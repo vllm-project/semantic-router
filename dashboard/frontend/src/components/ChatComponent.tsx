@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import styles from './ChatComponent.module.css'
 import ChatConversationSidebar from './ChatConversationSidebar'
 import ChatComponentConversationViewport from './ChatComponentConversationViewport'
 import ChatComponentErrors from './ChatComponentErrors'
+import ChatComponentHeader from './ChatComponentHeader'
 import ChatComponentInputBar from './ChatComponentInputBar'
 import ChatComponentSidebarShell from './ChatComponentSidebarShell'
 import ChatTaskQueue from './ChatTaskQueue'
+import PlaygroundInspector from './PlaygroundInspector'
 import { runPlaygroundTask } from './chatTaskExecution'
 import {
   generateConversationId,
@@ -36,13 +37,13 @@ import {
   type ActivePlaygroundInvocationDraft,
 } from './usePlaygroundInvocation'
 import { usePlaygroundTaskSubmission } from './usePlaygroundTaskSubmission'
+import { usePlaygroundPanes } from './usePlaygroundPanes'
 import { sanitizeMessagesForPersistence } from './chatPersistenceSupport'
 
 const ChatComponent = ({
   endpoint = '/api/router/v1/chat/completions',
   feedbackInsightsBasePath,
   invocation = null,
-  isFullscreenMode = false,
   onInvocationConsumed,
 }: ChatComponentProps) => {
   const [conversationMessages, setConversationMessages] = useState<Record<string, Message[]>>({})
@@ -64,10 +65,10 @@ const ChatComponent = ({
     setConversationError,
     setConversationThinkingState,
   } = useChatConversationState()
-  const [isFullscreen] = useState(isFullscreenMode)
   const [enableWebSearch, setEnableWebSearch] = useState(true)
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [pinnedInspectId, setPinnedInspectId] = useState<string | null>(null)
+  const panes = usePlaygroundPanes()
   const { user } = useAuth()
   const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
 
@@ -180,19 +181,6 @@ const ChatComponent = ({
     categories: ['code', 'file', 'image', 'custom'],
   })
 
-  // Toggle fullscreen mode by adding/removing class to body
-  useEffect(() => {
-    if (isFullscreen) {
-      document.body.classList.add('playground-fullscreen')
-    } else {
-      document.body.classList.remove('playground-fullscreen')
-    }
-
-    return () => {
-      document.body.classList.remove('playground-fullscreen')
-    }
-  }, [isFullscreen])
-
   // Hydrate saved conversations once. Only restore a conversation the user
   // explicitly selected; otherwise keep the stable blank starting state.
   useEffect(() => {
@@ -284,8 +272,10 @@ const ChatComponent = ({
       setInputValue('')
       setProbeDraft(null)
       setExpandedToolCards(new Set())
+      setPinnedInspectId(null)
+      if (panes.conversationsOverlay) panes.setConversationsOpen(false)
     },
-    [conversations],
+    [conversations, panes],
   )
 
   const handleDeleteConversation = useCallback(
@@ -527,10 +517,16 @@ const ChatComponent = ({
     [conversationId, reorderTasks],
   )
 
+  // A new turn returns the inspector to following the newest answer.
+  const sendMessage = () => {
+    setPinnedInspectId(null)
+    handleSend()
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      handleSend()
+      sendMessage()
     }
   }
 
@@ -543,8 +539,25 @@ const ChatComponent = ({
     setProbeDraft(null)
     clearPendingAttachments()
     setExpandedToolCards(new Set())
+    setPinnedInspectId(null)
     setConversationId(generateConversationId())
   }, [clearPendingAttachments])
+
+  const handleInspectMessage = useCallback(
+    (messageId: string) => {
+      setPinnedInspectId(messageId)
+      panes.setInspectorOpen(true)
+    },
+    [panes],
+  )
+
+  const handleSuggestion = useCallback(
+    (prompt: string) => {
+      setInputValue(prompt)
+      focusComposer()
+    },
+    [focusComposer],
+  )
 
   const hasActiveProbeDraft = probeDraft?.conversationId === conversationId
 
@@ -570,83 +583,123 @@ const ChatComponent = ({
     : null
   const shouldShowThinking = Boolean(conversationThinking[conversationId])
   const isConversationEmpty = messages.length === 0 && !shouldShowThinking
-  return (
-    <>
-      <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
-        <div className={styles.mainLayout}>
-          <ChatComponentSidebarShell
-            isOpen={isSidebarOpen}
-            onCreate={handleNewConversation}
-            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-          >
-            <ChatConversationSidebar
-              conversationId={conversationId}
-              conversationPreviews={conversationPreviews}
-              onDeleteConversation={handleDeleteConversation}
-              onRenameConversation={handleRenameConversation}
-              onSelectConversation={handleSelectConversation}
-            />
-          </ChatComponentSidebarShell>
+  const runningConversationIds = useMemo(() => new Set(Object.keys(activeTasks)), [activeTasks])
+  const inspectedMessage = useMemo(() => {
+    const answers = messages.filter((message) => message.role === 'assistant')
+    return (
+      (pinnedInspectId && answers.find((message) => message.id === pinnedInspectId)) ||
+      [...answers].reverse().find((message) => message.headers) ||
+      answers[answers.length - 1] ||
+      null
+    )
+  }, [messages, pinnedInspectId])
+  const inspectedPrompt = useMemo(() => {
+    if (!inspectedMessage) return undefined
+    const index = messages.findIndex((message) => message.id === inspectedMessage.id)
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      if (messages[cursor].role === 'user') return messages[cursor].content
+    }
+    return undefined
+  }, [inspectedMessage, messages])
+  const selectedRecipe = routingModels.find((option) => option.id === model)?.recipe
 
-          <div className={`${styles.chatArea} ${isConversationEmpty ? styles.chatAreaEmpty : ''}`}>
-            <ChatComponentErrors
-              overlay={isConversationEmpty}
-              onDismissError={() => {
-                if (visibleErrorConversationId) {
-                  setConversationError(visibleErrorConversationId, null)
-                }
-              }}
-              onRetryRoutingModelDiscovery={retryRoutingModelDiscovery}
-              routingModelStatus={routingModelStatus}
-              visibleError={visibleError}
-            />
-            <ChatComponentConversationViewport
-              canSubmitFeedback={canSubmitFeedback(user)}
-              conversationId={conversationId}
-              expandedToolCards={expandedToolCards}
-              messages={messages}
-              feedbackInsightsBasePath={feedbackInsightsBasePath}
-              onToggleToolCard={handleToggleToolCard}
-              thinking={shouldShowThinking}
-              thinkingProcess={liveThinkingProcess}
-            />
-            <ChatTaskQueue
-              queuedTasks={queuedTasks}
-              onEditTask={handleEditQueuedTask}
-              onDeleteTask={handleDeleteQueuedTask}
-              onReorderTasks={handleReorderQueuedTasks}
-            />
-            <ChatComponentInputBar
-              attachments={pendingAttachments}
-              attachFilesDisabled={readonlyLoading || serverReadonly || hasActiveProbeDraft}
-              enableWebSearch={enableWebSearch}
-              inputRef={inputRef}
-              inputValue={inputValue}
-              isLoading={isCurrentConversationRunning}
-              modelOptions={routingModels}
-              modelSelectDisabled={!isRoutingModelReady || isCurrentConversationRunning}
-              selectedModel={model}
-              voiceInputDisabled={isCurrentConversationRunning || readonlyLoading || serverReadonly}
-              webSearchDisabled={hasActiveProbeDraft}
-              onAttachFiles={handleAttachFiles}
-              onChangeInput={setInputValue}
-              onKeyDown={handleKeyDown}
-              onModelChange={setModel}
-              onRemoveAttachment={handleRemoveAttachment}
-              onSend={handleSend}
-              onStop={handleStop}
-              onToggleWebSearch={() => setEnableWebSearch((prev) => !prev)}
-              sendDisabled={!isRoutingModelReady}
-              sendDisabledReason={
-                routingModelStatus === 'error'
-                  ? 'Retry model discovery before sending'
-                  : 'Discovering an available router model'
+  return (
+    <div className="relative flex min-h-0 flex-1" data-testid="playground">
+      <ChatComponentSidebarShell
+        isOpen={panes.conversationsOpen}
+        overlay={panes.conversationsOverlay}
+        onCreate={handleNewConversation}
+        onClose={() => panes.setConversationsOpen(false)}
+      >
+        <ChatConversationSidebar
+          conversationId={conversationId}
+          conversationPreviews={conversationPreviews}
+          runningConversationIds={runningConversationIds}
+          onDeleteConversation={handleDeleteConversation}
+          onRenameConversation={handleRenameConversation}
+          onSelectConversation={handleSelectConversation}
+        />
+      </ChatComponentSidebarShell>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ChatComponentHeader
+          conversationsOpen={panes.conversationsOpen}
+          inspectorOpen={panes.inspectorOpen}
+          models={routingModels}
+          model={model}
+          recipe={selectedRecipe}
+          modelSelectDisabled={!isRoutingModelReady || isCurrentConversationRunning}
+          onModelChange={setModel}
+          onNewConversation={handleNewConversation}
+          onToggleConversations={() => panes.setConversationsOpen(!panes.conversationsOpen)}
+          onToggleInspector={() => panes.setInspectorOpen(!panes.inspectorOpen)}
+        />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <ChatComponentErrors
+            overlay={isConversationEmpty}
+            onDismissError={() => {
+              if (visibleErrorConversationId) {
+                setConversationError(visibleErrorConversationId, null)
               }
-            />
-          </div>
+            }}
+            onRetryRoutingModelDiscovery={retryRoutingModelDiscovery}
+            routingModelStatus={routingModelStatus}
+            visibleError={visibleError}
+          />
+          <ChatComponentConversationViewport
+            canSubmitFeedback={canSubmitFeedback(user)}
+            conversationId={conversationId}
+            expandedToolCards={expandedToolCards}
+            inspectedMessageId={panes.inspectorOpen ? inspectedMessage?.id : undefined}
+            messages={messages}
+            feedbackInsightsBasePath={feedbackInsightsBasePath}
+            onInspectMessage={handleInspectMessage}
+            onSuggestion={handleSuggestion}
+            onToggleToolCard={handleToggleToolCard}
+            thinking={shouldShowThinking}
+            thinkingProcess={liveThinkingProcess}
+          />
+          <ChatTaskQueue
+            queuedTasks={queuedTasks}
+            onEditTask={handleEditQueuedTask}
+            onDeleteTask={handleDeleteQueuedTask}
+            onReorderTasks={handleReorderQueuedTasks}
+          />
+          <ChatComponentInputBar
+            attachments={pendingAttachments}
+            attachFilesDisabled={readonlyLoading || serverReadonly || hasActiveProbeDraft}
+            enableWebSearch={enableWebSearch}
+            inputRef={inputRef}
+            inputValue={inputValue}
+            isLoading={isCurrentConversationRunning}
+            voiceInputDisabled={isCurrentConversationRunning || readonlyLoading || serverReadonly}
+            webSearchDisabled={hasActiveProbeDraft}
+            onAttachFiles={handleAttachFiles}
+            onChangeInput={setInputValue}
+            onKeyDown={handleKeyDown}
+            onRemoveAttachment={handleRemoveAttachment}
+            onSend={sendMessage}
+            onStop={handleStop}
+            onToggleWebSearch={() => setEnableWebSearch((prev) => !prev)}
+            sendDisabled={!isRoutingModelReady}
+            sendDisabledReason={
+              routingModelStatus === 'error'
+                ? 'Retry model discovery before sending'
+                : 'Discovering an available router model'
+            }
+          />
         </div>
       </div>
-    </>
+
+      <PlaygroundInspector
+        open={panes.inspectorOpen}
+        overlay={panes.inspectorOverlay}
+        message={inspectedMessage}
+        prompt={inspectedPrompt}
+        insightsBasePath={feedbackInsightsBasePath}
+        onClose={() => panes.setInspectorOpen(false)}
+      />
+    </div>
   )
 }
 

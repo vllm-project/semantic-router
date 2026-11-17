@@ -1,53 +1,152 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { MessagesSquare, RefreshCw, Rocket } from 'lucide-react'
+
+import {
+  Alert,
+  Badge,
+  Button,
+  MetaItem,
+  PageContainer,
+  PageHeader,
+  Segmented,
+  StatusLabel,
+  Tooltip,
+  cn,
+  type StatusTone,
+} from '../ui'
 import RouterModelInventory from '../components/RouterModelInventory'
 import ViewModal from '../components/ViewModal'
-import ProductLoadingState from '../components/ProductLoadingState'
-import ProductIcon from '../components/ProductIcon'
+import { useAuth } from '../contexts/AuthContext'
+import { useReadonly } from '../contexts/ReadonlyContext'
+import { canAccessDashboardPath } from '../utils/accessControl'
 import {
   getRouterModelConsumers,
-  getModelStatusSummary,
   type RouterModelInfo,
   type SystemStatus,
 } from '../utils/routerRuntime'
-import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
-import DashboardRoutingProfiles from './DashboardRoutingProfiles'
-import DashboardRouterIntelligence from './DashboardRouterIntelligence'
-import type { RouterConfig } from './dashboardPageTypes'
-import {
-  categorizeDecisions,
-  countDecisions,
-  countModels,
-  countPlugins,
-  countSignals,
-  getAllDecisions,
-} from './dashboardPageStats'
-import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
-import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
-import { createVisibilityAwareRequest } from './visibilityAwareRequest'
-import { useInstanceDeployment } from './useInstanceDeployment'
-import { describeServingMode } from './dashboardServingMode'
 import { withRoutingView } from './configPageCanonicalLayout'
-import styles from './DashboardPage.module.css'
+import DashboardRouterIntelligence from './DashboardRouterIntelligence'
+import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
+import type { RouterConfig } from './dashboardPageTypes'
+import { describeServingMode } from './dashboardServingMode'
+import {
+  HomeConfigTiles,
+  HomeModelsInUse,
+  HomePublicModels,
+  HomeRoutingMix,
+  HomeServices,
+  HomeShortcuts,
+} from './HomeCards'
+import { HomeKpis, HomeRecentRequests } from './HomeTraffic'
+import { greeting, HOME_RANGES, readHomeRange, type HomeRange } from './homeSupport'
+import {
+  buildAgentRuleIndex,
+  buildModelProviders,
+  EMPTY_CONFIG_FACTS,
+  InsightsConfigContext,
+  type ConfigDocument,
+} from './insightsConfigFacts'
+import { useNow } from './insightsDisplayFormat'
+import { ModelLabelsProvider } from './insightsModelLabelSupport'
+import { fetchInsightsJSON, insightsUnavailableReason } from './insightsPageApi'
+import type { InsightsListResponse } from './insightsPageTypes'
+import { readRequestFilters, useRecentRuns, useRequestsData } from './insightsRequestsData'
+import { listPublicModels, buildStartChecklist, type ReplayFacts } from './startSupport'
+import { StartChecklistCard } from './StartChecklist'
+import { useInstanceDeployment } from './useInstanceDeployment'
+import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 
-const DashboardPage: React.FC = () => {
+const STATUS_POLL_MS = 10_000
+const REFRESH_MS = 30_000
+
+function routerState(
+  status: SystemStatus | null,
+  failed: boolean,
+): { tone: StatusTone; label: string } {
+  if (!status)
+    return failed
+      ? { tone: 'danger', label: 'Status unavailable' }
+      : { tone: 'neutral', label: 'Checking…' }
+  switch (status.overall?.toLowerCase()) {
+    case 'healthy':
+      return { tone: 'success', label: 'Router healthy' }
+    case 'degraded':
+      return { tone: 'warning', label: 'Degraded' }
+    case 'starting':
+      return { tone: 'info', label: 'Starting' }
+    case 'standby':
+      return { tone: 'neutral', label: 'Standby' }
+    default:
+      return { tone: 'danger', label: 'Router not running' }
+  }
+}
+
+/** Whether any request was ever recorded, for the checklist; independent of the range. */
+function useLatestReplay(refreshKey: number): ReplayFacts {
+  const [facts, setFacts] = useState<ReplayFacts>({ state: 'loading', count: 0 })
+  useEffect(() => {
+    let cancelled = false
+    fetchInsightsJSON<InsightsListResponse>(
+      '/api/router/api/v1/observability/replays?limit=1&offset=0&showDetails=false',
+      'recent requests',
+    )
+      .then((list) => {
+        if (cancelled) return
+        setFacts({
+          state: 'ready',
+          count: typeof list.total === 'number' ? list.total : (list.data?.length ?? 0),
+          latestAt: list.data?.[0]?.timestamp,
+        })
+      })
+      .catch((error: unknown) => {
+        if (!cancelled)
+          setFacts({ state: 'unavailable', count: 0, reason: insightsUnavailableReason(error) })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [refreshKey])
+  return facts
+}
+
+const DashboardPage = () => {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const { isReadonly } = useReadonly()
   const instance = useInstanceDeployment()
+  const [params, setParams] = useSearchParams()
+  const range = readHomeRange(params.get('range'))
 
+  const [rawConfig, setRawConfig] = useState<ConfigDocument | null>(null)
   const [config, setConfig] = useState<RouterConfig | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
+  const [statusFailed, setStatusFailed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [selectedRuntimeModel, setSelectedRuntimeModel] = useState<RouterModelInfo | null>(null)
+  const runtimeReturnFocus = useRef<HTMLElement | null>(null)
+  const [replayKey, setReplayKey] = useState(0)
 
   const fetchStatus = useCallback(async () => {
-    setStatus(await fetchDashboardJson<SystemStatus>('/api/status', 'System status'))
+    try {
+      setStatus(await fetchDashboardJson<SystemStatus>('/api/status', 'System status'))
+      setStatusFailed(false)
+    } catch (failure) {
+      setStatusFailed(true)
+      throw failure
+    }
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    setConfig(withRoutingView(await fetchDashboardJson<RouterConfig>('/api/router/config/all', 'Router config')))
+    const document = await fetchDashboardJson<RouterConfig>(
+      '/api/router/config/all',
+      'Router config',
+    )
+    setRawConfig(document as ConfigDocument)
+    setConfig(withRoutingView(document))
   }, [])
 
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
@@ -72,6 +171,34 @@ const DashboardPage: React.FC = () => {
     [configRequest, statusRequest],
   )
 
+  const facts = useMemo(
+    () =>
+      rawConfig
+        ? {
+            agentRules: buildAgentRuleIndex(rawConfig),
+            modelProviders: buildModelProviders(rawConfig),
+          }
+        : EMPTY_CONFIG_FACTS,
+    [rawConfig],
+  )
+  const filters = useMemo(() => readRequestFilters(new URLSearchParams({ range })), [range])
+  const requests = useRequestsData({
+    filters,
+    page: 1,
+    live: false,
+    held: false,
+    rules: facts.agentRules,
+  })
+  const runs = useRecentRuns(
+    requests.rows.some((record) => record.session_id),
+    requests.rows[0]?.id ?? '',
+  )
+  const latestReplay = useLatestReplay(replayKey)
+  const now = useNow(REFRESH_MS)
+
+  const refreshTraffic = useRef(requests.refresh)
+  refreshTraffic.current = requests.refresh
+
   useEffect(() => {
     const pollStatus = () => {
       void statusRequest.run().catch(() => {
@@ -80,15 +207,18 @@ const DashboardPage: React.FC = () => {
     }
     // Full refreshes settle config and status together before touching "Updated".
     const refreshWhenVisible = () => {
-      if (!document.hidden) void fetchAll()
+      if (document.hidden) return
+      void fetchAll()
+      refreshTraffic.current()
+      setReplayKey((key) => key + 1)
     }
     const onConfigDeployed = () => {
       void fetchAll()
     }
 
     void fetchAll()
-    const statusInterval = window.setInterval(pollStatus, 10000)
-    const refreshInterval = window.setInterval(refreshWhenVisible, 30000)
+    const statusInterval = window.setInterval(pollStatus, STATUS_POLL_MS)
+    const refreshInterval = window.setInterval(refreshWhenVisible, REFRESH_MS)
     window.addEventListener('config-deployed', onConfigDeployed)
     document.addEventListener('visibilitychange', refreshWhenVisible)
     return () => {
@@ -99,344 +229,221 @@ const DashboardPage: React.FC = () => {
     }
   }, [fetchAll, statusRequest])
 
-  const signalStats = useMemo(
-    () => (config ? countSignals(config) : { total: 0, byType: {} }),
-    [config],
-  )
-  const decisionCount = useMemo(() => (config ? countDecisions(config) : 0), [config])
-  const modelCount = useMemo(() => (config ? countModels(config) : 0), [config])
-  const pluginCount = useMemo(() => (config ? countPlugins(config) : 0), [config])
-  const currentDecisions = useMemo(() => (config ? getAllDecisions(config) : []), [config])
-  const healthyServices = useMemo(
-    () => status?.services.filter((s) => s.healthy).length ?? 0,
-    [status],
-  )
-  const totalServices = useMemo(() => status?.services.length ?? 0, [status])
-  const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
+  const openRuntimeModel = (model: RouterModelInfo) => {
+    runtimeReturnFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setSelectedRuntimeModel(model)
+  }
+
+  // The sheet opens without a dialog trigger, so closing it returns focus to nothing.
+  const closeRuntimeModel = () => {
+    setSelectedRuntimeModel(null)
+    const target = runtimeReturnFocus.current
+    window.requestAnimationFrame(() => target?.focus())
+  }
+
+  const refreshAll = () => {
+    void fetchAll(true)
+    requests.refresh()
+    setReplayKey((key) => key + 1)
+  }
+
+  const setRange = (next: HomeRange) =>
+    setParams(
+      (current) => {
+        const nextParams = new URLSearchParams(current)
+        if (next === '24h') nextParams.delete('range')
+        else nextParams.set('range', next)
+        return nextParams
+      },
+      { replace: true },
+    )
+
   const servingMode = describeServingMode(
     instance.status?.observed_mode === 'unknown'
       ? status?.serving_mode
       : (instance.status?.observed_mode ?? status?.serving_mode),
   )
-
-  const categorizedDecisions = useMemo(
-    () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
+  const router = routerState(status, statusFailed)
+  const publicModels = useMemo(
+    () => listPublicModels(config).filter((model) => model.api === 'chat'),
     [config],
   )
-  const signalBreakdownRows = useMemo(
-    () => buildSignalBreakdownRows(signalStats.byType),
-    [signalStats.byType],
-  )
-  const decisionPreviewRows = useMemo(
-    () =>
-      buildDecisionPreviewRows([
-        ...categorizedDecisions.guardrails,
-        ...categorizedDecisions.routing,
-        ...categorizedDecisions.fallbacks,
-      ]),
-    [categorizedDecisions],
-  )
-
-  if (loading && !config && !status) {
-    return (
-      <div className={styles.page}>
-        <ProductLoadingState label="Preparing your workspace" />
-      </div>
-    )
-  }
+  const backendCount = Array.isArray(config?.providers?.models) ? config.providers.models.length : 0
+  const steps = buildStartChecklist({ status, statusFailed, config, replay: latestReplay, now })
+  const unhealthy = status?.services.filter((service) => !service.healthy) ?? []
+  const overall = status?.overall?.toLowerCase()
+  const firstName = user?.name?.trim().split(/\s+/)[0]
+  const title = `${greeting(new Date(now).getHours())}${firstName ? `, ${firstName}` : ''}`
+  const description = config
+    ? `vLLM Semantic Router routes ${publicModels.length} public model${publicModels.length === 1 ? '' : 's'} across ${backendCount} backend model${backendCount === 1 ? '' : 's'}.`
+    : 'Your router’s traffic, routing and health at a glance.'
 
   return (
-    <div className={styles.page}>
-      <div className={styles.header}>
-        <div className={styles.heroIdentity}>
-          <img src="/vllm.png" alt="" aria-hidden="true" />
-          <div>
-            <span className={styles.eyebrow}>vLLM Semantic Router</span>
-            <h1 className={styles.title}>Compose the right model path.</h1>
-            <p className={styles.subtitle}>
-              Design, connect, and understand every Mixture-of-Models.
-            </p>
-            <div className={styles.servingMode} data-testid="dashboard-serving-mode">
-              <span className={styles.servingModeBadge}>{servingMode.label}</span>
-              <span>{servingMode.description}</span>
-            </div>
-          </div>
-        </div>
-        <div className={styles.headerActions}>
-          {lastUpdated && (
-            <span className={styles.lastUpdated}>Updated {lastUpdated.toLocaleTimeString()}</span>
-          )}
-          <button
-            className={`${styles.refreshBtn} ${refreshing ? styles.refreshBtnSpin : ''}`}
-            onClick={() => fetchAll(true)}
-            disabled={refreshing}
-          >
-            <ProductIcon name="refresh" />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className={styles.errorBanner}>
-          <span>Failed to load data: {error}</span>
-          <button onClick={() => fetchAll(true)}>Retry</button>
-        </div>
-      )}
-
-      <div className={styles.statsGrid}>
-        <button
-          type="button"
-          className={styles.statCard}
-          onClick={() => navigate('/config/models')}
-        >
-          <div className={styles.statIcon}>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
+    <PageContainer>
+      <PageHeader
+        title={title}
+        description={description}
+        meta={
+          <>
+            <StatusLabel tone={router.tone} pulse={router.tone === 'success'}>
+              {router.label}
+            </StatusLabel>
+            {status?.version ? <MetaItem label="Version">{status.version}</MetaItem> : null}
+            <span
+              className="inline-flex items-center gap-1.5"
+              data-testid="dashboard-serving-mode"
+              title={servingMode.description}
             >
-              <rect x="2" y="3" width="20" height="18" rx="3" />
-              <path d="M8 7v10M12 7v10M16 7v10" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{modelCount}</span>
-            <span className={styles.statLabel}>Models</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-
-        <button
-          type="button"
-          className={styles.statCard}
-          onClick={() => navigate('/config/decisions')}
-        >
-          <div className={styles.statIcon}>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M4 6h16M4 12h8M4 18h12" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{decisionCount}</span>
-            <span className={styles.statLabel}>Decisions</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-
-        <button
-          type="button"
-          className={styles.statCard}
-          onClick={() => navigate('/config/signals')}
-        >
-          <div className={styles.statIcon}>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{signalStats.total}</span>
-            <span className={styles.statLabel}>Signals</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-
-        <button type="button" className={styles.statCard} onClick={() => navigate('/status')}>
-          <div
-            className={`${styles.statIcon} ${
-              status?.overall === 'healthy'
-                ? styles.statIconHealthy
-                : status?.overall === 'degraded'
-                  ? styles.statIconDegraded
-                  : styles.statIconDown
-            }`}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#fff"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>
-              {healthyServices}/{totalServices}
+              <Badge tone="outline" size="sm">
+                {servingMode.label}
+              </Badge>
+              <span className="max-xl:hidden">{servingMode.description}</span>
             </span>
-            <span className={styles.statLabel}>Services Healthy</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-
-        <button type="button" className={styles.statCard} onClick={() => navigate('/status')}>
-          <div
-            className={`${styles.statIcon} ${
-              modelStatus.tone === 'ok'
-                ? styles.statIconHealthy
-                : modelStatus.tone === 'warn'
-                  ? styles.statIconStarting
-                  : styles.statIconDown
-            }`}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#fff"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 3v10" />
-              <path d="M8.5 9.5 12 13l3.5-3.5" />
-              <path d="M4 19h16" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{modelStatus.value}</span>
-            <span className={styles.statLabel}>Model Status</span>
-            <span className={styles.statDetail}>{modelStatus.detail}</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-      </div>
-
-      <div className={styles.mainGrid}>
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h2 className={styles.cardTitle}>Intelligence Layers</h2>
-            <button
-              type="button"
-              className={styles.cardAction}
-              onClick={() => navigate('/topology')}
-            >
-              View Full Layers &rsaquo;
-            </button>
-          </div>
-          <div className={styles.flowContainer}>
-            {config ? (
-              <DashboardMiniFlowDiagram
-                signals={signalStats}
-                decisions={decisionCount}
-                models={modelCount}
-                plugins={pluginCount}
-              />
-            ) : (
-              <div className={styles.emptyState}>No configuration loaded</div>
-            )}
-          </div>
-        </div>
-
-        <div className={styles.rightCol}>
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>System Health</h2>
-              <button
-                type="button"
-                className={styles.cardAction}
-                onClick={() => navigate('/status')}
+            {isReadonly ? (
+              <Badge tone="neutral" size="sm">
+                Read-only
+              </Badge>
+            ) : null}
+            {lastUpdated ? (
+              <span className="tabular text-subtle-foreground">
+                Updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            ) : null}
+          </>
+        }
+        actions={
+          <>
+            <Segmented
+              aria-label="Time range"
+              value={range}
+              onValueChange={setRange}
+              options={HOME_RANGES}
+            />
+            <Tooltip content="Refresh">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Refresh"
+                onClick={refreshAll}
+                disabled={refreshing}
               >
-                Details &rsaquo;
-              </button>
-            </div>
-            <div className={styles.healthContent}>
-              {status ? (
-                <>
-                  <div className={styles.healthOverall}>
-                    <span
-                      className={`${styles.healthDot} ${
-                        status.overall === 'healthy'
-                          ? styles.healthDotGreen
-                          : status.overall === 'degraded'
-                            ? styles.healthDotYellow
-                            : styles.healthDotRed
-                      }`}
-                    />
-                    <span className={styles.healthLabel}>
-                      {status.overall === 'not_running'
-                        ? 'Not Running'
-                        : status.overall.charAt(0).toUpperCase() + status.overall.slice(1)}
-                    </span>
-                    {status.version && (
-                      <span className={styles.versionBadge}>{status.version}</span>
-                    )}
-                    {status.deployment_type && status.deployment_type !== 'none' && (
-                      <span className={styles.deployBadge}>{status.deployment_type}</span>
-                    )}
-                  </div>
-                  <div className={styles.servicesList}>
-                    {status.services.slice(0, 6).map((svc, i) => (
-                      <div key={i} className={styles.serviceRow}>
-                        <span
-                          className={`${styles.svcDot} ${svc.healthy ? styles.svcDotOk : styles.svcDotFail}`}
-                        />
-                        <span className={styles.svcName}>{svc.name}</span>
-                        <span
-                          className={`${styles.svcStatus} ${svc.healthy ? styles.svcStatusOk : styles.svcStatusFail}`}
-                        >
-                          {svc.status}
-                        </span>
-                      </div>
-                    ))}
-                    {status.services.length > 6 && (
-                      <div className={styles.moreServices}>+{status.services.length - 6} more</div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className={styles.emptyState}>Unable to fetch status</div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {config ? (
-        <DashboardRoutingProfiles
-          config={config}
-          onOpenTopology={(scopeId) => navigate(`/topology?scope=${encodeURIComponent(scopeId)}`)}
-        />
-      ) : null}
-
-      <DashboardRouterIntelligence
-        config={config}
-        modelsInfo={status?.models}
-        onConfigure={() => navigate('/decision-model')}
-        onOpenStatus={() => navigate('/status')}
-        onSelectModel={setSelectedRuntimeModel}
+                <RefreshCw className={cn(refreshing && 'animate-spin')} />
+              </Button>
+            </Tooltip>
+            <Button
+              variant="outline"
+              className="max-xl:hidden"
+              onClick={() => navigate('/playground')}
+            >
+              <MessagesSquare />
+              Open playground
+            </Button>
+            <Button onClick={() => navigate('/get-started')}>
+              <Rocket />
+              Connect an app
+            </Button>
+          </>
+        }
       />
 
-      {selectedRuntimeModel && (
+      <div className="mb-5 flex flex-col gap-3 empty:hidden">
+        {error ? (
+          <Alert
+            tone="danger"
+            title="Some dashboard data could not load"
+            actions={
+              <Button size="sm" variant="outline" onClick={() => void fetchAll(true)}>
+                Retry
+              </Button>
+            }
+          >
+            Failed to load data: {error}
+          </Alert>
+        ) : null}
+        {status && overall !== 'healthy' ? (
+          <Alert
+            tone={overall === 'degraded' ? 'warning' : overall === 'starting' ? 'info' : 'danger'}
+            title={
+              overall === 'degraded'
+                ? `${unhealthy.length} of ${status.services.length} services need attention`
+                : overall === 'starting'
+                  ? 'The router is starting'
+                  : overall === 'standby'
+                    ? 'The router is on standby'
+                    : 'The router is not running'
+            }
+            actions={
+              <Button size="sm" variant="outline" onClick={() => navigate('/observe/status')}>
+                View status
+              </Button>
+            }
+          >
+            {overall === 'degraded'
+              ? unhealthy.map((service) => service.name).join(', ')
+              : overall === 'starting'
+                ? 'Requests route as soon as the models it needs are ready.'
+                : 'Requests, live metrics and the playground need it. Start it with vllm-sr serve, then check its status.'}
+          </Alert>
+        ) : null}
+      </div>
+
+      <InsightsConfigContext.Provider value={facts}>
+        <ModelLabelsProvider>
+          <div className="flex flex-col gap-4">
+            <HomeKpis data={requests} range={range} now={now} />
+            <HomeConfigTiles config={config} loading={loading} />
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <HomeRecentRequests
+                data={requests}
+                runs={runs}
+                rules={facts.agentRules}
+                range={range}
+                now={now}
+              />
+              <StartChecklistCard steps={steps} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              <HomeRoutingMix aggregate={requests.aggregate} config={config} range={range} />
+              <HomeModelsInUse
+                aggregate={requests.aggregate}
+                config={config}
+                range={range}
+                modelProviders={facts.modelProviders}
+              />
+              <HomePublicModels config={config} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <DashboardRouterIntelligence
+                config={config}
+                modelsInfo={status?.models}
+                onConfigure={() => navigate('/models/decision')}
+                onOpenStatus={() => navigate('/observe/status')}
+                onSelectModel={openRuntimeModel}
+              />
+              <div className="flex flex-col gap-4">
+                <HomeServices
+                  status={status}
+                  failed={statusFailed}
+                  onRetry={() =>
+                    void statusRequest.run({ allowHidden: true }).catch(() => undefined)
+                  }
+                />
+                <HomeShortcuts canOpen={(path) => canAccessDashboardPath(user, path)} />
+              </div>
+            </div>
+          </div>
+        </ModelLabelsProvider>
+      </InsightsConfigContext.Provider>
+
+      {selectedRuntimeModel ? (
         <ViewModal
           isOpen
           title="Runtime model details"
-          onClose={() => setSelectedRuntimeModel(null)}
+          onClose={closeRuntimeModel}
           sections={[
             {
               fields: [
@@ -459,97 +466,8 @@ const DashboardPage: React.FC = () => {
             },
           ]}
         />
-      )}
-
-      <div className={styles.bottomGrid}>
-        {signalStats.total > 0 && (
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Signal Breakdown</h2>
-              <span className={styles.cardSubtitle}>{signalStats.total} total</span>
-            </div>
-            <div className={styles.signalBreakdown}>
-              {signalBreakdownRows.map((row) => (
-                <div
-                  key={row.type}
-                  className={styles.breakdownRow}
-                  title={`${row.type}: ${row.count} signal(s)`}
-                >
-                  <span className={styles.breakdownLabel}>
-                    <span className={styles.breakdownDot} style={{ background: row.color }} />
-                    {row.type}
-                  </span>
-                  <div className={styles.breakdownBar}>
-                    <div
-                      className={styles.breakdownFill}
-                      style={{ width: `${row.percent}%`, background: row.color }}
-                    />
-                  </div>
-                  <span className={styles.breakdownCount}>{row.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {currentDecisions.length > 0 && (
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Decisions Overview</h2>
-              <button
-                type="button"
-                className={styles.cardAction}
-                onClick={() => navigate('/config/decisions')}
-              >
-                Manage &rsaquo;
-              </button>
-            </div>
-            <div className={styles.decisionTable}>
-              <div className={styles.decisionTableHead}>
-                <span>Name</span>
-                <span>Priority</span>
-                <span>Type</span>
-                <span>Models</span>
-              </div>
-              {decisionPreviewRows.map((row) => (
-                <div key={row.key} className={styles.decisionTableRow}>
-                  <span className={styles.decisionIdentity} title={row.title}>
-                    <span className={styles.decisionName}>{row.name}</span>
-                    {row.scopeLabel ? (
-                      <span className={styles.decisionScope}>{row.scopeLabel}</span>
-                    ) : null}
-                  </span>
-                  <span className={styles.decisionPriority}>{row.priorityLabel}</span>
-                  <span
-                    className={`${styles.decisionBadge} ${
-                      row.category === 'guardrail'
-                        ? styles.badgeGuardrail
-                        : row.category === 'fallback'
-                          ? styles.badgeFallback
-                          : styles.badgeRouting
-                    }`}
-                  >
-                    {row.typeLabel}
-                  </span>
-                  <span className={styles.decisionModels} title={row.modelNames}>
-                    {row.modelNames}
-                  </span>
-                </div>
-              ))}
-              {currentDecisions.length > 10 && (
-                <button
-                  type="button"
-                  className={styles.decisionTableMore}
-                  onClick={() => navigate('/config/decisions')}
-                >
-                  +{currentDecisions.length - 10} more decisions &rsaquo;
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+      ) : null}
+    </PageContainer>
   )
 }
 

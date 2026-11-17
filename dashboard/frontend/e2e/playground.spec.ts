@@ -158,11 +158,8 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible()
     await expect(page.getByTestId('playground-routing-status')).toHaveCount(0)
-
-    const motionBackground = page.getByTestId('playground-motion-background')
-    await expect(motionBackground).toBeVisible()
-    await expect(motionBackground).toHaveCSS('pointer-events', 'none')
-    await expect(motionBackground).toHaveAttribute('data-motion', 'animated')
+    await expect(page.getByTestId('playground-sidebar-shell')).toBeVisible()
+    await expect(page.getByTestId('playground-composer-model-select')).toContainText('vllm-sr/auto')
   })
 
   test('uses explicit routing metadata and keeps the model selector vendor-neutral', async ({
@@ -341,19 +338,15 @@ test.describe('Playground Chat Component', () => {
     expect(layoutWidth.scrollWidth).toBeLessThanOrEqual(layoutWidth.innerWidth)
   })
 
-  test('keeps the mobile composer readable and clear of the guide control', async ({ page }) => {
+  test('keeps the mobile composer readable with both side panes closed', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
 
     const input = page.getByPlaceholder('Ask me anything...')
     await expect.poll(async () => (await input.boundingBox())?.width ?? 0).toBeGreaterThan(250)
     await input.click()
-    await input.fill('The animated surface keeps the composer interactive')
-
-    const motionBackground = page.getByTestId('playground-motion-background')
-    const backgroundBox = await motionBackground.boundingBox()
-    expect(backgroundBox).not.toBeNull()
-    expect(backgroundBox?.width ?? 0).toBeLessThanOrEqual(390)
-    await expect(motionBackground).toHaveCSS('pointer-events', 'none')
+    await input.fill('The composer stays interactive on a phone')
+    await expect(page.getByTestId('playground-sidebar-shell')).toHaveCount(0)
+    await expect(page.getByTestId('playground-inspector')).toHaveCount(0)
 
     const layoutWidth = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
@@ -362,16 +355,14 @@ test.describe('Playground Chat Component', () => {
     expect(layoutWidth.scrollWidth).toBeLessThanOrEqual(layoutWidth.innerWidth)
 
     const composerBox = await page.getByTestId('chat-composer').boundingBox()
-    const guideBox = await page.getByRole('button', { name: 'Guide' }).boundingBox()
     expect(composerBox).not.toBeNull()
-    expect(guideBox).not.toBeNull()
-    const controlsOverlap = !(
-      (guideBox?.x ?? 0) + (guideBox?.width ?? 0) <= (composerBox?.x ?? 0) ||
-      (composerBox?.x ?? 0) + (composerBox?.width ?? 0) <= (guideBox?.x ?? 0) ||
-      (guideBox?.y ?? 0) + (guideBox?.height ?? 0) <= (composerBox?.y ?? 0) ||
-      (composerBox?.y ?? 0) + (composerBox?.height ?? 0) <= (guideBox?.y ?? 0)
-    )
-    expect(controlsOverlap).toBe(false)
+    expect((composerBox?.x ?? 0) + (composerBox?.width ?? 0)).toBeLessThanOrEqual(390)
+
+    // A pane opened on a phone floats over the chat and closes with Escape.
+    await page.getByRole('button', { name: 'Show conversations' }).click()
+    await expect(page.getByTestId('playground-sidebar-shell')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('playground-sidebar-shell')).toHaveCount(0)
   })
 
   test('uses the live alias and blocks a restored task with a retired model', async ({ page }) => {
@@ -532,105 +523,74 @@ test.describe('Playground Chat Component', () => {
       name: 'Saved conversation preview',
       exact: true,
     })
-
-    await page.getByRole('button', { name: 'Open sidebar' }).click()
     await expect(sidebarItem).toBeVisible()
     await expect(shell.locator('img')).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Close sidebar' }).click()
+    await page.getByRole('button', { name: 'Hide conversations' }).click()
     await expect(sidebarItem).not.toBeVisible()
+    // With the pane closed the header offers the new-conversation action.
+    await expect(page.getByRole('button', { name: 'New conversation' })).toHaveCount(1)
+
+    await page.getByRole('button', { name: 'Show conversations' }).click()
+    await expect(sidebarItem).toBeVisible()
+
+    // The choice holds across reloads.
+    await page.getByRole('button', { name: 'Hide conversations' }).click()
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('button', { name: 'Show conversations' })).toBeVisible()
+    await expect(page.getByTestId('playground-sidebar-shell')).toHaveCount(0)
   })
 
-  test('keeps the account control in the lower-left rail on playground', async ({ page }) => {
-    const shell = page.getByTestId('playground-sidebar-shell')
-    const accountButton = page.getByTestId('playground-account-control')
-
-    await expect(shell).toBeVisible()
-    await expect(accountButton).toBeVisible()
-    await expect(
-      page.getByRole('button', { name: /Open account menu for Admin User/i }),
-    ).toHaveCount(1)
-
-    await accountButton.click()
-
-    const dialog = page.getByTestId('layout-account-dialog')
-    await expect(dialog).toBeVisible()
-    await expect(dialog).toContainText('Admin User')
-    await expect(dialog).toContainText('admin@example.com')
-
-    const dialogBox = await dialog.boundingBox()
-    const viewport = page.viewportSize()
-
-    expect(dialogBox).not.toBeNull()
-    expect(viewport).not.toBeNull()
-
-    expect(dialogBox!.x).toBeLessThan(120)
-    expect(Math.abs(dialogBox!.y + dialogBox!.height - viewport!.height)).toBeLessThan(40)
-    expect(dialogBox!.width).toBeLessThanOrEqual(400)
-  })
-
-  test('hides the guide button permanently after finishing onboarding', async ({ page }) => {
-    const onboardingStatusKey = 'vllm-sr.onboarding.status'
-
-    await page.evaluate((key) => {
-      window.localStorage.setItem(key, 'pending')
-    }, onboardingStatusKey)
-    await page.goto('/playground', { waitUntil: 'domcontentloaded' })
-
-    await expect(page.getByText('Getting started')).toBeVisible()
-    await page.getByRole('button', { name: 'Next' }).click()
-    await expect(page.getByText('Step 2 of 4')).toBeVisible()
-    await page.getByRole('button', { name: 'Pause tour' }).click()
-    await page.getByRole('button', { name: 'Resume product guide' }).click()
-    await expect(page.getByText('Step 2 of 4')).toBeVisible()
-
-    while ((await page.getByRole('button', { name: 'Finish' }).count()) === 0) {
-      await page.getByRole('button', { name: 'Next' }).click()
-    }
-
-    await page.getByRole('button', { name: 'Finish' }).click()
-    await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0)
-
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0)
-  })
-
-  test('keeps guide actions anchored while step copy changes', async ({ page }) => {
-    await page.setViewportSize({ width: 768, height: 500 })
+  test('renames, searches and confirms deleting a saved conversation', async ({ page }) => {
     await page.evaluate(() => {
-      window.localStorage.setItem('vllm-sr.onboarding.status', 'pending')
-      window.localStorage.setItem('vllm-sr.onboarding.step', '0')
+      const now = Date.now()
+      const conversation = (id: string, content: string, ago: number) => ({
+        id,
+        createdAt: now - ago - 1000,
+        updatedAt: now - ago,
+        payload: [{ id: `${id}-u`, role: 'user', content, timestamp: new Date(now).toISOString() }],
+      })
+      window.localStorage.setItem(
+        'sr:chat:conversations',
+        JSON.stringify([
+          conversation('first', 'Summarize the routing logs', 60_000),
+          conversation('second', 'Plan a trip to Kyoto', 3 * 86_400_000),
+        ]),
+      )
     })
     await page.goto('/playground', { waitUntil: 'domcontentloaded' })
 
-    const actions = page.getByTestId('onboarding-guide-actions')
-    const body = page.getByTestId('onboarding-guide-body')
-    await expect(actions).toBeVisible()
-    await expect(body).toBeVisible()
+    const shell = page.getByTestId('playground-sidebar-shell')
+    await expect(shell.getByText('Today')).toBeVisible()
+    await expect(shell.getByText('Previous 7 days')).toBeVisible()
 
-    await actions.evaluate(async (element) => {
-      const dialog = element.closest('[role="dialog"]')
-      await Promise.all((dialog?.getAnimations() ?? []).map((animation) => animation.finished))
-    })
+    await shell.getByRole('searchbox', { name: 'Search conversations' }).fill('kyoto')
+    await expect(
+      shell.getByRole('button', { name: 'Plan a trip to Kyoto', exact: true }),
+    ).toBeVisible()
+    await expect(
+      shell.getByRole('button', { name: 'Summarize the routing logs', exact: true }),
+    ).toHaveCount(0)
+    await shell.getByRole('searchbox', { name: 'Search conversations' }).fill('')
 
-    const initialActionsBox = await actions.boundingBox()
-    expect(initialActionsBox).not.toBeNull()
+    await shell
+      .getByRole('button', { name: 'Conversation options for Plan a trip to Kyoto' })
+      .click()
+    await page.getByRole('menuitem', { name: 'Rename' }).click()
+    const name = shell.getByRole('textbox', { name: 'Conversation name' })
+    await name.fill('Kyoto itinerary')
+    await name.press('Enter')
+    await expect(shell.getByRole('button', { name: 'Kyoto itinerary', exact: true })).toBeVisible()
 
-    for (let index = 0; index < 3; index += 1) {
-      await page.getByRole('button', { name: 'Next' }).click()
-      const nextActionsBox = await actions.boundingBox()
-      expect(nextActionsBox).not.toBeNull()
-      expect(Math.abs((nextActionsBox?.y ?? 0) - (initialActionsBox?.y ?? 0))).toBeLessThan(2)
-    }
-
-    const viewport = page.viewportSize()
-    const finalActionsBox = await actions.boundingBox()
-    expect(viewport).not.toBeNull()
-    expect(finalActionsBox).not.toBeNull()
-    expect((finalActionsBox?.y ?? 0) + (finalActionsBox?.height ?? 0)).toBeLessThanOrEqual(
-      viewport?.height ?? 0,
-    )
-    await expect(body).toHaveCSS('overflow-y', 'auto')
+    await shell.getByRole('button', { name: 'Conversation options for Kyoto itinerary' }).click()
+    await page.getByRole('menuitem', { name: 'Delete' }).click()
+    const confirm = page.getByRole('alertdialog')
+    await expect(confirm).toContainText('Kyoto itinerary')
+    await confirm.getByRole('button', { name: 'Delete' }).click()
+    await expect(shell.getByRole('button', { name: 'Kyoto itinerary', exact: true })).toHaveCount(0)
+    await expect(
+      shell.getByRole('button', { name: 'Summarize the routing logs', exact: true }),
+    ).toBeVisible()
   })
 
   test('can type message', async ({ page }) => {
@@ -902,7 +862,7 @@ test.describe('Playground Chat Component', () => {
         .isVisible()
         .catch(() => false))
     ) {
-      await page.getByRole('button', { name: 'Open sidebar' }).click()
+      await page.getByRole('button', { name: 'Show conversations' }).click()
     }
 
     await expect(sessionAButton).toBeVisible()
@@ -991,7 +951,7 @@ test.describe('Playground Chat Component', () => {
         .isVisible()
         .catch(() => false))
     ) {
-      await page.getByRole('button', { name: 'Open sidebar' }).click()
+      await page.getByRole('button', { name: 'Show conversations' }).click()
     }
 
     await longHistoryButton.click()
@@ -1684,16 +1644,20 @@ test.describe('Playground Chat Component', () => {
 
     await expect(assistantContent).toBeVisible({ timeout: 5000 })
 
-    const boxWhileStreaming = await assistantContent.evaluate((node) => {
-      const rect = node.getBoundingClientRect()
-      return {
-        center: rect.left + rect.width / 2,
-        width: rect.width,
-      }
-    })
+    // The rail centers in the chat column between the conversation pane and the trace.
+    const measure = () =>
+      assistantContent.evaluate((node) => {
+        const rect = node.getBoundingClientRect()
+        const transcript = node.closest('[data-testid="chat-transcript"]')!.getBoundingClientRect()
+        return {
+          offset: rect.left + rect.width / 2 - (transcript.left + transcript.width / 2),
+          width: rect.width,
+        }
+      })
+    const boxWhileStreaming = await measure()
     expect(boxWhileStreaming.width).toBeGreaterThan(560)
     expect(boxWhileStreaming.width).toBeLessThan(900)
-    expect(Math.abs(boxWhileStreaming.center - 640)).toBeLessThan(120)
+    expect(Math.abs(boxWhileStreaming.offset)).toBeLessThan(60)
 
     await expect(
       page.getByText('The final chunk lands without the message suddenly widening.'),
@@ -1701,16 +1665,10 @@ test.describe('Playground Chat Component', () => {
       timeout: 10000,
     })
 
-    const boxAfterCompletion = await assistantContent.evaluate((node) => {
-      const rect = node.getBoundingClientRect()
-      return {
-        center: rect.left + rect.width / 2,
-        width: rect.width,
-      }
-    })
+    const boxAfterCompletion = await measure()
     expect(boxAfterCompletion.width).toBeGreaterThan(560)
     expect(boxAfterCompletion.width).toBeLessThan(900)
-    expect(Math.abs(boxAfterCompletion.center - 640)).toBeLessThan(120)
+    expect(Math.abs(boxAfterCompletion.offset)).toBeLessThan(60)
     expect(Math.abs(boxAfterCompletion.width - boxWhileStreaming.width)).toBeLessThan(48)
   })
 
@@ -1856,10 +1814,6 @@ test.describe('Playground Chat Component', () => {
 
     const thinkingBlock = page.getByTestId('thinking-block')
     await expect(thinkingBlock).toBeVisible({ timeout: 5000 })
-    await expect(page.getByTestId('playground-motion-background')).toHaveAttribute(
-      'data-motion',
-      'static',
-    )
     await expect(thinkingBlock.getByTestId('thinking-content')).toHaveCSS('animation-name', 'none')
     await expect(page.getByText('Reduced motion complete.')).toBeVisible({ timeout: 10000 })
   })
@@ -1893,5 +1847,58 @@ test.describe('Playground Chat Component', () => {
       timeout: 10000,
     })
     await expect(page.getByRole('button', { name: /Reasoning/ })).toBeVisible({ timeout: 10000 })
+  })
+
+  test('shows the routed decision, signals, model and timings in the routing trace', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'x-vsr-selected-model': 'qwen/qwen3-32b',
+          'x-vsr-selected-decision': 'computer_science_route',
+          'x-vsr-selected-recipe': 'default',
+          'x-vsr-replay-id': 'replay-123',
+          'x-vsr-trace':
+            'algorithm=confidence, confidence=0.86, routing_latency_ms=38, effective_input_tokens=412, signals=("domain:computer science" "keyword:code_keywords")',
+        },
+        body: chatStreamBody('Routed answer.'),
+      })
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+
+    const inspector = page.getByTestId('playground-inspector')
+    await expect(inspector).toContainText('Nothing to inspect yet')
+
+    await page.getByPlaceholder('Ask me anything...').fill('Why does my effect run twice?')
+    await page.getByRole('button', { name: 'Send message' }).click()
+    await expect(page.getByText('Routed answer.')).toBeVisible({ timeout: 10000 })
+
+    await expect(inspector).toContainText('Computer Science')
+    await expect(inspector).toContainText('computer_science_route')
+    await expect(inspector).toContainText('qwen/qwen3-32b')
+    await expect(inspector).toContainText('computer science')
+    await expect(inspector).toContainText('code_keywords')
+    await expect(inspector).toContainText('confidence 0.86')
+    await expect(inspector).toContainText('Input tokens')
+    await expect(inspector).toContainText('412')
+    await expect(inspector.getByRole('link', { name: 'Open in Requests' })).toHaveAttribute(
+      'href',
+      '/observe/requests/replay-123',
+    )
+    await inspector.getByRole('tab', { name: 'Headers' }).click()
+    await expect(inspector).toContainText('x-vsr-selected-decision')
+
+    await page.getByRole('button', { name: 'Close routing trace' }).click()
+    await expect(page.getByTestId('playground-inspector')).toHaveCount(0)
+    await page
+      .locator('[data-message-role="assistant"]')
+      .last()
+      .getByRole('button', { name: 'Inspect route' })
+      .click()
+    await expect(page.getByTestId('playground-inspector')).toContainText('computer_science_route')
   })
 })

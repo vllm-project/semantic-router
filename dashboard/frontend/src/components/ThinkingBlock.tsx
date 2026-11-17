@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { ThinkingOrb } from 'thinking-orbs'
-import styles from './ThinkingBlock.module.css'
+import { ChevronDown } from 'lucide-react'
+
+import { cn } from '../ui'
 import MarkdownRenderer from './MarkdownRenderer'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 
@@ -10,7 +12,7 @@ interface ThinkingBlockProps {
   thinkingTime?: number // in seconds
 }
 
-const AUTO_COLLAPSE_THRESHOLD = 2000 // Auto collapse when content exceeds 500 characters
+const AUTO_COLLAPSE_THRESHOLD = 2000 // Auto collapse when content exceeds 2000 characters
 
 const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingBlockProps) => {
   const [displayTime, setDisplayTime] = useState(0)
@@ -21,7 +23,6 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
   useEffect(() => {
     const shouldAutoCollapse = content.length > AUTO_COLLAPSE_THRESHOLD
 
-    // Auto-collapse as soon as content exceeds threshold, even while streaming
     if (shouldAutoCollapse && !hasAutoCollapsed) {
       setIsExpanded(false)
       setHasAutoCollapsed(true)
@@ -51,59 +52,42 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
 
   return (
     <div
-      className={styles.container}
+      className="w-full overflow-hidden rounded-lg border border-border bg-surface-subtle/60"
       translate={getTranslateAttr(isStreaming)}
       data-testid="thinking-block"
     >
       <button
-        className={styles.header}
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left outline-none transition-colors hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/40"
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
       >
-        <div className={styles.headerLeft}>
-          <svg
-            className={`${styles.icon} ${isExpanded ? styles.iconExpanded : ''}`}
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-          <ThinkingOrb
-            className={styles.thinkingOrb}
-            state="working"
-            paused={!isStreaming}
-            aria-label={isStreaming ? 'Thinking' : 'Reasoning finished'}
-            size={20}
-            theme="dark"
-          />
-          <span className={styles.title}>{isStreaming ? 'Thinking' : 'Reasoning'}</span>
-        </div>
-        <div className={styles.headerRight}>
-          {displayTime > 0 && <span className={styles.time}>{formatTime(displayTime)}</span>}
-          <svg
-            className={styles.expandIcon}
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="7 13 12 18 17 13" />
-            <polyline points="7 6 12 11 17 6" />
-          </svg>
-        </div>
+        <ThinkingOrb
+          className="shrink-0"
+          state="working"
+          paused={!isStreaming}
+          aria-label={isStreaming ? 'Thinking' : 'Reasoning finished'}
+          size={20}
+        />
+        <span className="text-[13px] font-medium">{isStreaming ? 'Thinking' : 'Reasoning'}</span>
+        {displayTime > 0 ? (
+          <span className="font-mono text-xs text-subtle-foreground tabular">
+            {formatTime(displayTime)}
+          </span>
+        ) : null}
+        <ChevronDown
+          className={cn(
+            'ml-auto size-4 text-subtle-foreground transition-transform duration-200',
+            isExpanded && 'rotate-180',
+          )}
+          aria-hidden
+        />
       </button>
       {isExpanded && (
-        <div className={styles.content} data-testid="thinking-content">
+        <div
+          className="max-h-80 overflow-y-auto border-t border-border px-3.5 py-2.5 text-[13px] leading-relaxed text-muted-foreground motion-safe:animate-fade-up"
+          data-testid="thinking-content"
+        >
           <MarkdownRenderer content={content} />
         </div>
       )}

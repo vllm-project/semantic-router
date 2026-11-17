@@ -44,7 +44,7 @@ test('dashboard overview reports a failed config request and recovers on retry',
 
   await expect(page.getByText(/^Failed to load data:/)).toHaveCount(0)
   await expect(page.getByText(/^Updated /)).toBeVisible()
-  await expect(page.getByRole('button').filter({ hasText: 'Models' }).first()).toContainText('1')
+  await expect(page.getByTestId('home-count-models')).toContainText('1')
 })
 
 test('dashboard overview keeps the last loaded config when a refresh fails and recovers automatically', async ({
@@ -78,7 +78,7 @@ test('dashboard overview keeps the last loaded config when a refresh fails and r
     page.getByText('Failed to load data: Router config request failed (HTTP 502)'),
   ).toBeVisible()
   await expect(updated).toHaveText(updatedBefore ?? '')
-  await expect(page.getByRole('button').filter({ hasText: 'Models' }).first()).toContainText('1')
+  await expect(page.getByTestId('home-count-models')).toContainText('1')
 
   configStatus = 200
   await page.clock.fastForward(30_000)

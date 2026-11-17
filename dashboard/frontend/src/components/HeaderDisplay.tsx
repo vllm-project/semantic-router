@@ -18,8 +18,9 @@ import {
   X_VSR_SELECTED_RECIPE,
   X_VSR_WARNINGS,
 } from '../generated/vsrHeaders'
-import styles from './HeaderDisplay.module.css'
-import ProductIcon from './ProductIcon'
+import { ChevronDown, Split } from 'lucide-react'
+import { ProviderLogo, cn } from '../ui'
+import { modelProviderId, useInsightsConfig } from '../pages/insightsConfigFacts'
 import {
   formatLearningHeaderValue,
   isLearningHeader,
@@ -154,7 +155,15 @@ function routingHeaderPriority(key: string): number {
   return 5
 }
 
+const TYPE_TEXT: Record<HeaderType, string> = {
+  info: 'text-foreground',
+  success: 'text-success-foreground',
+  warning: 'text-warning-foreground',
+  danger: 'text-destructive-foreground',
+}
+
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
+  const { modelProviders } = useInsightsConfig()
   // Filter to only show headers that exist
   const hasSelectedAlgorithm = Boolean(headers[ALGORITHM])
   const displayHeaders = Object.entries(headers)
@@ -186,18 +195,36 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
     ([key]) => !primaryKeys.includes(key) && !performanceKeys.includes(key),
   )
 
-  const renderHeader = ([key, value]: [string, string]) => {
+  const renderHeader = ([key, value]: [string, string], primary = false) => {
     const info = HEADER_INFO[key]
     const displayValue = summarizeHeaderValue(key, value)
     const unit = key.endsWith('-ms') || key.endsWith('_ms') ? ' ms' : ''
+    const isDecision = key === X_VSR_SELECTED_DECISION
+    const isModel = key === X_VSR_SELECTED_MODEL || key === LOOPER_MODEL
+    const provider = isModel ? modelProviderId(value, modelProviders) : undefined
     return (
       <div
         key={key}
-        className={`${styles.header} ${styles[info.type]}`}
+        data-header-type={info.type}
+        className={cn(
+          'inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs',
+          primary
+            ? isDecision
+              ? 'border-chart-3/30 bg-chart-3/[0.07]'
+              : 'border-border bg-surface'
+            : 'border-border bg-surface-subtle/70',
+        )}
         title={`${info.label}: ${displayValue}${unit}`}
       >
-        <span className={styles.label}>{info.label}</span>
-        <span className={styles.value}>
+        {isDecision ? <Split className="size-3.5 shrink-0 text-chart-3" aria-hidden /> : null}
+        {provider ? <ProviderLogo provider={provider} size={13} /> : null}
+        <span className="shrink-0 text-subtle-foreground">{info.label}</span>
+        <span
+          className={cn(
+            'min-w-0 truncate font-medium',
+            isDecision ? 'text-chart-3' : TYPE_TEXT[info.type],
+          )}
+        >
           {displayValue}
           {unit}
         </span>
@@ -211,31 +238,38 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
     return (
       <div
         key={key}
-        className={styles.performanceMetric}
+        className="inline-flex items-baseline gap-1 text-xs text-subtle-foreground"
         title={`${info.label}: ${displayValue} ms`}
       >
         <span>{info.label}</span>
-        <strong>{displayValue}</strong>
-        <small>ms</small>
+        <strong className="font-mono font-medium text-foreground/85 tabular">{displayValue}</strong>
+        <small className="text-[11px]">ms</small>
       </div>
     )
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.headers}>
-        {primaryHeaders.map(renderHeader)}
+    <div className="flex w-full min-w-0 flex-col gap-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        {primaryHeaders.map((entry) => renderHeader(entry, true))}
         {performanceHeaders.length > 0 ? (
-          <div className={styles.performance}>{performanceHeaders.map(renderPerformance)}</div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1">
+            {performanceHeaders.map(renderPerformance)}
+          </div>
         ) : null}
       </div>
       {detailHeaders.length > 0 ? (
-        <details className={styles.details}>
-          <summary className={styles.detailsToggle} aria-label="Show response details">
+        <details className="group/details w-full">
+          <summary
+            className="inline-flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-xs font-medium text-subtle-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden"
+            aria-label="Show response details"
+          >
             <span>Response details</span>
-            <ProductIcon name="chevron-down" width={13} height={13} />
+            <ChevronDown className="size-3.5 transition-transform group-open/details:rotate-180" />
           </summary>
-          <div className={styles.detailsPanel}>{detailHeaders.map(renderHeader)}</div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {detailHeaders.map((entry) => renderHeader(entry))}
+          </div>
         </details>
       ) : null}
     </div>
