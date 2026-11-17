@@ -71,6 +71,7 @@ class GitHubClient:
         method: str = "GET",
         payload: dict[str, Any] | None = None,
         ignore_not_found: bool = False,
+        ignore_unprocessable: bool = False,
     ) -> Any:
         command = ["gh", "api", endpoint, "--method", method, "--include"]
         if payload is not None:
@@ -96,6 +97,9 @@ class GitHubClient:
             if result.returncode == 0:
                 return json.loads(body) if body.strip() else None
             if ignore_not_found and "HTTP 404" in result.stderr:
+                return None
+            if ignore_unprocessable and "HTTP 422" in result.stderr:
+                sys.stderr.write(result.stderr)
                 return None
             server_error = SERVER_ERROR.search(result.stderr[-256:])
             delay = next(delays, None)
@@ -798,7 +802,8 @@ def request_workgroup_review(
 
     number = int(pull_request["number"])
     author = (pull_request.get("user") or {}).get("login") or ""
-    leads = {login.casefold() for login in workgroup_reviewers(owner_label, author)}
+    reviewers = workgroup_reviewers(owner_label, author)
+    leads = {login.casefold() for login in reviewers}
     keep = leads | {login.casefold() for login in DEFAULT_REVIEWERS}
     requested_logins = {
         requested_user["login"].casefold()
@@ -824,16 +829,30 @@ def request_workgroup_review(
         for node in (graph.get("latestReviews") or {}).get("nodes") or []
         if (review_author := node.get("author")) and review_author.get("login")
     }
-    if leads & (requested_logins | reviewed_logins):
-        return
-    reviewer = desired_workgroup_reviewer(owner_label, number, author)
-    if not reviewer:
+    if not reviewers or leads & (requested_logins | reviewed_logins):
         return
 
-    client.request(
-        f"repos/{repo}/pulls/{number}/requested_reviewers",
-        method="POST",
-        payload={"reviewers": [reviewer]},
+    # GitHub refuses a Lead who is not yet a collaborator, such as one with a
+    # pending invitation; the next Lead in the rotation takes the request.
+    start = number % len(reviewers)
+    for reviewer in reviewers[start:] + reviewers[:start]:
+        if (
+            client.request(
+                f"repos/{repo}/pulls/{number}/requested_reviewers",
+                method="POST",
+                payload={"reviewers": [reviewer]},
+                ignore_unprocessable=True,
+            )
+            is not None
+        ):
+            print(
+                f"::notice title=Review requested on #{number}::"
+                f"Requested {reviewer} for {owner_label}."
+            )
+            return
+    print(
+        f"::warning title=No review requested on #{number}::"
+        f"GitHub refused every {owner_label} Lead."
     )
 
 

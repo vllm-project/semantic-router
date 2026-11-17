@@ -616,6 +616,8 @@ class FakePullRequestApi:
         self.reviews: dict[int, list[dict]] = {}
         self.review_posts: list[tuple[int, str]] = []
         self.review_removals: list[tuple[int, str]] = []
+        self.review_attempts: list[tuple[int, str]] = []
+        self.non_collaborators: set[str] = set()
 
     def request(
         self,
@@ -624,6 +626,7 @@ class FakePullRequestApi:
         method: str = "GET",
         payload=None,
         ignore_not_found: bool = False,
+        ignore_unprocessable: bool = False,
     ):
         self.requests.append((method, endpoint))
         if endpoint == "graphql":
@@ -637,6 +640,11 @@ class FakePullRequestApi:
             if parts[5:] == ["requested_reviewers"]:
                 if method == "POST":
                     reviewer = payload["reviewers"][0]
+                    self.review_attempts.append((number, reviewer))
+                    if reviewer in self.non_collaborators:
+                        if not ignore_unprocessable:
+                            raise SystemExit(1)
+                        return None
                     self.requested_reviewers.setdefault(number, set()).add(reviewer)
                     self.review_posts.append((number, reviewer))
                 elif method == "DELETE":
@@ -918,6 +926,31 @@ class PullRequestReconciliationTests(unittest.TestCase):
                 )
             ],
         )
+
+    def refused_review(self, roster, non_collaborators):
+        pull_request = self.pull_request(
+            state="open",
+            labels=[],
+            user={"type": "User", "login": "contributor"},
+        )
+        client = FakePullRequestApi([pull_request], [self.accepted_issue()])
+        client.non_collaborators = set(non_collaborators)
+        rosters = {"wg/mom-routing": roster}
+        with mock.patch.dict(community_reviewers.WORKGROUP_REVIEWERS, rosters):
+            community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+        return client
+
+    def test_refused_lead_passes_the_request_to_the_next(self) -> None:
+        client = self.refused_review(("lead", "invited"), {"invited"})
+
+        self.assertEqual(client.review_attempts, [(7, "invited"), (7, "lead")])
+        self.assertEqual(client.review_posts, [(7, "lead")])
+
+    def test_refused_group_does_not_stop_the_sync(self) -> None:
+        client = self.refused_review(("lead", "invited"), {"lead", "invited"})
+
+        self.assertEqual(client.review_attempts, [(7, "invited"), (7, "lead")])
+        self.assertEqual(client.review_posts, [])
 
     def test_draft_or_unaccepted_pr_does_not_request_review(self) -> None:
         draft = self.pull_request(state="open", draft=True)
