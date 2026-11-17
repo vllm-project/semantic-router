@@ -50,12 +50,8 @@ Then add it to your global configuration, `~/.config/opencode/opencode.jsonc`
 The tiers are three models of one provider in your OpenCode configuration,
 lightest first, and your session runs on one of them: the router moves a
 subagent between them only when it starts from one of the three. Without
-`routing`, router and escalate stay off. OpenCode's background service reads
-the configuration when it starts, so restart it after a change:
-
-```bash
-opencode service restart
-```
+`routing`, router and escalate stay off. OpenCode applies a saved change
+within a few seconds; type `/reload` to apply it at once.
 
 `opencode plugin list` lists only plugins installed from npm or Git, so it does
 not show a plugin loaded from a folder.
@@ -343,7 +339,8 @@ token cannot be sent to another host.
 - **`/vsr-check` says an app has no answer.** The runtime is not answering at the
   connected URL, refuses the token, or is slower than the app's wait. Check
   that `vllm-srun serve` is running, or ask for `vsr-setup` again.
-- **A configuration change has no effect.** Run `opencode service restart`.
+- **A configuration change has no effect.** Type `/reload`. If it still has
+  none, run `opencode service restart`.
 - **Reads feel slower.** On a CPU runtime, redact and shield add up to their
   waits to a long output, and guard a fraction of a second per command part. A
   GPU runtime is several times faster; you can also shorten a wait (`/vsr-waits`) or
@@ -354,8 +351,7 @@ token cannot be sent to another host.
 
 ## Uninstall
 
-1. Take the plugin out of your OpenCode configuration and run
-   `opencode service restart`.
+1. Take the plugin out of your OpenCode configuration and save it.
 2. Remove the credential in `/connect`, if you connected a runtime.
 3. If `vsr-setup` installed a runtime and the Claude Code plugin does not use
    it, stop it and delete `~/.local/share/vsr`:
