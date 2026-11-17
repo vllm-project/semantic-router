@@ -419,13 +419,15 @@ func looperResponseUsageMetrics(usage looper.TokenUsage) responseUsageMetrics {
 	if usage.Unreported {
 		return responseUsageMetrics{invalid: true, invalidReason: "looper_usage_unreported"}
 	}
+	// The aggregate cannot tell a reported zero from an omitted cache field, so
+	// only a positive count is backend-reported; otherwise the router estimates.
 	metrics := responseUsageMetrics{
 		promptTokens:               int(usage.PromptTokens),
 		promptTokensReported:       true,
 		cachedPromptTokens:         int(usage.CachedInputTokens),
-		cachedPromptTokensReported: true,
+		cachedPromptTokensReported: usage.CachedInputTokens > 0,
 		cacheWriteTokens:           int(usage.CacheWriteTokens),
-		cacheWriteTokensReported:   true,
+		cacheWriteTokensReported:   usage.CacheWriteTokens > 0,
 		completionTokens:           int(usage.CompletionTokens),
 		completionTokensReported:   true,
 		totalTokens:                int(usage.TotalTokens),

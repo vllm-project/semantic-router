@@ -142,6 +142,27 @@ func TestRecordSuccessfulLooperExecutionRecordsCacheTokenBuckets(t *testing.T) {
 	assert.Equal(t, int64(20), snapshot.CumulativeCompletionTokens)
 }
 
+func TestRecordSuccessfulLooperExecutionEstimatesCacheWhenBackendOmitsIt(t *testing.T) {
+	sessiontelemetry.ResetForTesting()
+	t.Cleanup(sessiontelemetry.ResetForTesting)
+
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	ctx := &RequestContext{
+		RequestID: "req-looper-no-cache", SessionID: "session-no-cache",
+		RequestModel: "synthesizer", PreviousModel: "synthesizer",
+		HistoryTokenCount: 800, CacheWarmthEstimate: 1,
+	}
+	router.recordSuccessfulLooperExecution(&looper.Response{
+		Model: "synthesizer",
+		Usage: looper.TokenUsage{PromptTokens: 1000, CompletionTokens: 20, TotalTokens: 1020},
+	}, "vllm-sr/auto", &config.Decision{Name: "panel"}, ctx, nil)
+
+	snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot("session-no-cache", time.Now())
+	require.True(t, ok)
+	assert.Equal(t, "router_estimated", snapshot.LastCacheAccountingSource)
+	assert.Equal(t, int64(800), snapshot.CumulativeEstimatedCachedTokens)
+}
+
 func TestRecordSuccessfulLooperExecutionSkipsUnreportedUsageTotals(t *testing.T) {
 	sessiontelemetry.ResetForTesting()
 	t.Cleanup(sessiontelemetry.ResetForTesting)
