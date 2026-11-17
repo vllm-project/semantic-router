@@ -36,11 +36,10 @@ test('keeps quotes and backslashes intact when a Builder signal is saved', async
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: config }))
   await page.goto('/builder')
 
-  await page.getByText('Numbered Steps', { exact: true }).click()
+  await page.getByRole('button', { name: /^numbered_steps\b/ }).click()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
 
-  await page.getByRole('button', { name: 'DSL', exact: true }).first().click()
-  await page.getByRole('button', { name: 'Compile', exact: true }).click()
+  await page.getByRole('radio', { name: 'YAML', exact: true }).click()
   const compiled = page.locator('pre').filter({ hasText: 'name: numbered_steps' })
   await expect(compiled).toContainText(
     'description: Prompts that contain numbered list items such as "1. ..."',

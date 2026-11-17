@@ -120,7 +120,7 @@ async function deployPreviewYaml(page: Page, config: string) {
   await expect(page.getByRole('alert')).toHaveCount(0)
 
   const preview = page.waitForRequest('**/api/router/config/deploy/preview')
-  await page.getByRole('button', { name: 'Deploy', exact: true }).click()
+  await page.getByRole('button', { name: 'Review & deploy' }).click()
   return ((await preview).postDataJSON() as { yaml: string }).yaml
 }
 

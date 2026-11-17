@@ -46,17 +46,11 @@ const openBuilder = async (page: Page) => {
   await page.goto('/builder')
 }
 
-const fieldInput = (page: Page, label: string) =>
-  page
-    .locator('div[class*="fieldGroup"]', {
-      has: page.locator('label', { hasText: new RegExp(`^\\s*${label}\\b`) }),
-    })
-    .locator('input')
-    .first()
+const fieldInput = (page: Page, label: string) => page.getByLabel(new RegExp(`^${label}\\b`))
 
+// The YAML view compiles the working copy when it opens.
 const compiledOutput = async (page: Page, name: string) => {
-  await page.getByRole('button', { name: 'DSL', exact: true }).first().click()
-  await page.getByRole('button', { name: 'Compile', exact: true }).click()
+  await page.getByRole('radio', { name: 'YAML', exact: true }).click()
   return page.locator('pre').filter({ hasText: `name: ${name}` })
 }
 
@@ -78,7 +72,7 @@ test('saves a Builder signal whose name needs quotes', async ({ page }) => {
 test('saves a Builder route whose description contains a parenthesis', async ({ page }) => {
   await openBuilder(page)
 
-  await page.getByRole('button', { name: /^Coding Help\b/ }).click()
+  await page.getByRole('button', { name: /^coding_help_route\b/ }).click()
   await fieldInput(page, 'Priority').fill('150')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
 
@@ -88,7 +82,7 @@ test('saves a Builder route whose description contains a parenthesis', async ({ 
 test('deletes Builder entities whose headers need quotes', async ({ page }) => {
   await openBuilder(page)
 
-  const route = page.getByRole('button', { name: /^Coding Help\b/ })
+  const route = page.getByRole('button', { name: /^coding_help_route\b/ })
   await route.click()
   await page.getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(route).toHaveCount(0)

@@ -62,15 +62,14 @@ test('keeps the group a NOT applies to when a Builder route is saved', async ({ 
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: config }))
   await page.goto('/builder')
 
-  await page.getByRole('button', { name: /^Legal Review\b/ }).click()
+  await page.getByRole('button', { name: /^legal_review_route\b/ }).click()
   await expect(page.locator('code').filter({ hasText: 'legal_terms' })).toHaveText(condition)
   await expect(page.locator('pre').filter({ hasText: 'ROUTE legal_review_route' })).toContainText(
     `WHEN ${condition}`,
   )
 
   await page.getByRole('button', { name: 'Save', exact: true }).click()
-  await page.getByRole('button', { name: 'DSL', exact: true }).first().click()
-  await page.getByRole('button', { name: 'Compile', exact: true }).click()
+  await page.getByRole('radio', { name: 'YAML', exact: true }).click()
   const compiled = page.locator('pre').filter({ hasText: 'name: legal_review_route' })
   await expect(compiled).toContainText(
     '- operator: NOT conditions: - operator: AND conditions: - type: keyword name: opinion_request',

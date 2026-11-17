@@ -67,11 +67,10 @@ test('keeps route settings outside the form when a Builder route is saved', asyn
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: config }))
   await page.goto('/builder')
 
-  await page.getByRole('button', { name: /^Guard\b/ }).click()
+  await page.getByRole('button', { name: /^guard_route\b/ }).click()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
 
-  await page.getByRole('button', { name: 'DSL', exact: true }).first().click()
-  await page.getByRole('button', { name: 'Compile', exact: true }).click()
+  await page.getByRole('radio', { name: 'YAML', exact: true }).click()
   const compiled = page.locator('pre').filter({ hasText: 'name: guard_route' })
   for (const setting of [
     'tier: 2',
