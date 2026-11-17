@@ -30,7 +30,7 @@ def test_installed_varlen_api_matches_per_row_attention(groups):
     """Exercise the installed torch interface and its real GPU GQA kernel."""
     if not torch.cuda.is_available():
         pytest.skip("needs a CUDA or ROCm GPU")
-    from torch.nn.attention.varlen import varlen_attn
+    varlen_attn = pytest.importorskip("torch.nn.attention.varlen").varlen_attn
 
     torch.manual_seed(4)
     packed = Packed([3, 7, 1], torch.device("cuda"))
@@ -42,6 +42,41 @@ def test_installed_varlen_api_matches_per_row_attention(groups):
     out = _wrap_varlen(varlen_attn)(q, k, v, packed, scale=64**-0.5, groups=groups)
     want = varlen_attention_ref(q, k, v, packed, scale=64**-0.5, groups=groups)
     torch.testing.assert_close(out, want, rtol=0.02, atol=0.02)
+
+
+def _device_kernels():
+    from vllm_srun.accel.cuda import CUDAAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
+
+    accelerator = ROCmAccelerator() if torch.version.hip else CUDAAccelerator()
+    return accelerator.kernels(accelerator.devices()[0])
+
+
+@pytest.mark.parametrize("scale", [64**-0.5, 0.1])
+@pytest.mark.parametrize("groups", [1, 2])
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+def test_the_device_varlen_kernel_keeps_each_row_to_itself(groups, scale, dtype):
+    """The kernel the device registers, whichever PyTorch API provides it."""
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA or ROCm GPU")
+    kernels = _device_kernels()
+    if kernels.preferred_source("varlen_attention") == "torch-reference":
+        pytest.skip("no variable-length attention kernel on this device")
+    attend = kernels.preferred("varlen_attention")
+    torch.manual_seed(5)
+    packed = Packed([3, 7, 1], torch.device("cuda"))
+    q = torch.randn(11, 4, 64, device="cuda", dtype=dtype)
+    k, v = (
+        torch.randn(11, 4 // groups, 64, device="cuda", dtype=dtype) for _ in range(2)
+    )
+    out = attend(q, k, v, packed, scale=scale, groups=groups)
+    want = varlen_attention_ref(q, k, v, packed, scale=scale, groups=groups)
+    torch.testing.assert_close(out, want, rtol=0.02, atol=0.02)
+    # Changing the middle row leaves its neighbours bit for bit.
+    q[3:10], k[3:10], v[3:10] = q[3:10] + 1, k[3:10] - 1, v[3:10] * 2
+    moved = attend(q, k, v, packed, scale=scale, groups=groups)
+    assert torch.equal(moved[:3], out[:3]) and torch.equal(moved[10:], out[10:])
+    assert not torch.equal(moved[3:10], out[3:10])
 
 
 def _serve(path, variant, seed):
@@ -86,7 +121,9 @@ def test_merged_rows_pack_where_the_kernels_allow(served):
     if not engine.supports_packed:
         pytest.skip(engine.receipt()["packed"]["skipped"])
     assert served.model.packs_merged_rows
-    assert engine.receipt()["packed"] == {"attention": "torch-varlen-attention"}
+    assert engine.receipt()["packed"] == {
+        "attention": _device_kernels().preferred_source("varlen_attention")
+    }
 
 
 def test_packed_rows_answer_as_each_question_alone(served, png_url):
