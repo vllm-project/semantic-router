@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { MCPServerState } from '../tools/mcp'
+import { TooltipProvider } from '../ui'
 import { MCPAvailableToolsSection } from './MCPAvailableToolsSection'
 import { MCPServersSection } from './MCPServersSection'
 import type { UnifiedTool } from './mcpConfigPanelTypes'
@@ -32,69 +33,74 @@ function makeServer(index: number): MCPServerState {
   }
 }
 
-describe('MCP enterprise catalog sections', () => {
-  it('renders an accessible, bounded tools page instead of the full catalog', () => {
+const render = (element: ReturnType<typeof createElement>) =>
+  renderToStaticMarkup(createElement(TooltipProvider, null, element))
+
+function serversSection(servers: MCPServerState[], isReadonly: boolean) {
+  return render(
+    createElement(MCPServersSection, {
+      servers,
+      filteredServers: servers,
+      serverFilter: 'all',
+      serverSearch: '',
+      serverSort: 'name-asc',
+      isReadonly,
+      actionLoading: null,
+      onServerFilterChange: vi.fn(),
+      onServerSearchChange: vi.fn(),
+      onServerSortChange: vi.fn(),
+      onOpenServer: vi.fn(),
+      onToggleConnection: vi.fn(),
+      onToggleEnabled: vi.fn(),
+      onEditServer: vi.fn(),
+      onDeleteServer: vi.fn(),
+      onAddServer: vi.fn(),
+      onRefresh: vi.fn(),
+    }),
+  )
+}
+
+describe('MCP catalog sections', () => {
+  it('renders a bounded tools page instead of the full catalog', () => {
     const tools = Array.from({ length: 31 }, (_, index) => makeTool(index))
-    const markup = renderToStaticMarkup(
+    const markup = render(
       createElement(MCPAvailableToolsSection, {
         allAvailableTools: tools,
         filteredTools: tools,
         toolSearch: '',
         toolSort: 'name-asc',
         toolSourceFilter: 'all',
-        toolsSectionExpanded: true,
         onSearchChange: vi.fn(),
         onSelectTool: vi.fn(),
         onSortChange: vi.fn(),
         onSourceFilterChange: vi.fn(),
-        onToggleExpanded: vi.fn(),
       }),
     )
 
-    expect(markup).toContain('aria-expanded="true"')
     expect(markup.match(/aria-label="View details for Tool/g)).toHaveLength(12)
-    expect(markup).toContain('1–12 of 31 tools')
-    expect(markup).toContain('Client view · 12 per page')
+    expect(markup).toContain('1–12')
+    expect(markup).toContain('31</span> tools')
+    expect(markup).toContain('12 per page')
     expect(markup).toContain('aria-label="Next tools page"')
   })
 
-  it('renders only one bounded server page and keeps management controls disabled in read-only mode', () => {
-    const servers = Array.from({ length: 20 }, (_, index) => makeServer(index))
-    const markup = renderToStaticMarkup(
-      createElement(MCPServersSection, {
-        actionLoading: null,
-        builtInExpanded: false,
-        expandedServers: new Set<string>(),
-        filteredServers: servers,
-        isReadonly: true,
-        registryTools: [],
-        serverFilter: 'all',
-        serverSearch: '',
-        serverSort: 'name-asc',
-        servers,
-        serversSectionExpanded: true,
-        toolsDbExpanded: false,
-        toolsDbLoading: false,
-        toolsDbTools: [],
-        onDeleteServer: vi.fn(),
-        onEditServer: vi.fn(),
-        onSelectTool: vi.fn(),
-        onServerFilterChange: vi.fn(),
-        onServerSearchChange: vi.fn(),
-        onServerSortChange: vi.fn(),
-        onToggleBuiltInExpanded: vi.fn(),
-        onToggleConnection: vi.fn(),
-        onToggleServerExpand: vi.fn(),
-        onToggleServersSection: vi.fn(),
-        onToggleToolsDbExpanded: vi.fn(),
-      }),
+  it('renders one bounded server page with its status', () => {
+    const markup = serversSection(
+      Array.from({ length: 20 }, (_, index) => makeServer(index)),
+      true,
     )
 
-    expect(markup).toContain('aria-expanded="true"')
-    expect(markup.match(/aria-label="Edit Server/g)).toHaveLength(8)
-    expect(markup.match(/aria-label="Delete Server/g)).toHaveLength(8)
-    expect(markup).toContain('1–8 of 20 servers')
-    expect(markup).toContain('Client view · 8 per page')
-    expect(markup).toMatch(/disabled=""[^>]*aria-label="Edit Server 00"/)
+    expect(markup).toContain('Server 00')
+    expect(markup).toContain('Server 07')
+    expect(markup).not.toContain('Server 08')
+    expect(markup).toContain('8 per page')
+    expect(markup).toContain('Connected')
+    expect(markup).toContain('Not connected')
+  })
+
+  it('offers adding a server only to people who may manage them', () => {
+    expect(serversSection([], true)).toContain('No MCP servers are configured.')
+    expect(serversSection([], true)).not.toContain('>Add server<')
+    expect(serversSection([], false)).toContain('Add server')
   })
 })

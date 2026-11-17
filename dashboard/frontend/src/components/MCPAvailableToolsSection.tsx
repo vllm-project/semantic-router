@@ -1,10 +1,30 @@
-import React, { useEffect, useId, useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Box, Blocks, Server, Wrench } from 'lucide-react'
 
-import styles from './MCPConfigPanel.module.css'
+import {
+  Badge,
+  Button,
+  Card,
+  DataToolbar,
+  EmptyState,
+  IconTile,
+  Segmented,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui'
 import { MCPListPagination } from './MCPListPagination'
 import type { ToolSort, ToolSourceFilter, UnifiedTool } from './mcpConfigPanelTypes'
 import { MCP_TOOLS_PAGE_SIZE } from './mcpConfigPanelTypes'
-import { getMCPPageCount, paginateMCPItems } from './mcpConfigPanelUtils'
+import {
+  TOOL_SOURCE_META,
+  getMCPPageCount,
+  paginateMCPItems,
+  toolIcon,
+} from './mcpConfigPanelUtils'
 
 interface MCPAvailableToolsSectionProps {
   allAvailableTools: UnifiedTool[]
@@ -12,12 +32,53 @@ interface MCPAvailableToolsSectionProps {
   toolSearch: string
   toolSort: ToolSort
   toolSourceFilter: ToolSourceFilter
-  toolsSectionExpanded: boolean
   onSearchChange: (value: string) => void
   onSelectTool: (tool: UnifiedTool) => void
   onSortChange: (sort: ToolSort) => void
   onSourceFilterChange: (filter: ToolSourceFilter) => void
-  onToggleExpanded: () => void
+}
+
+const SOURCE_ICON = { mcp: Blocks, frontend: Box, backend: Server } as const
+
+function ToolCard({ tool, onSelect }: { tool: UnifiedTool; onSelect: () => void }) {
+  const Icon = toolIcon(tool.name)
+  const source = TOOL_SOURCE_META[tool.sourceType]
+  const SourceIcon = SOURCE_ICON[tool.sourceType]
+  return (
+    <Card
+      interactive
+      role="button"
+      tabIndex={0}
+      aria-label={`View details for ${tool.name}`}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect()
+        }
+      }}
+      className="flex h-full w-full min-w-0 flex-col gap-3 p-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
+    >
+      <IconTile icon={Icon} tone="slate" />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="truncate font-mono text-[12.5px] font-semibold">{tool.name}</span>
+        <p className="line-clamp-2 min-h-8 text-xs leading-relaxed text-muted-foreground">
+          {tool.description || 'No description'}
+        </p>
+      </div>
+      <div className="mt-auto flex items-center gap-1.5 border-t border-border pt-3">
+        <Badge tone={source.tone} className="min-w-0">
+          <SourceIcon />
+          <span className="truncate">
+            {tool.sourceType === 'mcp' ? `${source.label} · ${tool.source}` : source.label}
+          </span>
+        </Badge>
+        <span className="ml-auto shrink-0 text-[11px] tabular text-subtle-foreground">
+          {tool.parameters.length} {tool.parameters.length === 1 ? 'param' : 'params'}
+        </span>
+      </div>
+    </Card>
+  )
 }
 
 export const MCPAvailableToolsSection: React.FC<MCPAvailableToolsSectionProps> = ({
@@ -26,18 +87,18 @@ export const MCPAvailableToolsSection: React.FC<MCPAvailableToolsSectionProps> =
   toolSearch,
   toolSort,
   toolSourceFilter,
-  toolsSectionExpanded,
   onSearchChange,
   onSelectTool,
   onSortChange,
   onSourceFilterChange,
-  onToggleExpanded,
 }) => {
-  const contentId = useId()
-  const searchInputId = useId()
   const [page, setPage] = useState(1)
   const pageCount = getMCPPageCount(filteredTools.length, MCP_TOOLS_PAGE_SIZE)
   const visibleTools = paginateMCPItems(filteredTools, page, MCP_TOOLS_PAGE_SIZE)
+  const count = (source: ToolSourceFilter) =>
+    source === 'all'
+      ? allAvailableTools.length
+      : allAvailableTools.filter((tool) => tool.sourceType === source).length
 
   useEffect(() => setPage(1), [toolSearch, toolSort, toolSourceFilter])
   useEffect(() => {
@@ -45,146 +106,103 @@ export const MCPAvailableToolsSection: React.FC<MCPAvailableToolsSectionProps> =
   }, [page, pageCount])
 
   return (
-    <section className={styles.availableToolsSection}>
-      <div className={styles.sectionHeader}>
-        <button
-          type="button"
-          className={styles.sectionToggle}
-          onClick={onToggleExpanded}
-          aria-expanded={toolsSectionExpanded}
-          aria-controls={contentId}
-        >
-          <span className={styles.expandIcon} aria-hidden="true">
-            {toolsSectionExpanded ? '▼' : '▶'}
-          </span>
-          <span>Available Tools</span>
-          <span className={styles.toolCountBadge}>{allAvailableTools.length} tools</span>
-        </button>
+    <section className="flex flex-col gap-3" aria-labelledby="mcp-tools-title">
+      <div className="flex flex-col gap-0.5">
+        <h3 id="mcp-tools-title" className="text-[15px] font-semibold tracking-[-0.012em]">
+          Available tools
+        </h3>
+        <p className="text-[13px] text-muted-foreground">
+          Tools decisions can call. Built-in tools run in the dashboard; router tools come from the
+          tools database.
+        </p>
       </div>
-
-      {toolsSectionExpanded ? (
-        <div id={contentId}>
-          {allAvailableTools.length === 0 ? (
-            <div className={styles.noToolsAvailable}>
-              <span className={styles.emptyIcon} aria-hidden="true">
-                🔧
-              </span>
-              <p>No tools available</p>
-              <span className={styles.emptyHint}>
-                Connect an MCP server or add built-in tools to see them here.
-              </span>
-            </div>
-          ) : (
-            <>
-              <div className={styles.catalogControls}>
-                <div className={styles.searchField}>
-                  <label htmlFor={searchInputId}>Search tools</label>
-                  <div className={styles.toolSearchWrapper}>
-                    <input
-                      id={searchInputId}
-                      type="search"
-                      className={styles.toolSearchInput}
-                      placeholder="Name, source, or parameter"
-                      value={toolSearch}
-                      onChange={(event) => onSearchChange(event.target.value)}
-                    />
-                    {toolSearch ? (
-                      <button
-                        type="button"
-                        className={styles.clearSearchBtn}
-                        onClick={() => onSearchChange('')}
-                        aria-label="Clear tool search"
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                <label className={styles.catalogSelect}>
-                  <span>Source</span>
-                  <select
-                    value={toolSourceFilter}
-                    onChange={(event) =>
-                      onSourceFilterChange(event.target.value as ToolSourceFilter)
-                    }
-                  >
-                    <option value="all">All sources</option>
-                    <option value="mcp">MCP servers</option>
-                    <option value="frontend">Frontend</option>
-                    <option value="backend">Semantic Router</option>
-                  </select>
-                </label>
-                <label className={styles.catalogSelect}>
-                  <span>Sort</span>
-                  <select
-                    value={toolSort}
-                    onChange={(event) => onSortChange(event.target.value as ToolSort)}
-                  >
-                    <option value="name-asc">Name A–Z</option>
-                    <option value="source-asc">Source A–Z</option>
-                    <option value="parameters-desc">Most parameters</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className={styles.catalogMeta} aria-live="polite">
-                <strong>{filteredTools.length}</strong> of {allAvailableTools.length} tools
-                <span>Client view · {MCP_TOOLS_PAGE_SIZE} per page</span>
-              </div>
-
-              {filteredTools.length === 0 ? (
-                <div className={styles.noToolsFound}>
-                  No tools match the current search and source filter.
-                </div>
-              ) : (
-                <>
-                  <div className={styles.toolsGridWrapper}>
-                    <div className={styles.toolsGrid}>
-                      {visibleTools.map((tool) => (
-                        <button
-                          type="button"
-                          key={tool.id}
-                          className={`${styles.toolGridCard} ${styles[`source_${tool.sourceType}`]}`}
-                          onClick={() => onSelectTool(tool)}
-                          aria-label={`View details for ${tool.name}`}
-                        >
-                          <span className={styles.toolGridHeader}>
-                            <span className={styles.toolGridIcon} aria-hidden="true">
-                              🔧
-                            </span>
-                            <span className={styles.toolGridName}>{tool.name}</span>
-                          </span>
-                          <span className={styles.toolGridDesc}>
-                            {tool.description || 'No description'}
-                          </span>
-                          <span className={styles.toolCardMeta}>
-                            <span
-                              className={`${styles.sourceTypeBadge} ${styles[tool.sourceType]}`}
-                            >
-                              {tool.sourceType === 'mcp'
-                                ? 'MCP'
-                                : tool.sourceType === 'frontend'
-                                  ? 'Frontend'
-                                  : 'Backend'}
-                            </span>
-                            <span className={styles.sourceNameBadge}>{tool.source}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <MCPListPagination
-                    itemCount={filteredTools.length}
-                    itemLabel="tools"
-                    page={page}
-                    pageSize={MCP_TOOLS_PAGE_SIZE}
-                    onPageChange={setPage}
-                  />
-                </>
-              )}
-            </>
-          )}
+      <DataToolbar
+        search={toolSearch}
+        onSearchChange={onSearchChange}
+        placeholder="Search tools…"
+        className="mb-0"
+        filters={
+          <>
+            <Segmented
+              size="sm"
+              aria-label="Source"
+              value={toolSourceFilter}
+              onValueChange={onSourceFilterChange}
+              options={[
+                { value: 'all', label: `All · ${count('all')}` },
+                { value: 'mcp', label: `MCP · ${count('mcp')}` },
+                { value: 'frontend', label: `Built-in · ${count('frontend')}` },
+                { value: 'backend', label: `Router · ${count('backend')}` },
+              ]}
+            />
+            <Select value={toolSort} onValueChange={(value) => onSortChange(value as ToolSort)}>
+              <SelectTrigger size="sm" aria-label="Sort tools" className="min-w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name-asc">Name A–Z</SelectItem>
+                <SelectItem value="source-asc">Source A–Z</SelectItem>
+                <SelectItem value="parameters-desc">Most parameters</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+      />
+      {filteredTools.length ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <AnimatePresence initial={false} mode="popLayout">
+            {visibleTools.map((tool) => (
+              <motion.div
+                key={tool.id}
+                layout
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.97 }}
+                transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                className="flex min-w-0"
+              >
+                <ToolCard tool={tool} onSelect={() => onSelectTool(tool)} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
+      ) : (
+        <Card>
+          <EmptyState
+            compact
+            icon={Wrench}
+            tone="slate"
+            title={allAvailableTools.length ? 'No tools match' : 'No tools available'}
+            description={
+              allAvailableTools.length
+                ? 'No tools match the current search and source filter.'
+                : 'Connect an MCP server or add built-in tools to see them here.'
+            }
+            actions={
+              allAvailableTools.length ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onSearchChange('')
+                    onSourceFilterChange('all')
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : null
+            }
+          />
+        </Card>
+      )}
+      {filteredTools.length > 0 ? (
+        <MCPListPagination
+          itemCount={filteredTools.length}
+          itemLabel="tools"
+          page={page}
+          pageSize={MCP_TOOLS_PAGE_SIZE}
+          onPageChange={setPage}
+        />
       ) : null}
     </section>
   )

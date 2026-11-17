@@ -4,6 +4,28 @@ import type {
   MCPToolDefinition,
   MCPTransportType,
 } from '../tools/mcp'
+import type { LucideIcon } from 'lucide-react'
+import {
+  AppWindow,
+  Calculator,
+  CalendarDays,
+  CircleDot,
+  Clock,
+  CloudSun,
+  Database,
+  FilePen,
+  FileText,
+  FolderTree,
+  GitCommitHorizontal,
+  GitPullRequest,
+  Globe,
+  Image,
+  Mail,
+  Newspaper,
+  Search,
+  Terminal,
+  Wrench,
+} from 'lucide-react'
 import type { RegisteredTool } from '../tools'
 import type {
   BuiltInTool,
@@ -307,4 +329,76 @@ function extractSchemaParameters(schema?: ParameterSchemaLike): UnifiedToolParam
     description: property.description,
     required: required.includes(name),
   }))
+}
+
+const TOOL_ICON_RULES: Array<[RegExp, LucideIcon]> = [
+  [/weather|forecast/, CloudSun],
+  [/calc|math/, Calculator],
+  [/e?mail/, Mail],
+  [/calendar|event|slot|schedule/, CalendarDays],
+  [/time|clock|date/, Clock],
+  [/image|photo|picture/, Image],
+  [/news/, Newspaper],
+  [/pull_request|pull-request|\bpr\b/, GitPullRequest],
+  [/issue/, CircleDot],
+  [/commit|git/, GitCommitHorizontal],
+  [/sql|query|table|database|\bdb\b/, Database],
+  [/director|folder|list_files/, FolderTree],
+  [/write|edit|save/, FilePen],
+  [/file|read|doc/, FileText],
+  [/page|browser|open_web|url/, AppWindow],
+  [/search|find|lookup|web/, Search],
+]
+
+/** A recognisable icon for a tool from its name; a wrench when nothing fits. */
+export function toolIcon(name: string): LucideIcon {
+  const key = name.toLowerCase()
+  return TOOL_ICON_RULES.find(([pattern]) => pattern.test(key))?.[1] ?? Wrench
+}
+
+export const TOOL_SOURCE_META: Record<
+  UnifiedTool['sourceType'],
+  { label: string; tone: 'brand' | 'neutral' | 'outline' }
+> = {
+  mcp: { label: 'MCP', tone: 'brand' },
+  frontend: { label: 'Built-in', tone: 'neutral' },
+  backend: { label: 'Router', tone: 'outline' },
+}
+
+export const TRANSPORT_META: Record<
+  MCPTransportType,
+  { label: string; icon: LucideIcon; hint: string }
+> = {
+  stdio: { label: 'stdio', icon: Terminal, hint: 'Runs as a local process next to the dashboard.' },
+  'streamable-http': {
+    label: 'HTTP',
+    icon: Globe,
+    hint: 'Streamable HTTP endpoint, usually ending in /mcp.',
+  },
+}
+
+/** Whether a user may call tools directly (tools.use); old role-only sessions fall back to writers. */
+export function canRunToolCalls(user?: { role?: string; permissions?: string[] } | null): boolean {
+  if (Array.isArray(user?.permissions)) return user.permissions.includes('tools.use')
+  return user?.role === 'admin' || user?.role === 'write'
+}
+
+/** Where a server connects, for display: its command line or URL. */
+export function serverTarget(config: MCPServerConfig): string {
+  if (config.transport === 'stdio') {
+    const args = (config.connection.args ?? []).filter((arg) => arg !== MCP_REDACTED_ARGUMENTS)
+    const hidden = (config.connection.args ?? []).length !== args.length
+    return [config.connection.command ?? '', ...args, hidden ? '…' : ''].filter(Boolean).join(' ')
+  }
+  return (config.connection.url ?? '').replace(MCP_REDACTED_ARGUMENTS, '•••')
+}
+
+export const SERVER_STATUS_META: Record<
+  MCPServerState['status'],
+  { label: string; tone: 'success' | 'info' | 'danger' | 'neutral'; pulse?: boolean }
+> = {
+  connected: { label: 'Connected', tone: 'success' },
+  connecting: { label: 'Connecting', tone: 'info', pulse: true },
+  error: { label: 'Error', tone: 'danger' },
+  disconnected: { label: 'Not connected', tone: 'neutral' },
 }

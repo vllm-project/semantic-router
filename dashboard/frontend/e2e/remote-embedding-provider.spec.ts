@@ -164,7 +164,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
       { width: 390, height: 844 },
     ]) {
       await page.setViewportSize(viewport)
-      await page.goto('/status')
+      await page.goto('/observe/status')
 
       const panel = page.getByTestId('status-availability')
       await expect(panel).toBeVisible()
