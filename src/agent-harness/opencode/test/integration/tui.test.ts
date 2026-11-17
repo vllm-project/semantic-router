@@ -59,10 +59,7 @@ test(
       "/vsr-check reports the runtime check: " + screen.text.slice(-8000),
     );
     assert.ok(screen.text.includes("vSR decisions"), screen.text.slice(-8000));
-    assert.ok(
-      screen.text.includes("Observed child tokens:"),
-      screen.text.slice(-8000),
-    );
+    assert.ok(screen.text.includes("subagents "), screen.text.slice(-8000));
     assert.ok(
       screen.text.includes("Redact") && screen.text.includes("Shield"),
       screen.text.slice(-8000),
@@ -73,8 +70,8 @@ test(
         screen.text.slice(-8000),
     );
     assert.ok(
-      screen.text.includes("Runtime: HTTP reachable") &&
-        screen.text.includes("Apps: Router"),
+      screen.text.includes("runtime reachable") &&
+        /[○⇢] Router {2}[○↑] Escalate/.test(screen.text),
       "summary lines must not overlap: " + screen.text.slice(-8000),
     );
     const snapshot = (await native.rpc("snapshot", {
@@ -180,6 +177,12 @@ test(
       5,
     );
     assert.ok(open.last.includes("vSR decisions ·"), open.last);
+    // The theme's tokens resolve: a badge is drawn on its own color, not on the panel's.
+    const badge =
+      /48;2;([\d;]+)m REDACTED \x1b\[0;38;2;[\d;]+;48;2;([\d;]+)m/.exec(
+        open.ansi,
+      );
+    assert.ok(badge && badge[1] !== badge[2], JSON.stringify(badge?.[0]));
     const toggled = await native.terminal(
       run.sessionID,
       [
@@ -218,5 +221,35 @@ test(
       prompt.last.includes("vSR decisions ·"),
       "Esc at the prompt is OpenCode's, not the panel's: " + prompt.last,
     );
+  },
+);
+
+test(
+  "the newest decision shows above the prompt and the session's decisions in the sidebar",
+  { timeout: 60000 },
+  async (t) => {
+    const native = await fixture(t);
+    const run = await native.run("OUTPUT_CASE READ");
+    const screen = await native.terminal(
+      run.sessionID,
+      [
+        { at: 2500, keys: "\u0010" }, // ctrl+p: the command palette.
+        { at: 3200, keys: "Show sidebar" },
+        { at: 4000, keys: "\r" },
+        { at: 4500, keys: "\u001b" },
+      ],
+      6,
+    );
+    const composer = screen.last
+      .split("\n")
+      .find((line) => /^\s*vSR +[A-Z]+ /.test(line));
+    assert.match(
+      composer ?? "",
+      /vSR +(REDACTED|SHIELDED) +[▒◆] read …\/fixture\.txt .*· 2 decisions · \/vsr/,
+      screen.last,
+    );
+    assert.match(screen.last, /vSR +· 2 decisions · \/vsr/, screen.last);
+    assert.match(screen.last, /▒ redacted +read …\/fixture\.txt/, screen.last);
+    assert.match(screen.last, /◆ shielded +read …\/fixture\.txt/, screen.last);
   },
 );

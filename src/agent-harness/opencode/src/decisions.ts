@@ -81,6 +81,8 @@ export interface Decision {
   subject?: string;
   // Escalate's two scores, pushback and repeat, each held against its own threshold.
   features?: number[];
+  // The app's thresholds when the decision was made, in calibration's order, so a later calibration does not redraw it.
+  thresholds?: number[];
 }
 export const FEEDBACK = [
   "right",
@@ -118,6 +120,14 @@ interface Session {
   decisions: Decision[];
   feedback: Record<string, Feedback>;
 }
+// A finite, non-negative copy, or nothing.
+function thresholdsOf(values: readonly number[] | undefined) {
+  return values?.length &&
+    values.length <= 3 &&
+    values.every((value) => Number.isFinite(value) && value >= 0)
+    ? { thresholds: [...values] }
+    : {};
+}
 // Only a decision's clipped subject is kept of its text; prompts, outputs and model explanations are not.
 export class DecisionStore {
   private readonly sessions = new Map<string, Session>();
@@ -126,6 +136,8 @@ export class DecisionStore {
   private readonly maxSessions: number;
   private readonly maxDecisions: number;
   sink: DecisionSink | undefined;
+  // The thresholds in force for an app; each decision keeps a copy.
+  thresholds: ((app: App) => readonly number[]) | undefined;
   constructor(maxSessions: number, maxDecisions: number) {
     if (
       !Number.isInteger(maxSessions) ||
@@ -228,6 +240,7 @@ export class DecisionStore {
       ...(input.features === undefined
         ? {}
         : { features: [...input.features] }),
+      ...thresholdsOf(this.thresholds?.(input.app)),
     };
     const session = this.touch(input.sessionID);
     session.decisions.push(decision);

@@ -110,7 +110,7 @@ export async function host(t: TestContext, config: Record<string, unknown>) {
       sessionID: string,
       steps: { at: number; keys?: string; resize?: [number, number] }[],
       duration = 15,
-    ): Promise<{ text: string; last: string; exit: number }> {
+    ): Promise<{ text: string; last: string; ansi: string; exit: number }> {
       const driver = spawn(
         "python3",
         [resolve(import.meta.dirname, "terminal.py")],
@@ -127,7 +127,12 @@ export async function host(t: TestContext, config: Record<string, unknown>) {
       driver.stdin.end(JSON.stringify({ url, sessionID, steps, duration }));
       const [code] = await once(driver, "exit");
       assert.equal(code, 0, error);
-      return JSON.parse(output) as { text: string; last: string; exit: number };
+      return JSON.parse(output) as {
+        text: string;
+        last: string;
+        ansi: string;
+        exit: number;
+      };
     },
     async api(path: string, body?: unknown, method?: string): Promise<unknown> {
       const response = await fetch(url + path, {

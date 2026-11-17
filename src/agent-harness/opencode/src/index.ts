@@ -124,6 +124,7 @@ export default Plugin.define({
       set: (key, value) => ctx.storage.set(key, value as never),
     });
     await calibrated.load();
+    decisions.thresholds = (app) => thresholdsOf(settings)[app];
     const log = new DecisionLog(
       {
         get: (key) => ctx.storage.get(key),

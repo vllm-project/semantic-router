@@ -331,6 +331,9 @@ definition to call these through an OpenCode client. Snapshots are scoped to the
 requested session. Of a decision's text only its subject is kept: the command,
 child task, prompt or output source (file, address or command, never the output
 itself), on one line, at most 200 characters, with fixed secret patterns hidden.
+Each decision also keeps a copy of its app's thresholds when it was made
+(`thresholds`, in the calibration log's order), so a later calibration does not
+redraw the bars of decisions already made.
 The session view is memory-only and bounded by retention settings; the
 calibration log below is kept in plugin storage. A new server has a
 new snapshot instance ID, allowing clients to discard obsolete revisions.

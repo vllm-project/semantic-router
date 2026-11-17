@@ -34,7 +34,8 @@ def main():
     steps = list(config["steps"])
     try:
         while time.monotonic() - (ready or started) < config.get("duration", 15):
-            if ready is None and b"vSR" in data:
+            # The line vSR draws above the prompt; its colored mark splits "vSR" across style codes.
+            if ready is None and "decisions · /vsr".encode() in data:
                 ready = time.monotonic()
             elapsed = (time.monotonic() - (ready or started)) * 1000
             while ready is not None and steps and elapsed >= steps[0]["at"]:
@@ -64,10 +65,26 @@ def main():
         os.close(master)
     screen = Screen(45, 160, config["steps"])
     frames = screen.replay(data.decode(errors="replace"))
-    print(json.dumps({"text": "\n".join(frames), "last": "\n".join(screen.lines()), "exit": child.returncode, "readyAfter": None if ready is None else ready - started}))
+    print(json.dumps({"text": "\n".join(frames), "last": "\n".join(screen.lines()), "ansi": screen.ansi(), "exit": child.returncode, "readyAfter": None if ready is None else ready - started}))
 
 
 TOKEN = re.compile(r"\x1b[\]P_^X].*?(?:\x07|\x1b\\)|\x1b\[([0-?]*)[ -/]*([@-~])|\x1b[^\[\]]|.", re.S)
+
+
+BASE16 = [(0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0), (0, 0, 128), (128, 0, 128), (0, 128, 128), (192, 192, 192),
+          (128, 128, 128), (255, 0, 0), (0, 255, 0), (255, 255, 0), (0, 0, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255)]
+
+
+def xterm(n):
+    """A 256-color index as `r;g;b`."""
+    if n < 16:
+        rgb = BASE16[n]
+    elif n < 232:
+        n -= 16
+        rgb = tuple(0 if c == 0 else 55 + 40 * c for c in (n // 36, n // 6 % 6, n % 6))
+    else:
+        rgb = (8 + 10 * (n - 232),) * 3
+    return ";".join(map(str, rgb))
 
 
 class Screen:
@@ -81,10 +98,49 @@ class Screen:
     def resize(self, rows, cols):
         self.rows, self.cols = rows, cols
         self.cells = [[" "] * cols for _ in range(rows)]
+        self.styles = [[(None, None)] * cols for _ in range(rows)]
+        self.style = (None, None)
         self.row = self.col = 0
 
     def lines(self):
         return ["".join(line).rstrip() for line in self.cells]
+
+    def ansi(self):
+        """The final screen with its truecolor foreground and background, to look at the colors drawn."""
+        out = []
+        for chars, styles in zip(self.cells, self.styles):
+            line, last = "", None
+            for char, style in zip(chars, styles):
+                if style != last:
+                    fg, bg = style
+                    line += "\x1b[0" + (f";38;2;{fg}" if fg else "") + (f";48;2;{bg}" if bg else "") + "m"
+                    last = style
+                line += char
+            out.append(line + "\x1b[0m")
+        return "\n".join(out)
+
+    def sgr(self, params):
+        values = [int(v) if v.isdigit() else 0 for v in params.split(";")] if params else [0]
+        fg, bg = self.style
+        i = 0
+        while i < len(values):
+            v = values[i]
+            if v == 0:
+                fg = bg = None
+            elif v in (38, 48) and len(values) > i + 4 and values[i + 1] == 2:
+                color = ";".join(str(c) for c in values[i + 2 : i + 5])
+                fg, bg = (color, bg) if v == 38 else (fg, color)
+                i += 4
+            elif v in (38, 48) and len(values) > i + 2 and values[i + 1] == 5:
+                color = xterm(values[i + 2])
+                fg, bg = (color, bg) if v == 38 else (fg, color)
+                i += 2
+            elif v == 39:
+                fg = None
+            elif v == 49:
+                bg = None
+            i += 1
+        self.style = (fg, bg)
 
     def replay(self, text):
         frames, seen = [], set()
@@ -107,6 +163,7 @@ class Screen:
                 elif token >= " " and len(token) == 1:
                     if self.col < self.cols:
                         self.cells[self.row][self.col] = token
+                        self.styles[self.row][self.col] = self.style
                     self.col += 1
                 continue
             private = params.startswith("?")
@@ -119,6 +176,8 @@ class Screen:
                 snap()
             elif private:
                 continue
+            elif final == "m":
+                self.sgr(params)
             elif final in "Hf":
                 self.row = min(max(values[0], 1), self.rows) - 1
                 self.col = min(max(values[1] if len(values) > 1 else 1, 1), self.cols) - 1
@@ -144,6 +203,7 @@ class Screen:
                 if values[0] in (2, 3):
                     snap()
                     self.cells = [[" "] * self.cols for _ in range(self.rows)]
+                    self.styles = [[(None, None)] * self.cols for _ in range(self.rows)]
                 elif values[0] == 0:
                     self.cells[self.row][self.col :] = [" "] * (self.cols - self.col)
                     for line in self.cells[self.row + 1 :]:

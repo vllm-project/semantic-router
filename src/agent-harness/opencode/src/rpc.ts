@@ -73,6 +73,11 @@ const decision = {
       items: { type: "number", minimum: 0, maximum: 1 },
       maxItems: 2,
     },
+    thresholds: {
+      type: "array",
+      items: { type: "number", minimum: 0 },
+      maxItems: 3,
+    },
   },
   required: ["id", "sessionID", "app", "outcome", "at"],
   additionalProperties: false,

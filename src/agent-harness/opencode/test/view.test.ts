@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DecisionView, subjectLine, summary } from "../src/view.ts";
+import {
+  APP_LOOK,
+  DecisionView,
+  brief,
+  clip,
+  gauge,
+  modelName,
+  shortSubject,
+  subjectLine,
+  summary,
+  THEME_TOKENS,
+  tokenCount,
+  toneOf,
+} from "../src/view.ts";
 import type { ViewSnapshot, ViewState, ViewService } from "../src/view.ts";
 import { parseSettings } from "../src/settings.ts";
 import { DecisionStore } from "../src/decisions.ts";
@@ -220,4 +233,98 @@ test("a decision is shown by its subject, and by its call or turn only without o
     subjectLine({ ...decision, toolCallID: undefined, turnID: undefined }),
     "d1",
   );
+});
+
+test("the panel colors what needs a look, what went through in part, and what an app changed", () => {
+  for (const outcome of ["held", "declined", "withheld", "unverified"] as const)
+    assert.equal(toneOf({ app: "guard", outcome }), "error", outcome);
+  for (const outcome of ["partial", "skipped"] as const)
+    assert.equal(toneOf({ app: "redact", outcome }), "warning", outcome);
+  for (const outcome of ["allowed", "verified", "kept"] as const)
+    assert.equal(toneOf({ app: "check", outcome }), "muted", outcome);
+  assert.equal(toneOf({ app: "redact", outcome: "redacted" }), "purple");
+  assert.equal(toneOf({ app: "router", outcome: "routed" }), "info");
+  for (const look of Object.values(APP_LOOK))
+    assert.ok(THEME_TOKENS[look.tone].length > 0, look.glyph);
+});
+
+test("a gauge marks the decision's own thresholds on the scale its app scores on", () => {
+  const text = (found: ReturnType<typeof gauge>) =>
+    found?.parts.map((part) => part.text).join("");
+  const guard = gauge({ app: "guard", score: 0.82, thresholds: [0.9] }, 10);
+  assert.equal(text(guard), "████████░┃");
+  assert.equal(guard?.words, "0.82 < 0.90");
+  assert.equal(
+    gauge({ app: "redact", score: 1, thresholds: [0.7] }, 10)?.words,
+    "1.00 ≥ 0.70",
+  );
+  // The router scores a level from 0 to 2 against two lines.
+  const router = gauge(
+    { app: "router", score: 0.22, thresholds: [0.6, 1.4, 0.5] },
+    10,
+  );
+  assert.equal(text(router), "█░░┃░░░┃░░");
+  assert.equal(
+    router?.words,
+    "level 0.22 · light below 0.60, strong from 1.40",
+  );
+  // Escalate holds its larger score against that score's own line.
+  assert.equal(
+    gauge({
+      app: "escalate",
+      score: 0.7,
+      features: [0.2, 0.7],
+      thresholds: [0.6, 0.8],
+    })?.words,
+    "0.70 < 0.80",
+  );
+  assert.equal(gauge({ app: "check", score: 0.3 }, 4)?.words, "0.30");
+  assert.equal(gauge({ app: "check" }), undefined);
+});
+
+test("one line says what redact hid, where the router sent the task, or the score", () => {
+  assert.equal(
+    brief({ app: "redact", counts: { email: 1, phone: 2 } }),
+    "email ×1 · phone ×2",
+  );
+  assert.equal(
+    brief({
+      app: "router",
+      score: 0.2,
+      model: "deltallm/Qwen/Qwen3.8-27B-nothink",
+    }),
+    "→ Qwen3.8-27B-nothink",
+  );
+  assert.equal(
+    brief({ app: "guard", score: 0.82, thresholds: [0.9] }),
+    "0.82 < 0.90",
+  );
+  assert.equal(clip("read customer.txt", 8), "read cu…");
+  assert.equal(clip("short", 8), "short");
+  const subject = (text: string) =>
+    shortSubject({
+      id: "d",
+      sessionID: "s",
+      app: "guard",
+      outcome: "allowed",
+      at: 0,
+      subject: text,
+    });
+  assert.equal(
+    subject("read /home/kuntai/vsr-try/customer.txt"),
+    "read …/customer.txt",
+  );
+  assert.equal(subject("rm -rf ~/vsr-try/*"), "rm -rf …/*");
+  assert.equal(subject("列出 /home/a/b 的檔案"), "列出 …/b 的檔案");
+  assert.equal(subject("git status"), "git status");
+});
+
+test("the panel draws models and token counts compactly", () => {
+  assert.equal(
+    modelName("deltallm/Qwen/Qwen3.8-27B-nothink#default"),
+    "Qwen3.8-27B-nothink",
+  );
+  assert.equal(modelName("fixture"), "fixture");
+  assert.equal(tokenCount(297), "297");
+  assert.equal(tokenCount(36956), "37.0k");
 });

@@ -86,20 +86,31 @@ listener that publishes a System One model.
 
 ## What you see
 
-Above the prompt, one line counts the session's decisions:
-`vSR · 12 decisions · 0 partial · 0 withheld · /vsr`. A held command is OpenCode's
-own permission prompt, with the reason vSR held it. Everything else is in the
-decisions panel, `/vsr`:
+While the agent runs, the line above the prompt shows the newest decision, so
+it sits under the step it was made on:
+`vSR  REDACTED ▒ read …/customer.txt  email ×1 · phone ×1  · 9 decisions · /vsr`.
+It names what redact hid, the model the router picked, or the score against its
+threshold, and counts in red the decisions to look at. The sidebar (OpenCode's
+"Show sidebar", `<leader>b`) lists the session's decisions in order, one line
+each. A held command is OpenCode's own permission prompt, with the reason vSR
+held it. OpenCode draws its transcript itself, so vSR cannot add lines under
+each step there.
+
+The decisions panel, `/vsr`, is for looking back:
 
 - At the top: whether the runtime answers, which apps are on, each app's wait,
   the router's goal, when you last calibrated, and the tokens and estimated cost
   of the session's subagents (from OpenCode's prices; a model with no known
   price is counted apart).
-- Then each decision, newest first: what it was about (the command, the
-  subagent's task, your prompt, or the file, page or command an output came
-  from), how long it took, its score and why:
+- Then each decision, newest first: its outcome in color (red needs a look,
+  amber went through only in part, quiet let things be), what it was about (the
+  command, the subagent's task, your prompt, or the file, page or command an
+  output came from), how long it took, and its score as a bar with the
+  thresholds in force when it was made marked on it. The router's score is a
+  difficulty level from 0 to 2, marked with its light and strong lines.
   - `routed`: vSR picked the subagent's model and effort from your tiers.
-    `Planned` is what vSR chose and `Observed` what the subagent actually ran on.
+    `→` names the model vSR chose, then `ran`, or the model the subagent
+    actually ran on when it differs.
   - `kept`: the subagent stays on its model: the router was not sure enough, the
     goal is `quality`, or the model is not one of your tiers.
   - `escalated`: you pushed back; the agent re-checks and the next subagent

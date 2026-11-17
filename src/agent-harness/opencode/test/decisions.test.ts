@@ -124,3 +124,29 @@ test("coverage and masking counts are validated metadata and snapshots are indep
   assert.throws(() => store.record({ ...input, counts: { secret: NaN } }));
   assert.throws(() => store.record({ ...input, counts: { secret: -1 } }));
 });
+
+test("a decision keeps the thresholds in force when it was made", () => {
+  const store = new DecisionStore(4, 10);
+  let line = 0.9;
+  store.thresholds = (app) => (app === "guard" ? [line] : [Number.NaN]);
+  const first = store.record({
+    sessionID: "s",
+    app: "guard",
+    outcome: "allowed",
+    score: 0.82,
+  });
+  line = 0.8;
+  store.record({ sessionID: "s", app: "guard", outcome: "held", score: 0.82 });
+  const kept = store.snapshot("s").decisions;
+  assert.deepEqual(first.thresholds, [0.9]);
+  assert.deepEqual(
+    kept.map((d) => d.thresholds),
+    [[0.9], [0.8]],
+  );
+  // A threshold that is not a finite number is not kept.
+  assert.equal(
+    store.record({ sessionID: "s", app: "redact", outcome: "allowed" })
+      .thresholds,
+    undefined,
+  );
+});

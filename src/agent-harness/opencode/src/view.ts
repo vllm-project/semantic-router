@@ -280,6 +280,114 @@ export const APP_NAMES = {
 } as const;
 export const subjectLine = (decision: Decision): string =>
   decision.subject ?? decision.toolCallID ?? decision.turnID ?? decision.id;
+
+// Colors by role. The panel resolves each against OpenCode's theme tokens, so they follow the theme in use.
+export type Tone =
+  | "text"
+  | "muted"
+  | "border"
+  | "focus"
+  | "background"
+  | "info"
+  | "success"
+  | "warning"
+  | "error"
+  | "blue"
+  | "purple"
+  | "orange";
+export const THEME_TOKENS: Record<Tone, readonly string[]> = {
+  text: ["text", "base"],
+  muted: ["text", "muted"],
+  border: ["border", "base"],
+  focus: ["background", "action", "primary", "focused"],
+  background: ["background", "base"],
+  info: ["text", "feedback", "info", "base"],
+  success: ["text", "feedback", "success", "base"],
+  warning: ["text", "feedback", "warning", "base"],
+  error: ["text", "feedback", "error", "base"],
+  blue: ["categorical", "0", "200"],
+  purple: ["categorical", "1", "200"],
+  orange: ["categorical", "3", "200"],
+};
+// The Claude Code plugin's glyphs, one color per app.
+export const APP_LOOK: Record<
+  keyof typeof APP_NAMES,
+  { glyph: string; tone: Tone }
+> = {
+  router: { glyph: "⇢", tone: "info" },
+  escalate: { glyph: "↑", tone: "orange" },
+  redact: { glyph: "▒", tone: "purple" },
+  shield: { glyph: "◆", tone: "blue" },
+  guard: { glyph: "‖", tone: "warning" },
+  check: { glyph: "✓", tone: "success" },
+};
+// A decision that needs a look is red, one that went through only in part amber, one that changed something in its
+// app's color, and one that let things be is quiet.
+const NEEDS_LOOK = new Set(["held", "declined", "withheld", "unverified"]);
+const IN_PART = new Set(["partial", "skipped"]);
+const LET_BE = new Set(["allowed", "verified", "kept"]);
+export function toneOf(decision: Pick<Decision, "app" | "outcome">): Tone {
+  if (NEEDS_LOOK.has(decision.outcome)) return "error";
+  if (IN_PART.has(decision.outcome)) return "warning";
+  if (LET_BE.has(decision.outcome)) return "muted";
+  return APP_LOOK[decision.app].tone;
+}
+export type GaugePart = { text: string; kind: "fill" | "rest" | "line" };
+// A score as a bar with the decision's thresholds marked on it, and the words that read it. The router's score is a
+// difficulty level from 0 to 2 against two lines; escalate's is the larger of its two scores, against that one's line.
+export function gauge(
+  decision: Pick<Decision, "app" | "score" | "features" | "thresholds">,
+  cells = 12,
+): { parts: GaugePart[]; words: string } | undefined {
+  const { score, thresholds = [] } = decision;
+  if (score === undefined) return undefined;
+  const max = decision.app === "router" ? 2 : 1;
+  const lines =
+    decision.app === "router"
+      ? thresholds.slice(0, 2)
+      : decision.app === "escalate"
+        ? thresholds
+            .slice(0, 2)
+            .filter((_, i) => {
+              const features = decision.features ?? [];
+              return (
+                features.length < 2 || features[i] === Math.max(...features)
+              );
+            })
+            .slice(0, 1)
+        : thresholds.slice(0, 1);
+  const at = (value: number) =>
+    Math.round((Math.min(max, Math.max(0, value)) / max) * cells);
+  const filled = at(score);
+  const marks = new Set(lines.map((line) => Math.min(cells - 1, at(line))));
+  const parts: GaugePart[] = [];
+  for (let cell = 0; cell < cells; cell++) {
+    const kind = marks.has(cell) ? "line" : cell < filled ? "fill" : "rest";
+    const text = kind === "line" ? "┃" : kind === "fill" ? "█" : "░";
+    const last = parts[parts.length - 1];
+    if (last?.kind === kind) last.text += text;
+    else parts.push({ kind, text });
+  }
+  const fixed = (value: number) => value.toFixed(2);
+  const words =
+    decision.app === "router"
+      ? `level ${fixed(score)}` +
+        (lines.length === 2
+          ? ` · light below ${fixed(lines[0]!)}, strong from ${fixed(lines[1]!)}`
+          : "")
+      : lines.length
+        ? `${fixed(score)} ${score >= lines[0]! ? "≥" : "<"} ${fixed(lines[0]!)}`
+        : fixed(score);
+  return { parts, words };
+}
+// A model as the panel names it: its last path part, without OpenCode's `#default` variant.
+export const modelName = (model: string): string =>
+  model
+    .replace(/#default$/, "")
+    .split("/")
+    .pop()!;
+export const tokenCount = (value: number): string =>
+  value < 1000 ? String(value) : `${(value / 1000).toFixed(1)}k`;
 export function median(values: readonly number[]): number | undefined {
   if (!values.length) return undefined;
   const sorted = [...values].sort((a, b) => a - b);
@@ -423,3 +531,30 @@ export interface CalibrationReport {
     calibrated: boolean;
   }[];
 }
+// At most `width` characters, an ellipsis taking the last when it is cut.
+export function clip(text: string, width: number): string {
+  const chars = Array.from(text);
+  return chars.length <= width
+    ? text
+    : chars.slice(0, Math.max(0, width - 1)).join("") + "…";
+}
+// What one line says of a decision beside its subject: what redact hid, the model the router picked, or the score
+// against its threshold.
+export function brief(
+  decision: Pick<
+    Decision,
+    "app" | "score" | "features" | "thresholds" | "counts" | "model"
+  >,
+): string {
+  const counts = Object.entries(decision.counts ?? {});
+  if (counts.length)
+    return counts.map(([label, count]) => `${label} ×${count}`).join(" · ");
+  if (decision.model) return `→ ${modelName(decision.model)}`;
+  return gauge(decision)?.words ?? "";
+}
+// A subject for a narrow line: each path down to its last part, so the file a step touched stays in view.
+export const shortSubject = (decision: Decision): string =>
+  subjectLine(decision).replace(
+    /(?:~|\.{1,2})?(?:\/[^\s/]+)+\/([^\s/]+)/g,
+    "…/$1",
+  );

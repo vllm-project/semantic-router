@@ -1,28 +1,54 @@
 import { Plugin } from "@opencode/plugin/tui";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
+import type { JSX } from "solid-js";
+import type { RGBA } from "@opentui/core";
 import { Vsr } from "./rpc.ts";
 import { APPS } from "./settings.ts";
 import type { App, Wait } from "./settings.ts";
 import {
+  APP_LOOK,
   APP_NAMES,
   calibrationQuestion,
   DecisionView,
   emptyView,
+  brief,
+  clip,
+  gauge,
+  modelName,
   report,
+  shortSubject,
   subjectLine,
   suggestionText,
   summary,
+  THEME_TOKENS,
+  tokenCount,
+  toneOf,
 } from "./view.ts";
 import type {
   CalibrationQuestion,
   CalibrationReport,
   CalibrationSuggestion,
+  Tone,
 } from "./view.ts";
 import type { ViewSnapshot, ViewState } from "./view.ts";
 import type { ControlResult } from "./controls.ts";
 import type { Decision, Feedback } from "./decisions.ts";
 import type { Verification } from "./verify.ts";
 
+// OpenCode colors a span through its style, which this OpenTUI's span type leaves out.
+// An unset color is left out: OpenTUI cannot parse one that is undefined.
+const Span = (props: { fg?: unknown; bg?: unknown; children: JSX.Element }) => (
+  <span
+    style={
+      {
+        ...(props.fg === undefined ? {} : { fg: props.fg }),
+        ...(props.bg === undefined ? {} : { bg: props.bg }),
+      } as object
+    }
+  >
+    {props.children}
+  </span>
+);
 const names: Record<App, string> = APP_NAMES;
 const outcome = (decision: Decision) =>
   decision.outcome === "verified"
@@ -430,14 +456,139 @@ export default Plugin.define({
         },
       ],
     }));
+    // A token the theme lacks gives no color rather than a broken one.
+    const tone = (name: Tone) =>
+      THEME_TOKENS[name].reduce<unknown>(
+        (node, key) =>
+          node && typeof node === "object"
+            ? (node as Record<string, unknown>)[key]
+            : undefined,
+        ctx.theme,
+      ) as RGBA | undefined;
+    const runtimeLook = (snapshot: ViewSnapshot) =>
+      snapshot.runtime.retryAt > Date.now()
+        ? { tone: "error" as const, words: "offline · retry pending" }
+        : snapshot.runtime.reachable === null
+          ? { tone: "muted" as const, words: "not checked yet" }
+          : snapshot.runtime.reachable
+            ? { tone: "success" as const, words: "reachable" }
+            : { tone: "error" as const, words: "offline" };
+    const attention = () =>
+      (current()?.decisions ?? []).filter(
+        (decision) => toneOf(decision) === "error",
+      ).length;
+    // The Claude Code plugin's mark without its ground: v in the theme's text color, S and R in the mark's hues.
+    const Brand = () =>
+      (
+        [
+          ["v", tone("text")],
+          ["S", "#fdb618"],
+          ["R", "#32a3ff"],
+        ] as const
+      ).map(([letter, color]) => (
+        <b style={{ fg: color } as object}>{letter}</b>
+      ));
+    // The bar a decision's score draws, its thresholds marked, then the words that read it.
+    const Gauge = (props: { decision: Decision }) => (
+      <Show when={gauge(props.decision)}>
+        {(found) => (
+          <text>
+            {found().parts.map((part) => (
+              <Span
+                fg={tone(
+                  part.kind === "fill"
+                    ? APP_LOOK[props.decision.app].tone
+                    : part.kind === "line"
+                      ? "text"
+                      : "border",
+                )}
+              >
+                {part.text}
+              </Span>
+            ))}
+            <Span fg={tone("muted")}>{` ${found().words}`}</Span>
+          </text>
+        )}
+      </Show>
+    );
+    const latest = () => current()?.decisions.at(-1);
+    // Above the prompt, the newest decision as it is made, under the step it was made on.
     const offComposer = ctx.ui.slot({
       append: "session.composer.top",
       render: () => (
-        <text fg={ctx.theme.textMuted}>
-          vSR · {view.loading ? "syncing · " : ""}
-          {total().total} decisions · {total().outcomes.partial ?? 0} partial ·{" "}
-          {total().outcomes.withheld ?? 0} withheld · /vsr
+        <text>
+          <Brand />{" "}
+          {latest() ? (
+            <Span bg={tone(toneOf(latest()!))} fg={tone("background")}>
+              {` ${latest()!.outcome.toUpperCase()} `}
+            </Span>
+          ) : (
+            ""
+          )}
+          {latest() ? (
+            <Span fg={tone(APP_LOOK[latest()!.app].tone)}>
+              {` ${APP_LOOK[latest()!.app].glyph} `}
+            </Span>
+          ) : (
+            ""
+          )}
+          {latest() ? clip(shortSubject(latest()!), 48) : ""}
+          {latest() && brief(latest()!) ? (
+            <Span fg={tone(APP_LOOK[latest()!.app].tone)}>
+              {`  ${brief(latest()!)}`}
+            </Span>
+          ) : (
+            ""
+          )}
+          <Span fg={tone("muted")}>
+            {`${latest() ? "  · " : "· "}${view.loading ? "syncing · " : ""}${total().total} decisions · /vsr`}
+          </Span>
+          {attention() ? (
+            <Span fg={tone("error")}>{` · ${attention()} to look at`}</Span>
+          ) : (
+            ""
+          )}
         </text>
+      ),
+    });
+    // The session's decisions in order, one line each, while it runs.
+    const SIDEBAR_ROWS = 12;
+    const offSidebar = ctx.ui.slot({
+      append: "sidebar.content",
+      render: (input) => (
+        <Show
+          when={
+            current()?.sessionID === input.sessionID &&
+            current()!.decisions.length
+          }
+        >
+          <box flexDirection="column" marginTop={1}>
+            <text>
+              <Brand />
+              <Span fg={tone("muted")}>
+                {` · ${total().total} decisions · /vsr`}
+              </Span>
+            </text>
+            <Show when={current()!.decisions.length > SIDEBAR_ROWS}>
+              <text fg={tone("muted")}>
+                {`… ${current()!.decisions.length - SIDEBAR_ROWS} earlier`}
+              </text>
+            </Show>
+            <For each={current()!.decisions.slice(-SIDEBAR_ROWS)}>
+              {(decision) => (
+                <text>
+                  <Span fg={tone(APP_LOOK[decision.app].tone)}>
+                    {`${APP_LOOK[decision.app].glyph} `}
+                  </Span>
+                  <Span fg={tone(toneOf(decision))}>
+                    {decision.outcome.padEnd(10)}
+                  </Span>
+                  {clip(shortSubject(decision), 24)}
+                </text>
+              )}
+            </For>
+          </box>
+        </Show>
       ),
     });
     let offPanel = () => {};
@@ -454,126 +605,208 @@ export default Plugin.define({
           return panel.name !== "vsr.decisions" ? null : (
             <box
               flexDirection="column"
-              padding={1}
               width={panel.width}
               height={Math.max(1, height() - 3)}
+              border
+              borderStyle="rounded"
+              borderColor={panel.focused ? tone("focus") : tone("border")}
+              paddingLeft={1}
+              paddingRight={1}
             >
-              {/* The list scrolls; the summary lines keep their height instead of drawing over each other. */}
-              <text flexShrink={0}>vSR decisions · {panel.sessionID}</text>
-              <text flexShrink={0} fg={ctx.theme.textMuted}>
-                /vsr-apps · /vsr-waits · /vsr-feedback · /vsr-check ·
-                /vsr-sessions
+              <text flexShrink={0}>
+                <Brand />
+                {" decisions"}
+                <Span fg={tone("muted")}>{` · ${panel.sessionID}`}</Span>
               </text>
               <Show when={view.error}>
-                <text flexShrink={0} fg={ctx.theme.warning}>
+                <text flexShrink={0} fg={tone("warning")}>
                   {view.error}
                 </text>
               </Show>
               <Show
                 when={current()}
-                fallback={<text flexShrink={0}>Loading vSR snapshot…</text>}
+                fallback={
+                  <text flexShrink={0} fg={tone("muted")}>
+                    Loading vSR snapshot…
+                  </text>
+                }
               >
                 {(snapshot) => (
                   <>
+                    {/* The list scrolls; the summary lines keep their height instead of drawing over each other. */}
                     <text flexShrink={0}>
-                      Runtime:{" "}
-                      {snapshot().runtime.retryAt > Date.now()
-                        ? "offline; retry pending"
-                        : snapshot().runtime.reachable === null
-                          ? "not checked"
-                          : snapshot().runtime.reachable
-                            ? "HTTP reachable"
-                            : "offline"}{" "}
-                      · {snapshot().runtime.models.length} known models
+                      <Span fg={tone(runtimeLook(snapshot()).tone)}>● </Span>
+                      runtime {runtimeLook(snapshot()).words}
+                      <Span fg={tone("muted")}>
+                        {` · ${snapshot().runtime.models.length} ${snapshot().runtime.models.length === 1 ? "model" : "models"} · `}
+                        {view.busy
+                          ? "saving…"
+                          : snapshot().controls.persistence === "durable"
+                            ? "saved"
+                            : "not saved"}
+                      </Span>
                     </text>
                     <text flexShrink={0}>
-                      Apps:{" "}
-                      {APPS.map(
-                        (app) =>
-                          `${names[app]} ${snapshot().apps[app] ? "on" : "off"}`,
-                      ).join(" · ")}
+                      {APPS.map((app) => (
+                        <Span
+                          fg={
+                            snapshot().apps[app]
+                              ? tone(APP_LOOK[app].tone)
+                              : tone("muted")
+                          }
+                        >
+                          {`${snapshot().apps[app] ? APP_LOOK[app].glyph : "○"} ${names[app]}  `}
+                        </Span>
+                      ))}
                     </text>
-                    <text flexShrink={0}>
-                      Waits:{" "}
+                    <text flexShrink={0} fg={tone("muted")}>
+                      waits{" "}
                       {Object.entries(snapshot().waits)
                         .map(
                           ([app, wait]) =>
-                            `${app} ${wait === "done" ? "strict" : `${wait / 1000}s`}`,
+                            `${app} ${wait === "done" ? "until done" : `${wait / 1000}s`}`,
                         )
                         .join(" · ")}{" "}
-                      · Goal: {snapshot().controls.goal}
+                      · goal {snapshot().controls.goal}
                     </text>
-                    <text flexShrink={0}>
-                      Controls: {snapshot().controls.persistence} ·{" "}
-                      {view.busy ? "saving…" : "confirmed"}
+                    <text flexShrink={0} marginTop={1}>
+                      <strong>{total().total}</strong> decisions
+                      <Span fg={tone("muted")}> · </Span>
+                      <Span fg={tone(total().masked ? "purple" : "muted")}>
+                        {total().masked} hidden
+                      </Span>
+                      <Span fg={tone("muted")}> · </Span>
+                      <Span fg={tone(attention() ? "error" : "muted")}>
+                        {attention()} to look at
+                      </Span>
+                    </text>
+                    <text flexShrink={0} fg={tone("muted")}>
+                      {total().children
+                        ? `subagents ${total().children} · ${tokenCount(total().input)} in · ${tokenCount(total().output)} out · ${tokenCount(total().cached)} cached · ${
+                            total().priced
+                              ? `~$${total().cost.toFixed(4)}${total().unpriced ? ` + ${total().unpriced} unpriced` : ""}`
+                              : "no prices"
+                          }`
+                        : "subagents none yet"}
                     </text>
                     <text
                       flexShrink={0}
                       fg={
                         snapshot().calibration.remind
-                          ? ctx.theme.warning
-                          : ctx.theme.textMuted
+                          ? tone("warning")
+                          : tone("muted")
                       }
                     >
-                      Calibration:{" "}
+                      calibrated{" "}
                       {snapshot().calibration.at
-                        ? `last ${new Date(snapshot().calibration.at!).toLocaleDateString()}`
-                        : "not yet"}{" "}
+                        ? new Date(
+                            snapshot().calibration.at!,
+                          ).toLocaleDateString()
+                        : "never"}{" "}
                       · {snapshot().calibration.since} decisions since
                       {snapshot().calibration.remind
                         ? " · time to run /vsr-calibrate"
                         : ""}
                     </text>
-                    <text flexShrink={0}>
-                      {total().total} decisions · {total().masked} masking
-                      findings · {total().outcomes.unverified ?? 0} unverified
-                    </text>
-                    <text flexShrink={0}>
-                      Observed child tokens: {total().input} input /{" "}
-                      {total().output} output / {total().cached} cached /{" "}
-                      {total().reasoning} reasoning
-                    </text>
-                    <text flexShrink={0}>
-                      {total().priced
-                        ? `Estimated child cost (known prices): $${total().cost.toFixed(6)}`
-                        : "Child cost: pricing unavailable"}{" "}
-                      · {total().unpriced} unpriced children
-                    </text>
-                    <scrollbox flexGrow={1} focused={panel.focused}>
+                    <scrollbox
+                      flexGrow={1}
+                      marginTop={1}
+                      focused={panel.focused}
+                    >
                       <For
                         each={[...snapshot().decisions].reverse()}
                         fallback={
-                          <text>No decisions in this session yet.</text>
+                          <text fg={tone("muted")}>
+                            No decisions in this session yet.
+                          </text>
                         }
                       >
                         {(decision) => (
-                          <box flexDirection="column" marginTop={1}>
+                          <box flexDirection="column" marginBottom={1}>
                             <text>
-                              {names[decision.app]} · {outcome(decision)}
-                              {snapshot().feedback[decision.id]
-                                ? ` · ${snapshot().feedback[decision.id]}`
-                                : ""}
+                              <Span
+                                bg={tone(toneOf(decision))}
+                                fg={tone("background")}
+                              >
+                                {` ${decision.outcome.toUpperCase()} `}
+                              </Span>
+                              <Span fg={tone(APP_LOOK[decision.app].tone)}>
+                                {` ${APP_LOOK[decision.app].glyph} ${names[decision.app]}`}
+                              </Span>
+                              <Span fg={tone("muted")}>
+                                {` · ${decision.elapsedMs ?? 0} ms`}
+                                {decision.reason &&
+                                decision.reason !== "selected"
+                                  ? ` · ${decision.reason.replaceAll("-", " ")}`
+                                  : ""}
+                              </Span>
                             </text>
                             <text>{subjectLine(decision)}</text>
-                            <text fg={ctx.theme.textMuted}>
-                              {decision.elapsedMs ?? 0} ms
-                              {decision.score === undefined
-                                ? ""
-                                : ` · score ${decision.score.toFixed(2)}`}
-                              {decision.reason
-                                ? ` · ${decision.reason.replaceAll("-", " ")}`
-                                : ""}
-                            </text>
+                            <Gauge decision={decision} />
                             <Show when={decision.model}>
                               <text>
-                                Planned: {decision.model} · Observed:{" "}
-                                {decision.observedModel ?? "pending"}
+                                <Span fg={tone("muted")}>→ </Span>
+                                {modelName(decision.model!)}
+                                <Span
+                                  fg={tone(
+                                    decision.observedModel &&
+                                      modelName(decision.observedModel) !==
+                                        modelName(decision.model!)
+                                      ? "warning"
+                                      : "muted",
+                                  )}
+                                >
+                                  {decision.observedModel
+                                    ? modelName(decision.observedModel) ===
+                                      modelName(decision.model!)
+                                      ? " · ran"
+                                      : ` · ran ${modelName(decision.observedModel)}`
+                                    : " · pending"}
+                                </Span>
                               </text>
                             </Show>
-                            <Show when={decision.coverage}>
-                              <text>
-                                Text checked: {decision.coverage?.checked}/
-                                {decision.coverage?.total} UTF-16 units
+                            <Show
+                              when={Object.keys(decision.counts ?? {}).length}
+                            >
+                              <text fg={tone("purple")}>
+                                hid{" "}
+                                {Object.entries(decision.counts ?? {})
+                                  .map(([label, count]) => `${label} ×${count}`)
+                                  .join(" · ")}
+                              </text>
+                            </Show>
+                            <Show
+                              when={decision.labels?.length && !decision.counts}
+                            >
+                              <text fg={tone("muted")}>
+                                {decision.labels!.join(" · ")}
+                              </text>
+                            </Show>
+                            <Show when={decision.usage}>
+                              <text fg={tone("muted")}>
+                                {tokenCount(decision.usage!.input)} in ·{" "}
+                                {tokenCount(decision.usage!.output)} out
+                              </text>
+                            </Show>
+                            <Show
+                              when={
+                                decision.coverage &&
+                                decision.coverage.checked <
+                                  decision.coverage.total
+                              }
+                            >
+                              <text fg={tone("warning")}>
+                                checked {decision.coverage?.checked} of{" "}
+                                {decision.coverage?.total} characters
+                              </text>
+                            </Show>
+                            <Show when={snapshot().feedback[decision.id]}>
+                              <text fg={tone("info")}>
+                                you said:{" "}
+                                {snapshot().feedback[decision.id]!.replaceAll(
+                                  "-",
+                                  " ",
+                                )}
                               </text>
                             </Show>
                           </box>
@@ -583,6 +816,11 @@ export default Plugin.define({
                   </>
                 )}
               </Show>
+              <text flexShrink={0} fg={tone("muted")}>
+                {panel.focused
+                  ? "Esc close · ctrl+x ← back to the prompt"
+                  : "/vsr-apps · /vsr-waits · /vsr-feedback · /vsr-check"}
+              </text>
             </box>
           );
         },
@@ -594,6 +832,7 @@ export default Plugin.define({
       offUpdated();
       offState();
       offComposer();
+      offSidebar();
       offPanel();
       controller.close();
     };
