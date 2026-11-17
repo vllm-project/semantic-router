@@ -2,7 +2,6 @@ import React from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
-import AuthTransitionPage from '../pages/AuthTransitionPage'
 import AuthGate from './AuthGate'
 import AuthenticatedShell from './AuthenticatedShell'
 import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
@@ -54,7 +53,6 @@ const AppRouter: React.FC = () => {
           path="/invite/:token"
           element={<RecoverableLazyRoute loader={loadInviteAcceptPage} routeLabel="Invitation" />}
         />
-        <Route path="/auth/transition" element={<AuthTransitionPage />} />
 
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>

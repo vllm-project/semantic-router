@@ -1,31 +1,52 @@
 import { useEffect, useState } from 'react'
+import { AppWindow, ExternalLink, RotateCw, ShieldCheck, type LucideIcon } from 'lucide-react'
 
-import ServiceNotConfigured, { type ServiceConfig } from './ServiceNotConfigured'
+import {
+  Alert,
+  Button,
+  IconTile,
+  PageContainer,
+  PageHeader,
+  StatusLabel,
+  type StatusTone,
+  type Tone,
+} from '../ui'
 import ProductLoadingState from './ProductLoadingState'
-import styles from './EmbeddedServicePage.module.css'
+import ServiceNotConfigured, { type ServiceConfig } from './ServiceNotConfigured'
 
 interface EmbeddedServicePageProps {
-  eyebrow: string
+  /** Retained for API compatibility; page headers no longer render an eyebrow. */
+  eyebrow?: string
   title: string
   description: string
   service: ServiceConfig
   availabilityUrl: string
   src: string
   iframeTitle: string
+  icon?: LucideIcon
+  tone?: Tone
+}
+
+type Availability = 'checking' | 'available' | 'missing' | 'failed'
+
+const availabilityStatus: Record<Availability, { tone: StatusTone; label: string }> = {
+  checking: { tone: 'info', label: 'Checking connection' },
+  available: { tone: 'success', label: 'Connected through dashboard' },
+  missing: { tone: 'neutral', label: 'Not configured' },
+  failed: { tone: 'danger', label: 'Connection unavailable' },
 }
 
 export default function EmbeddedServicePage({
-  eyebrow,
   title,
   description,
   service,
   availabilityUrl,
   src,
   iframeTitle,
+  icon = AppWindow,
+  tone = 'blue',
 }: EmbeddedServicePageProps) {
-  const [availability, setAvailability] = useState<'checking' | 'available' | 'missing' | 'failed'>(
-    'checking',
-  )
+  const [availability, setAvailability] = useState<Availability>('checking')
   const [frameKey, setFrameKey] = useState(0)
   const [frameLoading, setFrameLoading] = useState(true)
   const [frameSlow, setFrameSlow] = useState(false)
@@ -104,92 +125,114 @@ export default function EmbeddedServicePage({
     setFrameKey((value) => value + 1)
   }
 
-  if (availability === 'missing') {
-    return (
-      <div className={styles.page}>
-        <ServiceNotConfigured service={service} onRetry={reloadFrame} />
-      </div>
-    )
-  }
+  const status = availabilityStatus[availability]
 
   return (
-    <div className={styles.page}>
-      <header className={styles.header}>
-        <div className={styles.heading}>
-          <span className={styles.eyebrow}>{eyebrow}</span>
-          <h1>{title}</h1>
-          <p>{description}</p>
-        </div>
-        <div className={styles.actions}>
-          <span className={styles.status} aria-live="polite">
-            <span className={styles.statusDot} aria-hidden="true" />
-            {availability === 'checking'
-              ? 'Checking connection'
-              : availability === 'failed'
-                ? 'Connection unavailable'
-                : 'Connected through dashboard'}
-          </span>
-          <button type="button" onClick={reloadFrame} disabled={availability === 'checking'}>
-            Reload
-          </button>
-          <a href={src} target="_blank" rel="noopener noreferrer">
-            Open full view
-          </a>
-        </div>
-      </header>
+    <PageContainer width="wide">
+      <PageHeader
+        icon={<IconTile icon={icon} tone={tone} size="lg" />}
+        title={title}
+        description={description}
+        actions={
+          availability === 'missing' ? null : (
+            <>
+              <span className="mr-1" aria-live="polite">
+                <StatusLabel tone={status.tone} pulse={availability === 'checking'}>
+                  {status.label}
+                </StatusLabel>
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={reloadFrame}
+                disabled={availability === 'checking'}
+              >
+                <RotateCw />
+                Reload
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <a href={src} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink />
+                  Open full view
+                </a>
+              </Button>
+            </>
+          )
+        }
+      />
+
+      {availability === 'missing' ? (
+        <ServiceNotConfigured service={service} onRetry={reloadFrame} />
+      ) : null}
 
       {error ? (
-        <div className={styles.error} role="alert">
-          <span>{error}</span>
-          <button type="button" onClick={reloadFrame}>
-            Try again
-          </button>
+        <div role="alert" className="mb-4">
+          <Alert
+            tone="danger"
+            title={`${service.name} could not be loaded`}
+            actions={
+              <Button type="button" variant="outline" size="sm" onClick={reloadFrame}>
+                Try again
+              </Button>
+            }
+          >
+            {error}
+          </Alert>
         </div>
       ) : null}
 
-      {availability !== 'failed' ? (
-        <section className={styles.frameShell} aria-label={`${title} embedded workspace`}>
-          <div className={styles.frameRail}>
-            <span>{service.name}</span>
-            <span>Secure same-origin proxy</span>
+      {availability !== 'failed' && availability !== 'missing' ? (
+        <section
+          className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs"
+          aria-label={`${title} embedded workspace`}
+        >
+          <div className="flex h-10 items-center justify-between gap-3 border-b border-border bg-surface-subtle/70 px-4 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground/85">{service.name}</span>
+            <span className="flex items-center gap-1.5">
+              <ShieldCheck className="size-3.5 text-success" aria-hidden="true" />
+              Secure same-origin proxy
+            </span>
           </div>
 
-          {(availability === 'checking' || frameLoading) && (
-            <div className={styles.loading} role="status" aria-live="polite">
-              <ProductLoadingState
-                label={
-                  frameSlow ? `Still connecting to ${service.name}` : `Loading ${service.name}`
-                }
-                compact
-              />
-            </div>
-          )}
+          <div className="relative h-[calc(100dvh-15rem)] min-h-[520px] bg-background">
+            {(availability === 'checking' || frameLoading) && (
+              <div className="absolute inset-0 grid place-items-center">
+                <ProductLoadingState
+                  label={
+                    frameSlow ? `Still connecting to ${service.name}` : `Loading ${service.name}`
+                  }
+                  compact
+                />
+              </div>
+            )}
 
-          {availability === 'available' ? (
-            <iframe
-              key={`${frameKey}-${src}`}
-              src={src}
-              className={styles.frame}
-              title={iframeTitle}
-              allowFullScreen
-              referrerPolicy="same-origin"
-              onLoad={() => {
-                setFrameLoading(false)
-                setFrameSlow(false)
-                setError(null)
-              }}
-              onError={() => {
-                setAvailability('failed')
-                setFrameLoading(false)
-                setFrameSlow(false)
-                setError(
-                  `Could not load ${service.name}. Check the service and proxy configuration.`,
-                )
-              }}
-            />
-          ) : null}
+            {availability === 'available' ? (
+              <iframe
+                key={`${frameKey}-${src}`}
+                src={src}
+                className="relative size-full border-0"
+                title={iframeTitle}
+                allowFullScreen
+                referrerPolicy="same-origin"
+                onLoad={() => {
+                  setFrameLoading(false)
+                  setFrameSlow(false)
+                  setError(null)
+                }}
+                onError={() => {
+                  setAvailability('failed')
+                  setFrameLoading(false)
+                  setFrameSlow(false)
+                  setError(
+                    `Could not load ${service.name}. Check the service and proxy configuration.`,
+                  )
+                }}
+              />
+            ) : null}
+          </div>
         </section>
       ) : null}
-    </div>
+    </PageContainer>
   )
 }

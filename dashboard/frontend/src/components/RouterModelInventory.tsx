@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import styles from './RouterModelInventory.module.css'
+import { ArrowUpRight, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+
+import { Badge, Button, InputGroup, cn } from '../ui'
+import NativeSelect from './NativeSelect'
 import {
   getLoadedModelCount,
   getPreviewRouterModels,
@@ -39,40 +42,45 @@ interface RouterModelInventoryProps {
   onSelectModel?: (model: RouterModelInfo) => void
 }
 
-function getStateChipClass(model: RouterModelInfo): string {
+type StateTone = 'success' | 'info' | 'warning' | 'neutral'
+
+function getStateTone(model: RouterModelInfo): StateTone {
   switch (getRouterModelState(model)) {
     case 'ready':
-      return styles.stateReady
+      return 'success'
     case 'downloading':
-      return styles.stateDownloading
+      return 'info'
     case 'pending':
     case 'initializing':
-      return styles.stateWarm
+      return 'warning'
     default:
-      return styles.stateMuted
+      return 'neutral'
   }
 }
 
-function getCardToneClass(model: RouterModelInfo): string {
-  switch (getRouterModelState(model)) {
-    case 'ready':
-      return styles.cardReady
-    case 'downloading':
-    case 'pending':
-    case 'initializing':
-      return styles.cardWarm
-    default:
-      return styles.cardMuted
-  }
-}
+const StateBadge: React.FC<{ model: RouterModelInfo }> = ({ model }) => (
+  <Badge tone={getStateTone(model)} size="sm" dot className="shrink-0">
+    {getRouterModelStateLabel(model)}
+  </Badge>
+)
 
-function renderDetailRows(rows: RouterModelDetailRow[]): JSX.Element {
+function renderDetailRows(rows: RouterModelDetailRow[], wide = false): JSX.Element {
   return (
-    <dl className={styles.detailList}>
+    <dl className="flex flex-col divide-y divide-border">
       {rows.map((row) => (
-        <div key={`${row.label}-${row.value}`} className={styles.detailRow}>
-          <dt className={styles.detailLabel}>{row.label}</dt>
-          <dd className={styles.detailValue}>{row.value}</dd>
+        <div
+          key={`${row.label}-${row.value}`}
+          className={cn(
+            'grid gap-x-4 gap-y-0.5 py-2 text-[13px] first:pt-0 last:pb-0',
+            wide
+              ? 'grid-cols-1 sm:grid-cols-[minmax(10rem,0.4fr)_minmax(0,1fr)]'
+              : 'grid-cols-1 sm:grid-cols-[minmax(7rem,0.9fr)_minmax(0,1fr)]',
+          )}
+        >
+          <dt className="text-xs leading-5 text-subtle-foreground">{row.label}</dt>
+          <dd className="min-w-0 leading-5 text-foreground [overflow-wrap:anywhere]">
+            {row.value}
+          </dd>
         </div>
       ))}
     </dl>
@@ -82,8 +90,10 @@ function renderDetailRows(rows: RouterModelDetailRow[]): JSX.Element {
 const DeviceMark: React.FC<{ model: RouterModelInfo }> = ({ model }) => {
   const device = getRouterModelDevice(model)
   return (
-    <span className={styles.deviceMark}>
-      {device.isAmd && <img src="/amd-logo.png" alt="AMD GPU" className={styles.platformLogo} />}
+    <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+      {device.isAmd && (
+        <img src="/amd-logo.png" alt="AMD GPU" className="h-3.5 w-auto opacity-80 dark:invert" />
+      )}
       <span>{device.label}</span>
     </span>
   )
@@ -101,36 +111,36 @@ const PreviewCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModel
   })
   return (
     <>
-      <div className={styles.previewTopRow}>
-        <span className={styles.previewPurpose}>{getRouterModelKind(model)}</span>
-        <span className={`${styles.previewState} ${getStateChipClass(model)}`}>
-          {getRouterModelStateLabel(model)}
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-xs font-medium text-muted-foreground">
+          {getRouterModelKind(model)}
         </span>
+        <StateBadge model={model} />
       </div>
-      <div className={styles.previewIdentity}>
-        <h3 className={styles.previewModelId}>{name.title}</h3>
-        {name.subtitle && <p className={styles.previewSubtitle}>{name.subtitle}</p>}
-      </div>
-      <div className={styles.previewFooter}>
-        {limits.window !== undefined && (
-          <p className={styles.previewContext}>Window: {formatRouterModelTokens(limits.window)}</p>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <h3 className="truncate text-sm font-semibold tracking-[-0.01em] text-foreground">
+          {name.title}
+        </h3>
+        {name.subtitle && (
+          <p className="truncate text-xs text-subtle-foreground">{name.subtitle}</p>
         )}
+      </div>
+      <div className="mt-auto flex flex-col gap-1 border-t border-border pt-3 text-xs text-muted-foreground tabular">
+        {limits.window !== undefined && <p>Window: {formatRouterModelTokens(limits.window)}</p>}
         {limits.input !== undefined ? (
-          <p className={styles.previewContext}>
+          <p>
             {limits.overflow === 'window' ? 'Document budget' : 'Input budget'}:{' '}
             {budgetVaries
               ? 'Varies by consumer'
               : formatRouterModelTokens(limits.document ?? limits.input)}
           </p>
         ) : (
-          <p className={styles.previewContext}>
+          <p>
             {limits.publishedContext !== undefined ? 'Published model context' : 'Input budget'}:{' '}
             {formatRouterModelTokens(limits.publishedContext)}
           </p>
         )}
-        {consumers.length > 1 && (
-          <p className={styles.previewContext}>Shared by {consumers.length} consumers</p>
-        )}
+        {consumers.length > 1 && <p>Shared by {consumers.length} consumers</p>}
       </div>
     </>
   )
@@ -144,49 +154,62 @@ const FullCardBody: React.FC<{ model: RouterModelInfo; consumers: RouterModelInf
 
   return (
     <>
-      <div className={styles.titleBlock}>
-        <div className={styles.titleRow}>
-          <h3 className={styles.modelName}>{getRouterModelDisplayName(model)}</h3>
-          <span className={`${styles.stateChip} ${getStateChipClass(model)}`}>
-            {getRouterModelStateLabel(model)}
-          </span>
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="min-w-0 text-[15px] font-semibold tracking-[-0.012em] text-foreground [overflow-wrap:anywhere]">
+            {getRouterModelDisplayName(model)}
+          </h3>
+          <StateBadge model={model} />
         </div>
-        <p className={styles.modelSubtitle}>{getRouterModelKind(model)}</p>
+        <p className="text-xs text-muted-foreground">{getRouterModelKind(model)}</p>
       </div>
 
-      <div className={styles.detailSections}>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {sections.map((section) =>
           section.collapsible ? (
             <details
               key={section.title}
-              className={`${styles.detailSection} ${styles.detailSectionWide} ${styles.technicalDetails}`}
+              className="group/details rounded-lg border border-border bg-surface-subtle/50 md:col-span-2"
             >
-              <summary className={styles.detailSectionTitle}>{section.title}</summary>
-              {renderDetailRows(section.rows)}
+              <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-xs font-medium text-muted-foreground outline-none transition-colors before:size-1.5 before:-rotate-45 before:border-b-[1.5px] before:border-r-[1.5px] before:border-current before:transition-transform before:content-[''] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 group-open/details:before:rotate-45 [&::-webkit-details-marker]:hidden">
+                {section.title}
+              </summary>
+              <div className="border-t border-border px-3.5 py-3 font-mono text-xs [&_dd]:text-xs">
+                {renderDetailRows(section.rows, true)}
+              </div>
             </details>
           ) : (
             <section
               key={section.title}
-              className={`${styles.detailSection} ${section.wide ? styles.detailSectionWide : ''}`}
+              className={cn(
+                'flex flex-col gap-2.5 rounded-lg border border-border bg-surface px-3.5 py-3',
+                section.wide && 'md:col-span-2',
+              )}
             >
-              <h4 className={styles.detailSectionTitle}>{section.title}</h4>
-              {renderDetailRows(section.rows)}
+              <h4 className="text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground">
+                {section.title}
+              </h4>
+              {renderDetailRows(section.rows, section.wide)}
             </section>
           ),
         )}
       </div>
 
       <div
-        className={`${styles.detailFooter} ${!model.registry?.model_card_url ? styles.detailFooterEnd : ''}`}
+        className={cn(
+          'flex flex-wrap items-center gap-3',
+          model.registry?.model_card_url ? 'justify-between' : 'justify-end',
+        )}
       >
         {model.registry?.model_card_url ? (
           <a
-            className={styles.cardLink}
+            className="inline-flex items-center gap-1 text-[13px] font-medium text-primary-soft-foreground underline-offset-4 hover:underline"
             href={model.registry.model_card_url}
             target="_blank"
             rel="noreferrer"
           >
             Open model card
+            <ArrowUpRight className="size-3.5" aria-hidden="true" />
           </a>
         ) : null}
 
@@ -253,44 +276,58 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
   }, [filteredModels, mode])
 
   if (allModels.length === 0) {
-    return <div className={styles.empty}>{emptyMessage}</div>
+    return (
+      <div className="rounded-lg border border-dashed border-border-strong px-4 py-8 text-center text-[13px] text-muted-foreground">
+        {emptyMessage}
+      </div>
+    )
   }
 
   return (
-    <div className={styles.inventory}>
+    <div className="flex flex-col gap-4">
       {mode === 'full' && (
         <>
           {showSummary && (
-            <div className={styles.summaryRow}>
-              <div className={styles.summaryStat}>
-                <span className={styles.summaryLabel}>Runtimes ready</span>
-                <span className={styles.summaryValue}>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex min-w-28 flex-col gap-0.5 rounded-lg border border-border bg-surface px-3.5 py-2.5">
+                <span className="text-xs text-subtle-foreground">Runtimes ready</span>
+                <span className="text-base font-semibold tabular tracking-[-0.02em]">
                   {loadedCount}/{totalCount}
                 </span>
               </div>
               {phase && (
-                <div className={styles.summaryStat}>
-                  <span className={styles.summaryLabel}>Phase</span>
-                  <span className={styles.summaryValue}>{formatRouterModelLabel(phase)}</span>
+                <div className="flex min-w-28 flex-col gap-0.5 rounded-lg border border-border bg-surface px-3.5 py-2.5">
+                  <span className="text-xs text-subtle-foreground">Phase</span>
+                  <span className="text-base font-semibold tracking-[-0.02em]">
+                    {formatRouterModelLabel(phase)}
+                  </span>
                 </div>
               )}
-              {summaryMessage && <p className={styles.summaryMessage}>{summaryMessage}</p>}
+              {summaryMessage && (
+                <p className="min-w-56 flex-1 text-[13px] leading-relaxed text-muted-foreground">
+                  {summaryMessage}
+                </p>
+              )}
             </div>
           )}
 
-          <div className={styles.inventoryToolbar}>
-            <label className={styles.searchField}>
-              <span className={styles.srOnly}>Search models</span>
-              <input
+          <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
+            <label className="min-w-56 flex-1">
+              <span className="sr-only">Search models</span>
+              <InputGroup
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search name, type, repository, or tag"
+                leading={<Search />}
+                className="h-8"
               />
             </label>
-            <label className={styles.selectField}>
-              <span>Status</span>
-              <select
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Status
+              <NativeSelect
+                size="sm"
+                containerClassName="w-36"
                 value={stateFilter}
                 onChange={(event) =>
                   setStateFilter(event.target.value as ModelInventoryStateFilter)
@@ -300,20 +337,25 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
                 <option value="ready">Ready</option>
                 <option value="loading">Loading</option>
                 <option value="not_loaded">Not loaded</option>
-              </select>
+              </NativeSelect>
             </label>
-            <label className={styles.selectField}>
-              <span>Sort</span>
-              <select
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Sort
+              <NativeSelect
+                size="sm"
+                containerClassName="w-32"
                 value={sort}
                 onChange={(event) => setSort(event.target.value as ModelInventorySort)}
               >
                 <option value="state">Readiness</option>
                 <option value="name">Name</option>
                 <option value="type">Type</option>
-              </select>
+              </NativeSelect>
             </label>
-            <span className={styles.resultCount} aria-live="polite">
+            <span
+              className="ml-auto whitespace-nowrap text-xs tabular text-muted-foreground"
+              aria-live="polite"
+            >
               {filteredModels.length} of {allModels.length} runtimes
             </span>
           </div>
@@ -321,11 +363,12 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
       )}
 
       {mode === 'full' && filteredModels.length === 0 ? (
-        <div className={styles.empty}>
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border-strong px-4 py-8 text-center text-[13px] text-muted-foreground">
           No models match the current search and status filters.
-          <button
+          <Button
             type="button"
-            className={styles.clearFilters}
+            variant="outline"
+            size="sm"
             onClick={() => {
               setQuery('')
               setStateFilter('all')
@@ -333,24 +376,32 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
             }}
           >
             Clear filters
-          </button>
+          </Button>
         </div>
       ) : (
         <>
           <div
-            className={mode === 'preview' ? styles.previewGrid : styles.fullGrid}
+            className={cn(
+              'grid gap-3',
+              mode === 'preview'
+                ? 'grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))]'
+                : 'grid-cols-1',
+            )}
             data-testid={`router-model-grid-${mode}`}
           >
             {models.map((model) => {
               const consumers = getRouterModelConsumers(modelsInfo?.models ?? [], model)
-              const className = [
-                styles.card,
-                mode === 'preview' ? styles.previewCard : styles.detailCard,
-                getCardToneClass(model),
-                onSelectModel && mode === 'preview' ? styles.cardInteractive : '',
-              ]
-                .filter(Boolean)
-                .join(' ')
+              const interactive = Boolean(onSelectModel) && mode === 'preview'
+              const className = cn(
+                'relative flex min-w-0 flex-col text-left',
+                mode === 'preview'
+                  ? 'min-h-[10.5rem] gap-3 rounded-xl border border-border bg-card p-4 shadow-xs'
+                  : mode === 'full'
+                    ? 'gap-4 rounded-xl border border-border bg-card p-5 shadow-xs'
+                    : 'gap-4',
+                interactive &&
+                  'group cursor-pointer outline-none transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-border-strong hover:shadow-md focus-visible:ring-[3px] focus-visible:ring-ring/40',
+              )
 
               const cardContent =
                 mode === 'preview' ? (
@@ -359,7 +410,7 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
                   <FullCardBody model={model} consumers={consumers} />
                 )
 
-              if (onSelectModel && mode === 'preview') {
+              if (interactive && onSelectModel) {
                 return (
                   <button
                     key={getRouterModelAnchor(model)}
@@ -369,6 +420,10 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
                     onClick={() => onSelectModel(model)}
                   >
                     {cardContent}
+                    <ChevronRight
+                      aria-hidden="true"
+                      className="absolute bottom-4 right-4 size-4 text-subtle-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                    />
                   </button>
                 )
               }
@@ -387,24 +442,33 @@ const RouterModelInventory: React.FC<RouterModelInventoryProps> = ({
           </div>
 
           {mode === 'full' && totalPages > 1 && (
-            <nav className={styles.pagination} aria-label="Model inventory pages">
-              <button
+            <nav
+              className="flex items-center justify-end gap-2 text-xs text-muted-foreground"
+              aria-label="Model inventory pages"
+            >
+              <Button
                 type="button"
+                variant="outline"
+                size="xs"
                 disabled={currentPage === 1}
                 onClick={() => setPage((value) => Math.max(1, value - 1))}
               >
+                <ChevronLeft />
                 Previous
-              </button>
-              <span>
+              </Button>
+              <span className="min-w-[5.5rem] text-center tabular">
                 Page {currentPage} of {totalPages}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="xs"
                 disabled={currentPage === totalPages}
                 onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
               >
                 Next
-              </button>
+                <ChevronRight />
+              </Button>
             </nav>
           )}
         </>

@@ -95,7 +95,7 @@ test.describe('FeedbackButtons', () => {
     expect(feedbackPayload!.verdict).toBe('good_fit')
     expect((feedbackPayload!.metadata as Record<string, unknown>).decision).toBe('tech')
     await expect(page.getByText('Feedback Sent!')).toBeVisible({ timeout: 3000 })
-    await expect(page.getByRole('link', { name: 'View in Insights' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'View request' })).toHaveAttribute(
       'href',
       `/insights/${MOCK_REPLAY_ID}`,
     )

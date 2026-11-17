@@ -385,16 +385,17 @@ test.describe('Router model inventory surfaces', () => {
     await expect(embeddingPreview).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(details).toBeVisible()
-    const closeButtons = details.getByRole('button', { name: 'Close', exact: true })
-    await expect(closeButtons.first()).toBeFocused()
-    await page.keyboard.press('Shift+Tab')
-    await expect(closeButtons.last()).toBeFocused()
+    // The detail sheet takes focus itself; Tab then cycles through its controls.
+    await expect(details).toBeFocused()
+    const close = details.getByRole('button', { name: 'Close', exact: true })
     await page.keyboard.press('Tab')
-    await expect(closeButtons.first()).toBeFocused()
+    await expect(close).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(technicalDetails).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(details.getByRole('link', { name: /model card/i })).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(close).toBeFocused()
   })
 
   test('keeps model-card HTML out of runtime descriptions', async ({ page }) => {

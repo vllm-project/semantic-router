@@ -107,7 +107,8 @@ const redactedReplayRecordWithDetailedToolTrace = {
   },
 }
 
-const transitionCopyPattern = /Entering control plane/i
+const SIGN_IN_HEADING = 'Sign in to Semantic Router'
+const isHome = (url: URL) => url.pathname === '/'
 
 test.describe('Dashboard auth flow', () => {
   test.beforeEach(async ({ page }) => {
@@ -121,7 +122,7 @@ test.describe('Dashboard auth flow', () => {
     )
   })
 
-  test('keeps the mobile sign-in form reachable below the story panel', async ({ page }) => {
+  test('keeps the mobile sign-in form reachable', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.route('**/api/setup/state', async (route) => {
       await route.fulfill({
@@ -183,20 +184,15 @@ test.describe('Dashboard auth flow', () => {
     await page.goto('/playground', { waitUntil: 'domcontentloaded' })
 
     await expect(page).toHaveURL(/\/login$/)
-    await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: SIGN_IN_HEADING, exact: true })).toBeVisible()
+    await expect(page.getByText('You’ll continue to /playground')).toBeVisible()
     await expect(page.getByRole('button', { name: /create admin/i })).toHaveCount(0)
   })
 
-  test('login shows the transition loader and reuses the session for protected requests', async ({
+  test('login goes straight to the workspace and reuses the session for protected requests', async ({
     page,
   }) => {
     test.slow()
-    await page.addInitScript(() => {
-      // A background tab may suspend animation frames. Authentication handoff must
-      // still complete from its wall-clock timer even when the visual scene is paused.
-      window.requestAnimationFrame = () => 1
-      window.cancelAnimationFrame = () => undefined
-    })
     const issuedToken = 'issued-dashboard-token'
     let settingsSessionObserved = false
     let statusSessionObserved = false
@@ -317,12 +313,9 @@ test.describe('Dashboard auth flow', () => {
     await page.goto('/login')
     await page.getByPlaceholder('you@example.com').fill('admin@example.com')
     await page.getByPlaceholder('••••••••').fill('secret-password')
-    await Promise.all([
-      page.waitForURL(/\/auth\/transition\?to=%2Fdashboard$/),
-      page.getByText(transitionCopyPattern).waitFor({ state: 'visible' }),
-      page.getByRole('button', { name: 'Continue' }).click(),
-    ])
-    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 })
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page).toHaveURL(isHome, { timeout: 12000 })
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
     await expect.poll(() => settingsSessionObserved).toBe(true)
     await expect.poll(() => statusSessionObserved).toBe(true)
     expect(forwardedAuthorization.every((header) => header === null)).toBe(true)
@@ -345,13 +338,12 @@ test.describe('Dashboard auth flow', () => {
 
     // A new page has no in-memory token; /api/auth/me must restore the cookie session.
     await page.reload()
-    await expect(
-      page.getByRole('heading', { name: 'Compose the right model path.', exact: true }),
-    ).toBeVisible()
-    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
+    await expect(page).toHaveURL(isHome)
+    await expect(page.getByRole('heading', { name: SIGN_IN_HEADING })).toHaveCount(0)
   })
 
-  test('bootstrap registration passes through the transition loader', async ({ page }) => {
+  test('bootstrap registration continues to the setup wizard', async ({ page }) => {
     test.slow()
     const issuedToken = 'bootstrap-dashboard-token'
     let registerPayload: Record<string, unknown> | null = null
@@ -469,7 +461,7 @@ test.describe('Dashboard auth flow', () => {
         name: 'Name your first administrator.',
       }),
     ).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Sign in' })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: SIGN_IN_HEADING })).toHaveCount(0)
 
     await page.getByLabel('What should we call you?').fill('Ada Router')
     await page.getByRole('button', { name: 'Next' }).click()
@@ -492,11 +484,7 @@ test.describe('Dashboard auth flow', () => {
     const bootstrapPassword = page.getByLabel('Password')
     await expect(bootstrapPassword).toHaveAttribute('autocomplete', 'new-password')
     await bootstrapPassword.fill('future-password')
-    await Promise.all([
-      page.waitForURL(/\/auth\/transition\?to=%2Fsetup$/),
-      page.getByText(transitionCopyPattern).waitFor({ state: 'visible' }),
-      page.getByRole('button', { name: 'Create admin and continue' }).click(),
-    ])
+    await page.getByRole('button', { name: 'Create admin and continue' }).click()
 
     await expect
       .poll(() => registerPayload)
@@ -509,9 +497,7 @@ test.describe('Dashboard auth flow', () => {
     await expect(page).toHaveURL(/\/setup$/, { timeout: 12000 })
   })
 
-  test('bootstrap registration with complete configuration redirects to dashboard', async ({
-    page,
-  }) => {
+  test('bootstrap registration with complete configuration continues to home', async ({ page }) => {
     test.slow()
     const issuedToken = 'complete-config-bootstrap-token'
     let registerRequestCount = 0
@@ -613,20 +599,13 @@ test.describe('Dashboard auth flow', () => {
     await page.getByLabel('Admin email').fill('ada@example.com')
     await page.getByRole('button', { name: 'Next' }).click()
     await page.getByLabel('Password').fill('future-password')
-
-    await Promise.all([
-      page.waitForURL(/\/auth\/transition\?to=%2Fdashboard$/),
-      page.getByText(transitionCopyPattern).waitFor({ state: 'visible' }),
-      page.getByRole('button', { name: 'Create admin and continue' }).click(),
-    ])
+    await page.getByRole('button', { name: 'Create admin and continue' }).click()
 
     await expect.poll(() => registerRequestCount).toBe(1)
-    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 })
+    await expect(page).toHaveURL(isHome, { timeout: 12000 })
   })
 
-  test('login preserves the original protected route through the transition page', async ({
-    page,
-  }) => {
+  test('login returns to the original protected route', async ({ page }) => {
     test.slow()
 
     await page.route('**/api/setup/state', async (route) => {
@@ -716,18 +695,15 @@ test.describe('Dashboard auth flow', () => {
       })
     })
 
-    await page.goto('/status', { waitUntil: 'domcontentloaded' })
+    await page.goto('/observe/status', { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveURL(/\/login$/)
+    await expect(page.getByText('You’ll continue to /observe/status')).toBeVisible()
 
     await page.getByPlaceholder('you@example.com').fill('admin@example.com')
     await page.getByPlaceholder('••••••••').fill('secret-password')
-    await Promise.all([
-      page.waitForURL(/\/auth\/transition\?to=%2Fstatus$/),
-      page.getByText(transitionCopyPattern).waitFor({ state: 'visible' }),
-      page.getByRole('button', { name: 'Continue' }).click(),
-    ])
-    await expect(page).toHaveURL(/\/status$/, { timeout: 12000 })
-    await expect(page.getByRole('heading', { name: 'System status', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page).toHaveURL(/\/observe\/status$/, { timeout: 12000 })
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
   })
 
   for (const bootstrap of [false, true]) {
@@ -780,78 +756,9 @@ test.describe('Dashboard auth flow', () => {
       }),
     )
     await page.goto('/login')
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(
-      page.getByRole('heading', { name: 'Compose the right model path.', exact: true }),
-    ).toBeVisible()
+    await expect(page).toHaveURL(isHome)
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Continue', exact: true })).toHaveCount(0)
-  })
-
-  test('transition route rejects login targets and falls back to dashboard', async ({ page }) => {
-    test.slow()
-
-    await mockAuthenticatedSession(page, {
-      token: 'transition-fallback-token',
-    })
-
-    await page.route('**/api/setup/state', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(baseSetupState),
-      })
-    })
-
-    await page.route('**/api/settings', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dashboardSettingsResponse()),
-      })
-    })
-
-    await page.route('**/api/status', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          overall: 'healthy',
-          deployment_type: 'local',
-          services: [],
-        }),
-      })
-    })
-
-    await page.route('**/api/router/config/all', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          version: 'v0.5',
-          providers: { models: [] },
-          recipes: [{ name: 'default' }],
-        }),
-      })
-    })
-
-    await page.route('**/api/mcp/servers', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([]),
-      })
-    })
-
-    await page.route('**/api/mcp/tools', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tools: [] }),
-      })
-    })
-
-    await page.goto('/auth/transition?to=%2Flogin%3Fnext%3Dusers')
-    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 })
   })
 
   test('setup mode keeps authenticated users on the setup wizard', async ({ page }) => {
@@ -877,7 +784,7 @@ test.describe('Dashboard auth flow', () => {
       })
     })
 
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' })
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
 
     await expect(page).toHaveURL(/\/setup$/)
   })
@@ -969,12 +876,9 @@ test.describe('Dashboard auth flow', () => {
       })
     })
 
-    await page.goto('/insights/replay-sensitive-1')
+    await page.goto('/observe/requests/replay-sensitive-1')
 
-    await page.getByRole('heading', { name: 'Record trace', exact: true }).click()
-    const trace = page
-      .locator('details')
-      .filter({ has: page.getByRole('heading', { name: 'Record trace', exact: true }) })
+    const trace = page.getByRole('region', { name: 'Conversation', exact: true })
     await trace.locator('summary').filter({ hasText: 'Turn 1' }).click()
     await expect(trace.getByText('You', { exact: true })).toBeVisible()
     await expect(trace.getByText('Response', { exact: true })).toBeVisible()
@@ -988,7 +892,8 @@ test.describe('Dashboard auth flow', () => {
       .click()
     await expect(trace.getByText('Arguments hidden for this role')).toBeVisible()
     await expect(trace.getByText('Result hidden · succeeded')).toBeVisible()
-    await expect(trace.getByText('Content hidden for this role')).toBeVisible()
+    // the user's prompt and the final answer
+    await expect(trace.getByText('Content hidden for this role')).toHaveCount(2)
     await expect(page.getByText(/NVDA/)).toHaveCount(0)
     await expect(page.getByText('Confidential flow prompt 7A')).toHaveCount(0)
     await expect(page.getByText('Confidential tool result 7B')).toHaveCount(0)
@@ -1019,12 +924,9 @@ test.describe('Dashboard auth flow', () => {
       })
     })
 
-    await page.goto('/insights/replay-sensitive-1')
+    await page.goto('/observe/requests/replay-sensitive-1')
 
-    await page.getByRole('heading', { name: 'Record trace', exact: true }).click()
-    const trace = page
-      .locator('details')
-      .filter({ has: page.getByRole('heading', { name: 'Record trace', exact: true }) })
+    const trace = page.getByRole('region', { name: 'Conversation', exact: true })
     await trace.locator('summary').filter({ hasText: 'Turn 1' }).click()
     await trace
       .locator('summary')
