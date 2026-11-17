@@ -59,6 +59,11 @@ test(
       screen.text.slice(-8000),
     );
     assert.ok(
+      /read \S*fixture\.txt/.test(screen.text),
+      "a decision shows its subject, not its call ID: " +
+        screen.text.slice(-8000),
+    );
+    assert.ok(
       screen.text.includes("Runtime: HTTP reachable") &&
         screen.text.includes("Apps: Router"),
       "summary lines must not overlap: " + screen.text.slice(-8000),

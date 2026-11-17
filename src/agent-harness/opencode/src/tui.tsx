@@ -9,6 +9,7 @@ import {
   DecisionView,
   emptyView,
   report,
+  subjectLine,
   suggestionText,
   summary,
 } from "./view.ts";
@@ -140,7 +141,7 @@ export default Plugin.define({
         options: [...snapshot.decisions].reverse().map((value) => ({
           value,
           title: `${names[value.app]}: ${outcome(value)}`,
-          description: `${value.toolCallID ?? value.turnID ?? value.id}${snapshot.feedback[value.id] ? ` · ${snapshot.feedback[value.id]}` : ""}`,
+          description: `${subjectLine(value)}${snapshot.feedback[value.id] ? ` · ${snapshot.feedback[value.id]}` : ""}`,
         })),
       });
       if (!decision) return;
@@ -538,11 +539,9 @@ export default Plugin.define({
                                 ? ` · ${snapshot().feedback[decision.id]}`
                                 : ""}
                             </text>
+                            <text>{subjectLine(decision)}</text>
                             <text fg={ctx.theme.textMuted}>
-                              {decision.toolCallID ??
-                                decision.turnID ??
-                                decision.id}{" "}
-                              · {decision.elapsedMs ?? 0} ms
+                              {decision.elapsedMs ?? 0} ms
                               {decision.score === undefined
                                 ? ""
                                 : ` · score ${decision.score.toFixed(2)}`}

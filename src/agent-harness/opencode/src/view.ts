@@ -278,6 +278,8 @@ export const APP_NAMES = {
   guard: "Guard",
   check: "Check",
 } as const;
+export const subjectLine = (decision: Decision): string =>
+  decision.subject ?? decision.toolCallID ?? decision.turnID ?? decision.id;
 export function median(values: readonly number[]): number | undefined {
   if (!values.length) return undefined;
   const sorted = [...values].sort((a, b) => a - b);

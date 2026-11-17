@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DecisionView, summary } from "../src/view.ts";
+import { DecisionView, subjectLine, summary } from "../src/view.ts";
 import type { ViewSnapshot, ViewState, ViewService } from "../src/view.ts";
 import { parseSettings } from "../src/settings.ts";
 import { DecisionStore } from "../src/decisions.ts";
@@ -202,4 +202,22 @@ test("late failed controls and feedback cannot mark a newly selected session sta
   assert.equal(latest?.error, undefined);
   assert.equal(latest?.busy, false);
   view.close();
+});
+
+test("a decision is shown by its subject, and by its call or turn only without one", () => {
+  const decision = {
+    id: "d1",
+    toolCallID: "call_7",
+    turnID: "turn_3",
+  } as Parameters<typeof subjectLine>[0];
+  assert.equal(
+    subjectLine({ ...decision, subject: "git push --force origin main" }),
+    "git push --force origin main",
+  );
+  assert.equal(subjectLine(decision), "call_7");
+  assert.equal(subjectLine({ ...decision, toolCallID: undefined }), "turn_3");
+  assert.equal(
+    subjectLine({ ...decision, toolCallID: undefined, turnID: undefined }),
+    "d1",
+  );
 });

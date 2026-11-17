@@ -99,7 +99,9 @@ decisions panel, **F5**:
   the router's goal, when you last calibrated, and the tokens and estimated cost
   of the session's subagents (from OpenCode's prices; a model with no known
   price is counted apart).
-- Then each decision, newest first, with how long it took, its score and why:
+- Then each decision, newest first: what it was about (the command, the
+  subagent's task, your prompt, or the file, page or command an output came
+  from), how long it took, its score and why:
   - `routed`: vSR picked the subagent's model and effort from your tiers.
     `Planned` is what vSR chose and `Observed` what the subagent actually ran on.
   - `kept`: the subagent stays on its model: the router was not sure enough, the
