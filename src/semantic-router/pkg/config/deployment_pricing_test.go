@@ -10,7 +10,8 @@ import (
 func TestDeploymentPricing(t *testing.T) {
 	cfg := &RouterConfig{}
 	cfg.ModelDeployments = map[string]ModelDeployment{
-		"unpriced":  {Provider: ModelRuntimeProvider},
+		"unpriced":  {Provider: SystemOneProvider},
+		"runtime":   {Provider: ModelRuntimeProvider},
 		"priced":    {Pricing: &ModelPricing{PromptPer1M: 2, CompletionPer1M: 4}},
 		"free":      {Pricing: &ModelPricing{}},
 		"inherited": {Model: "provider-model"},
@@ -22,7 +23,14 @@ func TestDeploymentPricing(t *testing.T) {
 		input    float64
 		currency string
 	}{
-		{"unpriced", false, 0, ""}, {"missing", false, 0, ""}, {"priced", true, 2, "USD"}, {"free", true, 0, "USD"}, {"inherited", true, 3, "EUR"},
+		// A model_runtime deployment runs on the operator's own hardware and
+		// bills no tokens; a remote one without pricing stays unpriced.
+		{"unpriced", false, 0, ""},
+		{"runtime", true, 0, "USD"},
+		{"missing", false, 0, ""},
+		{"priced", true, 2, "USD"},
+		{"free", true, 0, "USD"},
+		{"inherited", true, 3, "EUR"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, ok := cfg.DeploymentPricing(tc.name)
@@ -39,7 +47,7 @@ func TestDeploymentPricingValidationAndYAML(t *testing.T) {
 			t.Fatalf("accepted %+v", pricing)
 		}
 	}
-	original := ModelDeployment{Provider: ModelRuntimeProvider, Pricing: &ModelPricing{PromptPer1M: 2}}
+	original := ModelDeployment{Provider: ModelRuntimeProvider, Pricing: &ModelPricing{Currency: "USD", PromptPer1M: 2}}
 	data, err := yaml.Marshal(original)
 	if err != nil {
 		t.Fatal(err)
@@ -91,5 +99,19 @@ global:
 	exported.Global.ModelCatalog.Deployments["priced"].Pricing.PromptPer1M = 100
 	if pricing, _ := cfg.DeploymentPricing("priced"); pricing.PromptPer1M != 2 {
 		t.Fatal("export changed runtime pricing")
+	}
+}
+
+// The deployments every configuration declares are served by the model
+// runtime, so their calls cost nothing without a pricing block.
+func TestDefaultDeploymentsCountTheirCallsAsFree(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte("version: v0.5\nglobal: {}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{DefaultDecisionDeployment, EmbeddingDefaultDeployment} {
+		if pricing, ok := cfg.DeploymentPricing(name); !ok || pricing.PromptPer1M != 0 || pricing.CompletionPer1M != 0 || pricing.Currency != "USD" {
+			t.Fatalf("%s pricing = %+v, %v; want free in USD", name, pricing, ok)
+		}
 	}
 }

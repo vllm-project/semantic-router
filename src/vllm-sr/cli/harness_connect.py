@@ -4,11 +4,14 @@ The command owns the env keys it sets in Claude Code's settings, the whole of
 one Codex profile file or, for the Codex app, a few keys of Codex's shared
 config.toml, and one provider of Pi's models.json. It records what each held
 before and what it wrote, so --undo puts back only what still holds what it
-wrote and leaves every other edit in place.
+wrote and leaves every other edit in place. A file nothing changed since the
+command wrote it gets back the very text it had.
 """
 
 from __future__ import annotations
 
+import difflib
+import hashlib
 import json
 import os
 import re
@@ -92,16 +95,37 @@ class Change:
             return harness_toml.values(text, self.values)
         return {"file": text or None}
 
+    def diff(self, old: str | None, new: str, key_label: str) -> str:
+        """The change from old (None: no file) to new, for display, with no key in
+        it. A TOML file is compared whole and with no context, so each line stands
+        where it is written and patch applies the diff, and any line of it that is
+        not in one of the command's entries is shown as NOT_SHOWN."""
+        label = str(self.path)
+        before, old = (label if old is not None else "/dev/null"), old or ""
+        if self.kind != "toml":
+            texts = (self.shown(text, key_label) for text in (old, new))
+            a, b = (text.splitlines(keepends=True) for text in texts)
+            return "".join(difflib.unified_diff(a, b, before, label))
+        mine = {
+            line
+            for text in (old, new)
+            for held in self.raw(text).values()
+            for line in (held or "").splitlines()
+        }
+        a, b = (text.splitlines(keepends=True) for text in (old, new))
+        diff = list(difflib.unified_diff(a, b, before, label, n=0))
+        for index, line in enumerate(diff[2:], 2):
+            body = line[1:].rstrip("\r\n")
+            if line[0] in "+-":
+                shown = body if body in mine or not body.strip() else NOT_SHOWN
+                diff[index] = line[0] + hide_secrets(shown + "\n")
+        return "".join(diff)
+
     def shown(self, text: str, key_label: str) -> str:
-        """The part of text the command owns, for display, with no key in it."""
+        """The part of text the command owns, for display, with no key in it, for
+        every kind but toml, whose lines diff shows."""
         if self.kind == "file":
             return hide_secrets(text)
-        if self.kind == "toml":
-            held = [value for value in self.raw(text).values() if value]
-            keys = "\n".join(v for v in held if not v.startswith("["))
-            tables = [v for v in held if v.startswith("[")]
-            shown = "\n\n".join(part for part in [keys, *tables] if part)
-            return hide_secrets(shown + "\n") if shown else ""
         if self.kind == "json":
             shown: dict[str, Any] = {}
             for key, value in self.raw(text).items():
@@ -134,6 +158,9 @@ SETTING_LINE = re.compile(r'(\s*"?([\w.-]+)"?\s*[=:]\s*)(.*?)(,?\s*)$')
 # Characters of a line a preview shows; Codex's model catalog holds its base
 # instructions as one line of tens of thousands.
 SHOWN_LINE = 160
+# What a TOML preview shows for a line of the file that is not the command's,
+# which can hold a secret no setting name gives away
+NOT_SHOWN = "(a line that is not connect's)"
 
 
 def _at(held: dict, path: list[str]) -> Any:
@@ -167,8 +194,10 @@ def _hidden(value: Any, ours: Any, name: str) -> Any:
             _hidden(v, mine[i] if i < len(mine) else None, name)
             for i, v in enumerate(value)
         ]
+    # a "$NAME" reference names the variable that holds the key, not the key
+    reference = isinstance(value, str) and re.fullmatch(r"\$\{?\w+\}?", value)
     if isinstance(value, str) and SECRET_NAME.search(name) and value != ours:
-        return "<hidden>"
+        return value if reference else "<hidden>"
     return value
 
 
@@ -218,6 +247,10 @@ def claude_env(
         "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
         "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": MAX_OUTPUT_TOKENS,
+        # sends x-claude-code-request-class and x-claude-code-agent-type, which
+        # agent signal rules route on and Insights names a session's run by;
+        # off for a custom base URL by default
+        "CLAUDE_CODE_GATEWAY_HINT_HEADERS": "1",
     }
 
 
@@ -477,16 +510,15 @@ def codex_memories(model: str, memory_model: str | None = None) -> dict[str, str
     return {"extract_model": memory, "consolidation_model": memory}
 
 
-def _memories_table(settings: dict[str, Any]) -> str:
-    lines = ["[memories]"]
+def _table(name: str, settings: dict[str, Any]) -> str:
+    """settings as the TOML table name, a table among them as one under it."""
+    lines, under = [f"[{name}]"], []
     for key, value in settings.items():
         if isinstance(value, dict):
-            raise ValueError(
-                f"[memories].{key} is a table, which connect cannot carry over;"
-                " set extract_model and consolidation_model there yourself"
-            )
-        lines.append(f"{key} = {json.dumps(value)}")
-    return "\n".join(lines)
+            under.append(_table(f"{name}.{key}", value))
+        else:
+            lines.append(f"{key} = {json.dumps(value)}")
+    return "\n\n".join(["\n".join(lines), *under])
 
 
 def codex_change(
@@ -507,7 +539,7 @@ def codex_change(
         gateway, model, key_env, context_window, login, catalog, key_command
     )
     lines = [f"{k} = {json.dumps(v)}" for k, v in top.items()]
-    memories = _memories_table(codex_memories(model, memory_model))
+    memories = _table("memories", codex_memories(model, memory_model))
     text = (
         "\n".join(lines) + "\n\n" + _provider_table(provider) + "\n\n" + memories + "\n"
     )
@@ -564,7 +596,7 @@ def codex_app_change(
     held = harness_toml.values(text, ["[memories]"])["[memories]"]
     settings = harness_toml.loads(held).get("memories", {}) if held else {}
     memories = codex_memories(model, memory_model)
-    values["[memories]"] = _memories_table({**settings, **memories})
+    values["[memories]"] = _table("memories", {**settings, **memories})
     return Change(path, "toml", values)
 
 
@@ -612,6 +644,129 @@ def codex_model_overrides(cwd: Path) -> list[Path]:
         if directory == stop:
             break
     return found
+
+
+# --- handing work between Claude Code and Codex ------------------------------------
+
+# OpenAI's Claude Code plugin that hands a task to Codex (openai/codex-plugin-cc
+# 1.0.6). It runs `codex app-server` with Codex's default config and no profile.
+CODEX_PLUGIN = "codex@openai-codex"
+CODEX_MARKETPLACE = "openai-codex"
+CODEX_PLUGIN_SOURCE = "openai/codex-plugin-cc"
+# Claude Code's settings env reaches every program it starts, the plugin's Codex
+# among them, and Codex passes its whole environment to its shell (0.166)
+SHELL_POLICY = "[shell_environment_policy]"
+CLAUDE_VARIABLES = "ANTHROPIC_*"
+# The MCP server Codex asks Claude Code through: Claude Code's own `claude mcp
+# serve`, with only its Agent tool, which reads and answers but cannot edit
+# (2.1.325). Codex 0.166 asks before an MCP tool call unless the tool is approved.
+CLAUDE_MCP = "mcp_servers.claude"
+CLAUDE_MCP_TABLE = f"""\
+[{CLAUDE_MCP}]
+command = "claude"
+args = ["mcp", "serve"]
+env_vars = ["CLAUDE_CONFIG_DIR"]
+enabled_tools = ["Agent"]
+tool_timeout_sec = 300
+
+[{CLAUDE_MCP}.tools.Agent]
+approval_mode = "approve\""""
+# The skill, in a folder Codex 0.166 loads skills from, that hands Claude Code
+# a task that may edit files
+CLAUDE_SKILL = "vllm-sr-claude-code"
+CLAUDE_SKILL_TEXT = f"""\
+---
+name: {CLAUDE_SKILL}
+description: Hand one task to Claude Code with `claude -p` when the user asks Claude Code (or Claude) to answer, review or change something. Never use it on your own initiative, or for a task Claude Code handed to you.
+---
+
+# Hand a task to Claude Code
+
+Claude Code works in its own official client, on its own login or key from its
+own settings (`$CLAUDE_CONFIG_DIR`, else `~/.claude`). Never pass it a key,
+token or login, and never set an `ANTHROPIC_` variable for it.
+
+Run one command for the task, in the directory it is about. By default Claude
+Code may only read:
+
+    claude -p --output-format json --max-turns 10 --tools Read,Grep,Glob -- "<the task>"
+
+Only when the user asked for Claude Code to change files, give it the edit
+tools too:
+
+    claude -p --output-format json --max-turns 10 --tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits -- "<the task>"
+
+Claude Code reaches its model over the network and keeps its session in its
+own home, so the command cannot run in the sandbox. Run it with
+`sandbox_permissions: "require_escalated"` and a `justification` that asks,
+such as "Let Claude Code work on this task outside the sandbox?". Suggest no
+`prefix_rule`. When the user declines, stop and say so.
+
+It prints one JSON object. Give the user its `result`, say it came from Claude
+Code, and after edits list the files that changed. When `is_error` is true or
+`subtype` is `error_max_turns`, say so rather than doing the task yourself, and
+do not run it again.
+"""
+
+
+def codex_shell_change(home: Path) -> Change:
+    """Codex's config.toml with Claude Code's variables left out of every command
+    Codex runs, beside the shell settings it holds already."""
+    path = home / "config.toml"
+    held = harness_toml.values(read(path) or "", [SHELL_POLICY])[SHELL_POLICY]
+    name = SHELL_POLICY[1:-1]
+    policy = harness_toml.loads(held).get(name, {}) if held else {}
+    exclude = policy.get("exclude") or []
+    if CLAUDE_VARIABLES not in exclude:
+        exclude = [*exclude, CLAUDE_VARIABLES]
+    return Change(
+        path, "toml", {SHELL_POLICY: _table(name, {**policy, "exclude": exclude})}
+    )
+
+
+def codex_default_gateway(home: Path) -> str | None:
+    """The gateway Codex's config.toml sends to by default, the one a Codex
+    started without a profile uses; None when it sends elsewhere."""
+    try:
+        doc = harness_toml.loads(read(home / "config.toml") or "")
+    except ValueError:
+        return None
+    provider = (doc.get("model_providers") or {}).get(PROVIDER) or {}
+    if doc.get("model_provider") != PROVIDER or not provider.get("base_url"):
+        return None
+    return str(provider["base_url"]).removesuffix("/v1")
+
+
+def with_claude_mcp(change: Change) -> Change:
+    """The Codex change with the MCP server it asks Claude Code through: at the
+    end of the profile connect writes whole, or as a table of config.toml."""
+    if change.kind == "file":
+        change.values["file"] += f"\n{CLAUDE_MCP_TABLE}\n"
+    else:
+        change.values[CLAUDE_MCP] = CLAUDE_MCP_TABLE
+    return change
+
+
+def claude_skill(home: Path) -> Change:
+    return Change(
+        home / "skills" / CLAUDE_SKILL / "SKILL.md", "file", {"file": CLAUDE_SKILL_TEXT}
+    )
+
+
+def record_install(manifest_dir: Path, kind: str, name: str) -> None:
+    """Record a plugin or marketplace (kind) connect added, so --undo removes
+    it, and only what connect added."""
+    manifest_path = manifest_dir / MANIFEST
+    record = _record(manifest_path) or {"files": []}
+    added = record.setdefault("installed", {}).setdefault(kind, [])
+    if name not in added:
+        added.append(name)
+    write_private(manifest_path, json.dumps(record, indent=2) + "\n", always=True)
+
+
+def installed(manifest_dir: Path) -> dict[str, list[str]]:
+    """The plugins and marketplaces connect added, by kind."""
+    return (_record(manifest_dir / MANIFEST) or {}).get("installed") or {}
 
 
 # --- writing and undo --------------------------------------------------------------
@@ -662,7 +817,8 @@ def apply_changes(
     no longer holds that is refused before anything is written, since the
     changes shown were worked out from it. A second run keeps each key's first
     "before", so --undo still returns to what was there before vllm-sr connect
-    first touched it.
+    first touched it, and to the whole file as it was then while nothing else
+    changed the file between the runs.
     """
     now = {change.path: read(change.path) for change in changes}
     moved = [p for p, text in now.items() if seen is not None and text != seen.get(p)]
@@ -687,8 +843,13 @@ def apply_changes(
                 "kind": change.kind,
                 "created": old is None,
                 "keys": {},
+                "file_before": old,
             }
             record["files"].append(item)
+        elif item.get("file_written") != _digest(old or ""):
+            # changed since connect wrote it, so only the keys go back
+            item.pop("file_before", None)
+        item["file_written"] = _digest(new)
         before, written = change.raw(old or ""), change.raw(new)
         for key in change.values:
             entry = item["keys"].setdefault(key, {"before": before[key]})
@@ -786,32 +947,49 @@ def undo_changes(manifest_dir: Path) -> list[str]:
             report.append(f"skipped {path}: it no longer exists")
             continue
         probe = Change(path, item["kind"], dict.fromkeys(item["keys"], ""))
-        current = probe.raw(probe.old_text())
-        restore = {}
-        for key, entry in item["keys"].items():
-            now, written = current[key], entry["written"]
-            if not still_written(key, now, written):
-                what = path if key == "file" else f"{key} in {path}"
-                report.append(f"kept {what}: it was changed after vllm-sr connect")
+        text = probe.old_text()
+        if "file_before" in item and _digest(text) == item.get("file_written"):
+            # as connect wrote it: back to the text it had, byte for byte
+            text = item["file_before"] or ""
+        else:
+            text = _restored(item, probe, text, report)
+            if text is None:
                 continue
-            restore[key] = entry["before"]
-            if now != written:
-                tail = now[len(written) :].lstrip("\n")
-                before = entry["before"] or ""
-                if before and not before.endswith("\n"):
-                    before += "\n"
-                restore[key] = before + tail
-        if not restore:
-            continue
-        text = probe.new_text(restore)
         if item["created"] and not text.strip():
             path.unlink()
+            if path.parent.name == CLAUDE_SKILL and not any(path.parent.iterdir()):
+                path.parent.rmdir()  # the skill's own folder
             report.append(f"removed {path}")
         else:
             write_private(path, text)
             report.append(f"restored {path}")
     manifest_path.unlink()
     return report
+
+
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _restored(item: dict, probe: Change, text: str, report: list[str]) -> str | None:
+    """text with each owned key that still holds what connect wrote set back to
+    its value before, None when no key does."""
+    path, current = probe.path, probe.raw(text)
+    restore = {}
+    for key, entry in item["keys"].items():
+        now, written = current[key], entry["written"]
+        if not still_written(key, now, written):
+            what = path if key == "file" else f"{key} in {path}"
+            report.append(f"kept {what}: it was changed after vllm-sr connect")
+            continue
+        restore[key] = entry["before"]
+        if now != written:
+            tail = now[len(written) :].lstrip("\n")
+            before = entry["before"] or ""
+            if before and not before.endswith("\n"):
+                before += "\n"
+            restore[key] = before + tail
+    return probe.new_text(restore, text) if restore else None
 
 
 def still_written(key: str, now: Any, written: Any) -> bool:
@@ -829,13 +1007,17 @@ def still_written(key: str, now: Any, written: Any) -> bool:
 # --- status ------------------------------------------------------------------------
 
 
-def connections(manifest_dir: Path) -> list[dict[str, Any]]:
+def connections(manifest_dir: Path, cwd: Path) -> list[dict[str, Any]]:
     """What the undo record in manifest_dir says connect set up, one entry for each
     Claude Code settings file, Codex profile and Codex config.toml: the gateway,
-    model and window written there, and whether each file written still holds
-    them. No entry holds a secret."""
+    model and window written there, whether each file written still holds them,
+    and the project settings in cwd that win over them, as connect warns. No
+    entry holds a secret."""
     record = _record(manifest_dir / MANIFEST) or {}
     items = record.get("files") or []
+    # Codex's shell settings that --delegate codex wrote, beside Claude Code's
+    shell = [item for item in items if SHELL_POLICY in item["keys"]]
+    skill = [item for item in items if Path(item["path"]).parent.name == CLAUDE_SKILL]
     found = []
     for item in items:
         path = Path(item["path"])
@@ -843,12 +1025,13 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
         if item["kind"] == "json-env":
             token, helper = written.get(TOKEN_KEY), written.get(KEY_HELPER)
             window = str(written.get("CLAUDE_CODE_MAX_CONTEXT_TOKENS") or "")
+            scope = "project" if path.name == "settings.local.json" else "user"
+            owned = [key for key, value in written.items() if value is not None]
+            overrides = claude_overrides(cwd, owned, path) if scope == "user" else []
             found.append(
                 {
                     "harness": "claude-code",
-                    "scope": (
-                        "project" if path.name == "settings.local.json" else "user"
-                    ),
+                    "scope": scope,
                     "gateway": written.get("ANTHROPIC_BASE_URL"),
                     "model": written.get("ANTHROPIC_MODEL"),
                     "context_window": int(window) if window.isdigit() else None,
@@ -860,15 +1043,32 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                         for other in items
                         if other is item
                         or Path(other["path"]).name == STATUS_LINE_SCRIPT
+                        or other in shell
                     ],
                     "plugins": sorted(record.get("plugins") or {}),
+                    "delegate": (
+                        {
+                            "to": "codex",
+                            "plugin": CODEX_PLUGIN,
+                            "installed_by_connect": CODEX_PLUGIN
+                            in installed(manifest_dir).get("plugins", []),
+                        }
+                        if shell
+                        else None
+                    ),
+                    "overrides": [
+                        {"path": str(other), "keys": keys} for other, keys in overrides
+                    ],
                 }
             )
-        elif item["kind"] == "toml" or (
+        elif (item["kind"] == "toml" and "model_provider" in item["keys"]) or (
             item["kind"] == "file" and path.name.endswith(".config.toml")
         ):
-            # the profile, or the entries --app wrote into config.toml
+            # the profile, or the entries --app wrote into config.toml, up to the
+            # MCP server --delegate claude-code puts last, whose keys are not the
+            # provider's
             text = "\n".join(str(value) for value in written.values() if value)
+            text, mcp, _ = text.partition(f"[{CLAUDE_MCP}]")
             profile = profile_values(text)
             catalog = profile.get("model_catalog_json")
             # the auth table connect writes: the shell, then -c and the command
@@ -881,6 +1081,7 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                 if other is item
                 or other["path"] == catalog
                 or Path(other["path"]).name == "vsr.json"
+                or other in skill
             ]
             found.append(
                 {
@@ -904,6 +1105,13 @@ def connections(manifest_dir: Path) -> list[dict[str, Any]]:
                     "key_env": profile.get("env_key"),
                     "key_command": helper,
                     "files": [file_state(other) for other in paired],
+                    "delegate": (
+                        {"to": "claude-code", "edits": bool(skill)} if mcp else None
+                    ),
+                    "overrides": [
+                        {"path": str(other), "keys": ["model"]}
+                        for other in codex_model_overrides(cwd)
+                    ],
                 }
             )
     return found

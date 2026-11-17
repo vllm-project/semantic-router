@@ -458,8 +458,9 @@ providers:
 | `use_nli` and the NLI explainer fields | Removed: the rule's spans stay in the response |
 
 A backend's inline `api_key` still loads; it cannot be combined with
-`auth.api_key_env`. [Migrate model resources](./model-resource-migration)
-shows each form in full.
+`auth.api_key_env` or `auth.api_key_file`, and a Dashboard save moves it into
+a key file ([Move an existing literal key](./security-hardening#move-an-existing-literal-key)).
+[Migrate model resources](./model-resource-migration) shows each form in full.
 
 A Looper algorithm's `model_names` sent a request for one of those names
 through the default recipe's decisions of that algorithm alone (`workflows`

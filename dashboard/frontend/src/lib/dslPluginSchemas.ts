@@ -242,6 +242,12 @@ function getFastResponsePluginFieldSchema(): FieldSchema[] {
       placeholder: 'I cannot help with that request.',
       description: 'The response message returned directly to the client',
     },
+    {
+      key: 'block',
+      label: 'Block the request',
+      type: 'boolean',
+      description: 'Refuse the request with HTTP 403 and this message instead of answering with it',
+    },
   ]
 }
 

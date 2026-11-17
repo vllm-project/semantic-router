@@ -5,7 +5,9 @@ The `vela3_d3` family against vela3-lite's own runtime (`modeling_vela3.py`,
 with a gated adapter answers as the package does. Questions that run with
 every adapter off differ from the package by up to 0.023 on this host, the
 same way the plain `decision3` family differs from the Decision 3.0 runtime
-on it. No decision and no span set changed.
+on it. No decision and no span set changed. vela3-mini and vela3-flash, which
+write definitions for open labels, are below: each differs from its package
+on one label set's definition.
 
 - **Date:** 2026-11-02.
 - **Packages:** `vllm-sr/vela3-lite` `c789afd6` over its pinned base
@@ -65,49 +67,89 @@ not the cause: the runtime's kernel and Transformers' agree bit for bit at
 differ from the recorded `cpu` reference (13 of 16 numbers equal, the
 largest difference 0.172), the host class #5273 and #5274 describe.
 
-## vela3-mini
+## vela3-mini and vela3-flash
 
-`vllm-sr/vela3-mini` `bbc0206e` over `vllm-sr/d3-mini` `566da0ea`, the same
-host and environments, `generate --count 40 --seed 0` (no `hazard:` Nouls:
-vela3-mini ships no hazard adapter; opt-in questions run its opt-in adapter).
-The package's runtime took 2,239 s, the runtime 794 s.
+The runtime writing open-label definitions, against each package's own
+runtime, on `generate --count 40 --seed 0` (290 questions).
 
-| Questions | Count | Identical values | Changed | Largest difference |
-| --- | --- | --- | --- | --- |
-| Gated (router, task, opt-in adapters) | 106 | 66 | 0 | 0.0075 |
-| Adapters off | 105 | 61 | 0 | 0.0044 |
-| Span, labels with descriptions or a label set | 41 | 41 | 0 | 0 |
-| Span, open labels without a description | 38 | 26 | 20 | 0.156 |
+- **Date:** 2026-11-16.
+- **Host:** an Intel Xeon Platinum 8568Y+ virtual machine (AVX-512 with BF16,
+  no AMX exposed), both sides with 12 threads pinned to 16 cores.
+- **Environments:** PyTorch 2.10.0+cpu on both sides; Transformers 5.17.0 and
+  Accelerate 1.15.0 for the packages' runtime.
+- **Precision:** the runtime at `--dtype bfloat16`, as the packages run a BF16
+  backbone with an FP32 readout. At `--dtype auto` the runtime computes
+  Decision 3.0 in FP32 on CPUs ([record](d3-cpu-fp32.md)) against the
+  packages' BF16: even spans that write no definition then differ (up to
+  0.013 on vela3-mini, 0.038 on vela3-flash), and no ordinary or opt-in
+  question is identical.
 
-Every change is a span question whose open labels have no description:
-vela3-mini's package writes a definition for each with its base
-(`definitions.writer` `base`), which changes the option lines, the NER
-threshold (with definitions, not names only) and so the spans. The runtime
-runs these labels by name until the definition writers land. Every other
-span question is identical, and no decision changes. Unlike vela3-lite's,
-the gated rows here differ more than the adapters-off rows (0.0075 against
-0.0044), and the base-alone control ran only on vela3-lite's requests, so
-these gated differences are within the bar but not shown to be this host's
-alone.
+### vela3-mini
 
-## vela3-flash
-
-`vllm-sr/vela3-flash` `af48828d` over `vllm-sr/d3-flash` `8b35c853`, the same
-host, environments and request generator (290 questions). The package's
-runtime took 2,279 s, the runtime 1,052 s.
+`vllm-sr/vela3-mini` `bbc0206e` over `vllm-sr/d3-mini` `566da0ea`
+(`definitions.writer` `base`). No `hazard:` Nouls: vela3-mini ships no hazard
+adapter. Opt-in questions run its opt-in adapter, so the second row holds the
+ordinary and opt-in questions rather than adapters-off ones. The package's
+runtime took 2,809 s, the runtime 1,349 s.
 
 | Questions | Count | Identical values | Changed | Largest difference |
 | --- | --- | --- | --- | --- |
-| Gated (router and task adapters) | 106 | 67 | 0 | 0.011 |
-| Adapters off | 105 | 61 | 0 | 0.0043 |
+| Gated (router and task adapters) | 106 | 76 | 0 | 0.0082 |
+| Ordinary and opt-in questions | 105 | 56 | 0 | 0.013 |
 | Span, labels with descriptions or a label set | 41 | 41 | 0 | 0 |
-| Span, open labels without a description | 38 | 27 | 20 | 0.213 |
+| Span, open labels without a description | 38 | 34 | 0 | 0.019 |
 
-As on vela3-mini, every change is an open-label span question without a
-description, which vela3-flash's package defines with its base and grafted
-LM head (`definitions.writer` `grafted_head`; #5703). No decision changes.
-As on vela3-mini, the gated rows differ more than the adapters-off rows
-(0.011 against 0.0043) and have no control of their own.
+No decision or span set changes, and every request's input tokens agree.
+Of the 61 definitions the package writes (one per question and label), 54 are
+identical. The 7 that differ are one label set, `["birthplace"]`, asked by 7 questions: the
+package writes "The text span covers the place where a person was born." and
+the runtime "The text span that covers the place where a person was born."
+Four of those questions read the same spans with scores up to 0.019 apart;
+the other three read no span on either side.
+
+### vela3-flash
+
+`vllm-sr/vela3-flash` `af48828d` over `vllm-sr/d3-flash` `8b35c853`
+(`definitions.writer` `grafted_head`: the base with
+`labeldef_lm_head.safetensors`). vela3-flash ships no hazard adapter and no
+opt-in adapter, so it has no `hazard:` Nouls and its opt-in questions run every
+adapter off. The package's runtime took 3,336 s,
+the runtime 2,240 s.
+
+| Questions | Count | Identical values | Changed | Largest difference |
+| --- | --- | --- | --- | --- |
+| Gated (router and task adapters) | 106 | 74 | 0 | 0.006 |
+| Ordinary and opt-in questions | 105 | 55 | 0 | 0.0063 |
+| Span, labels with descriptions or a label set | 41 | 41 | 0 | 0 |
+| Span, open labels without a description | 38 | 37 | 1 | 0.13 |
+
+No decision changes, and every request's input tokens agree. The runtime
+Of the 61 definitions the package writes, 53 are identical. The 8 that differ
+are one label set, `["answer"]`, asked by 8 questions: the package writes "The
+text span that contains the answer to the question." and the runtime "The
+answer entity type covers the text span that directly responds to a question
+or prompt." One of those questions changes its span set (request 8): the
+package also reads the word "answer" itself (score 0.487, threshold 0.39),
+and both read the other two spans; "Monday" scores 0.739 against the
+runtime's 0.610, the table's 0.13. The other seven read no span on either
+side.
+
+### Definitions
+
+Each differing definition forks where the package's greedy step is nearly a
+tie in BF16, so the choice depends on last-bit rounding:
+
+- `birthplace` (vela3-mini) forks at its fourth token: `covers` 15.375
+  against `that` 15.25, two BF16 steps apart (a step is 0.0625 below 16).
+  Two other steps of the same definition are one step apart (`text` against
+  `entity`, `place` against `location`), and both sides agree there.
+- `answer` (vela3-flash) forks at its second token: `answer` and `text` tie
+  at 17.125.
+
+The package's `generate` ends a definition at the checkpoint's
+`eos_token_id` (`<|endoftext|>`): after the `birthplace` definition it emits
+`<|endoftext|>` with no `<|im_end|>`. The runtime ends a definition at the
+same token.
 
 ## vela3-turbo (GPU)
 
@@ -136,5 +178,7 @@ gated rows' largest difference, 0.018, is the closest to the bar.
 - Golden answers: none are recorded, since this host does not reproduce the
   generic `cpu` references of the d3 bases. Record them on the host class
   the d3 references come from.
-- Open-label definitions written by the base (vela3-mini's `base` writer and
-  vela3-flash's `grafted_head`): vela3-lite and vela3-turbo run names only.
+- vela3-lite on the vela3-mini and vela3-flash host, and the base-alone
+  control (the plain `decision3` family against the Decision 3.0 runtime) on
+  that host, so the gated and ordinary differences there have no control of
+  their own.

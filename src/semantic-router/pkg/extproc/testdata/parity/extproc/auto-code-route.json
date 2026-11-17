@@ -18,6 +18,8 @@
             "x-user-vertex-ai-key",
             "x-vsr-bench-expected-config-hash",
             "x-vsr-bench-max-inference-calls",
+            "x-vsr-budget-remaining",
+            "x-vsr-budget-scope",
             "x-vsr-cache-control",
             "x-vsr-compression-control",
             "x-vsr-config-hash",
@@ -173,6 +175,12 @@
               "header": {
                 "key": "x-vsr-selected-model",
                 "rawValueText": "general-large"
+              }
+            },
+            {
+              "header": {
+                "key": "x-vsr-replay-id",
+                "rawValueText": "<volatile>"
               }
             }
           ]

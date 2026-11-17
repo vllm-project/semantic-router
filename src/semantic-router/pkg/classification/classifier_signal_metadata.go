@@ -17,6 +17,10 @@ type RequestFacts struct {
 	Metadata map[string]string
 	Context  context.Context
 
+	// Agent is the agent the request belongs to, read from its harness's
+	// headers for the agent signal.
+	Agent AgentFacts
+
 	// JailbreakInput, when present, supplies role-scoped Guard content separately
 	// from the general routing text. Nil preserves flat-text classifier callers.
 	JailbreakInput *JailbreakInput

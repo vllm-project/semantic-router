@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import InsightsReviewCharts from '../components/InsightsReviewCharts'
 import InsightsReviewsTable from './InsightsReviewsTable'
+import { ModelLabelsContext } from './insightsModelLabelSupport'
 import InsightsSessionRoutes from './InsightsSessionRoutes'
 import { fetchInsightsSessionReviews } from './insightsPageApi'
 import { buildInsightsRecordSections } from './insightsPageSupport'
@@ -115,6 +116,25 @@ describe('Insights reviews', () => {
     expect(html).toContain('<option value="tool_call">Tool check</option>')
     expect(html).toContain('<option value="codex-auto-review">codex-auto-review</option>')
     expect(html).not.toContain('No approval reviews yet')
+  })
+
+  it('names review models by their labels in the table and the filter', () => {
+    const html = render(
+      <ModelLabelsContext.Provider value={{ 'codex-auto-review': 'GPT Review' }}>
+        <InsightsReviewsTable
+          records={[denied]}
+          total={1}
+          filters={EMPTY_REVIEW_FILTERS}
+          sessionInput=""
+          modelOptions={['codex-auto-review']}
+          hasReviews
+          onSessionInput={() => undefined}
+          onFilterChange={() => undefined}
+        />
+      </ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain('<option value="codex-auto-review">GPT Review (codex-auto-review)</option>')
+    expect(html).toContain('title="Configured as codex-auto-review">GPT Review</span>')
   })
 
   it('shows an empty state when no review was recorded', () => {

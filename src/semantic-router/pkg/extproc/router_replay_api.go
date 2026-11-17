@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -26,6 +27,7 @@ type routerReplayFilters struct {
 	cacheStatus string
 	sessionID   string
 	turnID      string
+	since       time.Time
 	review      routerReplayReviewFilters
 }
 
@@ -56,6 +58,12 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 		return r.handleRouterReplayAggregateAPI(method, rawQuery)
 	case normalizedPath == routerReplayTrajectoryPath:
 		return r.handleRouterReplayTrajectoryAPI(method, rawQuery)
+	case normalizedPath == routerReplayRunsPath:
+		return r.handleRouterReplayRunsAPI(method, rawQuery)
+	case normalizedPath == routerReplayRunPath:
+		return r.handleRouterReplayRunAPI(method, rawQuery)
+	case normalizedPath == routerReplayModelsPath:
+		return r.handleRouterReplayModelsAPI(method)
 	case normalizedPath == routerReplayDatasetPath:
 		return r.handleRouterReplayDatasetAPI(method, rawQuery)
 	case normalizedPath == routerReplayJudgeTasksPath:
@@ -214,6 +222,14 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		return filters, fmt.Errorf("cache_status must be one of all, cached, or streamed")
 	}
 
+	if raw := strings.TrimSpace(values.Get("since")); raw != "" {
+		since, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return filters, fmt.Errorf("since must be an RFC 3339 timestamp, such as 2026-11-15T15:00:00Z")
+		}
+		filters.since = since
+	}
+
 	review, err := parseRouterReplayReviewFilters(values)
 	filters.review = review
 	return filters, err
@@ -264,6 +280,7 @@ func doesRouterReplayRecordMatchFilters(
 		matchesOptionalModel(record, filters.model),
 		matchesOptionalValue(record.SessionID, filters.sessionID),
 		matchesOptionalTurn(record, filters.turnID),
+		filters.since.IsZero() || !record.Timestamp.Before(filters.since),
 		filters.review.matches(record),
 		matchesReplaySearch(record, search),
 	}

@@ -117,6 +117,7 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		int64(usage.completionTokens),
 	)
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
+	r.settleRequestSpend(ctx, &replayUsage)
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
 	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, usage, replayUsage)
 }

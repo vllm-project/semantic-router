@@ -1,7 +1,8 @@
 package config
 
 // DeploymentPricing resolves explicit deployment rates before the provider
-// model it names. An explicit empty block declares a free deployment.
+// model it names. An explicit empty block declares a free deployment, and so
+// does a model_runtime deployment with neither.
 func (c *RouterConfig) DeploymentPricing(name string) (ModelPricing, bool) {
 	if c == nil {
 		return ModelPricing{}, false
@@ -17,10 +18,17 @@ func (c *RouterConfig) DeploymentPricing(name string) (ModelPricing, bool) {
 		}
 		return pricing, true
 	}
-	if d.Model == "" {
-		return ModelPricing{}, false
+	if d.Model != "" {
+		if pricing, priced := c.GetFullModelPricing(d.Model); priced {
+			return pricing, true
+		}
 	}
-	return c.GetFullModelPricing(d.Model)
+	if d.IsModelRuntime() {
+		// The built-in runtime runs on the operator's own hardware and bills no
+		// tokens, so an unpriced one is free, as an empty pricing block says.
+		return ModelPricing{Currency: "USD"}, true
+	}
+	return ModelPricing{}, false
 }
 
 // cloneDeploymentPricing keeps exported declarations independent of runtime config.

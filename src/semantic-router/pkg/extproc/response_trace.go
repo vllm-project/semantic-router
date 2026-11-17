@@ -149,6 +149,7 @@ func matchedSignalTrace(ctx *RequestContext) []headers.Item {
 		{config.SignalTypeConversation, ctx.VSRMatchedConversation},
 		{config.SignalTypeMetadata, ctx.VSRMatchedMetadata},
 		{config.SignalTypeInputModality, ctx.VSRMatchedInputModality},
+		{config.SignalTypeAgent, ctx.VSRMatchedAgent},
 		{config.SignalTypeSystemOne, append(slices.Clone(ctx.VSRMatchedDecisionModel), response[config.SignalTypeSystemOne]...)},
 		{config.SignalTypeProjection, ctx.VSRMatchedProjection},
 	}

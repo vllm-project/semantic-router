@@ -351,15 +351,29 @@ type MemoryQdrantConfig struct {
 }
 
 // ResponseAPIConfig controls response and conversation history storage.
-// StoreBackend defaults to "redis" for durable storage that survives router
-// restarts. Set to "memory" only for local development — all history is lost
-// when the router process exits.
+// An omitted StoreBackend is "redis" when the Redis block names a server, as a
+// configuration written when Redis was the default does, and "memory"
+// otherwise, which needs no service but loses all history when the router
+// process exits. vllm-sr serve selects the Redis it runs when the
+// configuration names no store.
 type ResponseAPIConfig struct {
 	Enabled      bool                   `yaml:"enabled"`
 	StoreBackend string                 `yaml:"store_backend,omitempty"`
 	TTLSeconds   int                    `yaml:"ttl_seconds"`
 	MaxResponses int                    `yaml:"max_responses"`
 	Redis        ResponseAPIRedisConfig `yaml:"redis,omitempty"`
+}
+
+// withDefaultStoreBackend resolves an omitted StoreBackend.
+func (c ResponseAPIConfig) withDefaultStoreBackend() ResponseAPIConfig {
+	if c.StoreBackend != "" {
+		return c
+	}
+	c.StoreBackend = "memory"
+	if c.Redis.Address != "" || len(c.Redis.ClusterAddresses) > 0 || c.Redis.ConfigPath != "" {
+		c.StoreBackend = "redis"
+	}
+	return c
 }
 
 type ResponseAPIRedisConfig struct {
@@ -384,9 +398,13 @@ type ResponseAPIRedisConfig struct {
 
 // RouterReplayConfig says where routing-decision replay records are stored.
 // A router_replay plugin turns recording on and says what a record captures.
-// Without a storage configuration records stay in memory. Supported
-// backends: "postgres", "redis", "milvus", "qdrant", "memory". Production
-// deployments should configure a durable backend.
+// Supported backends: "file", "postgres", "redis", "milvus", "qdrant",
+// "memory". The default, "file", writes each record that holds no prompt or
+// body text once its request ends to .vllm-sr/router-replay.jsonl in the
+// configuration's directory, at most 1,000 of them, and keeps them in memory
+// where a plugin captures text, that directory cannot be written or another
+// process holds the file. Shared or production deployments should configure
+// postgres or redis.
 type RouterReplayConfig struct {
 	StoreBackend string                      `json:"store_backend,omitempty" yaml:"store_backend,omitempty"`
 	TTLSeconds   int                         `json:"ttl_seconds" yaml:"ttl_seconds"`

@@ -68,6 +68,8 @@
             "x-user-vertex-ai-key",
             "x-vsr-bench-expected-config-hash",
             "x-vsr-bench-max-inference-calls",
+            "x-vsr-budget-remaining",
+            "x-vsr-budget-scope",
             "x-vsr-cache-control",
             "x-vsr-compression-control",
             "x-vsr-config-hash",
@@ -181,6 +183,10 @@
             {
               "name": "x-vsr-selected-model",
               "value": "general-small"
+            },
+            {
+              "name": "x-vsr-replay-id",
+              "value": "<volatile>"
             }
           ],
           "remove": [
@@ -303,6 +309,10 @@
       {
         "name": "x-vsr-selected-model",
         "value": "general-small"
+      },
+      {
+        "name": "x-vsr-replay-id",
+        "value": "<volatile>"
       }
     ],
     "chunks": [

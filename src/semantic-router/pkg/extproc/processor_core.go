@@ -101,6 +101,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		// Requests that ended through a normal path already zeroed the token,
 		// making this a no-op.
 		releaseInflightAdmission(ctx)
+		r.finishRequestSpend(ctx)
 		releaseStreamedBody(ctx)
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)

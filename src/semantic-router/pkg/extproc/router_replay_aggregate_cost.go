@@ -101,7 +101,8 @@ func (a *replayCostAccumulator) addRouterCalls(record routerreplay.RoutingRecord
 	return priced, gap
 }
 
-// addSavings compares a record with its baseline when both are complete.
+// addSavings compares a record with its baseline when both are complete and
+// nets out the calls the Router made for it, which only a price can do.
 func (a *replayCostAccumulator) addSavings(record routerreplay.RoutingRecord, modelPriced bool) {
 	coverage := &a.summary.Coverage
 	if !modelPriced {
@@ -115,8 +116,15 @@ func (a *replayCostAccumulator) addSavings(record routerreplay.RoutingRecord, mo
 		coverage.BaselineUnavailable = incrementReplayCount(coverage.BaselineUnavailable, reason)
 		return
 	}
-	group := a.currency(replayRecordCurrency(record))
-	group.TotalSaved += *record.CostSavings
+	currency := replayRecordCurrency(record)
+	routerCost, gap := replayNettedRouterCallCost(record, currency)
+	if gap != "" {
+		coverage.NetUnavailable = incrementReplayCount(coverage.NetUnavailable, gap)
+		return
+	}
+	group := a.currency(currency)
+	group.GrossSaved += *record.CostSavings
+	group.NettedRouterCallSpend += routerCost
 	group.BaselineSpend += *record.BaselineCost
 	group.ActualSpend += *record.ActualCost
 	group.CostRecordCount++
@@ -127,6 +135,36 @@ func (a *replayCostAccumulator) addSavings(record routerreplay.RoutingRecord, mo
 		source = record.CostAccounting.BaselineSource
 	}
 	coverage.BaselineSources = incrementReplayCount(coverage.BaselineSources, source)
+	for _, call := range replayRouterCalls(record) {
+		if coverage.NettedRouterCalls == nil {
+			coverage.NettedRouterCalls = make(map[string]int)
+		}
+		coverage.NettedRouterCalls[call.Kind] += call.Calls
+	}
+}
+
+// replayNettedRouterCallCost sums the calls the Router made for a record, in
+// the record's currency, or says why the first one that has no such price
+// cannot be netted.
+func replayNettedRouterCallCost(record routerreplay.RoutingRecord, currency string) (float64, string) {
+	cost := 0.0
+	for _, call := range replayRouterCalls(record) {
+		switch {
+		case call.UnpricedCalls > 0:
+			return 0, firstReplayReason(call.UnpricedReasons)
+		case call.Calls == 0:
+			continue
+		case !finiteReplayCost(call.Cost):
+			return 0, store.UnpricedNotRecorded
+		case *call.Cost == 0:
+			// Nothing is netted, whatever the currency of a free call.
+			continue
+		case normalizeReplayCurrency(call.Currency) != currency:
+			return 0, store.UnpricedCurrencyMismatch
+		}
+		cost += *call.Cost
+	}
+	return cost, ""
 }
 
 func replaySavingsComplete(record routerreplay.RoutingRecord) bool {
@@ -164,6 +202,7 @@ func (a *replayCostAccumulator) result() routerReplayAggregateCostSummary {
 	summary := a.summary
 	summary.ByCurrency = nil
 	for _, group := range a.currencies {
+		group.TotalSaved = group.GrossSaved - group.NettedRouterCallSpend
 		summary.ByCurrency = append(summary.ByCurrency, *group)
 	}
 	sort.Slice(summary.ByCurrency, func(i, j int) bool {
@@ -173,12 +212,21 @@ func (a *replayCostAccumulator) result() routerReplayAggregateCostSummary {
 		group := summary.ByCurrency[0]
 		summary.Currency = group.Currency
 		summary.TotalSaved = group.TotalSaved
+		summary.GrossSaved = group.GrossSaved
+		summary.NettedRouterCallSpend = group.NettedRouterCallSpend
 		summary.BaselineSpend = group.BaselineSpend
 		summary.ActualSpend = group.ActualSpend
 		summary.RouterCallSpend = group.RouterCallSpend
 		summary.TotalSpend = group.TotalSpend
 	}
 	return summary
+}
+
+func replayRouterCalls(record routerreplay.RoutingRecord) []store.RouterCallCost {
+	if record.CostAccounting == nil {
+		return nil
+	}
+	return record.CostAccounting.RouterCalls
 }
 
 // isLooperReplayRecord reports a Looper request, whose cost is its attempts'

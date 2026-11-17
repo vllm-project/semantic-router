@@ -373,6 +373,7 @@ export interface ConfigSignals {
   metadata?: MetadataSignal[]
   conversation?: ConversationSignal[]
   input_modality?: InputModalitySignal[]
+  agent?: AgentSignal[]
   systemone?: SystemOneSignal[]
 }
 
@@ -422,6 +423,15 @@ export interface DomainSignal {
   predicate?: NumericPredicate
   deployment?: string
   timeout_ms?: number
+}
+
+export interface AgentSignal {
+  name: string
+  description?: string
+  role?: 'main' | 'subagent'
+  harness?: 'claude_code' | 'codex'
+  types?: string[]
+  request_classes?: Array<'main' | 'subagent' | 'workflow' | 'compaction' | 'auxiliary'>
 }
 
 export interface InputModalitySignal {

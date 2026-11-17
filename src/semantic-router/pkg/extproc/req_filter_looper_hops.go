@@ -87,6 +87,7 @@ func (r *OpenAIRouter) executeLooperGraph(
 	if scope, ok := masking.RequestScope(reqCtx.TraceContext); ok {
 		ctx = masking.WithRequestScope(ctx, scope)
 	}
+	ctx = r.withReplayRunParent(ctx, reqCtx)
 	outcome, err := graph.Run(ctx, program, in, graph.Options{
 		Caller: hops,
 		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},
@@ -176,11 +177,14 @@ func (s upstreamSender) Send(ctx context.Context, call *routing.Call) (*graph.De
 		return &graph.Delivery{Immediate: result.Immediate}, nil
 	}
 	resp := result.Response
-	return &graph.Delivery{
+	delivery := &graph.Delivery{
 		Response: &routing.UpstreamResponse{Status: resp.StatusCode, Header: routingHeaderOf(resp.Header), Body: resp.Body},
-		Local:    resp.Local != nil,
 		Close:    func() { _ = resp.Body.Close() },
-	}, nil
+	}
+	if resp.Local != nil {
+		delivery.Local = &routing.LocalReply{Status: resp.StatusCode, Failure: string(resp.Local.Kind)}
+	}
+	return delivery, nil
 }
 
 // localDelivery answers a failure the upstream layer reports as an error,
@@ -195,7 +199,7 @@ func localDelivery(err error) *graph.Delivery {
 	header := routing.Header{{Name: "content-type", Value: "text/plain"}, {Name: "content-length", Value: strconv.Itoa(len(text))}}
 	return &graph.Delivery{
 		Response: &routing.UpstreamResponse{Status: status, Header: header, Body: io.NopCloser(strings.NewReader(text))},
-		Local:    true,
+		Local:    &routing.LocalReply{Status: status, Failure: string(upstream.KindOf(err))},
 	}
 }
 

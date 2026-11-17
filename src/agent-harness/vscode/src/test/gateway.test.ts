@@ -136,6 +136,7 @@ const catalog = {
     { id: 'vllm-sr/auto', description: 'Default recipe', routing: { api: 'chat', resolution: 'virtual', selectable: true, recipe: 'default' } },
     { id: 'backend-b', routing: { api: 'chat', resolution: 'passthrough', selectable: true } },
     { id: 'coding', routing: { api: 'chat', resolution: 'virtual', selectable: true, recipe: 'coding' } },
+    { id: 'vllm-sr/review', routing: { api: 'chat', resolution: 'virtual', selectable: false, delegates: ['review'], recipe: 'review' } },
   ],
 };
 

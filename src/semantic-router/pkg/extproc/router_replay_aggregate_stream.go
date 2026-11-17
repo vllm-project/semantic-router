@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 // The accumulator retains buckets, never a row list or captured bodies. The
@@ -49,7 +50,7 @@ func (r *OpenAIRouter) queryRouterReplayAggregate(filters routerReplayFilters) (
 }
 
 func (a *replayAggregateAccumulator) addOptions(record routerreplay.RoutingRecord) {
-	if record.RequestKind != "" && record.SelectedModel != "" {
+	if record.RequestKind == store.RequestKindCodexApprovalReview && record.SelectedModel != "" {
 		a.availableReviewModels[record.SelectedModel] = struct{}{}
 	}
 	for _, option := range []struct {

@@ -18,6 +18,7 @@ import type {
   InsightsAggregateCurrencySummary,
   InsightsAggregateTokenEntry,
 } from '../pages/insightsPageTypes'
+import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
 import styles from './InsightsCharts.module.css'
 import InsightsCostCoverage from './InsightsCostCoverage'
 import InsightsProviderCacheSummary from './InsightsProviderCacheSummary'
@@ -185,6 +186,26 @@ const comparedCost = (
   value: number,
 ) => (summary.cost_record_count > 0 ? formatCurrency(value, summary.currency) : 'N/A')
 
+// Savings are net of the compared requests' Router calls; where those cost
+// anything, the gross figure and what was netted show beside it.
+const netCards = (summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary) =>
+  summary.cost_record_count > 0 && (summary.netted_router_call_spend ?? 0) !== 0
+    ? [
+        {
+          label: 'Estimated Gross Savings',
+          value: formatCurrency(summary.gross_saved, summary.currency),
+          accentClassName: styles.summaryValueNeutral,
+          cardClassName: '',
+        },
+        {
+          label: 'Router Calls Netted',
+          value: formatCurrency(summary.netted_router_call_spend, summary.currency),
+          accentClassName: styles.summaryValueNeutral,
+          cardClassName: '',
+        },
+      ]
+    : []
+
 const summaryCards = (summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary) => [
   {
     label: 'Estimated Savings',
@@ -214,6 +235,7 @@ const summaryCards = (summary: InsightsAggregateSummary | InsightsAggregateCurre
     accentClassName: styles.summaryValueNeutral,
     cardClassName: '',
   },
+  ...netCards(summary),
   ...spendCards(summary),
 ]
 
@@ -237,18 +259,20 @@ function InsightsEstimateNotes() {
         <p>
           Decision-model, System One, embedding and Looper calls are costed apart from the selected
           model and added to the total; a call without a price is counted as unpriced, never as
-          free. Recorded router spend includes failed requests. A generation model without
-          configured pricing uses the built-in catalog’s list price when its provider lists one,
-          marked as an estimate. On a client’s own login a cost is the API-price equivalent, not
-          what the plan charges.
+          free. Savings are net of the calls the Router made for the compared requests; the gross
+          figure is before them. Recorded router spend includes failed requests. A generation model
+          without configured pricing uses the built-in catalog’s list price when its provider lists
+          one, marked as an estimate. On a client’s own login a cost is the API-price equivalent,
+          not what the plan charges.
         </p>
         <p>
           Infrastructure charges and invoice adjustments are excluded. Currencies are shown
           separately; no exchange-rate conversion is applied. Savings leave out requests that are
-          not completed or lack token usage, model pricing, or baseline data. The total still counts
-          the priced calls of a request that failed. Missing data is shown as an explicit reason in
-          each record. Historical requests without captured prices remain “Price not recorded”;
-          current model rates do not backfill them.
+          not completed or lack token usage, model pricing, or baseline data, and requests whose
+          Router calls lack a price rather than netting them at zero. The total still counts the
+          priced calls of a request that failed. Missing data is shown as an explicit reason in each
+          record. Historical requests without captured prices remain “Price not recorded”; current
+          model rates do not backfill them.
         </p>
       </details>
     </div>
@@ -258,7 +282,11 @@ function InsightsEstimateNotes() {
 export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   const summary = aggregate.summary
   const costGroups = summary.by_currency?.length ? summary.by_currency : [summary]
-  const modelData = aggregate.model_selection
+  const labels = useModelLabels()
+  const modelData = aggregate.model_selection.map((entry) => ({
+    ...entry,
+    name: modelText(labels, entry.name),
+  }))
   const decisionData = aggregate.decision_distribution
   const signalData = aggregate.signal_distribution
   const tokenVolume = aggregate.token_volume
@@ -500,7 +528,10 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
         <TokenBreakdownChart title="Tokens by Decision" data={tokenBreakdown.by_decision} />
         <TokenBreakdownChart
           title="Tokens by Selected Model"
-          data={tokenBreakdown.by_selected_model}
+          data={tokenBreakdown.by_selected_model.map((entry) => ({
+            ...entry,
+            name: modelText(labels, entry.name),
+          }))}
         />
       </div>
     </section>

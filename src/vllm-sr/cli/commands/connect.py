@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import difflib
 import json
 import os
 import shlex
@@ -125,18 +124,19 @@ def _options(command, launch_and_vsr: bool = True):
                     "--launch",
                     is_flag=True,
                     help="Start the harness through the gateway for this session only,"
-                    " writing no file; arguments after -- go to the harness.",
+                    " writing none of its settings; arguments after -- go to the"
+                    " harness.",
                 )
             ),
             theirs(
                 click.option(
                     "--worktree",
-                    type=click.Path(
-                        exists=True, file_okay=False, resolve_path=True, path_type=Path
-                    ),
+                    metavar="DIRECTORY|new[:NAME]",
                     default=None,
                     help="With --launch, start the harness in this existing git"
-                    " worktree. No branch or worktree is created, switched or removed.",
+                    " worktree, or with new (new:NAME) in a new one: branch"
+                    " vllm-sr/NAME and the worktree <checkout>-NAME beside this"
+                    " checkout, from its HEAD. Nothing is switched or removed.",
                 )
             ),
             theirs(
@@ -191,6 +191,22 @@ def connect() -> None:
     is_flag=True,
     help="Also show in Claude Code's status line which models answered, the last first.",
 )
+@click.option(
+    "--delegate",
+    type=click.Choice(["codex"]),
+    default=None,
+    help="Also let Claude Code hand a task to Codex, which works on its own default"
+    " config and login: installs OpenAI's Codex plugin and keeps Claude Code's"
+    " variables out of the commands Codex runs. Needs --key-command for a keyed"
+    " listener, so the gateway key never sits in Claude Code's env.",
+)
+@click.option(
+    "--delegate-source",
+    default=hc.CODEX_PLUGIN_SOURCE,
+    show_default=True,
+    help="Where the Codex plugin installs from with --delegate codex: a"
+    " marketplace's owner/repo, Git URL, or a local checkout.",
+)
 def claude_code(
     router_config,
     base_url,
@@ -210,42 +226,81 @@ def claude_code(
     harness_args,
     scope,
     status_line,
+    delegate,
+    delegate_source,
 ):
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
     path = hc.claude_settings_path(scope, Path.cwd(), env)
     where = _check_launch(
-        launch, harness_args, undo, status_line, check, worktree, harness_home
+        launch,
+        harness_args,
+        undo,
+        status_line,
+        check,
+        worktree,
+        harness_home,
+        "claude-code",
+        delegate,
     )
     if undo:
         _undo(path.parent)
         return
+    if delegate:
+        _require_clients("claude", "codex")
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    login = _caller_login("claude-code", doc)
+    login = _caller_login("claude-code", doc, model)
     # a key command gives the key, so the variable may be unset
     _require_key(doc, base_url, from_env, api_key_env, login or key_command)
     if login or key_command:
         # the Router presents Claude Code's own login to Anthropic, or Claude Code
         # runs the key command itself, and a gateway token would go in its place
         token, from_env = "", False
+    if delegate and from_env:
+        # the settings' env reaches every program Claude Code starts: the
+        # plugin's Codex, and each command Codex runs
+        raise click.ClickException(
+            f"--delegate codex would leave the key from ${api_key_env} in Claude"
+            " Code's settings env, which reaches Codex and every command it runs."
+            " Give Claude Code a command that prints the key instead, such as"
+            " --key-command 'pass show vllm-sr/gateway'. Nothing was written."
+        )
     # the harness runs the key command in its session, so the probe's run does too
     session = hs.session_env("claude-code", env, harness_home)
-    key = _key("claude-code", key_command, login, session, where, check or not dry_run)
+    key = _key(
+        "claude-code",
+        key_command,
+        login,
+        session,
+        where and where.here,
+        check or not dry_run,
+    )
     context_window, notes = _context_window(doc, model, context_window)
     values = hc.claude_env(gateway, model, token, key_command)
+    values["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(rc.output_limit(doc, model))
     if context_window:
         values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
     if launch:
         # the key stays off the command line and out of the settings file: Claude
         # Code prints it from the variable its own session inherits
-        launched = values
+        session_id = hs.session_id()
+        own = hs.claude_session_args(harness_args, session_id)
+        # the headers that carry the session: Claude Code's own one too, unless
+        # it resumes a conversation, which keeps its id
+        carried = [hs.SESSION_HEADER]
+        if own:
+            carried.append(rc.CLAUDE_HEADERS["session"])
+        # the settings Claude Code reads where it starts; for a new worktree,
+        # those of the checkout it is made from
+        headers = hs.claude_headers(session, where.here, session_id)
+        launched = {**values, hs.CLAUDE_HEADERS: headers}
         if from_env:
             helper = f"printenv {shlex.quote(api_key_env)}"
-            launched = {**values, hc.TOKEN_KEY: "", hc.KEY_HELPER: helper}
+            launched = {**launched, hc.TOKEN_KEY: "", hc.KEY_HELPER: helper}
         _launch(
             "claude-code",
-            ["claude", *harness_args],
+            ["claude", *own, *harness_args],
             doc,
             gateway,
             model,
@@ -255,6 +310,8 @@ def claude_code(
             json.loads(hc.set_json_env("", launched)),
             where,
             session,
+            session_id,
+            carried,
         )
     # the undo manifest beside the settings records the key too
     keyed = (path, path.parent / hc.MANIFEST) if scope == "project" and from_env else ()
@@ -269,6 +326,11 @@ def claude_code(
         script, values["statusLine"] = hc.status_line(path)
         changes.append(script)
     changes.append(hc.Change(path, "json-env", values))
+    steps = []
+    if delegate:
+        changes.append(_codex_shell_change(env))
+        notes.append(_codex_default_note(env))
+        steps = _codex_plugin_steps(env, delegate_source)
     label = f"<${api_key_env}>" if from_env else token
     options, plugin_id, state = _vsr_claude_start(
         env, gateway, doc, vsr, from_env, api_key_env, key_command
@@ -289,6 +351,7 @@ def claude_code(
         notes,
         plan,
         model,
+        [shlex.join(argv) for _, _, argv in steps],
     ):
         if check:
             text = hc.set_json_env("", values)
@@ -311,6 +374,8 @@ def claude_code(
             ),
             plan,
         )
+    if delegate:
+        _install_codex_plugin(env, steps, path.parent)
     if scope == "project":
         for kept in hc.keep_out_of_git([path, path.parent / hc.MANIFEST], Path.cwd()):
             echo(f"Added {kept} to this repository's .git/info/exclude.")
@@ -349,6 +414,8 @@ def claude_code(
         settings = path.absolute()  # the harness runs in a directory of its own
         _check("claude-code", lambda *_: hk.claude_argv(settings), env, secrets)
     echo("Start a new Claude Code session to use it.")
+    if delegate:
+        echo("There, /codex:rescue <task> hands a task to Codex.")
 
 
 @connect.command("codex")
@@ -365,6 +432,20 @@ def claude_code(
     help="Write the gateway as the default of Codex's shared config.toml in place"
     " of a profile, since the Codex app reads that file and no profile. This"
     " changes the default for the Codex CLI too; --undo takes it back.",
+)
+@click.option(
+    "--delegate",
+    type=click.Choice(["claude-code"]),
+    default=None,
+    help="Also let Codex ask Claude Code, read-only, through Claude Code's own MCP"
+    " server, which answers on Claude Code's own login or key.",
+)
+@click.option(
+    "--delegate-edits",
+    is_flag=True,
+    help="With --delegate claude-code, also add a skill that hands Claude Code one"
+    " task that may edit files: claude -p, which Codex asks to run outside its"
+    " sandbox.",
 )
 def codex(
     router_config,
@@ -385,6 +466,8 @@ def codex(
     harness_args,
     profile,
     app,
+    delegate,
+    delegate_edits,
 ):
     """Route Codex through the gateway, with a profile or (--app) as its default.
 
@@ -394,24 +477,25 @@ def codex(
     home = hc.codex_home(env)
     if app and launch:
         raise click.UsageError("--launch writes nothing, so it does not take --app")
+    if delegate_edits and not delegate:
+        raise click.UsageError("--delegate-edits goes with --delegate claude-code")
     where = _check_launch(
-        launch, harness_args, undo, check=check, worktree=worktree, home=harness_home
+        launch,
+        harness_args,
+        undo,
+        check=check,
+        worktree=worktree,
+        home=harness_home,
+        harness="codex",
+        delegate=delegate,
     )
     if undo:
         _undo(home)
         return
+    if delegate:
+        _require_clients("claude")
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    login = _caller_login("codex", doc)
-    _require_key(doc, base_url, from_env, api_key_env, login or key_command)
-    if login or key_command:
-        # the Router presents Codex's own ChatGPT login or API key to OpenAI, or
-        # Codex runs the key command itself, and a gateway key would go in its place
-        token, from_env = "", False
-    # the harness runs the key command in its session, so the probe's run does too
-    session = hs.session_env("codex", env, harness_home)
-    key = _key("codex", key_command, login, session, where, check or not dry_run)
-    key_env = api_key_env if from_env else None
     context_window, notes = _context_window(doc, model, context_window)
     entrypoint = next(
         (
@@ -455,12 +539,34 @@ def codex(
         memory_model,
         memory_window,
     )
+    # the entrypoints Codex calls: reviews go to review_model only through the
+    # catalog, memories always to memory_model
+    login = _caller_login(
+        "codex",
+        doc,
+        model,
+        review_model=review_model if catalog else None,
+        memory_model=memory_model,
+    )
+    _require_key(doc, base_url, from_env, api_key_env, login or key_command)
+    if login or key_command:
+        # the Router presents Codex's own ChatGPT login or API key to OpenAI, or
+        # Codex runs the key command itself, and a gateway key would go in its place
+        token, from_env = "", False
+    # the harness runs the key command in its session, so the probe's run does too
+    session = hs.session_env("codex", env, harness_home)
+    key = _key(
+        "codex", key_command, login, session, where and where.here, check or not dry_run
+    )
+    key_env = api_key_env if from_env else None
     if launch:
         # Codex reads the key from key_env or its command, so it stays off the
         # command line
         overrides = hc.codex_launch_args(
             gateway, model, key_env, context_window, login, key_command, memory_model
         )
+        session_id = hs.session_id()
+        overrides += hs.codex_headers(session_id)
         _launch(
             "codex",
             ["codex", *overrides, *harness_args],
@@ -473,6 +579,8 @@ def codex(
             catalog or None,
             where,
             session,
+            session_id,
+            [hs.SESSION_HEADER],
         )
     catalog_name = f"{hc.PROVIDER}-app" if app else profile
     catalog_path = home / f"{catalog_name}.models.json" if catalog else None
@@ -491,7 +599,23 @@ def codex(
             )
     else:
         change = hc.codex_change(home, profile, *settings, key_command, memory_model)
-    changes = [change]
+    changes = [hc.with_claude_mcp(change) if delegate else change]
+    if delegate:
+        notes.append(
+            "Codex asks Claude Code, read-only, through the MCP server claude:"
+            " Claude Code's own `claude mcp serve`,"
+            " which answers on Claude Code's own login or key ($CLAUDE_CONFIG_DIR,"
+            " else ~/.claude). Only its Agent tool is on, approved ahead, and Codex"
+            " waits up to 300 seconds for it."
+        )
+    if delegate_edits:
+        changes.append(hc.claude_skill(home))
+        notes.append(
+            f"The {hc.CLAUDE_SKILL} skill hands Claude Code one task that may edit"
+            " files, when you ask for it: Codex runs claude -p once, with edit tools"
+            " only for a task that asks for edits, and asks you before it runs the"
+            " command outside its sandbox."
+        )
     if catalog_path:
         text = json.dumps(catalog, indent=2) + "\n"
         changes.append(hc.Change(catalog_path, "file", {"file": text}))
@@ -544,7 +668,15 @@ def codex(
                     config += ["-c", f"model_catalog_json={json.dumps(str(found))}"]
                 return hk.codex_argv(config, work, bool(reviewer))
 
-            _check("codex", unwritten, env, secrets, False, reviewer, gateway)
+            _check(
+                "codex",
+                unwritten,
+                env,
+                secrets,
+                False,
+                reviewer,
+                _management_url(gateway, doc),
+            )
         return
     if options and _vsr_step(lambda: [_must(argv, env) for argv in install], plan):
         success(
@@ -582,7 +714,7 @@ def codex(
             secrets,
             True,
             reviewer,
-            gateway,
+            _management_url(gateway, doc),
         )
     if app:
         warning(
@@ -592,6 +724,11 @@ def codex(
         # model_catalog_json is read only when Codex starts (0.166)
         echo("Restart the Codex app so it reads the new model catalog.")
     echo(f"Start Codex with: {shlex.join(['codex', *selected])}")
+    if delegate:
+        echo(
+            "There, ask it to ask Claude Code"
+            + (", or to have Claude Code make an edit." if delegate_edits else ".")
+        )
 
 
 # Seconds the status waits for the gateway's basic reply.
@@ -628,7 +765,7 @@ def status(as_json):
                 **entry,
             }
             for folder in folders
-            for entry in _connections(folder)
+            for entry in _connections(folder, cwd)
             if entry["harness"] == harness
         ]
         for entry in entries:
@@ -650,9 +787,46 @@ def status(as_json):
         raise click.exceptions.Exit(1)
 
 
-def _connections(folder: Path) -> list[dict]:
+@connect.command("sessions")
+@click.option("--json", "as_json", is_flag=True, help="Print the sessions as JSON.")
+def sessions(as_json):
+    """List the sessions --launch started and what is left of their worktrees.
+
+    The newest comes first. For a worktree connect made, the steps that remove
+    it are shown, but nothing is removed here. No step is offered while the
+    worktree has uncommitted changes or commits on a detached HEAD, the branch
+    is not deleted while it has commits no other branch or remote has, and the
+    steps say first when the removal deletes files git ignores there. Without
+    git on PATH, each session is listed with that state unknown and no step.
+    """
     try:
-        return hc.connections(folder) + hp.connections(folder)
+        found = [{**session, "state": hs.state(session)} for session in hs.recorded()]
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    for session in found:
+        session["cleanup"] = hs.cleanup(session, session["state"])
+    if as_json:
+        echo(json.dumps({"sessions": found}, indent=2))
+        return
+    if not found:
+        echo("No sessions: connect <harness> --launch records each one it starts.")
+    for session in found:
+        heading(f"Session {session['id']}")
+        state = hs.describe(session["state"])
+        steps = ", then ".join(session["cleanup"])
+        _aligned([*hs.rows(session), ("state", state), ("cleanup", steps)])
+
+
+def _aligned(rows: list[tuple[str, str]]) -> None:
+    """Label and value rows, not wrapped, so a path stays whole to copy."""
+    width = max(len(label) for label, _ in rows)
+    for label, value in rows:
+        echo(f"  {label:<{width}}  {value}")
+
+
+def _connections(folder: Path, cwd: Path) -> list[dict]:
+    try:
+        return hc.connections(folder, cwd) + hp.connections(folder)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise click.ClickException(
             f"cannot read {folder / hc.MANIFEST}: {exc!r}"
@@ -752,8 +926,10 @@ def _show_status(entry: dict) -> None:
     }[harness]
     heading(f"{harness} ({where})")
     window = entry["context_window"]
+    # Pi's, with the provider it signed in to
+    own = f" ({entry['pi_login']})" if entry.get("pi_login") else ""
     login = {
-        "own login": f"{name}'s own login",
+        "own login": f"{name}'s own login{own}",
         "no key": "no key",
         "gateway key": (
             f"gateway key from ${entry['key_env']}"
@@ -781,14 +957,29 @@ def _show_status(entry: dict) -> None:
         if item.get("changed"):
             state += f": {', '.join(item['changed'])}"
         rows.append(("files" if index == 0 else "", f"{item['path']}: {state}"))
+    # what a harness started in this directory takes over the files above
+    trusted = ", once Codex trusts this project" if codex else ""
+    for index, item in enumerate(entry.get("overrides") or []):
+        label = "overridden here" if index == 0 else ""
+        rows.append((label, f"{item['path']} sets {', '.join(item['keys'])}{trusted}"))
     if entry.get("plugins"):
         rows.append(("vSR plugin", ", ".join(entry["plugins"])))
+    if delegate := entry.get("delegate"):
+        rows.append(("delegates to", _delegation(delegate)))
     probe = entry["probe"]
     rows.append(("gateway now", f"{probe['state']}: {probe['detail']}"))
     # not wrapped, so a path stays whole to copy
     width = max(len(label) for label, _ in rows)
     for label, value in rows:
         echo(f"  {label:<{width}}  {value}")
+
+
+def _delegation(delegate: dict) -> str:
+    if delegate["to"] == "codex":
+        by = "connect" if delegate["installed_by_connect"] else "you"
+        return f"codex: plugin {delegate['plugin']} (installed by {by})"
+    edits = f", edits through the skill {hc.CLAUDE_SKILL}" if delegate["edits"] else ""
+    return f"claude-code: MCP server claude, read-only{edits}"
 
 
 def _chatgpt_caller_backend(doc) -> bool:
@@ -844,6 +1035,7 @@ def _run(
     notes=(),
     plan=(),
     model=None,
+    delegation=(),
 ):
     """Show the changes, check the Router configuration, and write; False on a dry run."""
     heading(f"vllm-sr connect {harness}")
@@ -853,14 +1045,8 @@ def _run(
     try:
         for change in changes:
             seen[change.path] = old = hc.read(change.path)
-            label, new = str(change.path), change.new_text(old=old or "")
-            diff = difflib.unified_diff(
-                change.shown(old or "", key_label).splitlines(keepends=True),
-                change.shown(new, key_label).splitlines(keepends=True),
-                fromfile=label if old is not None else "/dev/null",
-                tofile=label,
-            )
-            echo("".join(diff) or f"{label}: no change")
+            diff = change.diff(old, change.new_text(old=old or ""), key_label)
+            echo(diff or f"{change.path}: no change")
     except ValueError as exc:
         raise click.ClickException(
             f"{change.path} is not plain JSON ({exc}). connect would lose its"
@@ -872,6 +1058,10 @@ def _run(
     if plan:
         echo("vSR (System One) beside it, then:")
         for line in plan:
+            echo(f"  {line}")
+    if delegation:
+        echo("So Claude Code can hand a task to Codex, then:")
+        for line in delegation:
             echo(f"  {line}")
     if dry_run:
         echo("Dry run: nothing was written.")
@@ -899,9 +1089,11 @@ def _check_launch(
     check=False,
     worktree=None,
     home=None,
-) -> Path | None:
+    harness="",
+    delegate=None,
+) -> hs.Workspace | None:
     """Refuse options that do not go together, and give the worktree --launch
-    starts the harness in, checked to be one."""
+    starts the harness in: checked to be one, or planned when it is new."""
     if (worktree or home) and not launch:
         flag = "--worktree" if worktree else "--home"
         raise click.UsageError(f"{flag} goes with --launch, which starts the harness")
@@ -917,13 +1109,13 @@ def _check_launch(
         raise click.UsageError(
             "--undo leaves nothing to check, so it does not take --check"
         )
-    if launch and (undo or status_line):
-        flag = "--undo" if undo else "--status-line"
+    if launch and (undo or status_line or delegate):
+        flag = "--undo" if undo else "--status-line" if status_line else "--delegate"
         raise click.UsageError(f"--launch writes nothing, so it does not take {flag}")
-    if not worktree:
+    if not launch:
         return None
     try:
-        return hs.worktree(worktree)
+        return hs.workspace(worktree, harness)
     except ValueError as exc:
         raise click.BadParameter(str(exc), param_hint="--worktree") from exc
 
@@ -976,7 +1168,7 @@ def _private(directory: Path, name: str, text: str) -> Path:
 
 
 def _check(
-    harness, argv_for, env, secrets, written=True, review_model=None, gateway=""
+    harness, argv_for, env, secrets, written=True, review_model=None, management=""
 ) -> None:
     """Run the harness once on a tiny task through the gateway, in a temporary
     directory, and report each step. argv_for(private, work) gives its command
@@ -993,7 +1185,7 @@ def _check(
         tempfile.TemporaryDirectory(prefix="vllm-sr-check-") as work,
     ):
         argv = argv_for(Path(private), Path(work))
-        rows = hk.run(harness, argv, env, Path(work), secrets, review_model, gateway)
+        rows = hk.run(harness, argv, env, Path(work), secrets, review_model, management)
     fields((row.name, f"{row.state:<13}{row.detail}".rstrip()) for row in rows)
     if any(row.state == "failed" for row in rows):
         raise click.ClickException(
@@ -1070,10 +1262,12 @@ def _launch(
     settings=None,
     where=None,
     env=None,
+    session_id="",
+    carried=(),
 ):
-    """Probe the gateway, then run the harness through it, in where (default: here)
-    with the session environment env (default: this one), and exit with its
-    status."""
+    """Probe the gateway, then run the harness through it, in where (a new
+    worktree made first) with the session environment env (default: this one),
+    record the session, and exit with its status."""
     heading(f"vllm-sr connect {harness} --launch")
     _check_router(harness, doc, model)
     for note in notes:
@@ -1095,6 +1289,8 @@ def _launch(
                 ),
                 *argv[1:],
             ]
+        if where.new:
+            echo(f"Creates: {shlex.join(hs.add_argv(where))}")
         echo(f"Starts: {shlex.join(argv)}")
         if dry_run:
             echo("Dry run: nothing was started.")
@@ -1103,9 +1299,17 @@ def _launch(
             hc.write_private(path, json.dumps(settings, indent=2))
         _probe_or_say_why(gateway, harness, model, token, doc, written=False)
         env = dict(os.environ) if env is None else env
-        where = where or Path.cwd()
-        echo(hs.receipt(where, hs.home_of(harness, env), gateway, model))
-        child = subprocess.Popen([found, *argv[1:]], cwd=where, env=env)
+        try:
+            if where.new:
+                hs.add(where)
+            home = hs.home_of(harness, env)
+            session = hs.record(session_id, harness, where, home, gateway, model)
+        except (OSError, ValueError) as exc:
+            raise click.ClickException(f"{exc}, so {argv[0]} was not started.") from exc
+        shown = [*hs.rows(session), ("requests", f"{', '.join(carried)}: {session_id}")]
+        heading(f"Session {session_id}")
+        _aligned(shown)
+        child = subprocess.Popen([found, *argv[1:]], cwd=where.path, env=env)
 
         # Ctrl-C belongs to the harness while it runs, and a closed terminal or a
         # stop reaches it through this process, which outlives it to remove the
@@ -1145,8 +1349,13 @@ def _gateway(router_config: Path, base_url: str | None) -> tuple[str, dict | Non
 def _require_key(doc, base_url, from_env, api_key_env, login) -> None:
     """Refuse to write a placeholder key for a listener that takes keys: it would
     replace a key written before, and every request would be refused."""
-    listeners = (doc or {}).get("listeners") or [{}]
-    if base_url or from_env or login or not (listeners[0] or {}).get("api_keys"):
+    first = ((doc or {}).get("listeners") or [{}])[0] or {}
+    if (
+        base_url
+        or from_env
+        or login
+        or not (first.get("api_keys") or first.get("api_key_files"))
+    ):
         return
     raise click.ClickException(
         f"The listener takes an API key and ${api_key_env} is not set. Export it"
@@ -1390,6 +1599,80 @@ def _plugin_state(
     return strings, configured
 
 
+def _require_clients(*names: str) -> None:
+    """Refuse --delegate before anything is written when a client it needs is
+    missing: each runs the other through its own command."""
+    for name in names:
+        if shutil.which(name) is None:
+            raise click.ClickException(
+                f"--delegate needs {name}, which is not on PATH. Nothing was written."
+            )
+
+
+def _claude_listed(env: dict[str, str], kind: str) -> set[str]:
+    """The plugins (by id) or marketplaces (by name) Claude Code has."""
+    argv = ["claude", "plugin", *(["marketplace"] if kind == "marketplaces" else [])]
+    listed = _json_of([*argv, "list", "--json"], env)
+    field = "id" if kind == "plugins" else "name"
+    return {str(e.get(field)) for e in listed or [] if isinstance(e, dict)}
+
+
+def _codex_plugin_steps(env: dict[str, str], source: str) -> list[tuple]:
+    """What installs OpenAI's Codex plugin in Claude Code's own CLI: each step's
+    kind and name, as recorded for --undo, and its command; none when it is there."""
+    if hc.CODEX_PLUGIN in _claude_listed(env, "plugins"):
+        return []
+    steps = [
+        ("plugins", hc.CODEX_PLUGIN, ["claude", "plugin", "install", hc.CODEX_PLUGIN])
+    ]
+    if hc.CODEX_MARKETPLACE not in _claude_listed(env, "marketplaces"):
+        add = ["claude", "plugin", "marketplace", "add", source]
+        steps.insert(0, ("marketplaces", hc.CODEX_MARKETPLACE, add))
+    return steps
+
+
+def _install_codex_plugin(env, steps, manifest_dir: Path) -> None:
+    """Install the Codex plugin after the settings are written, recording each
+    step that ran; a failure leaves the settings and says what to run."""
+    for index, (kind, name, argv) in enumerate(steps):
+        try:
+            _must(argv, env)
+        except click.ClickException as exc:
+            warning(f"The Codex plugin is not installed: {exc.message}. Run:")
+            for _, _, left in steps[index:]:
+                echo(f"  {shlex.join(left)}")
+            return
+        hc.record_install(manifest_dir, kind, name)
+    success(f"{hc.CODEX_PLUGIN} hands Claude Code's tasks to Codex.")
+
+
+def _codex_shell_change(env: dict[str, str]) -> hc.Change:
+    try:
+        return hc.codex_shell_change(hc.codex_home(env))
+    except ValueError as exc:
+        raise click.ClickException(
+            f"{hc.codex_home(env) / 'config.toml'} cannot get the shell setting"
+            f" --delegate codex adds: {exc}. Nothing was written."
+        ) from exc
+
+
+def _codex_default_note(env: dict[str, str]) -> str:
+    """Where the Codex the plugin runs sends its model calls: the plugin runs it
+    with Codex's default config, never a profile."""
+    gateway = hc.codex_default_gateway(hc.codex_home(env))
+    if gateway:
+        return (
+            f"Codex's default config sends to {gateway}, so the Codex the plugin"
+            " runs works there, on Codex's own key or login."
+        )
+    return (
+        "The Codex plugin runs codex with no profile, and Codex's default"
+        f" config ({hc.codex_home(env) / 'config.toml'}) sends to no vLLM-SR gateway,"
+        " so Codex works on its own login, if it has one. Run vllm-sr connect codex"
+        " --app to send it through a gateway."
+    )
+
+
 def _json_of(argv: list[str], env: dict[str, str]):
     try:
         result = subprocess.run(
@@ -1400,25 +1683,33 @@ def _json_of(argv: list[str], env: dict[str, str]):
         return None
 
 
-def _caller_login(harness: str, doc: dict | None) -> bool:
-    """Whether the gateway presents the harness's own login upstream. A gateway
-    that presents another provider's login refuses every call of the harness, so
-    nothing is written for it."""
-    provider = rc.caller_provider(doc)
-    if provider is None:
-        return False
+def _caller_login(harness: str, doc: dict | None, model: str, **called) -> bool:
+    """Whether the gateway presents the harness's own login upstream for model
+    or another entrypoint the harness calls, given in called by its setting
+    (Codex's review_model and memory_model). A gateway that presents another
+    provider's login for one of them refuses every call to it, so nothing is
+    written for it."""
     name, own = HARNESS_LOGINS[harness]
-    if provider != own:
-        raise click.ClickException(
-            f"The gateway presents each client's own {provider} login upstream, and"
-            f" {name} sends a {own} login, so every call would be refused. Point"
-            f" {name} at a gateway whose caller backends name {own}."
-        )
-    return True
+    login = False
+    for setting, entrypoint in {None: model, **called}.items():
+        provider = rc.caller_provider(doc, entrypoint) if entrypoint else None
+        if provider is not None and provider != own:
+            reached = (
+                f" for {entrypoint}, the {setting} of {model}," if setting else ","
+            )
+            calls = "every call to it" if setting else "every call"
+            raise click.ClickException(
+                f"The gateway presents each client's own {provider} login upstream"
+                f"{reached} and {name} sends its {own} login, so {calls} would be"
+                f" refused. Point {name} at a gateway whose caller backends name"
+                f" {own}."
+            )
+        login = login or provider == own
+    return login
 
 
 def _probe_or_say_why(gateway, harness, model, token, doc, written=True) -> None:
-    if rc.caller_provider(doc) is not None:
+    if rc.caller_provider(doc, model) is not None:
         echo(
             f"Not probed: the gateway answers only on the login {HARNESS_LOGINS[harness][0]}"
             " itself sends, which this command does not hold."
@@ -1436,10 +1727,10 @@ def _probe(
             raise click.ClickException(
                 f"{result.name}: failed. {result.detail}\n"
                 + (
-                    "The changes above stay written: fix the gateway and run this"
+                    "The changes above stay written: fix what failed and run this"
                     " command again, or take them back with --undo."
                     if written
-                    else f"{harness} was not started: fix the gateway and run this"
+                    else f"{harness} was not started: fix what failed and run this"
                     " command again."
                 )
             )
@@ -1470,6 +1761,20 @@ def _undo(manifest_dir: Path) -> None:
                 json.dumps(back),
             )
             echo(f"restored {plugin_id}: {', '.join(sorted(back))}")
+    # what connect installed, the plugins before their marketplace, each only while
+    # Claude Code still has it
+    added = hc.installed(manifest_dir)
+    if added and shutil.which("claude") is None:
+        raise click.ClickException(
+            "connect installed a Claude Code plugin here, and claude is not on PATH"
+            " to remove it, so nothing was undone."
+        )
+    removing = (("plugins", ["uninstall"]), ("marketplaces", ["marketplace", "remove"]))
+    for kind, verb in removing:
+        for name in added.get(kind, []):
+            if name in _claude_listed(env, kind):
+                _must(["claude", "plugin", *verb, name], env)
+                echo(f"removed {name}")
     try:
         for line in hc.undo_changes(manifest_dir):
             echo(line)

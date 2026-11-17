@@ -262,6 +262,8 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
           value: `${(asArray(section?.providers) || []).flatMap((provider) => asArray(provider.rules) || []).length}`,
         },
       ]
+    case 'budgets':
+      return budgetsSummary(section)
     case 'management_api':
       return [
         { label: 'Bind address', value: stringOrFallback(section?.bind_address) },
@@ -355,6 +357,38 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
   return [{ label: 'Fields', value: `${keys}` }]
 }
 
+function budgetsSummary(section: Record<string, unknown> | undefined): RouterSectionSummaryItem[] {
+  const currency = stringOrFallback(section?.currency, 'USD')
+  const run = asObject(section?.run)
+  return [
+    { label: 'Run limit', value: run?.limit ? `${run.limit} ${currency}` : 'Not set' },
+    { label: 'User budgets', value: `${(asArray(section?.users) || []).length}` },
+    { label: 'Unpriced calls', value: stringOrFallback(section?.unpriced, 'refuse') },
+  ]
+}
+
+function budgetsFields(): FieldConfig[] {
+  return [
+    { name: 'currency', label: 'Currency', type: 'text', placeholder: 'USD' },
+    {
+      name: 'unpriced',
+      label: 'Unpriced Calls',
+      type: 'select',
+      options: ['refuse', 'allow'],
+      description: 'Refuse a call to a model with no price, or admit it at zero and count it.',
+    },
+    {
+      name: 'output_reserve_tokens',
+      label: 'Output Reserve Tokens',
+      type: 'number',
+      placeholder: '4096',
+      description: 'Output a call reserves when neither its request nor its model sets a limit.',
+    },
+    routerStructuredField('budgets', 'run'),
+    routerStructuredField('budgets', 'users'),
+  ]
+}
+
 function badgesForKey(key: RouterSystemKey, data: unknown): RouterSectionBadge[] {
   const badges: RouterSectionBadge[] = []
 
@@ -436,7 +470,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'store_backend',
           label: 'Store Backend',
           type: 'select',
-          options: ['memory', 'redis', 'postgres', 'milvus'],
+          options: ['file', 'memory', 'redis', 'postgres', 'milvus'],
           required: true,
         },
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '2592000' },
@@ -453,6 +487,8 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'fail_open', label: 'Fail Open', type: 'boolean' },
         routerStructuredField(key, 'providers'),
       ]
+    case 'budgets':
+      return budgetsFields()
     case 'memory':
       return [
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },

@@ -56,7 +56,8 @@ decision, algorithm, plugin and global block.
 | Field | Meaning | Default |
 | --- | --- | --- |
 | `timeout` | The whole call, including its streamed response; it also bounds a stalled stream. `0s` lifts both limits. To lift only one model's call limit, set that model's `total_timeout: 0s`. | `300s` |
-| `api_keys` | Client API keys the listener requires. | none |
+| `api_keys` | Client API keys the listener requires. A `"${NAME}"` entry reads the key from that environment variable, with an uppercase `NAME` as every reference in the configuration. | none |
+| `api_key_files` | Absolute paths of owner-only files that each hold one more client key, read at every load. Standalone mode reads them; `--gateway extproc` refuses them. See [Keep credentials out of configuration](security-hardening.md#keep-credentials-out-of-configuration). | none |
 | `apis` | The APIs the listener serves, by API name: `chat_completions`, `responses`, `messages`, `images` and `systemone` (`openai` and `anthropic` are accepted as aliases of `chat_completions` and `messages`). Any other API path answers `404` with a `detail` naming the listener. Standalone mode serves `systemone`; `--gateway extproc` refuses a listener that serves it. | the four LLM APIs, no `systemone` |
 | `apis.<api>.models` | The only request models an API accepts. | every model of its kind |
 | `apis.systemone.schema` | The System One schema the listener speaks to its clients: `vllm-sr/5.0`, or `vllm-sr/4.0`, which also accepts every request form of the earlier contract. See [System One schemas](../system-one/use/schemas.md). | `vllm-sr/5.0` |
@@ -71,7 +72,11 @@ decision, algorithm, plugin and global block.
   `providers.models[]` entry.
 - **Pricing.** `providers.models[].pricing` takes an optional uppercase
   three-letter `currency`, plus non-negative `prompt_per_1m`,
-  `completion_per_1m`, `cached_input_per_1m` and `cache_write_per_1m` rates.
+  `completion_per_1m`, `cached_input_per_1m`, `cache_write_per_1m` and
+  `cache_write_1h_per_1m` rates. A model without it takes its provider's
+  [list price](catalog-backed-models#list-prices) when the catalog lists one.
+  A written block always wins and defaults `currency` to `USD`, so zero rates
+  mark a model free.
 - **Backend format.** [Protocol Compatibility](protocol-compatibility) helps
   you choose a backend's `api_format`. Check
   [Backend Target Compatibility](backend-target-compatibility) before moving
@@ -122,6 +127,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
+| `agent` — heuristic signal | `agent` matches the agent a request belongs to: the main agent or a subagent, the harness that sent it, the type the harness gives the subagent, and the class Claude Code gives the request, such as a compaction. | [`config/fragments/signal/agent/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/agent/) | [Guide](../tutorials/signal/heuristic/agent) |
 | `authz` — heuristic signal | `authz` turns identity and policy bindings into reusable routing inputs under `recipes[].signals.role_bindings`. | [`config/fragments/signal/authz/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/authz/) | [Guide](../tutorials/signal/heuristic/authz) |
 | `complexity` — application signal | `complexity` rates how difficult a request is to answer well: easy, medium or hard. | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [Guide](../tutorials/signal/application/complexity) |
 | `context` — heuristic signal | `context` detects requests that need a larger effective context window. | [`config/fragments/signal/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/context/) | [Guide](../tutorials/signal/heuristic/context) |
@@ -168,7 +174,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | --- | --- | --- | --- |
 | `content-safety` — plugin bundle | Content Safety combines supported route-local safety plugins into one reusable policy. | [`config/fragments/plugin/content-safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/content-safety/) | [Guide](../tutorials/plugin/content-safety) |
 | `context` — route plugin | `context` is the plugin that assembles the request's context. | [`config/fragments/plugin/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context/) | [Guide](../tutorials/plugin/context) |
-| `fast-response` — route plugin | `fast_response` is a route-local plugin that returns a deterministic fallback message immediately. | [`config/fragments/plugin/fast-response/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/fast-response/) | [Guide](../tutorials/plugin/fast-response) |
+| `fast-response` — route plugin | `fast_response` is a route-local plugin that returns a deterministic fallback message immediately, or, with `block: true`, refuses the request with it. | [`config/fragments/plugin/fast-response/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/fast-response/) | [Guide](../tutorials/plugin/fast-response) |
 | `header-mutation` — route plugin | `header_mutation` is a route-local plugin for adding, updating, or deleting downstream headers. | [`config/fragments/plugin/header-mutation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/header-mutation/) | [Guide](../tutorials/plugin/header-mutation) |
 | `masking` — route plugin | `masking` is a route-local plugin that detects personal data (emails, phone numbers, names, and other configured entity types) in the provider-bound request and replaces each occurrence with a deterministic placeholder, such as `[EMAIL_ADDRESS_0]`, immediately before the request is encoded and sent to the model provider. | [`config/fragments/plugin/masking/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/masking/) | [Guide](../tutorials/plugin/masking) |
 | `prompt-cache` — route plugin | `prompt_cache` is a route-local plugin that inserts Anthropic prompt-cache breakpoints on a matched route. | [`config/fragments/plugin/prompt-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/prompt-cache/) | [Guide](../tutorials/plugin/prompt-cache) |
@@ -470,6 +476,7 @@ every recipe.
 | Where | What it sets |
 | --- | --- |
 | `global.services.router_replay` | Shared storage and retention. |
+| No `router_replay` plugin on any layer | A record of each request's routing data, with no request or response text. |
 | A `router_replay` plugin in `global.plugins` | Whether capture is on, and the capture defaults. |
 | A recipe's or decision's `router_replay` plugin | Only the fields it sets. `enabled: false` turns capture off there; `enabled: true` opts in when the default is off. |
 

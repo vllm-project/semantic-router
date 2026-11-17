@@ -1,6 +1,9 @@
+import difflib
 import importlib
 import json
 import os
+import re
+import shlex
 import signal
 import stat
 import subprocess
@@ -159,6 +162,8 @@ def _stage(body: dict) -> str:
     return "result" if any(word in sent for word in answered) else "tool"
 
 
+UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+
 # A translation loss whose reason holds a comma, as the Router writes it: an RFC 8941 list.
 PLAIN_WARNINGS = (
     'protocol;action=approximated;reason="stop_sequence, absent, read as null";'
@@ -172,6 +177,14 @@ def pi_home(tmp_path, monkeypatch):
     home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(home))
     return home
+
+
+@pytest.fixture(autouse=True)
+def state_home(tmp_path_factory, monkeypatch):
+    """The CLI's state directory, where --launch records its sessions."""
+    state = tmp_path_factory.mktemp("state")
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    return state
 
 
 @pytest.fixture
@@ -321,6 +334,13 @@ def test_the_displayed_diff_shows_owned_keys_and_hides_the_key(tmp_path):
     assert '"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"' in new
 
 
+def test_claude_code_names_its_request_class_for_the_session_title(tmp_path):
+    # Router Replay names an agent run by the title Claude Code asks for on an
+    # auxiliary request, which it marks only with its gateway hint headers on.
+    settings = json.loads(_claude(tmp_path / "settings.json").new_text())
+    assert settings["env"]["CLAUDE_CODE_GATEWAY_HINT_HEADERS"] == "1"
+
+
 def test_codex_profile_holds_the_provider_and_undo_restores_the_old_one(tmp_path):
     tomllib = pytest.importorskip("tomllib")
     profile = tmp_path / "vllm-sr.config.toml"
@@ -375,6 +395,47 @@ def test_undo_removes_what_it_created_and_keeps_what_changed_since(tmp_path):
     assert any(line.startswith("kept ") for line in report)
 
 
+@pytest.mark.parametrize("kind", ["toml", "json-env"])
+def test_undo_gives_back_the_file_byte_for_byte(tmp_path, kind):
+    pytest.importorskip("tomllib")
+    if kind == "toml":
+        # Codex's config.toml whose last line has no newline
+        path = tmp_path / "config.toml"
+        before = 'model = "gpt-5"\n\n[projects."/src/app"]\ntrust_level = "trusted"'
+        mine, theirs = '"trusted"', '"untrusted"'
+
+        def change(gateway):
+            return hc.codex_app_change(tmp_path, gateway, "vllm-sr/auto", "K")
+
+    else:
+        # Claude Code's settings as another tool wrote them, compact
+        path = tmp_path / "settings.json"
+        before = '{"theme": "dark", "env": {"FOO": "1"}}'
+        mine, theirs = '"dark"', '"light"'
+
+        def change(gateway):
+            return _claude(path, gateway)
+
+    path.write_text(before)
+    hc.apply_changes([change("http://a")], tmp_path)
+    hc.apply_changes([change("http://b")], tmp_path)
+    assert path.read_text() != before
+    hc.undo_changes(tmp_path)
+    assert path.read_bytes() == before.encode()
+
+    # an edit after connect wrote the file, or between two runs, is kept
+    for edit_before_second_run in (False, True):
+        path.write_text(before)
+        hc.apply_changes([change("http://a")], tmp_path)
+        if edit_before_second_run:
+            path.write_text(path.read_text().replace(mine, theirs))
+            hc.apply_changes([change("http://b")], tmp_path)
+        else:
+            path.write_text(path.read_text().replace(mine, theirs))
+        hc.undo_changes(tmp_path)
+        assert theirs in path.read_text() and "http://" not in path.read_text()
+
+
 def test_undo_does_not_recreate_a_file_deleted_since(tmp_path):
     path = tmp_path / "settings.json"
     path.write_text("{}")
@@ -384,18 +445,40 @@ def test_undo_does_not_recreate_a_file_deleted_since(tmp_path):
     assert not path.exists()
 
 
+# the fallback the router check asks for, with room for a long agent call
+AGENT_FALLBACK = {
+    "enabled": True,
+    "total_timeout": "1200s",
+    "per_attempt_timeout": "1200s",
+}
+
+
 def _router(
-    lossy=(), learning=None, services=None, api_format="anthropic", plugins=None
+    lossy=(),
+    learning=None,
+    services=None,
+    api_format="anthropic",
+    plugins=None,
+    reliable=True,
 ):
+    """A configuration with one decision; reliable gives it what the reliability
+    findings ask for: fallback to a second model, and no total timeout."""
     model = {"name": "m"}
     if api_format:
         model["api_format"] = api_format
-    decision = {"name": "d", "modelRefs": [{"model": "m"}], "plugins": plugins or []}
+    models = [model]
+    if reliable:
+        model["reliability"] = {"total_timeout": "0s"}
+        models.append({**model, "name": "m2"})
+    refs = [{"model": m["name"]} for m in models]
+    decision = {"name": "d", "modelRefs": refs, "plugins": plugins or []}
     doc = {
-        "providers": {"models": [model]},
+        "providers": {"models": models},
         "recipes": [{"decisions": [decision]}],
         "global": {"router": {"allow_lossy_translation": list(lossy)}},
     }
+    if reliable:
+        doc["global"]["router"]["fallback"] = dict(AGENT_FALLBACK)
     if learning is not None:
         doc["global"]["router"]["learning"] = learning
     if services is not None:
@@ -439,6 +522,33 @@ def _learning(headers, enabled=True):
             "identity": {"headers": headers},
         },
     }
+
+
+def test_router_check_needs_no_identity_headers_the_router_reads_by_default():
+    session = {"enabled": True, "protection": {"enabled": True, "scope": "session"}}
+    max_tokens = [
+        {"type": "request_params", "configuration": {"default_max_tokens": 32000}}
+    ]
+    assert (
+        rc.check_router_config(_router(["tools.defer_loading"], session), "claude-code")
+        == []
+    )
+    codex = _router(["reasoning.signature"], session, plugins=max_tokens)
+    assert rc.check_router_config(codex, "codex") == []
+    assert rc.check_router_config(_router(["reasoning.signature"], session), "pi") == []
+    # without protection, the advice turns it on and names no identity headers
+    (finding,) = rc.check_router_config(_router(["tools.defer_loading"]), "claude-code")
+    assert "scope: session" in finding.snippet and "identity" not in finding.snippet
+    # identity headers that name others replace the defaults, so the advice names
+    # the harness's own
+    other = _router(["tools.defer_loading"], _learning({"agent": "x-agent-id"}))
+    (finding,) = rc.check_router_config(other, "claude-code")
+    assert "agent: x-claude-code-agent-id" in finding.snippet
+    # Claude Code's session is read from session_id_headers when identity names none
+    narrowed = _router(["tools.defer_loading"], session)
+    narrowed["global"]["router"]["headers"] = {"session_id_headers": ["x-session-id"]}
+    (finding,) = rc.check_router_config(narrowed, "claude-code")
+    assert "session: x-claude-code-session-id" in finding.snippet
 
 
 def test_router_check_for_claude_code():
@@ -665,6 +775,31 @@ def test_cli_dry_run_writes_nothing_and_hides_the_key(tmp_path, gateway, monkeyp
     assert not (tmp_path / "settings.json").exists()
 
 
+def test_claude_code_sends_the_gateway_hint_headers(tmp_path, gateway, monkeypatch):
+    # Claude Code names a subagent's type and a request's class, which the
+    # agent signal routes on, only with this variable set (2.1.325)
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    args = ["connect", "claude-code", "--base-url", url]
+    preview = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert '"CLAUDE_CODE_GATEWAY_HINT_HEADERS": "1"' in preview.output
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    settings = tmp_path / "settings.json"
+    env = json.loads(settings.read_text())["env"]
+    assert env["CLAUDE_CODE_GATEWAY_HINT_HEADERS"] == "1"
+    env["CLAUDE_CODE_GATEWAY_HINT_HEADERS"] = "0"
+    settings.write_text(json.dumps({"env": env}))
+    status = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert "CLAUDE_CODE_GATEWAY_HINT_HEADERS" in status.output
+    assert CliRunner().invoke(main, ["connect", "claude-code", "--undo"]).exit_code == 0
+    assert json.loads(settings.read_text()) == {
+        "env": {"CLAUDE_CODE_GATEWAY_HINT_HEADERS": "0"}
+    }
+
+
 def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):
     url, seen, _ = gateway
     monkeypatch.chdir(tmp_path)
@@ -789,6 +924,8 @@ def test_cli_refuses_a_caller_gateway_of_another_provider(
     )
     assert result.exit_code != 0
     assert f"own {provider} login upstream" in result.output
+    own = "anthropic" if harness == "claude-code" else "openai"
+    assert f"sends its {own} login, so every call" in _flat(result.output)
     assert not (tmp_path / "vllm-sr.config.toml").exists()
     assert not (tmp_path / "claude").exists()
     assert len(seen) == asked
@@ -1223,7 +1360,7 @@ def test_launch_starts_the_harness_through_the_gateway_and_writes_nothing(
     assert result.exit_code == 3, result.output
     assert "Streamed tool loop: ok" in result.output
     ran = json.loads(harness_bin.read_text())
-    assert ran["args"][-2:] == ["--resume", "x"]
+    assert ran["args"][-2:] == ["--resume", "x"] and "--session-id" not in ran["args"]
     settings = json.loads(ran["settings"])
     assert settings["env"]["ANTHROPIC_BASE_URL"] == url
     assert settings["env"]["ANTHROPIC_AUTH_TOKEN"] == ""
@@ -2180,8 +2317,19 @@ def test_a_recipe_that_drops_what_no_longer_fits_advertises_each_decisions_large
     assert connect_command._context_window(doc, "vllm-sr/auto", None)[0] == 8192
 
 
-# What claude -p --output-format stream-json and codex exec --json print for a
-# check that passes: the command's call, its output, and the answer to it.
+# What the check's file holds in every run here, and what claude -p
+# --output-format stream-json and codex exec --json print for a check that
+# passes: the command's call, its output, and the answer to it.
+TOKEN = "vsr-check-0a1b2c3d"
+
+
+@pytest.fixture(autouse=True)
+def check_token(monkeypatch):
+    monkeypatch.setattr(
+        importlib.import_module("cli.harness_check"), "_token", lambda: TOKEN
+    )
+
+
 CLAUDE_EVENTS = [
     {"type": "system", "subtype": "init", "model": "vllm-sr/auto"},
     {
@@ -2193,7 +2341,7 @@ CLAUDE_EVENTS = [
                     "type": "tool_use",
                     "id": "t1",
                     "name": "Bash",
-                    "input": {"command": "echo vsr-check"},
+                    "input": {"command": "cat vsr-check.txt"},
                 }
             ],
         },
@@ -2205,7 +2353,7 @@ CLAUDE_EVENTS = [
                 {
                     "type": "tool_result",
                     "tool_use_id": "t1",
-                    "content": "vsr-check",
+                    "content": TOKEN,
                     "is_error": False,
                 }
             ]
@@ -2215,7 +2363,7 @@ CLAUDE_EVENTS = [
         "type": "assistant",
         "message": {"model": "qwen36", "content": [{"type": "text", "text": "ok"}]},
     },
-    {"type": "result", "subtype": "success", "is_error": False, "result": "vsr-check"},
+    {"type": "result", "subtype": "success", "is_error": False, "result": TOKEN},
 ]
 CODEX_EVENTS = [
     {"type": "thread.started", "thread_id": "th1"},
@@ -2224,13 +2372,13 @@ CODEX_EVENTS = [
         "type": "item.completed",
         "item": {
             "type": "command_execution",
-            "command": "bash -lc 'echo vsr-check'",
-            "aggregated_output": "vsr-check\n",
+            "command": "bash -lc 'cat vsr-check.txt'",
+            "aggregated_output": TOKEN + "\n",
             "exit_code": 0,
             "status": "completed",
         },
     },
-    {"type": "item.completed", "item": {"type": "agent_message", "text": "vsr-check"}},
+    {"type": "item.completed", "item": {"type": "agent_message", "text": TOKEN}},
     {"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}},
 ]
 
@@ -2240,8 +2388,8 @@ def checked_harness(tmp_path, monkeypatch):
     """A claude, a codex and a pi that answer --version, list a bundled gpt-5.5,
     and otherwise act out one --check run: they record how they were started and
     the models.json in Pi's agent directory, send a review request to
-    $FAKE_REVIEW_URL when Codex reviews approvals, then print $FAKE_EVENTS and
-    exit with $FAKE_EXIT."""
+    $FAKE_REVIEW_URL when Codex reviews approvals, then print $FAKE_EVENTS, and
+    $FAKE_STDERR on stderr, and exit with $FAKE_EXIT."""
     bin_dir = tmp_path / "check-bin"
     bin_dir.mkdir()
     record = tmp_path / "check-ran.json"
@@ -2267,6 +2415,7 @@ def checked_harness(tmp_path, monkeypatch):
             "agent = os.environ.get('PI_CODING_AGENT_DIR') or ''\n"
             "models = os.path.join(agent, 'models.json')\n"
             "json.dump({'args': args, 'cwd': os.getcwd(), 'agent': agent,"
+            " 'file': open('vsr-check.txt').read() if os.path.exists('vsr-check.txt') else None,"
             " 'models': open(models).read() if os.path.exists(models) else None,"
             " 'settings': open(given).read() if given else None,"
             " 'catalog': json.load(open(json.loads(catalog[0]))) if catalog else None,"
@@ -2279,6 +2428,7 @@ def checked_harness(tmp_path, monkeypatch):
             "time.sleep(float(os.environ.get('FAKE_SLEEP', '0')))\n"
             "for event in json.loads(os.environ.get('FAKE_EVENTS', '[]')):\n"
             "    print(json.dumps(event))\n"
+            "sys.stderr.write(os.environ.get('FAKE_STDERR', ''))\n"
             "sys.exit(int(os.environ.get('FAKE_EXIT', '0')))\n"
         )
         script.chmod(0o755)
@@ -2306,14 +2456,20 @@ def test_check_runs_claude_code_on_the_settings_connect_wrote(
     assert "Harness ok 2.1.325 (Claude Code) at " in output
     assert "Login ok the gateway answered, as qwen36" in output
     assert (
-        "Tool round trip ok ran echo vsr-check and answered with its output" in output
+        "Tool round trip ok ran cat vsr-check.txt and answered with its output"
+        in output
     )
     assert "sk-secret" not in result.output
     ran = json.loads(checked_harness.read_text())
     settings = tmp_path / "claude" / "settings.json"
-    assert ran["args"][:2] == ["-p", rc_prompt()]
+    assert ran["args"][:2] == ["-p", rc_prompt("Bash")]
+    # each harness is told the name its own shell tool has
+    assert "with your Bash tool," in ran["args"][1]
     assert ran["args"][ran["args"].index("--settings") + 1] == str(settings)
-    assert "Bash(echo vsr-check)" in ran["args"]
+    assert "Bash(cat vsr-check.txt)" in ran["args"]
+    # the file it shows holds a token the prompt does not, so a model cannot
+    # answer without running the command
+    assert ran["file"] == TOKEN + "\n" and TOKEN not in ran["args"][1]
     assert "--no-session-persistence" in ran["args"]
     # its own temporary directory, gone afterwards, and no stdin to wait on
     assert ran["stdin_closed"] and not Path(ran["cwd"]).exists()
@@ -2331,8 +2487,8 @@ def test_check_runs_claude_code_on_the_settings_connect_wrote(
     assert not settings.exists()
 
 
-def rc_prompt():
-    return importlib.import_module("cli.harness_check").PROMPT
+def rc_prompt(tool):
+    return importlib.import_module("cli.harness_check").PROMPT.format(tool=tool)
 
 
 def test_a_failed_check_names_the_step_and_hides_the_key(
@@ -2371,7 +2527,7 @@ def test_a_failed_check_names_the_step_and_hides_the_key(
     )
     result = CliRunner().invoke(main, args)
     assert result.exit_code == 1
-    assert "answered without running echo vsr-check" in _flat(result.output)
+    assert "answered without running cat vsr-check.txt" in _flat(result.output)
 
 
 def test_check_without_the_harness_or_in_time_fails(
@@ -2400,6 +2556,31 @@ def test_check_without_the_harness_or_in_time_fails(
     for other in (["--launch"], ["--undo"]):
         result = CliRunner().invoke(main, ["connect", "codex", "--check", *other])
         assert result.exit_code == 2 and "does not take --check" in result.output
+
+
+def test_a_harness_that_stops_before_its_run_is_no_login_failure(
+    tmp_path, gateway, checked_harness, monkeypatch
+):
+    # Codex 0.166 on a config.toml it cannot load prints this and no event
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv(
+        "FAKE_STDERR",
+        "WARNING: proceeding, even though we could not create PATH aliases\n"
+        "Error loading config.toml: invalid transport\n"
+        "in `mcp_servers.other`\n\n",
+    )
+    monkeypatch.setenv("FAKE_EXIT", "1")
+    args = ["connect", "codex", "--app", "--base-url", url, "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, [*args, "--check"])
+    assert result.exit_code == 1
+    output = _flat(result.output)
+    assert (
+        "Harness failed codex exited with status 1 before it ran the task: Error"
+        " loading config.toml: invalid transport in `mcp_servers.other`" in output
+    )
+    assert "Login not run" in output and "Tool round trip not run" in output
+    assert "Login failed" not in output
 
 
 REVIEW_DOC = {
@@ -2433,27 +2614,35 @@ def test_check_sees_codex_send_its_approval_review_to_the_review_entrypoint(
     url, _, _ = gateway
     hk = importlib.import_module("cli.harness_check")
     config = tmp_path / "config.yaml"
-    config.write_text(yaml.safe_dump(REVIEW_DOC))
+    # the replay list is read from the management port this config names
+    management = {"management_api": {"port": urllib.parse.urlsplit(url).port}}
+    config.write_text(
+        yaml.safe_dump({**REVIEW_DOC, "global": {"services": management}})
+    )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
     monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
     monkeypatch.setenv("FAKE_EVENTS", json.dumps(CODEX_EVENTS))
     monkeypatch.setenv("FAKE_REVIEW_URL", url + "/v1/responses")
-    monkeypatch.setattr(hk, "management_url", lambda gateway: url)
     args = ["connect", "codex", "--config", str(config), "--base-url", url]
     result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes", "--check"])
     assert result.exit_code == 0, result.output
     output = _flat(result.output)
     assert "Harness ok codex-cli 0.166.0 at " in output
-    assert "Tool round trip ok ran echo vsr-check" in output
+    assert "Tool round trip ok ran cat vsr-check.txt" in output
     assert "Approval review ok went to vllm-sr/review (replay r" in output
     ran = json.loads(checked_harness.read_text())
     assert ran["args"][:3] == ["exec", "--profile", "vllm-sr"]
     assert "--approve-for-me" in ran["args"] and "--ephemeral" in ran["args"]
-    assert ran["args"][-1] == hk.REVIEW_PROMPT and ran["stdin_closed"]
+    assert ran["args"][-1] == hk.REVIEW_PROMPT.format(tool="exec_command")
+    assert "with your exec_command tool outside" in ran["args"][-1]
+    assert ran["stdin_closed"]
 
     # without the Router's replay list the review is not observed, which passes
-    monkeypatch.setattr(hk, "management_url", lambda gateway: "http://127.0.0.1:9")
+    management["management_api"]["port"] = 9
+    config.write_text(
+        yaml.safe_dump({**REVIEW_DOC, "global": {"services": management}})
+    )
     result = CliRunner().invoke(main, [*args, "--no-vsr", "--yes", "--check"])
     assert result.exit_code == 0, result.output
     assert "Approval review not observed the replay list at" in _flat(result.output)
@@ -2623,6 +2812,46 @@ def test_status_fails_when_a_gateway_check_fails(tmp_path, gateway, monkeypatch)
         result = CliRunner().invoke(main, ["connect", "status", *shown])
         assert result.exit_code == 1, result.output
         assert "failed" in result.output
+
+
+def test_status_names_the_project_settings_that_win_in_this_directory(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    project = tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    for harness in ("claude-code", "codex"):
+        args = ["connect", harness, "--base-url", url, "--no-vsr", "--yes"]
+        assert CliRunner().invoke(main, args).exit_code == 0
+    local = project / ".claude" / "settings.local.json"
+    local.write_text('{"env": {"ANTHROPIC_MODEL": "opus", "OTHER": "1"}}')
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    (project / ".codex").mkdir()
+    toml = project / ".codex" / "config.toml"
+    toml.write_text('model = "gpt-x"\n')
+
+    # reported, as connect warns, but the gateway still answers
+    result = CliRunner().invoke(main, ["connect", "status"])
+    assert result.exit_code == 0, result.output
+    output = _flat(result.output)
+    assert f"overridden here {local} sets ANTHROPIC_MODEL" in output
+    assert f"overridden here {toml} sets model, once Codex trusts" in output
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    claude, codex, _ = json.loads(result.output)["connections"]
+    assert claude["overrides"] == [{"path": str(local), "keys": ["ANTHROPIC_MODEL"]}]
+    assert codex["overrides"] == [{"path": str(toml), "keys": ["model"]}]
+    assert claude["probe"]["state"] == "ok"
+
+    # elsewhere the user settings hold
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    claude, codex, _ = json.loads(result.output)["connections"]
+    assert claude["overrides"] == codex["overrides"] == []
 
 
 def test_status_sends_no_key_to_a_gateway_the_settings_no_longer_name(
@@ -2808,18 +3037,16 @@ def test_launch_starts_the_harness_in_a_worktree_with_its_home_or_another(
         ran = json.loads(harness_bin.read_text())
         # the user's own home, so the harness keeps its own login
         assert ran["cwd"] == str(linked) and ran["homes"][index] == str(own)
-        assert "Session: started=" in result.output
-        assert (
-            f"worktree={linked} home={own} gateway={url} model=vllm-sr/auto"
-            in result.output
-        )
+        header = " ".join(result.output.split())
+        assert f"harness {harness} model vllm-sr/auto gateway {url} " in header
+        assert f"worktree {linked} branch linked home {own} started " in header
 
         result = CliRunner().invoke(
             main, [*args, "--worktree", str(linked), "--home", str(other)]
         )
         assert result.exit_code == 3, result.output
         assert json.loads(harness_bin.read_text())["homes"][index] == str(other)
-        assert f"home={other} " in result.output
+        assert f"home {other} " in " ".join(result.output.split())
     # nothing was put in either home, and no branch or worktree changed
     assert list(other.iterdir()) == [] and not own.exists()
     assert _git_state(repo) == before
@@ -2859,6 +3086,350 @@ def test_launch_runs_the_key_command_in_the_worktree_and_home_it_starts(
     assert ran_in.read_text() == f"{repo}\n"
     assert json.loads(harness_bin.read_text())["cwd"] == str(repo)
     assert "sk-" not in result.output
+
+
+def _committed_repo(tmp_path, monkeypatch) -> tuple[Path, list[str], str]:
+    """A repository on main with one commit, the git command that commits in
+    it, and that commit."""
+    repo = tmp_path / "repo"
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-C"]
+    start = [*git, str(repo), "commit", "-q", "--allow-empty", "-m", "start"]
+    subprocess.run(start, check=True)
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    return repo, git, head
+
+
+@pytest.mark.parametrize("harness", ["claude-code", "codex"])
+def test_launch_in_a_new_worktree_branches_from_head_and_tags_every_request(
+    tmp_path, gateway, harness_bin, monkeypatch, harness
+):
+    url, _, _ = gateway
+    tmp_path = tmp_path.resolve()
+    repo, _, head = _committed_repo(tmp_path, monkeypatch)
+    (repo / "uncommitted.txt").write_text("stays in the checkout\n")
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "home"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ANTHROPIC_CUSTOM_HEADERS", "x-team: red\nx-vsr-session-id: old")
+    # the new worktree has no settings of its own yet: the checkout's are read
+    local = {"env": {"ANTHROPIC_CUSTOM_HEADERS": "x-team: blue\nx-vsr-session-id: x"}}
+    (repo / ".claude").mkdir()
+    (repo / ".claude" / "settings.local.json").write_text(json.dumps(local))
+    args = ["connect", harness, "--base-url", url, "--launch", "--worktree"]
+    linked, before = tmp_path / "repo-fix", _git_state(repo)
+
+    # a dry run, and a gateway that fails the probe, make nothing
+    result = CliRunner().invoke(main, [*args, "new:fix", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert f"git -C {repo} worktree add -b vllm-sr/fix {linked} {head}" in result.output
+    result = CliRunner().invoke(main, [*args[:3], url + "/nope", *args[4:], "new:fix"])
+    assert result.exit_code == 1, result.output
+    assert _git_state(repo) == before and not linked.exists()
+    assert not harness_bin.exists()
+
+    result = CliRunner().invoke(main, [*args, "new:fix"])
+    assert result.exit_code == 3, result.output
+    ran = json.loads(harness_bin.read_text())
+    assert ran["cwd"] == str(linked)
+    assert not (linked / "uncommitted.txt").exists()
+    listed = subprocess.run(
+        ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert f"worktree {linked}\nHEAD {head}\nbranch refs/heads/vllm-sr/fix\n" in listed
+    session = re.search(rf"^Session ({UUID})$", result.output, re.M)[1]
+    header = " ".join(result.output.split())
+    assert f"harness {harness} model vllm-sr/auto gateway {url} " in header
+    made = f"worktree {linked} (made by connect from {head[:12]}) branch vllm-sr/fix "
+    assert made in header
+    # every request carries the session: the Router pins it from
+    # x-vsr-session-id, and Claude Code's own session id is the same one
+    if harness == "claude-code":
+        sent = json.loads(ran["settings"])["env"]["ANTHROPIC_CUSTOM_HEADERS"]
+        assert sent == f"x-team: blue\nx-vsr-session-id: {session}"
+        assert ran["args"][2:4] == ["--session-id", session]
+        carried = "x-vsr-session-id, x-claude-code-session-id"
+    else:
+        tag = f"model_providers.vllm-sr.http_headers.x-vsr-session-id={session!r}"
+        assert tag.replace("'", '"') in ran["args"]
+        carried = "x-vsr-session-id"
+    assert header.endswith(f"requests {carried}: {session}")
+    # the docs say where Router Replay files the calls; the header does not
+    # guess at the Router's identity settings, given or not
+    learning = {"protection": {"identity": {"headers": {"session": "session-id"}}}}
+    config = tmp_path / "router.yaml"
+    config.write_text(yaml.safe_dump(_router(learning=learning)))
+    result = CliRunner().invoke(main, [*args[:-1], "--config", str(config)])
+    assert result.exit_code == 3, result.output
+    assert "replay" not in result.output
+
+    # its worktree removed, the branch is still taken, and git says so; a
+    # directory in the way is refused first, since git would make the branch
+    # before it refuses
+    harness_bin.unlink()
+    remove = ["git", "-C", str(repo), "worktree", "remove", str(linked)]
+    subprocess.run(remove, check=True)
+    result = CliRunner().invoke(main, [*args, "new:fix"])
+    assert result.exit_code == 1, result.output
+    name = "claude" if harness == "claude-code" else harness
+    assert result.output.endswith(
+        "git worktree add failed: a branch named 'vllm-sr/fix' already exists,"
+        f" so {name} was not started.\n"
+    )
+    (tmp_path / "repo-taken").mkdir()
+    (tmp_path / "repo-taken" / "kept.txt").write_text("kept\n")
+    before = _git_state(repo)
+    result = CliRunner().invoke(main, [*args, "new:taken"])
+    assert result.exit_code == 2 and "repo-taken already exists" in result.output
+    assert _git_state(repo) == before and not harness_bin.exists()
+    result = CliRunner().invoke(main, [*args, "new"])
+    assert result.exit_code == 3, result.output
+    made = re.search(rf"branch\s+vllm-sr/({harness}-\d{{8}}-\d{{6}})", result.output)
+    assert json.loads(harness_bin.read_text())["cwd"] == f"{repo}-{made[1]}"
+    for bad in ("new:../up", "new:"):
+        result = CliRunner().invoke(main, [*args, bad])
+        assert result.exit_code == 2 and "is not a worktree name" in result.output
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(main, [*args, "new"])
+    assert result.exit_code == 2 and "not inside a git checkout" in result.output
+
+
+def test_a_conversation_claude_code_resumes_keeps_its_own_session_id():
+    assert hs.claude_session_args(["-p", "hi"], "s") == ["--session-id", "s"]
+    for picked in (["--resume", "x"], ["-c"], ["--session-id=x"], ["--fork-session"]):
+        assert hs.claude_session_args(picked, "s") == []
+
+
+def test_connect_sessions_lists_each_launch_and_how_to_clean_it_up(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    tmp_path = tmp_path.resolve()
+    repo, git, head = _committed_repo(tmp_path, monkeypatch)
+    linked = tmp_path / "repo-fix"
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "home"))
+    launch = ["connect", "claude-code", "--base-url", url, "--launch"]
+    result = CliRunner().invoke(main, launch)
+    assert result.exit_code == 3, result.output
+    first = re.search(r"^Session (\S+)$", result.output, re.M)[1]
+    result = CliRunner().invoke(main, [*launch, "--worktree", "new:fix"])
+    assert result.exit_code == 3, result.output
+    made = re.search(r"^Session (\S+)$", result.output, re.M)[1]
+
+    def listed():
+        result = CliRunner().invoke(main, ["connect", "sessions"])
+        assert result.exit_code == 0, result.output
+        return " ".join(result.output.split())
+
+    remove = f"git -C {repo} worktree remove {linked}"
+    delete = f"git -C {repo} branch -d vllm-sr/fix"
+    text = listed()
+    # the newest first; a launch in a checkout of the user's own is not cleaned up
+    assert text.index(f"Session {made}") < text.index(f"Session {first}")
+    assert f"worktree {linked} (made by connect from {head[:12]})" in text
+    assert f"state no uncommitted changes, no unmerged commits cleanup {remove}" in text
+    assert f"then {delete}" in text
+    assert f"worktree {repo} branch main" in text
+    assert "none: this launch did not make the worktree" in text
+
+    # connect never suggests removing work: a change, then a commit, stop it
+    (linked / "notes.txt").write_text("work\n")
+    text = listed()
+    assert "state 1 uncommitted change, no unmerged commits cleanup" in text
+    assert "commit or discard the changes in it first" in text and remove not in text
+    subprocess.run([*git, str(linked), "add", "notes.txt"], check=True)
+    subprocess.run([*git, str(linked), "commit", "-q", "-m", "work"], check=True)
+    text = listed()
+    assert f"state no uncommitted changes, 1 unmerged commit cleanup {remove}" in text
+    assert (
+        "then push or merge vllm-sr/fix before deleting it" in text
+        and delete not in text
+    )
+
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "remove", str(linked)], check=True
+    )
+    text = listed()
+    assert "state worktree removed, 1 unmerged commit cleanup push or merge" in text
+    # merged into main, the branch holds nothing main lacks, and the step works
+    merge = [*git, str(repo), "merge", "-q", "--ff-only", "vllm-sr/fix"]
+    subprocess.run(merge, check=True)
+    text = listed()
+    assert f"state worktree removed, no unmerged commits cleanup {delete}" in text
+    subprocess.run(delete.split(), check=True, capture_output=True)
+    assert "state worktree removed, branch deleted cleanup nothing left" in listed()
+
+    result = CliRunner().invoke(main, ["connect", "sessions", "--json"])
+    assert result.exit_code == 0, result.output
+    sessions = json.loads(result.output)["sessions"]
+    assert sessions[0]["id"] == made
+    assert sessions[0] | {"state": None} == {
+        **sessions[0],
+        "harness": "claude-code",
+        "worktree": str(linked),
+        "branch": "vllm-sr/fix",
+        "repository": str(repo),
+        "base": head,
+        "made_by_connect": True,
+        "state": None,
+    }
+    assert sessions[0]["state"]["worktree"] == "removed"
+
+
+def test_a_claude_code_launch_keeps_the_custom_headers_its_settings_set(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    # Claude Code 2.1.325 takes ANTHROPIC_CUSTOM_HEADERS whole from its local,
+    # project or user settings, the first that sets it, else from the shell,
+    # and the launch's --settings would replace them all
+    url, _, _ = gateway
+    home, project = tmp_path / "home", tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+    monkeypatch.chdir(project)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(home))
+    monkeypatch.setenv("ANTHROPIC_CUSTOM_HEADERS", "x-from: shell")
+    launch = ["connect", "claude-code", "--base-url", url, "--launch"]
+
+    def sent(*args):
+        result = CliRunner().invoke(main, [*launch, *args])
+        assert result.exit_code == 3, result.output
+        session = re.search(rf"^Session ({UUID})$", result.output, re.M)[1]
+        settings = json.loads(json.loads(harness_bin.read_text())["settings"])
+        return settings["env"]["ANTHROPIC_CUSTOM_HEADERS"], session
+
+    def write(path, headers):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"env": {"ANTHROPIC_CUSTOM_HEADERS": headers}}))
+
+    headers, session = sent()
+    assert headers == f"x-from: shell\nx-vsr-session-id: {session}"
+    write(home / "settings.json", "x-from: user\nx-vsr-session-id: old")
+    headers, session = sent()
+    assert headers == f"x-from: user\nx-vsr-session-id: {session}"
+    write(project / ".claude" / "settings.json", "x-from: project")
+    assert sent()[0].startswith("x-from: project\n")
+    write(project / ".claude" / "settings.local.json", "x-from: local")
+    assert sent()[0].startswith("x-from: local\n")
+    # another home is read in place of the user's
+    other = tmp_path / "other"
+    write(other / "settings.json", "x-from: other")
+    (project / ".claude" / "settings.json").unlink()
+    (project / ".claude" / "settings.local.json").unlink()
+    assert sent("--home", str(other))[0].startswith("x-from: other\n")
+
+
+def test_connect_sessions_offers_no_cleanup_that_loses_detached_or_ignored_work(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    tmp_path = tmp_path.resolve()
+    repo, git, _ = _committed_repo(tmp_path, monkeypatch)
+    (repo / ".gitignore").write_text(".env\n")
+    subprocess.run([*git, str(repo), "add", ".gitignore"], check=True)
+    subprocess.run([*git, str(repo), "commit", "-q", "-m", "ignore"], check=True)
+    linked = tmp_path / "repo-fix"
+    monkeypatch.chdir(repo)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "home"))
+    launch = ["connect", "claude-code", "--base-url", url, "--launch"]
+    result = CliRunner().invoke(main, [*launch, "--worktree", "new:fix"])
+    assert result.exit_code == 3, result.output
+
+    def listed():
+        result = CliRunner().invoke(main, ["connect", "sessions"])
+        assert result.exit_code == 0, result.output
+        return " ".join(result.output.split())
+
+    remove = f"git -C {repo} worktree remove {linked}"
+    # a file git ignores is deleted by the removal: the list says so first
+    (linked / ".env").write_text("TOKEN=kept\n")
+    text = listed()
+    assert "state no uncommitted changes, 1 ignored path, no unmerged commits" in text
+    assert (
+        "cleanup keep what you need of the 1 ignored path there, which the"
+        f" removal deletes, then {remove}, then git -C {repo} branch -d" in text
+    )
+    # a commit on a detached HEAD is on no branch: no removal is offered
+    subprocess.run(["git", "-C", str(linked), "checkout", "-q", "--detach"], check=True)
+    (linked / "work.txt").write_text("work\n")
+    subprocess.run([*git, str(linked), "add", "work.txt"], check=True)
+    subprocess.run([*git, str(linked), "commit", "-q", "-m", "work"], check=True)
+    text = listed()
+    assert "1 ignored path, 1 detached commit, no unmerged commits" in text
+    assert "cleanup put the commits on its detached HEAD on a branch first" in text
+    assert remove not in text
+    # on a branch, the commits outlive the worktree
+    subprocess.run(["git", "-C", str(linked), "switch", "-q", "-c", "kept"], check=True)
+    text = listed()
+    assert "1 ignored path, no unmerged commits cleanup keep what" in text
+    assert remove in text
+
+
+def test_the_sessions_directory_is_private(tmp_path, state_home):
+    sessions = state_home / "vllm-sr" / "sessions"
+    hs.record("s1", "codex", hs.Workspace(tmp_path), tmp_path, "http://gw", "m")
+    assert stat.S_IMODE(sessions.stat().st_mode) == 0o700
+    assert stat.S_IMODE((sessions / "s1.json").stat().st_mode) == 0o600
+    # one an earlier version made readable is made private
+    sessions.chmod(0o755)
+    hs.record("s2", "codex", hs.Workspace(tmp_path), tmp_path, "http://gw", "m")
+    assert stat.S_IMODE(sessions.stat().st_mode) == 0o700
+
+
+def test_a_launch_needs_git_only_for_a_worktree(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("PATH", str(harness_bin.parent / "bin"))
+    launch = ["connect", "codex", "--base-url", url, "--launch"]
+    result = CliRunner().invoke(main, launch)
+    assert result.exit_code == 3, result.output
+    assert json.loads(harness_bin.read_text())["cwd"] == str(tmp_path)
+    for worktree in ("new", str(tmp_path)):
+        result = CliRunner().invoke(main, [*launch, "--worktree", worktree])
+        assert result.exit_code == 2, result.output
+        assert "a worktree needs git, which is not on PATH" in result.output
+
+
+def test_connect_sessions_lists_a_launch_without_git_and_its_state_as_unknown(
+    tmp_path, gateway, harness_bin, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "home"))
+    # a worktree connect made while git was there, then a launch without git
+    made = hs.Workspace(tmp_path / "repo-fix", "vllm-sr/fix", tmp_path / "repo", "a1")
+    hs.record("s-made", "codex", made, tmp_path / "home", url, "vllm-sr/auto")
+    monkeypatch.setenv("PATH", str(harness_bin.parent / "bin"))
+    launch = ["connect", "codex", "--base-url", url, "--launch"]
+    assert CliRunner().invoke(main, launch).exit_code == 3
+    result = CliRunner().invoke(main, ["connect", "sessions"])
+    assert result.exit_code == 0, result.output
+    text = _flat(result.output)
+    unknown = "git state unknown: git is not on PATH, and the state needs it"
+    assert f"worktree {tmp_path} home" in text
+    assert f"state {unknown} cleanup none: this launch did not make the" in text
+    assert (
+        f"state worktree removed, {unknown} cleanup unknown: git is not on PATH,"
+        " and the cleanup steps need it" in text
+    )
+    result = CliRunner().invoke(main, ["connect", "sessions", "--json"])
+    states = [s["state"] for s in json.loads(result.output)["sessions"]]
+    assert states == [
+        {"worktree": "present", "git": "not on PATH"},
+        {"worktree": "removed", "git": "not on PATH"},
+    ]
 
 
 def test_a_key_command_gets_no_longer_than_the_harness_gives_it(
@@ -3054,7 +3625,7 @@ PI_EVENTS = [
                     "type": "toolCall",
                     "id": "c1",
                     "name": "bash",
-                    "arguments": {"command": "echo vsr-check"},
+                    "arguments": {"command": "cat vsr-check.txt"},
                 }
             ],
             "model": "vllm-sr/auto",
@@ -3066,14 +3637,14 @@ PI_EVENTS = [
         "type": "tool_execution_end",
         "toolCallId": "c1",
         "toolName": "bash",
-        "result": {"content": [{"type": "text", "text": "vsr-check\n"}]},
+        "result": {"content": [{"type": "text", "text": TOKEN + "\n"}]},
         "isError": False,
     },
     {
         "type": "message_end",
         "message": {
             "role": "assistant",
-            "content": [{"type": "text", "text": "vsr-check"}],
+            "content": [{"type": "text", "text": TOKEN}],
             "model": "vllm-sr/auto",
             "responseModel": "qwen36",
             "stopReason": "stop",
@@ -3207,17 +3778,116 @@ def test_pi_takes_a_key_command_as_its_api_key_and_never_the_key(
     assert {auth for _, _, auth in seen} == {"Bearer sk-from-file"}
 
 
-def test_pi_refuses_a_gateway_that_presents_each_callers_login(
-    tmp_path, gateway, pi_home, monkeypatch
+def _pi_logins(pi_home, **logins):
+    """Pi's auth.json with a made-up OAuth login for each provider named."""
+    pi_home.mkdir(parents=True, exist_ok=True)
+    stored = {
+        name: {"type": "oauth", "access": access, "refresh": "r", "expires": 4e12}
+        for name, access in logins.items()
+    }
+    (pi_home / "auth.json").write_text(json.dumps(stored))
+    return (pi_home / "auth.json").read_text()
+
+
+@pytest.mark.parametrize(
+    ("caller", "login", "api", "path"),
+    [
+        ("anthropic", "anthropic", "anthropic-messages", ""),
+        ("openai", "openai-codex", "openai-completions", "/v1"),
+    ],
+)
+def test_pi_sends_its_own_login_to_a_caller_gateway_of_its_provider(
+    tmp_path, gateway, pi_home, monkeypatch, caller, login, api, path
 ):
     url, seen, _ = gateway
     _homes(tmp_path, monkeypatch)
-    config = _caller_config(tmp_path, "openai")
+    # a gateway key in the shell never replaces the login
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    stored = _pi_logins(pi_home, **{login: "the-login-token"})
+    config = _caller_config(tmp_path, caller)
+    args = ["connect", "pi", "--config", str(config), "--base-url", url]
+    result = CliRunner().invoke(main, [*args, "--key-command", "cat key", "--yes"])
+    assert result.exit_code == 2
+    assert "this gateway takes Pi's own login instead" in _flat(result.output)
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    models = pi_home / "models.json"
+    held = json.loads(models.read_text())["providers"]["vllm-sr"]
+    # Pi runs the command it offers external clients, which prints its stored
+    # login and refreshes it, before each request
+    assert held["apiKey"] == f"!pi auth print-bearer-token --provider {login}"
+    assert (held["api"], held["baseUrl"]) == (api, url + path)
+    if api == "anthropic-messages":
+        # the Router refuses tools[].eager_input_streaming, Pi's default there
+        assert held["compat"] == {"supportsEagerToolInputStreaming": False}
+    output = _flat(result.output)
+    assert f"Pi sends its own {login} login" in output
+    assert "Not probed: the gateway answers only on the login Pi itself" in output
+    for secret in ("the-login-token", "sk-secret"):
+        assert secret not in result.output + models.read_text()
+    assert not seen
+
+    result = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    (pi,) = [
+        e for e in json.loads(result.output)["connections"] if e["harness"] == "pi"
+    ]
+    assert (pi["login"], pi["pi_login"], pi["key_command"]) == (
+        "own login",
+        login,
+        None,
+    )
+    assert pi["probe"] == {
+        "state": "not probed",
+        "detail": "the gateway answers only on the login Pi itself sends",
+    }
+    status = CliRunner().invoke(main, ["connect", "status"]).output
+    assert f"Pi's own login ({login})" in status
+    assert "the-login-token" not in result.output + status and not seen
+
+    assert CliRunner().invoke(main, ["connect", "pi", "--undo"]).exit_code == 0
+    assert not models.exists()
+    assert (pi_home / "auth.json").read_text() == stored
+
+
+@pytest.mark.parametrize(
+    ("caller", "stored"),
+    [
+        # a login reaches only the provider that issued it
+        ("anthropic", {"openai-codex": {"type": "oauth", "access": "the-login"}}),
+        ("openai", {"anthropic": {"type": "oauth", "access": "the-login"}}),
+        # a key Pi stored is no login
+        ("anthropic", {"anthropic": {"type": "api_key", "key": "the-login"}}),
+        ("openai", None),
+    ],
+)
+def test_pi_refuses_a_caller_gateway_without_a_login_of_its_provider(
+    tmp_path, gateway, pi_home, monkeypatch, caller, stored
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    if stored is not None:
+        pi_home.mkdir(parents=True)
+        (pi_home / "auth.json").write_text(json.dumps(stored))
+    config = _caller_config(tmp_path, caller)
     args = ["connect", "pi", "--config", str(config), "--base-url", url, "--yes"]
     result = CliRunner().invoke(main, args)
     assert result.exit_code == 1
-    assert "own openai login upstream" in _flat(result.output)
-    assert not pi_home.exists() and not seen
+    output = _flat(result.output)
+    assert f"own {caller} login upstream, and Pi holds no {caller} login" in output
+    login = {"anthropic": "anthropic", "openai": "openai-codex"}[caller]
+    assert f"pi auth login {login}" in output
+    assert "the-login" not in output
+    assert not (pi_home / "models.json").exists() and not seen
+
+
+def test_pi_takes_chatgpt_for_codex_before_chatgpt_for_the_api(tmp_path):
+    _pi_logins(tmp_path, openai="api")
+    assert hp.login(tmp_path, "openai") == "openai"
+    _pi_logins(tmp_path, openai="api", **{"openai-codex": "codex"})
+    assert hp.login(tmp_path, "openai") == "openai-codex"
+    assert hp.login(tmp_path, "anthropic") is None
 
 
 def test_pi_refuses_a_key_of_its_own_and_a_keyed_listener_without_one(
@@ -3376,6 +4046,262 @@ def test_pi_checks_only_the_models_its_entrypoint_reaches(
     assert "reasoning.signature" in auto.output
 
 
+def _two_entrypoints(caller=False, limit=16384):
+    local = {
+        "name": "local",
+        "api_format": "chat_completions",
+        "max_output_tokens": limit,
+    }
+    login = {"name": "login", "api_format": "responses", "max_output_tokens": 128000}
+    if caller:
+        login["backend_refs"] = [
+            {
+                "endpoint": "https://chatgpt.com/backend-api/codex",
+                "provider": "openai",
+                "auth": {"credential": "caller"},
+            }
+        ]
+
+    def recipe(name, models):
+        refs = [{"model": model} for model in models]
+        return {"name": name, "decisions": [{"name": name, "modelRefs": refs}]}
+
+    return {
+        "providers": {"models": [local, login]},
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "agent"},
+            {"model_names": ["vllm-sr/chat"], "recipe": "chat"},
+        ],
+        "recipes": [recipe("agent", ["local", "login"]), recipe("chat", ["local"])],
+    }
+
+
+def test_pi_checks_the_login_and_limits_of_its_own_entrypoint(
+    tmp_path, gateway, pi_home, monkeypatch
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    config = tmp_path / "pi.yaml"
+    config.write_text(yaml.safe_dump(_two_entrypoints(caller=True)))
+    args = ["connect", "pi", "--config", str(config), "--base-url", url, "--yes"]
+    # a caller login only vllm-sr/auto reaches does not stop Pi on vllm-sr/chat
+    chat = CliRunner().invoke(main, [*args, "--model", "vllm-sr/chat"])
+    assert chat.exit_code == 0, chat.output
+    held = json.loads((pi_home / "models.json").read_text())["providers"]["vllm-sr"]
+    # the model refuses more output than its max_output_tokens
+    assert held["models"][0]["maxTokens"] == 16384
+    auto = CliRunner().invoke(main, [*args, "--model", "vllm-sr/auto"])
+    assert auto.exit_code == 1 and "own openai login upstream" in _flat(auto.output)
+
+
+@pytest.mark.parametrize(
+    "harness, other", [("claude-code", "openai"), ("codex", "anthropic")]
+)
+def test_claude_code_and_codex_check_the_login_of_their_own_entrypoint(
+    tmp_path, gateway, monkeypatch, harness, other
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    doc = _two_entrypoints(caller=True)
+    # only vllm-sr/auto reaches the caller backend, on the other harness's login
+    doc["providers"]["models"][1]["backend_refs"][0]["provider"] = other
+    config = tmp_path / "router.yaml"
+    config.write_text(yaml.safe_dump(doc))
+    args = ["connect", harness, "--config", str(config), "--base-url", url]
+    args += ["--no-vsr", "--yes"]
+    chat = CliRunner().invoke(main, [*args, "--model", "vllm-sr/chat"])
+    assert chat.exit_code == 0, chat.output
+    auto = CliRunner().invoke(main, [*args, "--model", "vllm-sr/auto"])
+    assert auto.exit_code == 1 and f"own {other} login upstream" in _flat(auto.output)
+
+
+@pytest.mark.parametrize("role", ["review_model", "memory_model"])
+def test_codex_checks_the_login_of_its_review_and_memory_entrypoints(
+    tmp_path, gateway, harness_bin, monkeypatch, role
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    doc = _two_entrypoints(caller=True)
+    # Codex asks vllm-sr/chat, whose models take a key, and calls vllm-sr/auto,
+    # which reaches the caller backend, for its reviews or memories
+    doc["entrypoints"][1][role] = "vllm-sr/auto"
+    login = doc["providers"]["models"][1]["backend_refs"][0]
+    login["provider"] = "anthropic"
+    config = tmp_path / "router.yaml"
+    config.write_text(yaml.safe_dump(doc))
+    args = ["connect", "codex", "--config", str(config), "--base-url", url]
+    args += ["--model", "vllm-sr/chat", "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 1, result.output
+    assert (
+        f"own anthropic login upstream for vllm-sr/auto, the {role} of vllm-sr/chat,"
+        " and Codex sends its openai login, so every call to it would be refused"
+    ) in _flat(result.output)
+    assert not (tmp_path / "codex" / "vllm-sr.config.toml").exists()
+    # one that takes Codex's own login has Codex send it to every entrypoint
+    login["provider"] = "openai"
+    config.write_text(yaml.safe_dump(doc))
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    written = (tmp_path / "codex" / "vllm-sr.config.toml").read_text()
+    assert "requires_openai_auth = true" in written and "env_key" not in written
+
+
+def test_claude_code_asks_for_no_more_output_than_its_models_allow(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    config = tmp_path / "router.yaml"
+    for limit, want in ((8192, "8192"), (64000, "32000")):
+        config.write_text(yaml.safe_dump(_two_entrypoints(limit=limit)))
+        args = ["connect", "claude-code", "--config", str(config), "--base-url", url]
+        result = CliRunner().invoke(
+            main, [*args, "--model", "vllm-sr/chat", "--no-vsr", "--yes"]
+        )
+        assert result.exit_code == 0, result.output
+        env = json.loads((tmp_path / "claude" / "settings.json").read_text())["env"]
+        assert env["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == want
+
+
+def test_one_model_needs_no_session_protection():
+    doc = _two_entrypoints()
+
+    def needs(model):
+        return [f.need for f in rc.check_router_config(doc, "pi", model)]
+
+    assert rc.PROTECTION_NEED in needs("vllm-sr/auto")
+    assert rc.PROTECTION_NEED not in needs("vllm-sr/chat")
+    # a recipe the document does not write shows no model, which is not one model
+    doc["entrypoints"].append({"model_names": ["vllm-sr/x"], "recipe": "elsewhere"})
+    assert rc.entrypoint_models(doc, "vllm-sr/x") == []
+    assert rc.PROTECTION_NEED in needs("vllm-sr/x")
+
+
+def test_a_preview_shows_a_key_variable_by_name():
+    change = hc.Change(
+        Path("models.json"), "json", {"providers/vllm-sr": {"apiKey": "!cat key"}}
+    )
+    shown = change.shown(
+        '{"providers": {"vllm-sr": {"apiKey": "$VLLM_SR_API_KEY"}}}', ""
+    )
+    assert "$VLLM_SR_API_KEY" in shown
+    secret = change.shown('{"providers": {"vllm-sr": {"apiKey": "sk-live"}}}', "")
+    assert "sk-live" not in secret and "<hidden>" in secret
+
+
+RELIABILITY_NEEDS = (
+    "fallback",
+    "a second model",
+    "total_timeout",
+    "reliability.total_timeout",
+)
+
+
+def _reliability_needs(doc, harness="claude-code", model=None):
+    found = rc.check_router_config(doc, harness, model)
+    return [f for f in found if f.need.startswith(RELIABILITY_NEEDS)]
+
+
+def _need(doc, prefix, model=None):
+    (found,) = [
+        f for f in _reliability_needs(doc, model=model) if f.need.startswith(prefix)
+    ]
+    return found.need, yaml.safe_load(found.snippet)
+
+
+def test_router_check_asks_every_harness_for_fallback_and_no_total_timeout():
+    for harness in ("claude-code", "codex", "pi"):
+        needs = _reliability_needs(_router(reliable=False), harness)
+        assert [f.need.split(" ")[0] for f in needs] == ["fallback", "total_timeout:"]
+        fallback, timeout = needs
+        assert "fallback on decision d," in fallback.need and "10s" in fallback.need
+        assert yaml.safe_load(fallback.snippet) == {
+            "global": {"router": {"fallback": AGENT_FALLBACK}}
+        }
+        assert "m (300s, the listener's timeout)" in timeout.need
+        assert yaml.safe_load(timeout.snippet) == {
+            "providers": {
+                "models": [{"name": "m", "reliability": {"total_timeout": "0s"}}]
+            }
+        }
+        assert _reliability_needs(_router(), harness) == []
+
+
+def test_fallback_finding_says_where_to_change_it():
+    # fallback on with its default timeouts still ends a slow candidate
+    doc = _router()
+    doc["global"]["router"]["fallback"] = {"enabled": True}
+    need, snippet = _need(doc, "fallback")
+    assert "decision d," in need and snippet["global"]["router"]["fallback"] == (
+        AGENT_FALLBACK
+    )
+    # fallback a decision turns on stays its own: the global block only adds room
+    doc = _router()
+    del doc["global"]["router"]["fallback"]
+    doc["recipes"][0]["decisions"][0]["fallback"] = {"enabled": True}
+    _, snippet = _need(doc, "fallback")
+    assert snippet["global"]["router"]["fallback"] == {
+        "total_timeout": "1200s",
+        "per_attempt_timeout": "1200s",
+    }
+    # a recipe or decision that turns it off itself is where to turn it on
+    doc = _router()
+    doc["recipes"][0].update(name="agent", fallback={"enabled": False})
+    need, snippet = _need(doc, "fallback")
+    assert "recipe agent's own fallback" in need and snippet == {
+        "fallback": AGENT_FALLBACK
+    }
+    decision = doc["recipes"][0]["decisions"][0]
+    decision["fallback"] = {"enabled": False}
+    need, snippet = _need(doc, "fallback")
+    assert "decision d's own fallback" in need and snippet == {
+        "fallback": AGENT_FALLBACK
+    }
+    decision["fallback"] = {"enabled": True, "per_attempt_timeout": "10s"}
+    assert "decision d's own fallback" in _need(doc, "fallback")[0]
+    decision["fallback"] = dict(AGENT_FALLBACK)
+    assert _reliability_needs(doc) == []
+    # one model leaves fallback nowhere to go
+    decision["modelRefs"] = [{"model": "m"}]
+    need, snippet = _need(doc, "a second model")
+    assert "decision d names one" in need
+    assert snippet == {"modelRefs": [{"model": "m"}, {"model": "<another model>"}]}
+    # a request for a provider model by name takes no decision
+    assert _reliability_needs(doc, model="m") == []
+
+
+def test_timeout_finding_reads_the_decision_then_the_model_then_the_listener():
+    doc = _router()
+    doc["providers"]["models"][0]["reliability"] = {"total_timeout": "2m"}
+    need, _ = _need(doc, "total_timeout")
+    assert "m (2m, its total_timeout)" in need and "m2" not in need
+    # a decision's override bounds the calls it routes instead
+    decision = doc["recipes"][0]["decisions"][0]
+    decision["reliability"] = {"total_timeout": "0s"}
+    assert _reliability_needs(doc) == []
+    decision["reliability"] = {"total_timeout": "120s"}
+    need, snippet = _need(doc, "reliability.total_timeout")
+    assert "decision d (120s)" in need and snippet == {
+        "reliability": {"total_timeout": "0s"}
+    }
+    assert [f.need.split(" ")[0] for f in _reliability_needs(doc)] == [
+        "reliability.total_timeout:"
+    ]
+    del decision["reliability"]
+    doc["providers"]["models"][0]["reliability"] = {}
+    doc["listeners"] = [{"name": "http", "port": 8899, "timeout": "900s"}]
+    assert "m (900s" in _need(doc, "total_timeout")[0]
+    for off in ("0s", 0):
+        doc["listeners"][0]["timeout"] = off
+        assert _reliability_needs(doc) == []
+
+
 def test_router_check_for_pi():
     needs = [f.need for f in rc.check_router_config(_router(), "pi")]
     assert any("reasoning.signature" in n for n in needs)
@@ -3385,6 +4311,13 @@ def test_router_check_for_pi():
     complete = _router(["reasoning.signature"], _learning(rc.PI_HEADERS))
     assert rc.check_router_config(complete, "pi") == []
     assert rc.PI_HEADERS == {"session": "x-session-id"}
+    # on its own Anthropic login Pi speaks Messages, which keeps the signature,
+    # and sends no session header
+    login = _router()
+    login["providers"]["models"][0]["backend_refs"] = [
+        {"provider": "anthropic", "auth": {"credential": "caller"}}
+    ]
+    assert rc.check_router_config(login, "pi") == []
 
 
 def test_check_runs_pi_on_the_provider_connect_wrote(
@@ -3401,9 +4334,11 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
     assert "Harness ok 1.5.2 at " in output
     assert "Login ok the gateway answered, as qwen36" in output
     assert (
-        "Tool round trip ok ran echo vsr-check and answered with its output" in output
+        "Tool round trip ok ran cat vsr-check.txt and answered with its output"
+        in output
     )
     ran = json.loads(checked_harness.read_text())
+    assert ran["file"] == TOKEN + "\n" and TOKEN not in ran["args"][-1]
     assert ran["args"][:7] == [
         "--mode",
         "json",
@@ -3413,7 +4348,9 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
         "vllm-sr/auto",
         "--tools",
     ]
-    assert "--no-session" in ran["args"] and ran["args"][-1] == rc_prompt()
+    assert "--no-session" in ran["args"] and ran["args"][-1] == rc_prompt("bash")
+    # Pi's only tool is bash: a model told of a shell tool answered without it
+    assert "with your bash tool," in ran["args"][-1]
     # the user's own agent directory, with the provider written there
     assert ran["agent"] == str(pi_home)
     assert ran["stdin_closed"] and not Path(ran["cwd"]).exists()
@@ -3447,6 +4384,35 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
     assert "Tool round trip not run" in output and "Nothing was written" in output
 
 
+def test_check_runs_pi_on_its_own_login(
+    tmp_path, gateway, checked_harness, pi_home, monkeypatch
+):
+    url, seen, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    monkeypatch.setenv("FAKE_EVENTS", json.dumps(PI_EVENTS))
+    _pi_logins(pi_home, anthropic="the-login-token")
+    config = _caller_config(tmp_path, "anthropic")
+    args = ["connect", "pi", "--config", str(config), "--base-url", url, "--check"]
+    command = "pi auth print-bearer-token --provider anthropic"
+    # a dry run's agent directory holds only models.json, so its provider asks
+    # Pi for the login stored in yours
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    ran = json.loads(checked_harness.read_text())
+    assert ran["agent"] != str(pi_home)
+    held = json.loads(ran["models"])["providers"]["vllm-sr"]
+    pinned = f"PI_CODING_AGENT_DIR={shlex.quote(str(pi_home))} {command}"
+    assert held["apiKey"] == f"!{pinned}"
+    assert not (pi_home / "models.json").exists()
+
+    result = CliRunner().invoke(main, [*args, "--yes"])
+    assert result.exit_code == 0, result.output
+    ran = json.loads(checked_harness.read_text())
+    assert ran["agent"] == str(pi_home)
+    assert json.loads(ran["models"])["providers"]["vllm-sr"]["apiKey"] == f"!{command}"
+    assert "the-login-token" not in result.output and not seen
+
+
 def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
     tmp_path, gateway, harness_bin, monkeypatch
 ):
@@ -3477,11 +4443,16 @@ def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
     assert result.exit_code == 0, result.output
     assert "the Codex CLI included" in _flat(result.output)
     assert config.read_text() == before
+    preview = result.output
 
     result = CliRunner().invoke(main, [*args, "--yes"])
     assert result.exit_code == 0, result.output
     output = _flat(result.output)
     assert "The gateway is now Codex's default" in output
+    # the preview is the change written, where it is written
+    lines = [text.splitlines(keepends=True) for text in (before, config.read_text())]
+    diff = difflib.unified_diff(*lines, str(config), str(config), n=0)
+    assert "".join(diff) in preview
     assert result.output.rstrip().endswith("Start Codex with: codex")
     held = tomllib.loads(config.read_text())
     assert held["model"] == "vllm-sr/auto" and held["model_provider"] == "vllm-sr"
@@ -3529,6 +4500,51 @@ def test_codex_app_sets_the_shared_defaults_and_undo_keeps_the_rest(
     assert result.exit_code == 2 and "does not take --app" in result.output
 
 
+# Secrets the shared config.toml holds where hiding by setting name misses them:
+# an MCP server's env, a provider's headers, a password in a URL argument.
+THEIR_SECRETS = (
+    'model = "gpt-5.5"\n'
+    "\n"
+    "[mcp_servers.brave]\n"
+    'env = { "BRAVE_API_KEY" = "BSA-live-secret-123" }\n'
+    'command = "npx"\n'
+    "\n"
+    "[mcp_servers.pg]\n"
+    'command = "npx"\n'
+    'args = ["-y", "@modelcontextprotocol/server-postgres",'
+    ' "postgresql://admin:hunter2@db/prod"]\n'
+    "[model_providers.other]\n"
+    'base_url = "https://x"\n'
+    'http_headers = { "X-Api-Key" = "xk-secret-999" }\n'
+)
+
+
+@pytest.mark.parametrize("ending", ["\n", ""])
+def test_a_codex_app_preview_shows_no_line_connect_does_not_own(
+    tmp_path, gateway, monkeypatch, ending
+):
+    url, _, _ = gateway
+    _homes(tmp_path, monkeypatch)
+    config = tmp_path / "codex" / "config.toml"
+    config.parent.mkdir()
+    # without a newline at its end, connect adds one to a line of theirs
+    before = THEIR_SECRETS.removesuffix("\n") + ending
+    config.write_text(before)
+    args = ["connect", "codex", "--app", "--base-url", url, "--no-vsr"]
+    preview = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert preview.exit_code == 0, preview.output
+    for secret in ("BSA-live-secret-123", "hunter2", "xk-secret-999"):
+        assert secret not in preview.output
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    if ending:
+        # the preview is the whole change, line numbers included, so patch applies it
+        lines = [
+            text.splitlines(keepends=True) for text in (before, config.read_text())
+        ]
+        diff = difflib.unified_diff(*lines, str(config), str(config), n=0)
+        assert "".join(diff) in preview.output
+
+
 def test_codex_app_check_runs_codex_without_a_profile(
     tmp_path, gateway, checked_harness, monkeypatch
 ):
@@ -3540,6 +4556,7 @@ def test_codex_app_check_runs_codex_without_a_profile(
     assert result.exit_code == 0, result.output
     ran = json.loads(checked_harness.read_text())
     assert ran["args"][0] == "exec" and "--profile" not in ran["args"]
+    assert "with your exec_command tool," in ran["args"][-1]
     assert (tmp_path / "codex" / "config.toml").exists()
 
 
@@ -3621,3 +4638,83 @@ def test_codex_memories_ask_the_gateway_for_their_models(
     launch = hc.codex_launch_args(url, "vllm-sr/auto", None, None)
     assert "-c" in launch and 'memories.extract_model="vllm-sr/auto"' in launch
     assert 'memories.consolidation_model="vllm-sr/auto"' in launch
+
+
+@pytest.mark.parametrize(
+    "error, client_key",
+    [
+        # the listener, on a key it does not hold
+        (
+            {
+                "message": "Unauthorized: missing or invalid API key",
+                "type": "authentication_error",
+                "code": "invalid_api_key",
+            },
+            True,
+        ),
+        # the Router past it, holding no key for the backend
+        (
+            {
+                "message": "authentication failed",
+                "type": "authentication_error",
+                "code": "authentication_failed",
+            },
+            False,
+        ),
+        # the backend itself, on the key the Router sent it
+        (
+            {
+                "message": "Incorrect API key provided: sk-up***",
+                "type": "invalid_request_error",
+                "code": "invalid_api_key",
+            },
+            False,
+        ),
+    ],
+)
+def test_a_failed_probe_says_what_failed_in_words(error, client_key):
+    body = json.dumps({"error": error}).encode()
+
+    class Refuses(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_POST(self):
+            self.rfile.read(int(self.headers["content-length"]))
+            self.send_response(401)
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Refuses)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    refused = rc.basic_reply(url, "codex", "vllm-sr/auto", "sk-wrong")
+    server.shutdown()
+    server.server_close()
+    assert f"HTTP 401 {body.decode()}" in refused.detail
+    assert ("the gateway did not accept the key" in refused.detail) is client_key
+    down = rc.basic_reply(url, "codex", "vllm-sr/auto", "sk-wrong")
+    assert down.detail == (
+        f"{url}/v1/responses: no connection (Connection refused)."
+        " Is the gateway running there?"
+    )
+
+
+def test_a_branch_git_cannot_count_is_never_offered_for_deletion(tmp_path, monkeypatch):
+    repo, _, head = _committed_repo(tmp_path.resolve(), monkeypatch)
+    subprocess.run(["git", "-C", str(repo), "branch", "vllm-sr/x"], check=True)
+    session = {
+        "worktree": str(repo.parent / "gone"),
+        "made_by_connect": True,
+        "repository": str(repo),
+        "branch": "vllm-sr/x",
+        "base": head,
+    }
+    found = hs.state(session)
+    assert found == {"worktree": "removed", "unmerged": 0}
+    assert hs.cleanup(session, found) == [f"git -C {repo} branch -d vllm-sr/x"]
+    # a start commit git does not have: the count fails, and no step deletes
+    found = hs.state({**session, "base": "0" * 40})
+    assert found == {"worktree": "removed", "unmerged": None}
+    assert hs.describe(found) == "worktree removed, unmerged commits unknown"
+    assert hs.cleanup(session, found) == ["push or merge vllm-sr/x before deleting it"]

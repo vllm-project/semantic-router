@@ -41,6 +41,8 @@ func newReviewQueryRouter(t *testing.T) *OpenAIRouter {
 		reviewRecord("invalid-1", 33, "local-reviewer", "invalid", "", "", 400, nil),
 		reviewRecord("check-1", 34, "codex-auto-review", "tool_call", "", "", 80, price(0.005)),
 		{ID: "main-turn", Timestamp: time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC), SessionID: "agent-session", SelectedModel: "gpt-6-luna", LifecycleState: routerreplay.LifecycleCompleted},
+		// A session-title request is a side request but no review.
+		{ID: "title", Timestamp: time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC), SessionID: "agent-session", SelectedModel: "title-model", RequestKind: store.RequestKindSessionTitle, LifecycleState: routerreplay.LifecycleCompleted},
 	} {
 		_, err := recorder.AddRecord(record)
 		require.NoError(t, err)
@@ -65,7 +67,7 @@ func TestReplayListFiltersReviews(t *testing.T) {
 		"review_status=failed":                                   {"failed-1"},
 		"review_risk=medium":                                     {"allow-3"},
 		"review_outcome=allow&model=local-reviewer":              {"allow-3"},
-		"session_id=agent-session&review_status=all":             {"check-1", "invalid-1", "failed-1", "deny-1", "allow-3", "allow-2", "allow-1", "main-turn"},
+		"session_id=agent-session&review_status=all":             {"check-1", "invalid-1", "failed-1", "deny-1", "allow-3", "allow-2", "allow-1", "main-turn", "title"},
 	} {
 		var list routerreplay.ListResponse
 		replayAPIJSON(t, router, "/api/v1/observability/replays?limit=100&"+query, &list)

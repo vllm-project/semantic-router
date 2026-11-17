@@ -28,7 +28,7 @@ const REPLY_TIMEOUT_MS = 120_000;
 export interface GatewayModel {
   id: string;
   description?: string;
-  routing?: { resolution?: string; recipe?: string };
+  routing?: { resolution?: string; recipe?: string; selectable?: boolean };
 }
 
 /** What the gateway said about the reply it served. */
@@ -131,7 +131,8 @@ async function readModels(gateway: Gateway, wanted: readonly string[], signal?: 
   }
   const models = ((await response.json()) as { data?: GatewayModel[] }).data ?? [];
   if (!wanted.length) {
-    return models.filter((model) => model.routing?.resolution === 'virtual');
+    // an entrypoint that serves another one's reviews or memory calls is not for chat
+    return models.filter((model) => model.routing?.resolution === 'virtual' && model.routing.selectable !== false);
   }
   return wanted.flatMap((id) => models.filter((model) => model.id === id));
 }

@@ -47,6 +47,7 @@ func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]
 	assertReferenceConfigObservabilityCoverage(t, mustMapAt(t, services, "observability"))
 	assertReferenceConfigAuthzCoverage(t, mustMapAt(t, services, "authz"))
 	assertReferenceConfigRateLimitCoverage(t, mustMapAt(t, services, "ratelimit"))
+	assertReferenceConfigBudgetsCoverage(t, mustMapAt(t, services, "budgets"))
 	assertReferenceConfigManagementAPICoverage(t, mustMapAt(t, services, "management_api"))
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
 }
@@ -144,6 +145,19 @@ func assertReferenceConfigAuthzCoverage(t testingT, authz map[string]interface{}
 		mustSliceAt(t, authz, "providers"),
 		reflect.TypeOf(AuthzProviderConfig{}),
 		"global.services.authz.providers",
+	)
+}
+
+func assertReferenceConfigBudgetsCoverage(t testingT, budgets map[string]interface{}) {
+	users := mustSliceAt(t, budgets, "users")
+	assertMapCoversStructFields(t, budgets, reflect.TypeOf(BudgetsConfig{}), "global.services.budgets")
+	assertMapCoversStructFields(t, mustMapAt(t, budgets, "run"), reflect.TypeOf(RunBudget{}), "global.services.budgets.run")
+	assertSliceUnionCoversStructFields(t, users, reflect.TypeOf(UserBudget{}), "global.services.budgets.users")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, users, "match", "global.services.budgets.users"),
+		reflect.TypeOf(BudgetMatch{}),
+		"global.services.budgets.users[].match",
 	)
 }
 

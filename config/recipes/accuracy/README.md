@@ -107,8 +107,9 @@ Keep credentials outside the recipe and pass them by environment variable.
 
 ## Data handling and safety
 
-The checked-in recipe does not enable Router Replay or response caching.
-Direct routes send the request to one provider. Workflow and Fusion routes can
+The checked-in recipe sets no `router_replay` plugin, so Router Replay keeps
+only its default record of each request's routing data, with no request or
+response text, and it does not enable response caching. Direct routes send the request to one provider. Workflow and Fusion routes can
 send request content or derived task prompts to the coordinator and several
 review workers, so one user request may cross multiple provider boundaries.
 

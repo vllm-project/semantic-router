@@ -29,6 +29,11 @@ func init() {
 		Tags:        []string{"masking", "keyword", "systemone", "functional", "fail-closed"},
 		Fn:          testMaskingOwnRules,
 	})
+	pkgtestcases.Register("masking-placeholder-collisions", pkgtestcases.TestCase{
+		Description: "Intersecting custom templates keep different values distinct and reuse repeated values across Chat, Responses and Messages",
+		Tags:        []string{"masking", "keyword", "systemone", "cross-protocol", "functional"},
+		Fn:          testMaskingPlaceholderCollisions,
+	})
 }
 
 func testMaskingOwnRules(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -97,6 +102,57 @@ func testMaskingOwnRules(ctx context.Context, client *kubernetes.Clientset, opts
 	}
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{"received": received, "failed_status": failed.StatusCode})
+	}
+	return nil
+}
+
+func testMaskingPlaceholderCollisions(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	prompt := "Paid by " + maskingRulesEmployee + " for account " + maskingRulesAccount +
+		" " + maskingSpanMarker + " account " + maskingRulesAccount + " e2e-template-collision"
+	want := "Paid by [V0X0] for account [V0X1]"
+	received := map[string]string{}
+	for _, tc := range []maskingWireCase{
+		{
+			name: "chat completions", path: "/v1/chat/completions", decision: "mask_template_collision",
+			body: map[string]interface{}{
+				"model":    maskingRulesEntrypoint,
+				"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
+			},
+		},
+		{
+			name: "responses", path: "/v1/responses", decision: "mask_template_collision",
+			body: map[string]interface{}{
+				"model": maskingRulesEntrypoint, "store": false, "input": prompt,
+			},
+		},
+		{
+			name: "anthropic messages", path: "/v1/messages", decision: "mask_template_collision",
+			body: map[string]interface{}{
+				"model": maskingRulesEntrypoint, "max_tokens": 64,
+				"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
+			},
+		},
+	} {
+		echoed, caseErr := runMaskingWireCase(ctx, session, tc)
+		if caseErr != nil {
+			return fmt.Errorf("%s: %w", tc.name, caseErr)
+		}
+		if !strings.HasPrefix(echoed, want) || strings.Contains(echoed, maskingRulesEmployee) || strings.Contains(echoed, maskingRulesAccount) {
+			return fmt.Errorf("%s: the backend received %q, want it to start %q with no employee ID or account number", tc.name, echoed, want)
+		}
+		if count := strings.Count(echoed, "[V0X1]"); count != 2 {
+			return fmt.Errorf("%s: repeated account has %d copies of its placeholder, want 2: %q", tc.name, count, echoed)
+		}
+		received[tc.name] = echoed
+	}
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{"received": received})
 	}
 	return nil
 }

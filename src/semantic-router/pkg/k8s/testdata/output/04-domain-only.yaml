@@ -6,6 +6,7 @@ providers:
   models:
     - name: mistral-7b
       pricing:
+        currency: USD
         prompt_per_1m: 0.7
         completion_per_1m: 1.4
       loras:
@@ -13,6 +14,7 @@ providers:
           description: STEM education tutor
     - name: mistral-large
       pricing:
+        currency: USD
         prompt_per_1m: 3
         completion_per_1m: 9
       loras:

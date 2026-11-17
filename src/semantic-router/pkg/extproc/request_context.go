@@ -115,6 +115,8 @@ type RequestContext struct {
 	RequestCost                   float64
 	RequestCostCurrency           string
 	RequestCostPriced             bool
+	// spend is the request's place in the spend budgets; nil without any.
+	spend *requestSpend
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
@@ -345,6 +347,7 @@ type RequestContext struct {
 	VSRMatchedConversation    []string // Matched conversation-shape signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
+	VSRMatchedAgent           []string // Matched agent signal names: the request's agent role, harness and type
 	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
@@ -443,11 +446,18 @@ type RequestContext struct {
 	ApprovalReview        *routerreplay.Review
 	approvalReviewSettled bool
 	// AgentTurn is the Codex turn the request belongs to, read from its turn
-	// metadata at ingress. Replay records it; nothing routes on it.
+	// metadata at ingress. Replay records it; protection and the agent signal
+	// read its session and thread when no header carries them.
 	AgentTurn codexreview.Turn
+	// SessionTitleRequest marks the side request a harness sends to name its
+	// session, and sessionName is the name its answer gave. Observational
+	// only, like ApprovalReview.
+	SessionTitleRequest bool
+	sessionName         string
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process
+	replayRunParent *replayRunParent      // The client request a hop is made for
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
 	// LooperTrace is what the Looper's execution reports in x-vsr-trace.

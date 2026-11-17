@@ -111,9 +111,9 @@ codex --profile vllm-sr
 Here each harness has its own Router, served from `claude-code.yaml` and
 `codex.yaml`. The command reaches the gateway at the first listener of the
 configuration it is given (`config.yaml` by default); `--base-url` names
-another origin. When that listener has `api_keys` and the variable is unset,
-the command stops before writing anything, so a key written before is never
-replaced.
+another origin. When that listener has `api_keys` or `api_key_files` and the
+variable is unset, the command stops before writing anything, so a key written
+before is never replaced.
 
 The command shows the changes and asks before writing them:
 
@@ -153,15 +153,21 @@ It then reports three checks, each on its own line:
 
 - `Router configuration`: what the configuration given with `--config` lacks
   for this harness and the models its entrypoint reaches, from the settings
-  below, without changing it.
+  below, without changing it. For every harness that includes
+  [the timeout and fallback an agent call needs](#keep-long-and-failed-calls-in-the-turn).
 - `Basic reply`: a plain request in the harness's protocol gets an answer, and
   the line names the model that gave it.
 - `Streamed tool loop`: a streamed tool call, then the answer once its result
   goes back, as the harness sends them. A stream that ends in an error fails
   it, and the check runs only after the basic reply passed.
 
-On a failure the written changes stay, so fix the gateway and run the command
-again, or take them back with `--undo`. With the vSR plugin installed it warns
+On a failure the line says what failed in words: a key the gateway refused, no
+connection at that address, or no answer in time. Only the listener's own
+refusal (`invalid_api_key`) is read as a refused key. Any other 401, such as
+the Router's when it holds no credential for the selected backend or the
+backend's own, is shown as its body says. The written changes stay, so
+fix what failed and run the command again, or take them back with `--undo`.
+With the vSR plugin installed it warns
 while the plugin's router app is on, and when the listener also serves System
 One it prints the setting that points vSR at it. `--dry-run` prints the plan
 and writes nothing.
@@ -187,6 +193,8 @@ sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
 the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
+A file nothing else changed since the command wrote it gets back the very bytes
+it had, its formatting and a missing final newline included.
 
 ### Check and status
 
@@ -200,24 +208,30 @@ vllm-sr connect status
 with the settings the command wrote, `codex exec --profile vllm-sr`, or
 `pi --mode json --provider vllm-sr` ([Pi](#pi)), and with `--dry-run` the
 settings it would write, given for that run only. The
-harness works in a temporary directory, is asked to run `echo vsr-check` and
-answer with its output, and is stopped after 120 seconds. This spends a few
-short model calls on your login or key. The harness reads its own credentials
+harness works in a temporary directory, where the check writes `vsr-check.txt`
+with a token new for each run, is asked to run `cat vsr-check.txt` with its
+shell tool, named as the harness names it (`Bash` in Claude Code,
+`exec_command` in Codex, `bash` in Pi), and answer with its output, which the
+model cannot know without running the command, and is stopped after 120
+seconds. This spends a few short model calls on your login or key. The harness reads its own credentials
 as it always does, and the lines shown hide the gateway key, the value of any
 variable whose name says it holds a secret, and bearer tokens. Each step gets a
 line, and a failed one fails the command:
 
-- `Harness`: found on `PATH`, with its version.
+- `Harness`: found on `PATH`, with its version. A harness that exits before
+  it runs the task, as Codex does on a `config.toml` it cannot load, fails
+  here with the error it printed, and the steps after it do not run.
 - `Login`: the gateway answered, so the key or login the harness sent was
   accepted.
 - `Tool round trip`: the command ran and the model answered with its output.
 - `Approval review`, for Codex with a `review_model`: Codex runs with
   `--approve-for-me` and is asked to request approval for the command. The line
   says whether a request for the review entrypoint appeared in the Router's
-  replay list, read from the management API on the gateway's host (port 8080
-  plus `VLLM_SR_PORT_OFFSET`, with `VSR_MGMT_TOKEN`). Without replay capture on
-  the review recipe, or when the model runs the command without asking, it
-  reads `not observed`, which does not fail the check.
+  replay list, read from the management API on the gateway's host (at
+  `global.services.management_api.port`, 8080 by default, plus
+  `VLLM_SR_PORT_OFFSET`, with `VSR_MGMT_TOKEN`). When `enabled: false`
+  turns replay off for the review recipe, or when the model runs the command
+  without asking, it reads `not observed`, which does not fail the check.
 - `Exit`: the harness finished in time, exited with status 0, and reported no
   failed turn or error result. A run that ends any other way fails the check,
   even after the steps above passed.
@@ -234,8 +248,15 @@ why, once Claude Code's settings name another gateway or model than connect
 wrote, or the Codex profile, Codex's shared `config.toml` (`--app`) or Pi's
 `models.json` no longer holds what connect wrote, since the key they send may
 then be for another gateway. A Pi connection fails when Pi's `auth.json` holds
-a key of its own for `vllm-sr`, which Pi sends in its place. `--json` prints the same as JSON,
-and the command exits with status 1 when a gateway check fails.
+a key of its own for `vllm-sr`, which Pi sends in its place. Under
+`overridden here` it names the project settings in the current directory that
+win over what connect wrote, the ones connect warns about after writing: a
+`.claude/settings.json` or `.claude/settings.local.json` that sets one of the
+keys of a user scope connection, and a `.codex/config.toml` that sets `model`.
+Run it in the directory you start the harness in. These do not fail the
+command, since the gateway itself still answers. `--json` prints the same as
+JSON, the settings under `overrides`, and the command exits with status 1 when
+a gateway check fails.
 
 ### Try it without writing anything
 
@@ -245,8 +266,8 @@ vllm-sr connect codex --config codex.yaml --launch -- exec "fix the failing test
 ```
 
 `--launch` runs the same checks and the same probe, then starts the harness
-through the gateway for that one session and exits with its status. Nothing is
-written: Claude Code gets the settings with `--settings` from a temporary file
+through the gateway for that one session and exits with its status. No setting
+is written: Claude Code gets the settings with `--settings` from a temporary file
 only you can read, and Codex gets them as `-c` overrides. Both read the key from
 `VLLM_SR_API_KEY` in their own environment (Claude Code through an
 `apiKeyHelper` that prints it), so it never appears on the command line or in a
@@ -260,26 +281,108 @@ with `vllm-sr connect claude-code --launch -- --resume <session id>`.
 ### Launch in a worktree or another home
 
 ```bash
+vllm-sr connect codex --config codex.yaml --launch --worktree new:fix-auth
 vllm-sr connect codex --config codex.yaml --launch --worktree ../feature-x
 vllm-sr connect claude-code --config claude-code.yaml --launch \
-  --worktree ../feature-x --home ~/.claude-work
+  --worktree new --home ~/.claude-work
 ```
 
-`--worktree` starts the harness in an existing git worktree, with the same
-temporary settings as `--launch`. The command only checks that git sees a work
-tree there: it never creates, switches or removes a branch or a worktree, so
-make one with `git worktree add` first. The harness keeps its own home,
-`$CLAUDE_CONFIG_DIR` or `~/.claude` and `$CODEX_HOME` or `~/.codex`, and with
-it its own login. `--home` gives it another existing home for that session,
-such as one signed in to a second account. Nothing is copied into it, so the
-harness signs in there as that home's account does.
+`--worktree new:NAME` starts the harness in a new worktree. Once the gateway
+passes the probe, the command runs `git worktree add -b vllm-sr/NAME
+<checkout>-NAME HEAD` in the git checkout it is run from, so the worktree sits
+beside that checkout on a branch of its own and starts from the committed
+`HEAD`; uncommitted changes stay in the checkout. `new` alone names it after the
+harness and the time, such as `vllm-sr/codex-20261116-153012`. A name takes
+letters, digits, `.`, `_` and `-`. A directory that already exists is refused
+before anything is made, and `git worktree add` itself refuses a branch that
+already exists, such as one whose worktree was removed, and the harness is not
+started then. Give a directory called `new` as `./new`. `--dry-run` prints the
+`git worktree add` command and makes nothing.
 
-Before the harness starts, the command prints one line to match the session to
-its calls in Insights later:
+`--worktree <path>` starts the harness in an existing git worktree instead, and
+only checks that git sees a work tree there. Neither form switches or removes a
+branch or a worktree. Only a worktree needs git: without `--worktree`,
+`--launch` starts the harness in the directory it is run from, with or without
+git. The harness keeps its own home, `$CLAUDE_CONFIG_DIR` or
+`~/.claude` and `$CODEX_HOME` or `~/.codex`, and with it its own login.
+`--home` gives it another existing home for that session, such as one signed in
+to a second account. Nothing is copied into it, so the harness signs in there as
+that home's account does.
+
+Before the harness starts, the command prints the session's header:
 
 ```text
-Session: started=2026-11-15T21:03:11+09:00 worktree=/src/feature-x home=/home/me/.codex gateway=http://localhost:8899 model=vllm-sr/auto
+Session 0b6f8c2e-3d1a-4f6b-9a57-2c8e4d1f7a90
+  harness   claude-code
+  model     vllm-sr/auto
+  gateway   http://localhost:8899
+  worktree  /src/app-fix-auth (made by connect from 1a2b3c4d5e6f)
+  branch    vllm-sr/fix-auth
+  home      /home/me/.claude
+  started   2026-11-16T15:30:12+09:00
+  requests  x-vsr-session-id, x-claude-code-session-id: 0b6f8c2e-3d1a-4f6b-9a57-2c8e4d1f7a90
 ```
+
+Every model call of a launched session carries its id in `x-vsr-session-id`:
+Codex sends it through `http_headers` in its provider settings, and Claude Code
+through `ANTHROPIC_CUSTOM_HEADERS`, beside the headers it would send there
+anyway. Claude Code takes that variable whole from its local, project or user
+settings, the first that sets it, else from your shell, and the launch's
+`--settings` would replace them all, so the launch reads them in that order
+and keeps the lines it finds; for `--worktree new` the project's files are those
+of the checkout it is made from. Claude Code also starts its conversation with
+`--session-id` set to the same id, so its own `x-claude-code-session-id` carries
+it too, and `-- --resume <id>` resumes it later.
+
+The Router reads `x-vsr-session-id` before any other session header, so while
+`global.router.learning.protection.identity.headers.session` is unset, as in the
+Router settings below, Router Replay files every call of the launch under its
+id, and `GET /api/v1/observability/replays?session_id=<id>` returns them all,
+subagents included. A header named there replaces it: a call that carries the
+header is filed under that header's value whenever protection can key the
+call by it, as
+[Session identification](../api/session-identification#choose-the-identity-you-need)
+describes, and under the launch's id otherwise. Claude Code's
+`x-claude-code-session-id` holds the launch's id too, unless the launch resumes
+or continues a conversation, which keeps its own id, and Codex's `session-id`
+holds the id Codex makes for each of its sessions.
+
+### List and clean up launched sessions
+
+```bash
+vllm-sr connect sessions
+```
+
+Each launch is recorded in `$XDG_STATE_HOME/vllm-sr/sessions` (by default
+`~/.local/state/vllm-sr/sessions`), a directory only you can read, and
+`connect sessions` lists them, the newest first, with the header above and what
+is left of each one now: whether the worktree still exists, how many
+uncommitted changes it has, and when there are any, how many paths git ignores
+there and how many commits on a detached `HEAD` no branch and no remote has.
+For a worktree connect made it also counts the commits on its branch no other
+branch and no remote has. `--json` prints the same as JSON.
+
+The command removes nothing. For a worktree connect made it prints the steps
+that remove it, and only steps that lose no change and no commit:
+
+```text
+  state     no uncommitted changes, no unmerged commits
+  cleanup   git -C /src/app worktree remove /src/app-fix-auth, then git -C /src/app branch -d vllm-sr/fix-auth
+```
+
+While the worktree has uncommitted changes it says to commit or discard them
+first, and while commits on a detached `HEAD` there are on no branch, to put
+them on one first: removing the worktree would leave them unreachable. While
+the branch has unmerged commits it says to push or merge the branch before
+deleting it. `git worktree remove` and `git branch -d` refuse uncommitted
+changes and unmerged commits too, but `git worktree remove` deletes the files
+git ignores there, such as build output or a `.env`, so the steps then start by
+saying how many paths it deletes. A launch with `--worktree <path>` or none is
+listed but never offered for removal, since that launch did not make the
+worktree. Without git on `PATH`, as for a launch with no `--worktree`, each
+session is listed with its state unknown and no cleanup step, since both come
+from git. The record stays after the cleanup, so the list keeps the session id
+to look up in Insights.
 
 ### Fetch the key with a command
 
@@ -344,6 +447,11 @@ the default, in place of the profile:
   that way, such as one where a key it sets spans several lines or one that is
   not valid TOML, is refused and left alone. Reading TOML needs Python 3.11 or
   later.
+- the preview is a diff of the whole file with no context lines: the lines the
+  command writes or takes out, at their line numbers, so `patch` applies it.
+  It never prints a line of yours, which can hold a secret no setting name
+  gives away, such as an MCP server's `env`. One it changes, such as a last line
+  that gets its missing newline, reads `(a line that is not connect's)`.
 
 This changes the default for the Codex CLI too: every `codex` started without
 `--profile` uses the gateway, and the command says so before it writes and
@@ -358,6 +466,135 @@ Restart the app afterwards: Codex reads `model_catalog_json` only when it
 starts. An app started from the desktop often does not see the variables your
 shell exports, so give it `--key-command` rather than `VLLM_SR_API_KEY`.
 
+### Hand work between Claude Code and Codex
+
+```bash
+vllm-sr connect codex --config codex.yaml --app --key-command "pass show vllm-sr/codex"
+vllm-sr connect claude-code --config claude-code.yaml \
+  --key-command "pass show vllm-sr/claude" --delegate codex
+vllm-sr connect codex --config codex.yaml --app \
+  --key-command "pass show vllm-sr/codex" --delegate claude-code
+```
+
+`--delegate` lets each client hand a task to the other, which does it in its
+own official client on its own login or key. No credential passes from one
+client to the other: connect only adds a plugin, an MCP server, a skill and
+settings to each client's own configuration. It previews them with
+`--dry-run`, asks before writing, takes them back with `--undo` like every
+other change it makes, and `connect status` names them under `delegates to`.
+
+**Claude Code to Codex.** `--delegate codex` installs OpenAI's Codex plugin for
+Claude Code ([openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc))
+with Claude Code's own commands, each only when what it adds is missing:
+
+```bash
+claude plugin marketplace add openai/codex-plugin-cc
+claude plugin install codex@openai-codex
+```
+
+`--delegate-source` installs from another source, such as a local checkout. In
+a new Claude Code session, `/codex:rescue <task>` hands the task to Codex, which
+can edit files in its workspace, and its answer comes back. The plugin runs
+`codex app-server` on Codex's default configuration and no profile, so connect
+Codex with `--app` for that Codex to use a gateway. The command says where
+Codex's default configuration sends; without a gateway there, Codex works on
+its own ChatGPT login, if it has one.
+
+Claude Code's settings `env` reaches every program Claude Code starts, the
+plugin's Codex and each command Codex runs included. Two settings keep Claude
+Code's credentials out of them:
+
+- For a listener that takes a key, `--delegate codex` needs `--key-command`,
+  which Claude Code runs itself as its `apiKeyHelper`, and refuses to write the
+  key from `VLLM_SR_API_KEY` into the settings. Claude Code on its own Claude
+  login, or a listener without keys, needs no key command.
+- It adds `ANTHROPIC_*` to `exclude` under `[shell_environment_policy]` in
+  Codex's `config.toml`, keeping the rest of that table, so a command Codex runs
+  sees no `ANTHROPIC_` variable. Codex's own provider still works, since it
+  reads none of them.
+
+`--undo` uninstalls the plugin, and removes its marketplace, only when connect
+added them, and takes the shell setting back. Connect leaves the plugin's
+review gate off: `/codex:setup --enable-review-gate` would have Codex review
+Claude Code's work every time Claude Code stops.
+
+**Codex to Claude Code.** `--delegate claude-code` adds Claude Code's own MCP
+server to the Codex profile, or with `--app` to `config.toml`:
+
+```toml
+[mcp_servers.claude]
+command = "claude"
+args = ["mcp", "serve"]
+env_vars = ["CLAUDE_CONFIG_DIR"]
+enabled_tools = ["Agent"]
+tool_timeout_sec = 300
+
+[mcp_servers.claude.tools.Agent]
+approval_mode = "approve"
+```
+
+Codex can then ask Claude Code. The `Agent` tool of `claude mcp serve` runs a
+Claude Code subagent on the login or key of `$CLAUDE_CONFIG_DIR` (else
+`~/.claude`), which reads files and answers. It cannot edit or run commands,
+since nobody answers its permission prompts, so this way is read-only. The
+other tools stay off. `Agent` is approved ahead, since `codex exec` refuses an
+MCP call it would have to ask about, and Codex waits up to 300 seconds for it.
+Codex offers it to the model as `mcp__claude__Agent`, with Claude Code's own
+description, which reads much like Codex's own `spawn_agent`. A model may run
+`spawn_agent` instead and still say Claude Code answered, so name the tool when
+you ask, and look for an MCP call to `claude` in Codex's output. Codex 0.166
+cannot be told to prefer it: its `tool_search_always_defer_mcp_tools` feature
+is removed and stays on whatever the configuration says, and connect's model
+catalog turns tool search off, so the tool is offered directly anyway.
+
+`--delegate-edits` adds a skill, `$CODEX_HOME/skills/vllm-sr-claude-code/SKILL.md`,
+for a task you ask Claude Code to do. Codex runs Claude Code's official command
+once for it:
+
+```bash
+claude -p --output-format json --max-turns 10 --tools Read,Grep,Glob -- "<task>"
+claude -p --output-format json --max-turns 10 \
+  --tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits -- "<task>"
+```
+
+The first, read-only, is the default, and the second is for a task that asks
+for edits. Claude Code reaches its model over the network and keeps its session
+in its own home, so Codex asks you to run that one command outside its sandbox
+(`require_escalated`), and Approve for me can answer for you. Network access
+stays off for every other command. The skill never uses `--bare`, which would
+skip Claude Code's own login.
+
+You still sign each client in, or connect each to its gateway, start a new
+Claude Code session, and restart Codex and the Codex app, which load MCP
+servers and skills when they start.
+
+**Loops.** A task one client hands to the other could come back. The command
+wires neither client to do that on its own: `claude -p` above has no `Bash` or
+`Agent` tool, so it cannot start Codex, the MCP subagent cannot run commands,
+and the skill tells Codex not to hand back a task Claude Code gave it. The
+plugin's `codex:codex-rescue` subagent is described to Claude Code as one to use
+proactively, so Claude Code may hand a task to Codex you did not ask it to. A
+`claude mcp serve` subagent does not stop when Codex stops waiting for it: in
+one test it made about 164 model calls in ten minutes and went on after Codex
+was killed. Stop such a process yourself, and
+[set budgets](#set-budgets-before-running-a-task) before a long task.
+
+**In Replay.** Each client calls its gateway itself, with its own session
+headers, so Router Replay files a handed-over task under a session of the
+client that did it: the Codex thread the plugin starts, or the session `claude
+mcp serve` or `claude -p` starts. Nothing links it to the session that handed
+it over. The gateway's access log names the client in its user agent: the
+plugin's Codex sends `Claude Code/<Codex version> (...) (Claude Code; <plugin
+version>)`, the MCP server `claude-cli/<version> (external, mcp)`, and the
+skill's `claude -p` `claude-cli/<version> (external, sdk-cli)`.
+
+**What delegation is not.** Caller mode forwards only the login that came with
+each request, and never connects or refreshes a second account. Using another
+provider's model inside one session needs that provider's API key on the
+gateway, and Anthropic does not support routing Claude Code to non-Claude
+models through a gateway. Delegation keeps each login inside its own official
+client.
+
 ### Router settings for Claude Code
 
 ```yaml
@@ -369,10 +606,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: x-claude-code-session-id
-            agent: x-claude-code-agent-id
 ```
 
 Claude Code's tool search marks tools for loading on demand. Without
@@ -381,6 +614,16 @@ Claude Code goes on without tool search. Toward an `openai` backend, also list
 `tool_result.is_error`, `messages[].role` and `content.file`, as
 [protocol compatibility](protocol-compatibility#validation-and-failure-behavior)
 describes. An `anthropic` backend receives those as sent.
+
+Protection reads the session and subagent ids Claude Code sends,
+`x-claude-code-session-id` and `x-claude-code-agent-id`, with no identity
+headers configured, so each session and each subagent keeps its own model.
+Insights then names each subagent in a session's routing history.
+
+For every harness, `connect` leaves protection out of what it asks for only
+when the entrypoint reaches exactly one model, which leaves no model to keep.
+An entrypoint whose recipe the configuration does not write out reaches no
+model it can name, and is still asked for protection.
 
 ### Claude Code on its own Claude login
 
@@ -411,8 +654,12 @@ only on that login.
 
 The Router then routes each call among Claude models on that login, and
 Insights shows the session's calls with the model each decision picked. A
-model's `pricing` is the API's list price, not the plan's, so leave it out or
-read the cost as an API-price estimate. The login stays its owner's: serve this
+cost is the tokens at the API's list price, not what the plan charges. A model
+without `pricing` takes its list price from the built-in catalog, through its
+`catalog` card or through the `provider_model_id` its `anthropic` backend calls,
+such as `claude-sonnet-5-5` or `claude-haiku-5-5`
+([list prices](catalog-backed-models#list-prices)). A model the catalog does
+not price has no cost. The login stays its owner's: serve this
 to your own Claude Code, or to your organization's members, never to other
 people as a service
 ([Security Hardening](security-hardening#send-the-clients-own-login-to-its-provider)).
@@ -437,10 +684,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: session-id
-            agent: thread-id
   services:
     response_api:
       enabled: true
@@ -454,6 +697,10 @@ ends in a `lossy_translation` error where the thinking block closes, and Codex
 reconnects until it gives up. The Responses endpoint needs the Router's
 Responses service and store. See [Codex CLI](protocol-compatibility#codex-cli)
 for the other fields Codex sends.
+
+Protection reads the `session-id` and `thread-id` Codex sends with no identity
+headers configured, so the root thread and each subagent or review child keep
+their own models, and Replay files their calls under the Codex session.
 
 ### Codex on its own ChatGPT login
 
@@ -476,11 +723,17 @@ Keep `web_search = "disabled"` in the profile: the Router takes function tools
 only. `vllm-sr connect codex --config <your config>` writes this profile for
 such a configuration, with `requires_openai_auth` and without a key variable,
 and does not probe the gateway, which answers only on Codex's own login. Each
-`connect` command stops before writing anything for a gateway whose caller
-backends name the other provider: the Router takes an `anthropic` login only on
-Messages and an `openai` one only on Responses or Chat, so every call would be
-refused. The plan's usage limits apply to each call, and the login stays its
-owner's, as for Claude Code above.
+`connect` command stops before writing anything when the caller backends of the
+models its `--model` entrypoint reaches name the other provider: the Router takes
+an `anthropic` login only on Messages and an `openai` one only on Responses or
+Chat, so every call would be refused. For Codex this covers the entrypoint's
+`memory_model` and, when the catalog sends reviews there, its `review_model`,
+and the message names the one that failed; a caller backend of Codex's own
+provider on either has Codex send its login too. A caller backend only another
+entrypoint reaches does not stop it. The plan's usage limits apply to each
+call, and a cost and the login
+work as for Claude Code above, with `gpt-6.1-sol` on an `openai` backend for
+example.
 
 ### Approve for me reviews
 
@@ -553,10 +806,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: session-id
-            agent: thread-id
   services:
     response_api:
       enabled: true
@@ -657,10 +906,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: session-id
-            agent: thread-id
   services:
     response_api:
       enabled: true
@@ -683,17 +928,10 @@ another entrypoint in the same API namespace with neither a `review_model` nor
 a `memory_model` of its own. One entrypoint can take both reviews and
 memories. Re-run connect after changing the memory binding.
 
-To see the reviews, turn Router Replay on for the recipe that answers them,
-the `review` recipe above or the main one when reviews use the session model.
-A global plugin covers every recipe:
-
-```yaml
-global:
-  plugins:
-    - type: router_replay
-      configuration:
-        enabled: true
-```
+Router Replay records the reviews by default, under the recipe that answers
+them: the `review` recipe above, or the main one when reviews use the session
+model. A `router_replay` plugin with `enabled: false` on that recipe leaves
+them out.
 
 Each review's record holds the planned action, the verdict with its risk and
 rationale, the reviewed session, the review model, latency, tokens and cost.
@@ -814,10 +1052,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: session-id
-            agent: thread-id
   services:
     response_api:
       enabled: true
@@ -949,14 +1183,16 @@ Router records the call's `thread_id`, `turn_id` and `parent_turn_id` from it.
 An approval review and a subagent name the turn that started them as their
 parent turn, so `GET /api/v1/observability/replays?turn_id=<id>` returns the
 turn's calls, reviews and subagent calls, and the plugin asks for the turn id
-its `Stop` hook receives. The line does not use the session: Codex sends its
-session in `session-id`, which the Router reads only when
-`global.router.headers.session_id_headers` or protection's `identity.headers`
-name it, so by default a Codex call is filed under a session the Router derives.
+its `Stop` hook receives. The line does not use the session. Replay files a
+Codex call under the `session-id` Codex sends when protection reads it, as it
+does by default under `scope: session`
+([Session identification](../api/session-identification#choose-the-identity-you-need)),
+and under a session the Router derives otherwise.
 
-- **Router Replay** must be on for the recipes that serve the turn and its
-  reviews. A principal without `replay.detail` permission still sees the
-  models, decisions and verdicts.
+- **Router Replay** records the turn and its reviews by default; a recipe
+  whose `router_replay` plugin sets `enabled: false` leaves them out. A
+  principal without `replay.detail` permission still sees the models,
+  decisions and verdicts.
 - **The management API** must be reachable at `managementUrl`. With bearer
   auth, set `VSR_MANAGEMENT_TOKEN` to a token with `replay.read`.
 - **No answer within 1.5 seconds**, or no record of the turn, ends the turn
@@ -1071,10 +1307,22 @@ The command writes these. Claude Code reads them from its settings:
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "vllm-sr/auto",
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
+    "CLAUDE_CODE_GATEWAY_HINT_HEADERS": "1"
   }
 }
 ```
+
+`CLAUDE_CODE_MAX_OUTPUT_TOKENS` is 32000, or the smallest `max_output_tokens`
+of the models the entrypoint reaches when that is lower, since a model refuses
+a request for more. `CLAUDE_CODE_GATEWAY_HINT_HEADERS` has Claude Code send
+each request's class and each subagent's type, which Claude Code leaves out for
+a custom base URL otherwise; the
+[agent signal](../tutorials/signal/heuristic/agent) routes on them, and Insights
+names a session's run with the title Claude Code shows for it
+([Session names](../tutorials/plugin/router-replay#session-names)). Codex sends
+no thread name the gateway can tie to its run, so Insights shows a Codex run by
+its first prompt.
 
 Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
 `codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider
@@ -1148,9 +1396,10 @@ above, or with `/model`, where Ctrl+S saves it for new sessions.
   once its provider has a key. A key Pi stored for `vllm-sr` in `auth.json`
   wins over `apiKey`, so the command refuses to connect while one is there.
 - The model gets the context window the command works out as `contextWindow`
-  (Pi assumes 128,000 tokens without one), and `maxTokens: 32000`, the output
-  limit the command gives Claude Code. Pi lowers it for a request that leaves
-  less room in the window.
+  (Pi assumes 128,000 tokens without one), and as `maxTokens` the output limit
+  the command gives Claude Code: 32000, or the smallest `max_output_tokens` of
+  the models the entrypoint reaches when that is lower. Pi lowers it for a
+  request that leaves less room in the window.
 - `compat.sendSessionAffinityHeaders` with `sessionAffinityFormat: "openrouter"`
   has Pi send its session ID as `x-session-id`, which session protection reads.
 
@@ -1161,12 +1410,69 @@ its `bash` tool, no session file, and no extensions, skills or instruction
 files. Pi has no allowlist for a single command, so it runs whatever the model
 asks for, in the check's empty temporary directory. With `--dry-run` the check
 gives Pi an agent directory of its own that holds only the `models.json` the
-command would write, so it runs without your Pi login and settings.
+command would write, so it runs without your Pi login and settings, except
+on [Pi's own login](#pi-on-its-own-claude-or-chatgpt-login).
 
 There is no `--launch` for Pi: it reads providers only from `models.json`, so
 it cannot reach a gateway for one session without one being written. There is
 no vSR plugin for Pi. A gateway that presents each caller's own login upstream
-is refused, since Pi sends only the key `models.json` gives it.
+gets Pi's own login, as the next section describes.
+
+### Pi on its own Claude or ChatGPT login
+
+Pi signed in with `/login` (or `pi auth login anthropic`, `pi auth login
+openai-codex`) keeps that login on a gateway whose caller backends name its
+provider, as [Claude Code](#claude-code-on-its-own-claude-login) and
+[Codex](#codex-on-its-own-chatgpt-login) do. `vllm-sr connect pi --config
+<your config>` then gives the provider Pi's own command for that login as its
+key:
+
+```json
+{
+  "providers": {
+    "vllm-sr": {
+      "name": "vLLM Semantic Router",
+      "baseUrl": "http://localhost:8899",
+      "api": "anthropic-messages",
+      "apiKey": "!pi auth print-bearer-token --provider anthropic",
+      "compat": { "supportsEagerToolInputStreaming": false },
+      "models": [
+        { "id": "vllm-sr/auto", "maxTokens": 32000, "contextWindow": 200000 }
+      ]
+    }
+  }
+}
+```
+
+- Before each request Pi runs `pi auth print-bearer-token`, the command Pi
+  offers external clients: it prints the OAuth login Pi stored in `auth.json`,
+  and refreshes it first when it expires within 30 minutes. The login stays in
+  Pi's store and its refresh stays Pi's. `connect` reads only which kind of
+  credential each provider holds there; it never runs the command, so it never
+  holds or shows the login.
+- A login goes only to the provider that issued it. A gateway whose caller
+  backends name `anthropic` gets Pi's `anthropic` login, and one that names
+  `openai` its `openai-codex` login (ChatGPT for Codex), or else its `openai`
+  login (Sign in with ChatGPT). The command stops before writing anything when
+  Pi holds no OAuth login of that provider, a login of the other provider or a
+  stored API key included. A gateway key in `$VLLM_SR_API_KEY` is not used.
+- The Router takes an Anthropic login only on Messages, so on one Pi talks to
+  the gateway over Messages (`api: anthropic-messages`, the listener without
+  `/v1` as `baseUrl`), with the login, Claude's OAuth beta and Claude Code's
+  identity as Pi sends them to Anthropic. The Router refuses Pi's default
+  `tools[].eager_input_streaming` there, so the provider turns it off and Pi
+  asks for fine-grained tool streaming with its beta header instead. Pi sends
+  no session header on this login, so session protection cannot hold its
+  model for a session, and Messages keeps thinking signatures: the Router
+  settings below do not apply.
+- On an `openai` login Pi stays on Chat Completions. It sends the ChatGPT login
+  without the `chatgpt-account-id` header Codex sends beside it.
+
+The gateway is not probed, since it answers only on Pi's login. `--check` runs
+Pi on that login. With `--dry-run` the provider in the check's own agent
+directory runs the command with `PI_CODING_AGENT_DIR` set to yours, so it reads
+your login there. `vllm-sr connect status` shows `Pi's own login (anthropic)`
+and sends nothing, and `--undo` takes the provider back as for a key.
 
 ### Router settings for Pi
 
@@ -1180,9 +1486,6 @@ global:
       protection:
         enabled: true
         scope: session
-        identity:
-          headers:
-            session: x-session-id
 ```
 
 Pi names no subagent, and it sends its own output limit
@@ -1243,6 +1546,8 @@ scoring. This does not configure the harness's own context management. Follow
 [Virtual Models: limits for agent clients](../tutorials/global/entrypoints-and-recipes#limits-for-agent-clients)
 for the example and exact eligibility behavior.
 
+### Keep long and failed calls in the turn
+
 A listener's `timeout` (300 seconds by default) bounds a whole call, the
 streamed response included, and arriving output does not extend it. A call
 that reaches the limit is cut off: the stream is reset and the rest of the
@@ -1256,6 +1561,44 @@ In live Terminal-Bench 2.1 runs of Claude Code 2.1.304 at `xhigh` effort on
 Qwen3.8-27B-FP8 (vLLM 0.32, one MI300X), 2.5% to 4% of calls took more than
 300 seconds, and the longest about 17 minutes.
 :::
+
+In standalone mode and behind the Envoy the CLI renders, a backend that
+refuses a connection does not fail the call: the Router retries an attempt
+the backend never received twice, and never resends one it did. An Envoy
+configured elsewhere retries only as its routes say (see
+[model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health)).
+A model that answers with an error, or keeps refusing, fails the call unless
+its decision falls back to its next model. Fallback is off by default, because
+the next model answers without the first one's prompt cache, and its default
+timeouts (30 seconds in all, 10 for each model) end an agent's slower answer;
+see [Fall back to another model](model-configuration#fall-back-to-another-model).
+
+`vllm-sr connect` reports both for the entrypoint it connects: each model, or
+decision override, whose whole call the Router bounds, with the
+`total_timeout: 0s` to add; each decision whose fallback is off or too short
+for an agent call, with the block to add where it is set (the decision's own
+`fallback`, its recipe's, or `global.router.fallback`); and each decision that
+names one model:
+
+```text
+- fallback on decision all, so a model call that fails moves to the decision's next model ... with 1200s for it: ...
+  global:
+    router:
+      fallback:
+        enabled: true
+        total_timeout: 1200s
+        per_attempt_timeout: 1200s
+- total_timeout: 0s on qwen-msg (300s, the listener's timeout): the Router cuts a call off ...
+  providers:
+    models:
+      - name: qwen-msg
+        reliability:
+          total_timeout: 0s
+```
+
+Behind Envoy a fallback answer also ends at the listener's `timeout` (300
+seconds by default), since the Router holds the response while the fallback
+call runs; raise it there for agents that fall back on long calls.
 
 ## Preserve tool and conversation continuity
 
@@ -1303,9 +1646,10 @@ retains tool permissions, task state, and the outer loop; recipes do not configu
 delegated agents.
 
 Claude Code sends `x-claude-code-session-id` instead of `x-session-id`, and
-Codex CLI sends `session-id` and `thread-id`. See
+Codex CLI sends `session-id` and `thread-id`. Protection reads both without
+identity headers configured; see
 [Agents that delegate to subagents](../tutorials/learning/protection#agents-that-delegate-to-subagents)
-for the identity headers that hold their runs and their subagents.
+for how they hold a run and its subagents.
 
 ### Agents that send tool output as messages
 
@@ -1348,7 +1692,12 @@ backend thinks and at what effort; the harness's own request does not:
 | `use_reasoning: true` | The decision's `reasoning_effort`, or the family default when none is set |
 
 This holds whatever effort the harness asks for. Claude Code, for example,
-asks for adaptive thinking with its effort setting on every call. Set
+asks for adaptive thinking with its effort setting on every call. When the
+decision turns reasoning off for a Messages backend, the Router also drops the
+thinking display the harness asked for, since no thinking comes back. For a
+Chat or Responses backend the display stays: `omitted` keeps the backend's
+reasoning out of the harness's answer, and `summarized` or `updates` return it
+as thinking (see [Protocol Compatibility](./protocol-compatibility#anthropic-messages-clients-on-other-backends)). Set
 `use_reasoning: true` and the effort you want on the decisions behind an agent
 entrypoint. See [Model Reasoning](./model-reasoning#select-reasoning-in-a-decision).
 
@@ -1386,3 +1735,28 @@ entrypoints. The receiving model must serve with prefix caching disabled, and
 the [connector](https://github.com/vllm-project/semantic-router/tree/main/src/kv_connector)
 rejects scaled RoPE, so neither model can serve a context extended past its
 native length.
+
+## Troubleshooting
+
+Each row starts from what the harness shows. `vllm-sr connect status` sends one
+short request with the key the harness would send, and the Router log has a
+line for each request it refused. The messages are those of Claude Code
+2.1.325, Codex CLI 0.166.0, Pi 1.5.2 and the VS Code extension in VS Code 1.146.
+
+| Symptom | Check | Fix |
+| --- | --- | --- |
+| The gateway refuses the key. `claude -p` prints nothing for about three minutes while it retries, then `Failed to authenticate. API Error: 401 Unauthorized: missing or invalid API key`. Codex: `unexpected status 401 Unauthorized`. Pi: `401: {"message":"Unauthorized: missing or invalid API key"`. VS Code: `The gateway answered 401: Unauthorized: missing or invalid API key.` | `vllm-sr connect status` says `the gateway did not accept the key`. `claude -p --output-format stream-json --verbose` shows each retry as an `api_retry` event with `"error_status":401`. The Router logs an `access` line with `"response_code":401`. | The key is wrong, or the listener's `api_keys` changed. Claude Code keeps the key in its settings: export the current key as `VLLM_SR_API_KEY` and run `vllm-sr connect claude-code` again. Codex and Pi read the variable when they start, so export it in the shell that starts them. In VS Code, run **vLLM Semantic Router: Set Gateway API Key**. |
+| Codex says `` Missing environment variable: `VLLM_SR_API_KEY`. `` Pi says `No API key found for vllm-sr.` | `vllm-sr connect status` says `not probed: $VLLM_SR_API_KEY is not set`. | Export the listener's key as `VLLM_SR_API_KEY` before you start the harness, or connect again with `--key-command` ([Fetch the key with a command](#fetch-the-key-with-a-command)). |
+| The gateway does not answer at that address. `claude -p` retries for about three minutes, then `API Error: Connection refused`. Codex keeps printing `Reconnecting... waiting for network`. Pi: `Connection error.: connect ECONNREFUSED`. VS Code: `The gateway at <address> refused the connection`. | `vllm-sr connect status` says `no connection (Connection refused). Is the gateway running there?` after the URL it tried. | Start the Router, or run connect again with the `--config` the Router serves or with `--base-url`. In VS Code, set `vllm-sr.gatewayUrl`. |
+| A `--key-command` fails or prints nothing. `vllm-sr connect` stops with `--key-command exited with status 1`, `--key-command printed no key` or `--key-command did not finish in 5 s`, and writes nothing. When it stops working after connect: Claude Code says `apiKeyHelper failed: did not return a value`, then `Your apiKeyHelper script is failing`. Codex: ``provider auth command `/bin/sh` produced an empty token``. Pi: `API key auth failed for provider vllm-sr`. | `vllm-sr connect status` runs the command as the harness does and says `--key-command printed no key` or `--key-command exited with status 1`. Run the command in a shell to see its error. | Make the command print the key, for example by unlocking the password store, and start a new session. The settings keep the command, so connect does not need to run again. |
+| The harness asks for a model the gateway does not serve. Claude Code: `API Error: 400 the requested model is not available`. Codex: `the requested model is not available`, after a warning that it found no model metadata. Pi: `400: {"type":"invalid_request_error","code":"model_not_found"`. | `GET /v1/models` lists what the gateway serves. The Router logs `specified_model_not_found` with the `model` the harness sent. `codex exec` names it on its `model:` line. | Ask for an entrypoint such as `vllm-sr/auto`, or add the ID to an entrypoint's `model_names` ([Model names the harness picks itself](#model-names-the-harness-picks-itself)). When a project's settings name the model, see the next two rows. |
+| Claude Code started in one directory asks for another model. | `vllm-sr connect status` run in that directory shows `overridden here` with the file and keys, such as `.claude/settings.json sets ANTHROPIC_MODEL`, and `vllm-sr connect claude-code` there warns that `Claude Code started in this directory takes those over` the user settings. | Remove those keys from the project's settings, connect there with `--scope project`, or start with `--launch` ([Try it without writing anything](#try-it-without-writing-anything)). |
+| Codex in a trusted project asks for another model: its `model:` line names it, and the gateway answers `the requested model is not available`. | Run `vllm-sr connect codex` in that directory. It warns that `.codex/config.toml sets model, which Codex asks for instead of vllm-sr/auto once it trusts this project`. | Remove `model` from the project's `.codex/config.toml`, or start with `--launch`. |
+| Pi answers `401` although `VLLM_SR_API_KEY` holds the right key. | `vllm-sr connect status` says `Pi holds a key of its own for vllm-sr in auth.json, which it sends in place of the one models.json names`. | Remove the `vllm-sr` entry from Pi's `auth.json`. |
+| The request is larger than the context window. Claude Code: `Prompt is too long`. Codex: `This model's maximum context length is`, in an error with code `context_length_exceeded`. VS Code: `The gateway answered 400: This model's maximum context length is`. `pi -p` prints nothing and exits with status 0, and `pi --mode json` shows the error in `errorMessage`. | When the Router refuses it on its own count, it logs `context_window_exceeded` with the window and the count. `vllm-sr connect status` shows the `context window` the harness was given. | Give the harness the smallest window of the models the entrypoint reaches: run connect again after those models change, or pass `--context-window`. In VS Code, set `vllm-sr.maxInputTokens` ([Set budgets](#set-budgets-before-running-a-task)). |
+| `vllm-sr connect codex --check` shows `not observed` on its `Approval review` line. | The Router logs a `routing_decision` line with `"original_model":"vllm-sr/review"` for a review that reached it. If `GET /api/v1/observability/replays?model=vllm-sr/review` on the management API then lists nothing, replay is off for the review recipe. Without that log line, the model ran the command without asking for approval. | Remove `enabled: false` from the `router_replay` plugin of the review recipe to record reviews. A model that runs the command without asking does not fail the check. |
+| Approve for me reviews go to the session model after you set a `review_model`. | `vllm-sr connect status` shows `the session model` as the review model. | Run connect again after you set or change `review_model` ([Approve for me reviews](#approve-for-me-reviews)). |
+| Insights shows no requests, although the harness gets answers. | `GET /api/v1/observability/replays` on the management API answers 404 with `router replay is disabled or unavailable`. | Replay is on by default. Remove `enabled: false` from the `router_replay` plugin in `global.plugins`, or set it to `true`, and restart the Router. |
+| Insights lost the requests from before the Router restarted. | The list answers `"count":0` right after a restart, and either `global.services.router_replay.store_backend` is `memory` or the Router logged at startup that its records `stay in memory`. | Remove `store_backend: memory` so the default `file` store keeps them, make the configuration's directory writable, or configure Postgres or Redis ([Keep records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts)). |
+| `vllm-sr connect` stops before writing anything, with `so every call would be refused`, for a gateway that presents each client's own login. | The configuration's `auth: {credential: caller}` backends name `openai` while Claude Code sends an `anthropic` login, or the reverse for Codex. For Pi the message names the provider it has no login for, such as `Pi holds no anthropic login`. | Point Claude Code at a gateway whose caller backends name `anthropic`, and Codex at one whose caller backends name `openai`. Sign Pi in with `pi auth login anthropic` or `pi auth login openai-codex`, and run connect again. |
+| `claude -p` prints `[claude-code:unrecognized_model] {"model":"vllm-sr/auto","query_source":"sdk"}` before the answer. | The answer follows. | Nothing to fix: Claude Code does not know the entrypoint's name. |

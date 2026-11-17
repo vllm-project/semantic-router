@@ -228,6 +228,7 @@ func buildResponseHeaderMutation(ctx *RequestContext) *ext_proc.HeaderMutation {
 	builder.addKeystone(ctx)
 	builder.addConfigVersion(ctx)
 	builder.addPublicRoutingHeaders(ctx)
+	builder.addBudget(ctx)
 	builder.addWarnings(ctx)
 	builder.addTrace(ctx)
 	return builder.mutation()

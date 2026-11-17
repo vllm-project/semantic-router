@@ -222,7 +222,9 @@ func cutScanWindows(text string, size, most, overlap int) ([]scanWindow, int) {
 // turn last.
 func scanSource(state modelservice.Request, size int) (string, int, func(string) modelservice.Request) {
 	if state.Parts == nil {
-		return state.State, size, func(window string) modelservice.Request { return modelservice.Request{State: window} }
+		return state.State, size, func(window string) modelservice.Request {
+			return modelservice.Request{State: window, Images: state.Images, Videos: state.Videos}
+		}
 	}
 	if answer, ok := state.Parts["answer"]; ok {
 		others := modelservice.Request{Parts: map[string]string{}}
@@ -237,7 +239,7 @@ func scanSource(state modelservice.Request, size int) (string, int, func(string)
 			for name, text := range others.Parts {
 				parts[name] = text
 			}
-			return modelservice.Request{Parts: parts}
+			return modelservice.Request{Parts: parts, Images: state.Images, Videos: state.Videos}
 		}
 	}
 	names := make([]string, 0, len(state.Parts))
@@ -257,7 +259,9 @@ func scanSource(state modelservice.Request, size int) (string, int, func(string)
 	for index, name := range names {
 		texts[index] = state.Parts[name]
 	}
-	return strings.Join(texts, "\n\n"), size, func(window string) modelservice.Request { return modelservice.Request{State: window} }
+	return strings.Join(texts, "\n\n"), size, func(window string) modelservice.Request {
+		return modelservice.Request{State: window, Images: state.Images, Videos: state.Videos}
+	}
 }
 
 // scanWindowsOf cuts text into windows of at most size bytes, each starting

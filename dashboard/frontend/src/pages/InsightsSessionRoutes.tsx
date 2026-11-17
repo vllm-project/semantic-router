@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { formatSeconds } from '../utils/dateTime'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { buildConversationLabels } from './insightsConversationIdentity'
+import { ModelName } from './insightsModelLabelSupport'
 import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import {
@@ -183,7 +184,7 @@ function Summary({
         <dd>
           {[...models].map(([model, count]) => (
             <span key={model} className={styles.historyChip}>
-              {model}
+              <ModelName name={model} compact />
               <b>×{count}</b>
             </span>
           ))}
@@ -252,11 +253,15 @@ function ModelCell({ route }: { route: InsightsTrajectoryRoute }) {
       ) : null}
       {switched ? (
         <>
-          <span className={styles.historyPrevious}>{route.previous_model}</span>
+          <span className={styles.historyPrevious}>
+            <ModelName name={route.previous_model} compact />
+          </span>
           <span aria-hidden="true">→</span>
         </>
       ) : null}
-      <strong>{route.selected_model || 'No backend selected'}</strong>
+      <strong>
+        <ModelName name={route.selected_model} fallback="No backend selected" compact />
+      </strong>
     </span>
   )
 }
@@ -434,7 +439,8 @@ export default function InsightsSessionRoutes({
       <div className={styles.recordSectionHeader}>
         <h2>Session routing history</h2>
         <span>
-          {trajectory?.recipe || 'Default recipe'} · {routes.length} requests
+          {trajectory?.recipe || 'Default recipe'} · {routes.length} request
+          {routes.length === 1 ? '' : 's'}
         </span>
       </div>
       <Summary

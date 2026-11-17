@@ -22,6 +22,7 @@ import {
   loadEvaluationPage,
   loadInsightsPage,
   loadInsightsRecordPage,
+  loadInsightsRunPage,
   loadLogsPage,
   loadModelHubPage,
   loadMonitoringPage,
@@ -63,6 +64,7 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   'insights-record': (
     <RecoverableLazyRoute loader={loadInsightsRecordPage} routeLabel="Insight record" />
   ),
+  'insights-run': <RecoverableLazyRoute loader={loadInsightsRunPage} routeLabel="Agent run" />,
   logs: <RecoverableLazyRoute loader={loadLogsPage} routeLabel="Logs" />,
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   models: <RecoverableLazyRoute loader={loadModelHubPage} routeLabel="Model Hub" />,

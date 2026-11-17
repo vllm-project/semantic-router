@@ -1,0 +1,18 @@
+recipes:
+  - name: default
+    signals:
+      agent:
+        - name: explore
+          description: A Claude Code Explore subagent or a Codex spawn_agent child.
+          role: subagent
+          types: [Explore, collab_spawn]
+        - name: reviewer
+          description: A Codex review child.
+          harness: codex
+          types: [review]
+        - name: any_subagent
+          description: Any subagent of a supported harness.
+          role: subagent
+        - name: housekeeping
+          description: Claude Code compactions and side requests such as session titles.
+          request_classes: [compaction, auxiliary]

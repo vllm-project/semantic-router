@@ -787,6 +787,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -911,6 +934,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -1439,6 +1485,29 @@
                         },
                         "version": {
                           "type": "string"
+                        },
+                        "warnings": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "field": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "field",
+                              "message"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -1651,6 +1720,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -1775,6 +1867,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -2303,6 +2418,29 @@
                         },
                         "version": {
                           "type": "string"
+                        },
+                        "warnings": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "field": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "field",
+                              "message"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -4091,6 +4229,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -4215,6 +4376,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -4339,6 +4523,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -4867,6 +5074,29 @@
                         },
                         "version": {
                           "type": "string"
+                        },
+                        "warnings": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "field": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "field",
+                              "message"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -5104,6 +5334,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -5228,6 +5481,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -5712,6 +5988,29 @@
                         },
                         "version": {
                           "type": "string"
+                        },
+                        "warnings": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "field": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "field",
+                              "message"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -5906,6 +6205,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -6030,6 +6352,29 @@
                     },
                     "version": {
                       "type": "string"
+                    },
+                    "warnings": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "field": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "field",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -6558,6 +6903,29 @@
                         },
                         "version": {
                           "type": "string"
+                        },
+                        "warnings": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "field": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "field",
+                              "message"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -8330,6 +8698,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -9541,6 +9916,13 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "agent": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "authz": {
                           "nullable": true,
                           "type": "array",
@@ -19283,6 +19665,14 @@
             }
           },
           {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -19404,6 +19794,24 @@
                             "nullable": true,
                             "type": "number"
                           },
+                          "agent": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "harness": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "parent_id": {
+                                "type": "string"
+                              }
+                            }
+                          },
                           "baseline_cost": {
                             "nullable": true,
                             "type": "number"
@@ -19464,6 +19872,44 @@
                               },
                               "baseline_unavailable": {
                                 "type": "string"
+                              },
+                              "budget": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "charged": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "estimate": {
+                                    "type": "number"
+                                  },
+                                  "limit": {
+                                    "type": "number"
+                                  },
+                                  "remaining": {
+                                    "type": "number"
+                                  },
+                                  "scope": {
+                                    "type": "string"
+                                  },
+                                  "settlement": {
+                                    "type": "string"
+                                  },
+                                  "unpriced_calls": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "scope",
+                                  "currency",
+                                  "limit",
+                                  "remaining",
+                                  "estimate"
+                                ]
                               },
                               "caller_login": {
                                 "type": "boolean"
@@ -20478,6 +20924,9 @@
                               ]
                             }
                           },
+                          "parent_request_id": {
+                            "type": "string"
+                          },
                           "parent_turn_id": {
                             "type": "string"
                           },
@@ -20860,6 +21309,9 @@
                           },
                           "rag_similarity_score": {
                             "type": "number"
+                          },
+                          "reasoning_effort": {
+                            "type": "string"
                           },
                           "reasoning_mode": {
                             "type": "string"
@@ -21601,6 +22053,9 @@
                           "session_id": {
                             "type": "string"
                           },
+                          "session_name": {
+                            "type": "string"
+                          },
                           "session_policy": {
                             "nullable": true,
                             "type": "object",
@@ -21630,6 +22085,13 @@
                           "signals": {
                             "type": "object",
                             "properties": {
+                              "agent": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "authz": {
                                 "nullable": true,
                                 "type": "array",
@@ -22215,6 +22677,14 @@
             }
           },
           {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -22741,6 +23211,12 @@
                               "currency": {
                                 "type": "string"
                               },
+                              "gross_saved": {
+                                "type": "number"
+                              },
+                              "netted_router_call_spend": {
+                                "type": "number"
+                              },
                               "router_call_spend": {
                                 "type": "number"
                               },
@@ -22754,6 +23230,8 @@
                             "required": [
                               "currency",
                               "total_saved",
+                              "gross_saved",
+                              "netted_router_call_spend",
                               "baseline_spend",
                               "actual_spend",
                               "router_call_spend",
@@ -22790,6 +23268,20 @@
                             },
                             "looper_hop_records": {
                               "type": "integer"
+                            },
+                            "net_unavailable": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "netted_router_calls": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
                             },
                             "partly_priced_records": {
                               "type": "integer"
@@ -22831,6 +23323,12 @@
                         "excluded_record_count": {
                           "type": "integer"
                         },
+                        "gross_saved": {
+                          "type": "number"
+                        },
+                        "netted_router_call_spend": {
+                          "type": "number"
+                        },
                         "router_call_spend": {
                           "type": "number"
                         },
@@ -22843,6 +23341,8 @@
                       },
                       "required": [
                         "total_saved",
+                        "gross_saved",
+                        "netted_router_call_spend",
                         "baseline_spend",
                         "actual_spend",
                         "router_call_spend",
@@ -23257,6 +23757,14 @@
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
             "schema": {
               "type": "string"
             }
@@ -23868,6 +24376,14 @@
             }
           },
           {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "cache_status",
             "in": "query",
             "description": "Filter by response-cache outcome.",
@@ -24334,6 +24850,1793 @@
           }
         },
         "x-vllm-sr-permission": "replay.detail",
+        "x-vllm-sr-sensitivity": "replay",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-plugin-operations": [
+          {
+            "plugin": "router_replay",
+            "mode": "read"
+          }
+        ],
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
+    "/api/v1/observability/replays/models": {
+      "get": {
+        "summary": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
+        "description": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
+        "operationId": "get_api_v1_observability_replays_models",
+        "tags": [
+          "observability"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful replay response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "label"
+                        ]
+                      }
+                    },
+                    "object": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "object",
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-plugin-operations": [
+          {
+            "plugin": "router_replay",
+            "mode": "read"
+          }
+        ],
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
+    "/api/v1/observability/replays/run": {
+      "get": {
+        "summary": "Read one agent run as a tree: its agents and their calls in time order, with each call's route, cost and outcome",
+        "description": "Read one agent run as a tree: its agents and their calls in time order, with each call's route, cost and outcome",
+        "operationId": "get_api_v1_observability_replays_run",
+        "tags": [
+          "observability"
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Session whose agent run should be returned, across recipes.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful replay response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "calls": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "completion_tokens": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "cost": {
+                            "nullable": true,
+                            "type": "number"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "decision": {
+                            "type": "string"
+                          },
+                          "duration_ms": {
+                            "type": "integer"
+                          },
+                          "effort": {
+                            "type": "string"
+                          },
+                          "entrypoint": {
+                            "type": "string"
+                          },
+                          "final_answer": {
+                            "type": "boolean"
+                          },
+                          "hops": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "lifecycle_state": {
+                            "type": "string"
+                          },
+                          "looper_attempts": {
+                            "type": "integer"
+                          },
+                          "markers": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "outcomes": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "idempotency_key": {
+                                  "type": "string"
+                                },
+                                "metadata": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "string"
+                                  }
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "score": {
+                                  "type": "number"
+                                },
+                                "source": {
+                                  "type": "string"
+                                },
+                                "target": {
+                                  "type": "string"
+                                },
+                                "target_ref": {
+                                  "type": "string"
+                                },
+                                "timestamp": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "verdict": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "source",
+                                "target",
+                                "verdict"
+                              ]
+                            }
+                          },
+                          "previous_model": {
+                            "type": "string"
+                          },
+                          "prompt_tokens": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "recipe": {
+                            "type": "string"
+                          },
+                          "record_id": {
+                            "type": "string"
+                          },
+                          "request_id": {
+                            "type": "string"
+                          },
+                          "request_kind": {
+                            "type": "string"
+                          },
+                          "response_status": {
+                            "type": "integer"
+                          },
+                          "router_calls": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "calls": {
+                                  "type": "integer"
+                                },
+                                "completion_tokens": {
+                                  "type": "integer"
+                                },
+                                "cost": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "model": {
+                                  "type": "string"
+                                },
+                                "prompt_tokens": {
+                                  "type": "integer"
+                                },
+                                "unpriced_calls": {
+                                  "type": "integer"
+                                },
+                                "unpriced_reasons": {
+                                  "nullable": true,
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "calls"
+                              ]
+                            }
+                          },
+                          "selection_method": {
+                            "type": "string"
+                          },
+                          "session_action": {
+                            "type": "string"
+                          },
+                          "signals": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "terminal_reason": {
+                            "type": "string"
+                          },
+                          "timestamp": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "tool_failures": {
+                            "type": "integer"
+                          },
+                          "tool_results": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "record_id",
+                          "agent",
+                          "timestamp",
+                          "duration_ms",
+                          "lifecycle_state"
+                        ]
+                      }
+                    },
+                    "object": {
+                      "type": "string"
+                    },
+                    "run": {
+                      "type": "object",
+                      "properties": {
+                        "agents": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "calls": {
+                                "type": "integer"
+                              },
+                              "cost": {
+                                "type": "object",
+                                "properties": {
+                                  "by_currency": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "currency": {
+                                          "type": "string"
+                                        },
+                                        "router_call_spend": {
+                                          "type": "number"
+                                        },
+                                        "total": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "currency",
+                                        "total",
+                                        "router_call_spend"
+                                      ]
+                                    }
+                                  },
+                                  "completion_tokens": {
+                                    "type": "integer"
+                                  },
+                                  "prompt_tokens": {
+                                    "type": "integer"
+                                  },
+                                  "unpriced_records": {
+                                    "type": "integer"
+                                  },
+                                  "unpriced_router_calls": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "unpriced_records",
+                                  "unpriced_router_calls",
+                                  "prompt_tokens",
+                                  "completion_tokens"
+                                ]
+                              },
+                              "first_call_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "last_call_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "models": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "parent": {
+                                "type": "string"
+                              },
+                              "spawned_after_record_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "label",
+                              "calls",
+                              "first_call_at",
+                              "last_call_at",
+                              "cost"
+                            ]
+                          }
+                        },
+                        "calls": {
+                          "type": "integer"
+                        },
+                        "cost": {
+                          "type": "object",
+                          "properties": {
+                            "by_currency": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "router_call_spend": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "currency",
+                                  "total",
+                                  "router_call_spend"
+                                ]
+                              }
+                            },
+                            "completion_tokens": {
+                              "type": "integer"
+                            },
+                            "prompt_tokens": {
+                              "type": "integer"
+                            },
+                            "unpriced_records": {
+                              "type": "integer"
+                            },
+                            "unpriced_router_calls": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "unpriced_records",
+                            "unpriced_router_calls",
+                            "prompt_tokens",
+                            "completion_tokens"
+                          ]
+                        },
+                        "duration_ms": {
+                          "type": "integer"
+                        },
+                        "ended_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "events": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer"
+                          }
+                        },
+                        "harness": {
+                          "type": "string"
+                        },
+                        "models": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "value": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "value"
+                            ]
+                          }
+                        },
+                        "outcome": {
+                          "type": "object",
+                          "properties": {
+                            "final_answer_record_id": {
+                              "type": "string"
+                            },
+                            "reported": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "outcome": {
+                                    "type": "object",
+                                    "properties": {
+                                      "idempotency_key": {
+                                        "type": "string"
+                                      },
+                                      "metadata": {
+                                        "nullable": true,
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "score": {
+                                        "type": "number"
+                                      },
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "target": {
+                                        "type": "string"
+                                      },
+                                      "target_ref": {
+                                        "type": "string"
+                                      },
+                                      "timestamp": {
+                                        "type": "string",
+                                        "format": "date-time"
+                                      },
+                                      "verdict": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "source",
+                                      "target",
+                                      "verdict"
+                                    ]
+                                  },
+                                  "record_id": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "record_id",
+                                  "outcome"
+                                ]
+                              }
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "tool_failures": {
+                              "type": "integer"
+                            },
+                            "tool_results": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "tool_results",
+                            "tool_failures"
+                          ]
+                        },
+                        "prompt": {
+                          "type": "string"
+                        },
+                        "session_id": {
+                          "type": "string"
+                        },
+                        "session_name": {
+                          "type": "string"
+                        },
+                        "started_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "session_id",
+                        "started_at",
+                        "ended_at",
+                        "duration_ms",
+                        "calls",
+                        "agents",
+                        "models",
+                        "outcome",
+                        "cost"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "object",
+                    "run",
+                    "calls"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-plugin-operations": [
+          {
+            "plugin": "router_replay",
+            "mode": "read"
+          }
+        ],
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
+    "/api/v1/observability/replays/runs": {
+      "get": {
+        "summary": "List agent runs, one summary per session over the filtered records, latest activity first",
+        "description": "List agent runs, one summary per session over the filtered records, latest activity first",
+        "operationId": "get_api_v1_observability_replays_runs",
+        "tags": [
+          "observability"
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive text search across replay records.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Filter by recipe name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "Filter by decision name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by selected model.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "turn_id",
+            "in": "query",
+            "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache_status",
+            "in": "query",
+            "description": "Filter by response-cache outcome.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "cached",
+                "streamed"
+              ]
+            }
+          },
+          {
+            "name": "request_kind",
+            "in": "query",
+            "description": "Filter by request kind; codex_approval_review selects Codex approval reviews.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "codex_approval_review"
+              ]
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "description": "Filter approval reviews by status.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "completed",
+                "tool_call",
+                "invalid",
+                "failed",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "review_outcome",
+            "in": "query",
+            "description": "Filter completed approval reviews by verdict.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "allow",
+                "deny"
+              ]
+            }
+          },
+          {
+            "name": "review_risk",
+            "in": "query",
+            "description": "Filter completed approval reviews by reported risk.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum runs; defaults to 20 and is capped at 100.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Zero-based result offset.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful replay response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "data": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agents": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "calls": {
+                                  "type": "integer"
+                                },
+                                "cost": {
+                                  "type": "object",
+                                  "properties": {
+                                    "by_currency": {
+                                      "nullable": true,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "currency": {
+                                            "type": "string"
+                                          },
+                                          "router_call_spend": {
+                                            "type": "number"
+                                          },
+                                          "total": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "currency",
+                                          "total",
+                                          "router_call_spend"
+                                        ]
+                                      }
+                                    },
+                                    "completion_tokens": {
+                                      "type": "integer"
+                                    },
+                                    "prompt_tokens": {
+                                      "type": "integer"
+                                    },
+                                    "unpriced_records": {
+                                      "type": "integer"
+                                    },
+                                    "unpriced_router_calls": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "unpriced_records",
+                                    "unpriced_router_calls",
+                                    "prompt_tokens",
+                                    "completion_tokens"
+                                  ]
+                                },
+                                "first_call_at": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "last_call_at": {
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "models": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "parent": {
+                                  "type": "string"
+                                },
+                                "spawned_after_record_id": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "label",
+                                "calls",
+                                "first_call_at",
+                                "last_call_at",
+                                "cost"
+                              ]
+                            }
+                          },
+                          "calls": {
+                            "type": "integer"
+                          },
+                          "cost": {
+                            "type": "object",
+                            "properties": {
+                              "by_currency": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "router_call_spend": {
+                                      "type": "number"
+                                    },
+                                    "total": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "currency",
+                                    "total",
+                                    "router_call_spend"
+                                  ]
+                                }
+                              },
+                              "completion_tokens": {
+                                "type": "integer"
+                              },
+                              "prompt_tokens": {
+                                "type": "integer"
+                              },
+                              "unpriced_records": {
+                                "type": "integer"
+                              },
+                              "unpriced_router_calls": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "unpriced_records",
+                              "unpriced_router_calls",
+                              "prompt_tokens",
+                              "completion_tokens"
+                            ]
+                          },
+                          "duration_ms": {
+                            "type": "integer"
+                          },
+                          "ended_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "events": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "integer"
+                            }
+                          },
+                          "harness": {
+                            "type": "string"
+                          },
+                          "models": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "value"
+                              ]
+                            }
+                          },
+                          "outcome": {
+                            "type": "object",
+                            "properties": {
+                              "final_answer_record_id": {
+                                "type": "string"
+                              },
+                              "reported": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "outcome": {
+                                      "type": "object",
+                                      "properties": {
+                                        "idempotency_key": {
+                                          "type": "string"
+                                        },
+                                        "metadata": {
+                                          "nullable": true,
+                                          "type": "object",
+                                          "additionalProperties": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        },
+                                        "score": {
+                                          "type": "number"
+                                        },
+                                        "source": {
+                                          "type": "string"
+                                        },
+                                        "target": {
+                                          "type": "string"
+                                        },
+                                        "target_ref": {
+                                          "type": "string"
+                                        },
+                                        "timestamp": {
+                                          "type": "string",
+                                          "format": "date-time"
+                                        },
+                                        "verdict": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "source",
+                                        "target",
+                                        "verdict"
+                                      ]
+                                    },
+                                    "record_id": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "record_id",
+                                    "outcome"
+                                  ]
+                                }
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "tool_failures": {
+                                "type": "integer"
+                              },
+                              "tool_results": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "status",
+                              "tool_results",
+                              "tool_failures"
+                            ]
+                          },
+                          "prompt": {
+                            "type": "string"
+                          },
+                          "session_id": {
+                            "type": "string"
+                          },
+                          "session_name": {
+                            "type": "string"
+                          },
+                          "started_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "session_id",
+                          "started_at",
+                          "ended_at",
+                          "duration_ms",
+                          "calls",
+                          "agents",
+                          "models",
+                          "outcome",
+                          "cost"
+                        ]
+                      }
+                    },
+                    "has_more": {
+                      "type": "boolean"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "next_offset": {
+                      "nullable": true,
+                      "type": "integer"
+                    },
+                    "object": {
+                      "type": "string"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "object",
+                    "count",
+                    "total",
+                    "limit",
+                    "offset",
+                    "has_more",
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
         "x-vllm-sr-sensitivity": "replay",
         "x-vllm-sr-plane": "management",
         "x-vllm-sr-audiences": [
@@ -24844,6 +27147,24 @@
                       "nullable": true,
                       "type": "number"
                     },
+                    "agent": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "harness": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "parent_id": {
+                          "type": "string"
+                        }
+                      }
+                    },
                     "baseline_cost": {
                       "nullable": true,
                       "type": "number"
@@ -24904,6 +27225,44 @@
                         },
                         "baseline_unavailable": {
                           "type": "string"
+                        },
+                        "budget": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "charged": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "estimate": {
+                              "type": "number"
+                            },
+                            "limit": {
+                              "type": "number"
+                            },
+                            "remaining": {
+                              "type": "number"
+                            },
+                            "scope": {
+                              "type": "string"
+                            },
+                            "settlement": {
+                              "type": "string"
+                            },
+                            "unpriced_calls": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "scope",
+                            "currency",
+                            "limit",
+                            "remaining",
+                            "estimate"
+                          ]
                         },
                         "caller_login": {
                           "type": "boolean"
@@ -25918,6 +28277,9 @@
                         ]
                       }
                     },
+                    "parent_request_id": {
+                      "type": "string"
+                    },
                     "parent_turn_id": {
                       "type": "string"
                     },
@@ -26300,6 +28662,9 @@
                     },
                     "rag_similarity_score": {
                       "type": "number"
+                    },
+                    "reasoning_effort": {
+                      "type": "string"
                     },
                     "reasoning_mode": {
                       "type": "string"
@@ -27041,6 +29406,9 @@
                     "session_id": {
                       "type": "string"
                     },
+                    "session_name": {
+                      "type": "string"
+                    },
                     "session_policy": {
                       "nullable": true,
                       "type": "object",
@@ -27070,6 +29438,13 @@
                     "signals": {
                       "type": "object",
                       "properties": {
+                        "agent": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
                         "authz": {
                           "nullable": true,
                           "type": "array",
@@ -29677,6 +32052,9 @@
                     "nullable": true,
                     "type": "object",
                     "properties": {
+                      "block": {
+                        "type": "boolean"
+                      },
                       "enabled": {
                         "nullable": true,
                         "type": "boolean"
@@ -32922,6 +35300,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -33061,6 +35446,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -33193,6 +35585,13 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
                             "authz": {
                               "nullable": true,
                               "type": "array",
@@ -33412,6 +35811,29 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "agent": {
+                          "type": "object",
+                          "properties": {
+                            "confidence": {
+                              "nullable": true,
+                              "type": "number"
+                            },
+                            "confidence_available": {
+                              "nullable": true,
+                              "type": "boolean"
+                            },
+                            "execution_time_ms": {
+                              "type": "number"
+                            },
+                            "method": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "execution_time_ms",
+                            "confidence"
+                          ]
+                        },
                         "authz": {
                           "type": "object",
                           "properties": {
@@ -33821,6 +36243,7 @@
                         "conversation",
                         "metadata",
                         "input_modality",
+                        "agent",
                         "systemone"
                       ]
                     },
@@ -34492,6 +36915,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "agent": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -34631,6 +37061,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "agent": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -34763,6 +37200,13 @@
                               "nullable": true,
                               "type": "object",
                               "properties": {
+                                "agent": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "authz": {
                                   "nullable": true,
                                   "type": "array",
@@ -34982,6 +37426,29 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "agent": {
+                              "type": "object",
+                              "properties": {
+                                "confidence": {
+                                  "nullable": true,
+                                  "type": "number"
+                                },
+                                "confidence_available": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "execution_time_ms": {
+                                  "type": "number"
+                                },
+                                "method": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "execution_time_ms",
+                                "confidence"
+                              ]
+                            },
                             "authz": {
                               "type": "object",
                               "properties": {
@@ -35391,6 +37858,7 @@
                             "conversation",
                             "metadata",
                             "input_modality",
+                            "agent",
                             "systemone"
                           ]
                         },
@@ -49083,6 +51551,13 @@
                               },
                               "default_route": {
                                 "type": "boolean"
+                              },
+                              "delegates": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "recipe": {
                                 "type": "string"
