@@ -266,7 +266,9 @@ non-draft PR is ready for review. After the linked issue is accepted and its
 single `wg/*` owner is synchronized to the PR, Community Label Sync requests
 one Lead of that Working Group, rotating among the group's Leads by PR number.
 It skips the PR author and the repository-wide reviewers, and requests no one
-while a Lead of the group is already requested or has reviewed. Only
+while a Lead of the group is already requested or has reviewed. With each
+request it keeps one PR comment that names the requested Lead and up to two
+other Leads of the group; mention them in a reply to speed up the review. Only
 Leads who are Maintainers or Committers with write access are requested,
 because only their approvals count toward the two the merge queue needs. The
 rosters are maintained in `tools/ci/community_reviewers.py`; update them when

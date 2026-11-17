@@ -618,6 +618,9 @@ class FakePullRequestApi:
         self.review_removals: list[tuple[int, str]] = []
         self.review_attempts: list[tuple[int, str]] = []
         self.non_collaborators: set[str] = set()
+        self.comments: dict[int, list[dict]] = {}
+        self.comment_posts: list[tuple[int, str]] = []
+        self.comment_edits: list[tuple[int, str]] = []
 
     def request(
         self,
@@ -631,10 +634,25 @@ class FakePullRequestApi:
         self.requests.append((method, endpoint))
         if endpoint == "graphql":
             return self.graphql(payload)
-        if "?" in endpoint:
+        path, _, query = endpoint.partition("?")
+        parts = path.split("/")
+        if query and parts[3] == "issues" and parts[5:] == ["comments"]:
+            return self.comments.get(int(parts[4]), [])
+        if query:
             return self.listings.get(endpoint, [])
-        parts = endpoint.split("/")
+        if parts[3:5] == ["issues", "comments"]:
+            comment_id = int(parts[5])
+            for comment in (c for items in self.comments.values() for c in items):
+                if comment["id"] == comment_id:
+                    comment["body"] = payload["body"]
+            self.comment_edits.append((comment_id, payload["body"]))
+            return {"id": comment_id}
         number = int(parts[4])
+        if parts[3:6] == ["issues", str(number), "comments"] and method == "POST":
+            comment = {"id": 1000 + len(self.comment_posts), "body": payload["body"]}
+            self.comments.setdefault(number, []).append(comment)
+            self.comment_posts.append((number, payload["body"]))
+            return comment
         if parts[3] == "pulls":
             self.fetched.append(number)
             if parts[5:] == ["requested_reviewers"]:
@@ -945,12 +963,62 @@ class PullRequestReconciliationTests(unittest.TestCase):
 
         self.assertEqual(client.review_attempts, [(7, "invited"), (7, "lead")])
         self.assertEqual(client.review_posts, [(7, "lead")])
+        self.assertEqual(
+            client.comment_posts,
+            [
+                (
+                    7,
+                    community_lifecycle_github.workgroup_review_comment(
+                        "wg/mom-routing", "lead", []
+                    ),
+                )
+            ],
+        )
 
     def test_refused_group_does_not_stop_the_sync(self) -> None:
         client = self.refused_review(("lead", "invited"), {"lead", "invited"})
 
         self.assertEqual(client.review_attempts, [(7, "invited"), (7, "lead")])
         self.assertEqual(client.review_posts, [])
+        self.assertEqual(client.comment_posts, [])
+
+    def test_requested_lead_is_announced_once(self) -> None:
+        pull_request = self.pull_request(
+            state="open",
+            labels=[],
+            user={"type": "User", "login": "contributor"},
+        )
+        client = FakePullRequestApi([pull_request], [self.accepted_issue()])
+        rosters = {"wg/mom-routing": ("first", "second", "third", "fourth")}
+        with mock.patch.dict(community_reviewers.WORKGROUP_REVIEWERS, rosters):
+            community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+            community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        self.assertEqual(client.review_posts, [(7, "fourth")])
+        self.assertEqual(
+            client.comment_posts,
+            [
+                (
+                    7,
+                    "<!-- community-lifecycle:workgroup-review -->\n"
+                    "**Reviewer:** @fourth, MoM & Routing Lead\n\n"
+                    "To speed up the review, mention them in a reply. "
+                    "No response? Ask another Lead: `@first` or `@second`.",
+                )
+            ],
+        )
+
+    def test_review_comment_without_another_lead(self) -> None:
+        body = community_lifecycle_github.workgroup_review_comment(
+            "wg/enterprise-environment", "AayushSaini101", []
+        )
+
+        self.assertTrue(
+            body.endswith(
+                "**Reviewer:** @AayushSaini101, Enterprise & Environment Lead\n\n"
+                "To speed up the review, mention them in a reply."
+            )
+        )
 
     def test_draft_or_unaccepted_pr_does_not_request_review(self) -> None:
         draft = self.pull_request(state="open", draft=True)
@@ -963,7 +1031,7 @@ class PullRequestReconciliationTests(unittest.TestCase):
 
         self.assertEqual(client.review_posts, [])
 
-    def owner_change(self, old_roster, new_roster, requested):
+    def owner_change(self, old_roster, new_roster, requested, comments=()):
         old_owner = "wg/mom-routing"
         new_owner = "wg/evaluation-quality"
         pull_request = self.pull_request(
@@ -974,6 +1042,7 @@ class PullRequestReconciliationTests(unittest.TestCase):
         issue = {**self.accepted_issue(), "labels": labels("accepted", new_owner)}
         client = FakePullRequestApi([pull_request], [issue])
         client.requested_reviewers[7] = set(requested)
+        client.comments[7] = [dict(comment) for comment in comments]
         rosters = {old_owner: old_roster, new_owner: new_roster}
         with mock.patch.dict(community_reviewers.WORKGROUP_REVIEWERS, rosters):
             community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
@@ -984,6 +1053,30 @@ class PullRequestReconciliationTests(unittest.TestCase):
 
         self.assertEqual(client.review_removals, [(7, "old-lead")])
         self.assertEqual(client.review_posts, [(7, "new-lead")])
+
+    def test_owner_change_edits_the_review_comment(self) -> None:
+        old_comment = community_lifecycle_github.workgroup_review_comment(
+            "wg/mom-routing", "old-lead", []
+        )
+        client = self.owner_change(
+            ("old-lead",),
+            ("new-lead",),
+            {"old-lead"},
+            comments=[{"id": 1, "body": old_comment}],
+        )
+
+        self.assertEqual(client.comment_posts, [])
+        self.assertEqual(
+            client.comment_edits,
+            [
+                (
+                    1,
+                    community_lifecycle_github.workgroup_review_comment(
+                        "wg/evaluation-quality", "new-lead", []
+                    ),
+                )
+            ],
+        )
 
     def test_owner_change_keeps_shared_and_repository_wide_requests(self) -> None:
         for previous, new_roster, posts in (
