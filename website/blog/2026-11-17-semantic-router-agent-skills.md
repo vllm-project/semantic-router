@@ -79,9 +79,10 @@ is synthetic and public. Preparing it checks the data path without making a
 model call. A real result still needs reachable Router and model backends,
 reviewed call and cost bounds, and saved run IDs.
 
-The comparison skill then checks that two runs used compatible cases,
-request profiles, graders, and price assumptions. It reports paired, failed,
-and missing denominators alongside uncertainty. Its
+The comparison skill starts with a direct single-model reference and checks
+that each Router run used compatible cases, request profiles, graders, and
+price assumptions. It reports paired, failed, and missing denominators
+alongside uncertainty for each Router run against that reference. Its
 [worked example](https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/references/paired-evidence.md)
 is illustrative: with only two cases, even a valid paired calculation cannot
 support a broad quality or savings claim. The tune-recipe skill uses that
@@ -90,18 +91,28 @@ validation and a fresh before/after run.
 
 ## What we have verified
 
-The [workflow guide](/docs/installation/agent-skills) records the exact
-offline fixture digests and source commit used for the initial checks. The
-canonical parser accepted both recipe documents, and the two-case dataset
-prepared deterministically. The skill catalog, public mirrors, links, and
-command references have repository checks. These are checks of the skill and
-fixture contracts, not measurements of routing quality or performance.
+The [workflow guide](/docs/installation/agent-skills) records offline fixture
+digests and a [local live smoke receipt](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/vllm-sr-benchmark/fixtures/local-ollama-smoke-receipt.json).
+On a CPU Colima VM, a v0.5 Router loaded Vela 2.0 0.3B for a model-backed
+signal and routed to a local Ollama `qwen3:8b` backend. A public listener probe
+returned a complete answer with the expected `code-route` decision and
+`upstream` response path.
 
-The next evidence milestone is a live stack run: validate and plan a
-candidate against an active configuration, capture preview and listener
-probes, execute bounded benchmark runs for both configurations, and preserve
-the paired comparison receipts. We will publish measured claims only with
-those run IDs, coverage, versions, and cost assumptions available for review.
+We then ran two synthetic development cases through a direct single-model
+reference and two Router configs. All three runs completed and graded 2/2.
+The Router configs differed only in the code-signal threshold; one selected
+`code-route` twice, the other `default-route` twice. sr-bench accepted both
+as comparable to the direct reference. Each two-case comparison found zero
+observed quality difference but a conservative 95% interval of `[-1, 1]`.
+Prices were not supplied, so there is no cost-savings result. The service
+does not provide a direct A-versus-B interval from these comparisons.
+
+This smoke proves that the workflow can preserve route and run identities,
+execute bounded calls, grade the frozen cases, and reject unsupported
+conclusions. A larger independent workload, priced usage, and a prespecified
+direct comparison are still needed before making quality, latency, or savings
+claims. The skill catalog, public mirrors, links, and command references also
+have repository checks.
 
 Each public `SKILL.md` is generated from a repository-authored source. That
 keeps an installable copy available to an agent without a checkout while the
