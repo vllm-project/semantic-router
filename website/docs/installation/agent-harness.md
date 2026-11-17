@@ -193,6 +193,8 @@ sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
 the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
+A file nothing else changed since the command wrote it gets back the very bytes
+it had, its formatting and a missing final newline included.
 
 ### Check and status
 
@@ -206,14 +208,19 @@ vllm-sr connect status
 with the settings the command wrote, `codex exec --profile vllm-sr`, or
 `pi --mode json --provider vllm-sr` ([Pi](#pi)), and with `--dry-run` the
 settings it would write, given for that run only. The
-harness works in a temporary directory, is asked to run `echo vsr-check` and
-answer with its output, and is stopped after 120 seconds. This spends a few
-short model calls on your login or key. The harness reads its own credentials
+harness works in a temporary directory, where the check writes `vsr-check.txt`
+with a token new for each run, is asked to run `cat vsr-check.txt` with its
+shell tool, named as the harness names it (`Bash` in Claude Code,
+`exec_command` in Codex, `bash` in Pi), and answer with its output, which the
+model cannot know without running the command, and is stopped after 120
+seconds. This spends a few short model calls on your login or key. The harness reads its own credentials
 as it always does, and the lines shown hide the gateway key, the value of any
 variable whose name says it holds a secret, and bearer tokens. Each step gets a
 line, and a failed one fails the command:
 
-- `Harness`: found on `PATH`, with its version.
+- `Harness`: found on `PATH`, with its version. A harness that exits before
+  it runs the task, as Codex does on a `config.toml` it cannot load, fails
+  here with the error it printed, and the steps after it do not run.
 - `Login`: the gateway answered, so the key or login the harness sent was
   accepted.
 - `Tool round trip`: the command ran and the model answered with its output.
@@ -372,7 +379,9 @@ changes and unmerged commits too, but `git worktree remove` deletes the files
 git ignores there, such as build output or a `.env`, so the steps then start by
 saying how many paths it deletes. A launch with `--worktree <path>` or none is
 listed but never offered for removal, since that launch did not make the
-worktree. The record stays after the cleanup, so the list keeps the session id
+worktree. Without git on `PATH`, as for a launch with no `--worktree`, each
+session is listed with its state unknown and no cleanup step, since both come
+from git. The record stays after the cleanup, so the list keeps the session id
 to look up in Insights.
 
 ### Fetch the key with a command
@@ -456,6 +465,135 @@ take `--app`.
 Restart the app afterwards: Codex reads `model_catalog_json` only when it
 starts. An app started from the desktop often does not see the variables your
 shell exports, so give it `--key-command` rather than `VLLM_SR_API_KEY`.
+
+### Hand work between Claude Code and Codex
+
+```bash
+vllm-sr connect codex --config codex.yaml --app --key-command "pass show vllm-sr/codex"
+vllm-sr connect claude-code --config claude-code.yaml \
+  --key-command "pass show vllm-sr/claude" --delegate codex
+vllm-sr connect codex --config codex.yaml --app \
+  --key-command "pass show vllm-sr/codex" --delegate claude-code
+```
+
+`--delegate` lets each client hand a task to the other, which does it in its
+own official client on its own login or key. No credential passes from one
+client to the other: connect only adds a plugin, an MCP server, a skill and
+settings to each client's own configuration. It previews them with
+`--dry-run`, asks before writing, takes them back with `--undo` like every
+other change it makes, and `connect status` names them under `delegates to`.
+
+**Claude Code to Codex.** `--delegate codex` installs OpenAI's Codex plugin for
+Claude Code ([openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc))
+with Claude Code's own commands, each only when what it adds is missing:
+
+```bash
+claude plugin marketplace add openai/codex-plugin-cc
+claude plugin install codex@openai-codex
+```
+
+`--delegate-source` installs from another source, such as a local checkout. In
+a new Claude Code session, `/codex:rescue <task>` hands the task to Codex, which
+can edit files in its workspace, and its answer comes back. The plugin runs
+`codex app-server` on Codex's default configuration and no profile, so connect
+Codex with `--app` for that Codex to use a gateway. The command says where
+Codex's default configuration sends; without a gateway there, Codex works on
+its own ChatGPT login, if it has one.
+
+Claude Code's settings `env` reaches every program Claude Code starts, the
+plugin's Codex and each command Codex runs included. Two settings keep Claude
+Code's credentials out of them:
+
+- For a listener that takes a key, `--delegate codex` needs `--key-command`,
+  which Claude Code runs itself as its `apiKeyHelper`, and refuses to write the
+  key from `VLLM_SR_API_KEY` into the settings. Claude Code on its own Claude
+  login, or a listener without keys, needs no key command.
+- It adds `ANTHROPIC_*` to `exclude` under `[shell_environment_policy]` in
+  Codex's `config.toml`, keeping the rest of that table, so a command Codex runs
+  sees no `ANTHROPIC_` variable. Codex's own provider still works, since it
+  reads none of them.
+
+`--undo` uninstalls the plugin, and removes its marketplace, only when connect
+added them, and takes the shell setting back. Connect leaves the plugin's
+review gate off: `/codex:setup --enable-review-gate` would have Codex review
+Claude Code's work every time Claude Code stops.
+
+**Codex to Claude Code.** `--delegate claude-code` adds Claude Code's own MCP
+server to the Codex profile, or with `--app` to `config.toml`:
+
+```toml
+[mcp_servers.claude]
+command = "claude"
+args = ["mcp", "serve"]
+env_vars = ["CLAUDE_CONFIG_DIR"]
+enabled_tools = ["Agent"]
+tool_timeout_sec = 300
+
+[mcp_servers.claude.tools.Agent]
+approval_mode = "approve"
+```
+
+Codex can then ask Claude Code. The `Agent` tool of `claude mcp serve` runs a
+Claude Code subagent on the login or key of `$CLAUDE_CONFIG_DIR` (else
+`~/.claude`), which reads files and answers. It cannot edit or run commands,
+since nobody answers its permission prompts, so this way is read-only. The
+other tools stay off. `Agent` is approved ahead, since `codex exec` refuses an
+MCP call it would have to ask about, and Codex waits up to 300 seconds for it.
+Codex offers it to the model as `mcp__claude__Agent`, with Claude Code's own
+description, which reads much like Codex's own `spawn_agent`. A model may run
+`spawn_agent` instead and still say Claude Code answered, so name the tool when
+you ask, and look for an MCP call to `claude` in Codex's output. Codex 0.166
+cannot be told to prefer it: its `tool_search_always_defer_mcp_tools` feature
+is removed and stays on whatever the configuration says, and connect's model
+catalog turns tool search off, so the tool is offered directly anyway.
+
+`--delegate-edits` adds a skill, `$CODEX_HOME/skills/vllm-sr-claude-code/SKILL.md`,
+for a task you ask Claude Code to do. Codex runs Claude Code's official command
+once for it:
+
+```bash
+claude -p --output-format json --max-turns 10 --tools Read,Grep,Glob -- "<task>"
+claude -p --output-format json --max-turns 10 \
+  --tools Read,Grep,Glob,Edit,Write --permission-mode acceptEdits -- "<task>"
+```
+
+The first, read-only, is the default, and the second is for a task that asks
+for edits. Claude Code reaches its model over the network and keeps its session
+in its own home, so Codex asks you to run that one command outside its sandbox
+(`require_escalated`), and Approve for me can answer for you. Network access
+stays off for every other command. The skill never uses `--bare`, which would
+skip Claude Code's own login.
+
+You still sign each client in, or connect each to its gateway, start a new
+Claude Code session, and restart Codex and the Codex app, which load MCP
+servers and skills when they start.
+
+**Loops.** A task one client hands to the other could come back. The command
+wires neither client to do that on its own: `claude -p` above has no `Bash` or
+`Agent` tool, so it cannot start Codex, the MCP subagent cannot run commands,
+and the skill tells Codex not to hand back a task Claude Code gave it. The
+plugin's `codex:codex-rescue` subagent is described to Claude Code as one to use
+proactively, so Claude Code may hand a task to Codex you did not ask it to. A
+`claude mcp serve` subagent does not stop when Codex stops waiting for it: in
+one test it made about 164 model calls in ten minutes and went on after Codex
+was killed. Stop such a process yourself, and
+[set budgets](#set-budgets-before-running-a-task) before a long task.
+
+**In Replay.** Each client calls its gateway itself, with its own session
+headers, so Router Replay files a handed-over task under a session of the
+client that did it: the Codex thread the plugin starts, or the session `claude
+mcp serve` or `claude -p` starts. Nothing links it to the session that handed
+it over. The gateway's access log names the client in its user agent: the
+plugin's Codex sends `Claude Code/<Codex version> (...) (Claude Code; <plugin
+version>)`, the MCP server `claude-cli/<version> (external, mcp)`, and the
+skill's `claude -p` `claude-cli/<version> (external, sdk-cli)`.
+
+**What delegation is not.** Caller mode forwards only the login that came with
+each request, and never connects or refreshes a second account. Using another
+provider's model inside one session needs that provider's API key on the
+gateway, and Anthropic does not support routing Claude Code to non-Claude
+models through a gateway. Delegation keeps each login inside its own official
+client.
 
 ### Router settings for Claude Code
 
@@ -588,8 +726,12 @@ and does not probe the gateway, which answers only on Codex's own login. Each
 `connect` command stops before writing anything when the caller backends of the
 models its `--model` entrypoint reaches name the other provider: the Router takes
 an `anthropic` login only on Messages and an `openai` one only on Responses or
-Chat, so every call would be refused. A caller backend only another entrypoint
-reaches does not stop it. The plan's usage limits apply to each call, and a cost and the login
+Chat, so every call would be refused. For Codex this covers the entrypoint's
+`memory_model` and, when the catalog sends reviews there, its `review_model`,
+and the message names the one that failed; a caller backend of Codex's own
+provider on either has Codex send its login too. A caller backend only another
+entrypoint reaches does not stop it. The plan's usage limits apply to each
+call, and a cost and the login
 work as for Claude Code above, with `gpt-6.1-sol` on an `openai` backend for
 example.
 
@@ -1165,14 +1307,22 @@ The command writes these. Claude Code reads them from its settings:
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "vllm-sr/auto",
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
+    "CLAUDE_CODE_GATEWAY_HINT_HEADERS": "1"
   }
 }
 ```
 
 `CLAUDE_CODE_MAX_OUTPUT_TOKENS` is 32000, or the smallest `max_output_tokens`
 of the models the entrypoint reaches when that is lower, since a model refuses
-a request for more.
+a request for more. `CLAUDE_CODE_GATEWAY_HINT_HEADERS` has Claude Code send
+each request's class and each subagent's type, which Claude Code leaves out for
+a custom base URL otherwise; the
+[agent signal](../tutorials/signal/heuristic/agent) routes on them, and Insights
+names a session's run with the title Claude Code shows for it
+([Session names](../tutorials/plugin/router-replay#session-names)). Codex sends
+no thread name the gateway can tie to its run, so Insights shows a Codex run by
+its first prompt.
 
 Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
 `codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider
@@ -1545,8 +1695,9 @@ This holds whatever effort the harness asks for. Claude Code, for example,
 asks for adaptive thinking with its effort setting on every call. When the
 decision turns reasoning off for a Messages backend, the Router also drops the
 thinking display the harness asked for, since no thinking comes back. For a
-Chat or Responses backend the display stays, and the Router keeps the
-backend's reasoning out of the harness's answer as it asked. Set
+Chat or Responses backend the display stays: `omitted` keeps the backend's
+reasoning out of the harness's answer, and `summarized` or `updates` return it
+as thinking (see [Protocol Compatibility](./protocol-compatibility#anthropic-messages-clients-on-other-backends)). Set
 `use_reasoning: true` and the effort you want on the decisions behind an agent
 entrypoint. See [Model Reasoning](./model-reasoning#select-reasoning-in-a-decision).
 

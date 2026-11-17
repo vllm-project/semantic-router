@@ -740,6 +740,22 @@ recipes:
           description: Request contains at least one audio content part.
           modality: audio
 
+      # The agent a request belongs to, as Claude Code's and Codex's headers
+      # name it. Claude Code sends a subagent's type and a request's class
+      # only when CLAUDE_CODE_GATEWAY_HINT_HEADERS is set.
+      agent:
+        - name: exploration_subagent
+          description: A Claude Code Explore subagent or a Codex spawn_agent child.
+          role: subagent
+          types: [Explore, collab_spawn]
+        - name: codex_review
+          description: A Codex review child.
+          harness: codex
+          types: [review]
+        - name: housekeeping
+          description: Claude Code compactions and side requests such as session titles.
+          request_classes: [compaction, auxiliary]
+
       # Typed questions. deployment names the deployment that answers each one:
       # the built-in model runtime (provider model_runtime) or a remote System
       # One API (provider systemone). A question without one asks the decision
@@ -1857,6 +1873,32 @@ recipes:
           - model: qwen3-8b
             use_reasoning: false
 
+      - name: block_subagent_personal_data
+        description: Refuse an exploration subagent's request that carries personal data.
+        priority: 127
+        rules:
+          operator: AND
+          conditions:
+            - type: agent
+              name: exploration_subagent
+            - type: pii
+              name: restricted_pii
+        plugins:
+          - type: fast_response
+            configuration:
+              message: Exploration subagents may not send personal data.
+              block: true
+
+      - name: exploration_subagent_route
+        description: Keep exploration subagents on a small model at low effort.
+        priority: 126
+        rules:
+          type: agent
+          name: exploration_subagent
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+
       - name: classifier_band_route
         description: Route a bounded generic classifier score to a local model.
         priority: 125
@@ -2371,6 +2413,13 @@ global:
             min_consecutive_recoveries: 2
             cooldown_seconds: 120
             max_switches_per_window: 2
+          # Price a switch against the prompt cache it throws away, from the
+          # last response's cache reads and writes and the models' cache prices.
+          # Without a receipt or a cache price the scores above decide alone.
+          cache_economics:
+            enabled: true
+            cache_ttl_seconds: 300 # 3600 when the receipt wrote 1-hour entries.
+            default_remaining_turns: 3 # Used when no remaining-turn prior applies.
         # A client sends this header on one request to get a fresh decision for
         # its protection key, with at least min_user_turns_between user turns
         # between honored releases.
@@ -2508,6 +2557,23 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    # Spend limits per agent run and per user window, in one currency. A call
+    # reserves its estimated cost before it is sent and settles its actual
+    # cost after.
+    budgets:
+      currency: USD
+      unpriced: refuse
+      output_reserve_tokens: 4096
+      run:
+        limit: 5.0
+        idle_timeout_seconds: 86400
+      users:
+        - name: premium-daily
+          match:
+            user: "*"
+            group: premium-tier
+          limit: 50.0
+          window: day
     management_api:
       bind_address: 127.0.0.1
       port: 8080

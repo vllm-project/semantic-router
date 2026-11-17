@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"runtime/debug"
 	"strconv"
 
@@ -74,6 +75,7 @@ func (r *OpenAIRouter) newRoutingSession(ctx context.Context, release func()) *r
 	}
 	if hop, ok := routing.HopFrom(ctx); ok {
 		session.ctx.Hop = &hop
+		session.ctx.replayRunParent = replayRunParentFrom(ctx)
 	} else if models, ok := routing.ListenerModelsFrom(ctx); ok {
 		// A hop's context derives from its client request's, so only a
 		// client request takes the listener's restriction.
@@ -106,7 +108,12 @@ func (s *routingSession) RequestBody(body []byte, endOfStream bool) (*routing.Ef
 	}
 	return s.phase(func() (*ext_proc.ProcessingResponse, error) {
 		response, err := s.router.handleRequestBodyDispatch(v, s.ctx)
-		return s.router.requestBodyReply(response, err, s.ctx)
+		response, err = s.router.requestBodyReply(response, err, s.ctx)
+		if state, _ := replayLifecycleForProcessError(err); err != nil && state == routerreplay.LifecycleFailed {
+			// The gateway answers a request body phase that failed with 500.
+			s.router.updateRouterReplayStatus(s.ctx, http.StatusInternalServerError, false)
+		}
+		return response, err
 	}, func(response *ext_proc.ProcessingResponse) {
 		finishImmediateResponseTrace(s.ctx, response)
 	})
@@ -215,6 +222,7 @@ func (s *routingSession) end(err error) {
 	}
 	s.ended = true
 	releaseInflightAdmission(s.ctx)
+	s.router.finishRequestSpend(s.ctx)
 	releaseStreamedBody(s.ctx)
 	finishRequestTrace(s.ctx, err)
 	if s.release != nil {

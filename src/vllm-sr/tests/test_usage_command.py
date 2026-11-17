@@ -36,11 +36,12 @@ def _record(record_id, session, entrypoint, model, cost=None, currency="USD", **
 
 # The second record again at the top of the second page, as when a record is
 # stored between two pages of the newest-first list: it is counted once.
+DONE, FAILED = {"lifecycle_state": "completed"}, {"lifecycle_state": "failed"}
 RECORDS = [
-    _record("r1", "s1", "vllm-sr/auto", "qwen-msg", 0.00015),
-    _record("r2", "s1", "vllm-sr/auto", "qwen-msg", 0.00015),
-    _record("r2", "s1", "vllm-sr/auto", "qwen-msg", 0.00015),
-    _record("r3", "s2", "vllm-sr/review", "qwen-chat", 0.00012),
+    _record("r1", "s1", "vllm-sr/auto", "qwen-msg", 0.00015, **DONE),
+    _record("r2", "s1", "vllm-sr/auto", "qwen-msg", 0.00015, **DONE),
+    _record("r2", "s1", "vllm-sr/auto", "qwen-msg", 0.00015, **DONE),
+    _record("r3", "s2", "vllm-sr/review", "qwen-chat", 0.00012, **FAILED),
 ]
 
 AGGREGATE = {
@@ -177,7 +178,7 @@ def test_usage_summarizes_today_from_the_default_management_api(router, monkeypa
 def test_usage_rows_count_and_price_their_own_requests(router):
     # qwen-chat is the entrypoint of r1 and the selected model of r1 to r3;
     # each row adds its requests' own priced costs, Router calls included, per
-    # currency, and a Looper hop's cost belongs to the request that made it
+    # currency, and a Looper hop belongs to the request that made it
     hop = {"cost_accounting": {"unpriced_reason": "counted_in_parent"}}
     decision = {"kind": "decision_model", "calls": 1, "cost": 0.5, "currency": "usd"}
     router["records"] = [
@@ -203,14 +204,49 @@ def test_usage_rows_count_and_price_their_own_requests(router):
     models = lines[lines.index("Top models") + 1 : lines.index("Top entrypoints")]
     assert models == [
         "qwen-chat 3 requests, 4.000000 EUR, 3.500000 USD",
-        "qwen-msg 2 requests, no price",
+        "qwen-msg 1 request, no price",
     ]
     assert lines[lines.index("Top entrypoints") + 1 :] == [
-        "vllm-sr/auto 4 requests, 4.000000 EUR, 2.500000 USD, 1 with no price",
+        "vllm-sr/auto 3 requests, 4.000000 EUR, 2.500000 USD, 1 with no price",
         "qwen-chat 1 request, 1.000000 USD",
     ]
     # no aggregate per row: the rows come from the window's records
     assert not [query for _, query, _ in router["seen"] if "model" in query]
+
+
+def test_usage_counts_a_looper_request_once_with_its_hops_in_it(router):
+    # one request to a ratings decision of two models, as the Router records
+    # it: the request, which carries the hops' calls, and a record per hop
+    hop = {"cost_accounting": {"unpriced_reason": "counted_in_parent"}, **DONE}
+    calls = {"kind": "looper", "calls": 2, "unpriced_calls": 2}
+    router["records"] = [
+        _record("h1", "s1", "Ratings", "qwen-chat", **hop),
+        _record("h2", "s1", "Ratings", "premium-ref", **hop),
+        _record(
+            "p1",
+            "s1",
+            "vllm-sr/rate",
+            "premium-ref",
+            cost_accounting={"router_calls": [calls]},
+            **DONE,
+        ),
+    ]
+    lifecycle = {**AGGREGATE["lifecycle"], "completed": 3, "failed": 0}
+    router["aggregate"] = {**AGGREGATE, "record_count": 3, "lifecycle": lifecycle}
+
+    lines = _lines(_usage(router))
+    assert "Requests 1: 1 completed, 0 failed, 0 aborted" in lines
+    assert lines[lines.index("Top models") + 1 :] == [
+        "premium-ref 1 request, no price",
+        "Top entrypoints",
+        "vllm-sr/rate 1 request, no price",
+    ]
+    summary = json.loads(_usage(router, "--json").output)
+    assert summary["requests"]["total"] == summary["requests"]["completed"] == 1
+    # a row with no price has every request of it unpriced, as the text says
+    row = {"requests": 1, "spend": {}, "unpriced": 1}
+    assert summary["models"] == [{"name": "premium-ref", **row}]
+    assert summary["entrypoints"] == [{"name": "vllm-sr/rate", **row}]
 
 
 def test_usage_json_reads_a_duration_window(router):
@@ -243,8 +279,7 @@ def test_usage_json_reads_a_duration_window(router):
 
 
 def test_usage_shows_requests_in_an_unknown_state(router):
-    lifecycle = {**AGGREGATE["lifecycle"], "completed": 1, "unknown": 1}
-    router["aggregate"] = {**AGGREGATE, "lifecycle": lifecycle}
+    router["records"] = [RECORDS[0], {**RECORDS[1], "lifecycle_state": ""}, RECORDS[3]]
 
     result = _usage(router)
 

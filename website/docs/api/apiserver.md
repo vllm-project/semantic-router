@@ -336,7 +336,8 @@ the exact current `ETag` in `If-Match`. The Router does not accept unguarded
 writes. A mutation response and `GET /api/v1/config/hash` use the same explicit
 runtime identity fields: `source_config_hash`, `generated_runtime_hash`,
 `active_runtime_hash`, and `activation_status`. Config mutations validate,
-keep the replaced document in the configuration history, and trigger reload;
+keep the replaced document in the configuration history, write the config
+file with the mode, owner and group it had, and trigger reload;
 an active config still does not prove that upstream model backends are
 healthy. Check `/ready` and send a representative request after a change.
 
@@ -674,6 +675,9 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | `GET` | `/api/v1/observability/replays` | List Router Replay records |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate Router Replay routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
+| `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session over the filtered records, latest activity first |
+| `GET` | `/api/v1/observability/replays/run` | Read one agent run as a tree: its agents and their calls in time order, with each call's route, cost and outcome |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id |
 | `GET` | `/api/v1/observability/replays/dataset` | Export a shadow comparison dataset manifest built from the selected Router Replay records |
 | `GET` | `/api/v1/observability/replays/dataset/judge-tasks` | Build blinded pairwise judge tasks over the shadow comparison dataset |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |

@@ -507,7 +507,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	// side effects until the final public wire has passed validation.
 	policyPlan := r.prepareResponsePolicy(ctx, ctx.SemanticResponse, translated.Body)
 	if policyPlan.blocked != nil {
-		blockedStatus := http.StatusForbidden
+		blockedStatus := http.StatusBadRequest
 		if imm := policyPlan.blocked.GetImmediateResponse(); imm != nil && imm.GetStatus() != nil {
 			if code := int(imm.GetStatus().GetCode()); code != 0 {
 				blockedStatus = code
@@ -780,6 +780,14 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 			Reason:      "candidate_rate_limited",
 		}, fmt.Errorf("fallback candidate %q rejected by rate limit", candidateModel)
 	}
+	// The primary's reservation ends here; a candidate the budget cannot
+	// cover gives way to the next, which may cost less.
+	if refusal := r.reserveDispatchSpend(ctx, candidateModel, reqCopy); refusal != nil {
+		return nil, fallback.EvaluationResult{
+			CanFallback: true,
+			Reason:      "candidate_" + refusal.code,
+		}, fmt.Errorf("fallback candidate %q refused by the spend budget: %s", candidateModel, refusal.message)
+	}
 
 	return &fallbackCandidate{
 		model: candidateModel, ref: candidateRef, dispatch: dispatch, request: reqCopy, body: requestBody,
@@ -1042,6 +1050,10 @@ func (r *OpenAIRouter) buildFallbackImmediateResponse(
 	}
 }
 
+// fallbackOutcomeSource is the source of the outcome the fallback audit
+// appends to a request's replay record.
+const fallbackOutcomeSource = "fallback"
+
 // recordFallbackExecution persists one bounded terminal audit record containing
 // every correlated attempt. It runs for success, exhaustion, cancellation, and
 // policy rejection so replay consumers never have to infer missing attempts.
@@ -1107,7 +1119,7 @@ func (r *OpenAIRouter) recordFallbackExecution(ctx *RequestContext) {
 	}
 	outcome := routerreplay.Outcome{
 		Timestamp: time.Now().UTC(),
-		Source:    "fallback",
+		Source:    fallbackOutcomeSource,
 		Target:    "request",
 		TargetRef: selectedModel,
 		Verdict:   verdict,

@@ -181,9 +181,13 @@ func (p *RouterReplayPluginConfig) ValidatePromptCapture() error {
 
 // validateRouterReplayCostBaseline refuses a cost_baseline_model that names
 // no model with rates, against which no record's savings could be priced.
+// cost_baseline_model names a providers.models entry, so a document validated
+// without any models in scope, such as the global block the Dashboard checks
+// alone (ParseGlobalYAMLBytesWithoutEnvExpansion), defers the reference to the
+// whole-config load that resolves it.
 func validateRouterReplayCostBaseline(cfg *RouterConfig, path string, p *RouterReplayPluginConfig) error {
 	model := strings.TrimSpace(p.CostBaselineModel)
-	if model == "" {
+	if model == "" || len(cfg.ModelConfig) == 0 {
 		return nil
 	}
 	if _, priced := cfg.GetFullModelPricing(model); priced {

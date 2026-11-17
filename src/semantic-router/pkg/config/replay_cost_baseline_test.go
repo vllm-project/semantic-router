@@ -329,3 +329,25 @@ func TestRouterReplayCostBaselineModelSurvivesCanonicalExport(t *testing.T) {
 		t.Fatalf("exported astra provenance = %+v, %v", provenance, priced)
 	}
 }
+
+// The Dashboard validates a configuration's global block alone, with no
+// providers.models in scope (resolveTransportGlobal builds version + global).
+// A cost_baseline_model names a providers.models entry, a cross-section
+// reference the whole config resolves, so the global-only parse must defer it
+// to the whole-config load, not reject a model it cannot see. The whole
+// config, which has the models, still rejects a baseline that names none.
+func TestCostBaselineModelDefersWhenNoModelsAreInScope(t *testing.T) {
+	globalOnly := []byte("version: v0.5\n" +
+		"global:\n" +
+		"  plugins:\n" +
+		"    - type: router_replay\n" +
+		"      configuration:\n" +
+		"        cost_baseline_model: astra\n")
+	if _, err := ParseGlobalYAMLBytesWithoutEnvExpansion(globalOnly); err != nil {
+		t.Fatalf("global-only parse rejected a cost_baseline_model it cannot resolve: %v", err)
+	}
+	if _, err := ParseYAMLBytes(costBaselineDocument("missing")); err == nil ||
+		!strings.Contains(err.Error(), `"missing" is not a configured model`) {
+		t.Fatalf("whole-config load must still reject a missing baseline: %v", err)
+	}
+}

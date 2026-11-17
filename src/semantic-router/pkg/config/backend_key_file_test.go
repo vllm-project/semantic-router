@@ -91,3 +91,24 @@ func TestBackendKeyFileFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+// A validation that resolves no reference, such as -validate-config in
+// `vllm-sr serve`, runs where the key file is not mounted: it checks the
+// path's shape and leaves the file to the Router that loads the config.
+func TestValidationChecksAKeyFileShapeNotItsContent(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "provider-keys", "key-1")
+	document := keyFileConfig("auth: {api_key_file: " + missing + "}")
+	cfg, err := ParseYAMLBytesWithoutEnvExpansion(document)
+	if err != nil {
+		t.Fatalf("validation read the key file: %v", err)
+	}
+	if cfg.VLLMEndpoints[0].APIKey != "" {
+		t.Fatalf("validation resolved a key")
+	}
+	if _, err = ParseYAMLBytesWithoutEnvExpansion(keyFileConfig("auth: {api_key_file: provider-keys/key-1}")); err == nil || !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("relative path error = %v, want the shape check", err)
+	}
+	if _, err = ParseYAMLBytes(document); err == nil || !strings.Contains(err.Error(), "cannot be read") {
+		t.Fatalf("load error = %v, want the missing file refused", err)
+	}
+}

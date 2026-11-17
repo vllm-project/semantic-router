@@ -30,9 +30,10 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			RequestTimeoutSeconds: canonicalIntPtr(DefaultRoutingPreviewTimeoutSeconds),
 			MaxConcurrency:        canonicalIntPtr(DefaultRoutingPreviewMaxConcurrency),
 		}},
+		// StoreBackend is left out: an omitted one resolves once the
+		// configuration is applied (see ResponseAPIConfig).
 		ResponseAPI: ResponseAPIConfig{
 			Enabled:      true,
-			StoreBackend: "redis",
 			TTLSeconds:   86400,
 			MaxResponses: 1000,
 		},

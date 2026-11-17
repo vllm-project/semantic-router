@@ -1,4 +1,5 @@
 import { formatInsightsCost } from '../utils/insightsCost'
+import { modelText, type ModelLabels } from './insightsModelLabelSupport'
 import type {
   InsightsAggregateCostCoverage,
   InsightsCostAccounting,
@@ -57,7 +58,10 @@ export function describePricingSource(accounting?: InsightsCostAccounting): stri
 }
 
 /** Why a completed record shows no model cost, with how to fix it when the fix is pricing. */
-export function describeMissingModelCost(record: InsightsRecord): string | undefined {
+export function describeMissingModelCost(
+  record: InsightsRecord,
+  labels: ModelLabels = {},
+): string | undefined {
   const reason = record.cost_accounting?.unpriced_reason
   if (!reason) {
     return undefined
@@ -68,10 +72,11 @@ export function describeMissingModelCost(record: InsightsRecord): string | undef
   const login = record.cost_accounting?.caller_login
     ? ' It ran on the client’s own login, which its plan bills; a price shows the API-price equivalent, not what the plan charges.'
     : ''
-  return `No price is configured for ${record.selected_model || 'this model'}.${login} ${SET_PRICING_HINT}`
+  const model = record.selected_model ? modelText(labels, record.selected_model) : 'this model'
+  return `No price is configured for ${model}.${login} ${SET_PRICING_HINT}`
 }
 
-export function describeBaselineBasis(record: InsightsRecord): string {
+export function describeBaselineBasis(record: InsightsRecord, labels: ModelLabels = {}): string {
   const accounting = record.cost_accounting
   if (!accounting?.baseline_source) {
     return 'Older records used the highest estimate in the recipe’s complete model pool, or the selected model for a direct request, and keep that baseline.'
@@ -80,12 +85,39 @@ export function describeBaselineBasis(record: InsightsRecord): string {
   if (accounting.baseline_unavailable) {
     return `No baseline: ${rule} is ${describeUnpricedReason(accounting.baseline_unavailable)}.`
   }
-  const model = record.baseline_model ? ` (${record.baseline_model})` : ''
+  const model = record.baseline_model ? `, ${modelText(labels, record.baseline_model)}` : ''
   return `The same recorded tokens at the rates of ${rule}${model}.`
 }
 
+const BUDGET_SETTLEMENTS: Record<string, string> = {
+  usage: 'from its usage',
+  estimate: 'its estimate, as it reported no usage that could be priced',
+  released: 'nothing, as no provider answered it',
+}
+
+/** What the request's tightest spend budget had left, and what the request reserved and spent. */
+export function describeBudget(accounting?: InsightsCostAccounting): string | undefined {
+  const budget = accounting?.budget
+  if (!budget) {
+    return undefined
+  }
+  const cost = (value?: number) => formatInsightsCost(value, budget.currency)
+  const left = `${budget.scope}: ${cost(budget.remaining)} of ${cost(budget.limit)} left`
+  const unpriced = budget.unpriced_calls ? `; ${plural(budget.unpriced_calls, 'unpriced call')}` : ''
+  if (!budget.settlement) {
+    const refused =
+      budget.remaining > 0 ? `the call was estimated at ${cost(budget.estimate)}` : 'nothing was left'
+    return `${left}; refused: ${refused}${unpriced}`
+  }
+  const settled = BUDGET_SETTLEMENTS[budget.settlement] ?? budget.settlement
+  return `${left}; reserved ${cost(budget.estimate)}, charged ${cost(budget.charged)} ${settled}${unpriced}`
+}
+
 /** The calls the Router made itself, with what they cost and what is left unpriced. */
-export function describeRouterCalls(accounting?: InsightsCostAccounting): string | undefined {
+export function describeRouterCalls(
+  accounting?: InsightsCostAccounting,
+  labels: ModelLabels = {},
+): string | undefined {
   const calls = accounting?.router_calls ?? []
   if (calls.length === 0) {
     return undefined
@@ -95,7 +127,7 @@ export function describeRouterCalls(accounting?: InsightsCostAccounting): string
       const label = ROUTER_CALL_LABELS[call.kind] ?? call.kind
       const priced = call.calls - (call.unpriced_calls ?? 0)
       const parts = [
-        `${call.calls} ${label} call${call.calls === 1 ? '' : 's'}${call.model ? ` (${call.model})` : ''}`,
+        `${call.calls} ${label} call${call.calls === 1 ? '' : 's'}${call.model ? ` on ${modelText(labels, call.model)}` : ''}`,
       ]
       parts.push(`${call.prompt_tokens ?? 0} input / ${call.completion_tokens ?? 0} output tokens`)
       if (priced > 0) {

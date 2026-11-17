@@ -63,7 +63,7 @@ func activateSetupRoundTrip(t *testing.T, configPath, root string, configJSON js
 	t.Helper()
 	w := httptest.NewRecorder()
 	body := mustJSONRaw(t, SetupConfigRequest{Config: configJSON})
-	SetupActivateHandler(configPath, false, root, setupmode.New(configPath, false))(
+	asSecretReader(SetupActivateHandler(configPath, false, root, setupmode.New(configPath, false)))(
 		w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 	if w.Code != http.StatusOK {
 		t.Fatalf("activation failed: %d %s", w.Code, w.Body.String())

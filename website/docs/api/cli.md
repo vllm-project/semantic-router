@@ -1014,6 +1014,8 @@ Route Claude Code's model calls through the gateway.
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
 | `--status-line` | Also show in Claude Code's status line which models answered, the last first. Default: false. |
+| `--delegate CHOICE` | Also let Claude Code hand a task to Codex, which works on its own default config and login: installs OpenAI's Codex plugin and keeps Claude Code's variables out of the commands Codex runs. Needs --key-command for a keyed listener, so the gateway key never sits in Claude Code's env. Choices: codex. |
+| `--delegate-source TEXT` | Where the Codex plugin installs from with --delegate codex: a marketplace's owner/repo, Git URL, or a local checkout.  [default: openai/codex-plugin-cc] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr connect codex` {#vllm-sr-connect-codex}
@@ -1046,6 +1048,8 @@ The default is what the Codex app reads, and the Codex CLI without --profile.
 | `[HARNESS_ARGS]...` | Optional argument. Type: text. Accepts multiple values. |
 | `--profile TEXT` | The Codex profile to write.  [default: vllm-sr] |
 | `--app` | Write the gateway as the default of Codex's shared config.toml in place of a profile, since the Codex app reads that file and no profile. This changes the default for the Codex CLI too; --undo takes it back. Default: false. |
+| `--delegate CHOICE` | Also let Codex ask Claude Code, read-only, through Claude Code's own MCP server, which answers on Claude Code's own login or key. Choices: claude-code. |
+| `--delegate-edits` | With --delegate claude-code, also add a skill that hands Claude Code one task that may edit files: claude -p, which Codex asks to run outside its sandbox. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr connect pi` {#vllm-sr-connect-pi}
@@ -1082,7 +1086,8 @@ The newest comes first. For a worktree connect made, the steps that remove
 it are shown, but nothing is removed here. No step is offered while the
 worktree has uncommitted changes or commits on a detached HEAD, the branch
 is not deleted while it has commits no other branch or remote has, and the
-steps say first when the removal deletes files git ignores there.
+steps say first when the removal deletes files git ignores there. Without
+git on PATH, each session is listed with that state unknown and no step.
 
 | Parameter | Description |
 | --- | --- |
@@ -1809,10 +1814,12 @@ Usage: vllm-sr usage [OPTIONS]
 Show the requests, spend and savings the Router recorded in a window.
 
 Read from Router Replay's list and aggregate, the figures Insights shows,
-with $VSR_MGMT_TOKEN as the bearer token when it is set. Top models and
-entrypoints are those with the most requests, by selected model and by the
-model the client asked for; each row adds its requests' own priced costs,
-the Router's calls for them included, as the window's spend does.
+with $VSR_MGMT_TOKEN as the bearer token when it is set. Requests count each
+client request once: the record of a Looper hop counts in the request that
+made it. Top models and entrypoints are those with the most requests, by
+selected model and by the model the client asked for; each row adds its
+requests' own priced costs, the Router's calls for them included, as the
+window's spend does.
 
 | Parameter | Description |
 | --- | --- |

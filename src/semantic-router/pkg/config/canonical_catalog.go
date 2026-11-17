@@ -150,7 +150,7 @@ func appendEffectiveProviderBinding(
 	if err := applyBindingAPIFormat(model.Alias, bindingIndex, binding.Protocol, params); err != nil {
 		return err
 	}
-	credential, err := applyBindingMetadata(model.Alias, effective, params)
+	credential, err := applyBindingMetadata(model.Alias, effective, params, cfg.SkipExternalAssetValidation)
 	if err != nil {
 		return err
 	}
@@ -183,6 +183,7 @@ func applyBindingMetadata(
 	modelAlias string,
 	effective modelcatalog.EffectiveModelProvider,
 	params *ModelParams,
+	skipKeyFile bool,
 ) (string, error) {
 	binding := effective.Binding
 	providerID := effective.Provider.Definition.ID
@@ -193,7 +194,7 @@ func applyBindingMetadata(
 	for key, value := range binding.ExternalModelIDs {
 		params.ExternalModelIDs[key] = value
 	}
-	credential, err := resolveProviderCredential(effective.Provider.Instance.Credentials)
+	credential, err := resolveProviderCredential(effective.Provider.Instance.Credentials, skipKeyFile)
 	if err != nil {
 		return "", fmt.Errorf("providers.models[%s]: %w", modelAlias, err)
 	}
@@ -448,11 +449,15 @@ func endpointTemplateHostname(raw string) string {
 }
 
 // resolveProviderCredential reads a backend's key at every load, so a hot
-// reload picks up a rotated key file.
-func resolveProviderCredential(credentials modelcatalog.CredentialsRef) (string, error) {
+// reload picks up a rotated key file. A validation that reads no external
+// asset leaves the file unread, as it leaves an unset variable empty: the
+// file may be mounted only where the Router serves the config.
+func resolveProviderCredential(credentials modelcatalog.CredentialsRef, skipKeyFile bool) (string, error) {
 	switch {
 	case credentials.APIKey != "":
 		return credentials.APIKey, nil
+	case credentials.APIKeyFile != "" && skipKeyFile:
+		return "", nil
 	case credentials.APIKeyFile != "":
 		return readKeyFile("auth.api_key_file", credentials.APIKeyFile)
 	case credentials.APIKeyEnv != "":

@@ -24,6 +24,7 @@ from manual_ci import (
     read_artifact,
     source_identity,
 )
+from pr_ci_status_suites import read_rollup, read_suites, successful
 
 CHECK = "PR Gate"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
@@ -775,6 +776,9 @@ def diagnose(
             "requiredness_complete": False,
         },
         "checks": {"all": [], "latest": []},
+        "suites": [],
+        "run_suite_id": None,
+        "rollup_state": None,
     }
 
     def finish(state, reason):
@@ -789,6 +793,8 @@ def diagnose(
     ):
         return finish("ignored", "invalid_identity")
     snapshots = {}
+    suite_snapshot = None
+    rollup_snapshot = None
     try:
         run = client.request(f"repos/{repo}/actions/runs/{run_id}")
         workflow = client.request(f"repos/{repo}/actions/workflows/pr.yml")
@@ -811,6 +817,9 @@ def diagnose(
         if not bound or bound.get("number") != number:
             return finish("ignored", "pull_mismatch")
         snapshots[run_id] = run
+        suite_id = run.get("check_suite_id")
+        if type(suite_id) is int and suite_id > 0:
+            result["run_suite_id"] = suite_id
         source_snapshot = None
         raw = {}
         for check_filter in ("all", "latest"):
@@ -920,6 +929,29 @@ def diagnose(
                 state, reason = "failed", "current_qualification_failed"
             elif evidence["full_qualification"]:
                 try:
+                    suite_ids = [
+                        run.get("check_suite_id"),
+                        *(
+                            check.get("check_suite", {}).get("id")
+                            for check in replacements
+                        ),
+                    ]
+                    suite_snapshot = read_suites(client, repo, head, suite_ids, APP_ID)
+                    rollup_snapshot = read_rollup(client, repo, head)
+                    result["suites"] = list(suite_snapshot.values())
+                    result["rollup_state"] = rollup_snapshot
+                except (
+                    ManualCIError,
+                    KeyError,
+                    ValueError,
+                    TypeError,
+                    OSError,
+                    subprocess.TimeoutExpired,
+                ):
+                    # Missing health evidence must not skip source revalidation.
+                    suite_snapshot = None
+                    result["reason_codes"].append("check_state_evidence_unavailable")
+                try:
                     identity = source_identity(client, repo, number)
                     source_snapshot = plan_for_run(client, repo, run, identity)
                     evidence["current_source"] = source_snapshot is not None
@@ -950,6 +982,42 @@ def diagnose(
                     state, reason = (
                         "healthy" if green else "uncertain"
                     ), "no_competing_native_failure"
+                    if green:
+                        visible = {check["id"] for check in raw["latest"]}
+                        required_green = [
+                            check
+                            for check in replacements
+                            if required.get(check["id"]) is True
+                            and check["id"] in visible
+                        ]
+                        if not complete or suite_snapshot is None:
+                            state, reason = (
+                                "evidence_unavailable",
+                                "health_evidence_incomplete",
+                            )
+                        elif not required_green:
+                            state, reason = (
+                                "uncertain",
+                                "current_required_gate_not_visible",
+                            )
+                        elif not successful(suite_snapshot[run["check_suite_id"]]):
+                            state, reason = (
+                                "uncertain",
+                                "qualification_suite_not_successful",
+                            )
+                        elif any(
+                            not successful(suite_snapshot[check["check_suite"]["id"]])
+                            for check in required_green
+                        ):
+                            state, reason = (
+                                "suite_mismatch",
+                                "required_gate_suite_not_successful",
+                            )
+                        elif rollup_snapshot != "SUCCESS":
+                            state, reason = (
+                                "rollup_blocked",
+                                "commit_rollup_not_successful",
+                            )
         except (ManualCIError, KeyError, ValueError, TypeError) as error:
             if (
                 isinstance(error, ManualCIError)
@@ -1014,6 +1082,14 @@ def diagnose(
             for key in ("number", "state", "head", "base", "merge_commit_sha")
         ) or not latest_run(client, repo, run):
             return finish("stale", "snapshot_changed")
+        if suite_snapshot is not None:
+            if (
+                read_suites(client, repo, head, suite_snapshot, APP_ID)
+                != suite_snapshot
+            ):
+                return finish("stale", "check_suite_changed")
+            if read_rollup(client, repo, head) != rollup_snapshot:
+                return finish("stale", "commit_rollup_changed")
         if source_snapshot is not None:
             try:
                 fresh_identity = source_identity(client, repo, number)

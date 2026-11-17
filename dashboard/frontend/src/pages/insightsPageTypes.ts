@@ -219,6 +219,19 @@ export interface InsightsCostAccounting {
   baseline_source?: 'configured_model' | 'recipe_most_expensive' | 'selected_model'
   baseline_unavailable?: string
   router_calls?: InsightsRouterCallCost[]
+  budget?: InsightsBudgetAccounting
+}
+
+/** The tightest spend budget a request belongs to, as it left it. */
+export interface InsightsBudgetAccounting {
+  scope: string
+  currency: string
+  limit: number
+  remaining: number
+  estimate: number
+  charged?: number
+  settlement?: 'usage' | 'estimate' | 'released'
+  unpriced_calls?: number
 }
 
 export interface TokenCostComponent {

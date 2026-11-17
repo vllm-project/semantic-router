@@ -118,6 +118,12 @@ These headers were checked with Codex CLI 0.167.0 and 0.166.0 and Claude Code
 [protocol compatibility guide](../../installation/protocol-compatibility)
 requires.
 
+To choose a subagent's model and effort by its kind, for example exploration
+subagents on a small model at low effort and reviews on a strong model at high
+effort, route on the [`agent`](../signal/heuristic/agent) signal. It reads the
+same agent identity, so protection then holds each subagent on the model its
+first request got.
+
 ### Explicit release
 
 A harness that knows its task has changed phase can ask for a fresh decision
@@ -203,6 +209,10 @@ The switch rule is:
 switch if proposal_gain >= switch_margin + stability_weight * switch_cost
 ```
 
+When the last response's cache counts and both models' cache prices are
+known, the cache part of `switch_cost` is priced in money instead; see
+[Cache economics](#cache-economics).
+
 Protection can also allow a deterministic `rescue_switch` when repeated
 backend failures or replay-linked outcomes show the current model is
 underpowered:
@@ -239,6 +249,112 @@ present:
   lock releases and the new decision routes from its own candidates, traced as
   `decision_drift`.
 - **Opaque provider state** stays bound to the model that created it.
+
+## Cache Economics
+
+A prompt cache belongs to the model that wrote it. When protection would move
+a conversation or an agent to another model, it prices the switch against the
+cache it would throw away, from the usage of the last response on that
+protection key:
+
+```yaml
+global:
+  router:
+    learning:
+      protection:
+        tuning:
+          cache_economics:
+            enabled: true                # default
+            cache_ttl_seconds: 300       # default
+            default_remaining_turns: 3   # default
+```
+
+| Number | What it is |
+| --- | --- |
+| prefix | The last response's cache reads plus cache writes: what the next request on the current model would read. |
+| current turn cost | The last response priced at the current model's rates, its cached tokens at the cache-read rate. |
+| proposed turn cost | The same response priced at the proposed model's rates, once its cache holds the prefix. |
+| rewrite cost | prefix × (proposed cache-write rate − proposed cache-read rate): the proposed model's first request writes the prefix instead of reading it. The 1-hour write rate applies when the last response wrote 1-hour entries. |
+| saving | (current turn cost − proposed turn cost) × remaining turns. |
+
+Remaining turns come from the remaining-turn prior protection already reads
+when one applies, otherwise from `default_remaining_turns`.
+
+The switch goes ahead when:
+
+- the saving covers the rewrite (`switch_pays`);
+- the proposed model costs no less per turn, so the routing chose it for
+  quality, not price (`proposal_not_cheaper`); the cost is still recorded;
+- the last response is older than the cache lifetime (`cache_expired`);
+- nothing was cached (`no_warm_cache`).
+
+Otherwise protection keeps the current model (`switch_does_not_pay`). For
+example, with 19,000 tokens cached on a model priced $3 input, $0.30 cache
+read, $3.75 cache write and $15 output per million tokens, a last response with
+1,000 uncached input tokens and 500 output tokens costs $0.01965:
+
+- A model at a third of those prices costs $0.00655 for the same turn, saves
+  $0.0393 over 3 turns and rewrites the prefix for $0.02185: the switch goes
+  ahead.
+- A model at 90% of them saves $0.0059 over 3 turns but rewrites the prefix for
+  $0.0590: the current model is kept.
+
+Cache lifetime:
+
+- **`cache_ttl_seconds`** counts from the last response, because providers
+  refresh an entry each time it is read. A response that wrote 1-hour entries
+  extends the lifetime to 3600 seconds.
+- **Match your providers.** Anthropic keeps entries 5 minutes after their last
+  use by default, or 1 hour on request
+  ([prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching));
+  OpenAI keeps them 5 to 10 minutes idle and up to an hour, or up to 24 hours
+  with extended retention
+  ([prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)).
+
+When the receipts decide a switch, the switch guard's estimated prefix-cache
+penalty and benefit drop out for that switch; stay bias, handoff, switch
+margin, switch history and tool-loop terms still apply. When a value is
+missing, the switch guard decides as before and replay records why:
+
+| Reason | Missing value |
+| --- | --- |
+| `no_receipt` | No response has been recorded on the key yet. |
+| `receipt_other_model` | The last response came from another model. |
+| `cache_not_reported` | The backend reported no cache reads or writes. |
+| `no_cache_price` | A model has no `pricing`, or neither `cached_input_per_1m` nor `cache_write_per_1m`. |
+| `currency_mismatch` | The two models are priced in different currencies. |
+
+The economics do not apply to an honored release, a rescue switch or a hard
+lock. Under `scope: session` the current model is held before the switch guard
+runs, so the economics apply once the idle timeout has released it; per-agent
+keys and `scope: conversation` are priced on every switch. Long-context price
+tiers are not modeled.
+
+Replay records the proposed switch in `session_policy.cache_economics`, and
+each priced candidate in `session_policy.candidate_traces.<model>.cache_economics`:
+
+```json
+{
+  "decision": "hold",
+  "reason": "switch_does_not_pay",
+  "current_model": "premium",
+  "proposed_model": "near",
+  "currency": "USD",
+  "cached_prefix_tokens": 19000,
+  "cache_age_seconds": 60,
+  "cache_ttl_seconds": 300,
+  "remaining_turns": 3,
+  "remaining_turns_source": "default",
+  "current_turn_cost": 0.01965,
+  "proposed_turn_cost": 0.017685,
+  "rewrite_cost": 0.058995,
+  "saving": 0.005895
+}
+```
+
+`decision` is `hold`, `switch` or `fallback`. A switch the receipts refused
+shows `reason=cache_switch_does_not_pay` in the `learning` member of
+`x-vsr-trace`, and one they allowed on price shows `reason=cache_switch_pays`.
 
 ## Progress Gate
 

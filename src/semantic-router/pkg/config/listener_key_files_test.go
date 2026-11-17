@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -75,6 +76,21 @@ func TestListenerKeyFileFailsClosed(t *testing.T) {
 				t.Fatalf("error exposes the key: %v", err)
 			}
 		})
+	}
+}
+
+// A validation that resolves no reference checks a listener's key file paths
+// and leaves the files to the Router that serves the configuration.
+func TestValidationChecksListenerKeyFilePathsOnly(t *testing.T) {
+	missing := listenerKeyConfig("api_key_files: [" + filepath.Join(t.TempDir(), "gone") + "]")
+	if _, err := ParseYAMLBytesWithoutEnvExpansion(missing); err != nil {
+		t.Fatalf("validation read the key file: %v", err)
+	}
+	if _, err := ParseYAMLBytesWithoutEnvExpansion(listenerKeyConfig("api_key_files: [gateway.key]")); err == nil || !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("relative path error = %v, want the path check", err)
+	}
+	if _, err := ParseYAMLBytes(missing); err == nil || !strings.Contains(err.Error(), "cannot be read") {
+		t.Fatalf("load error = %v, want the missing file refused", err)
 	}
 }
 

@@ -65,6 +65,7 @@ var builtinSignalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeConversation, DisplayName: "Conversation", Collection: "conversation", ObservationKey: "conversation", DecisionReferenceable: true},
 	{Type: SignalTypeMetadata, DisplayName: "Metadata", Collection: "metadata", ObservationKey: "metadata", DecisionReferenceable: true},
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
+	{Type: SignalTypeAgent, DisplayName: "Agent", Collection: "agent", ObservationKey: "agent", DecisionReferenceable: true},
 	{Type: SignalTypeSystemOne, DisplayName: "System One", Collection: "systemone", ObservationKey: "systemone", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 }
 
@@ -308,6 +309,15 @@ func DecisionAlgorithmCatalog() []AlgorithmCatalogEntry {
 		result[index].APIs = append([]InferenceAPI(nil), entry.Catalog.APIs...)
 	}
 	return result
+}
+
+// DecisionAlgorithmDisplayName returns the catalog's name for an algorithm
+// type, or the type itself when the catalog names none.
+func DecisionAlgorithmDisplayName(algorithmType string) string {
+	if entry, ok := decisionAlgorithmCatalogEntry(algorithmType); ok && entry.DisplayName != "" {
+		return entry.DisplayName
+	}
+	return algorithmType
 }
 
 // GetAlgorithmTier returns the tier for a given algorithm type, or empty string if unknown
