@@ -54,6 +54,7 @@ func (c *replayReadCache[V]) get(ctx context.Context, key string, scan func(cont
 		if c.flights == nil {
 			c.flights = make(map[string]*replayReadFlight[V])
 		}
+		//nolint:gosec // G118: the flight owns cancel; run calls it when the scan ends and leave when its last caller leaves.
 		scanCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 		flight = &replayReadFlight[V]{done: make(chan struct{}), cancel: cancel}
 		c.flights[key] = flight
