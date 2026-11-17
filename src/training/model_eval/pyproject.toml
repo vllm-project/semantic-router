@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "Environment for the model evaluation scripts under src/training/model_eval"
 requires-python = ">=3.10,<3.14"
 dependencies = [
-    "datasets>=2.19,<5",
+    "datasets>=2.19,<6",
     "huggingface_hub>=0.20,<2",
     "jsonschema>=4.18,<5",
     "matplotlib>=3.5,<4",
@@ -20,7 +20,7 @@ dependencies = [
     "seqeval>=1.2.2,<2",
     "torch>=2.2,<3",
     "tqdm>=4.60,<5",
-    "transformers>=4.57.6,<5",
+    "transformers>=4.57.6,<6",
 ]
 
 [dependency-groups]
