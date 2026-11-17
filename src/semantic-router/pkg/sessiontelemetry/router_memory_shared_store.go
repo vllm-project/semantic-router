@@ -251,6 +251,7 @@ func loadSharedRouterSessionSnapshotMode(sessionID string, now time.Time, hydrat
 	snapshot.LastPolicy = clonePolicyMap(snapshot.LastPolicy)
 	snapshot.RecentOutcomes = cloneTurnOutcomes(snapshot.RecentOutcomes)
 	snapshot.SwitchTimestamps = cloneInt64Slice(snapshot.SwitchTimestamps)
+	snapshot.LastCacheReceipt = cloneCacheReceipt(snapshot.LastCacheReceipt)
 	if hydrate {
 		hydrateRouterSessionSnapshot(snapshot)
 	}
@@ -282,6 +283,8 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 		turnCount:                       snapshot.TurnCount,
 		switchCount:                     snapshot.SwitchCount,
 		modelTurns:                      modelTurns,
+		userTurnCount:                   snapshot.UserTurnCount,
+		lastReleaseUserTurn:             snapshot.LastReleaseUserTurn,
 		cumulativePrompt:                snapshot.CumulativePromptTokens,
 		cumulativeCached:                snapshot.CumulativeCachedTokens,
 		cumulativeCacheWrite:            snapshot.CumulativeCacheWriteTokens,
@@ -295,6 +298,7 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 		lastCacheAccountingSource:       snapshot.LastCacheAccountingSource,
 		lastPolicy:                      clonePolicyMap(snapshot.LastPolicy),
 		recentOutcomes:                  cloneTurnOutcomes(snapshot.RecentOutcomes),
+		lastCacheReceipt:                cloneCacheReceipt(snapshot.LastCacheReceipt),
 	}
 }
 

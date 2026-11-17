@@ -100,6 +100,7 @@ def run_precommit(
             "configuration-reference-generated",
             "public-agent-skill",
             "supply-chain-security-scan",
+            "dashboard-js-ts-lint",
         }
         requested = set(filter(None, environment.get("SKIP", "").split(",")))
         environment["SKIP"] = ",".join(sorted(requested | owned_elsewhere))

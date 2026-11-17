@@ -10,8 +10,10 @@ it, compares the answers of the two with d3-turbo's own comparison as the
 yardstick, and times d3-ultra against d3-turbo on the same build.
 
 - **Date:** 2026-10-25.
-- **Packages:** `vllm-sr/d3-ultra` (`2f9a5e5e`) and `vllm-sr/d3-turbo`
-  (`689b3af1`).
+- **Packages:** `vllm-sr/d3-ultra` (`2f9a5e5e`, a pre-release revision that
+  is not on the Hub; the release the runtime pins, `52ba9e7a`, has another
+  first weight shard and `decision_config.json` but the same prompt layout
+  and temperatures) and `vllm-sr/d3-turbo` (`689b3af1`).
 - **Device:** one AMD Instinct MI325X (gfx942) per run, in the router's ROCm
   image (PyTorch 2.12.0 for ROCm 7.2, Triton 3.7.0, FLA 0.5.2) with this
   branch's runtime. The packages' own runtime ran through `AutoModel` with

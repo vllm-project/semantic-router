@@ -23,7 +23,7 @@ import (
 
 func TestProviderCredentialIsInjectedOnceWithOverwriteSemantics(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: private
@@ -32,10 +32,10 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: https://private.example/v1
-          auth_header: x-api-key
-          auth_prefix: ""
+          auth: {header: x-api-key, prefix: ""}
           api_key: static-secret
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ routing: {}
 
 func TestProviderWithNoAuthDoesNotRequireCredentialInFailClosedMode(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: local
@@ -80,7 +80,8 @@ providers:
       backend_refs:
         - provider: ollama
           endpoint: http://127.0.0.1:11434/v1
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -118,6 +119,33 @@ func TestProviderDispatchEncodesEveryClientBackendProtocolPair(t *testing.T) {
 	}
 }
 
+func TestProviderDispatchAcceptsAnthropicNullCitations(t *testing.T) {
+	router := routingTestRouter("chat")
+	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, nil)
+	body := []byte(`{"model":"chat","max_tokens":64,"messages":[
+		{"role":"user","content":"hi"},
+		{"role":"assistant","content":[{"type":"text","text":"hello","citations":null}]},
+		{"role":"user","content":"more"}]}`)
+	request, immediate := router.prepareProtocolRequest(body, ctx)
+	if immediate != nil || request == nil {
+		t.Fatalf("Anthropic history was rejected: %v", ctx.ImmediateProtocolError)
+	}
+	if _, err := router.prepareProviderDispatch(request, "chat", "", false, ctx); err != nil {
+		t.Fatal(err)
+	}
+	body, err := router.encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIChatV1, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Messages) != 3 || len(decoded.Messages[1].Content) != 1 || decoded.Messages[1].Content[0].Text != "hello" {
+		t.Fatalf("assistant history changed: %+v", decoded.Messages)
+	}
+}
+
 func TestAzureProviderDispatchAcceptsDecoratedResponse(t *testing.T) {
 	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	profile := router.Config.ProviderProfiles["provider"]
@@ -129,8 +157,8 @@ func TestAzureProviderDispatchAcceptsDecoratedResponse(t *testing.T) {
 	if _, err := router.prepareProviderDispatch(request, logicalModel, "", false, ctx); err != nil {
 		t.Fatal(err)
 	}
-	if ctx.ResponseVendor != llmprotocol.ResponseVendorAzure {
-		t.Fatalf("response vendor = %q, want Azure", ctx.ResponseVendor)
+	if ctx.ResponseVendor != "" {
+		t.Fatalf("response vendor = %q, want none: Azure decorations need no vendor", ctx.ResponseVendor)
 	}
 
 	body := []byte(`{"id":"response_1","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop","content_filter_results":{}}]}`)
@@ -200,12 +228,9 @@ func TestProviderDispatchAppliesReasoningBeforeExternalModelIDRewrite(t *testing
 }
 
 func TestToolSelectionMutatesNeutralRequestBeforeEveryProviderEncoding(t *testing.T) {
-	semanticSelection := false
 	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
-		Enabled:           true,
-		Mode:              config.ToolsPluginModeFiltered,
-		AllowTools:        []string{"lookup_weather"},
-		SemanticSelection: &semanticSelection,
+		Enabled: true,
+		Policy:  &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeFiltered, AllowTools: []string{"lookup_weather"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -515,9 +540,6 @@ func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	router := routingTestRouter("qwen14b-dev")
 	request := testNeutralRequest("vllm-sr/auto", "hello from routed model")
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
-	ctx.ModalityClassification = &ModalityClassificationResult{
-		Modality: ModalityBoth, Confidence: 0.97, Method: "signal",
-	}
 
 	response, err := router.handleEntrypointModelRouting(
 		request, "vllm-sr/auto", "", entropy.ReasoningDecision{}, "qwen14b-dev", ctx,
@@ -527,7 +549,7 @@ func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	}
 	common := response.GetRequestBody().GetResponse()
 	headersByName := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-	if got := headersByName[headers.SelectedModel]; got != "qwen14b-dev" {
+	if got := headersByName[headers.VSRRouteModel]; got != "qwen14b-dev" {
 		t.Fatalf("selected model header = %q", got)
 	}
 	var body map[string]any
@@ -539,9 +561,6 @@ func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	}
 	if request.Model != "qwen14b-dev" || ctx.SemanticRequest != request {
 		t.Fatalf("neutral request was not updated in place: %+v", request)
-	}
-	if ctx.ModalityClassification.Modality != ModalityBoth {
-		t.Fatalf("backend dispatch lost modality evidence: %+v", ctx.ModalityClassification)
 	}
 }
 
@@ -683,7 +702,7 @@ func TestProviderDispatchHonorsRouteCachePolicyAcrossRequestPaths(t *testing.T) 
 					t.Fatalf("expected provider dispatch, got %v", response)
 				}
 				values := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-				if values[headers.SelectedModel] != "worker" || values[":path"] != "/v1/chat/completions" {
+				if values[headers.VSRRouteModel] != "worker" || values[":path"] != "/v1/chat/completions" {
 					t.Fatalf("provider routing headers = %v", values)
 				}
 				if common.GetClearRouteCache() != clear {
@@ -700,7 +719,7 @@ func TestProviderAuthResolutionFailureEmitsEventAndKeepsGenericResponse(t *testi
 	defer restoreLogger()
 
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: broken
@@ -709,7 +728,8 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: https://broken.example/v1
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)

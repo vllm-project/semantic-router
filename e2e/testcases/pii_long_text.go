@@ -21,10 +21,11 @@ func init() {
 	})
 }
 
-// The PII token classifier truncates at its own sequence limit, so a single
-// classification call only ever scores the start of a long text. This drives the
-// endpoint with the entity placed past that limit, which no mocked backend can
-// reproduce: the truncation lives in the tokenizer.
+// A model reads at most its own sequence limit, so a call that sent only the
+// start of a long text would never see its end. This drives the endpoint with
+// the entity placed past any one sequence window; the profile's System One
+// fixture reads all of what it is sent, so it finds the marked entity only if
+// the Router sends the whole text.
 func testPIILongText(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -53,7 +54,7 @@ func testPIILongText(
 	}
 	filler := builder.String()
 
-	const secret = "Contact John Doe at john.doe@example.com or 555-123-4567."
+	const secret = "Contact John Doe at john.doe@example.com or 555-123-4567. __PII_SPAN__ EMAIL_ADDRESS john.doe@example.com"
 	text := filler + secret
 	secretStart := utf8.RuneCountInString(filler)
 

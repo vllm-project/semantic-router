@@ -4,7 +4,7 @@ import path from 'node:path'
 import { mockAuthenticatedAppShell, test } from './support/compiler'
 
 // Uses the production Go compiler through its HTTP handler; only server data is a fixture.
-const config = String.raw`version: v0.3
+const config = String.raw`version: v0.5
 providers:
   models:
     - name: model-a
@@ -12,19 +12,16 @@ providers:
         - name: local
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: model-a
-      modality: text
-  signals:
-    structure:
-      - name: numbered_steps
-        description: Prompts that contain numbered list items such as "1. ..."
-        feature:
-          type: exists
-          source:
-            type: regex
-            pattern: '(?m)^\s*\d+\.\s+'
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: numbered_steps
+          description: Prompts that contain numbered list items such as "1. ..."
+          operator: OR
+          method: regex
+          keywords:
+            - '(?m)^\s*\d+\.\s+'
 `
 
 test('keeps quotes and backslashes intact when a Builder signal is saved', async ({ page }) => {
@@ -48,5 +45,5 @@ test('keeps quotes and backslashes intact when a Builder signal is saved', async
   await expect(compiled).toContainText(
     'description: Prompts that contain numbered list items such as "1. ..."',
   )
-  await expect(compiled).toContainText(String.raw`pattern: (?m)^\s*\d+\.\s+`)
+  await expect(compiled).toContainText(String.raw`- (?m)^\s*\d+\.\s+`)
 })

@@ -1,5 +1,6 @@
 algorithm:
   type: remom
+  on_error: skip
   remom:
     breadth_schedule: [3, 2]
     model_distribution: round_robin
@@ -9,4 +10,3 @@ algorithm:
     round_timeout_seconds: 120
     min_successful_responses: 2
     include_intermediate_responses: false
-    on_error: skip

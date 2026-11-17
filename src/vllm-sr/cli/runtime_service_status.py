@@ -11,9 +11,13 @@ a container that is up but not answering yet.
 
 import yaml
 
-from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT
+from cli.consts import DEFAULT_ENVOY_PORT
 from cli.container_cli import container_exec, container_status
 from cli.decision_model import configured_decision_model
+from cli.runtime_management_config import (
+    ROUTER_MANAGEMENT_PORT_PATH,
+    _configured_management_port,
+)
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import fields
 from cli.utils import get_logger
@@ -56,27 +60,63 @@ def report_service_status(service: str, stack_layout) -> None:
         log.error(f"Failed to check {service} status: {exc}")
 
 
-def active_decision_model(stack_layout: RuntimeStackLayout) -> str | None:
-    """The decision model of the Router's active config, or None when unreadable."""
+def _active_router_config(container_name: str) -> dict | None:
+    """Read the running Router's config without exposing its contents in errors."""
 
     try:
         return_code, stdout, _stderr = container_exec(
-            stack_layout.service_container_name("router"),
+            container_name,
             ["sh", "-c", 'cat "$VLLM_SR_RUNTIME_CONFIG_PATH"'],
         )
         if return_code != 0:
             return None
-        return configured_decision_model(yaml.safe_load(stdout) or {})
+        document = yaml.safe_load(stdout) or {}
+        return document if isinstance(document, dict) else None
     except Exception:  # status output must survive an unreadable config
         return None
 
 
+def active_decision_model(stack_layout: RuntimeStackLayout) -> str | None:
+    """The decision model of the Router's active config, or None when unreadable."""
+
+    document = _active_router_config(stack_layout.service_container_name("router"))
+    if document is None:
+        return None
+    try:
+        return configured_decision_model(document)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def _check_router_status(container_name: str) -> bool:
+    try:
+        port = _router_management_port(container_name)
+    except ValueError:
+        return False
     return_code, _stdout, _stderr = container_exec(
         container_name,
-        ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
+        ["curl", "-f", "-s", f"http://localhost:{port}/health"],
     )
     return return_code == 0
+
+
+def _router_management_port(container_name: str) -> int:
+    try:
+        return_code, stdout, _stderr = container_exec(
+            container_name, ["cat", ROUTER_MANAGEMENT_PORT_PATH]
+        )
+    except Exception:  # retain compatibility with containers without a record
+        return_code = 1
+    if return_code == 0:
+        value = stdout.strip()
+        if not value.isascii() or not value.isdecimal() or int(value) == 0:
+            raise ValueError("invalid Router management port record")
+        return _configured_management_port(
+            {"global": {"services": {"management_api": {"port": int(value)}}}}
+        )
+    # Containers created before the startup wrapper use this best-effort path.
+    # Managed recreation enables the record before a future config can replace it.
+    return _configured_management_port(_active_router_config(container_name) or {})
 
 
 def _check_envoy_status(container_name: str, stack_layout: RuntimeStackLayout) -> bool:

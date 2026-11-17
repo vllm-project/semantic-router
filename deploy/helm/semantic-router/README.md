@@ -124,6 +124,12 @@ the locked chart dependencies.
 | dashboard.service.port | int | `8700` | Dashboard service port |
 | dashboard.service.targetPort | int | `8700` | Dashboard target port |
 | dashboard.service.type | string | `"ClusterIP"` | Dashboard service type |
+| data.persistence.accessMode | string | `"ReadWriteOnce"` | Access mode. Several Router replicas share the data directory only through ReadWriteMany. |
+| data.persistence.annotations | object | `{}` | Annotations for the PVC |
+| data.persistence.enabled | bool | `false` | Keep the Router's data directory, `/var/lib/vsr`, on a PersistentVolumeClaim so it survives Pod replacement. Off, it is an emptyDir that a new Pod starts empty. |
+| data.persistence.existingClaim | string | `""` | Existing claim name (if provided, will use existing PVC instead of creating new one) |
+| data.persistence.size | string | `"10Gi"` | Storage size of the data directory |
+| data.persistence.storageClassName | string | `""` | Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "". |
 | config.listeners[0].address | string | `"0.0.0.0"` |  |
 | config.listeners[0].name | string | `"http-8899"` |  |
 | config.listeners[0].port | int | `8899` |  |
@@ -137,18 +143,18 @@ the locked chart dependencies.
 | config.providers.models[0].backend_refs[0].weight | int | `100` |  |
 | config.providers.models[0].name | string | `"replace-with-your-model"` |  |
 | config.providers.models[0].provider_model_id | string | `"replace-with-your-model"` |  |
-| config.routing.decisions[0].description | string | `"Default route for every request while you wire real backends."` |  |
-| config.routing.decisions[0].modelRefs[0].model | string | `"replace-with-your-model"` |  |
-| config.routing.decisions[0].modelRefs[0].use_reasoning | bool | `false` |  |
-| config.routing.decisions[0].name | string | `"default-route"` |  |
-| config.routing.decisions[0].priority | int | `100` |  |
-| config.routing.decisions[0].rules.conditions | list | `[]` |  |
-| config.routing.decisions[0].rules.operator | string | `"AND"` |  |
-| config.routing.modelCards[0].name | string | `"replace-with-your-model"` |  |
-| config.routing.signals.domains[0].description | string | `"Catch-all domain"` |  |
-| config.routing.signals.domains[0].mmlu_categories[0] | string | `"other"` |  |
-| config.routing.signals.domains[0].name | string | `"general"` |  |
-| config.version | string | `"v0.3"` |  |
+| config.recipes[0].decisions[0].description | string | `"Default route for every request while you wire real backends."` |  |
+| config.recipes[0].decisions[0].modelRefs[0].model | string | `"replace-with-your-model"` |  |
+| config.recipes[0].decisions[0].modelRefs[0].use_reasoning | bool | `false` |  |
+| config.recipes[0].decisions[0].name | string | `"default-route"` |  |
+| config.recipes[0].decisions[0].priority | int | `100` |  |
+| config.recipes[0].decisions[0].rules.conditions | list | `[]` |  |
+| config.recipes[0].decisions[0].rules.operator | string | `"AND"` |  |
+| config.recipes[0].name | string | `"default"` |  |
+| config.recipes[0].signals.domains[0].description | string | `"Catch-all domain"` |  |
+| config.recipes[0].signals.domains[0].labels[0] | string | `"other"` |  |
+| config.recipes[0].signals.domains[0].name | string | `"general"` |  |
+| config.version | string | `"v0.5"` |  |
 | dependencies.observability.grafana.adminPassword | string | `"admin"` |  |
 | dependencies.observability.grafana.adminUser | string | `"admin"` |  |
 | dependencies.observability.grafana.enabled | bool | `false` |  |
@@ -220,8 +226,8 @@ the locked chart dependencies.
 | env[4].valueFrom.secretKeyRef.key | string | `"token"` |  |
 | env[4].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
 | env[4].valueFrom.secretKeyRef.optional | bool | `true` |  |
-| extraVolumeMounts | list | `[]` | Extra Router mounts. A mount at `/app/models` replaces the default model volume mount. |
-| extraVolumes | list | `[]` | Volumes for custom mounts; provide a matching volume when replacing `/app/models`. |
+| extraVolumeMounts | list | `[]` | Extra Router mounts. A mount at `/app/models` or `/var/lib/vsr` replaces the chart's model or data volume mount. |
+| extraVolumes | list | `[]` | Volumes for custom mounts; provide a matching volume when replacing `/app/models` or `/var/lib/vsr`. |
 | fullnameOverride | string | `""` | Override the full name of the chart |
 | gateway.mode | string | `"standalone"` | `standalone`: the Router serves the OpenAI-compatible API on `config.listeners` itself, answers `/health` and `/ready` there, and the Service exposes each listener's port; no Envoy runs. `extproc`: the Router serves Envoy's ext_proc gRPC on `service.grpc.port` for a gateway you run (Envoy Gateway, Envoy AI Gateway, Istio, KServe, llm-d). Releases before standalone mode deployed `extproc`; set it to keep such an integration. |
 | gateway.tls.secretName | string | `""` | Standalone only. A `kubernetes.io/tls` Secret mounted at `/app/config/certs`, for listeners whose `tls` names `cert_file: certs/tls.crt` and `key_file: certs/tls.key`. The Secret is mounted as a volume, so a rotated certificate reaches new connections without a restart. |
@@ -239,6 +245,7 @@ the locked chart dependencies.
 | ingress.hosts | list | `[{"host":"semantic-router.local","paths":[{"path":"/","pathType":"Prefix"}]}]` | Ingress hosts configuration. A path without `servicePort` goes to the first listener without TLS in standalone mode, and to `service.api.port` in extproc mode. |
 | ingress.tls | list | `[]` | Ingress TLS configuration |
 | jaeger.allInOne.image.tag | string | `"latest"` |  |
+| lifecycle | object | `{}` | The Router container's lifecycle hooks, such as a preStop sleep that gives load balancers time to take the pod out of rotation before its listeners close. |
 | livenessProbe.enabled | bool | `true` | Enable liveness probe |
 | livenessProbe.failureThreshold | int | `5` | Failure threshold |
 | livenessProbe.initialDelaySeconds | int | `30` | Initial delay seconds |
@@ -299,6 +306,7 @@ the locked chart dependencies.
 | startupProbe.failureThreshold | int | `360` | Failure threshold (360 * 10s = 60 minutes total timeout for model downloads) |
 | startupProbe.periodSeconds | int | `10` | Period seconds |
 | startupProbe.timeoutSeconds | int | `5` | Timeout seconds |
+| terminationGracePeriodSeconds | int | `nil` | Seconds Kubernetes waits, once it signals the Router to stop, before it kills it. Unset, Kubernetes waits 30 s, which fits the standalone gateway's default drain (config global.router.drain_timeout_seconds, 25 s) and the 5 s after it. A longer drain or a preStop delay needs at least preStop delay + drain + 5 s, with some margin. |
 | tolerations | list | `[]` |  |
 | toolsDb[0].category | string | `"weather"` |  |
 | toolsDb[0].description | string | `"Get current weather information, temperature, conditions, forecast for any location, city, or place. Check weather today, now, current conditions, temperature, rain, sun, cloudy, hot, cold, storm, snow"` |  |
@@ -430,7 +438,7 @@ in front of the Service sets them, add `identity: {trust_headers: true}` to that
 listener in `config.listeners`, with `trusted_peers` set to the proxy's Pod or
 node CIDRs; memory, authz signals and per-user rate limits then see the user.
 
-**GPU platforms.** `vllm-sr serve --target kubernetes --platform amd|nvidia`
+**GPU platforms.** `vllm-sr serve --target kubernetes --platform rocm|cuda`
 sets `image.repository` to `vllm-sr-rocm` or `vllm-sr-cuda` and adds
 `amd.com/gpu: 1` or `nvidia.com/gpu: 1` to `resources.limits`. Set the same
 values yourself to run the built-in models on a GPU node. The Router runs as
@@ -496,3 +504,16 @@ config backups.
 Managed knowledge base assets need a writable, persistent directory in
 addition to the YAML document; their mutation API returns
 `KB_ASSET_STORAGE_READ_ONLY` on ConfigMap-backed deployments.
+
+### Router data directory
+
+The Router's root filesystem is read-only. Besides `/tmp` and the model volume
+at `/app/models`, the chart mounts a writable data directory at
+`/var/lib/vsr`, where the vector store keeps uploaded files
+(`global.stores.vector_store.file_storage_dir`, `/var/lib/vsr/data` by
+default). It is an emptyDir unless `data.persistence.enabled=true` puts it on
+a PersistentVolumeClaim. A mount at `/var/lib/vsr` in `extraVolumeMounts`
+replaces it. When a configured storage directory is not writable, the Router
+stops at startup with an error that names the setting, before it downloads any
+model. [Files on the Router's disk](https://vllm-sr.ai/docs/installation/storage-overview#router-local-files)
+covers the settings, persistence and replicas.

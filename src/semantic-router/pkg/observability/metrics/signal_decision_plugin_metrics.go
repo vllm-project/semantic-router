@@ -38,6 +38,63 @@ var (
 		[]string{"signal_type", "signal_name"},
 	)
 
+	// SignalScanCoverageTotal counts the guard rules (jailbreak, safety, pii)
+	// by how much of their input they read: full, partial (some windows) or
+	// none.
+	SignalScanCoverageTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_scan_coverage_total",
+			Help: "Guard signal rules by how much of their input the model read: full, partial or none",
+		},
+		[]string{"signal", "result"},
+	)
+
+	// SignalScanCoverageRatio is the share of its windows a guard rule that
+	// read a long input in windows read: 1 for a full read.
+	SignalScanCoverageRatio = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "vsr_signal_scan_coverage_ratio",
+			Help:    "Share of its windows, 0 to 1, a guard signal rule that read a long input in windows read",
+			Buckets: []float64{0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99, 1},
+		},
+		[]string{"signal"},
+	)
+
+	// SignalScanDecidedTotal counts the guard rules a window decided before
+	// every window of their input was read: its answer made the rule match.
+	SignalScanDecidedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_scan_decided_total",
+			Help: "Guard signal rules a matching window decided before every window of their long input was read",
+		},
+		[]string{"signal"},
+	)
+
+	// SignalOverloadWaitsTotal counts the request-stage calls that the
+	// decision runtime refused as overloaded and that the Router asked again
+	// while the request waited for capacity
+	// (global.model_catalog.on_signal_overload), by how the last one ended:
+	// ok when capacity freed, overloaded when the wait ran out, or the reason
+	// of another failure.
+	SignalOverloadWaitsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_overload_waits_total",
+			Help: "Request-stage calls the decision runtime refused as overloaded and the Router asked again, by outcome: ok, overloaded or another failure's reason",
+		},
+		[]string{"deployment", "outcome"},
+	)
+
+	// SignalOverloadRetryableTotal counts the requests answered a retryable
+	// error (429, or 529 for Anthropic Messages) instead of a refusal or a
+	// forward that rules unread on an overloaded decision runtime decide.
+	SignalOverloadRetryableTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_overload_retryable_total",
+			Help: "Requests answered a retryable error instead of a refusal or a forward decided by rules unread on an overloaded decision runtime",
+		},
+		[]string{"format"},
+	)
+
 	// DecisionEvaluationTotal tracks the total number of decision evaluations
 	DecisionEvaluationTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
@@ -110,6 +167,16 @@ var (
 		},
 		[]string{"plugin_type", "error_reason"},
 	)
+
+	// ResponseGuardBufferedTotal counts the streamed answers the Router held
+	// until the decision's response_guard had read them, by what became of each.
+	ResponseGuardBufferedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_response_guard_buffered_total",
+			Help: "Streamed answers held for the decision's response_guard by decision and outcome: passed, annotated, blocked, over_limit or incomplete",
+		},
+		[]string{"decision_name", "outcome"},
+	)
 )
 
 // RecordSignalExtraction records a signal extraction event
@@ -133,6 +200,51 @@ func RecordSignalMatch(signalType, signalName string) {
 		signalName = consts.UnknownLabel
 	}
 	SignalMatchTotal.WithLabelValues(signalType, signalName).Inc()
+}
+
+// RecordSignalScanCoverage records how much of its input a guard rule,
+// "type:name", read.
+func RecordSignalScanCoverage(signal, result string) {
+	if signal == "" {
+		signal = consts.UnknownLabel
+	}
+	SignalScanCoverageTotal.WithLabelValues(signal, result).Inc()
+}
+
+// RecordSignalScanCoverageRatio records the share of its windows a guard
+// rule, "type:name", read of a long input.
+func RecordSignalScanCoverageRatio(signal string, ratio float64) {
+	if signal == "" {
+		signal = consts.UnknownLabel
+	}
+	SignalScanCoverageRatio.WithLabelValues(signal).Observe(ratio)
+}
+
+// RecordSignalScanDecided records a guard rule, "type:name", that a window
+// decided before every window of its input was read.
+func RecordSignalScanDecided(signal string) {
+	if signal == "" {
+		signal = consts.UnknownLabel
+	}
+	SignalScanDecidedTotal.WithLabelValues(signal).Inc()
+}
+
+// RecordSignalOverloadWait records a call asked again while its request
+// waited for capacity, by how the last one ended.
+func RecordSignalOverloadWait(deployment, outcome string) {
+	if deployment == "" {
+		deployment = consts.UnknownLabel
+	}
+	SignalOverloadWaitsTotal.WithLabelValues(deployment, outcome).Inc()
+}
+
+// RecordSignalOverloadRetryable records a request answered a retryable
+// error instead of a refusal or a forward, by its client's wire format.
+func RecordSignalOverloadRetryable(format string) {
+	if format == "" {
+		format = consts.UnknownLabel
+	}
+	SignalOverloadRetryableTotal.WithLabelValues(format).Inc()
 }
 
 // RecordDecisionEvaluation records a decision evaluation event
@@ -188,4 +300,13 @@ func RecordPluginError(pluginType, errorReason string) {
 		errorReason = "unknown"
 	}
 	PluginExecutionErrors.WithLabelValues(pluginType, errorReason).Inc()
+}
+
+// RecordResponseGuardBuffered records one streamed answer held for the
+// decision's response_guard and what became of it.
+func RecordResponseGuardBuffered(decisionName, outcome string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	ResponseGuardBufferedTotal.WithLabelValues(decisionName, outcome).Inc()
 }

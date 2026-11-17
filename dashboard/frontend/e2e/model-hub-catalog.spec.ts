@@ -76,9 +76,9 @@ test('Model Hub exposes model search before evaluations finish and shares the re
   await page.route('**/api/router/config/all', (route) =>
     route.fulfill({
       json: {
-        version: 'v0.3',
+        version: 'v0.5',
         providers: { models: [] },
-        routing: { signals: {}, decisions: [] },
+        recipes: [{ name: 'default' }],
         global: {},
       },
     }),
@@ -125,9 +125,9 @@ test('Global Config does not load unrelated manager sections or the full model c
   await page.route('**/api/router/config/all', (route) =>
     route.fulfill({
       json: {
-        version: 'v0.3',
+        version: 'v0.5',
         providers: { models: [] },
-        routing: { signals: {}, decisions: [] },
+        recipes: [{ name: 'default' }],
         global: {},
       },
     }),

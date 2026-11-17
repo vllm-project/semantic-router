@@ -25,7 +25,7 @@
   "usage": {
     "input_tokens": 5,
     "input_tokens_details": {
-      "cached_tokens": null
+      "cached_tokens": 0
     },
     "output_tokens": 3,
     "output_tokens_details": {

@@ -25,7 +25,7 @@ func TestRedisExtractSearchResultUsesConfiguredMetric(t *testing.T) {
 		metric     string
 		similarity float32
 	}{
-		{"COSINE", 0.625},  // 1 - d/2
+		{"COSINE", 0.25},   // 1 - d, the cosine
 		{"IP", 0.25},       // 1 - d
 		{"L2", 1.0 / 1.75}, // 1 / (1 + d)
 	}
@@ -93,7 +93,7 @@ func TestRedisMetricTypeNormalization(t *testing.T) {
 
 // TestRedisExtractSearchResultMissingDistance covers the parse failures that
 // must be reported as "not ok" rather than as a similarity of zero, which the
-// caller would otherwise store and expose as x-vsr-cache-similarity.
+// caller would otherwise store and expose as the trace's cache_similarity.
 func TestRedisExtractSearchResultMissingDistance(t *testing.T) {
 	cfg := &config.RedisConfig{}
 	cfg.Index.VectorField.MetricType = "COSINE"

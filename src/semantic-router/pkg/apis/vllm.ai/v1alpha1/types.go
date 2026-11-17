@@ -188,7 +188,6 @@ type IntelligentPoolList struct {
 // +kubebuilder:resource:scope=Namespaced,shortName=iroute
 // +kubebuilder:printcolumn:name="Decisions",type="integer",JSONPath=".status.statistics.decisions",description="Number of decisions"
 // +kubebuilder:printcolumn:name="Keywords",type="integer",JSONPath=".status.statistics.keywords",description="Number of keyword signals"
-// +kubebuilder:printcolumn:name="Embeddings",type="integer",JSONPath=".status.statistics.embeddings",description="Number of embedding signals"
 // +kubebuilder:printcolumn:name="Domains",type="integer",JSONPath=".status.statistics.domains",description="Number of domain signals"
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="Ready status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

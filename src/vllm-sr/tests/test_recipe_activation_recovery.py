@@ -48,14 +48,14 @@ def _write_valid_active_package(
 ) -> dict[str, object]:
     files = {
         "metadata.yaml": b"schema_version: vllm-sr/recipe-metadata/v1\nid: test\n",
-        "config.yaml": b"version: v0.3\nlisteners:\n  - port: 8899\n",
+        "config.yaml": b"version: v0.5\nlisteners:\n  - port: 8899\n",
         "probes.yaml": b"schema_version: vllm-sr/recipe-probes/v1\nname: test\n",
         "recipe.dsl": b'recipe "test" {}\n',
         "README.md": b"# Test Recipe\n",
     }
     raw_digest = _digest(files["config.yaml"])
     digest = recipe_digest(files)
-    realized = b"version: v0.3\nlisteners:\n  - port: 8899\nsetup:\n  mode: false\n"
+    realized = b"version: v0.5\nlisteners:\n  - port: 8899\nsetup:\n  mode: false\n"
 
     runtime_dir = tmp_path / ".vllm-sr"
     runtime_dir.mkdir(exist_ok=True)
@@ -86,8 +86,8 @@ def _write_valid_active_package(
 def _write_crashed_activation(
     tmp_path: Path, *, previous_pointer: dict[str, str] | None
 ) -> tuple[Path, Path, Path, bytes, bytes]:
-    previous_config = b"version: v0.3\nlisteners:\n  - port: 8899\n"
-    unverified_target = b"version: v0.3\nlisteners:\n  - port: 9999\n"
+    previous_config = b"version: v0.5\nlisteners:\n  - port: 8899\n"
+    unverified_target = b"version: v0.5\nlisteners:\n  - port: 9999\n"
     runtime_dir = tmp_path / ".vllm-sr"
     runtime_dir.mkdir()
     runtime_config = runtime_dir / "runtime-config.yaml"
@@ -375,7 +375,7 @@ def test_core_recovers_then_validates_before_cleanup_or_provision(
 ):
     events: list[str] = []
     config = tmp_path / "config.yaml"
-    config.write_text("version: v0.3\n", encoding="utf-8")
+    config.write_text("version: v0.5\n", encoding="utf-8")
     monkeypatch.setattr(core, "print_vllm_logo", lambda: None)
     monkeypatch.setattr(
         core,
@@ -654,7 +654,7 @@ def test_committing_activation_rejects_tampered_object_before_topology_cleanup(
     pointer = active["pointer"]
     transaction_dir = store_dir / "transactions" / TRANSACTION_ID
     transaction_dir.mkdir(parents=True)
-    previous = b"version: v0.3\nlisteners:\n  - port: 7777\n"
+    previous = b"version: v0.5\nlisteners:\n  - port: 7777\n"
     backup_path = transaction_dir / "previous-config.yaml"
     backup_path.write_bytes(previous)
     journal_path = store_dir / "activation-pending.json"
@@ -752,7 +752,7 @@ def test_core_recovers_before_loading_runtime_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     source = tmp_path / "config.yaml"
-    source.write_text("version: v0.3\n", encoding="utf-8")
+    source.write_text("version: v0.5\n", encoding="utf-8")
     runtime_config, _store_dir, _transaction_dir, previous, _target = (
         _write_crashed_activation(tmp_path, previous_pointer=None)
     )

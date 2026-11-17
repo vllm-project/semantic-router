@@ -1,8 +1,8 @@
 // Package jailbreakonerror provides the e2e test profile for #2918's
-// PromptGuardConfig.OnError contract. It deploys the router with
-// prompt_guard.backend pointed at a deliberately unreachable endpoint and
-// on_error: block, then verifies that a classify failure closes the request
-// instead of silently letting it through.
+// fail-closed jailbreak contract. It deploys the router with its jailbreak
+// rule answered by a systemone deployment at a deliberately unreachable
+// endpoint, then verifies that the unknown signal closes the request instead
+// of silently letting it through.
 package jailbreakonerror
 
 import (
@@ -14,10 +14,7 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const (
-	valuesFile           = "e2e/profiles/jailbreak-onerror/values.yaml"
-	mappingConfigMapYAML = "deploy/kubernetes/jailbreak-onerror/jailbreak-mapping-configmap.yaml"
-)
+const valuesFile = "e2e/profiles/jailbreak-onerror/values.yaml"
 
 var resourceManifests = []string{
 	"deploy/kubernetes/hallucination/provider-mocker.yaml",
@@ -27,12 +24,13 @@ var resourceManifests = []string{
 // waitDeployments are the mock backends the profile must wait on before
 // running tests. provider-mocker exists only to satisfy config validation (a
 // modelRef needs a real backend) - the request path under test never
-// reaches it, since on_error: block short-circuits before model selection.
+// reaches it, since the blocking decision short-circuits before model
+// selection.
 var waitDeployments = []helpers.DeploymentRef{
 	{Namespace: "default", Name: "provider-mocker"},
 }
 
-// Profile implements the PromptGuardConfig.OnError test profile.
+// Profile implements the fail-closed jailbreak test profile.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
@@ -43,7 +41,6 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "jailbreak-onerror",
 			SemanticRouterValuesFile: valuesFile,
-			PrerequisiteManifests:    []string{mappingConfigMapYAML},
 			ResourceManifests:        resourceManifests,
 			WaitDeployments:          waitDeployments,
 		}),
@@ -57,7 +54,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests PromptGuardConfig.OnError: block against a real classify failure end-to-end"
+	return "Tests that a jailbreak rule whose deployment is unreachable fails closed end-to-end"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.

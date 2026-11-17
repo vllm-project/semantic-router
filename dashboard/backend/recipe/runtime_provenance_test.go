@@ -125,7 +125,7 @@ func TestBoundRuntimeConfigDigestUsesCommittedPackageActivationReceipt(t *testin
 	defer archiveServer.Close()
 	root := t.TempDir()
 	runtimePath := filepath.Join(root, "runtime-config.yaml")
-	previous := []byte("version: v0.3\n")
+	previous := []byte("version: v0.5\n")
 	if err := os.WriteFile(runtimePath, previous, 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,26 @@
+# algorithm.type: decision with an algorithm.decision block is the systemone selector.
+version: v0.5
+providers:
+  defaults: {model: small}
+  models:
+    - name: small
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
+    - name: large
+      backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+      description: Strong reasoning model
+recipes:
+  - name: default
+    decisions:
+      - name: pick
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: systemone
+          systemone:
+            instructions: Which model should answer this request?
+            candidates:
+              small: Fast general model for routine work
+              large: Strong reasoning model for hard work
+            timeout_ms: 1000

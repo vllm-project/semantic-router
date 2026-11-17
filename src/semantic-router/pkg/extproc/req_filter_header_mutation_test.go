@@ -28,7 +28,7 @@ func TestBuildHeaderMutationsUsesDistinctAddAndUpdateSemantics(t *testing.T) {
 		},
 	}
 
-	setHeaders, removeHeaders := (&OpenAIRouter{}).buildHeaderMutations(decision)
+	setHeaders, removeHeaders := (&OpenAIRouter{}).buildHeaderMutations(&RequestContext{VSRSelectedDecision: decision})
 	if len(setHeaders) != 2 {
 		t.Fatalf("set headers = %d, want 2", len(setHeaders))
 	}
@@ -37,6 +37,13 @@ func TestBuildHeaderMutationsUsesDistinctAddAndUpdateSemantics(t *testing.T) {
 	}
 	if got := setHeaders[1].GetAppendAction(); got != corev3.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD {
 		t.Fatalf("update append action = %v, want OVERWRITE_IF_EXISTS_OR_ADD", got)
+	}
+	// Envoy's ext_proc reads the deprecated append flag, not append_action.
+	if !setHeaders[0].GetAppend().GetValue() {
+		t.Fatal("add must set the deprecated append flag that ext_proc reads")
+	}
+	if setHeaders[1].GetAppend().GetValue() {
+		t.Fatal("update must not append")
 	}
 	if len(removeHeaders) != 1 || removeHeaders[0] != "x-deleted" {
 		t.Fatalf("remove headers = %#v, want [x-deleted]", removeHeaders)

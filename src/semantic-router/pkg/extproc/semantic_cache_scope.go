@@ -17,20 +17,12 @@ func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool 
 		strings.TrimSpace(responseCacheScopeIdentity(ctx)) == "" {
 		return false
 	}
-	if ctx != nil && ctx.VSRSelectedDecision != nil {
-		return r.Config.IsCacheEnabledForDecisionObject(ctx.VSRSelectedDecision)
-	}
-	if r.Config.HasRoutingDecisions() {
-		return false
-	}
-	return r.Config.Enabled
+	plugin := requestResponseCache(ctx)
+	return plugin != nil && plugin.Enabled
 }
 
 func responseCacheModeForRequest(ctx *RequestContext) string {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return config.ResponseCacheModeSemantic
-	}
-	pluginConfig := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	pluginConfig := requestResponseCache(ctx)
 	if pluginConfig == nil || strings.TrimSpace(pluginConfig.Mode) == "" {
 		return config.ResponseCacheModeSemantic
 	}

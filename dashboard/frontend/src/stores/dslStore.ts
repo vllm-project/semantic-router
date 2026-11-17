@@ -35,8 +35,9 @@ import {
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
 import type { EditorMode, CompileResult, ValidateResult, DSLFieldObject } from '@/types/dsl'
+import { configSaveWarnings } from '@/utils/configSaveWarnings'
 import type { DSLStore } from './dslStoreTypes'
-import { initialDSLState, type DeployStatusResponse } from './dslStoreSupport'
+import { deployBaseYaml, initialDSLState, type DeployStatusResponse } from './dslStoreSupport'
 import { renderCanonicalYaml } from './dslStoreYamlSupport'
 
 // ---------- Debounce helper ----------
@@ -107,7 +108,8 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   async compile() {
-    const { dslSource, compilerReady, baseConfigYaml } = get()
+    const base = get()
+    const { dslSource, compilerReady } = base
     if (!compilerReady) return
     if (!dslSource.trim()) {
       set({
@@ -142,7 +144,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       })
       if (compiledYaml) {
         const requestId = ++renderedYamlRequestId
-        void renderCanonicalYaml(compiledYaml, dslSource, baseConfigYaml, editorRequests.signal)
+        void renderCanonicalYaml(compiledYaml, dslSource, base, editorRequests.signal)
           .then((renderedYamlOutput) => {
             if (requestId !== renderedYamlRequestId || get().yamlOutput !== compiledYaml) return
             set({ renderedYamlOutput })
@@ -301,7 +303,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     }
   },
 
-  async importYaml(yaml: string) {
+  async importYaml(yaml: string, fromRouter = false) {
     const revision = sourceRevision
     const requestId = ++importRequestId
     const dsl = await get().decompile(yaml)
@@ -320,6 +322,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       diagnostics: [],
       compileError: null,
       baseConfigYaml: yaml,
+      baseConfigFromRouter: fromRouter,
       renderedYamlOutput: yaml,
     })
     const state = get()
@@ -343,7 +346,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     }
     if (revision !== sourceRevision)
       throw new Error('The draft changed while loading. Load again to replace it.')
-    await get().importYaml(yaml)
+    await get().importYaml(yaml, true)
   },
 
   // --- Visual Builder mutations (Phase 2) ---
@@ -512,7 +515,8 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   // --- Deploy actions ---
 
   async requestDeploy() {
-    const { yamlOutput, dslSource, compilerReady, dirty, baseConfigYaml } = get()
+    const { yamlOutput, dslSource, compilerReady, dirty } = get()
+    const baseYaml = deployBaseYaml(get())
     if (!compilerReady || !dslSource.trim()) return
 
     const revision = sourceRevision
@@ -551,7 +555,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     fetch('/api/router/config/deploy/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ yaml, dsl: dslSource, baseYaml: baseConfigYaml, mode: 'replace' }),
+      body: JSON.stringify({ yaml, dsl: dslSource, baseYaml, mode: 'replace' }),
     })
       .then(async (resp) => {
         if (!resp.ok) {
@@ -576,7 +580,8 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   async executeDeploy() {
-    const { yamlOutput, dslSource, baseConfigYaml } = get()
+    const { yamlOutput, dslSource } = get()
+    const baseYaml = deployBaseYaml(get())
     if (!yamlOutput) return
 
     console.log(
@@ -599,7 +604,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         body: JSON.stringify({
           yaml: yamlOutput,
           dsl: dslSource,
-          baseYaml: baseConfigYaml,
+          baseYaml,
           mode: 'replace',
         }),
       })
@@ -624,6 +629,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         return
       }
 
+      const warnings = configSaveWarnings(data)
       if (data.status === 'persisted' || data.status === 'restart_required') {
         set({
           deploying: false,
@@ -633,6 +639,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
             version: data.version,
             message:
               data.message || 'Configuration saved. Roll out Router and Envoy to activate it.',
+            warnings,
           },
           savedSource: dslSource,
         })
@@ -676,6 +683,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
           message: healthy
             ? `Deployed v${data.version} — ${reloaded} reloaded successfully.`
             : `Deployed v${data.version} — Runtime reload status unknown (check logs).`,
+          warnings,
         },
         savedSource: dslSource,
       })

@@ -7,11 +7,12 @@ import (
 )
 
 func TestFallbackConfigDefaultsDisabled(t *testing.T) {
-	input := []byte(`version: v0.3
-routing:
-  decisions:
-    - name: route1
-      modelRefs: [{model: m1}]
+	input := []byte(`version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: route1
+        modelRefs: [{model: m1}]
 `)
 	cfg, err := ParseYAMLBytes(input)
 	if err != nil {
@@ -30,76 +31,84 @@ func TestFallbackConfigValidation(t *testing.T) {
 	}{
 		{
 			name: "unsupported version",
-			yamlSnippet: `version: v0.3
-routing:
-  fallback:
-    version: 2
-    enabled: true
+			yamlSnippet: `version: v0.5
+recipes:
+  - name: default
+    fallback:
+      version: 2
+      enabled: true
 `,
 			errSubstr: "unsupported fallback policy version 2",
 		},
 		{
 			name: "max_attempts negative when enabled",
-			yamlSnippet: `version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: -1
+			yamlSnippet: `version: v0.5
+recipes:
+  - name: default
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: -1
 `,
 			errSubstr: "max_attempts must be >= 1 when enabled",
 		},
 		{
 			name: "per_attempt_timeout exceeds total_timeout",
-			yamlSnippet: `version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 3
-    total_timeout: 5s
-    per_attempt_timeout: 10s
+			yamlSnippet: `version: v0.5
+recipes:
+  - name: default
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 3
+      total_timeout: 5s
+      per_attempt_timeout: 10s
 `,
 			errSubstr: "per_attempt_timeout (10s) cannot exceed total_timeout (5s)",
 		},
 		{
 			name: "invalid retryable status code",
-			yamlSnippet: `version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 3
-    retryable_status_codes: [999]
+			yamlSnippet: `version: v0.5
+recipes:
+  - name: default
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 3
+      retryable_status_codes: [999]
 `,
 			errSubstr: "invalid retryable status code 999",
 		},
 		{
 			name: "invalid circuit breaker cooldown",
-			yamlSnippet: `version: v0.3
-routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 3
-    circuit_breaker:
-      cooldown_period: -5s
+			yamlSnippet: `version: v0.5
+recipes:
+  - name: default
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 3
+      circuit_breaker:
+        cooldown_period: -5s
 `,
 			errSubstr: "cooldown_period cannot be negative",
 		},
 		{
 			name: "invalid recipe-scoped fallback",
-			yamlSnippet: `version: v0.3
-routing: {}
+			yamlSnippet: `version: v0.5
 recipes:
+  - name: default
   - name: broken-recipe
-    routing:
-      fallback:
-        version: 1
-        enabled: true
-        max_attempts: -1
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: -1
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
-			errSubstr: "recipes[broken-recipe].routing.fallback: fallback max_attempts must be >= 1 when enabled",
+			errSubstr: "recipes[broken-recipe].fallback: fallback max_attempts must be >= 1 when enabled",
 		},
 	}
 
@@ -117,7 +126,7 @@ recipes:
 }
 
 func TestFallbackRecipeInheritanceAndOverrides(t *testing.T) {
-	input := []byte(`version: v0.3
+	input := []byte(`version: v0.5
 global:
   router:
     fallback:
@@ -127,16 +136,19 @@ global:
       total_timeout: 20s
       per_attempt_timeout: 5s
 recipes:
+  - name: default
   - name: active-fallback
-    routing:
-      fallback:
-        version: 1
-        enabled: true
-        max_attempts: 5
-        total_timeout: 45s
-        per_attempt_timeout: 10s
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 5
+      total_timeout: 45s
+      per_attempt_timeout: 10s
   - name: inherited-fallback
-    routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `)
 	cfg, err := ParseYAMLBytes(input)
 	if err != nil {
@@ -191,13 +203,14 @@ recipes:
 }
 
 func TestFallbackRoutingFragment(t *testing.T) {
-	fragment := []byte(`routing:
-  fallback:
-    version: 1
-    enabled: true
-    max_attempts: 4
-    total_timeout: 30s
-    per_attempt_timeout: 8s
+	fragment := []byte(`recipes:
+  - name: default
+    fallback:
+      version: 1
+      enabled: true
+      max_attempts: 4
+      total_timeout: 30s
+      per_attempt_timeout: 8s
 `)
 	cfg, err := ParseRoutingYAMLBytes(fragment)
 	if err != nil {
@@ -218,7 +231,7 @@ func TestFallbackRoutingFragment(t *testing.T) {
 }
 
 func TestFallbackRecipePartialOverridePreservesGlobalEnabled(t *testing.T) {
-	input := []byte(`version: v0.3
+	input := []byte(`version: v0.5
 global:
   router:
     fallback:
@@ -232,19 +245,21 @@ global:
         cooldown_period: 30s
         half_open_probes: 1
 recipes:
+  - name: default
   - name: partial-tuning
-    routing:
-      fallback:
-        max_attempts: 5
-        circuit_breaker:
-          consecutive_failures: 1
+    fallback:
+      max_attempts: 5
+      circuit_breaker:
+        consecutive_failures: 1
   - name: explicitly-disabled
-    routing:
-      fallback:
-        enabled: false
-        max_attempts: 2
+    fallback:
+      enabled: false
+      max_attempts: 2
   - name: pure-inherit
-    routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `)
 	cfg, err := ParseYAMLBytes(input)
 	if err != nil {
@@ -312,7 +327,7 @@ recipes:
 func TestFallbackRecipeEnableOnlyOverrideInheritsGlobalLimits(t *testing.T) {
 	// 1. Enable-only recipe with global limits defined
 	yamlConfigWithGlobal := `
-version: v0.3
+version: v0.5
 global:
   router:
     fallback:
@@ -322,10 +337,14 @@ global:
       total_timeout: 10s
       per_attempt_timeout: 4s
 recipes:
+  - name: default
   - name: enable-only-with-global
-    routing:
-      fallback:
-        enabled: true
+    fallback:
+      enabled: true
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	cfg, err := ParseYAMLBytes([]byte(yamlConfigWithGlobal))
 	if err != nil {
@@ -355,12 +374,16 @@ recipes:
 
 	// 2. Enable-only recipe without any global fallback defined (inherits canonical defaults)
 	yamlConfigNoGlobal := `
-version: v0.3
+version: v0.5
 recipes:
+  - name: default
   - name: enable-only-no-global
-    routing:
-      fallback:
-        enabled: true
+    fallback:
+      enabled: true
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	cfgNoGlobal, err := ParseYAMLBytes([]byte(yamlConfigNoGlobal))
 	if err != nil {
@@ -387,7 +410,7 @@ recipes:
 
 	// 3. Explicitly invalid recipe values must still be rejected during validation
 	yamlConfigInvalid := `
-version: v0.3
+version: v0.5
 global:
   router:
     fallback:
@@ -395,10 +418,14 @@ global:
       enabled: true
       max_attempts: 3
 recipes:
+  - name: default
   - name: explicitly-invalid-recipe
-    routing:
-      fallback:
-        max_attempts: -1
+    fallback:
+      max_attempts: -1
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	_, err = ParseYAMLBytes([]byte(yamlConfigInvalid))
 	if err == nil {
@@ -413,7 +440,7 @@ func TestFallbackRecipeProactiveOverridePermutationsAndValidation(t *testing.T) 
 	// - recipe-status-codes: overrides retryable status codes only
 	// - recipe-unconfigured: omits fallback completely (inherits clean clone of global)
 	multiRecipeYAML := `
-version: v0.3
+version: v0.5
 global:
   router:
     fallback:
@@ -428,23 +455,24 @@ global:
         cooldown_period: 20s
         half_open_probes: 2
 recipes:
+  - name: default
   - name: recipe-timeouts
-    routing:
-      fallback:
-        total_timeout: 15s
-        per_attempt_timeout: 5s
+    fallback:
+      total_timeout: 15s
+      per_attempt_timeout: 5s
   - name: recipe-breaker
-    routing:
-      fallback:
-        circuit_breaker:
-          consecutive_failures: 5
-          cooldown_period: 45s
+    fallback:
+      circuit_breaker:
+        consecutive_failures: 5
+        cooldown_period: 45s
   - name: recipe-status-codes
-    routing:
-      fallback:
-        retryable_status_codes: [503]
+    fallback:
+      retryable_status_codes: [503]
   - name: recipe-unconfigured
-    routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	cfg, err := ParseYAMLBytes([]byte(multiRecipeYAML))
 	if err != nil {
@@ -533,7 +561,7 @@ recipes:
 		{
 			name: "recipe per_attempt_timeout exceeds inherited total_timeout",
 			yaml: `
-version: v0.3
+version: v0.5
 global:
   router:
     fallback:
@@ -543,17 +571,21 @@ global:
       total_timeout: 20s
       per_attempt_timeout: 5s
 recipes:
+  - name: default
   - name: conflicting-timeouts
-    routing:
-      fallback:
-        per_attempt_timeout: 30s
+    fallback:
+      per_attempt_timeout: 30s
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "cannot exceed total_timeout",
 		},
 		{
 			name: "recipe total_timeout smaller than inherited per_attempt_timeout",
 			yaml: `
-version: v0.3
+version: v0.5
 global:
   router:
     fallback:
@@ -563,97 +595,129 @@ global:
       total_timeout: 30s
       per_attempt_timeout: 10s
 recipes:
+  - name: default
   - name: clamped-total
-    routing:
-      fallback:
-        total_timeout: 5s
+    fallback:
+      total_timeout: 5s
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "cannot exceed total_timeout",
 		},
 		{
 			name: "recipe negative total_timeout",
 			yaml: `
-version: v0.3
+version: v0.5
 recipes:
+  - name: default
   - name: neg-total
-    routing:
-      fallback:
-        total_timeout: -5s
+    fallback:
+      total_timeout: -5s
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "total_timeout cannot be negative",
 		},
 		{
 			name: "recipe negative per_attempt_timeout",
 			yaml: `
-version: v0.3
+version: v0.5
 recipes:
+  - name: default
   - name: neg-attempt
-    routing:
-      fallback:
-        per_attempt_timeout: -2s
+    fallback:
+      per_attempt_timeout: -2s
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "per_attempt_timeout cannot be negative",
 		},
 		{
 			name: "recipe invalid retryable status code",
 			yaml: `
-version: v0.3
+version: v0.5
 recipes:
+  - name: default
   - name: invalid-code
-    routing:
-      fallback:
-        retryable_status_codes: [999]
+    fallback:
+      retryable_status_codes: [999]
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "invalid retryable status code 999",
 		},
 		{
 			name: "recipe negative circuit breaker consecutive failures",
 			yaml: `
-version: v0.3
+version: v0.5
 recipes:
+  - name: default
   - name: invalid-breaker-failures
-    routing:
-      fallback:
-        circuit_breaker:
-          consecutive_failures: -1
+    fallback:
+      circuit_breaker:
+        consecutive_failures: -1
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "consecutive_failures cannot be negative",
 		},
 		{
 			name: "recipe negative circuit breaker cooldown period",
 			yaml: `
-version: v0.3
+version: v0.5
 recipes:
+  - name: default
   - name: invalid-breaker-cooldown
-    routing:
-      fallback:
-        circuit_breaker:
-          cooldown_period: -10s
+    fallback:
+      circuit_breaker:
+        cooldown_period: -10s
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "cooldown_period cannot be negative",
 		},
 		{
 			name: "recipe negative circuit breaker half open probes",
 			yaml: `
-version: v0.3
+version: v0.5
 recipes:
+  - name: default
   - name: invalid-breaker-probes
-    routing:
-      fallback:
-        circuit_breaker:
-          half_open_probes: -1
+    fallback:
+      circuit_breaker:
+        half_open_probes: -1
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "half_open_probes cannot be negative",
 		},
 		{
 			name: "recipe unsupported fallback version",
 			yaml: `
-version: v0.3
+version: v0.5
 recipes:
+  - name: default
   - name: invalid-version
-    routing:
-      fallback:
-        version: 99
+    fallback:
+      version: 99
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 			errSubstr: "unsupported fallback policy version 99",
 		},

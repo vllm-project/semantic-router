@@ -62,7 +62,7 @@ class TestRestartRequired(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         mock_container = f"{self.runtime_stack.stack_name}-restart-upstream"
         self.write_minimal_canonical_config(
             provider="openai",
-            base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
+            endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
         )
         with open(os.path.join(self.test_dir, "config.yaml"), encoding="utf-8") as f:
             moved = yaml.safe_load(f)

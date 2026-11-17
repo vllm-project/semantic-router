@@ -1,0 +1,22 @@
+[
+  {
+    "filename": "go1.25.14.linux-riscv64.tar.gz",
+    "url": "https://go.dev/dl/go1.25.14.linux-riscv64.tar.gz",
+    "sha256": "c47a1bd1ca1fef087920c9a5d648af77a90071f5af305b6e4c426a3dea982983"
+  },
+  {
+    "filename": "rustc-1.90.0-riscv64gc-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/2025-09-18/rustc-1.90.0-riscv64gc-unknown-linux-gnu.tar.xz",
+    "sha256": "11ae522969c6b18ad4b5a1ae229473de59406af7ab2e831acb43ee247a16b58d"
+  },
+  {
+    "filename": "cargo-1.90.0-riscv64gc-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/2025-09-18/cargo-1.90.0-riscv64gc-unknown-linux-gnu.tar.xz",
+    "sha256": "8a09de014f7cec749b338c6636d190a1b73fd377bab6a223eb715d3c76c49e79"
+  },
+  {
+    "filename": "rust-std-1.90.0-riscv64gc-unknown-linux-gnu.tar.xz",
+    "url": "https://static.rust-lang.org/dist/2025-09-18/rust-std-1.90.0-riscv64gc-unknown-linux-gnu.tar.xz",
+    "sha256": "675dc5556d9d879101d2401b693fcf79edac8f00a49249e2e0f19cecd172ce51"
+  }
+]

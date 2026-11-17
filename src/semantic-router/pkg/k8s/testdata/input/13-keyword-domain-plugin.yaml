@@ -66,7 +66,7 @@ spec:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a medical information assistant. Provide general health information but always advise users to consult healthcare professionals."
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.88
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.88}}}

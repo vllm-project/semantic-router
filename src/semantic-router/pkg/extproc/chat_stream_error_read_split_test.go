@@ -149,8 +149,10 @@ func TestChatUpstreamErrorEventKeepsTheRewriteForAnUnsetClientFormat(t *testing.
 	event := `data: {"error":{"message":"mock provider stream failed","type":"vendor_overloaded","param":null,"code":"provider_overloaded"}}` + "\n\n"
 	content := `data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"provider-model","system_fingerprint":"fp1","choices":[{"index":0,"delta":{"content":"partial"},"logprobs":null,"finish_reason":null}]}` + "\n\n"
 	body := chatUpstreamClientBody(t, "", false, true, []string{content + event + "data: [DONE]\n\n"})
-	require.Contains(t, body, `"model":"public-model"`)
-	require.NotContains(t, body, "provider-model")
+	// The codec's frames name the model the provider reports and drop its
+	// system_fingerprint, which the provider's bytes carry.
+	require.Contains(t, body, `"model":"provider-model"`)
+	require.NotContains(t, body, "fp1")
 }
 
 // chatUpstreamClientBody runs a Chat upstream's reads through the response

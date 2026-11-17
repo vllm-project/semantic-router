@@ -2,7 +2,7 @@
 """The plugin guide's "Try it", run as written: install, serve, ask.
 
 The test reads its commands, keyword package and request from the guide
-(`website/docs/model-runtime/plugins.md`). Its `vllm-srun` cases need the
+(`website/docs/model-runtime/extend/plugins.md`). Its `vllm-srun` cases need the
 model runtime in the current Python environment (`make model-runtime-install`,
 whose test extra brings the example's build backend). pip installs the example
 plugin from the repository into a private directory on PYTHONPATH instead of
@@ -42,7 +42,7 @@ except ImportError:  # Python 3.10: tomllib was added in 3.11
     import tomli as tomllib
 
 REPO = Path(__file__).resolve().parents[3]
-GUIDE = REPO / "website/docs/model-runtime/plugins.md"
+GUIDE = REPO / "website/docs/model-runtime/extend/plugins.md"
 EXAMPLE = REPO / "src/model-runtime/examples/third_party_plugin"
 BASH_BLOCK = re.compile(r"^```bash\n(.*?)^```", re.M | re.S)
 HEREDOC = re.compile(r"cat > (\S+) <<'(\w+)'\n(.*?)\n\2$", re.M | re.S)

@@ -60,7 +60,7 @@ func loadTokenCountFixture(t *testing.T) tokenCountFixture {
 // contextBandYAML renders the document both test suites load for a
 // yaml_cases entry: one context rule whose min_tokens is spelled as scalar.
 func contextBandYAML(scalar string) string {
-	return "routing:\n  signals:\n    context:\n      - name: probe\n        min_tokens: " + scalar + "\n        max_tokens: 100M\n"
+	return "recipes:\n  - name: default\n    signals:\n      context:\n        - name: probe\n          min_tokens: " + scalar + "\n          max_tokens: 100M\n"
 }
 
 // decodeTokenCountLikeRouter runs the loader's decode, marshal, decode steps
@@ -76,14 +76,14 @@ func decodeTokenCountLikeRouter(t *testing.T, doc string) TokenCount {
 	if err != nil {
 		t.Fatalf("re-marshal: %v", err)
 	}
-	var fragment routingFragmentDocument
+	var fragment CanonicalConfig
 	if err := yaml.Unmarshal(remarshalled, &fragment); err != nil {
 		t.Fatalf("decode typed: %v", err)
 	}
-	if len(fragment.Routing.Signals.Context) != 1 {
-		t.Fatalf("decoded %d context rules, want 1", len(fragment.Routing.Signals.Context))
+	if len(fragment.Recipes[0].Signals.Context) != 1 {
+		t.Fatalf("decoded %d context rules, want 1", len(fragment.Recipes[0].Signals.Context))
 	}
-	return fragment.Routing.Signals.Context[0].MinTokens
+	return fragment.Recipes[0].Signals.Context[0].MinTokens
 }
 
 // TestTokenCountValueMatchesSharedContract pins TokenCount.Value to the
@@ -198,7 +198,7 @@ func TestContextBandTokenCountsExpandEnvironment(t *testing.T) {
 	if got := parseContextBand(t, contextBandYAML("${CTX_PROBE_MIN}")); got.Min != 8001 {
 		t.Fatalf("min_tokens: ${CTX_PROBE_MIN} parsed as %d, want 8001", got.Min)
 	}
-	doc := "routing:\n  signals:\n    context:\n      - name: probe\n        min_tokens: 8001\n        max_tokens: ${CTX_PROBE_UNSET}\n"
+	doc := "recipes:\n  - name: default\n    signals:\n      context:\n        - name: probe\n          min_tokens: 8001\n          max_tokens: ${CTX_PROBE_UNSET}\n"
 	if got := parseContextBand(t, doc); !got.Unbounded {
 		t.Fatalf("max_tokens: ${CTX_PROBE_UNSET} parsed as %+v, want an open-ended band", got)
 	}
@@ -207,7 +207,7 @@ func TestContextBandTokenCountsExpandEnvironment(t *testing.T) {
 // TestContextBandAnchorIsTypedEverywhere shows that yaml.v2 typing follows
 // the scalar, not the field: an anchored 0123 reaches every alias as 83.
 func TestContextBandAnchorIsTypedEverywhere(t *testing.T) {
-	doc := "routing:\n  signals:\n    context:\n      - name: probe\n        min_tokens: &count 0123\n        max_tokens: 100M\n        description: *count\n"
+	doc := "recipes:\n  - name: default\n    signals:\n      context:\n        - name: probe\n          min_tokens: &count 0123\n          max_tokens: 100M\n          description: *count\n"
 	cfg, err := ParseYAMLBytes([]byte(doc))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes: %v", err)

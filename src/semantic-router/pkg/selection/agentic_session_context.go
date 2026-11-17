@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 )
 
 // AgenticPhase describes where the request sits in a tool-using conversation.
@@ -38,8 +39,14 @@ type AgenticSessionContext struct {
 	MemoryCost                  float64
 	MemoryEstimatedCacheSavings float64
 	MemoryCacheAccountingSource string
+	MemoryUserTurnCount         int
+	MemoryLastReleaseUserTurn   int
 	LastDecisionName            string
 	LastDecisionReason          string
+
+	// ReleaseHonored marks a client release that protection has accepted;
+	// the selector treats it as a continuity boundary.
+	ReleaseHonored bool
 
 	HistoryTokens int
 	ContextTokens int
@@ -49,6 +56,13 @@ type AgenticSessionContext struct {
 
 	CacheWarmth   float64
 	CacheWarmthOK bool
+
+	// CacheReceipt is the session's last response usage and CacheReceiptAge
+	// how long ago it arrived; ModelRates are the candidates' configured
+	// prices. Together they price the cache a switch would throw away.
+	CacheReceipt    *modelpricing.Receipt
+	CacheReceiptAge time.Duration
+	ModelRates      map[string]modelpricing.Rates
 
 	Phase          AgenticPhase
 	ActiveToolLoop bool

@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -157,6 +158,23 @@ func TestHandleRouterReplayAPIListFiltersBySessionID(t *testing.T) {
 		if row["session_id"] != "sess-alpha" {
 			t.Fatalf("expected session_id=sess-alpha, got %#v", row["session_id"])
 		}
+	}
+}
+
+// since keeps the records at or after an instant, written in any zone, in the
+// list and the aggregate alike, so a usage window can be read from both.
+func TestHandleRouterReplayAPIFiltersBySince(t *testing.T) {
+	router := newReplayAPITestRouterWithRecords(t, 3, "")
+	since := url.QueryEscape(time.Unix(2, 0).In(time.FixedZone("KST", 9*3600)).Format(time.RFC3339))
+
+	body := mustReplayListBody(t, router, "/api/v1/observability/replays?since="+since)
+	assertReplayPage(t, body, 2, 2, 20, 0)
+	aggregate := mustReplayListBody(t, router, "/api/v1/observability/replays/aggregate?since="+since)
+	assertIntField(t, aggregate, "record_count", 2)
+
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate?since=today")
+	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_BadRequest {
+		t.Fatalf("expected bad request for a since that is not a timestamp, got %v", got)
 	}
 }
 

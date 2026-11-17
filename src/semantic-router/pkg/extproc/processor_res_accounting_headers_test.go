@@ -18,25 +18,25 @@ func accountingHeaderValue(mutation *ext_proc.HeaderMutation, key string) (strin
 	return "", false
 }
 
-func TestRoutingLatencyHeaderKeepsSubMillisecondPrecision(t *testing.T) {
-	ctx := &RequestContext{VSRSelectedModel: "local", RoutingLatency: 412 * time.Microsecond}
+func TestRoutingLatencyKeepsSubMillisecondPrecision(t *testing.T) {
+	ctx := debugRequestContext()
+	ctx.VSRSelectedModel, ctx.RoutingLatency = "local", 412*time.Microsecond
 
-	got, ok := accountingHeaderValue(buildResponseHeaderMutation(ctx, true), headers.VSRRoutingLatencyMs)
-
-	if !ok || got != "0.412" {
-		t.Fatalf("%s = %q (present %v), want 0.412", headers.VSRRoutingLatencyMs, got, ok)
+	if got := traceOf(t, buildResponseHeaderMutation(ctx).GetSetHeaders())[headers.TraceRoutingLatencyMs]; got != "0.412" {
+		t.Fatalf("routing_latency_ms = %q, want 0.412", got)
 	}
 }
 
-func TestRoutingLatencyHeaderOmittedWithoutRoutingOrOnCacheHit(t *testing.T) {
-	cases := map[string]*RequestContext{
-		"not routed": {VSRSelectedModel: "local"},
-		"cache hit":  {VSRSelectedModel: "local", RoutingLatency: time.Millisecond, VSRCacheHit: true},
+func TestRoutingLatencyOmittedWithoutRoutingOrOnCacheHit(t *testing.T) {
+	notRouted := debugRequestContext()
+	notRouted.VSRSelectedModel = "local"
+	if got, ok := traceOf(t, buildResponseHeaderMutation(notRouted).GetSetHeaders())[headers.TraceRoutingLatencyMs]; ok {
+		t.Fatalf("not routed: routing_latency_ms = %s, want it omitted", got)
 	}
-	for name, ctx := range cases {
-		if _, ok := accountingHeaderValue(buildResponseHeaderMutation(ctx, true), headers.VSRRoutingLatencyMs); ok {
-			t.Fatalf("%s: %s should be omitted", name, headers.VSRRoutingLatencyMs)
-		}
+	cacheHit := debugRequestContext()
+	cacheHit.VSRSelectedModel, cacheHit.RoutingLatency, cacheHit.VSRCacheHit = "local", time.Millisecond, true
+	if mutation := buildResponseHeaderMutation(cacheHit); mutation != nil {
+		t.Fatalf("cache hit: provider response headers = %v, want none", mutation.GetSetHeaders())
 	}
 }
 

@@ -80,53 +80,20 @@ func runProgressGateVertical(ctx context.Context, public, management, token, mod
 		if err != nil {
 			return gateReplayRecord{}, err
 		}
-		var reply struct {
-			Model string `json:"model"`
-			Usage struct {
-				CompletionTokens int `json:"completion_tokens"`
-			} `json:"usage"`
+		reply, err := gateBackendReply(body, headers)
+		if err != nil {
+			return gateReplayRecord{}, fmt.Errorf("turn %d: %w", turnIndex, err)
 		}
-		if err = json.Unmarshal(body, &reply); err != nil {
-			return gateReplayRecord{}, err
+		record, err := waitSessionReplay(ctx, client, management, token, sid, reply.replayID, func(r gateReplayRecord) string { return r.ID })
+		if err != nil {
+			return gateReplayRecord{}, fmt.Errorf("turn %d: %w", turnIndex, err)
 		}
-		selected, replayID := headers.Get("x-vsr-selected-model"), headers.Get("x-vsr-replay-id")
-		if selected == "" || replayID == "" || reply.Model == "" || reply.Usage.CompletionTokens <= 0 {
-			return gateReplayRecord{}, fmt.Errorf("missing routing identity or backend output: headers=%v body=%s", headers, body)
+		// Providers may return their primary alias instead of the requested logical name.
+		if record.SelectedModel != reply.selected || record.ResponseStatus != 200 {
+			return record, fmt.Errorf("turn %d: routed model %q and replay disagree: %+v", turnIndex, reply.selected, record)
 		}
-		deadline := time.NewTimer(15 * time.Second)
-		defer deadline.Stop()
-		tick := time.NewTicker(100 * time.Millisecond)
-		defer tick.Stop()
-		for {
-			data, _, err := gateHTTPRequest(ctx, client, http.MethodGet, management+"/api/v1/observability/replays?showDetails=true&limit=30&session_id="+url.QueryEscape(sid), token, nil, nil)
-			if err != nil {
-				return gateReplayRecord{}, err
-			}
-			var list struct {
-				Data []gateReplayRecord `json:"data"`
-			}
-			if err = json.Unmarshal(data, &list); err != nil {
-				return gateReplayRecord{}, err
-			}
-			for _, record := range list.Data {
-				if record.ID != replayID {
-					continue
-				}
-				// Providers may return their primary alias instead of the requested logical name.
-				if record.SelectedModel != selected || record.ResponseStatus != 200 {
-					return record, fmt.Errorf("turn %d: routed model %q and replay disagree: %+v", turnIndex, selected, record)
-				}
-				fmt.Printf("session=%s turn=%d model=%s tokens=%d gate=%+v\n", sid, turnIndex, record.SelectedModel, reply.Usage.CompletionTokens, record.SessionPolicy.Gate)
-				return record, nil
-			}
-			select {
-			case <-ctx.Done():
-				return gateReplayRecord{}, ctx.Err()
-			case <-deadline.C:
-				return gateReplayRecord{}, fmt.Errorf("turn %d missing replay", turnIndex)
-			case <-tick.C:
-			}
-		}
+		fmt.Printf("session=%s turn=%d model=%s tokens=%d gate=%+v\n", sid, turnIndex, record.SelectedModel, reply.completionTokens, record.SessionPolicy.Gate)
+		return record, nil
 	}
 	feedback := func(record gateReplayRecord) error {
 		payload := map[string]any{"replay_id": record.ID, "target": "model", "target_ref": record.SelectedModel, "verdict": "underpowered", "score": 0.1}
@@ -330,6 +297,62 @@ func gateWait(ctx context.Context, duration time.Duration) error {
 		return ctx.Err()
 	case <-timer.C:
 		return nil
+	}
+}
+
+type gateReply struct {
+	selected         string
+	replayID         string
+	completionTokens int
+}
+
+// gateBackendReply checks that the backend answered and the Router named its route.
+func gateBackendReply(body []byte, headers http.Header) (gateReply, error) {
+	var reply struct {
+		Model string `json:"model"`
+		Usage struct {
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &reply); err != nil {
+		return gateReply{}, err
+	}
+	out := gateReply{selected: headers.Get("x-vsr-selected-model"), replayID: headers.Get("x-vsr-replay-id"), completionTokens: reply.Usage.CompletionTokens}
+	if out.selected == "" || out.replayID == "" || reply.Model == "" || out.completionTokens <= 0 {
+		return gateReply{}, fmt.Errorf("missing routing identity or backend output: headers=%v body=%s", headers, body)
+	}
+	return out, nil
+}
+
+func waitSessionReplay[T any](ctx context.Context, client *http.Client, management, token, sid, replayID string, id func(T) string) (T, error) {
+	var zero T
+	deadline := time.NewTimer(15 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		data, _, err := gateHTTPRequest(ctx, client, http.MethodGet, management+"/api/v1/observability/replays?showDetails=true&limit=30&session_id="+url.QueryEscape(sid), token, nil, nil)
+		if err != nil {
+			return zero, err
+		}
+		var list struct {
+			Data []T `json:"data"`
+		}
+		if err = json.Unmarshal(data, &list); err != nil {
+			return zero, err
+		}
+		for _, record := range list.Data {
+			if id(record) == replayID {
+				return record, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return zero, ctx.Err()
+		case <-deadline.C:
+			return zero, fmt.Errorf("replay %s missing", replayID)
+		case <-tick.C:
+		}
 	}
 }
 

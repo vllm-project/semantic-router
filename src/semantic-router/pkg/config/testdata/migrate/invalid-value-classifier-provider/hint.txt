@@ -1,0 +1,1 @@
+global.model_catalog.deployments.sequence-classifier: invalid_value: provider classify is removed: no signal asks a classifier service; run `vllm-sr config migrate` (drop the deployment; the decision model answers the signals)

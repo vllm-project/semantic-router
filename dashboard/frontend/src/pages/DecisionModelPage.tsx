@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canWriteConfig } from '../utils/accessControl'
@@ -188,9 +189,12 @@ export default function DecisionModelPage() {
             tasks={tasks.data}
           />
           {model.applyResult && (
-            <p className={styles.notice} role="status">
-              {model.applyResult.message}
-            </p>
+            <>
+              <p className={styles.notice} role="status">
+                {model.applyResult.message}
+              </p>
+              <ConfigSaveWarnings warnings={model.applyResult.warnings} />
+            </>
           )}
           {model.applyError && (
             <p className={styles.notice} role="alert">

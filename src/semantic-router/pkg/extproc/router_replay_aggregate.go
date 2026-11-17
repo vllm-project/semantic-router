@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"math"
 	"net/url"
 	"sort"
 
@@ -58,6 +57,7 @@ func buildRouterReplayAggregatePayload(
 		RecordCount:          len(filteredRecords),
 		Lifecycle:            buildRouterReplayLifecycleSummary(filteredRecords),
 		Summary:              buildRouterReplayAggregateCostSummary(filteredRecords),
+		ProviderCache:        buildRouterReplayProviderCacheSummary(filteredRecords),
 		ModelSelection:       buildRouterReplayModelSelection(filteredRecords),
 		DecisionDistribution: buildRouterReplayDecisionDistribution(filteredRecords),
 		SignalDistribution:   buildRouterReplaySignalDistribution(filteredRecords),
@@ -88,53 +88,6 @@ func buildRouterReplayLifecycleSummary(
 		}
 	}
 	return summary
-}
-
-func buildRouterReplayAggregateCostSummary(
-	records []routerreplay.RoutingRecord,
-) routerReplayAggregateCostSummary {
-	summary := routerReplayAggregateCostSummary{}
-	byCurrency := make(map[string]*routerreplay.CurrencyCostSummary)
-	for _, record := range records {
-		if record.LifecycleState != routerreplay.LifecycleCompleted ||
-			record.TotalTokens == nil || record.BaselineModel == nil || *record.BaselineModel == "" ||
-			record.Currency == nil || normalizeReplayCurrency(*record.Currency) == "" {
-			continue
-		}
-		if !finiteReplayCost(record.ActualCost) || !finiteReplayCost(record.BaselineCost) || !finiteReplayCost(record.CostSavings) {
-			continue
-		}
-		currency := normalizeReplayCurrency(*record.Currency)
-		group := byCurrency[currency]
-		if group == nil {
-			group = &routerreplay.CurrencyCostSummary{Currency: currency}
-			byCurrency[currency] = group
-		}
-		group.TotalSaved += *record.CostSavings
-		group.BaselineSpend += *record.BaselineCost
-		group.ActualSpend += *record.ActualCost
-		group.CostRecordCount++
-		summary.CostRecordCount++
-	}
-	for _, group := range byCurrency {
-		summary.ByCurrency = append(summary.ByCurrency, *group)
-	}
-	sort.Slice(summary.ByCurrency, func(i, j int) bool {
-		return summary.ByCurrency[i].Currency < summary.ByCurrency[j].Currency
-	})
-	if len(summary.ByCurrency) == 1 {
-		group := summary.ByCurrency[0]
-		summary.Currency = group.Currency
-		summary.TotalSaved = group.TotalSaved
-		summary.BaselineSpend = group.BaselineSpend
-		summary.ActualSpend = group.ActualSpend
-	}
-	summary.ExcludedRecordCount = len(records) - summary.CostRecordCount
-	return summary
-}
-
-func finiteReplayCost(value *float64) bool {
-	return value != nil && !math.IsNaN(*value) && !math.IsInf(*value, 0)
 }
 
 func buildRouterReplayModelSelection(
@@ -170,35 +123,10 @@ func buildRouterReplaySignalDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		if n := len(record.Signals.Keyword); n > 0 {
-			counts["keyword"] += n
-		}
-		if n := len(record.Signals.Embedding); n > 0 {
-			counts["embedding"] += n
-		}
-		if n := len(record.Signals.Domain); n > 0 {
-			counts["domain"] += n
-		}
-		if n := len(record.Signals.FactCheck); n > 0 {
-			counts["fact_check"] += n
-		}
-		if n := len(record.Signals.UserFeedback); n > 0 {
-			counts["user_feedback"] += n
-		}
-		if n := len(record.Signals.Reask); n > 0 {
-			counts["reask"] += n
-		}
-		if n := len(record.Signals.Preference); n > 0 {
-			counts["preference"] += n
-		}
-		if n := len(record.Signals.Language); n > 0 {
-			counts["language"] += n
-		}
-		if n := len(record.Signals.Context); n > 0 {
-			counts["context"] += n
-		}
-		if n := len(record.Signals.Complexity); n > 0 {
-			counts["complexity"] += n
+		for name, matched := range replaySignalGroups(record.Signals) {
+			if len(matched) > 0 {
+				counts[name] += len(matched)
+			}
 		}
 	}
 	return sortRouterReplayAggregateValues(counts, 0)

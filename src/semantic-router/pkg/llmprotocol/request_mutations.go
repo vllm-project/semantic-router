@@ -31,6 +31,11 @@ func CapOutputTokens(request *Request, limit *int) bool {
 		return false
 	}
 	request.Sampling.MaxOutputTokens = Int64(int64(*limit))
+	// Thinking counts toward the output bound, so a budget the cap no longer
+	// leaves room for drops to the largest one below it.
+	if request.ReasoningBudgetTokens != nil && *request.ReasoningBudgetTokens >= int64(*limit) {
+		request.ReasoningBudgetTokens = Int64(int64(*limit) - 1)
+	}
 	return true
 }
 
@@ -91,6 +96,10 @@ func BlockRequestField(request *Request, field string) (bool, error) {
 		changed := request.Sampling.MinP != nil
 		request.Sampling.MinP = nil
 		return changed, nil
+	case "logit_bias":
+		changed := len(request.Sampling.LogitBias) > 0
+		request.Sampling.LogitBias = nil
+		return changed, nil
 	case "repetition_penalty":
 		changed := request.Sampling.RepetitionPenalty != nil
 		request.Sampling.RepetitionPenalty = nil
@@ -136,9 +145,9 @@ func BlockRequestField(request *Request, field string) (bool, error) {
 		request.Store = nil
 		return changed, nil
 	case "stream":
-		changed := request.Stream
-		request.Stream = false
-		return changed, nil
+		// The Router sends the backend the transport the client asked for and
+		// answers in it, so removing stream would hand a stream reader JSON.
+		return false, fmt.Errorf("transport field %q cannot be blocked", field)
 	default:
 		// Unknown client fields never enter neutral IR; codecs already enforce
 		// the configured unknown-field policy at ingress.

@@ -255,7 +255,6 @@ class RouterClassificationTest(SemanticRouterTestBase):
         # Check if classification and routing metrics exist
         # These are the actual metrics exposed by the router
         classification_metrics = [
-            "llm_entropy_classification_latency_seconds",  # Entropy-based classification timing
             "llm_cache_hits_total",  # Cache operations (related to classification)
             "llm_cache_misses_total",  # Cache misses
         ]

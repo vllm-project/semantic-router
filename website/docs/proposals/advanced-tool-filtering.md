@@ -2,10 +2,10 @@
 title: Advanced Tool Filtering for Tool Selection
 description: Defines an optional reranker that combines embedding, lexical, tag, name, and category signals for explainable tool selection.
 created: 2026-01-14
-status: Implemented
+status: Superseded
 ---
 
-> **Status:** Implemented · **Created:** 2026-01-14
+> **Status:** Superseded by the `select` block of the [tools plugin](../tutorials/plugin/tools), where the decision model chooses the tools · **Created:** 2026-01-14
 
 ## Problem
 
@@ -53,9 +53,6 @@ The main controls are:
 | `allow_tools` / `block_tools` | Applies deterministic catalog restrictions. |
 | `use_category_filter` | Enables category gating when category evidence is available. |
 
-Use the maintained tool-selection fragment and current configuration schema for exact
-field types and defaults.
-
 ## Failure and security behavior
 
 Invalid weights and thresholds are rejected during configuration validation. Runtime
@@ -78,6 +75,5 @@ require a reproducible dataset, baseline configuration, and evaluation artifact.
 
 ## References
 
-- [Tool-selection plugin guide](../tutorials/plugin/tool-selection)
-- [Maintained add-mode fragment](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/add-from-database.yaml)
+- [Tools plugin guide](../tutorials/plugin/tools)
 - [Related issue #1002](https://github.com/vllm-project/semantic-router/issues/1002)

@@ -3,6 +3,7 @@ package testcases
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,11 +15,36 @@ import (
 
 func init() {
 	pkgtestcases.Register("chat-completions-progressive-stress", pkgtestcases.TestCase{
-		Description: "Progressive stress test with 10/20 concurrent requests and success rate tracking",
+		Priority:    pkgtestcases.P2,
+		Description: "10/20/50 concurrent requests, each answered by the Router inside the gateway's deadline, then a drained queue",
 		Tags:        []string{"llm", "stress", "progressive", "concurrency"},
 		Fn:          testProgressiveStress,
 	})
 }
+
+const (
+	// progressiveStressAnswerBound is the gateway's ext_proc message_timeout
+	// (deploy/kubernetes/ai-gateway). The Router bounds a request's model
+	// signals at 45 s so that it still answers inside it.
+	progressiveStressAnswerBound = 60 * time.Second
+	// progressiveStressRequestTimeout outlasts that deadline, so a request fails
+	// only when the gateway or the Router fails it.
+	progressiveStressRequestTimeout = 90 * time.Second
+	// progressiveStressDrainBound is how long the Router may take, after the
+	// last stage, to answer a fresh request in about its unloaded time again.
+	// The model runtime keeps evaluating signals the Router stopped waiting
+	// for, so requests that arrive after a burst queue behind that work.
+	progressiveStressDrainBound = 5 * time.Minute
+	// progressiveStressBaselineSamples fresh sequential answers set the
+	// Router's unloaded latency before the stages.
+	progressiveStressBaselineSamples = 3
+	baselineRequestID                = 1000
+	drainRequestID                   = 2000
+	// responsePathCache and responsePathError are x-vsr-response-path values:
+	// a cache hit evaluates no model, and the error path is no answer.
+	responsePathCache = "cache"
+	responsePathError = "error"
+)
 
 // ProgressiveStageResult tracks results for a single QPS stage
 type ProgressiveStageResult struct {
@@ -31,6 +57,11 @@ type ProgressiveStageResult struct {
 	MinDuration  time.Duration
 	MaxDuration  time.Duration
 	Results      []StressTestResult
+	// ResponsePaths counts the answers by x-vsr-response-path, and Undecided
+	// the answers without a selected decision, such as default routes after a
+	// signal error.
+	ResponsePaths map[string]int
+	Undecided     int
 }
 
 func testProgressiveStress(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -44,6 +75,11 @@ func testProgressiveStress(ctx context.Context, client *kubernetes.Clientset, op
 		return err
 	}
 	defer stopPortForward()
+
+	baseline, err := measureBaselineLatency(ctx, localPort)
+	if err != nil {
+		return err
+	}
 
 	// Define concurrent request counts for each stage
 	concurrencyStages := []int{10, 20, 50}
@@ -68,6 +104,12 @@ func testProgressiveStress(ctx context.Context, client *kubernetes.Clientset, op
 		time.Sleep(5 * time.Second)
 	}
 
+	drained, drainErr := waitForDrain(ctx, localPort, baseline)
+	if opts.Verbose && drainErr == nil {
+		fmt.Printf("[Test] The Router answered in its unloaded time (%v) again %v after the last stage\n",
+			baseline.Round(time.Millisecond), drained.Round(time.Second))
+	}
+
 	// Print comprehensive summary
 	printProgressiveResults(stageResults)
 
@@ -88,6 +130,8 @@ func testProgressiveStress(ctx context.Context, client *kubernetes.Clientset, op
 				"avg_duration":    stage.AvgDuration.Milliseconds(),
 				"min_duration":    stage.MinDuration.Milliseconds(),
 				"max_duration":    stage.MaxDuration.Milliseconds(),
+				"response_paths":  stage.ResponsePaths,
+				"undecided":       stage.Undecided,
 				"sample_failures": sampleStressFailures(stage.Results, 3),
 			}
 		}
@@ -97,10 +141,65 @@ func testProgressiveStress(ctx context.Context, client *kubernetes.Clientset, op
 			"failed":         totalRequests - totalSuccess,
 			"success_rate":   fmt.Sprintf("%.2f%%", percentage(totalSuccess, totalRequests)),
 		}
+		details["drain"] = map[string]interface{}{
+			"unloaded_latency_ms": baseline.Milliseconds(),
+			"drained_after_ms":    drained.Milliseconds(),
+			"bound_ms":            progressiveStressDrainBound.Milliseconds(),
+		}
 		opts.SetDetails(details)
 	}
 
-	return nil
+	return drainErr
+}
+
+// measureBaselineLatency returns the median latency of fresh sequential
+// answers that evaluated the models, which a cache hit skips.
+func measureBaselineLatency(ctx context.Context, localPort string) (time.Duration, error) {
+	var samples []time.Duration
+	for id := baselineRequestID; len(samples) < progressiveStressBaselineSamples; id++ {
+		if id == baselineRequestID+3*progressiveStressBaselineSamples {
+			return 0, fmt.Errorf("only %d of %d unloaded requests evaluated the models; the rest were cache hits",
+				len(samples), id-baselineRequestID)
+		}
+		result := sendSingleRequest(ctx, id, localPort, progressiveStressRequestTimeout)
+		judgeProgressiveAnswer(&result)
+		if !result.Success {
+			return 0, fmt.Errorf("unloaded request #%d failed before the stages: %s", id, result.ErrorMessage)
+		}
+		if result.ResponsePath != responsePathCache {
+			samples = append(samples, result.Duration)
+		}
+	}
+	return medianDuration(samples), nil
+}
+
+// waitForDrain sends fresh sequential requests until the Router answers one in
+// about its unloaded time, and returns how long that took after the last stage.
+// A much faster answer evaluated no model, as when the runtime refuses work it
+// has no room for, so it does not show that the queue drained.
+func waitForDrain(ctx context.Context, localPort string, baseline time.Duration) (time.Duration, error) {
+	fastest, slowest := baseline/2, 2*baseline+time.Second
+	start := time.Now()
+	for id := drainRequestID; time.Since(start) < progressiveStressDrainBound; id++ {
+		result := sendSingleRequest(ctx, id, localPort, progressiveStressRequestTimeout)
+		judgeProgressiveAnswer(&result)
+		if result.Success && result.ResponsePath != responsePathCache &&
+			result.Duration >= fastest && result.Duration <= slowest {
+			return time.Since(start), nil
+		}
+		if err := ctx.Err(); err != nil {
+			return time.Since(start), err
+		}
+	}
+	return time.Since(start), fmt.Errorf(
+		"the Router did not answer in its unloaded time (%v) within %v after the last stage",
+		baseline.Round(time.Millisecond), progressiveStressDrainBound)
+}
+
+func medianDuration(samples []time.Duration) time.Duration {
+	sorted := append([]time.Duration(nil), samples...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	return sorted[len(sorted)/2]
 }
 
 func runConcurrencyStage(ctx context.Context, concurrency int, localPort string, verbose bool) ProgressiveStageResult {
@@ -123,8 +222,8 @@ func runConcurrencyStage(ctx context.Context, concurrency int, localPort string,
 		go func(reqID int) {
 			defer wg.Done()
 
-			// Send request
-			reqResult := sendSingleRequest(ctx, reqID, localPort, false)
+			reqResult := sendSingleRequest(ctx, reqID, localPort, progressiveStressRequestTimeout)
+			judgeProgressiveAnswer(&reqResult)
 
 			// Update results
 			mu.Lock()
@@ -145,6 +244,28 @@ func runConcurrencyStage(ctx context.Context, concurrency int, localPort string,
 	return calculateStageStats(result)
 }
 
+// judgeProgressiveAnswer accepts a 200 only when the Router produced it, as its
+// x-vsr-response-path shows, inside the gateway's deadline. Under overload the
+// Router answers slow or refused signals through their declared policies,
+// such as a fast block or a default route; those are still its answers, and
+// the stage reports their paths.
+func judgeProgressiveAnswer(result *StressTestResult) {
+	switch {
+	case !result.Success:
+	case result.ResponsePath == "":
+		result.Success = false
+		result.ErrorMessage = "status 200 without x-vsr-response-path"
+	case result.ResponsePath == responsePathError:
+		result.Success = false
+		result.ErrorMessage = "status 200 on the Router's error path"
+	case result.Duration > progressiveStressAnswerBound:
+		result.Success = false
+		result.ErrorMessage = fmt.Sprintf(
+			"answered after %v, past the gateway's %v deadline",
+			result.Duration.Round(time.Millisecond), progressiveStressAnswerBound)
+	}
+}
+
 func calculateStageStats(result ProgressiveStageResult) ProgressiveStageResult {
 	if result.TotalReqs == 0 {
 		return result
@@ -155,7 +276,14 @@ func calculateStageStats(result ProgressiveStageResult) ProgressiveStageResult {
 
 	// Calculate duration statistics
 	var totalDuration time.Duration
+	result.ResponsePaths = map[string]int{}
 	for _, r := range result.Results {
+		if r.Success {
+			result.ResponsePaths[r.ResponsePath]++
+			if r.Decision == "" {
+				result.Undecided++
+			}
+		}
 		totalDuration += r.Duration
 		if r.Duration < result.MinDuration {
 			result.MinDuration = r.Duration
@@ -201,6 +329,17 @@ func printProgressiveResults(stageResults []ProgressiveStageResult) {
 	}
 
 	fmt.Println(separator)
+
+	fmt.Println("\nAnswers by response path:")
+	for _, stage := range stageResults {
+		paths := make([]string, 0, len(stage.ResponsePaths))
+		for path, count := range stage.ResponsePaths {
+			paths = append(paths, fmt.Sprintf("%s=%d", path, count))
+		}
+		sort.Strings(paths)
+		fmt.Printf("  %d concurrent requests: %s; %d without a selected decision\n",
+			stage.QPS, strings.Join(paths, " "), stage.Undecided)
+	}
 
 	// Print summary statistics
 	fmt.Println("\nSummary:")

@@ -25,17 +25,19 @@ func TestEntrypointFallbackUsesItsRecipeAndGlobalDefaults(t *testing.T) {
 `
 		}
 		t.Run(name, func(t *testing.T) {
-			cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
-` + global + `routing:
-  fallback:
-    enabled: true
-    max_attempts: 2
-    total_timeout: 12s
-    per_attempt_timeout: 2s
-recipes:
+			cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+` + global + `recipes:
+  - name: default
+    fallback:
+      enabled: true
+      max_attempts: 2
+      total_timeout: 12s
+      per_attempt_timeout: 2s
   - name: independent
-    routing: {}
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [public/independent]
     recipe: independent
 `))

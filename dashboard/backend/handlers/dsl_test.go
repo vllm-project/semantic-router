@@ -10,7 +10,7 @@ import (
 )
 
 func TestDSLEditorNativeContract(t *testing.T) {
-	source := `MODEL qwen { modality: "text" capabilities: ["chat"] }
+	source := `MODEL qwen { capabilities: ["chat"] }
 SIGNAL keyword intent { operator: "any" keywords: ["hello"] }
 ROUTE greeting { PRIORITY 1 WHEN keyword("intent") MODEL "qwen" }`
 	compiled := editor.Compile(source)

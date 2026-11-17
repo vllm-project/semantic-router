@@ -11,8 +11,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 )
 
 // Global classification service instance
@@ -30,13 +30,12 @@ type ClassificationService struct {
 	configMutex       sync.RWMutex // Protects config access
 	// Router generations already lease this service. These locks additionally
 	// drain model calls for standalone compatibility-service replacement.
-	runtimeMutex     sync.RWMutex
-	reloadMutex      sync.Mutex
-	runtimeOwner     io.Closer // nil when classifiers are borrowed from the router
-	modelPool        *binding.Pool
-	globalEmbeddings *embedding.Set
-	closed           bool
-	evalSelector     EvalModelSelector
+	runtimeMutex sync.RWMutex
+	reloadMutex  sync.Mutex
+	runtimeOwner io.Closer // nil when classifiers are borrowed from the router
+	modelPool    *binding.Pool
+	closed       bool
+	evalSelector EvalModelSelector
 }
 
 func (s *ClassificationService) SetEvalModelSelector(selector EvalModelSelector) {
@@ -55,6 +54,18 @@ func (s *ClassificationService) evalModelSelectorSnapshot() EvalModelSelector {
 	s.configMutex.RLock()
 	defer s.configMutex.RUnlock()
 	return s.evalSelector
+}
+
+func (s *ClassificationService) routingInputSelectorSnapshot() *routinginput.Selector {
+	if s == nil {
+		return nil
+	}
+	s.configMutex.RLock()
+	defer s.configMutex.RUnlock()
+	if s.config == nil {
+		return nil
+	}
+	return routinginput.For(s.config.RoutingInput)
 }
 
 // NewRecipeClassificationService creates a model-aware service backed by
@@ -110,7 +121,7 @@ func NewClassificationServiceFromConfig(cfg *config.RouterConfig) (*Classificati
 	if err != nil {
 		return nil, err
 	}
-	if err := service.refreshRecipeClassifiers(cfg, nil, options, lease); err != nil {
+	if err := service.refreshRecipeClassifiers(cfg, options, lease); err != nil {
 		return nil, err
 	}
 	return service, nil
@@ -164,7 +175,7 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
-	input, err := req.resolveSignalInput()
+	input, err := req.resolveSignalInputWith(s.routingInputSelectorSnapshot())
 	if err != nil {
 		return nil, err
 	}

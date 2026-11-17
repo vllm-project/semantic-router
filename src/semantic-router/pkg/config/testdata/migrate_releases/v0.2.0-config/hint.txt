@@ -1,0 +1,1 @@
+model_config: removed_section: top-level model_config belongs to the layout before config v0.3; run `vllm-sr config migrate` (its place in the v0.5 layout)

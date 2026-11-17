@@ -1,0 +1,1 @@
+global.model_catalog.deployments.hazard.operating_point: removed_field: a deployment's operating_point is removed: nothing reads it; run `vllm-sr config migrate` (nothing: migrate drops it; the model runtime applies the operating point its package declares)

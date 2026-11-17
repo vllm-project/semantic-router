@@ -350,8 +350,6 @@ func featurePermission(method, path string) (string, bool) {
 			return PermEvalWrite, true
 		}
 		return PermEvalRead, true
-	case strings.HasPrefix(path, "/api/ml-pipeline/"):
-		return PermMlPipeline, true
 	default:
 		return "", false
 	}
@@ -374,8 +372,15 @@ func isSRBenchRunAction(path, action string) bool {
 }
 
 func AuthFromContext(r *http.Request) (AuthContext, bool) {
-	ctxVal := r.Context().Value(authContextKey)
-	ac, ok := ctxVal.(AuthContext)
+	return AuthFromContextValue(r.Context())
+}
+
+// AuthFromContextValue reads the authenticated caller a request's context
+// carries, for a service-side boundary that holds the context but not the
+// request. A context with none, such as an internal or test caller, reports
+// false, as RevalidateContextIfPresent treats a missing request policy.
+func AuthFromContextValue(ctx context.Context) (AuthContext, bool) {
+	ac, ok := ctx.Value(authContextKey).(AuthContext)
 	return ac, ok
 }
 

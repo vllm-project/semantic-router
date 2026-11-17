@@ -3,6 +3,7 @@ package extproc
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -89,6 +90,23 @@ func TestProcessBodyRoutingErrorConvertsProtocolErrorToImmediateResponse(t *test
 	}
 	if envelope.Error.Message == "" {
 		t.Fatalf("error envelope message is empty: %s", body)
+	}
+}
+
+// A masking failure tells the client, in its own protocol, that the request
+// was not sent because it could not be masked, not that a model is down.
+func TestProcessBodyRoutingErrorSaysMaskingFailed(t *testing.T) {
+	for _, format := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1} {
+		ctx := routingTestContext(format, testNeutralRequest("m", "hi"))
+		router := &OpenAIRouter{}
+		response, converted := router.processBodyRoutingError(&maskingDispatchError{cause: errors.New("scan failed")}, ctx)
+		if !converted || response.GetImmediateResponse().GetStatus().GetCode() != 503 {
+			t.Fatalf("%s: masking failure was not answered with 503", format)
+		}
+		body := string(router.encodeImmediateResponseForClient(response, ctx).GetImmediateResponse().GetBody())
+		if !strings.Contains(body, maskingUnavailableMessage) || strings.Contains(body, "scan failed") {
+			t.Fatalf("%s: body = %s, want the masking message and no cause", format, body)
+		}
 	}
 }
 

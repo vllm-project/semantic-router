@@ -77,15 +77,25 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         decisions = [
             decision
             for recipe in self.config["recipes"]
-            for decision in recipe["routing"]["decisions"]
+            for decision in recipe["decisions"]
         ]
         for decision in decisions:
             minimum = decision.get("algorithm", {}).get("minimum_candidates", 0)
             self.assertGreaterEqual(len(decision.get("modelRefs", [])), minimum)
 
+    def test_prepare_runtime_composes_the_bundle_through_the_cli(self):
+        self.assertTrue(self.authored["entrypoints"])
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "runtime/config.yaml"
+            args = argparse.Namespace(
+                recipes_root=self.recipe_root, recipe="mom-v1", config=output
+            )
+            self.assertEqual(conformance.command_prepare_runtime(args), 0)
+            self.assertEqual(conformance.load_yaml_mapping(output), self.config)
+
     def test_policy_mutation_is_rejected(self):
         changed = copy.deepcopy(self.config)
-        changed["recipes"][0]["routing"]["decisions"][0]["priority"] += 1
+        changed["recipes"][0]["decisions"][0]["priority"] += 1
         with self.assertRaisesRegex(ValueError, "changed authored routing policy"):
             runtime.verify_composed_policy(self.authored, changed, self.manifest)
 
@@ -257,12 +267,12 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                         "source": "built-in-latest",
                         "shard": f"built-in-latest-mom-v1-{index}",
                         "recipes": "mom-v1",
-                        "probe_shard": f"{index}/16",
+                        "probe_shard": f"{index}/8",
                         "variants": 0,
                         "recipes_root": "config/recipes/built-in/latest",
                         "report_dir": "built-in/latest",
                     }
-                    for index in range(16)
+                    for index in range(8)
                 ],
             )
             self.assertEqual(sum(row["variants"] for row in built_in), 366)
@@ -330,7 +340,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
             sharded = [row for row in matrix if row["probe_shard"]]
             self.assertEqual(
                 [row["shard"] for row in sharded],
-                [f"built-in-latest-mom-v1-{index}" for index in range(16)],
+                [f"built-in-latest-mom-v1-{index}" for index in range(8)],
             )
             self.assertEqual(
                 sum(row["variants"] for row in sharded),

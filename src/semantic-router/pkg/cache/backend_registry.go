@@ -36,7 +36,9 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				UseHNSW:             config.UseHNSW,
 				HNSWM:               config.HNSWM,
 				HNSWEfConstruction:  config.HNSWEfConstruction,
-				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingDeployment: config.EmbeddingDeployment,
+				EmbeddingDimension:  config.EmbeddingDimension,
+				EmbeddingLayer:      config.EmbeddingLayer,
 				EmbeddingProvider:   config.EmbeddingProvider,
 			}), nil
 		},
@@ -55,7 +57,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Redis,
-				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingDeployment: config.EmbeddingDeployment,
 				EmbeddingProvider:   config.EmbeddingProvider,
 			})
 		},
@@ -74,7 +76,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Valkey,
-				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingDeployment: config.EmbeddingDeployment,
 				EmbeddingProvider:   config.EmbeddingProvider,
 			})
 		},
@@ -93,7 +95,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Milvus,
-				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingDeployment: config.EmbeddingDeployment,
 				EmbeddingProvider:   config.EmbeddingProvider,
 			})
 		},
@@ -109,7 +111,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Qdrant,
-				EmbeddingModel:      config.EmbeddingModel,
+				EmbeddingDeployment: config.EmbeddingDeployment,
 				EmbeddingProvider:   config.EmbeddingProvider,
 			})
 		},

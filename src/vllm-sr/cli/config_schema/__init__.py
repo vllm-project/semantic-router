@@ -7,7 +7,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
-SCHEMA_FILENAME = "router-config-v0.3.schema.json"
+SCHEMA_FILENAME = "router-config-v0.5.schema.json"
 
 
 def schema_text() -> str:

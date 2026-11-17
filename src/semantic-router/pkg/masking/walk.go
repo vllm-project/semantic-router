@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -39,6 +42,18 @@ type Result struct {
 // being scanned at the time of the error is never mutated, and the caller is
 // expected to discard the whole request rather than dispatch it (D4).
 func Apply(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, error) {
+	if a.err != nil {
+		return Result{}, a.err
+	}
+	if a.identity != nil {
+		if err := a.prepare(request); err != nil {
+			return Result{}, err
+		}
+	}
+	return applyRequest(request, a, scan)
+}
+
+func applyRequest(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, error) {
 	var result Result
 	// Instructions before Messages, so placeholder indices are stable
 	// regardless of where a value first appears in the request.
@@ -51,6 +66,22 @@ func Apply(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, e
 		if err := applyToContent(request.Messages[i].Content, a, scan, &result, 0); err != nil {
 			return Result{}, err
 		}
+	}
+	// Auto mode's classifier context carries paths and git state from the
+	// client's machine to an Anthropic backend: its string leaves are masked
+	// like a structured tool result's, or the request is refused.
+	if len(request.Safeguards) > 0 {
+		masked, changed, err := maskJSONDocument(string(request.Safeguards), a, scan, &result)
+		if err != nil {
+			return Result{}, fmt.Errorf("masking: safeguards: %w", err)
+		}
+		if changed {
+			result.Changed = true
+			request.Safeguards = json.RawMessage(masked)
+		}
+	}
+	if a.err != nil {
+		return Result{}, a.err
 	}
 	result.EntityTypes = dedupSortedEntityTypes(result.EntityTypes)
 	return result, nil
@@ -109,10 +140,9 @@ func maskTextBlock(block *llmprotocol.Content, a *Allocator, scan ScanFunc, out 
 	if err != nil {
 		return fmt.Errorf("masking: scan failed: %w", err)
 	}
-	// Filtering and merging here (in addition to inside MaskText) only
-	// counts what will actually be masked; MaskText re-derives the same set
-	// to perform the splice, so no placeholder is allocated twice.
-	merged := MergeSpans(a.filter(spans))
+	// The same set MaskText splices, so the counts hold only what is masked;
+	// MaskText re-derives it, so no placeholder is allocated twice.
+	merged := a.maskable(block.Text, spans)
 	if len(merged) == 0 {
 		return nil
 	}
@@ -171,14 +201,22 @@ func maskToolResult(
 	return nil
 }
 
+// jsonOpening matches how a JSON object or array starts: `{` before a member
+// name or `}`, or `[` before `]` or a first value, where a number or a literal
+// must be followed by `,` or `]`. An opener with nothing after it counts too.
+var jsonOpening = regexp.MustCompile(`^\s*(?:\{\s*(?:$|["}])|\[\s*(?:$|[\]"{\[]|(?:-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null)\s*(?:$|[,\]])))`)
+
 // isJSONShapedPayload reports whether text opens as a JSON object or array.
 // Such a payload is masked as decoded JSON, so escapes are seen through, and
 // one that will not decode faithfully fails closed rather than falling back to
 // the text path, which scans the undecoded bytes and so cannot see an escaped
-// value. Anything else, a bare scalar included, is ordinary text.
+// value. Anything else, a bare scalar included, is ordinary text, and so is
+// text that only begins with a bracket, such as a log line ("[INFO] ...",
+// "[2026-11-14 10:00:00] ...") or a vSR plugin mark ("[vsr:employee_id]"):
+// failing those closed refused every later turn of an agent session that had
+// read one.
 func isJSONShapedPayload(text string) bool {
-	trimmed := strings.TrimSpace(text)
-	return strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[")
+	return jsonOpening.MatchString(text)
 }
 
 // jsonFrame tracks one open object or array while walking tokens. Only object
@@ -334,7 +372,7 @@ func maskStringValue(text string, a *Allocator, scan ScanFunc, out *Result) (str
 	if err != nil {
 		return "", false, fmt.Errorf("masking: scan failed: %w", err)
 	}
-	merged := MergeSpans(a.filter(spans))
+	merged := a.maskable(text, spans)
 	if len(merged) == 0 {
 		return text, false, nil
 	}
@@ -362,8 +400,10 @@ func maskJSONValue(value any, a *Allocator, scan ScanFunc, out *Result) (any, bo
 		return masked, changed, nil
 	case map[string]any:
 		changed := false
-		for key, child := range typed {
-			maskedChild, childChanged, err := maskJSONValue(child, a, scan, out)
+		// Keys in sorted order, the order json.Marshal writes them: map
+		// order would number the same request's placeholders differently.
+		for _, key := range slices.Sorted(maps.Keys(typed)) {
+			maskedChild, childChanged, err := maskJSONValue(typed[key], a, scan, out)
 			if err != nil {
 				return nil, false, err
 			}

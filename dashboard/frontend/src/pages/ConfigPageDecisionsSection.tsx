@@ -16,7 +16,12 @@ import type {
   DecisionFormState,
   NormalizedModel,
 } from './configPageSupport'
-import { getReasoningFamiliesMap, mergeDecisionForSave } from './configPageSupport'
+import {
+  decisionOutputForEditor,
+  decisionOutputFromEditor,
+  getReasoningFamiliesMap,
+  mergeDecisionForSave,
+} from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
@@ -48,7 +53,6 @@ import {
 
 interface ConfigPageDecisionsSectionProps {
   config: ConfigData | null
-  isPythonCLI: boolean
   isReadonly: boolean
   decisionsSearch: string
   onDecisionsSearchChange: (value: string) => void
@@ -67,7 +71,6 @@ function configuredObject(value: Record<string, unknown>): Record<string, unknow
 
 export default function ConfigPageDecisionsSection({
   config,
-  isPythonCLI,
   isReadonly,
   decisionsSearch,
   onDecisionsSearchChange,
@@ -82,7 +85,7 @@ export default function ConfigPageDecisionsSection({
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
   const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
     useRoutingScopeManager(config)
-  const reasoningFamilies = getReasoningFamiliesMap(config, isPythonCLI)
+  const reasoningFamilies = getReasoningFamiliesMap()
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -278,13 +281,14 @@ export default function ConfigPageDecisionsSection({
           fullWidth: true,
         },
         {
-          label: 'Iterations, Emits & Annotations',
+          label: 'Iterations, Retention, Output & Annotations',
           value: (
             <ConfigPageSchemaFieldsEditor
               schema={DECISION_DECLARATIVE_SCHEMA}
               value={{
                 candidateIterations: decision.candidateIterations || [],
-                emits: decision.emits || [],
+                retention: decision.retention || {},
+                output: decisionOutputForEditor(decision.output),
                 annotations: decision.annotations || {},
               }}
               readOnly
@@ -342,7 +346,8 @@ export default function ConfigPageDecisionsSection({
             fallback: decision.fallback || {},
             declarative: {
               candidateIterations: decision.candidateIterations || [],
-              emits: decision.emits || [],
+              retention: decision.retention || {},
+              output: decisionOutputForEditor(decision.output),
               annotations: decision.annotations || {},
             },
             rules: JSON.parse(JSON.stringify(decision.rules || {})),
@@ -538,7 +543,8 @@ export default function ConfigPageDecisionsSection({
         label: 'Declarative Extensions',
         section: 'Output behavior',
         type: 'custom',
-        description: 'Candidate iteration, emitted directives, and bounded annotations.',
+        description:
+          'Candidate iteration, retention, the media the decision answers with, and bounded annotations.',
         customRender: (value, onChange) => (
           <ConfigPageSchemaFieldsEditor
             schema={DECISION_DECLARATIVE_SCHEMA}
@@ -552,10 +558,6 @@ export default function ConfigPageDecisionsSection({
     const saveDecision = async (formData: DecisionFormState) => {
       if (!config) {
         throw new Error('Configuration not loaded yet.')
-      }
-
-      if (!isPythonCLI) {
-        throw new Error('Decisions are only supported for Python CLI configs.')
       }
 
       const name = (formData.name || '').trim()
@@ -606,9 +608,13 @@ export default function ConfigPageDecisionsSection({
         candidateIterations: Array.isArray(declarative.candidateIterations)
           ? (declarative.candidateIterations as Array<Record<string, unknown>>)
           : undefined,
-        emits: Array.isArray(declarative.emits)
-          ? (declarative.emits as Array<Record<string, unknown>>)
-          : undefined,
+        retention:
+          declarative.retention &&
+          typeof declarative.retention === 'object' &&
+          Object.keys(declarative.retention).length > 0
+            ? (declarative.retention as Record<string, unknown>)
+            : undefined,
+        output: decisionOutputFromEditor(declarative.output),
         annotations:
           declarative.annotations && typeof declarative.annotations === 'object'
             ? (declarative.annotations as Record<string, unknown>)
@@ -649,8 +655,8 @@ export default function ConfigPageDecisionsSection({
 
   const confirmDeleteDecision = async () => {
     if (!decisionPendingDelete) return
-    if (!config || !isPythonCLI) {
-      setDecisionDeleteError('Deleting decisions is only supported for Python CLI configs.')
+    if (!config) {
+      setDecisionDeleteError('Configuration not loaded yet.')
       return
     }
 

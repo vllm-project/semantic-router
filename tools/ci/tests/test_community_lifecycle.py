@@ -1,7 +1,9 @@
 import importlib.util
+import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 from urllib.parse import quote, unquote
 
 import yaml
@@ -659,6 +661,14 @@ class FakePullRequestApi:
 
 class PullRequestReconciliationTests(unittest.TestCase):
     REPO = "acme/router"
+
+    def setUp(self) -> None:
+        repository_environment = mock.patch.dict(
+            os.environ,
+            {"GITHUB_REPOSITORY": self.REPO},
+        )
+        repository_environment.start()
+        self.addCleanup(repository_environment.stop)
 
     def pull_request(self, **overrides):
         item = {

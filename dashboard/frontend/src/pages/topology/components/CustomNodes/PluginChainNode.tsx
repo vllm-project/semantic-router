@@ -9,7 +9,7 @@ import styles from './CustomNodes.module.css'
 interface PluginChainNodeData {
   decisionName: string
   plugins: PluginConfig[]
-  algorithm?: AlgorithmConfig  // Optional algorithm to display at the top
+  algorithm?: AlgorithmConfig // Optional algorithm to display at the top
   collapsed?: boolean
   isHighlighted?: boolean
   onToggleCollapse?: () => void
@@ -21,14 +21,15 @@ interface PluginChainNodeData {
 // Check if plugin overrides global config
 function getPluginOverrideInfo(plugin: PluginConfig, data: PluginChainNodeData): string | null {
   if (plugin.type === 'response_cache') {
-    const config = plugin.configuration as { similarity_threshold?: number; enabled?: boolean } | undefined
+    const config = plugin.configuration as
+      | { enabled?: boolean; semantic?: { match?: { recall?: { min_similarity?: number } } } }
+      | undefined
     if (config?.enabled === false) {
       return '(disabled)'
     }
-    if (config?.similarity_threshold && data.globalCacheThreshold) {
-      if (config.similarity_threshold !== data.globalCacheThreshold) {
-        return `(${config.similarity_threshold})`
-      }
+    const minSimilarity = config?.semantic?.match?.recall?.min_similarity
+    if (minSimilarity && data.globalCacheThreshold && minSimilarity !== data.globalCacheThreshold) {
+      return `(${minSimilarity})`
     }
     if (data.globalCacheEnabled) {
       return '(global)'
@@ -44,19 +45,12 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
   const totalItems = (algorithm ? 1 : 0) + plugins.length
 
   return (
-    <div
-      className={`${styles.pluginChainNode} ${isHighlighted ? styles.highlighted : ''}`}
-    >
+    <div className={`${styles.pluginChainNode} ${isHighlighted ? styles.highlighted : ''}`}>
       <Handle type="target" position={Position.Left} />
 
-      <div
-        className={styles.pluginChainHeader}
-        onClick={onToggleCollapse}
-      >
+      <div className={styles.pluginChainHeader} onClick={onToggleCollapse}>
         <span className={styles.collapseIcon}>{collapsed ? '▶' : '▼'}</span>
-        <span className={styles.pluginChainTitle}>
-          🔌 Plugin Chain ({totalItems})
-        </span>
+        <span className={styles.pluginChainTitle}>🔌 Plugin Chain ({totalItems})</span>
       </div>
 
       {!collapsed && (
@@ -72,15 +66,16 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
                 <span>{ALGORITHM_ICONS[algorithm.type] || '🔄'}</span>
                 <span>{algorithm.type}</span>
               </div>
-              {plugins.length > 0 && (
-                <span className={styles.chainArrow}>↓</span>
-              )}
+              {plugins.length > 0 && <span className={styles.chainArrow}>↓</span>}
             </>
           )}
 
           {/* Display plugins */}
           {plugins.map((plugin, idx) => {
-            const colors = PLUGIN_COLORS[plugin.type] || { background: '#607D8B', border: '#455A64' }
+            const colors = PLUGIN_COLORS[plugin.type] || {
+              background: '#607D8B',
+              border: '#455A64',
+            }
             const icon = PLUGIN_ICONS[plugin.type] || '🔌'
             const overrideInfo = getPluginOverrideInfo(plugin, data)
 
@@ -94,14 +89,10 @@ export const PluginChainNode = memo<NodeProps<PluginChainNodeData>>(({ data }) =
                   <span>{icon}</span>
                   <span>
                     {plugin.type.replace(/[-_]/g, ' ')}
-                    {overrideInfo && (
-                      <span className={styles.pluginOverride}>{overrideInfo}</span>
-                    )}
+                    {overrideInfo && <span className={styles.pluginOverride}>{overrideInfo}</span>}
                   </span>
                 </div>
-                {idx < plugins.length - 1 && (
-                  <span className={styles.chainArrow}>↓</span>
-                )}
+                {idx < plugins.length - 1 && <span className={styles.chainArrow}>↓</span>}
               </React.Fragment>
             )
           })}

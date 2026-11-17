@@ -72,14 +72,14 @@ func TestFallbackAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:                  "judge",
 			AnalysisModels:         panelModels,
 			MaxConcurrent:          1,
 			MinSuccessfulResponses: 2,
 			RoundTimeoutSeconds:    1,
-			OnError:                config.FusionOnErrorSkip,
 			QuorumFailurePolicy:    config.FusionQuorumFailurePolicyFallback,
 			QuorumFallbackTarget:   "backup-model",
 		},
@@ -172,7 +172,8 @@ func TestSuccessAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:          "judge",
 			AnalysisModels: panelModels,
@@ -180,7 +181,6 @@ func TestSuccessAccountingCountsOnlyDispatchedPanelCalls(t *testing.T) {
 			// panel while the remaining workers are still queued.
 			MaxConcurrent:          1,
 			MinSuccessfulResponses: 1,
-			OnError:                config.FusionOnErrorSkip,
 		},
 	}
 
@@ -365,14 +365,14 @@ func TestJudgeOrdinalsContinuePanelAttemptSequence(t *testing.T) {
 
 			req := newFusionTestRequest()
 			req.Algorithm = &config.AlgorithmConfig{
-				Type: "fusion",
+				Type:    "fusion",
+				OnError: config.FusionOnErrorSkip,
 				Fusion: &config.FusionAlgorithmConfig{
 					Model:                  "judge",
 					AnalysisModels:         []string{"panel-a", "panel-b"},
 					AnalysisMode:           tt.analysisMode,
 					MaxConcurrent:          2,
 					MinSuccessfulResponses: 1,
-					OnError:                config.FusionOnErrorSkip,
 				},
 			}
 

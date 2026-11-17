@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -16,86 +16,110 @@ providers:
           protocol: http
           provider: vllm
           weight: 1
-routing:
-  modelCards:
-    - name: Qwen/Qwen2.5-14B-Instruct-AWQ
       description: Benchmark target model for hallucination mitigation evaluation.
       capabilities: [chat, reasoning]
-      modality: ar
-  signals:
-    domains:
-      - name: general
-        description: General questions.
-        mmlu_categories: [other]
-      - name: math
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: general
+          description: General questions.
+          labels: [other]
+        - name: math
+          description: Mathematics and quantitative reasoning.
+          labels: [math]
+        - name: science
+          description: Science questions.
+          labels: [physics, chemistry, biology]
+      fact_check:
+        - name: needs_fact_check
+          description: Query contains factual claims that should be verified against context.
+        - name: no_fact_check_needed
+          description: Query is creative, code-related, or opinion-based and does not need factual verification.
+          labels: [NO_FACT_CHECK_NEEDED]
+          predicate:
+            gt: 0.3
+      hallucination:
+        - name: ungrounded_claims
+          description: Answers with claims their grounding context does not support.
+    decisions:
+      - name: math_decision
         description: Mathematics and quantitative reasoning.
-        mmlu_categories: [math]
-      - name: science
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: Qwen/Qwen2.5-14B-Instruct-AWQ
+            use_reasoning: true
+        plugins:
+          - type: response_guard
+            configuration:
+              rules:
+                - when:
+                    operator: AND
+                    conditions:
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: hallucination
+                        name: ungrounded_claims
+                  action: annotate
+              on_unknown: annotate
+      - name: science_decision
         description: Science questions.
-        mmlu_categories: [physics, chemistry, biology]
-    fact_check:
-      - name: needs_fact_check
-        description: Query contains factual claims that should be verified against context.
-      - name: no_fact_check_needed
-        description: Query is creative, code-related, or opinion-based and does not need factual verification.
-  decisions:
-    - name: math_decision
-      description: Mathematics and quantitative reasoning.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: Qwen/Qwen2.5-14B-Instruct-AWQ
-          use_reasoning: true
-      plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
-    - name: science_decision
-      description: Science questions.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: science
-      modelRefs:
-        - model: Qwen/Qwen2.5-14B-Instruct-AWQ
-          use_reasoning: true
-      plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
-    - name: general_decision
-      description: General questions.
-      priority: 50
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: Qwen/Qwen2.5-14B-Instruct-AWQ
-          use_reasoning: false
-      plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: science
+        modelRefs:
+          - model: Qwen/Qwen2.5-14B-Instruct-AWQ
+            use_reasoning: true
+        plugins:
+          - type: response_guard
+            configuration:
+              rules:
+                - when:
+                    operator: AND
+                    conditions:
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: hallucination
+                        name: ungrounded_claims
+                  action: annotate
+              on_unknown: annotate
+      - name: general_decision
+        description: General questions.
+        priority: 50
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: Qwen/Qwen2.5-14B-Instruct-AWQ
+            use_reasoning: false
+        plugins:
+          - type: response_guard
+            configuration:
+              rules:
+                - when:
+                    operator: AND
+                    conditions:
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: hallucination
+                        name: ungrounded_claims
+                  action: annotate
+              on_unknown: annotate
 global:
   router:
     strategy: priority
+    headers:
+      debug: any
   services:
     api:
       batch_classification:
@@ -104,11 +128,3 @@ global:
           detailed_goroutine_tracking: true
           high_resolution_timing: false
           sample_rate: 1.0
-  stores:
-    semantic_cache:
-      enabled: false
-      embedding_model: mmbert
-    memory:
-      embedding_model: mmbert
-    vector_store:
-      embedding_model: mmbert

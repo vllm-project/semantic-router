@@ -25,6 +25,9 @@ type ModelSpec struct {
 	// Glob patterns passed to `hf download --exclude` so artifacts the configured
 	// runtime never loads are skipped. Empty means the full snapshot is fetched.
 	ExcludePatterns []string
+	// Glob patterns passed to `hf download --include`, which fetches only the
+	// files they match. Empty means every file the excludes leave.
+	IncludePatterns []string
 }
 
 // DownloadConfig contains configuration for model downloading

@@ -8,9 +8,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 var (
@@ -26,74 +26,75 @@ var (
 	classifierErr  error
 )
 
-// signalClassifier runs the Domain, PII and Guard signals a request evaluates
-// together, bundled the way the router bundles one request stage.
-type signalClassifier struct {
-	domain    *binding.Resolved[string, tasks.LabelDistribution]
-	pii       *binding.Resolved[string, tasks.TokenClassificationResult]
-	jailbreak *binding.Resolved[string, tasks.LabelDistribution]
+// presetQuestion is the question an application rule of a preset asks, as
+// the Router writes it for the decision model's card to compile.
+func presetQuestion(preset string) modelservice.Question {
+	canonical, _ := presets.Lookup(preset, presets.StageRequest)
+	written := config.PresetSystemOneQuestion(canonical)
+	question := modelservice.Question{
+		ID: "preset:" + preset, TaskID: modelservice.PresetTask(preset), Stage: canonical.Stage,
+		Type: written.Type, Instructions: written.Instructions, Truncate: !canonical.Full,
+	}
+	for _, choice := range written.Choices {
+		question.Choices = append(question.Choices, modelservice.Choice{Key: choice.Key, Description: choice.Description})
+	}
+	for _, label := range written.Labels {
+		question.Labels = append(question.Labels, modelservice.Choice{Key: label.Key, Description: label.Description})
+	}
+	return question
 }
 
-// ClassifyBatch runs every signal on every text in one bundle.
-func (c *signalClassifier) ClassifyBatch(ctx context.Context, recipe string, texts []string) error {
+// signalClassifier asks the decision model the Domain, Guard and PII
+// questions a request stage asks together, bundled the way the router bundles
+// one request stage.
+type signalClassifier struct {
+	deployment string
+	card       modelservice.ModelCard
+	questions  []modelservice.Question
+}
+
+// ask asks one text's questions in one call, as a request stage does.
+func (c *signalClassifier) ask(ctx context.Context, text string) (modelservice.Response, error) {
+	return modelservice.ExecuteQuestions(ctx, benchmarkLease, c.deployment, c.card, modelservice.Request{State: text, Questions: c.questions})
+}
+
+// ClassifyBatch asks every text's questions in one bundle.
+func (c *signalClassifier) ClassifyBatch(ctx context.Context, texts []string) error {
 	ctx, bundle := modelservice.WithBundle(ctx, 0)
 	defer bundle.Join()()
-	errs := make([]error, 3*len(texts))
-	modelservice.Fan(ctx, len(errs), func(i int) {
-		text := texts[i/3]
-		switch i % 3 {
-		case 0:
-			_, errs[i] = c.domain.Call(ctx, recipe, text)
-		case 1:
-			_, errs[i] = c.pii.Call(ctx, recipe, text)
-		default:
-			_, errs[i] = c.jailbreak.Call(ctx, recipe, text)
-		}
+	errs := make([]error, len(texts))
+	modelservice.Fan(ctx, len(texts), func(i int) {
+		_, errs[i] = c.ask(ctx, texts[i])
 	})
-	return errors.Join(errs...)
-}
-
-func (c *signalClassifier) Close() error {
-	var errs []error
-	if c.domain != nil {
-		errs = append(errs, c.domain.Close())
-	}
-	if c.pii != nil {
-		errs = append(errs, c.pii.Close())
-	}
-	if c.jailbreak != nil {
-		errs = append(errs, c.jailbreak.Close())
-	}
 	return errors.Join(errs...)
 }
 
 var benchClassifier *signalClassifier
 
+func newSignalClassifier(b *testing.B, deployment string, input config.ModelInputBudget, presetIDs ...string) *signalClassifier {
+	b.Helper()
+	spec := benchmarkDeployment(b, "decision", deployment, input)
+	classifier := &signalClassifier{deployment: spec.Binding.Deployment, card: benchmarkCards["decision"]}
+	for _, preset := range presetIDs {
+		classifier.questions = append(classifier.questions, presetQuestion(preset))
+	}
+	return classifier
+}
+
 func initClassifier(b *testing.B) {
 	b.Helper()
 	classifierOnce.Do(func() {
-		// benchmarkModel stops this benchmark (b.Fatalf) inside Do, and Do still
-		// counts as done, so later benchmarks fail on this error unless setup ends.
+		// benchmarkDeployment stops this benchmark (b.Fatalf) inside Do, and Do
+		// still counts as done, so later benchmarks fail on this error unless
+		// setup ends.
 		classifierErr = errors.New("an earlier benchmark stopped while preparing them")
-		ctx := context.Background()
-		classifier := &signalClassifier{}
-		var err error
-		if classifier.domain, err = benchmarkRuntime.Sequence(ctx, benchmarkModel(b, "domain", "label_distribution.v1")); err == nil {
-			if classifier.pii, err = benchmarkRuntime.Tokens(ctx, benchmarkModel(b, "pii", "token_spans.v1")); err == nil {
-				classifier.jailbreak, err = benchmarkRuntime.Sequence(ctx, benchmarkModel(b, "jailbreak", "label_distribution.v1"))
-			}
-		}
-		if err != nil {
-			classifierErr = errors.Join(err, classifier.Close())
-			return
-		}
-		benchClassifier = classifier
+		benchClassifier = newSignalClassifier(b, "perf-decision", benchmarkInput, presets.Domain, presets.Jailbreak, presets.PII)
 		classifierErr = nil
 	})
 	if classifierErr != nil {
-		b.Fatalf("prepare the Vela signal classifiers: %v", classifierErr)
+		b.Fatalf("prepare the decision model: %v", classifierErr)
 	}
-	recordModelIdentity(b, "domain", "pii", "jailbreak")
+	recordModelIdentity(b, "decision")
 }
 
 // BenchmarkClassifyBatch_Size1 benchmarks single text classification
@@ -106,7 +107,7 @@ func BenchmarkClassifyBatch_Size1(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		text := testTexts[i%len(testTexts)]
-		err := classifier.ClassifyBatch(context.Background(), "perf", []string{text})
+		err := classifier.ClassifyBatch(context.Background(), []string{text})
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
@@ -128,7 +129,7 @@ func BenchmarkClassifyBatch_Size10(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := classifier.ClassifyBatch(context.Background(), "perf", batch)
+		err := classifier.ClassifyBatch(context.Background(), batch)
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
@@ -150,7 +151,7 @@ func BenchmarkClassifyBatch_Size50(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := classifier.ClassifyBatch(context.Background(), "perf", batch)
+		err := classifier.ClassifyBatch(context.Background(), batch)
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
@@ -172,7 +173,7 @@ func BenchmarkClassifyBatch_Size100(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := classifier.ClassifyBatch(context.Background(), "perf", batch)
+		err := classifier.ClassifyBatch(context.Background(), batch)
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
@@ -190,7 +191,7 @@ func BenchmarkClassifyBatch_Parallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			text := testTexts[0]
-			err := classifier.ClassifyBatch(context.Background(), "perf", []string{text})
+			err := classifier.ClassifyBatch(context.Background(), []string{text})
 			if err != nil {
 				b.Fatalf("Classification failed: %v", err)
 			}
@@ -210,7 +211,7 @@ func BenchmarkClassifyRuntimeOverhead(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		err := classifier.ClassifyBatch(context.Background(), "perf", texts)
+		err := classifier.ClassifyBatch(context.Background(), texts)
 		if err != nil {
 			b.Fatalf("Classification failed: %v", err)
 		}
