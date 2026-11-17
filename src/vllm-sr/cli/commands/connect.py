@@ -1333,6 +1333,8 @@ def _launch(
             hc.write_private(path, json.dumps(settings, indent=2))
         _probe_or_say_why(gateway, harness, model, token, doc, written=False)
         env = dict(os.environ) if env is None else env
+        if session_id:
+            env = {**env, hs.SESSION_ENV: session_id}
         try:
             if where.new:
                 hs.add(where)
@@ -1447,7 +1449,8 @@ CODEX_HOOK_TRUST = (
     "There, trust the vSR hooks once when Codex says they are new or changed"
     " (Trust all and continue, or Review hooks), and again after a plugin update."
     " Until then Codex runs none of them, codex exec included, which never asks:"
-    " no guard before a command, no redact or shield on its output, no turn line."
+    " no guard before a command, no redact or shield on its output, no turn line"
+    " and no tool timing in the run view."
 )
 
 
@@ -1507,6 +1510,10 @@ def _vsr_claude_start(env, gateway, doc, vsr, from_env, key_env, key_command=Non
             f" listener's key, or remove the token with /plugin configure {plugin_id}."
         )
         return None, None, None
+    if options and (state is None or "managementUrl" in state[0]):
+        # each tool call's timing goes to the Router's run view; a plugin from
+        # before that has no such option
+        options = {**options, "managementUrl": _management_url(gateway, doc)}
     return options, plugin_id, state
 
 

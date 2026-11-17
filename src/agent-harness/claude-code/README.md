@@ -238,6 +238,14 @@ skill writes them, and `/plugin configure vsr@vllm-sr` edits them. The ones you 
 | `logo` | `auto`, `image`, `smooth`, `blocks`, `off` | `auto` |
 | `logPath` | an absolute path or one under `~/`; empty turns the log off | `~/.claude/vsr/decisions.jsonl` |
 | `runtimeModel` | the model a remote runtime that serves several answers with; empty for one that serves one | empty |
+| `managementUrl` | a Router management API, such as `http://127.0.0.1:8080`, that gets each tool call's timing; empty sends none | empty |
+
+With `managementUrl` set (`vllm-sr connect claude-code` sets it), vSR reports each tool call to Router
+Replay's run view: the tool's name and call id, when it ran by Claude Code's own measure, how it
+ended, and when it was put to approval, never its input or output. Calls go a second after they end,
+in one batch, and never hold a call up; one the Router does not take within two seconds is dropped.
+`VSR_MANAGEMENT_TOKEN`, when set, is sent as the bearer token, and needs `learning.ingest` on a
+management API with bearer auth.
 
 A log path under `~/.claude/` follows `CLAUDE_CONFIG_DIR` when it is set. A relative path is refused
 (it would put every project's commands into each project), and a file of your own already at the

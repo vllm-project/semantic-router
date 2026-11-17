@@ -80,6 +80,8 @@ export type Settings = {
   display: Display
   // The rules the listener binds to guard and redact, from its listing (lib/profile.ts).
   rules: ListenerRules
+  // The Router management API that gets each tool call's timing; empty sends none (timing.ts).
+  managementUrl: string
 }
 
 export const DIFFICULTY_MAX = 2
@@ -119,5 +121,6 @@ export function parseSettings(options: PluginOptions): Settings {
     routerTurns: options.routerTurns === true,
     display: options.display as Display,
     rules: NO_RULES,
+    managementUrl: String(options.managementUrl ?? '').trim().replace(/\/+$/, ''),
   }
 }

@@ -1124,10 +1124,34 @@ and the tool calls one response asked for share it, since the gateway sees
 them leave together and their results come back together. A call whose result
 no later request carried has no `returned_at`.
 
-`started_at`, `ended_at` and `approval_ms` are kept for a harness plugin that
-reports when each tool ran and how long it waited for approval; such a report
-joins the call by its tool call id (Claude Code's `tool_use` id, Codex's
-`call_id`) and sets `timing_source: plugin`. They are empty from the gateway.
+The vSR plugins for Claude Code and Codex report each tool call as the
+harness ran it to `POST /api/v1/observability/tool-events`
+([Tool timing in the run view](../../installation/agent-harness#tool-timing-in-the-run-view)).
+A report joins the call of the same tool call id (Claude Code's `tool_use`
+id, Codex's `call_id`) in the run's session and sets `timing_source: plugin`
+with the plugin's times: `started_at` and `ended_at`, when the tool started
+and when it ended or was refused, `approval_requested_at`, when the harness
+put it to approval, and `approval_ms`, the wait from that ask to the start
+where the harness reports a start after the answer, as Claude Code does. A
+Codex start comes before the ask, because Codex's hooks do not say when the
+answer came, so its time includes the wait and `approval_ms` stays empty.
+The call's `status` becomes the plugin's, `succeeded`, `failed` or `denied`
+for a call refused before it ran: the gateway reads a result's status only
+from its error flag, which a Responses `function_call_output` does not carry
+and a refused call's result sets. The run's `tool_failures`, each call's
+`tool_failures` and the `tool_failure` marker, in the run and in Runs, count
+that status, so a denied call is no failed tool. The gateway's fields stay
+beside them, and a call no plugin reported keeps `timing_source: gateway` and
+the result's status. The run page shows a plugin's time as the tool's
+run with its approval wait apart, and the gateway's window as an estimate
+marked `≈`.
+
+Replay keeps at most 5,000 reports, none older than its records' TTL, or
+seven days without one: with the file store in
+`.vllm-sr/router-tool-events.jsonl` beside the records, which a restart reads
+back, and otherwise in memory, which a configuration reload keeps and a
+restart does not. PostgreSQL, Redis, Milvus and Qdrant keep the records but
+not the reports.
 
 #### Model labels
 

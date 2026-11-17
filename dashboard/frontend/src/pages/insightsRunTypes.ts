@@ -83,7 +83,7 @@ export interface RunToolCall {
   id?: string
   summary?: string
   arguments?: string
-  status?: 'succeeded' | 'failed' | string
+  status?: 'succeeded' | 'failed' | 'denied' | string
   // gateway: from the end of the response that asked for the call to the
   // start of the next request that carried its result, shared by the calls
   // of one response; plugin: as a harness plugin reported it.
@@ -93,6 +93,9 @@ export interface RunToolCall {
   client_ms?: number
   started_at?: string
   ended_at?: string
+  // plugin: when the harness put the call to approval, and the wait from
+  // there to the start where it reports a start after the answer.
+  approval_requested_at?: string
   approval_ms?: number
 }
 

@@ -277,24 +277,6 @@ func TestReplayRunNamesACodexChildFromAnEarlierSpawnCall(t *testing.T) {
 	require.Equal(t, "succeeded", agents[1].ReturnStatus)
 }
 
-// A harness plugin's report of a tool call joins the gateway's times by the
-// tool call id, and says so in timing_source.
-func TestReplayToolReportsJoinByToolCallID(t *testing.T) {
-	approval := int64(4000)
-	started, ended := time.Unix(100, 0), time.Unix(104, 0)
-	calls := []routerreplay.RunCall{{ToolCalls: []routerreplay.RunToolCall{
-		{Name: "Bash", ID: "toolu_1", TimingSource: "gateway"}, {Name: "Read", ID: "toolu_2", TimingSource: "gateway"},
-	}}}
-	joinReplayToolReports(calls, map[string]replayToolReport{"toolu_1": {startedAt: started, endedAt: ended, approvalMS: &approval}})
-	bash, read := calls[0].ToolCalls[0], calls[0].ToolCalls[1]
-	require.Equal(t, "plugin", bash.TimingSource)
-	require.Equal(t, started, *bash.StartedAt)
-	require.Equal(t, ended, *bash.EndedAt)
-	require.Equal(t, approval, *bash.ApprovalMS)
-	require.Equal(t, "gateway", read.TimingSource)
-	require.Nil(t, read.StartedAt)
-}
-
 // A request's offered tools are kept by name, an MCP or namespaced tool with
 // its server, and never with a schema or description.
 func TestReplayOfferedToolsKeepNamesOnly(t *testing.T) {

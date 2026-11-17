@@ -7,7 +7,8 @@ command should wait for a person, and blocks it with the reason when it should. 
 handles PostToolUse: redact replaces the personal data in a command's output with tags, and
 shield tells Codex to read an output that tries to give it orders as data. `stop` handles
 Stop: one line says which models the gateway served the turn with, read from the Router's own
-records of the turn.
+records of the turn. `tool` handles every tool's PreToolUse, PermissionRequest and
+PostToolUse as an async hook, and sends each call's timing to Router Replay (timing.py).
 
 The questions are the Claude Code plugin's own, copied into framing.py. Whatever goes wrong
 with the decision model, the call goes on as Codex would run it, and one line says what
@@ -29,6 +30,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+import timing
 from framing import PII_TAGS, READERS, framed
 
 DEFAULTS = {
@@ -768,12 +770,19 @@ def main(argv: list[str]) -> int:
     if mode == "stop":
         print(json.dumps(turn_line(event, settings(listener=False))))
         return 0
+    if mode == "tool":
+        # Every tool's timing, as an async hook Codex does not wait for.
+        timing.record(event, settings(listener=False), NO_REDIRECTS)
+        print("{}")
+        return 0
     opts = settings()
     if event.get("tool_name") != "Bash":
         print("{}")
         return 0
     handle = {"pre": guard, "post": output}.get(mode)
     print(json.dumps(handle(event, opts) if handle else {}))
+    if mode == "pre":
+        timing.checked(event, opts)
     return 0
 
 

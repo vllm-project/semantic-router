@@ -287,23 +287,47 @@ export function toolLabel(tool: RunToolCall): string {
   return tool.summary ? `${tool.name} · ${tool.summary}` : tool.name
 }
 
-// How long a tool call took on the client: the plugin's run when it
-// reported one, else the gateway's window.
+// How long a tool call took on the client: the tool's own run when a harness
+// plugin reported it, else the gateway's window.
 export function toolDuration(tool: RunToolCall): number | undefined {
-  if (tool.started_at && tool.ended_at) {
-    return Date.parse(tool.ended_at) - Date.parse(tool.started_at)
+  if (tool.timing_source === 'plugin') {
+    return tool.started_at && tool.ended_at
+      ? Date.parse(tool.ended_at) - Date.parse(tool.started_at)
+      : undefined
   }
   return tool.client_ms
 }
 
-// A tool call as a line under its call: "Bash · pytest -q · 13.0s · ok".
-export function toolLine(tool: RunToolCall): string {
+// A tool call's time as the run reads it. A plugin's report is the tool's
+// own run, with the time it waited for approval apart; the gateway's window
+// is an estimate, marked ≈, that the calls of one response share.
+export function toolTimeText(tool: RunToolCall): string {
   const duration = toolDuration(tool)
-  return [
-    toolLabel(tool),
-    duration === undefined ? '' : formatRunDuration(duration),
-    toolStatusText(tool.status),
-  ]
+  if (tool.timing_source !== 'plugin') {
+    return duration === undefined ? '' : `≈${formatRunDuration(duration)}`
+  }
+  let wait = ''
+  if (tool.approval_ms !== undefined) {
+    wait = `waited ${formatRunDuration(tool.approval_ms)} for approval`
+  } else if (tool.approval_requested_at) {
+    // A start the harness took before the answer holds the wait.
+    wait = duration === undefined ? 'asked for approval' : 'approval wait included'
+  }
+  return [duration === undefined ? '' : `ran ${formatRunDuration(duration)}`, wait]
+    .filter(Boolean)
+    .join(', ')
+}
+
+// Whose clock a tool call's time comes from, for its tooltip.
+export function toolTimeSource(tool: RunToolCall): string {
+  return tool.timing_source === 'plugin'
+    ? "As the harness's vSR plugin reported it: the tool's own run, and its approval wait apart"
+    : 'Estimated by the gateway: from the response that asked for the call to the request that carried its result, shared by the calls of one response'
+}
+
+// A tool call as a line under its call: "Bash · pytest -q · ≈13.0s · ok".
+export function toolLine(tool: RunToolCall): string {
+  return [toolLabel(tool), toolTimeText(tool), toolStatusText(tool.status)]
     .filter(Boolean)
     .join(' · ')
 }
@@ -311,5 +335,6 @@ export function toolLine(tool: RunToolCall): string {
 export function toolStatusText(status?: string): string {
   if (status === 'succeeded') return 'ok'
   if (status === 'failed') return 'failed'
+  if (status === 'denied') return 'refused'
   return 'no result yet'
 }

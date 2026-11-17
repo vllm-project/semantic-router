@@ -49,19 +49,13 @@ func newReplayRunEntry(record routerreplay.RoutingRecord) replayRunEntry {
 // carried it, in time order. A later call carries the results again in its
 // history, which shows no step for a text answer or a new prompt, and a side
 // request or Looper hop copies them: none of these sent a result.
-func countReplayToolResults(entries []replayRunEntry) {
+func countReplayToolResults(entries []replayRunEntry, reports map[string]store.ToolEvent) {
 	seen := make(map[string]bool)
 	for index := range entries {
 		entry := &entries[index]
 		var results, failures []string
 		if entry.parentRequestID == "" && entry.call.RequestKind == "" {
-			for _, id := range entry.toolResults {
-				if !seen[id] {
-					seen[id] = true
-					results = append(results, id)
-				}
-			}
-			failures = slices.DeleteFunc(entry.toolFailures, func(id string) bool { return !slices.Contains(results, id) })
+			results, failures = firstReplayToolResults(*entry, seen, reports)
 		}
 		entry.toolResults, entry.toolFailures = results, failures
 		entry.call.ToolResults, entry.call.ToolFailures = len(results), len(failures)
@@ -69,6 +63,28 @@ func countReplayToolResults(entries []replayRunEntry) {
 			entry.call.Markers = append(entry.call.Markers, routerreplay.RunMarkerToolFailure)
 		}
 	}
+}
+
+// firstReplayToolResults are the results a call carried that no earlier call
+// did, and those that failed: as the harness plugin reported the tool call,
+// where one did, since a Responses result carries no error flag, else as the
+// result says.
+func firstReplayToolResults(entry replayRunEntry, seen map[string]bool, reports map[string]store.ToolEvent) (results, failures []string) {
+	for _, id := range entry.toolResults {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		results = append(results, id)
+		failed := slices.Contains(entry.toolFailures, id)
+		if report, ok := reports[id]; ok && report.Status != "" {
+			failed = report.Status == store.ToolEventFailed
+		}
+		if failed {
+			failures = append(failures, id)
+		}
+	}
+	return results, failures
 }
 
 func buildReplayRunCall(record routerreplay.RoutingRecord) routerreplay.RunCall {

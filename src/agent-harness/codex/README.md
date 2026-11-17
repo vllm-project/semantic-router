@@ -25,7 +25,7 @@ codex plugin marketplace add vllm-project/semantic-router
 codex plugin add vsr@vllm-sr
 ```
 
-The next Codex session says `3 hooks are new or changed`. Choose **Review hooks** to read the three
+The next Codex session says `6 hooks are new or changed`. Choose **Review hooks** to read the six
 commands, or **Trust all and continue**. Codex runs a plugin's hooks only once they are trusted, and
 asks again after each update, since it hashes the plugin's files.
 
@@ -60,6 +60,14 @@ writes it for the Router it connects, and `""` leaves the line out. `VSR_MANAGEM
 it, and `VSR_MANAGEMENT_TOKEN` is sent as a bearer token to a management API with bearer auth.
 The turn line follows no redirect, so the token reaches only that URL: point it at the address
 that answers.
+
+With `managementUrl` set, vSR also reports each tool call to Router Replay's run view
+(`POST /api/v1/observability/tool-events`): the tool's name and call id, when it started and ended,
+and when it was put to approval, never its input or output. Three async hooks, which Codex does not
+wait for, keep a small file per call under `vsr-tools/` in the Codex home until the call returns.
+Codex 0.166 says nothing to hooks about a call that was refused, or about when a person answered an
+approval, so such a call keeps the gateway's estimate, and one that waited for approval is timed
+from when Codex took it up. With bearer auth the token needs `learning.ingest`.
 
 That listener can also turn `guard`, `redact` and `shield` on or off for every plugin pointed at it,
 under `apis.systemone.vsr` in the Router's config or as Default, On or Off in the Dashboard (Config ›

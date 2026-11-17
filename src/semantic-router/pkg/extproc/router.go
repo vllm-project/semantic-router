@@ -27,6 +27,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -96,6 +97,9 @@ type OpenAIRouter struct {
 	MemoryStatus         routerruntime.MemoryStatus
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
+	// toolEvents are the tool calls harness plugins report, which the run
+	// view joins to its tool calls; nil while replay records nothing.
+	toolEvents *store.ToolEventStore
 	// hopCaller, when set, sends Looper hops instead of the configuration
 	// snapshot's upstream set.
 	hopCaller graph.Caller

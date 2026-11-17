@@ -205,34 +205,6 @@ func replayGatewayToolTimes(tools []routerreplay.RunToolCall, call routerreplay.
 	return timed
 }
 
-// replayToolReport is what a harness plugin reports of one tool call.
-type replayToolReport struct {
-	startedAt, endedAt time.Time
-	approvalMS         *int64
-}
-
-// joinReplayToolReports is where a harness plugin's reports of its tool
-// calls join the gateway's view, by tool call id (Claude Code's tool_use id,
-// Codex's call_id): a reported call takes the plugin's times and its
-// timing_source says so. No report reaches the builder yet, so every call
-// keeps the gateway's times.
-func joinReplayToolReports(calls []routerreplay.RunCall, reports map[string]replayToolReport) {
-	if len(reports) == 0 {
-		return
-	}
-	for index := range calls {
-		for tool := range calls[index].ToolCalls {
-			timed := &calls[index].ToolCalls[tool]
-			report, ok := reports[timed.ID]
-			if !ok || timed.ID == "" {
-				continue
-			}
-			started, ended := report.startedAt, report.endedAt
-			timed.TimingSource, timed.StartedAt, timed.EndedAt, timed.ApprovalMS = replayToolTimingPlugin, &started, &ended, report.approvalMS
-		}
-	}
-}
-
 // linkReplayOfferedTools gives each agent the tools its first turn offered,
 // and each later turn the tools it offered beyond, or no longer offered
 // after, the agent's previous turn.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const replayRunMainAgent = "main"
@@ -31,9 +32,9 @@ type replayRunBuilder struct {
 	// reviews.
 	named, prompted replayRunName
 	sides           int
-	// toolReports holds what a harness plugin reported of the run's tool
-	// calls, by tool call id: where a later reporting source fills it in.
-	toolReports map[string]replayToolReport
+	// toolReports holds what the harness plugins reported of the run's tool
+	// calls, by tool call id.
+	toolReports map[string]store.ToolEvent
 }
 
 type replayRunName struct {
@@ -111,7 +112,7 @@ func (b *replayRunBuilder) build() (routerreplay.RunSummary, []routerreplay.RunC
 		}
 		return b.entries[i].call.Timestamp.Before(b.entries[j].call.Timestamp)
 	})
-	countReplayToolResults(b.entries)
+	countReplayToolResults(b.entries, b.toolReports)
 	entries := b.nestHops()
 	lanes := newReplayRunLanes()
 	calls := make([]routerreplay.RunCall, 0, len(entries))

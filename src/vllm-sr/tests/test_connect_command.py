@@ -1402,6 +1402,7 @@ def harness_bin(tmp_path, monkeypatch):
             f"json.dump({{'args': args, 'settings': open(given).read() if given else None,"
             " 'catalog': json.load(open(catalog[0])) if catalog else None,"
             f" 'key': os.environ.get('VLLM_SR_API_KEY'), 'cwd': os.getcwd(),"
+            " 'session': os.environ.get('VSR_SESSION_ID'),"
             " 'homes': [os.environ.get('CLAUDE_CONFIG_DIR'), os.environ.get('CODEX_HOME')]"
             f"}}, open({str(record)!r}, 'w'))\n"
             "sys.exit(3)\n"
@@ -1654,13 +1655,15 @@ def test_vsr_sets_up_claude_code_through_its_plugin_command_and_undoes_it(
     assert installs == (
         [] if installed else command._installs("claude", command.VSR_SOURCE)
     )
-    # the gateway routes, so the plugin's router steps aside; the token goes to the credential store
+    # the gateway routes, so the plugin's router steps aside; the token goes to the credential store.
+    # Tool timing goes to the management API, unless the plugin installed is one from before it
     assert claude.inputs == {
         "runtime": "remote",
         "runtimeUrl": url + "/v1/decisions",
         "runtimeModel": "vela3-lite",
         "router": "false",
         "guard": "true",
+        **({} if installed else {"managementUrl": "http://localhost:8080"}),
     }
     assert claude.token == "sk-secret"
     assert "sk-secret" not in (tmp_path / "settings.json").read_text().replace(
@@ -3251,6 +3254,8 @@ def test_launch_in_a_new_worktree_branches_from_head_and_tags_every_request(
         assert tag.replace("'", '"') in ran["args"]
         carried = "x-vsr-session-id"
     assert header.endswith(f"requests {carried}: {session}")
+    # the vSR plugin files tool timing under the same session
+    assert ran["session"] == session
     # the docs say where Router Replay files the calls; the header does not
     # guess at the Router's identity settings, given or not
     learning = {"protection": {"identity": {"headers": {"session": "session-id"}}}}

@@ -58,6 +58,7 @@ func (r *OpenAIRouter) handleRouterReplayRunAPI(method string, rawQuery string) 
 	for _, record := range records {
 		builder.add(record)
 	}
+	builder.toolReports = r.toolEvents.Session(sessionID)
 	summary, calls := builder.build()
 	return r.createJSONResponse(200, routerreplay.RunResponse{Object: "router_replay.run", Run: summary, Calls: calls})
 }
@@ -87,6 +88,7 @@ func (r *OpenAIRouter) queryRouterReplayRuns(query routerReplayListQuery) (route
 		if builder.sidesOnly() {
 			continue
 		}
+		builder.toolReports = r.toolEvents.Session(sessionID)
 		summary, _ := builder.build()
 		runs = append(runs, summary)
 		prompts[sessionID] = builder.firstMain.recordID

@@ -211,11 +211,16 @@ type RunToolCall struct {
 	ReturnedAt  *time.Time `json:"returned_at,omitempty"`
 	ClientMS    *int64     `json:"client_ms,omitempty"`
 	// From a harness plugin, joined by the tool call id (Claude Code's
-	// tool_use id, Codex's call_id): when the tool ran and how long it waited
-	// for approval. Empty from the gateway.
-	StartedAt  *time.Time `json:"started_at,omitempty"`
-	EndedAt    *time.Time `json:"ended_at,omitempty"`
-	ApprovalMS *int64     `json:"approval_ms,omitempty"`
+	// tool_use id, Codex's call_id) in the run's session: when the tool
+	// started and ended or was refused, when the harness put it to approval,
+	// and ApprovalMS, the wait from that ask to the start, where the harness
+	// reports a start after the answer. A start before the ask (Codex, whose
+	// hooks do not say when the answer came) includes the wait. Empty from
+	// the gateway.
+	StartedAt           *time.Time `json:"started_at,omitempty"`
+	EndedAt             *time.Time `json:"ended_at,omitempty"`
+	ApprovalRequestedAt *time.Time `json:"approval_requested_at,omitempty"`
+	ApprovalMS          *int64     `json:"approval_ms,omitempty"`
 }
 
 // ModelListResponse lists the models the Router's configuration holds, in

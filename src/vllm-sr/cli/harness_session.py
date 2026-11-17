@@ -61,6 +61,9 @@ def home_of(harness: str, env: dict[str, str]) -> Path:
 # The header the Router pins a request's session with, ahead of the headers
 # global.router.headers.session_id_headers names; every launch sends its own.
 SESSION_HEADER = "x-vsr-session-id"
+# The same session, for the harness's vSR plugin: it files each tool call's timing
+# under the session the Router files the run under.
+SESSION_ENV = "VSR_SESSION_ID"
 CLAUDE_HEADERS = "ANTHROPIC_CUSTOM_HEADERS"
 # Claude Code arguments that pick the conversation, and so its session id.
 CLAUDE_PICKS_SESSION = ("--session-id", "-r", "--resume", "-c", "--continue")

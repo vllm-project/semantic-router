@@ -204,8 +204,62 @@ describe('run sequence', () => {
     // a line each, with the time the gateway saw it take and its result
     expect(html).toMatch(/data-status="succeeded" title="Read: ok">Read · calc.py · ok</)
     expect(html).toMatch(
-      /data-status="failed" title="Bash: failed">Bash · pytest -q · 13.0s · failed</,
+      /data-status="failed" title="Bash: failed\. Estimated by the gateway[^"]*">Bash · pytest -q · ≈13\.0s · failed</,
     )
+  })
+
+  it("shows a tool's own run and its approval wait apart where a harness plugin reported it", () => {
+    const at = (second: number) => new Date(START + second * 1000).toISOString()
+    const plugin = { timing_source: 'plugin', status: 'succeeded' } as const
+    const turn = call('rec-p', 'main', 0, {
+      tool_calls: [
+        // Claude Code: started after the person approved it, 5 s after the ask
+        {
+          ...plugin,
+          name: 'Bash',
+          summary: 'touch a.txt',
+          approval_requested_at: at(1),
+          started_at: at(6),
+          ended_at: at(6.4),
+          approval_ms: 5000,
+        },
+        // two reads of one response, side by side, each with its own time
+        { ...plugin, name: 'Read', summary: 'a.py', started_at: at(1.1), ended_at: at(1.3) },
+        { ...plugin, name: 'Read', summary: 'b.py', started_at: at(1.1), ended_at: at(2.6) },
+        // Codex: its hooks do not say when the person answered
+        {
+          ...plugin,
+          name: 'Bash',
+          summary: 'git push',
+          approval_requested_at: at(1.2),
+          started_at: at(1),
+          ended_at: at(9),
+        },
+        {
+          ...plugin,
+          name: 'Write',
+          summary: 'hosts',
+          status: 'denied',
+          approval_requested_at: at(1),
+          ended_at: at(3),
+        },
+      ],
+    })
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <RunRowDetails calls={[turn]} onSelectCall={() => undefined} />
+      </MemoryRouter>,
+    )
+    expect(html).toContain(
+      '<code>touch a.txt</code><span title="As the harness&#x27;s vSR plugin reported it: the tool&#x27;s own run, and its approval wait apart" data-timing="plugin">ran 400ms, waited 5.0s for approval</span><span>ok</span>',
+    )
+    expect(html).toContain(
+      '<code>a.py</code><span title="As the harness&#x27;s vSR plugin reported it: the tool&#x27;s own run, and its approval wait apart" data-timing="plugin">ran 200ms</span>',
+    )
+    expect(html).toContain('data-timing="plugin">ran 1.5s</span>')
+    expect(html).toContain('data-timing="plugin">ran 8.0s, approval wait included</span>')
+    expect(html).toContain('data-timing="plugin">asked for approval</span><span>refused</span>')
+    expect(html).not.toContain('≈')
   })
 
   it('lists the tools an agent was offered and marks where that changed', () => {

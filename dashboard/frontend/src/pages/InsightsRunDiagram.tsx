@@ -10,9 +10,8 @@ import {
   modelHue,
   RUN_MARKER_GLYPHS,
   RUN_MARKER_LABELS,
-  formatRunDuration,
 } from './insightsRunSupport'
-import { toolDuration, toolStatusText } from './insightsRunSequence'
+import { toolStatusText, toolTimeSource, toolTimeText } from './insightsRunSequence'
 import type { RunCall, RunSummary, RunToolCall } from './insightsRunTypes'
 
 export function Markers({ markers }: { markers?: string[] }) {
@@ -145,13 +144,13 @@ interface RunRowDetailsProps {
 
 // How long a tool call took on the client, and whose clock says so.
 function ToolDuration({ tool }: { tool: RunToolCall }) {
-  const duration = toolDuration(tool)
-  if (duration === undefined) return <span />
-  const source =
-    tool.timing_source === 'plugin'
-      ? 'Run time the harness reported'
-      : 'From the response that asked for it to the request that carried its result, as the gateway saw it'
-  return <span title={source}>{formatRunDuration(duration)}</span>
+  const text = toolTimeText(tool)
+  if (!text) return <span />
+  return (
+    <span title={toolTimeSource(tool)} data-timing={tool.timing_source}>
+      {text}
+    </span>
+  )
 }
 
 // Every tool call of a row's turns with its arguments and result.

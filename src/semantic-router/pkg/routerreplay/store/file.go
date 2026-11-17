@@ -82,6 +82,9 @@ func OpenFileStore(path string, maxRecords, ttlSeconds int) (*FileStore, error) 
 	return store, nil
 }
 
+// Path is the file the store keeps its records in.
+func (f *FileStore) Path() string { return f.path }
+
 // lockFile takes the lock that keeps a second process off a store's file. It
 // is a file of its own, which no rewrite replaces, and the lock is released
 // when the process exits.

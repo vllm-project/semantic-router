@@ -8,6 +8,8 @@ import {
   sideKinds,
   toolLine,
   toolStatusText,
+  toolTimeSource,
+  toolTimeText,
   type RunArrowRow,
   type RunCallsRow,
   type RunColumn,
@@ -136,7 +138,7 @@ function ToolChips({ calls }: { calls: RunCall[] }) {
           key={tool.id || index}
           className={styles.tool}
           data-status={tool.status}
-          title={`${tool.name}${tool.arguments ? ` ${tool.arguments}` : ''}: ${toolStatusText(tool.status)}`}
+          title={`${tool.name}${tool.arguments ? ` ${tool.arguments}` : ''}: ${toolStatusText(tool.status)}${toolTimeText(tool) ? `. ${toolTimeSource(tool)}` : ''}`}
         >
           {toolLine(tool)}
         </span>
