@@ -7,14 +7,14 @@ Router project (vela3-lite, about 2.3 GB of RAM) makes these calls on your
 machine or on a runtime you host; your requests still go to your own provider.
 It does six things, the same six as the Claude Code and Codex plugins:
 
-| App      | What it does                                                                                      |
-| -------- | ------------------------------------------------------------------------------------------------- |
-| router   | Gives each new `general` subagent the model and effort, from your three tiers, that fit its task. |
-| escalate | When you push back on an answer, the agent re-checks it and the next subagent goes one step up.   |
-| redact   | Hides personal data and secrets in `read` and shell output before the model reads them.           |
-| shield   | Warns the model when a file or web page tries to give it instructions.                            |
-| guard    | Holds a risky shell command for you to confirm in OpenCode's own permission prompt.               |
-| check    | Marks a final answer that is not backed by what the model read that turn. Off by default.         |
+| App      | What it does                                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------------------ |
+| router   | Gives each new subagent without a model of its own the model and effort, from your three tiers, that fit its task. |
+| escalate | When you push back on an answer, the agent re-checks it and the next subagent goes one step up.                    |
+| redact   | Hides personal data and secrets in `read` and shell output before the model reads them.                            |
+| shield   | Warns the model when a file or web page tries to give it instructions.                                             |
+| guard    | Holds a risky shell command for you to confirm in OpenCode's own permission prompt.                                |
+| check    | Marks a final answer that is not backed by what the model read that turn. Off by default.                          |
 
 ## Install
 
@@ -112,7 +112,8 @@ The decisions panel, `/vsr`, is for looking back:
     `→` names the model vSR chose, then `ran`, or the model the subagent
     actually ran on when it differs.
   - `kept`: the subagent stays on its model: the router was not sure enough, the
-    goal is `quality`, or the model is not one of your tiers.
+    goal is `quality`, the model is not one of your tiers, or the agent has a
+    model of its own (`agent model`).
   - `escalated`: you pushed back; the agent re-checks and the next subagent
     goes one step up.
   - `held`, then `approved` or `declined`: a shell command waited for your
@@ -158,8 +159,12 @@ guard holds every command.
 
 ## How the router decides
 
-For each new `general` subagent, vSR asks how difficult the task is and how
-many reasoning steps it needs.
+For each new subagent without a model of its own, `general` and Explore alike,
+vSR asks how difficult the task is and how many reasoning steps it needs. In
+OpenCode such a subagent otherwise runs on your session's model. The Claude
+Code plugin routes only general-purpose subagents and leaves Explore on the
+model its definition picks. An agent you gave a model keeps it, recorded as
+`kept`.
 
 - Easy tasks go to your light tier, hard ones to your strong tier, the rest to
   the middle. With `efforts` on a tier, the effort follows the steps answer.

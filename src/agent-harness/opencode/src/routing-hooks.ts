@@ -1,3 +1,4 @@
+import { subjectOf } from "./decisions.ts";
 import { knownPrices } from "./prices.ts";
 import type { Plugin } from "@opencode/plugin";
 import type { Settings } from "./settings.ts";
@@ -126,17 +127,30 @@ export async function registerRouting(
     if (
       event.tool !== "subagent" ||
       !isRecord(input) ||
-      input.agent !== "general" ||
+      typeof input.agent !== "string" ||
       input.model !== undefined ||
       input.sessionID !== undefined ||
       typeof input.prompt !== "string"
     )
       return;
-    // Agent definitions with their own model retain it, just like explicit calls.
+    // Any subagent whose definition names no model is routed: in OpenCode such an agent, Explore among them, runs on
+    // the session's model. One with its own model keeps it, and says so.
     let candidates;
     try {
-      const agent = await ctx.agent.get({ agentID: "general" });
-      if (agent.data.model) return;
+      const agent = await ctx.agent.get({ agentID: input.agent });
+      if (agent.data.model) {
+        decisions.record({
+          sessionID: event.sessionID,
+          toolCallID: event.id,
+          app: "router",
+          outcome: "kept",
+          reason: "agent-model",
+          subject: subjectOf(input.prompt),
+          model: fullModel(agent.data.model),
+        });
+        await notify(event.sessionID);
+        return;
+      }
       candidates = (await ctx.model.list()).data;
     } catch {
       decisions.record({

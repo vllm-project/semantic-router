@@ -45,6 +45,7 @@ export const REASONS = [
   "placeholder-write",
   "listener-rule",
   "listener-unchecked",
+  "agent-model",
 ] as const;
 export type Reason = (typeof REASONS)[number];
 export interface Usage {

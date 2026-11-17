@@ -109,7 +109,9 @@ for changing the code and reviewing it.
 
 ### Router and Escalate
 
-Router applies to new `general` subagent calls. Configure three distinct models
+Router applies to new subagent calls whose agent names no model, `general` and
+`explore` alike; an agent with its own model is recorded as `kept`
+(`agent-model`). Configure three distinct models
 in ascending capability order from one provider, and use that ladder for the
 main session's model too. Replace the example IDs with models enabled in your
 OpenCode provider configuration. Optional `efforts` lists name supported native

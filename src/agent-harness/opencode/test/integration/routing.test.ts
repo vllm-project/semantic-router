@@ -101,7 +101,7 @@ async function fixture(t: TestContext, agentModel = false, priced = false) {
         function: {
           name: "subagent",
           arguments: JSON.stringify({
-            agent: "general",
+            agent: text.includes("EXPLORE") ? "explore" : "general",
             description: "Native routing fixture",
             ...(text.includes("BACKGROUND") ? { background: true } : {}),
             prompt: `TASK: ${text.includes("BACKGROUND") ? "BACKGROUND" : text.includes("LOWCONF") ? "LOWCONF" : text.includes("RETRY") ? "RETRY" : "EASY"} ${i}`,
@@ -429,15 +429,46 @@ test(
 );
 
 test(
+  "native Explore subagent without a model of its own is routed like general",
+  { timeout: 60000 },
+  async (t) => {
+    const native = await fixture(t);
+    const run = await native.run("ROOT EXPLORE EASY");
+    const decisions = (
+      (await native.rpc("snapshot", { sessionID: run.sessionID })) as Snapshot
+    ).decisions;
+    assert.equal(decisions[0]?.app, "router", JSON.stringify(decisions));
+    assert.equal(decisions[0]?.outcome, "routed", JSON.stringify(decisions));
+    assert.equal(native.requests.at(-2)?.model, "light");
+  },
+);
+
+test(
   "native agent-specific model is preserved",
   { timeout: 60000 },
   async (t) => {
     const native = await fixture(t, true);
     const run = await native.run("ROOT EASY");
+    const decisions = (
+      (await native.rpc("snapshot", { sessionID: run.sessionID })) as Snapshot
+    ).decisions;
     assert.deepEqual(
-      ((await native.rpc("snapshot", { sessionID: run.sessionID })) as Snapshot)
-        .decisions,
-      [],
+      decisions.map(({ app, outcome, reason, model, subject }) => ({
+        app,
+        outcome,
+        reason,
+        model,
+        subject,
+      })),
+      [
+        {
+          app: "router",
+          outcome: "kept",
+          reason: "agent-model",
+          model: "fixture/strong#high",
+          subject: "TASK: EASY 0",
+        },
+      ],
     );
     assert.equal(native.requests.at(-2)?.model, "strong");
   },
