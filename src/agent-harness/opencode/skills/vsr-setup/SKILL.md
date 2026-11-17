@@ -8,7 +8,7 @@ The runtime is the same one the Claude Code plugin installs: `~/.local/share/vsr
 
 1. **Look first.** Run these and summarize them in a few lines; they install nothing:
 
-   - `curl -s --max-time 3 http://127.0.0.1:8790/v1/systemone/models` — a runtime already answers when this prints a JSON listing.
+   - `curl -s --max-time 3 http://127.0.0.1:8790/health` — a runtime already runs here when this prints `"status":"ready"`; `"loading"` means one is still starting.
    - `nvidia-smi --query-gpu=name,memory.total --format=csv,noheader` (or `rocm-smi --showproductname` on AMD) — a GPU, when there is one.
    - `python3 --version`, `df -h ~` and `free -h` (`sysctl hw.memsize` on macOS).
 
@@ -22,7 +22,7 @@ The runtime is the same one the Claude Code plugin installs: `~/.local/share/vsr
 
    Done when the user picked one. An Apple GPU cannot run vela3 yet, so a Mac runs it on the CPU.
 
-3. **Install**, only when the user agrees to the download: about 200 MB of CPU torch, or 2 to 3 GB of CUDA or ROCm torch, plus about 1.8 GB of model weights on first start. Use a Python 3.10 or later; skip any command whose result already exists (`~/.local/share/vsr/venv/bin/vllm-srun` means it is installed). Each takes minutes, so run the pip commands in the background and wait for them.
+3. **Install**, only when the user agrees to the download: about 200 MB of CPU torch, or 3 to 4 GB of CUDA or ROCm torch (5 to 6 GB on disk; a few minutes on a fast connection), plus about 1.8 GB of model weights on first start. Use a Python 3.10 or later; skip any command whose result already exists (`~/.local/share/vsr/venv/bin/vllm-srun` means it is installed). Each takes minutes, so run the pip commands in the background and wait for them.
 
    ```bash
    python3 -m venv ~/.local/share/vsr/venv
@@ -45,7 +45,7 @@ The runtime is the same one the Claude Code plugin installs: `~/.local/share/vsr
 
    Across reboots on Linux, write that command as the `ExecStart` of a systemd user unit at `~/.config/systemd/user/vsr-runtime.service` (with `Restart=on-failure` and the log appended to `~/.local/share/vsr/runtime.log`), show it to the user, and only on their yes run `systemctl --user daemon-reload && systemctl --user enable --now vsr-runtime`. On macOS, the same as a launchd agent in `~/Library/LaunchAgents`. Done when the process runs.
 
-5. **Wait until it answers.** The first start downloads the model, which can take several minutes. Poll `curl -s --max-time 3 http://127.0.0.1:8790/v1/systemone/models` every 10 seconds, up to 15 minutes; for a remote runtime, the user's URL with `/v1/decisions` replaced by `/v1/systemone/models`. If it never answers, show the last lines of `~/.local/share/vsr/runtime.log`. Done when it prints a listing.
+5. **Wait until it answers.** The first start downloads the model, which can take several minutes. Poll `curl -s --max-time 3 http://127.0.0.1:8790/health` every 10 seconds, up to 15 minutes, until it prints `"status":"ready"`. For a remote runtime, use the user's URL with `/v1/decisions` replaced by `/health`; a Router listener answers `"status":"ok"` there and a hosted API has no `/health`, so for those `/v1/models` listing a model means it answers. If it never answers, show the last lines of `~/.local/share/vsr/runtime.log`. Done when it is ready.
 
 6. **Hand over.** Tell the user, in this order:
 
