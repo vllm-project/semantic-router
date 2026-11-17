@@ -98,6 +98,12 @@ signal and routed to a local Ollama `qwen3:8b` backend. A public listener probe
 returned a complete answer with the expected `code-route` decision and
 `upstream` response path.
 
+The first probe had already shown why the delivery check matters. It returned
+HTTP 200 and the right route headers, but a 128-token cap ended the answer in
+reasoning with no final text. The same request passed the delivery assertion
+with a reviewed 512-token cap. The [receipt](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/vllm-sr-benchmark/fixtures/local-ollama-smoke-receipt.json)
+records both outcomes without publishing the reasoning text.
+
 We then ran two synthetic development cases through a direct single-model
 reference and two Router configs. All three runs completed and graded 2/2.
 The Router configs differed only in the code-signal threshold; one selected
