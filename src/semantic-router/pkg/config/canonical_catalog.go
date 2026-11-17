@@ -63,6 +63,7 @@ func applyEffectiveModelRegistry(
 			params.Deployment = params.AuthoredModel.Deployment
 			params.Schema = params.AuthoredModel.Schema
 			params.UnsupportedCapabilities = append([]string(nil), params.AuthoredModel.UnsupportedCapabilities...)
+			params.Tokenizer = params.AuthoredModel.Tokenizer
 		}
 		if model.BindingDefaults.Protocol != "" {
 			apiFormat, err := apiFormatForProtocol(model.BindingDefaults.Protocol)
@@ -94,6 +95,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		Catalog:              model.Catalog,
 		ParamSize:            card.ParameterSize,
 		ContextWindowSize:    card.Limits.ContextWindowSize,
+		HubRepo:              hubRepoOf(card.Distribution),
 		MaxOutputTokens:      card.Limits.MaxOutputTokens,
 		Description:          card.Description,
 		Capabilities:         declaredCardCapabilities(model.Card),
@@ -148,7 +150,7 @@ func appendEffectiveProviderBinding(
 	if err := applyBindingAPIFormat(model.Alias, bindingIndex, binding.Protocol, params); err != nil {
 		return err
 	}
-	credential, err := applyBindingMetadata(model.Alias, effective, params)
+	credential, err := applyBindingMetadata(model.Alias, effective, params, cfg.SkipExternalAssetValidation)
 	if err != nil {
 		return err
 	}
@@ -181,14 +183,21 @@ func applyBindingMetadata(
 	modelAlias string,
 	effective modelcatalog.EffectiveModelProvider,
 	params *ModelParams,
+	skipKeyFile bool,
 ) (string, error) {
 	binding := effective.Binding
 	providerID := effective.Provider.Definition.ID
 	params.ExternalModelIDs[providerID] = binding.ModelID
+	if params.HubRepo == "" && effective.Provider.Definition.SupportTier == selfHostedSupportTier {
+		params.HubRepo = hubRepoID(binding.ModelID)
+	}
 	for key, value := range binding.ExternalModelIDs {
 		params.ExternalModelIDs[key] = value
 	}
-	credential := resolveProviderCredential(effective.Provider.Instance.Credentials)
+	credential, err := resolveProviderCredential(effective.Provider.Instance.Credentials, skipKeyFile)
+	if err != nil {
+		return "", fmt.Errorf("providers.models[%s]: %w", modelAlias, err)
+	}
 	if existing := params.AccessKeys[providerID]; existing != "" && credential != "" && existing != credential {
 		return "", fmt.Errorf(
 			"providers.models[%s] uses multiple %q backends with different static credentials",
@@ -215,12 +224,54 @@ func applyBindingServiceMetadata(effective modelcatalog.EffectiveModelProvider, 
 	if pricing == (modelcatalog.Pricing{}) && effective.CatalogBinding != nil {
 		pricing = effective.CatalogBinding.Pricing
 	}
+	if pricing == (modelcatalog.Pricing{}) && params.AuthoredModel != nil && strings.TrimSpace(params.AuthoredModel.Catalog) == "" {
+		pricing = providerListPrice(effective.Provider, effective.Binding.ModelID)
+	}
 	if params.Pricing == (ModelPricing{}) {
 		params.Pricing = modelPricingFromCatalog(pricing)
 	}
 	if params.Reliability.IsZero() {
 		params.Reliability = providerReliabilityFromCatalog(effective.Binding.Reliability)
 	}
+}
+
+// providerListPrice is the list price a provider's catalog gives the model ID
+// a backend calls, for a model declared without catalog: a binding's price,
+// or a price list entry's for a model ID with no card. Only the backend's own
+// provider is read, and only on that provider's own hosts, so a vllm backend
+// or an OpenAI-compatible server serving a vendor's model ID is not priced as
+// the vendor.
+func providerListPrice(provider modelcatalog.EffectiveProvider, modelID string) modelcatalog.Pricing {
+	if !servedByProviderHosts(provider) {
+		return modelcatalog.Pricing{}
+	}
+	for _, binding := range provider.Definition.Models {
+		if binding.ID == modelID {
+			return binding.Pricing
+		}
+	}
+	for _, entry := range provider.Definition.PriceList {
+		if entry.ID == modelID {
+			return entry.Pricing
+		}
+	}
+	return modelcatalog.Pricing{}
+}
+
+// servedByProviderHosts reports whether every endpoint of a backend is on its
+// provider's default base URL host or a host that serves its logins.
+func servedByProviderHosts(provider modelcatalog.EffectiveProvider) bool {
+	hosts := slices.Clone(CallerCredentialHosts[provider.Definition.ID])
+	if host, _, _, err := endpointAddress(provider.Definition.DefaultBaseURL); err == nil {
+		hosts = append(hosts, host)
+	}
+	for _, endpoint := range effectiveProviderURLs(provider) {
+		host, _, _, err := endpointAddress(endpoint.url)
+		if err != nil || !slices.Contains(hosts, strings.ToLower(strings.TrimSuffix(host, "."))) {
+			return false
+		}
+	}
+	return true
 }
 
 func appendMaterializedEndpoint(
@@ -397,14 +448,22 @@ func endpointTemplateHostname(raw string) string {
 	return strings.Trim(authority, "[]")
 }
 
-func resolveProviderCredential(credentials modelcatalog.CredentialsRef) string {
-	if credentials.APIKey != "" {
-		return credentials.APIKey
+// resolveProviderCredential reads a backend's key at every load, so a hot
+// reload picks up a rotated key file. A validation that reads no external
+// asset leaves the file unread, as it leaves an unset variable empty: the
+// file may be mounted only where the Router serves the config.
+func resolveProviderCredential(credentials modelcatalog.CredentialsRef, skipKeyFile bool) (string, error) {
+	switch {
+	case credentials.APIKey != "":
+		return credentials.APIKey, nil
+	case credentials.APIKeyFile != "" && skipKeyFile:
+		return "", nil
+	case credentials.APIKeyFile != "":
+		return readKeyFile("auth.api_key_file", credentials.APIKeyFile)
+	case credentials.APIKeyEnv != "":
+		return os.Getenv(credentials.APIKeyEnv), nil
 	}
-	if credentials.APIKeyEnv != "" {
-		return os.Getenv(credentials.APIKeyEnv)
-	}
-	return ""
+	return "", nil
 }
 
 func apiFormatForProtocol(protocol string) (string, error) {

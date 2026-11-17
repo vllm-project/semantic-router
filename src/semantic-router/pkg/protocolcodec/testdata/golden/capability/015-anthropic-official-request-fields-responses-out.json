@@ -175,6 +175,34 @@
       }
     },
     {
+      "name": "safeguards",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "max_output_tokens": 2048,
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "safeguards",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "stop_sequences",
       "outcome": {
         "status": "error",

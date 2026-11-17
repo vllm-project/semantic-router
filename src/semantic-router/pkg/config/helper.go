@@ -124,8 +124,16 @@ func (c *RouterConfig) GetModelForDecisionIndex(index int) string {
 // endpoint groups) resolves to the same owner on every load instead of
 // following Go's randomized map iteration order.
 func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) {
+	_, params, ok := c.resolveModelConfigEntry(modelName)
+	return params, ok
+}
+
+// resolveModelConfigEntry is resolveModelConfig with the configured name the
+// model resolved to; an external model ID shared by several models resolves
+// to the first by name.
+func (c *RouterConfig) resolveModelConfigEntry(modelName string) (string, ModelParams, bool) {
 	if params, ok := c.ModelConfig[modelName]; ok {
-		return params, true
+		return modelName, params, true
 	}
 	owners := make([]string, 0, len(c.ModelConfig))
 	for name := range c.ModelConfig {
@@ -136,11 +144,11 @@ func (c *RouterConfig) resolveModelConfig(modelName string) (ModelParams, bool) 
 		params := c.ModelConfig[name]
 		for _, extID := range params.ExternalModelIDs {
 			if extID == modelName {
-				return params, true
+				return name, params, true
 			}
 		}
 	}
-	return ModelParams{}, false
+	return "", ModelParams{}, false
 }
 
 // GetModelPricing returns pricing per 1M tokens and its currency for the given model.

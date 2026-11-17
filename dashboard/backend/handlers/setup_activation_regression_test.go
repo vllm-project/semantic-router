@@ -48,7 +48,7 @@ func TestSetupActivationRendersOmittedReasoningAndRecordsTheActivation(t *testin
 	delete(refs[0], "use_reasoning")
 	body := mustJSONRaw(t, SetupConfigRequest{Config: mustJSONRaw(t, patch)})
 	w := httptest.NewRecorder()
-	SetupActivateHandler(configPath, false, root, setupmode.New(configPath, false))(
+	asSecretReader(SetupActivateHandler(configPath, false, root, setupmode.New(configPath, false)))(
 		w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 	if w.Code != http.StatusOK {
 		t.Fatalf("activation failed: %d %s", w.Code, w.Body.String())
@@ -86,7 +86,7 @@ func TestSetupActivationMaterializesAuthoredEmptyListener(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	body := mustJSONRaw(t, SetupConfigRequest{Config: mustJSONRaw(t, patch)})
-	SetupActivateHandler(configPath, false, root, setupmode.New(configPath, false))(
+	asSecretReader(SetupActivateHandler(configPath, false, root, setupmode.New(configPath, false)))(
 		w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 	if w.Code != http.StatusOK {
 		t.Fatalf("activation failed: %d %s", w.Code, w.Body.String())
@@ -114,7 +114,7 @@ func TestSetupActivationPreservesExplicitManagementListener(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	body := mustJSONRaw(t, SetupConfigRequest{Config: mustJSONRaw(t, patch)})
-	SetupActivateHandler(configPath, false, root, setupmode.New(configPath, false))(
+	asSecretReader(SetupActivateHandler(configPath, false, root, setupmode.New(configPath, false)))(
 		w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 	if w.Code != http.StatusOK {
 		t.Fatalf("activation failed: %d %s", w.Code, w.Body.String())
@@ -142,7 +142,7 @@ func TestSetupActivationFailureRestoresBootstrapAndAllowsRetry(t *testing.T) {
 		t.Fatal(mkdirErr)
 	}
 	resolver := setupmode.New(configPath, false)
-	handler := SetupActivateHandler(configPath, false, root, resolver)
+	handler := asSecretReader(SetupActivateHandler(configPath, false, root, resolver))
 	body := mustJSONRaw(t, SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
 	w := httptest.NewRecorder()
 	handler(w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))

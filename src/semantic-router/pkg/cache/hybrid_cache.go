@@ -68,10 +68,10 @@ func putSearchBuffers(buf *searchBuffers) {
 // This provides fast search while supporting millions of entries without storing docs in memory
 type HybridCache struct {
 	// In-memory components (search only)
-	hnswIndex        *HNSWIndex
-	embeddings       [][]float32
-	idMap            map[int]string // Entry index → Milvus ID
-	hnswNeedsRebuild bool           // true while the HNSW graph is stale after an eviction (rebuilt on next add)
+	hnswIndex     *HNSWIndex
+	embeddings    [][]float32    // Entry index (a slot, reused after eviction) → embedding
+	idMap         map[int]string // Entry index → Milvus ID
+	nextEvictSlot int            // Once the index is full, the slot of the oldest entry
 
 	// External storage (all documents)
 	milvusCache *MilvusCache
@@ -304,12 +304,12 @@ func (h *HybridCache) RebuildFromMilvus(ctx context.Context) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Clear existing index (full rebuild from scratch satisfies any deferred rebuild).
+	// Clear existing index
 	loadLimit := min(len(embeddings), h.maxMemoryEntries)
 	h.embeddings = make([][]float32, 0, loadLimit)
 	h.idMap = make(map[int]string, loadLimit)
 	h.hnswIndex = newHNSWIndex(h.hnswIndex.M, h.hnswIndex.efConstruction)
-	h.hnswNeedsRebuild = false
+	h.nextEvictSlot = 0
 
 	// Rebuild HNSW index with progress logging
 	batchSize := 1000
@@ -403,16 +403,7 @@ func (h *HybridCache) AddPendingRequest(requestID string, model string, query st
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Check if we need to evict
-	if len(h.embeddings) >= h.maxMemoryEntries {
-		h.evictOneUnsafe()
-	}
-
-	// Add to HNSW
-	entryIndex := len(h.embeddings)
-	h.embeddings = append(h.embeddings, embedding)
-	h.idMap[entryIndex] = pendingRequestPrimaryKey(requestID)
-	h.addNodeHybridOrRebuild(entryIndex, embedding)
+	entryIndex := h.addToMemoryIndexLocked(pendingRequestPrimaryKey(requestID), embedding)
 
 	logging.Debugf("HybridCache.AddPendingRequest: added to HNSW index=%d, milvusID=%s, ttl=%d",
 		entryIndex, requestID, ttlSeconds)
@@ -476,16 +467,7 @@ func (h *HybridCache) AddEntry(ctx context.Context, requestID string, model stri
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Check if we need to evict
-	if len(h.embeddings) >= h.maxMemoryEntries {
-		h.evictOneUnsafe()
-	}
-
-	// Add to HNSW
-	entryIndex := len(h.embeddings)
-	h.embeddings = append(h.embeddings, embedding)
-	h.idMap[entryIndex] = requestID
-	h.addNodeHybridOrRebuild(entryIndex, embedding)
+	entryIndex := h.addToMemoryIndexLocked(requestID, embedding)
 
 	logging.Debugf("HybridCache.AddEntry: added to HNSW index=%d, milvusID=%s, ttl=%d",
 		entryIndex, requestID, ttlSeconds)
@@ -539,16 +521,7 @@ func (h *HybridCache) AddEntriesBatch(entries []CacheEntry) error {
 	defer h.mu.Unlock()
 
 	for i, entry := range entries {
-		// Check if we need to evict
-		if len(h.embeddings) >= h.maxMemoryEntries {
-			h.evictOneUnsafe()
-		}
-
-		// Add to HNSW
-		entryIndex := len(h.embeddings)
-		h.embeddings = append(h.embeddings, embeddings[i])
-		h.idMap[entryIndex] = entry.RequestID
-		h.addNodeHybridOrRebuild(entryIndex, embeddings[i])
+		h.addToMemoryIndexLocked(entry.RequestID, embeddings[i])
 	}
 
 	elapsed := time.Since(start)
@@ -633,76 +606,48 @@ func (h *HybridCache) GetStats() CacheStats {
 
 // Helper methods
 
-// evictOneUnsafe removes one entry from HNSW index (must hold write lock)
-func (h *HybridCache) evictOneUnsafe() {
-	if len(h.embeddings) == 0 {
-		return
+// addToMemoryIndexLocked stores an embedding and indexes it in the HNSW graph,
+// evicting the oldest entry first when the index is full. It returns the
+// entry's index. Caller must hold a write lock.
+func (h *HybridCache) addToMemoryIndexLocked(milvusID string, embedding []float32) int {
+	if len(h.embeddings) < h.maxMemoryEntries {
+		entryIndex := len(h.embeddings)
+		h.embeddings = append(h.embeddings, embedding)
+		h.idMap[entryIndex] = milvusID
+		h.addNodeHybrid(entryIndex, embedding)
+		return entryIndex
 	}
 
-	// Simple FIFO eviction: remove oldest entry (index 0)
-	victimIdx := 0
+	entryIndex := h.evictOldestLocked()
+	h.embeddings[entryIndex] = embedding
+	h.idMap[entryIndex] = milvusID
+	h.addNodeHybrid(entryIndex, embedding)
+	return entryIndex
+}
 
-	// Get milvusID before removing from map (for logging)
+// evictOldestLocked evicts the oldest entry (FIFO) and returns its slot, which
+// the caller reuses for the new entry. Every other entry keeps its index, so
+// only the victim's own links leave the graph. Shifting the indices instead made
+// every write at capacity rebuild the whole graph under h.mu, blocking lookups
+// for seconds to minutes. Caller must hold a write lock on a full index.
+func (h *HybridCache) evictOldestLocked() int {
+	victimIdx := h.nextEvictSlot
+	h.nextEvictSlot = (victimIdx + 1) % len(h.embeddings)
+
 	milvusID := h.idMap[victimIdx]
-
-	// Remove the embedding from the slice
-	h.embeddings = h.embeddings[1:]
-
-	// Rebuild idMap with adjusted indices (all indices shift down by 1)
-	newIDMap := make(map[int]string, len(h.idMap)-1)
-	for idx, id := range h.idMap {
-		if idx > victimIdx {
-			newIDMap[idx-1] = id // Shift index down
-		}
-		// Skip victimIdx (it's being evicted)
-	}
-	h.idMap = newIDMap
-
-	// Eviction shifts every entry index down, so the whole graph is stale. Mark
-	// for rebuild and defer it to the next add. Mirrors InMemoryCache.evictOne.
-	h.hnswNeedsRebuild = true
-	h.hnswIndex.markStale()
+	h.removeNodeHybrid(victimIdx)
+	delete(h.idMap, victimIdx)
 
 	atomic.AddInt64(&h.evictCount, 1)
 
-	logging.Debugf("HybridCache.evictOne: evicted entry at index %d (milvus_id=%s), new size=%d",
-		victimIdx, milvusID, len(h.embeddings))
+	logging.Debugf("HybridCache.evictOldest: evicted entry at index %d (milvus_id=%s), new size=%d",
+		victimIdx, milvusID, len(h.idMap))
 	logging.LogEvent("hybrid_cache_evicted", map[string]interface{}{
 		"backend":     "hybrid",
 		"milvus_id":   milvusID,
 		"hnsw_index":  victimIdx,
-		"new_size":    len(h.embeddings),
+		"new_size":    len(h.idMap),
 		"max_entries": h.maxMemoryEntries,
 	})
-}
-
-// addNodeHybridOrRebuild indexes the new entry, or rebuilds the whole graph if a
-// prior eviction left it stale. Without the rebuild the graph keeps only the last
-// node after eviction, degrading the cache to ~100% misses at capacity.
-// Caller must hold a write lock. Mirrors InMemoryCache.addEntryToHNSWIndex.
-func (h *HybridCache) addNodeHybridOrRebuild(entryIndex int, embedding []float32) {
-	if h.hnswNeedsRebuild {
-		h.rebuildHNSWFromEmbeddings()
-		return
-	}
-	h.addNodeHybrid(entryIndex, embedding)
-}
-
-// rebuildHNSWFromEmbeddings rebuilds the graph from the embeddings slice, reusing
-// the existing index parameters. Caller must hold a write lock. Mirrors
-// InMemoryCache.rebuildHNSWIndex but sources vectors from embeddings, not entries.
-func (h *HybridCache) rebuildHNSWFromEmbeddings() {
-	h.hnswIndex.nodes = []*HNSWNode{}
-	h.hnswIndex.nodeIndex = make(map[int]*HNSWNode)
-	h.hnswIndex.entryPoint = -1
-	h.hnswIndex.maxLayer = -1
-
-	for i, embedding := range h.embeddings {
-		if len(embedding) > 0 {
-			h.addNodeHybrid(i, embedding)
-		}
-	}
-
-	h.hnswNeedsRebuild = false
-	logging.Debugf("HybridCache: HNSW index rebuilt with %d nodes", len(h.hnswIndex.nodes))
+	return victimIdx
 }

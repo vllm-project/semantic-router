@@ -221,7 +221,12 @@ class Vela3Family(ModelFamily):
         return ModelSpec(
             name=package.model_name,
             backbone=backbone,
-            dtype=DtypePolicy(autocast=None, bf16_resident=False),
+            # docs/records/cpu-zentorch-linear-vela3.md: zentorch's FP32 linear
+            # changed no decision and no span set, so it runs on CPUs where
+            # opted in; GPUs keep exact kernels.
+            dtype=DtypePolicy(
+                autocast=None, bf16_resident=False, approximate_cpu_kernels=True
+            ),
             max_input_tokens=details.max_input_tokens,
             encoder=True,
         )

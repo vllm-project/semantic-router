@@ -19,6 +19,8 @@ const (
 	DefaultSystemOneScanWindowOverlap = 256
 	DefaultScanWindowParallel         = 4
 	MaxScanWindowParallel             = 64
+	DefaultScanWindowRereadMargin     = 3.0
+	MaxScanWindowRereadMargin         = 20.0
 	MinModelInputTokens               = 256
 	MaxModelInputTokens               = 1 << 20
 )
@@ -46,7 +48,8 @@ type DeploymentRoutingView struct {
 // each in a call of its own with at most MaxParallel in flight. Windows are
 // sized in bytes as routing views are, so the model's validated length bounds
 // a window whatever Tokens says and however dense the text; an input that
-// needs more than 256 windows is read in larger ones, up to that length.
+// needs more than 256 windows is read in larger ones between its head and
+// its tail, up to that length.
 type DeploymentScanWindow struct {
 	// Tokens is the size of one window in tokens of prose, as four bytes
 	// each (default 8192; 4096 for a systemone deployment).
@@ -60,11 +63,20 @@ type DeploymentScanWindow struct {
 	// signals' deadline ends are the ones a partial scan decides on.
 	MaxParallel int `yaml:"max_parallel,omitempty" json:"max_parallel,omitempty" jsonschema:"minimum=1,maximum=64"`
 	// MaxTokens is the largest a window grows to, in tokens of prose as four
-	// bytes each, for an input whose windows of Tokens would not all be read
-	// by the signals' deadline at the deployment's measured pace, or would
-	// number more than 256. By default the model's validated length less the
-	// reserve, which bounds every window whatever MaxTokens says.
+	// bytes each, for an input whose windows of Tokens would number more than
+	// 256, or whose scan falls behind the signals' deadline while larger
+	// windows would still be read by it at the deployment's measured pace. By
+	// default the model's validated length less the reserve, which bounds
+	// every window whatever MaxTokens says.
 	MaxTokens int `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty" jsonschema:"minimum=256,maximum=1048576"`
+	// RereadMargin is how far below its threshold, in log-odds, a window
+	// larger than Tokens may put a rule that one window decides, short of a
+	// match, and still be read again in windows of Tokens before the rule
+	// resolves: a larger window dilutes what it holds, and dilution lowers a
+	// score's log-odds by about the same amount at any threshold (default 3,
+	// which re-reads from 0.91 for a rule at 0.995 and from 0.05 for one at
+	// 0.5; 0 reads no window again).
+	RereadMargin *float64 `yaml:"reread_margin,omitempty" json:"reread_margin,omitempty" jsonschema:"minimum=0,maximum=20"`
 }
 
 // RoutingViewTokens is the routing view's bound and head share the
@@ -121,6 +133,16 @@ func (d ModelDeployment) ScanWindowMaxTokens() int {
 	return 0
 }
 
+// ScanWindowRereadMargin is how far below a rule's threshold, in log-odds, a
+// window of the deployment larger than its configured size may put the rule,
+// short of a match, to be read again in windows of that size.
+func (d ModelDeployment) ScanWindowRereadMargin() float64 {
+	if window := d.ScanWindow; window != nil && window.RereadMargin != nil {
+		return *window.RereadMargin
+	}
+	return DefaultScanWindowRereadMargin
+}
+
 func (d ModelDeployment) validateInputViews() error {
 	if d.RoutingView == nil && d.ScanWindow == nil {
 		return nil
@@ -149,6 +171,9 @@ func (d ModelDeployment) validateInputViews() error {
 		}
 		if window.MaxTokens != 0 && (window.MaxTokens < tokens || window.MaxTokens > MaxModelInputTokens) {
 			return fmt.Errorf("scan_window.max_tokens must be at least scan_window.tokens (%d) and at most %d", tokens, MaxModelInputTokens)
+		}
+		if margin := window.RereadMargin; margin != nil && (math.IsNaN(*margin) || *margin < 0 || *margin > MaxScanWindowRereadMargin) {
+			return fmt.Errorf("scan_window.reread_margin must be between 0 and %g", MaxScanWindowRereadMargin)
 		}
 	}
 	return nil

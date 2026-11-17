@@ -126,3 +126,57 @@ def test_failed_rekey_stops_the_container(monkeypatch, tmp_path):
     assert "reset failed" in status[2]
     assert stopped == [layout.grafana_container_name]
     assert os.environ.get(GRAFANA_ADMIN_PASSWORD_ENV, "admin") != status[2]
+
+
+def _fake_container_runtime(monkeypatch, *, running, healthy_after, logs=""):
+    """Answer the docker commands rekey issues, in the order they arrive."""
+
+    calls = []
+    health_checks = []
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        if command[1] == "inspect":
+            return _Completed(0, "true\n" if running else "false\n")
+        if command[1] == "logs":
+            return _Completed(0, logs)
+        if "wget" in command:
+            health_checks.append(command)
+            return _Completed(0 if len(health_checks) > healthy_after else 1)
+        return _Completed(0)
+
+    monkeypatch.setattr(container_support_services.subprocess, "run", run)
+    monkeypatch.setattr(container_support_services.time, "sleep", lambda _s: None)
+    return calls
+
+
+class _Completed:
+    def __init__(self, returncode, stdout=""):
+        self.returncode, self.stdout, self.stderr = returncode, stdout, ""
+
+
+def test_rekey_waits_until_grafana_answers_its_health_check(monkeypatch):
+    calls = _fake_container_runtime(monkeypatch, running=True, healthy_after=2)
+
+    status = container_support_services.rekey_grafana_admin("grafana", "docker")
+
+    assert status[0] == 0
+    resets = [i for i, call in enumerate(calls) if "reset-admin-password" in call[-1]]
+    healthy = [i for i, call in enumerate(calls) if "wget" in call]
+    assert len(healthy) == 3
+    assert resets and resets[0] > healthy[-1]
+
+
+def test_rekey_reports_why_grafana_exited_and_never_resets(monkeypatch):
+    calls = _fake_container_runtime(
+        monkeypatch,
+        running=False,
+        healthy_after=0,
+        logs='Error: migration failed (id = "x"): database is locked',
+    )
+
+    status = container_support_services.rekey_grafana_admin("grafana", "docker")
+
+    assert status[0] == 1
+    assert "database is locked" in status[2]
+    assert not any("reset-admin-password" in call[-1] for call in calls)

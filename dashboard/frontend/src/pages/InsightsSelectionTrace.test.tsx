@@ -7,6 +7,7 @@ import type {
   SelectionTrace,
 } from '../types/selectionTrace'
 import InsightsRecordSection from './InsightsRecordSection'
+import { ModelLabelsContext } from './insightsModelLabelSupport'
 import InsightsSelectionTrace from './InsightsSelectionTrace'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
 import type { InsightsRecord } from './insightsPageTypes'
@@ -57,6 +58,21 @@ function renderTrace(trace: SelectionTrace, selectedModel?: string) {
 }
 
 describe('recorded selection stages', () => {
+  it('names the selected model and the candidates by their labels', () => {
+    const html = renderToStaticMarkup(
+      <ModelLabelsContext.Provider value={{ [alpha.Model]: 'Alpha', [beta.Model]: 'Beta' }}>
+        <InsightsSelectionTrace
+          trace={{ stages: [latencyStage(2)], final_survivors: [alpha] }}
+          selectedModel={alpha.Model}
+        />
+      </ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain(`<dd><span`)
+    expect(html).toContain(`title="Configured as ${alpha.Model}">Alpha<small>${alpha.Model}</small>`)
+    expect(html).toContain(`title="Configured as ${beta.Model}">Beta</span>`)
+    expect(html).not.toContain(`<li>${alpha.Model}`)
+  })
+
   it.each([0, 1, 2])(
     'faithfully shows latency coverage %i / 2 with zero distinct from missing evidence',
     (available) => {

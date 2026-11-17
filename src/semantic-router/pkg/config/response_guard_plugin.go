@@ -37,7 +37,7 @@ type ResponseGuardPluginConfig struct {
 }
 
 // ResponseGuardRule is one condition on an answer and what happens to an
-// answer that meets it: block answers with the Router's 403 error, annotate
+// answer that meets it: block answers with the Router's 400 error, annotate
 // adds a code to x-vsr-warnings and none only records the outcome.
 type ResponseGuardRule struct {
 	When   RuleNode `json:"when" yaml:"when"`

@@ -79,7 +79,7 @@ func replayConversationReply(t *testing.T, router *OpenAIRouter, ctx *RequestCon
 
 func recordReplayConversation(t *testing.T, plugin map[string]interface{}, streaming bool) routerreplay.RoutingRecord {
 	t.Helper()
-	plugin["enabled"], plugin["capture_tool_results"] = true, true
+	plugin["enabled"], plugin["prompt_capture"], plugin["capture_tool_results"] = true, config.PromptCaptureRaw, true
 	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}}, replayTestPlugin(plugin))
 	router := replayRuntimeRouter(t, cfg)
 	ctx := replayConversationRequest(streaming)
@@ -127,6 +127,38 @@ func TestReplayBodyCaptureOffStoresNoConversationText(t *testing.T) {
 			})
 		}
 	}
+}
+
+// A configuration with no router_replay plugin records each request with its
+// routing data and usage, and none of the conversation's text; enabled: false
+// in global.plugins records nothing.
+func TestReplayRecordsRoutingDataWithoutAPlugin(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		cfg := withGlobalPlugins(t, &config.RouterConfig{})
+		router := replayRuntimeRouter(t, cfg)
+		ctx := replayConversationRequest(streaming)
+		router.startRouterReplay(ctx, "public-model", "public-model", "")
+		replayConversationReply(t, router, ctx, streaming)
+		require.NotNil(t, router.ReplayRecorder, "streaming=%t", streaming)
+		record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+		require.True(t, ok, "streaming=%t", streaming)
+		require.Equal(t, routerreplay.LifecycleCompleted, record.LifecycleState)
+		require.Equal(t, "public-model", record.SelectedModel)
+		require.NotNil(t, record.TotalTokens)
+		require.Equal(t, 3, *record.TotalTokens)
+		require.Empty(t, record.RequestBody)
+		require.Empty(t, record.ResponseBody)
+		require.Empty(t, record.Prompt)
+		stored, err := json.Marshal(record)
+		require.NoError(t, err)
+		for _, text := range append(append([]string{}, replayRequestTexts...), replayResponseTexts...) {
+			require.NotContains(t, string(stored), text, "streaming=%t", streaming)
+		}
+	}
+	off := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": false}))
+	router := replayRuntimeRouter(t, off)
+	require.Nil(t, router.ReplayRecorder)
+	require.Empty(t, router.ReplayRecorders)
 }
 
 // max_tool_trace_bytes bounds every stored trace text, user turns and the
@@ -179,7 +211,12 @@ func TestReplayFallbackExecutionKeepsProviderRepliesOnlyWhenCaptured(t *testing.
 		router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
 			return []byte(`{"error":"cannot answer ` + echo + `"}`), http.StatusServiceUnavailable, nil
 		}
-		require.Nil(t, router.handleUpstreamTransportError([]byte("overloaded: "+echo), ctx).GetImmediateResponse())
+		// The chain answers with its last attempt, a reply the Router cannot
+		// read as an error and so does not repeat to the client.
+		answer := router.handleUpstreamTransportError([]byte("overloaded: "+echo), ctx).GetImmediateResponse()
+		require.NotNil(t, answer)
+		require.EqualValues(t, http.StatusServiceUnavailable, answer.GetStatus().GetCode())
+		require.NotContains(t, string(answer.GetBody()), echo)
 
 		record, ok := recorder.GetRecord(recordID)
 		require.True(t, ok)

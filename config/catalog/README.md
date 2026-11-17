@@ -43,7 +43,11 @@ identity; those are embedded build metadata.
   runtime registry. Each provider owns its `models[]` mappings;
   every mapping explicitly classifies the creator-to-serving-channel
   relationship as `first_party`, `managed_cloud`, `gateway`, or `self_hosted`.
-  Credential-bearing headers are forbidden here.
+  An optional `price_list[]` gives the list price of a provider-native model
+  ID that has no Model Card: `id`, `pricing` and a `verification.source`. An
+  entry only prices a custom model whose backend calls that ID on that
+  provider's own host; it is never a model, so it needs no card or
+  evaluations and is not listed or selectable. Credential-bearing headers are forbidden here.
 - `models/single/`: intrinsic facts for physical models, grouped by creator.
 - `models/virtual/`: recipe-backed logical model identities and role contracts.
 - `reasoning-families.yaml`: reusable request projections for reasoning knobs.

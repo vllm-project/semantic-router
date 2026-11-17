@@ -132,7 +132,28 @@ def validate_provider_bindings(
                 reasoning_families or {},
             )
             bound_models.add(str(item["catalog"]))
+        _validate_price_list(provider, f"providers[{provider_id}]", native_ids)
     _validate_every_physical_model_is_bound(models, bound_models)
+
+
+def _validate_price_list(
+    provider: dict[str, Any], provider_path: str, native_ids: set[str]
+) -> None:
+    """A price list entry prices a provider model ID that has no Model Card."""
+
+    for index, item in enumerate(provider.get("price_list", [])):
+        path = f"{provider_path}.price_list[{index}]"
+        _reject_unknown(item, {"id", "pricing", "verification"}, path)
+        native_id = _nonempty_string(item.get("id"), f"{path}.id")
+        if native_id in native_ids:
+            raise CatalogBuildError(
+                f"{path}.id duplicates a provider-native model identifier"
+            )
+        native_ids.add(native_id)
+        if not _mapping(item.get("pricing"), f"{path}.pricing"):
+            raise CatalogBuildError(f"{path}.pricing must declare a rate")
+        verification = _mapping(item.get("verification"), f"{path}.verification")
+        _validate_https_url(verification.get("source"), f"{path}.verification.source")
 
 
 def _validate_provider_binding(

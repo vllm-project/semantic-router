@@ -8,6 +8,7 @@ providers:
       reasoning:
         family: qwen3
       pricing:
+        currency: USD
         prompt_per_1m: 0.5
         completion_per_1m: 1
       loras:
@@ -17,6 +18,7 @@ providers:
       reasoning:
         family: qwen3
       pricing:
+        currency: USD
         prompt_per_1m: 3
         completion_per_1m: 6
       loras:

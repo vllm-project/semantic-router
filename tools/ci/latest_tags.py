@@ -67,6 +67,8 @@ def move(repository: str, source: str) -> None:
         [
             "skopeo",
             "copy",
+            "--retry-times",
+            "3",
             "--all",
             "--preserve-digests",
             f"docker://{repository}:{source}",

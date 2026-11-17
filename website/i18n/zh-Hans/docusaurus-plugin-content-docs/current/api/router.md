@@ -206,7 +206,7 @@ Router 自行生成的 Chat 流（例如缓存重放）使用 `reasoning_content
 
 ## 路由错误 {#routing-errors}
 
-Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误外，消息不包含模型、决策或请求内容：
+Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误和上下文长度错误外，消息不包含模型、决策或请求内容：
 
 ```json
 {"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
@@ -216,8 +216,9 @@ Router 无法路由某个请求时，会直接应答该请求，不调用任何�
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | 请求指定的模型不由该 Router 提供。 |
 | `no_route` | 400 | `invalid_request_error` | 没有决策匹配，且没有可用的默认模型。配方入口会回退到已配置的 `providers.defaults.model`；Looper 入口遵循同样的配方规则，名称本身不会选择算法。 |
-| `context_length_exceeded` | 400 或 422 | `invalid_request_error` | 请求超出了可服务它的模型的容量：400 来自[请求预算检查](#request-budget-errors)，422 来自模型的 `context_window_size`。 |
+| `context_length_exceeded` | 400 | `invalid_request_error` | Router 的计数表明请求超出了每个可服务它的模型的 `context_window_size` 周围的区间（用模型自己的分词器时为 3%，用代理分词器时为 30%）：在信号运行的同时，对照请求能到达的每个模型，并取消仍在运行的信号；或在决策之后，对照其候选。`param` 为 `messages`，消息像 OpenAI 的那样给出最宽的窗口和请求的估算计数：`This model's maximum context length is 1048576 tokens. However, your request has an estimated 1100000 input tokens. Please reduce the length of the input.` Anthropic Messages 客户端收到 `prompt is too long: 1100000 tokens > 1048576 maximum`。见[上下文窗口检查](../installation/model-configuration#check-prompts-against-the-context-window)。[请求预算检查](#request-budget-errors)也以同一错误码应答。 |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
+| `overloaded` | 429 | `rate_limit_error` | 请求的防护因决策模型过载而无法读取，且 `global.model_catalog.on_signal_overload` 为 `retry`。要么拒绝请求的只有在它上面失败即关闭的规则，要么某条无法读取的规则会拒绝该请求，失败即放行的规则也算在内。Anthropic Messages 客户端收到 `529` 和 `overloaded_error`。响应带有 `Retry-After` 和 `x-vsr-warnings: guard_overloaded`。见[决策模型过载时](../system-one/deploy/performance#when-the-decision-model-is-overloaded)。 |
 | `decision_unresolved` | 503 | `server_error` | 某个决策所需的信号不可用，导致该决策无法评估，且其 `rules.on_unknown` 为 `fail_request`。`x-vsr-trace` 的 `on_unknown` 成员会给出该决策。 |
 | `no_eligible_model` | 503 | `server_error` | 选择策略拒绝了匹配决策的所有候选模型。 |
 | `image_route_required` | 400 | `invalid_request_error` | [Images API](#images-api) 请求未到达任何输出为图像的决策。 |
@@ -237,7 +238,7 @@ Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-requ
 
 缺少能力、上限未知、选择证据不可用以及混合失败，保持选择错误的行为，即 `no_eligible_model`。预算检查本身不会截断请求；需要时请启用[上下文压缩](../tutorials/plugin/context.md#compression-and-budget)。
 
-这些计数是估算值。后端仍可能拒绝请求；其有效的 HTTP 状态码和有意义的消息会被保留。vLLM 的整数错误码在 OpenAI 兼容错误中以字符串形式暴露：`code: 400` 的 `BadRequestError` 会变成 `code: "400"` 的 `invalid_request_error`。
+这些计数是估算值。后端仍可能拒绝请求；其有效的 HTTP 状态码和有意义的消息会被保留。vLLM 的整数错误码在 OpenAI 兼容错误中以字符串形式暴露：`code: 400` 的 `BadRequestError` 会变成 `code: "400"` 的 `invalid_request_error`。后端对超出其窗口的提示的拒绝（vLLM 的 `param: input_tokens`、提到上下文长度、窗口或大小的消息，或 Anthropic 的 `prompt is too long`）改为得到错误码 `context_length_exceeded`，并保留后端的消息，其中给出它的窗口和提示的计数。
 
 在生成开始前被拒绝的流式请求，收到的是同样的非 2xx JSON 错误，而不是成功的 SSE 流。启用回放时，回放会记录失败的状态码和响应体；Router 的预算拒绝使用 `terminal_reason: request_budget_exceeded`。
 
@@ -280,9 +281,11 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 
 记录、轨迹中的路由和消息在具有显式对话身份时包含 `conversation_id`。消息按对话和轮次分组，因此同一会话内的不同对话都可以从第零轮开始。Insights 会显示对话边界和完整 ID。
 
-Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值，并叠加其所属配方自身的插件。全局或插件设置 `capture_personal_data: false` 后，检测到 PII 或无法确认 PII 状态时会省略正文、提示词和工具内容，保留路由元数据。
+Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值，并叠加其所属配方自身的插件。`prompt_capture` 决定记录在路由证据之外保留什么：默认的 `none` 不保留任何请求或响应文本；`raw` 保留采集开关允许的文本；`verified` 只在配方的 PII 规则确认提示词不含个人数据时保留提示词，检测到 PII 或无法确认 PII 状态时省略它。`capture_personal_data` 是它已弃用的写法：`false` 加载为 `verified`，`true` 加载为 `raw`。
 
-`capture_request_body: false` 会让整条记录都不含请求文本：请求体、`prompt`、`tool_definitions`，以及 `tool_trace` 中每个请求步骤的文本、参数和结果。`capture_response_body: false` 对响应体、响应步骤、`hallucination_spans`，以及回退结果 `execution_record` 中提供方返回的内容同样处理；每个失败的尝试只保留状态码和固定的原因。这些步骤保留类型、工具名、调用 ID 和状态。被省略的文本直接缺失，不标记为 `content_redacted`；该标记仍只表示对读者角色隐藏的内容，以及 `capture_tool_results` 未保留的工具结果。`max_tool_trace_bytes` 也会截断步骤文本，此时轨迹中的用户和助手消息带有 `content_truncated`。
+`capture_request_body: false` 会让整条记录都不含请求文本：请求体、`prompt`、`tool_definitions`，以及 `tool_trace` 中每个请求步骤的文本、参数和结果。`capture_response_body: false` 对响应体、响应步骤、`hallucination_spans`，以及回退结果 `execution_record` 中提供方返回的内容同样处理；每个失败的尝试只保留状态码和固定的原因。这些步骤保留类型、工具名、调用 ID 和状态。被省略的文本直接缺失，不标记为 `content_redacted`；该标记仍只表示对读者角色隐藏的内容，以及 `capture_tool_results` 未保留的工具结果。`max_tool_trace_bytes` 也会截断步骤文本，此时轨迹中的用户和助手消息带有 `content_truncated`。没有任何一层设置它时，每个字段保留 65,536 字节（64 KiB），步骤的 `raw_arguments` 和 `raw_output` 也包括在内，被截断时带有 `raw_truncated: true`；此时 `max_tool_trace_total_bytes` 为 262,144 字节（256 KiB），限制所有步骤的总和：最旧的步骤被丢弃，`tool_trace` 带有 `steps_truncated: true` 和 `dropped_step_count`，与 `max_tool_trace_steps` 相同。
+
+`prompt` 会在 UTF-8 字符边界处截断到它的上限：`max_prompt_bytes`；没有任何一层设置它时为某一层设置的 `max_tool_trace_bytes`；两者都没设置时为 65,536 字节（64 KiB）。`max_prompt_bytes: 0` 保留完整提示词。被截断的记录带有 `prompt_truncated: true`，并在 `prompt_original_bytes` 中记录完整提示词的字节数、在 `prompt_original_sha256` 中记录其 SHA-256。对没有 `replay.detail` 的调用者，这个哈希与提示词一起脱敏。
 
 启用 bearer 认证时，回放调用者需要 `replay.read`。提示词、响应、工具及其他敏感细节保持脱敏，除非主体还拥有 `replay.detail`。所有回放读取路由使用同一套脱敏：没有 `replay.detail` 时，轨迹 `routes` 中的 `selection_reasoning` 和 `session_reason` 与记录的 `route_diagnostics` 一样返回为空。即使 API 通常返回脱敏视图，也应将回放存储视为可能敏感。
 

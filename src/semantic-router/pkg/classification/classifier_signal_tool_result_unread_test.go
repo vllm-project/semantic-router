@@ -136,15 +136,20 @@ func TestAScannedRuleMissingPartOfItsToolResultsReadsInPart(t *testing.T) {
 	rule := func(name string) config.SystemOneRule {
 		return config.SystemOneRule{Name: name, Deployment: "kai", Question: question, Input: config.SystemOneInput{ToolResults: true}, Coverage: config.SystemOneCoverageFull}
 	}
-	unread := askedRule{signalType: config.SignalTypeSystemOne, rule: rule("unread"), toolResultsUnread: true}
+	unread := askedRule{signalType: config.SignalTypeSystemOne, rule: rule("unread"), unread: unreadToolResult}
 	whole := askedRule{signalType: config.SignalTypeSystemOne, rule: rule("whole")}
 	response := modelservice.Response{Answers: map[string]modelservice.Answer{
 		unread.questionID(): {Type: "noul", Noul: 0.1}, whole.questionID(): {Type: "noul", Noul: 0.1},
 	}}
 	scan := &guardScan{
-		deployment: "kai", rules: []askedRule{unread, whole}, text: "first window second window",
-		windows:   []scanWindow{{start: 0, end: 12}, {start: 13, end: 26, runeStart: 13}},
-		responses: []modelservice.Response{response, response}, errs: make([]error, 2),
+		deployment: "kai",
+		rules:      []askedRule{unread, whole},
+		text:       "first window second window",
+		windows:    []scanWindow{{start: 0, end: 12, first: 0, last: 0}, {start: 13, end: 26, runeStart: 13, first: 1, last: 1}},
+		cut:        2,
+		responses:  []modelservice.Response{response, response},
+		errs:       make([]error, 2),
+		done:       []bool{true, true},
 	}
 	classifier := newSystemOneTestClassifier(newFakeDecider(nil), unread.rule, whole.rule)
 	results := newSignalResults()

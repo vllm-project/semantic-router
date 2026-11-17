@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"net/http"
+
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -32,10 +34,12 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
-		return r.createErrorResponse(503, "protocol runtime unavailable")
+		return r.answerInPlaceOfUpstream(ctx, http.StatusServiceUnavailable, "protocol runtime unavailable", "request_processing_failed")
 	}
 	source, target := responseWireFormats(ctx)
-	translated, err := engine.TranslateTransportError(source, target, body, nil)
+	// An upstream may echo the caller's login in its error.
+	body = redactCallerCredential(ctx, body)
+	translated, err := engine.TranslateTransportError(source, target, body, normalizeUpstreamContextLength(ctx.UpstreamStatusCode))
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "invalid_upstream_error")
 		logging.ComponentErrorEvent("extproc", "neutral_transport_error_decode_failed", map[string]interface{}{
@@ -47,7 +51,7 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		protocolError := upstreamTransportFallback(ctx.UpstreamStatusCode, err)
 		encoded, encodeErr := engine.EncodeError(target, protocolError)
 		if encodeErr != nil {
-			return r.createErrorResponse(502, "The selected model returned an invalid error response")
+			return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid error response")
 		}
 		translated.Body = encoded
 	}

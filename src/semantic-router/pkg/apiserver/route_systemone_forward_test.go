@@ -145,6 +145,24 @@ func TestSystemOneForwardUsesActiveListenerAndRetainsGeneration(t *testing.T) {
 			if response := invoke("active-key", "", "public", true); response.Code != 200 || strings.Contains(response.Body.String(), "judge-next") {
 				t.Fatalf("pending discovery grant exposed: %d %s", response.Code, response.Body.String())
 			}
+			// A forwarded rules call reaches the listener's rules endpoint, outside
+			// the listener's codec, behind the same key.
+			rules := func(key string) *httptest.ResponseRecorder {
+				// #nosec G117 -- Test-only keys exercise authenticated forwarding.
+				body, _ := json.Marshal(systemone.ForwardRequest{
+					Listener: "public", Method: http.MethodPost, Path: systemone.RulesPath, Authorization: "Bearer " + key,
+					Request: json.RawMessage(`{"app":"guard","parts":[{"id":"p","text":"ls"}]}`),
+				})
+				response := httptest.NewRecorder()
+				mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, systemone.ForwardPath, strings.NewReader(string(body))))
+				return response
+			}
+			if response := rules("pending-key"); response.Code != 401 {
+				t.Fatalf("a forwarded rules call with another generation's key answered %d %s", response.Code, response.Body.String())
+			}
+			if response := rules("active-key"); response.Code != 404 || !strings.Contains(response.Body.String(), "rules_not_published") {
+				t.Fatalf("a forwarded rules call on a listener without rules answered %d %s", response.Code, response.Body.String())
+			}
 			models.during = func() { publish(pending) }
 			if response := invoke("active-key", "judge", "public", false); response.Code != 200 || !strings.Contains(response.Body.String(), `"model":"judge"`) {
 				t.Fatalf("active inference failed across activation: %d %s", response.Code, response.Body.String())

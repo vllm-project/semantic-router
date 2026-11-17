@@ -261,9 +261,10 @@ contract without making roadmap, priority, or close decisions:
   `/accept` event reconciles only that issue and refreshes the open pull
   requests that reference it. An hourly sweep in `community-labels.yml`
   revisits open `needs-acceptance` issues updated in the last three days (a
-  manual dispatch sweeps all of them) and stops before the Actions token's
-  remaining API budget falls below a reserve, so earlier valid decisions
-  recover from queued, failed, or interrupted workflow runs;
+  manual dispatch sweeps all of them), reading fifty issues with their latest
+  comments per GraphQL request, and stops before the Actions token's remaining
+  REST budget falls below a reserve, so earlier valid decisions recover from
+  queued, failed, or interrupted workflow runs;
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;

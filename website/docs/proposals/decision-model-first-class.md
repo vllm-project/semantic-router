@@ -477,7 +477,7 @@ recipes:
             history: false                # the earlier user turns
             previous_turns: 0             # the last N turns, user and assistant (0 to 32)
             tool_results: false
-            image: false                  # the current turn's images
+            image: false                  # every image the request carries
           coverage: truncate              # truncate (the default) or full, read in windows
           timeout_ms: 1000
 ```
@@ -672,8 +672,8 @@ global:
 
 #### Media inputs
 
-A rule reads the current turn's images with `input.image`, and its audio and
-video with `input.audio` and `input.video`. The answering deployment must
+A rule reads the request's images with `input.image`, and the current turn's
+audio and video with `input.audio` and `input.video`. The answering deployment must
 declare that it reads the medium, or the load fails with
 `input_modality_unsupported`. The d3 family and the Vela 3.0 d3 sizes read
 images and video; vela3-fast, Vela 2.0 and the Decision models read text. The
