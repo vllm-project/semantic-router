@@ -868,6 +868,136 @@ def test_cli_leaves_the_login_to_claude_code_for_a_caller_gateway(
     assert len(seen) == asked
 
 
+def _web_search_config(tmp_path, provider=None):
+    """A Router configuration whose entrypoint reaches a Chat model on vLLM and,
+    with provider, a Messages model on a backend of that provider."""
+    qwen = {
+        "name": "qwen",
+        "api_format": "openai",
+        "backend_refs": [
+            {"name": "vllm", "provider": "vllm", "endpoint": "http://127.0.0.1:1/v1"}
+        ],
+    }
+    models, refs = [qwen], [{"model": "qwen"}]
+    if provider:
+        backend = {"name": "c", "provider": provider, "endpoint": "https://gw.test"}
+        models.append(
+            {"name": "claude", "api_format": "anthropic", "backend_refs": [backend]}
+        )
+        refs.append({"model": "claude"})
+    doc = {
+        "providers": {"defaults": {"model": "qwen"}, "models": models},
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "agent", "default": True}
+        ],
+        "recipes": [
+            {"name": "agent", "decisions": [{"name": "all", "modelRefs": refs}]}
+        ],
+    }
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump(doc))
+    return config
+
+
+def test_claude_code_web_search_is_denied_when_no_backend_runs_it(tmp_path, gateway):
+    # WebSearch sends Anthropic's server tool web_search_20250305, which the
+    # Router refuses for every model this entrypoint reaches
+    url, _, _ = gateway
+    path = tmp_path / "settings.json"
+    mine = {"permissions": {"deny": ["Bash(rm:*)"]}}
+    path.write_text(json.dumps(mine))
+    env = {"CLAUDE_CONFIG_DIR": str(tmp_path), "VLLM_SR_API_KEY": "sk-test"}
+    config = _web_search_config(tmp_path)
+    args = ["connect", "claude-code", "--config", str(config), "--base-url", url]
+    result = CliRunner().invoke(main, [*args, "--dry-run"], env=env)
+    assert result.exit_code == 0, result.output
+    assert '+      "WebSearch"' in result.output
+    assert "WebSearch: denied, since no model vllm-sr/auto reaches" in _flat(
+        result.output
+    )
+    assert json.loads(path.read_text()) == mine
+    result = CliRunner().invoke(main, [*args, "--yes"], env=env)
+    assert result.exit_code == 0, result.output
+    assert json.loads(path.read_text())["permissions"] == {
+        "deny": ["Bash(rm:*)", "WebSearch"]
+    }
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo"], env=env)
+    assert result.exit_code == 0, result.output
+    assert json.loads(path.read_text()) == mine
+
+
+@pytest.mark.parametrize("provider", ["anthropic", "anthropic-compatible"])
+def test_claude_code_web_search_stays_when_a_backend_runs_it(
+    tmp_path, gateway, provider
+):
+    # one model the entrypoint reaches runs Anthropic's server tools
+    url, _, _ = gateway
+    path = tmp_path / "settings.json"
+    mine = {"permissions": {"deny": ["Bash(rm:*)"]}}
+    path.write_text(json.dumps(mine))
+    env = {"CLAUDE_CONFIG_DIR": str(tmp_path), "VLLM_SR_API_KEY": "sk-test"}
+    config = _web_search_config(tmp_path, provider)
+    args = ["connect", "claude-code", "--config", str(config), "--base-url", url]
+    result = CliRunner().invoke(main, [*args, "--yes"], env=env)
+    assert result.exit_code == 0, result.output
+    assert "WebSearch" not in result.output
+    assert json.loads(path.read_text())["permissions"] == mine["permissions"]
+
+
+def test_claude_code_web_search_deny_goes_once_a_backend_runs_it(tmp_path, gateway):
+    # connect took WebSearch away while no model ran it, and gives it back, only
+    # its own rule, once the entrypoint reaches one that does
+    url, _, _ = gateway
+    path = tmp_path / "settings.json"
+    mine = {"permissions": {"deny": ["Bash(rm:*)"]}}
+    path.write_text(json.dumps(mine))
+    env = {"CLAUDE_CONFIG_DIR": str(tmp_path), "VLLM_SR_API_KEY": "sk-test"}
+    args = ["connect", "claude-code", "--base-url", url, "--config"]
+    (tmp_path / "vllm").mkdir()
+    vllm = _web_search_config(tmp_path / "vllm")
+    result = CliRunner().invoke(main, [*args, str(vllm), "--yes"], env=env)
+    assert result.exit_code == 0, result.output
+    assert json.loads(path.read_text())["permissions"]["deny"] == [
+        "Bash(rm:*)",
+        "WebSearch",
+    ]
+    anthropic = _web_search_config(tmp_path, "anthropic")
+    written = path.read_text()
+    result = CliRunner().invoke(main, [*args, str(anthropic), "--dry-run"], env=env)
+    assert result.exit_code == 0, result.output
+    assert '-      "WebSearch"' in result.output
+    allowed = "WebSearch: allowed again, since vllm-sr/auto now reaches a model with"
+    assert allowed in _flat(result.output)
+    assert path.read_text() == written
+    result = CliRunner().invoke(main, [*args, str(anthropic), "--yes"], env=env)
+    assert result.exit_code == 0, result.output
+    assert allowed in _flat(result.output)
+    assert json.loads(path.read_text())["permissions"] == mine["permissions"]
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo"], env=env)
+    assert result.exit_code == 0, result.output
+    assert json.loads(path.read_text()) == mine
+
+
+def test_claude_code_never_takes_out_a_web_search_rule_the_user_wrote(
+    tmp_path, gateway
+):
+    url, _, _ = gateway
+    path = tmp_path / "settings.json"
+    mine = {"permissions": {"deny": ["WebSearch", "Bash(rm:*)"]}}
+    path.write_text(json.dumps(mine))
+    env = {"CLAUDE_CONFIG_DIR": str(tmp_path), "VLLM_SR_API_KEY": "sk-test"}
+    args = ["connect", "claude-code", "--base-url", url, "--config"]
+    (tmp_path / "vllm").mkdir()
+    for config in (
+        _web_search_config(tmp_path / "vllm"),
+        _web_search_config(tmp_path, "anthropic"),
+    ):
+        result = CliRunner().invoke(main, [*args, str(config), "--yes"], env=env)
+        assert result.exit_code == 0, result.output
+        assert "allowed again" not in result.output
+        assert json.loads(path.read_text())["permissions"] == mine["permissions"]
+
+
 def _caller_config(tmp_path, provider):
     config = tmp_path / "config.yaml"
     backend = {"name": provider, "provider": provider, "auth": {"credential": "caller"}}

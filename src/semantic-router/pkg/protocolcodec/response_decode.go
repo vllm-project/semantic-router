@@ -248,7 +248,14 @@ func (accumulator *responseAccumulator) appendOutputText(event llmprotocol.Event
 		kind = event.Content.Kind
 		citations = event.Content.Citations
 	}
-	return accumulator.appendText(event.ItemIndex, event.ContentIndex, kind, event.Delta, "", "", citations)
+	if err := accumulator.appendText(event.ItemIndex, event.ContentIndex, kind, event.Delta, "", "", citations); err != nil {
+		return err
+	}
+	if event.Content != nil && len(event.Content.Raw) > 0 {
+		content := accumulator.items[event.ItemIndex].contents[event.ContentIndex]
+		content.Raw = llmprotocol.AppendCitations(content.Raw, event.Content.Raw)
+	}
+	return nil
 }
 
 func (accumulator *responseAccumulator) appendReasoning(event llmprotocol.Event) error {

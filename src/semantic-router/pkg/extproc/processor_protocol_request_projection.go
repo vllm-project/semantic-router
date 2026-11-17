@@ -30,8 +30,12 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, samplingDiagnostics := r.projectUnsupportedSampling(projected, model, target)
+	projected, serverToolDiagnostics, err := r.projectServerToolsForBackend(projected, model, target)
+	if err != nil {
+		return projected, nil, err
+	}
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, samplingDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, samplingDiagnostics, serverToolDiagnostics, otherDiagnostics), err
 }
 
 // projectUnsupportedSampling sends a model the request without the sampling

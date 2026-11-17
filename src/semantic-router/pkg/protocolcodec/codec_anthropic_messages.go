@@ -26,7 +26,7 @@ func (AnthropicMessagesCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilitySamplingTopK,
 		llmprotocol.CapabilityStopSequences, llmprotocol.CapabilityReasoningAdaptive,
 		llmprotocol.CapabilityReasoningSignature, llmprotocol.CapabilityReasoningDisplay,
-		llmprotocol.CapabilityMatchedStopSequence,
+		llmprotocol.CapabilityMatchedStopSequence, llmprotocol.CapabilityServerTools,
 	)
 }
 
@@ -80,9 +80,14 @@ type anthropicContentWire struct {
 	ToolsetName     json.RawMessage            `json:"toolset_name,omitempty"`
 	Transformations json.RawMessage            `json:"transformations,omitempty"`
 	FileID          string                     `json:"file_id,omitempty"`
+	// raw is a server tool block, sent as it was written.
+	raw json.RawMessage
 }
 
 func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
+	if wire.raw != nil {
+		return wire.raw, nil
+	}
 	type wireAlias anthropicContentWire
 	body, err := json.Marshal(wireAlias(wire))
 	if err != nil {
@@ -485,7 +490,7 @@ func decodeAnthropicTool(toolBody json.RawMessage, policy llmprotocol.Policy, di
 		return llmprotocol.Tool{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Anthropic tool is invalid", err)
 	}
 	if discriminator.Type != "" && discriminator.Type != "custom" {
-		return llmprotocol.Tool{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only custom tools enter the model protocol", nil)
+		return decodeAnthropicServerTool(toolBody, discriminator.Type)
 	}
 	var toolWire anthropicToolWire
 	if err := decodeWireValue(toolBody, &toolWire, policy); err != nil {

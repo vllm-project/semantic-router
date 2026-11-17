@@ -243,7 +243,7 @@ func validateRequestInstructions(instructions []InstructionBlock, limits Limits,
 			return NewError(ErrorInvalidRequest, "message_name_limit", "message name exceeds the configured limit", nil)
 		}
 		for _, content := range instruction.Content {
-			if content.Kind == ContentToolCall || content.Kind == ContentToolResult {
+			if content.Kind == ContentToolCall || content.Kind == ContentToolResult || content.Kind == ContentServerTool {
 				return NewError(ErrorInvalidRequest, "invalid_instruction_content", "instructions cannot contain tool control blocks", nil)
 			}
 			if err := validateContent(content, blocks, limits, 0); err != nil {
@@ -283,7 +283,10 @@ func validateRequestTool(tool Tool, limits Limits) error {
 	if tool.Kind == ToolKindCustom {
 		return validateCustomTool(tool, limits)
 	}
-	if tool.Kind != "" || tool.CustomFormat != nil {
+	if tool.Kind == ToolKindServer {
+		return validateServerTool(tool, limits)
+	}
+	if tool.Kind != "" || tool.CustomFormat != nil || len(tool.Raw) != 0 {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "tool kind is unsupported", nil)
 	}
 	if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) == 0 || !json.Valid(tool.InputSchema) {
@@ -622,7 +625,7 @@ func MarkDeferredToolLinks(request *Request) {
 func validateRoleContent(role Role, content Content) error {
 	switch role {
 	case RoleSystem, RoleDeveloper:
-		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentGeneratedImage) {
+		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentGeneratedImage, ContentServerTool) {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "system and developer messages cannot contain tool control blocks", nil)
 		}
 	case RoleAssistant:
@@ -634,7 +637,7 @@ func validateRoleContent(role Role, content Content) error {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "tool messages may contain only tool results", nil)
 		}
 	case RoleUser:
-		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentRefusal, ContentGeneratedImage) {
+		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentRefusal, ContentGeneratedImage, ContentServerTool) {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "user messages contain assistant-only content", nil)
 		}
 	}
@@ -669,7 +672,12 @@ func validateContentBlock(content Content, blocks *int, limits Limits, depth int
 	if err := validateCacheDirective(content.Cache); err != nil {
 		return err
 	}
+	if err := validateRawContent(content, limits); err != nil {
+		return err
+	}
 	switch content.Kind {
+	case ContentServerTool:
+		return nil
 	case ContentText, ContentRefusal, ContentReasoning:
 		return validateTextContent(content, limits)
 	case ContentImage, ContentAudio, ContentVideo, ContentFile:

@@ -119,7 +119,10 @@ The command shows the changes and asks before writing them:
 
 - Claude Code: the `env` block of `~/.claude/settings.json` (or
   `$CLAUDE_CONFIG_DIR/settings.json`; `--scope project` writes
-  `.claude/settings.local.json`). The other settings stay as they are. The
+  `.claude/settings.local.json`), and `WebSearch` in `permissions.deny` when
+  no model the entrypoint reaches can run it
+  ([Router settings for Claude Code](#router-settings-for-claude-code)). The
+  other settings stay as they are. The
   file holds the key when one is set, so only you can read it afterwards. In a
   git repository, `--scope project` adds the file and the command's undo record
   to `.git/info/exclude` when git would otherwise track them, and refuses to
@@ -615,6 +618,27 @@ Claude Code goes on without tool search. Toward an `openai` backend, also list
 [protocol compatibility](protocol-compatibility#validation-and-failure-behavior)
 describes. An `anthropic` backend receives those as sent.
 
+Claude Code's WebSearch runs as a request of its own that declares
+Anthropic's server tool `web_search_20250305`. The Router carries it to a model
+whose backend is `anthropic` or `anthropic-compatible`, so the decision that
+request matches must name one; see
+[Anthropic server tools](protocol-compatibility#anthropic-server-tools). A
+decision that sends it to another backend, such as an `openai` or a `vllm`
+one, gets a 400 before any call, and Claude Code 2.1.325 reports it as the
+search's error:
+
+```text
+API Error: 400 Anthropic tool "web_search" (web_search_20250305) runs only on an Anthropic backend, and model "qwen-chat" is served by provider vllm over openai.chat.v1
+```
+
+When no model the entrypoint reaches has such a backend, every search would
+fail that way, so `vllm-sr connect claude-code` adds `WebSearch` to
+`permissions.deny` in the settings, after the rules already there, and says
+so. `--dry-run` shows the rule, and `--undo` puts the deny rules back as they
+were. Once the entrypoint reaches a model that runs it, connect run again
+takes out the rule it added, and says so; a `WebSearch` rule you wrote
+yourself stays. Otherwise connect leaves WebSearch alone.
+
 Protection reads the session and subagent ids Claude Code sends,
 `x-claude-code-session-id` and `x-claude-code-agent-id`, with no identity
 headers configured, so each session and each subagent keeps its own model.
@@ -654,7 +678,8 @@ only on that login.
 
 The Router then routes each call among Claude models on that login, and
 Insights shows the session's calls with the model each decision picked. A
-cost is the tokens at the API's list price, not what the plan charges. A model
+cost is the tokens at the API's list price, not what the plan charges, and
+leaves out the fee Anthropic charges for each web search. A model
 without `pricing` takes its list price from the built-in catalog, through its
 `catalog` card or through the `provider_model_id` its `anthropic` backend calls,
 such as `claude-sonnet-5-5` or `claude-haiku-5-5`

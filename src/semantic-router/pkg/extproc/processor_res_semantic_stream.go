@@ -46,6 +46,10 @@ type semanticStreamItem struct {
 	image            *llmprotocol.GeneratedImage
 	completed        bool
 	reasoningDetails map[int]llmprotocol.ReasoningDetail
+	// serverTool and citations are what an Anthropic server tool left: its
+	// call or result as written, and the citations on this item's text.
+	serverTool json.RawMessage
+	citations  json.RawMessage
 }
 
 func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
@@ -391,8 +395,14 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
 				item.reasoningSig = event.Content.Signature
 			}
+			if event.Content != nil && event.Content.Kind == llmprotocol.ContentServerTool {
+				item.serverTool = event.Content.Raw
+			}
 		case llmprotocol.EventOutputTextDelta:
 			item := state.item(event.ItemIndex)
+			if event.Content != nil {
+				item.citations = llmprotocol.AppendCitations(item.citations, event.Content.Raw)
+			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentRefusal {
 				item.refusal += event.Delta
 			} else {
@@ -511,7 +521,10 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: item.refusal})
 		}
 		if item.text != "" {
-			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: item.text})
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: item.text, Raw: item.citations})
+		}
+		if item.serverTool != nil {
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentServerTool, Raw: item.serverTool})
 		}
 		if item.toolCall != nil {
 			call := *item.toolCall
