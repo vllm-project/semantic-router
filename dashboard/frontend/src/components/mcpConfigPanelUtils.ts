@@ -377,12 +377,6 @@ export const TRANSPORT_META: Record<
   },
 }
 
-/** Whether a user may call tools directly (tools.use); old role-only sessions fall back to writers. */
-export function canRunToolCalls(user?: { role?: string; permissions?: string[] } | null): boolean {
-  if (Array.isArray(user?.permissions)) return user.permissions.includes('tools.use')
-  return user?.role === 'admin' || user?.role === 'write'
-}
-
 /** Where a server connects, for display: its command line or URL. */
 export function serverTarget(config: MCPServerConfig): string {
   if (config.transport === 'stdio') {

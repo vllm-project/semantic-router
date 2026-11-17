@@ -14,7 +14,7 @@ import { useMCPServers } from '../tools/mcp'
 import type { MCPServerConfig, MCPServerState } from '../tools/mcp'
 import type { LatestMCPRequestRunner } from '../tools/mcp/requestSupport'
 import { Alert, Button, Skeleton, toast } from '../ui'
-import { canManageMCP } from '../utils/accessControl'
+import { canManageMCP, canUseTools } from '../utils/accessControl'
 import ConfirmDialog from './ConfirmDialog'
 import { MCPAvailableToolsSection } from './MCPAvailableToolsSection'
 import { MCPRequestNotice } from './MCPRequestNotice'
@@ -32,7 +32,6 @@ import type {
 } from './mcpConfigPanelTypes'
 import {
   buildUnifiedTools,
-  canRunToolCalls,
   filterAndSortServers,
   filterAndSortUnifiedTools,
 } from './mcpConfigPanelUtils'
@@ -69,7 +68,7 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({
   const { user, isLoading: authLoading } = useAuth()
   const canManageServers = canManageMCP(user)
   const mutationDisabled = authLoading || readonlyLoading || serverReadonly || !canManageServers
-  const canRunTools = !authLoading && canRunToolCalls(user)
+  const canRunTools = !authLoading && canUseTools(user)
   const {
     servers,
     loading,

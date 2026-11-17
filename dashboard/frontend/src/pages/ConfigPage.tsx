@@ -119,8 +119,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       setConfig(projectCanonicalConfigForManager(data))
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch config')
-      setConfig(null)
+      const message = err instanceof Error ? err.message : 'Failed to fetch config'
+      if (showLoading) {
+        setError(message)
+        setConfig(null)
+      } else {
+        toast.error('The configuration could not be reloaded', { description: message })
+      }
       return false
     } finally {
       if (showLoading) setLoading(false)
@@ -156,8 +161,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         })
       }
 
-      // Refresh config after save
-      await fetchConfig()
+      // Refresh in place so the section keeps its state instead of remounting.
+      await fetchConfig(false)
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to save configuration')
     }
@@ -291,7 +296,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       isReadonly={configEditorReadonly}
       openEditModal={openEditModal}
       refreshConfig={async () => {
-        await fetchConfig()
+        await fetchConfig(false)
       }}
       saveConfig={saveConfig}
     />

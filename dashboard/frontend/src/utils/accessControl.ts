@@ -16,6 +16,7 @@ const LOGS_READ_PERMISSION = 'logs.read'
 const MCP_READ_PERMISSION = 'mcp.read'
 const MCP_MANAGE_PERMISSION = 'mcp.manage'
 const REPLAY_READ_PERMISSION = 'replay.read'
+const TOOLS_USE_PERMISSION = 'tools.use'
 const TOPOLOGY_READ_PERMISSION = 'topology.read'
 const USERS_VIEW_PERMISSION = 'users.view'
 const USERS_MANAGE_PERMISSION = 'users.manage'
@@ -66,6 +67,10 @@ export function canSubmitFeedback(user?: PermissionUser | null): boolean {
 
 export function canManageMCP(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, MCP_MANAGE_PERMISSION)
+}
+
+export function canUseTools(user?: PermissionUser | null): boolean {
+  return canAccessWithPermission(user, TOOLS_USE_PERMISSION)
 }
 
 export function canAccessDashboardPath(

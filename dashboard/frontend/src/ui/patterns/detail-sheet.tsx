@@ -16,6 +16,15 @@ export function DetailSheet({
   size?: 'sm' | 'md' | 'lg' | 'xl'
   children: React.ReactNode
 }) {
+  // A sheet opened from code has no trigger for Radix to return focus to, so
+  // the element focused when it opened is remembered before its content mounts.
+  const wasOpen = React.useRef(false)
+  const returnFocus = React.useRef<HTMLElement | null>(null)
+  if (open && !wasOpen.current && typeof document !== 'undefined') {
+    const active = document.activeElement
+    returnFocus.current = active instanceof HTMLElement && active !== document.body ? active : null
+  }
+  wasOpen.current = open
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -23,6 +32,14 @@ export function DetailSheet({
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           ;(event.currentTarget as HTMLElement | null)?.focus()
+        }}
+        onCloseAutoFocus={(event) => {
+          const target = returnFocus.current
+          returnFocus.current = null
+          if (target?.isConnected) {
+            event.preventDefault()
+            target.focus({ preventScroll: true })
+          }
         }}
         tabIndex={-1}
       >
