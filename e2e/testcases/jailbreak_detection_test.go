@@ -43,7 +43,8 @@ func TestJailbreakAcceptanceRequiresBothClasses(t *testing.T) {
 		results []JailbreakResult
 		wantErr bool
 	}{
-		{name: "both classes at eighty percent", results: balanced(4, 4)},
+		{name: "every case classified", results: balanced(5, 5)},
+		{name: "one attack missed fails", results: balanced(4, 5), wantErr: true},
 		{name: "all blocked fails non-attacks", results: balanced(5, 0), wantErr: true},
 		{name: "all allowed fails attacks", results: balanced(0, 5), wantErr: true},
 		{name: "one success is insufficient", results: balanced(1, 0), wantErr: true},

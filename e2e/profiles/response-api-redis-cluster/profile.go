@@ -20,6 +20,7 @@ func NewProfile() *Profile {
 			"Tests Response API endpoints using Redis Cluster storage backend",
 			valuesFile,
 			redisClusterManifest,
+			"--for=condition=complete", "job/redis-cluster-create",
 		),
 	}
 }

@@ -290,7 +290,8 @@ def write_fixture(
     root.mkdir(parents=True, exist_ok=False)
     ids, codes = write_tokenizer(root)
     vocab = max(ids.values()) + 1
-    text = qwen3_5_config(vocab)
+    # A Qwen3.5 text config names its end token, as the published checkpoints do.
+    text = qwen3_5_config(vocab) | {"eos_token_id": ids["<|endoftext|>"]}
     if variant == "pruned":
         text |= {
             "layer_types": list(PRUNED_LAYERS),

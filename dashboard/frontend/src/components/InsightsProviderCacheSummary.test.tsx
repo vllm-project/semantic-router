@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import InsightsProviderCacheSummary from './InsightsProviderCacheSummary'
+import { ModelLabelsContext } from '../pages/insightsModelLabelSupport'
 import type { InsightsAggregateProviderCache } from '../pages/insightsPageTypes'
 
 const summary: InsightsAggregateProviderCache = {
@@ -53,6 +54,16 @@ const render = (value?: InsightsAggregateProviderCache) =>
   renderToStaticMarkup(<InsightsProviderCacheSummary summary={value} />)
 
 describe('Insights provider prompt-cache summary', () => {
+  it('names each selected model by its label', () => {
+    const html = renderToStaticMarkup(
+      <ModelLabelsContext.Provider value={{ 'model-a': 'Model A' }}>
+        <InsightsProviderCacheSummary summary={summary} />
+      </ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain('<th scope="row">Model A (model-a)</th>')
+    expect(html).toContain('<th scope="row">agents::writes</th>')
+  })
+
   it('shows a negative net saving as negative instead of clamping requests at zero', () => {
     const html = render(summary)
     expect(html).toMatch(/Net Cache Saving<\/span><strong[^>]*>-\$0\.0003</)
@@ -66,9 +77,10 @@ describe('Insights provider prompt-cache summary', () => {
     const html = render(summary)
     expect(html).toContain('Net Saving by Decision')
     expect(html).toContain('agents::writes')
-    expect(html).toContain('-$0.0004')
+    expect(html).toContain('Net saving (USD)')
+    expect(html).toContain('>-0.0004<')
     expect(html).toContain('agents::reads')
-    expect(html).toContain('&lt;$0.0001')
+    expect(html).toContain('&lt;0.0001')
     expect(html).toContain('Net Saving by Selected Model')
     expect(html).toContain('model-a')
   })

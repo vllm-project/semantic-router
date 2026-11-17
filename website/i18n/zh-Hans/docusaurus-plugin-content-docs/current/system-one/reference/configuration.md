@@ -23,6 +23,7 @@ translation:
 | `recipes[].model_bindings.<type>` | 同上，只针对一个配方 |
 | `global.model_catalog.deployments.<name>` | 一个部署：`provider: model_runtime`（本地或挂接）或 `provider: systemone`（远程 API） |
 | `global.model_catalog.signal_timeout_ms` | 一个请求所有信号的截止时间 |
+| `global.model_catalog.on_signal_overload` | `{action, wait_ms, retry_after_seconds}`：`action: retry` 时，过载的决策模型拒绝的每个调用都会在最长 `wait_ms` 内重新询问。如果仍无法读取的规则会拒绝该请求，请求就收到客户端会重试的错误。见[决策模型过载时](../deploy/performance.md#when-the-decision-model-is-overloaded) |
 
 `systemone` 部署接受 `endpoint`、`model`、`auth`（`api_key_env` 或 `api_key_file`，或 `credential: delegated`；`header`、`prefix`）、`headers`、`timeout_ms`、`max_retries`、`tls` 和 `capabilities`（`question_types`、`presets`、`modalities`）。
 

@@ -77,6 +77,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
+		Agent:         append([]AgentRule(nil), signals.AgentRules...),
 		SystemOne:     append([]SystemOneRule(nil), signals.SystemOneRules...),
 	}
 }
@@ -127,16 +128,20 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			AllowLossyTranslation: cfg.AllowLossyTranslation,
 			RoutingInput:          cfg.RoutingInput,
 			Headers:               cfg.Headers,
+			ContextWindow:         cfg.ContextWindow,
+			DrainTimeoutSeconds:   cfg.DrainTimeoutSeconds,
 		},
 		Services: CanonicalServiceGlobal{
-			API:           cfg.API,
-			ResponseAPI:   cfg.ResponseAPI,
-			Observability: cfg.Observability,
-			Authz:         cfg.Authz,
-			RateLimit:     cfg.RateLimit,
-			ManagementAPI: cfg.ManagementAPI,
-			RouterReplay:  cfg.RouterReplay,
-			StartupStatus: cfg.StartupStatus,
+			API:             cfg.API,
+			ResponseAPI:     cfg.ResponseAPI,
+			Observability:   cfg.Observability,
+			MaskingIdentity: cfg.MaskingIdentity,
+			Authz:           cfg.Authz,
+			RateLimit:       cfg.RateLimit,
+			Budgets:         cfg.Budgets,
+			ManagementAPI:   cfg.ManagementAPI,
+			RouterReplay:    cfg.RouterReplay,
+			StartupStatus:   cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
 			ResponseCache: cfg.SemanticCache,
@@ -157,12 +162,13 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
 	return CanonicalModelCatalog{
-		Deployments:     cloneModelMap(cfg.ModelDeployments),
-		Bindings:        cloneModelMap(cfg.GlobalModelBindings),
-		Embeddings:      CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: cfg.EmbeddingDeployment}},
-		System:          canonicalSystemModelsFromRouterConfig(cfg),
-		Admission:       cloneAdmissionMap(cfg.ModelAdmission),
-		SignalTimeoutMs: cfg.ModelSignalTimeoutMs,
+		Deployments:      cloneModelMap(cfg.ModelDeployments),
+		Bindings:         cloneModelMap(cfg.GlobalModelBindings),
+		Embeddings:       CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: cfg.EmbeddingDeployment}},
+		System:           canonicalSystemModelsFromRouterConfig(cfg),
+		Admission:        cloneAdmissionMap(cfg.ModelAdmission),
+		SignalTimeoutMs:  cfg.ModelSignalTimeoutMs,
+		OnSignalOverload: cloneSignalOverloadPolicy(cfg.ModelSignalOverload),
 	}
 }
 
@@ -253,6 +259,7 @@ func canonicalProviderModelFromRuntime(
 		Pricing:          params.Pricing,
 		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
+		Tokenizer:        params.Tokenizer,
 		BackendRefs: canonicalProviderBackendRefs(
 			name,
 			params,
@@ -264,6 +271,7 @@ func canonicalProviderModelFromRuntime(
 	if providerModelID := canonicalProviderModelID(params.ExternalModelIDs); providerModelID != "" {
 		providerModel.ProviderModelID = providerModelID
 	}
+	providerModel.UnsupportedCapabilities = append([]string(nil), params.UnsupportedCapabilities...)
 	if params.Catalog == "" {
 		providerModel.ModelFacts = ModelFacts{
 			ParamSize:         params.ParamSize,
@@ -307,6 +315,7 @@ func cloneCanonicalProviderModel(model *CanonicalProviderModel) *CanonicalProvid
 	clone := *model
 	clone.Reasoning = cloneCanonicalReasoning(model.Reasoning)
 	clone.ExternalModelIDs = copyStringMap(model.ExternalModelIDs)
+	clone.UnsupportedCapabilities = append([]string(nil), model.UnsupportedCapabilities...)
 	clone.BackendRefs = make([]CanonicalBackendRef, len(model.BackendRefs))
 	for index, backend := range model.BackendRefs {
 		clone.BackendRefs[index] = backend
@@ -376,8 +385,8 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 		ChatPath:   profile.ChatPath,
 		APIKey:     endpoint.APIKey,
 	}
-	if profile.AuthHeader != "" || profile.AuthPrefixSet || profile.AuthPrefix != "" || profile.Delegated() {
-		// A delegated backend has no static key to export; the request supplies it.
+	if profile.AuthHeader != "" || profile.AuthPrefixSet || profile.AuthPrefix != "" || profile.Delegated() || profile.Caller() {
+		// A delegated or caller backend has no static key to export; the request supplies it.
 		ref.Auth = &DeploymentAuth{Credential: profile.AuthCredential, Header: profile.AuthHeader}
 		if profile.AuthPrefixSet || profile.AuthPrefix != "" {
 			prefix := profile.AuthPrefix

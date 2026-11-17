@@ -47,3 +47,22 @@ func ValidateKeywordRuleContract(rule KeywordRule) error {
 	}
 	return nil
 }
+
+// KeywordRuleFindsText reports why a rule cannot say where in a text it
+// matched, which a rule must for masking to hide what it found: an OR rule of
+// literal or regex keywords locates each occurrence, AND and NOR match on a
+// combination or an absence, BM25, n-gram and fuzzy matching score
+// similarity, and a count or density matches on how many there are.
+func KeywordRuleFindsText(rule KeywordRule) error {
+	switch method := strings.ToLower(rule.Method); {
+	case rule.Operator != "OR":
+		return fmt.Errorf("operator %s matches on which keywords occur, not where; use OR", rule.Operator)
+	case method != "" && method != "regex":
+		return fmt.Errorf("method %s scores similarity and does not locate a match; use literal keywords or method: regex", rule.Method)
+	case rule.FuzzyMatch:
+		return fmt.Errorf("fuzzy_match does not locate a match")
+	case rule.Count != nil || rule.Density != nil:
+		return fmt.Errorf("a count or density matches on how often keywords occur, not on one occurrence")
+	}
+	return nil
+}

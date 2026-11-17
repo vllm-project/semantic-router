@@ -81,7 +81,7 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 		t.Fatalf("detail page failed: %v", err)
 	}
 	count, matching := 0, 0
-	err = postgres.ScanMetadata(ctx, func(record Record) error {
+	err = postgres.ScanMetadata(ctx, QueryFilters{}, func(record Record) error {
 		count++
 		if record.Recipe == "evaluation" {
 			matching++
@@ -94,6 +94,26 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	if err != nil || count != 12250 || matching != 12230 {
 		t.Fatalf("scan count=%d matching=%d err=%v", count, matching, err)
 	}
+	// A filtered scan reads only the selected rows; the filter options still
+	// come from every row.
+	filtered := 0
+	err = postgres.ScanMetadata(ctx, QueryFilters{Recipe: "other", SessionID: "unrelated-session"}, func(record Record) error {
+		if record.Recipe != "other" || record.SessionID != "unrelated-session" {
+			return errors.New("filtered scan returned an unselected record")
+		}
+		filtered++
+		return nil
+	})
+	if err != nil || filtered != 19 {
+		t.Fatalf("filtered scan count=%d err=%v", filtered, err)
+	}
+	recipes := map[string]bool{}
+	if err = postgres.ScanFilterOptions(ctx, func(record Record) error {
+		recipes[record.Recipe] = true
+		return nil
+	}); err != nil || len(recipes) != 2 || !recipes["evaluation"] || !recipes["other"] {
+		t.Fatalf("filter options recipes=%v err=%v", recipes, err)
+	}
 	scoped, err := postgres.QueryPage(ctx, QueryFilters{SessionID: "old-session", Recipe: "evaluation", RecipeSet: true}, 100, 0, true)
 	if err != nil || scoped.Total != 2 || len(scoped.Records) != 2 {
 		t.Fatalf("old scoped session=%+v err=%v", scoped, err)
@@ -101,6 +121,22 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	unscoped, err := postgres.QueryPage(ctx, QueryFilters{SessionID: "old-session"}, 100, 0, true)
 	if err != nil || unscoped.Total != 3 {
 		t.Fatalf("cross-recipe session total=%d err=%v", unscoped.Total, err)
+	}
+	// The search box matches a session id as the in-memory matcher does.
+	searched, err := postgres.QueryPage(ctx, QueryFilters{Search: "OLD-SESS"}, 100, 0, false)
+	if err != nil || searched.Total != 3 {
+		t.Fatalf("session search total=%d err=%v", searched.Total, err)
+	}
+	// since compares the zone-less timestamp column in UTC: the rows' own
+	// instant written in another zone keeps them, a second later drops them.
+	for _, window := range []struct {
+		since time.Time
+		want  int
+	}{{fixture.Timestamp.In(time.FixedZone("KST", 9*3600)), 3}, {fixture.Timestamp.Add(time.Second), 0}} {
+		windowed, windowErr := postgres.QueryPage(ctx, QueryFilters{SessionID: "old-session", Since: window.since}, 100, 0, false)
+		if windowErr != nil || windowed.Total != window.want {
+			t.Fatalf("since %s total=%d err=%v", window.since, windowed.Total, windowErr)
+		}
 	}
 	//nolint:gosec // generated table name is validated by NewPostgresStore
 	if _, err = postgres.db.ExecContext(ctx, "UPDATE "+cfg.TableName+" SET recipe=NULL WHERE id=$1", "record-12249"); err != nil {
@@ -111,7 +147,7 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 		t.Fatalf("legacy recipe session=%+v err=%v", legacy, err)
 	}
 	stopped := errors.New("stop scan")
-	if err = postgres.ScanMetadata(ctx, func(Record) error { return stopped }); !errors.Is(err, stopped) {
+	if err = postgres.ScanMetadata(ctx, QueryFilters{}, func(Record) error { return stopped }); !errors.Is(err, stopped) {
 		t.Fatalf("callback failure was hidden: %v", err)
 	}
 }

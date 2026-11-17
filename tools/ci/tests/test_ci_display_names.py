@@ -190,6 +190,10 @@ class DisplayNameTests(unittest.TestCase):
         for name, job in jobs.items():
             if name != "gate":
                 self.assertNotIn("image-distribution", job.get("needs", []))
+        # Accelerator builds wait for the cheap source checks, never for tests.
+        self.assertEqual(
+            jobs["image-distribution"]["needs"], ["plan", "quality", "generated"]
+        )
 
 
 if __name__ == "__main__":

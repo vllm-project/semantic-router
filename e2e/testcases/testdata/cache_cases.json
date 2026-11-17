@@ -2,37 +2,37 @@
   {
     "description": "Psychology question - kubernetes cache threshold (0.8)",
     "category": "psychology",
-    "original_question": "What is cognitive dissonance?",
+    "original_question": "__SYSTEMONE_CHOICE__ psychology __EMBED_TOPIC__ psychology What is cognitive dissonance?",
     "similar_questions": [
-      "Can you explain cognitive dissonance?",
-      "Tell me about cognitive dissonance",
-      "What does cognitive dissonance mean?",
-      "Define cognitive dissonance",
-      "Explain the concept of cognitive dissonance"
+      "__SYSTEMONE_CHOICE__ psychology __EMBED_TOPIC__ psychology Can you explain cognitive dissonance?",
+      "__SYSTEMONE_CHOICE__ psychology __EMBED_TOPIC__ psychology Tell me about cognitive dissonance",
+      "__SYSTEMONE_CHOICE__ psychology __EMBED_TOPIC__ psychology What does cognitive dissonance mean?",
+      "__SYSTEMONE_CHOICE__ psychology __EMBED_TOPIC__ psychology Define cognitive dissonance",
+      "__SYSTEMONE_CHOICE__ psychology __EMBED_TOPIC__ psychology Explain the concept of cognitive dissonance"
     ]
   },
   {
     "description": "Health question - kubernetes cache threshold (0.8)",
     "category": "health",
-    "original_question": "What are the benefits of regular exercise?",
+    "original_question": "__SYSTEMONE_CHOICE__ health __EMBED_TOPIC__ health What are the benefits of regular exercise?",
     "similar_questions": [
-      "What are the advantages of exercising regularly?",
-      "Tell me the benefits of working out regularly",
-      "What are the health benefits of regular physical activity?",
-      "Why is regular exercise good for you?",
-      "What benefits does regular exercise provide?"
+      "__SYSTEMONE_CHOICE__ health __EMBED_TOPIC__ health What are the advantages of exercising regularly?",
+      "__SYSTEMONE_CHOICE__ health __EMBED_TOPIC__ health Tell me the benefits of working out regularly",
+      "__SYSTEMONE_CHOICE__ health __EMBED_TOPIC__ health What are the health benefits of regular physical activity?",
+      "__SYSTEMONE_CHOICE__ health __EMBED_TOPIC__ health Why is regular exercise good for you?",
+      "__SYSTEMONE_CHOICE__ health __EMBED_TOPIC__ health What benefits does regular exercise provide?"
     ]
   },
   {
     "description": "General question - lower similarity threshold (0.75)",
     "category": "other",
-    "original_question": "How do I make a good cup of coffee?",
+    "original_question": "__SYSTEMONE_CHOICE__ other __EMBED_TOPIC__ other How do I make a good cup of coffee?",
     "similar_questions": [
-      "What's the best way to brew coffee?",
-      "Can you tell me how to make great coffee?",
-      "What are the steps to make a perfect cup of coffee?",
-      "How can I brew a delicious cup of coffee?",
-      "What's the method for making good coffee?"
+      "__SYSTEMONE_CHOICE__ other __EMBED_TOPIC__ other What's the best way to brew coffee?",
+      "__SYSTEMONE_CHOICE__ other __EMBED_TOPIC__ other Can you tell me how to make great coffee?",
+      "__SYSTEMONE_CHOICE__ other __EMBED_TOPIC__ other What are the steps to make a perfect cup of coffee?",
+      "__SYSTEMONE_CHOICE__ other __EMBED_TOPIC__ other How can I brew a delicious cup of coffee?",
+      "__SYSTEMONE_CHOICE__ other __EMBED_TOPIC__ other What's the method for making good coffee?"
     ]
   }
 ]

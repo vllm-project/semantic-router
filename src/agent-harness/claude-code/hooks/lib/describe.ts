@@ -1,7 +1,8 @@
-import type { App, Decision, Signal, Tag, Tiers } from '../../types'
+import type { App, BuiltinTag, Decision, Signal, Tag, Tiers } from '../../types'
 import { APPS, type Color, LOOKS } from './apps'
 import { difficultyMeter, holdMeter, type Segment } from './meters'
 import { clip, fixed, modelName, oneLine, plural, RISK_WORDS } from './text'
+import { PAYBACK_TURNS } from './prices'
 import { tagText } from './redact'
 
 // One meter row: `lead`, the cells, `close`, then the first of `fits` (score, caption) that fits the row.
@@ -107,12 +108,17 @@ const SIGNAL_WORDS: Record<Signal['kind'], string> = { wrong: 'said it was wrong
 
 const signalText = (signal: Signal) => `${SIGNAL_WORDS[signal.kind]} ${fixed(signal.score)}`
 
-export const TAGS: readonly Tag[] = ['name', 'email', 'phone', 'card', 'ip', 'date', 'ssn', 'iban', 'address', 'id', 'secret']
+export const TAGS: readonly BuiltinTag[] = ['name', 'email', 'phone', 'card', 'ip', 'date', 'ssn', 'iban', 'address', 'id', 'secret']
 
-const hiddenCount = (counts: Partial<Record<Tag, number>>) => Object.values(counts).reduce((sum, n) => sum + (n ?? 0), 0)
+const hiddenCount = (counts: Partial<Record<Tag, number>>) => Object.values(counts).reduce<number>((sum, n) => sum + (n ?? 0), 0)
 
-const countChips = (counts: Partial<Record<Tag, number>>) =>
-  TAGS.flatMap(tag => (counts[tag] ? [`${tag} ×${counts[tag]}`] : []))
+// The tags a redact hid, the plugin's own in their order, then the listener rules' by name.
+const tagsOf = (counts: Partial<Record<Tag, number>>): Tag[] => [
+  ...TAGS.filter(tag => counts[tag]),
+  ...Object.keys(counts).filter(tag => counts[tag] && !(TAGS as readonly string[]).includes(tag)).sort(),
+]
+
+const countChips = (counts: Partial<Record<Tag, number>>) => tagsOf(counts).map(tag => `${tag} ×${counts[tag]}`)
 
 const readWords = (files: number, commands: number) =>
   [files > 0 ? `${plural(files, 'file')} read` : '', commands > 0 ? plural(commands, 'command output') : '']
@@ -136,6 +142,37 @@ function effortNote(d: Extract<Decision, { kind: 'route' }>) {
   }
 }
 
+const KEEP_BRIEF: Record<NonNullable<Extract<Decision, { kind: 'keep' }>['reason']>, string> = {
+  quality: 'routing goal is quality',
+  downgrade: 'not sure enough for a smaller model',
+  unsure: 'model unsure',
+  'follow-up': 'short reply keeps the last turn\'s model',
+  cache: 'a move would cost more than it saves',
+}
+
+const dollars = (value: number) => (value < 0.01 ? '<$0.01' : `$${value.toFixed(2)}`)
+const kTokens = (tokens: number) => (tokens < 1000 ? `${tokens}` : `${Math.round(tokens / 1000)}K`)
+
+// Why a route stayed where it was, with the numbers that decided it; for a turn, the model it would have moved to.
+function keepNote(d: Extract<Decision, { kind: 'keep' }>) {
+  const would = d.would === undefined ? 'a smaller model' : modelName(d.would)
+  const alone = d.would === undefined ? '' : ` · alone: ${modelName(d.would)}`
+  switch (d.reason) {
+    case 'quality':
+      return `the routing goal is quality: never a smaller model${alone}`
+    case 'downgrade':
+      return `not sure enough for a smaller model · confidence ${fixed(d.confidence)} < ${fixed(d.minConfidence)}${alone}`
+    case 'follow-up':
+      return `short reply: keeps the last turn's model, not ${would}`
+    case 'cache':
+      return d.reread === undefined
+        ? `${would} would cost more than it saves`
+        : `${would} would re-read ${kTokens(d.reread.tokens)} tokens uncached: ${dollars(d.reread.cost)}, ${PAYBACK_TURNS} turns save ${dollars(d.reread.saving)}`
+    default:
+      return `model unsure · confidence ${fixed(d.confidence)} < ${fixed(d.minConfidence)}${alone}`
+  }
+}
+
 // What Claude read, as a title names it: a file by its path, a command by its output.
 const outputOf = (tool: string, source: string) => (tool === 'Read' ? source : `the output of ${source}`)
 
@@ -144,14 +181,18 @@ const outputOf = (tool: string, source: string) => (tool === 'Read' ? source : `
 const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } = {
   route: {
     look: d => {
-      const title = `subagent → ${modelName(d.model)}${d.effort ? ` · ${d.effort} effort` : ''}`
+      const who = d.scope === 'turn' ? 'your turn' : 'subagent'
+      const title = `${who} → ${modelName(d.model)}${d.effort ? ` · ${d.effort} effort` : ''}`
       const alone = d.escalated && (d.escalated.alone === 'default' ? 'keep the default model' : `pick ${modelName(d.escalated.alone)}`)
+      // A turn says where it moved from; a subagent, what it was asked to do.
+      const what = d.scope === 'turn' ? `from ${modelName(d.from ?? d.sessionModel ?? d.model)}` : oneLine(d.task)
+      const escalated = d.scope === 'turn' ? `you pushed back: one step up, effort one level up → ${d.picked}` : `escalated: you pushed back · router alone would ${alone}`
       return {
         app: 'router',
         badge: 'ROUTED',
         color: APPS.router.color,
-        headline: `subagent → ${modelName(d.model)}${d.effort ? `, ${d.effort} effort` : ''}`,
-        detail: `${taskWord(d.level, d.tiers)} · difficulty ${fixed(d.level)} of 2 · confidence ${fixed(d.confidence)} · ${effortNote(d)}${alone ? ` · escalated, router alone would ${alone}` : ''}`,
+        headline: `${who} → ${modelName(d.model)}${d.effort ? `, ${d.effort} effort` : ''}`,
+        detail: `${taskWord(d.level, d.tiers)} · difficulty ${fixed(d.level)} of 2 · confidence ${fixed(d.confidence)} · ${effortNote(d)}${d.scope === 'turn' ? ` · ${what}` : alone ? ` · escalated, router alone would ${alone}` : ''}`,
         subject: oneLine(d.task),
         inline: {
           kind: 'card',
@@ -159,7 +200,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           color: APPS.router.color,
           title,
           body: difficultyGauge(d.level, d.tiers, APPS.router.color),
-          note: alone ? `escalated: you pushed back · router alone would ${alone}` : `${effortNote(d)} · ${oneLine(d.task)}`,
+          note: d.escalated ? escalated : `${effortNote(d)} · ${what}`,
         },
       }
     },
@@ -168,35 +209,36 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
   },
   keep: {
     look: d => {
-      const note =
-        d.reason === 'quality'
-          ? 'the routing goal is quality: never a smaller model'
-          : d.reason === 'downgrade'
-            ? `not sure enough for a smaller model · confidence ${fixed(d.confidence)} < ${fixed(d.minConfidence)}`
-            : `model unsure · confidence ${fixed(d.confidence)} < ${fixed(d.minConfidence)}`
+      const note = keepNote(d)
+      const title = `${d.scope === 'turn' ? 'your turn' : 'subagent'} stays on ${modelName(d.model)}`
       return {
         app: 'router',
         badge: 'KEPT',
         color: LOOKS.kept.color,
-        headline: `subagent stays on ${modelName(d.model)}`,
+        headline: title,
         detail: note,
         subject: oneLine(d.task),
         inline: {
           kind: 'card',
           ...LOOKS.kept,
-          title: `subagent stays on ${modelName(d.model)}`,
+          title,
           body: difficultyGauge(d.level, d.tiers, LOOKS.kept.color),
           note,
         },
       }
     },
     weight: 'notice',
-    brief: d =>
-      d.reason === 'quality' ? 'routing goal is quality' : d.reason === 'downgrade' ? 'not sure enough for a smaller model' : 'model unsure',
+    brief: d => KEEP_BRIEF[d.reason ?? 'unsure'],
   },
   guard: {
     look: d => {
-      const words = d.rule ? `always held: ${d.rule}` : d.unchecked ? `${d.unchecked} of ${plural(d.parts, 'step')} not checked` : RISK_WORDS[d.risk]
+      const words = d.rule
+        ? `always held: ${d.rule}`
+        : d.ruleUnchecked
+          ? `required rule ${d.ruleUnchecked} not checked`
+          : d.unchecked
+            ? `${d.unchecked} of ${plural(d.parts, 'step')} not checked`
+            : RISK_WORDS[d.risk]
       const part = oneLine(d.part)
       const more = stepsMore(d.parts)
       const base = { app: 'guard' as const, subject: part, more }
@@ -235,7 +277,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
   },
   escalate: {
     look: d => {
-      const headline = 'you pushed back · next subagent one step up'
+      const headline = d.turns ? 'you pushed back · this turn one step up' : 'you pushed back · next subagent one step up'
       return {
         app: 'escalate',
         badge: 'ESCALATED',
@@ -260,7 +302,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
     look: d => {
       const chips = countChips(d.counts)
       const total = hiddenCount(d.counts)
-      const first = TAGS.find(tag => d.counts[tag])
+      const first = tagsOf(d.counts)[0]
       const headline = `${plural(total, 'item')} hidden ${d.tool === 'Read' ? 'before Claude read' : 'from'} ${outputOf(d.tool, d.source)}`
       return {
         app: 'redact',
@@ -282,7 +324,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
       }
     },
     weight: d => (d.unread ? 'act' : 'notice'),
-    brief: d => TAGS.filter(tag => d.counts[tag]).join(', '),
+    brief: d => tagsOf(d.counts).join(', '),
     line: (d, brief) => `${plural(hiddenCount(d.counts), 'item')} hidden: ${brief} · ${d.tool === 'Read' ? d.source : `output of ${d.source}`}`,
   },
   shield: {
@@ -359,8 +401,13 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           inline: { kind: 'card', glyph: APPS.off.glyph, color: APPS.off.color, title: headline, note },
         }
       }
+      const isTurn = d.app === 'router' && d.prompt !== undefined
       const headline =
-        d.also === 'shield' ? `${oneLine(d.subject)} went to Claude unchecked for personal data or instructions` : SKIPPED[d.app](oneLine(d.subject))
+        d.also === 'shield'
+          ? `${oneLine(d.subject)} went to Claude unchecked for personal data or instructions`
+          : isTurn
+            ? 'turn ran on its model without routing'
+            : SKIPPED[d.app](oneLine(d.subject))
       return {
         app: d.app,
         badge: 'SKIPPED',

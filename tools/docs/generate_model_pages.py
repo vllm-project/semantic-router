@@ -614,8 +614,8 @@ def render_page(model: Model) -> str:
     lines += [""]
     if "image" in model.modalities:
         lines += [
-            "Rules that read the turn's images (`input.image`) or videos (`input.video`) can",
-            "resolve to it.",
+            "Rules that read the request's images (`input.image`) or the current turn's",
+            "videos (`input.video`) can resolve to it.",
             "",
         ]
     lines += ["## Built-in questions", ""]

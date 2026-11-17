@@ -147,14 +147,15 @@ describe('graphite dashboard theme contract', () => {
 
   it('keeps the DSL editor and analytics surfaces on the shared palette', () => {
     const dslTheme = readFileSync(new URL('../lib/dslLanguage.ts', import.meta.url), 'utf8')
-    const insightsCharts = readFileSync(
-      new URL('../components/InsightsCharts.tsx', import.meta.url),
+    const insightsChartStyles = readFileSync(
+      new URL('../components/InsightsCharts.module.css', import.meta.url),
       'utf8',
     )
 
     expect(dslTheme).toContain("'editor.background': '#050505'")
     expect(dslTheme).toContain("'editorCursor.foreground': '#e31b23'")
-    expect(insightsCharts).toMatch(/const CHART_COLORS = \[\s*'#e31b23'/)
+    expect(insightsChartStyles).toMatch(/\.rankedFillLead\s*\{[^}]*var\(--brand-amd\)/)
+    expect(insightsChartStyles).toMatch(/\.tokenOutput\s*\{[^}]*var\(--brand-amd\)/)
   })
 
   it('does not reintroduce the retired legacy brand palette', () => {

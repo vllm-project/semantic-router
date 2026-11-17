@@ -44,14 +44,27 @@ type routerLearningDecision struct {
 }
 
 type routerLearningIdentity struct {
-	sessionID          string
-	conversationID     string
-	memoryKey          string
-	scope              string
-	sessionHeader      string
-	conversationHeader string
-	agentID            string
-	agentHeader        string
+	sessionID      string
+	conversationID string
+	// conversationDerived marks a conversationID the Router took from the
+	// request's conversation start because the client named none.
+	conversationDerived bool
+	memoryKey           string
+	scope               string
+	sessionHeader       string
+	conversationHeader  string
+	agentID             string
+	agentHeader         string
+}
+
+// declaredConversationID is the conversation id the client sent, if any. A
+// derived id keys protection but is not the client's identity, so it is
+// never reported or stored as one.
+func (identity routerLearningIdentity) declaredConversationID() string {
+	if identity.conversationDerived {
+		return ""
+	}
+	return identity.conversationID
 }
 
 func firstNonNilSelectionContext(values ...*selection.SelectionContext) *selection.SelectionContext {

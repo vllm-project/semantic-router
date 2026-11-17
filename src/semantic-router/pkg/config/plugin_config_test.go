@@ -80,9 +80,12 @@ var _ = Describe("a decision's context sources", func() {
 var _ = Describe("EffectiveRouterReplayConfig", registerEffectiveRouterReplayConfigSpecs)
 
 func registerEffectiveRouterReplayConfigSpecs() {
-	It("returns nil without a router_replay plugin in global.plugins or the decision", func() {
+	It("records routing data only without a router_replay plugin in global.plugins or the decision", func() {
 		cfg := routerReplayDecisionConfig(false, "plain", nil)
-		Expect(cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("plain"))).To(BeNil())
+		replayCfg := cfg.EffectiveRouterReplayConfig(cfg.GetDecisionByName("plain"))
+		Expect(replayCfg).NotTo(BeNil())
+		Expect(replayCfg.CapturesRequestText()).To(BeFalse())
+		Expect(replayCfg.CapturesResponseText()).To(BeFalse())
 	})
 
 	It("takes the default capture settings from a global.plugins router_replay", func() {

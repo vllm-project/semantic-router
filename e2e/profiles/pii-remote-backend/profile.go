@@ -61,6 +61,9 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"pii-backend-routing",
 		"pii-tool-output-only",
+		"agent-tool-output-guards",
+		"agent-tool-output-fails-closed",
+		"agent-tool-output-unreadable",
 		"pii-api-masking",
 		"pii-repeated-value-masking",
 	}

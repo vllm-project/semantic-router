@@ -8,6 +8,7 @@ providers:
       reasoning:
         family: deepseek
       pricing:
+        currency: USD
         prompt_per_1m: 0.27
         completion_per_1m: 1.1
       loras:
@@ -17,6 +18,7 @@ providers:
       reasoning:
         family: deepseek
       pricing:
+        currency: USD
         prompt_per_1m: 0.55
         completion_per_1m: 2.2
       loras:

@@ -3,9 +3,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import InsightsRecordSection from './InsightsRecordSection'
+import { ModelLabelsContext } from './insightsModelLabelSupport'
 import InsightsSessionRoutes from './InsightsSessionRoutes'
 import { fetchInsightsTrajectory } from './insightsPageApi'
-import { buildInsightsRecordSections } from './insightsPageSupport'
+import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 
 const record: InsightsRecord = {
@@ -67,6 +68,26 @@ function renderRecord(value: InsightsRecord) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('recorded routing explanation', () => {
+  it('names the eligible models by their labels', () => {
+    const protection = { ...record.learning!.protection!, candidate_models: ['alpha', 'beta'] }
+    const html = renderToStaticMarkup(
+      <ModelLabelsContext.Provider value={{ alpha: 'Alpha Model', beta: 'Beta Model' }}>
+        {buildInsightsRecordSections(
+          { ...record, learning: { ...record.learning, protection } },
+          { isReadonly: true },
+        ).map((section, index) => (
+          <InsightsRecordSection key={section.title} section={section} sectionIndex={index} />
+        ))}
+      </ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain('Eligible models</span><div><span')
+    expect(html).toContain('title="Configured as alpha">Alpha Model</span>, <span')
+    expect(html).toContain('title="Configured as beta">Beta Model</span>')
+    // the candidate scores name each model the same way
+    expect(html).toContain('<td><span')
+    expect(html).not.toContain('<td>alpha</td>')
+  })
+
   it('renders actual selection separately from an observed hold and preserves zero scores', () => {
     const html = renderRecord(record)
     expect(html).toContain('Actual selected model</span><div>beta')
@@ -135,6 +156,7 @@ describe('recorded routing explanation', () => {
         {
           record_id: 'two',
           timestamp: record.timestamp,
+          agent: '9f2c1a',
           turn_index: 1,
           decision: 'review',
           previous_model: 'alpha',
@@ -157,11 +179,137 @@ describe('recorded routing explanation', () => {
     expect(html).toContain('completed')
     expect(html).toContain('failed')
     expect(html).toContain('HTTP 503')
-    expect(html).toContain('17 ms')
-    expect(html).toContain('23 ms')
+    expect(html).toContain('0.017s')
+    expect(html).toContain('0.023s')
     expect(html).toContain('observe_only')
     expect(html).toContain('/insights/one')
     expect(html).toContain('/insights/two')
+    // a subagent's call names its agent, the main conversation's says main
+    expect(html).toContain('9f2c1a')
+    expect(html).toContain('>main<')
+  })
+
+  it('lists each request with its session, next to the request id', () => {
+    const columns = createInsightsTableColumns()
+    expect(columns.map((column) => column.key).slice(0, 2)).toEqual(['request_id', 'session_id'])
+    const session = columns[1]
+    const cell = renderToStaticMarkup(
+      <>{session.render!({ ...record, session_id: '21f9e946-5ddf-4b90-a897-7db814a78317' })}</>,
+    )
+    expect(cell).toContain('title="21f9e946-5ddf-4b90-a897-7db814a78317"')
+    expect(renderToStaticMarkup(<>{session.render!({ ...record, session_id: undefined })}</>)).toBe(
+      '-',
+    )
+  })
+
+  it('says in words why a session kept or switched its model, with the code in the title', () => {
+    const route = {
+      timestamp: record.timestamp,
+      turn_index: 0,
+      decision: 'think_fast',
+      selected_model: 'qwen36',
+      lifecycle_state: 'completed',
+      response_status: 200,
+      duration_ms: 5,
+    }
+    const trajectory: InsightsTrajectory = {
+      object: 'router_replay.trajectory',
+      session_id: 'session-one',
+      recipe: 'default',
+      record_count: 3,
+      turn_count: 1,
+      messages: [],
+      routes: [
+        {
+          ...route,
+          record_id: 'a',
+          session_action: 'stay',
+          session_reason: 'session_scope_protect',
+          session_policy_applied: true,
+        },
+        {
+          ...route,
+          record_id: 'b',
+          agent: '10ee5571',
+          session_action: 'stay',
+          session_reason: 'session_scope_protect',
+          session_policy_applied: true,
+        },
+        {
+          ...route,
+          record_id: 'c',
+          agent: '990eaa8c',
+          session_action: 'switch',
+          session_reason: 'previous_model_not_in_candidates',
+          session_policy_applied: true,
+        },
+      ],
+    }
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <InsightsSessionRoutes trajectory={trajectory} />
+      </MemoryRouter>,
+    )
+    expect(html).toContain('>kept<')
+    expect(html).toContain('aria-label="protected"')
+    expect(html).toContain('Kept this session&#x27;s model')
+    expect(html).toContain('Kept this agent&#x27;s model')
+    expect(html).toContain('>switched<')
+    expect(html).toContain('The previous model is not a candidate here')
+    expect(html).toContain('title="session_scope_protect"')
+    expect(html).toContain('title="previous_model_not_in_candidates"')
+  })
+
+  it('sums the session up and marks the request on the page, a switch and a hidden agent', () => {
+    const route = {
+      timestamp: '2026-09-14T00:00:00Z',
+      turn_index: 0,
+      decision: 'think_fast',
+      lifecycle_state: 'completed',
+      response_status: 200,
+      duration_ms: 2_000,
+      session_policy_applied: true,
+    }
+    const trajectory: InsightsTrajectory = {
+      object: 'router_replay.trajectory',
+      session_id: 'session-one',
+      recipe: 'default',
+      record_count: 3,
+      turn_count: 2,
+      messages: [],
+      routes: [
+        { ...route, record_id: 'a', selected_model: 'big', session_action: 'establish_baseline' },
+        // a viewer without raw access gets the agent and the reason emptied, not left out
+        { ...route, record_id: 'b', selected_model: 'big', agent: '', session_reason: '' },
+        {
+          ...route,
+          record_id: 'c',
+          timestamp: '2026-09-14T00:01:00Z',
+          turn_index: 1,
+          previous_model: 'big',
+          selected_model: 'small',
+          session_action: 'switch',
+          response_status: 503,
+          lifecycle_state: 'failed',
+        },
+      ],
+    }
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <InsightsSessionRoutes trajectory={trajectory} current="c" />
+      </MemoryRouter>,
+    )
+    expect(html).toContain('big<b>×2</b>')
+    expect(html).toContain('small<b>×1</b>')
+    expect(html).toContain('1 failed')
+    // from the first start to the last end, not the three durations added up
+    expect(html).toContain('>1m 2s<')
+    expect(html).toContain('>hidden<')
+    expect(html).toContain('Hidden from this viewer')
+    expect(html).not.toContain('>subagent 1<')
+    expect(html).toMatch(
+      /data-record-id="c" data-current="true" data-switch="true" aria-current="true"/,
+    )
   })
 
   it.each(['first', ''])('requests the exact record recipe scope %j', async (recipe) => {

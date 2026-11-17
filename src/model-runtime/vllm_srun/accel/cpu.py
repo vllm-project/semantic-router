@@ -3,7 +3,9 @@
 For models that name them it registers the ``geglu`` slot's ``contiguous``
 variant and, on x86, the ``linear`` slot's ``float32-packed`` one
 (``onednn.py``): together they make an encoder's forward batch-invariant where
-the packed products measure so at load (``onednn.invariant``).
+the packed products measure so at load (``onednn.invariant``). Opted in on a
+measured CPU it also registers zentorch's FP32 linear (``zentorch.py``), an
+approximate kernel for families that consent on CPUs.
 
 All CPU device work of a process runs on one thread (``execute``). PyTorch's
 OpenMP backend keeps one thread team per calling thread; as soon as two teams
@@ -25,7 +27,7 @@ from typing import Any, TypeVar
 import torch
 
 from ..plugins.base import Accelerator, DeviceInfo
-from . import onednn
+from . import onednn, zentorch
 from .kernels import (
     CONTIGUOUS,
     Kernel,
@@ -175,6 +177,12 @@ class CPUAccelerator(Accelerator):
                     exact=True,
                     variant=onednn.PACKED,
                 )
+            )
+        # zentorch's linear: approximate, so it runs only for a family that
+        # consents on CPUs, and only opted in on a measured CPU (zentorch.py).
+        if zentorch.enabled():
+            kernels.register(
+                Kernel("linear", zentorch.lay_out, "zentorch", exact=False)
             )
         return kernels
 
