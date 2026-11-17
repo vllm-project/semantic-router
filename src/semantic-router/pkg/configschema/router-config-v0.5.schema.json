@@ -52,7 +52,8 @@
           "enum": [
             "claude_code",
             "codex",
-            "opencode"
+            "opencode",
+            "deepseek_harness"
           ]
         },
         "types": {

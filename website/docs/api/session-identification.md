@@ -46,6 +46,7 @@ configured, because protection reads what they send:
 | Codex CLI | `session-id` | `thread-id`; on a root thread it equals `session-id` |
 | OpenCode | `x-session-id`, a `session_id_headers` default; on a subagent's calls `x-parent-session-id` | on a subagent's calls, its own session in `x-session-id` |
 | Pi, with the provider `vllm-sr connect pi` writes, and the VS Code extension | `x-session-id`, a `session_id_headers` default | none |
+| DeepSeek Harness | none | none |
 
 - **Session.** With `identity.headers.session` unset, protection reads the
   session the request pins, `x-vsr-session-id` or a `session_id_headers`
@@ -59,7 +60,10 @@ configured, because protection reads what they send:
   agent, also when the request pins another session, as
   `vllm-sr connect codex --launch` does. An OpenCode subagent's own session,
   its `x-session-id`, is its agent. OpenCode is known by its User-Agent,
-  `opencode/<version>`.
+  `opencode/<version>`, and DeepSeek Harness by its User-Agent,
+  `deepseek-harness/<version>`; DeepSeek Harness sends no session or agent
+  header, so its calls keep the session the Router derives unless the request
+  pins one in `x-vsr-session-id`.
 - **Codex's turn metadata.** Without those headers, protection reads the
   `session_id` and `thread_id` of Codex's `x-codex-turn-metadata`, or of a
   Responses request's `client_metadata`.
