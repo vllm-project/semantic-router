@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
@@ -38,7 +39,7 @@ func judgedReplayRecord(t *testing.T, id, responseBody, excerpt string) routerre
 }
 
 func judgeTasks(router *OpenAIRouter, query string) *ext_proc.ProcessingResponse {
-	return router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/dataset/judge-tasks"+query)
+	return router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/dataset/judge-tasks"+query)
 }
 
 func judgeTaskCounts(t *testing.T, response *ext_proc.ProcessingResponse) map[string]interface{} {
@@ -163,6 +164,6 @@ func TestRouterReplayJudgeTasksRejectAKeyThatBlindsNothing(t *testing.T) {
 			assertDatasetStatus(t, judgeTasks(router, query), typev3.StatusCode_BadRequest)
 		})
 	}
-	response := router.handleRouterReplayAPI("POST", "/api/v1/observability/replays/dataset/judge-tasks"+judgeTasksQuery)
+	response := router.handleRouterReplayAPI(context.Background(), "POST", "/api/v1/observability/replays/dataset/judge-tasks"+judgeTasksQuery)
 	assertDatasetStatus(t, response, typev3.StatusCode_MethodNotAllowed)
 }

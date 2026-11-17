@@ -203,15 +203,44 @@ func replayMatchedSignals(signals routerreplay.Signal) []string {
 	return matched
 }
 
+// replaySignalFamily is one signal type and the signals of it a record matched.
+type replaySignalFamily struct {
+	name    string
+	matched []string
+}
+
+// replaySignalFamilies is a record's matched signals by signal type, as an
+// array so that a scan over the whole history allocates nothing for them.
+func replaySignalFamilies(s routerreplay.Signal) [17]replaySignalFamily {
+	return [...]replaySignalFamily{
+		{"keyword", s.Keyword},
+		{"domain", s.Domain},
+		{"fact_check", s.FactCheck},
+		{"user_feedback", s.UserFeedback},
+		{"turn_relation", s.TurnRelation},
+		{"language", s.Language},
+		{"context", s.Context},
+		{"complexity", s.Complexity},
+		{"modality", s.Modality},
+		{"authz", s.Authz},
+		{"jailbreak", s.Jailbreak},
+		{"safety", s.Safety},
+		{"pii", s.PII},
+		{"conversation", s.Conversation},
+		{"metadata", s.Metadata},
+		{"input_modality", s.InputModality},
+		{"decision", s.Decision},
+	}
+}
+
 // replaySignalGroups is a record's matched signals by signal type.
 func replaySignalGroups(s routerreplay.Signal) map[string][]string {
-	return map[string][]string{
-		"keyword": s.Keyword, "domain": s.Domain, "fact_check": s.FactCheck,
-		"user_feedback": s.UserFeedback, "turn_relation": s.TurnRelation, "language": s.Language,
-		"context": s.Context, "complexity": s.Complexity, "modality": s.Modality, "authz": s.Authz,
-		"jailbreak": s.Jailbreak, "safety": s.Safety, "pii": s.PII, "conversation": s.Conversation,
-		"metadata": s.Metadata, "input_modality": s.InputModality, "decision": s.Decision,
+	families := replaySignalFamilies(s)
+	groups := make(map[string][]string, len(families))
+	for _, family := range families {
+		groups[family.name] = family.matched
 	}
+	return groups
 }
 
 func firstNonEmptyString(values ...string) string {

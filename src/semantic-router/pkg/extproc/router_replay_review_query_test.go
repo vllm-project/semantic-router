@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func newReviewQueryRouter(t *testing.T) *OpenAIRouter {
 
 func replayAPIJSON(t *testing.T, router *OpenAIRouter, path string, target interface{}) int {
 	t.Helper()
-	response := router.handleRouterReplayAPI("GET", path)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", path)
 	require.NotNil(t, response.GetImmediateResponse())
 	immediate := response.GetImmediateResponse()
 	require.NoError(t, json.Unmarshal(immediate.Body, target))

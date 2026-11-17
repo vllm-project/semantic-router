@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -49,7 +50,7 @@ func TestPublicListenerFailsClosedForRouterReplayBeforeSkipProcessing(t *testing
 func TestManagementReplayAdapterPreservesExistingReplayResponse(t *testing.T) {
 	router, recordID := newReplayAPITestRouter(t)
 
-	response, handled := router.HandleReplayRequest("GET", "/api/v1/observability/replays/"+recordID)
+	response, handled := router.HandleReplayRequest(context.Background(), "GET", "/api/v1/observability/replays/"+recordID)
 	if !handled {
 		t.Fatal("management replay request was not handled")
 	}
