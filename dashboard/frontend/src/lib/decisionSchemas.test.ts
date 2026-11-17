@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  DECISION_FALLBACK_SCHEMA,
-  DECISION_RELIABILITY_SCHEMA,
-} from './configPageDecisionAdvancedSchemas'
-import { mergeDecisionForSave, type DecisionConfig } from './configPageSupport'
+import { DECISION_FALLBACK_SCHEMA, DECISION_RELIABILITY_SCHEMA } from './decisionSchemas'
+import { mergeDecisionForSave, type DecisionConfig } from '../pages/configPageSupport'
 
 describe('decision fallback', () => {
   it("edits the recipe policy's fields except the circuit breaker", () => {

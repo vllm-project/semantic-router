@@ -1,5 +1,81 @@
-import type { FieldSchema } from '../lib/dslSchemas'
-import { mergeRouterFieldSchemas, routerConfigFieldsForRef } from '../lib/routerConfigSchema'
+import type { FieldSchema } from './dslSchemaTypes'
+import {
+  concreteRouterConfigSchema,
+  mergeRouterFieldSchemas,
+  routerConfigFieldsForRef,
+} from './routerConfigSchema'
+
+// Decision field schemas shared by the config managers and the Builder: the
+// generated Router contract with presentation labels, options and hints.
+
+const DECISION_IDENTITY_OVERRIDES: FieldSchema[] = [
+  { key: 'name', label: 'Name', type: 'string', required: true, placeholder: 'my_route' },
+  {
+    key: 'description',
+    label: 'Description',
+    type: 'string',
+    placeholder: 'What this decision routes',
+  },
+  {
+    key: 'priority',
+    label: 'Priority',
+    type: 'number',
+    min: 0,
+    placeholder: '0',
+    description: 'Higher priorities are evaluated first.',
+  },
+  {
+    key: 'tier',
+    label: 'Tier',
+    type: 'number',
+    min: 0,
+    description: 'Optional decision tier used by tier-scoped learning and selection.',
+  },
+  {
+    key: 'output_contract',
+    label: 'Output Contract',
+    type: 'string',
+    description: 'Model-facing output instructions.',
+  },
+]
+const identityKeys = new Set(DECISION_IDENTITY_OVERRIDES.map((field) => field.key))
+export const DECISION_IDENTITY_SCHEMA = mergeRouterFieldSchemas(
+  routerConfigFieldsForRef('#/$defs/Decision').filter((field) => identityKeys.has(field.key)),
+  DECISION_IDENTITY_OVERRIDES,
+)
+
+const DECISION_MODEL_REF_OVERRIDES: FieldSchema[] = [
+  { key: 'model', label: 'Model', type: 'string', required: true },
+  { key: 'lora_name', label: 'LoRA Adapter', type: 'string', placeholder: 'Optional adapter name' },
+  { key: 'weight', label: 'Weight', type: 'number', min: 0, placeholder: 'Optional weight' },
+  { key: 'use_reasoning', label: 'Use Reasoning', type: 'boolean' },
+  {
+    key: 'reasoning_description',
+    label: 'Reasoning Description',
+    type: 'string',
+    placeholder: 'Optional operator note or reasoning hint',
+  },
+  {
+    key: 'reasoning_mode',
+    label: 'Thinking Mode',
+    type: 'select',
+    options: ['', 'enabled', 'disabled', 'adaptive'],
+  },
+  { key: 'reasoning_effort', label: 'Reasoning Effort', type: 'string' },
+]
+export const DECISION_MODEL_REF_SCHEMA = mergeRouterFieldSchemas(
+  routerConfigFieldsForRef('#/$defs/ModelRef'),
+  DECISION_MODEL_REF_OVERRIDES,
+)
+
+const ruleNode = concreteRouterConfigSchema('#/$defs/RuleNode')
+/** The Router's policies for a signal that cannot be evaluated, from the rule schema. */
+export const DECISION_RULE_ON_UNKNOWN_OPTIONS = (
+  ruleNode.properties?.on_unknown?.enum ?? []
+).filter((value): value is string => typeof value === 'string')
+/** What a leaf condition does when its own evaluator fails. */
+export const DECISION_RULE_ON_ERROR_OPTIONS = ['no_match', 'match'] as const
+export const DECISION_RULE_OPERATORS = ['AND', 'OR', 'NOT'] as const
 
 const DECISION_ACTION_OVERRIDES: FieldSchema[] = [
   { key: 'type', label: 'Type', type: 'select', options: ['route'], required: true },
@@ -288,7 +364,8 @@ const DECISION_DECLARATIVE_OVERRIDES: FieldSchema[] = [
         label: 'Kind',
         type: 'string[]',
         placeholder: 'image',
-        description: 'text, image, audio or video; several kinds for one model that writes them all.',
+        description:
+          'text, image, audio or video; several kinds for one model that writes them all.',
       },
       { key: 'action', label: 'Action', type: 'select', options: ['generate', 'edit'] },
     ],
