@@ -16,6 +16,11 @@ import (
 // their prompt and answered with the image an image decision's model generates.
 const imagesGenerationsPath = "/v1/images/generations"
 
+// audioSpeechPath is the Speech API entry. Unlike images, it is not gated on
+// a decision output kind: a backend that cannot speak fails closed with
+// unsupported_capability.
+const audioSpeechPath = "/v1/audio/speech"
+
 // applyDecisionOutput adds the operation the selected decision's output
 // contract produces to the request before its candidates are qualified, so a
 // model that cannot carry it is never selected. A request that forbids the

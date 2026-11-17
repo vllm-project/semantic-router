@@ -30,6 +30,7 @@ const (
 	Responses       Name = "responses"
 	Messages        Name = "messages"
 	Images          Name = "images"
+	Speech          Name = "speech"
 	SystemOne       Name = "systemone"
 )
 
@@ -116,6 +117,12 @@ var registry = []API{
 		Name: Images, Summary: "OpenAI Images", Paths: []string{"/v1/images/generations"}, Kind: KindLLM,
 		Pattern:         `^/v1/images/generations$`,
 		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAIImagesV1}},
+		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true,
+	},
+	{
+		Name: Speech, Summary: "OpenAI Speech", Paths: []string{"/v1/audio/speech"}, Kind: KindLLM,
+		Pattern:         `^/v1/audio/speech$`,
+		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAISpeechV1}},
 		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true,
 	},
 	{
