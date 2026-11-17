@@ -105,6 +105,8 @@ export function fromCanonicalLayout(config: ConfigData): ConfigData {
       (entrypoint) =>
         !(
           entrypoint.default &&
+          !entrypoint.review_model &&
+          !entrypoint.memory_model &&
           entrypoint.recipe === name &&
           entrypoint.model_names.length === 1 &&
           entrypoint.model_names[0] === DEFAULT_ENTRYPOINT_MODEL

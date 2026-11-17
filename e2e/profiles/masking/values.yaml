@@ -91,6 +91,7 @@ config:
             operator: OR
             method: regex
             keywords: ['\bE-\d{6}\b']
+          - {name: template_collision, operator: OR, keywords: ["e2e-template-collision"]}
         systemone:
           - name: customer_account
             description: A customer's account number.
@@ -100,6 +101,20 @@ config:
               instructions: Which spans are named entities of these types?
               labels: [{key: account}]
       decisions:
+        - name: mask_template_collision
+          priority: 200
+          rules: {operator: AND, conditions: [{type: keyword, name: template_collision}]}
+          modelRefs: [{model: openai/mock-model, use_reasoning: false}]
+          plugins:
+            - type: masking
+              configuration:
+                enabled: true
+                rules:
+                  - {type: keyword, name: employee_id}
+                  - {type: systemone, name: customer_account}
+                placeholders:
+                  employee_id: "[V{index}X0]"
+                  customer_account: "[V0X{index}]"
         - name: mask_rules
           priority: 100
           rules: {operator: AND, conditions: []}

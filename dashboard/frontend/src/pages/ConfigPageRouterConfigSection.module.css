@@ -540,6 +540,25 @@
   cursor: pointer;
 }
 
+.vsrMore {
+  justify-self: start;
+  padding: 0.3rem 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.vsrMore:hover {
+  color: var(--text-primary);
+}
+
+.vsrMore:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 1px;
+}
+
 .vsrReset:hover:not(:disabled) {
   border-color: var(--border-strong);
   color: var(--text-primary);

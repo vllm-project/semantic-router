@@ -13,6 +13,8 @@ import (
 // inference service. Artifact aliases and module policy remain in the catalog;
 // recipe bindings select the adapter and head separately from execution.
 type ModelDeployment struct {
+	// Pricing describes the cost of calls made by the Router, per million tokens.
+	Pricing  *ModelPricing    `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 	Artifact string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
 	Revision string           `yaml:"revision,omitempty" json:"revision,omitempty"`
 	Provider string           `yaml:"provider" json:"provider"`
@@ -173,6 +175,7 @@ func (d ModelDeployment) SchemaCapabilities() (systemonecodec.CapabilitySet, boo
 }
 
 func (d ModelDeployment) WithDefaults() ModelDeployment {
+	d.Pricing = cloneDeploymentPricing(d.Pricing)
 	d.Replicas = append([]ModelReplica(nil), d.Replicas...)
 	d.Deviations = append([]string(nil), d.Deviations...)
 	d.ForwardRequestHeaders = append([]string(nil), d.ForwardRequestHeaders...)
@@ -209,6 +212,11 @@ func (d ModelDeployment) ValidateDecisionInput(name string) error {
 }
 
 func (d ModelDeployment) validate() error {
+	if d.Pricing != nil {
+		if err := validateModelPricing("deployment", *d.Pricing); err != nil {
+			return err
+		}
+	}
 	if d.PublicName != "" && (strings.TrimSpace(d.PublicName) != d.PublicName || strings.ContainsAny(d.PublicName, "\x00\r\n\t ") || strings.HasPrefix(d.PublicName, "/") || strings.Contains(d.PublicName, "://")) {
 		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
 	}
@@ -274,6 +282,7 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 	cloned := make(map[string]T, len(values))
 	for key, value := range values {
 		if deployment, ok := any(value).(ModelDeployment); ok {
+			deployment.Pricing = cloneDeploymentPricing(deployment.Pricing)
 			deployment.Replicas = append([]ModelReplica(nil), deployment.Replicas...)
 			deployment.Deviations = append([]string(nil), deployment.Deviations...)
 			deployment.ForwardRequestHeaders = append([]string(nil), deployment.ForwardRequestHeaders...)

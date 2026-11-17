@@ -45,7 +45,7 @@ func TestCodexToolLoopDecodesUnderEitherLossyPolicy(t *testing.T) {
 			if err != nil {
 				t.Fatalf("lossy=%s turn %d: Codex request rejected: %v", lossy, turn+1, err)
 			}
-			assertDroppedFields(t, diagnostics, "client_metadata", "include")
+			assertDroppedFields(t, diagnostics, "client_metadata")
 		}
 	}
 }
@@ -74,7 +74,10 @@ func TestCodexToolLoopDispatchDropsPromptCacheKeyOnlyForMessages(t *testing.T) {
 			if string(dispatch["prompt_cache_key"]) != `"`+codexPromptCacheKey+`"` {
 				t.Fatalf("turn %d to %s: prompt_cache_key = %s", turn+1, format, dispatch["prompt_cache_key"])
 			}
-			for _, dropped := range []string{"client_metadata", "include"} {
+			if format == llmprotocol.OpenAIResponsesV1 && string(dispatch["include"]) != `["reasoning.encrypted_content"]` {
+				t.Fatalf("turn %d lost encrypted reasoning include: %s", turn+1, encoded.Body)
+			}
+			for _, dropped := range []string{"client_metadata"} {
 				if _, ok := dispatch[dropped]; ok {
 					t.Fatalf("turn %d to %s forwarded %s: %s", turn+1, format, dropped, encoded.Body)
 				}
@@ -124,13 +127,13 @@ func TestCodexToolResultTurnReachesChatAsToolMessages(t *testing.T) {
 
 func TestResponsesIncludeAcceptsOnlyEncryptedReasoning(t *testing.T) {
 	tests := []struct {
-		include  string
-		category llmprotocol.ErrorCategory
-		dropped  bool
+		include   string
+		category  llmprotocol.ErrorCategory
+		encrypted bool
 	}{
 		{include: `[]`},
 		{include: `null`},
-		{include: `["reasoning.encrypted_content"]`, dropped: true},
+		{include: `["reasoning.encrypted_content"]`, encrypted: true},
 		{include: `["message.output_text.logprobs"]`, category: llmprotocol.ErrorUnsupportedFeature},
 		{include: `["reasoning.encrypted_content","web_search_call.results"]`, category: llmprotocol.ErrorUnsupportedFeature},
 		{include: `"reasoning.encrypted_content"`, category: llmprotocol.ErrorInvalidRequest},
@@ -139,7 +142,7 @@ func TestResponsesIncludeAcceptsOnlyEncryptedReasoning(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.include, func(t *testing.T) {
 			body := []byte(`{"model":"m","input":"hello","include":` + test.include + `}`)
-			_, _, diagnostics, err := engine.DecodeRequest(llmprotocol.OpenAIResponsesV1, body)
+			request, _, diagnostics, err := engine.DecodeRequest(llmprotocol.OpenAIResponsesV1, body)
 			if test.category != "" {
 				var protocolError *llmprotocol.ProtocolError
 				if !errors.As(err, &protocolError) || protocolError.Category != test.category {
@@ -150,9 +153,10 @@ func TestResponsesIncludeAcceptsOnlyEncryptedReasoning(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if test.dropped {
-				assertDroppedFields(t, diagnostics, "include")
-			} else if len(diagnostics) != 0 {
+			if request.IncludeEncryptedReasoning != test.encrypted {
+				t.Fatalf("include was not preserved: %+v", request)
+			}
+			if len(diagnostics) != 0 {
 				t.Fatalf("include %s produced diagnostics %+v", test.include, diagnostics)
 			}
 		})

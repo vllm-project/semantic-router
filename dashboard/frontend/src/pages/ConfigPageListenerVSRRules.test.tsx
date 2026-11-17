@@ -97,4 +97,21 @@ describe('vSR rules of a listener', () => {
     expect(markup).toMatch(/aria-label="Guard risky commands: prod_database">.*?aria-pressed="true"[^>]*>Required/)
     expect(markup).toContain('Try it')
   })
+
+  it('folds the rules left Off once one is bound, and shows all while none is', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ListenerVSRRules, {
+        config,
+        listener,
+        vsr: { rules: { recipe: 'agents', guard: [{ type: 'keyword', name: 'prod_database', enforce: 'required' }] } },
+        disabled: false,
+        onChange: () => undefined,
+      }),
+    )
+    expect(markup).toContain('aria-label="Guard risky commands: prod_database"')
+    expect(markup).not.toContain('aria-label="Guard risky commands: billing"')
+    expect(markup).toContain('Show 5 more rules of agents')
+    // Nothing is bound to redact, so every rule that fits it is listed.
+    expect(markup).toContain('aria-label="Hide personal data: account"')
+  })
 })

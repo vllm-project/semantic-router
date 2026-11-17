@@ -12,6 +12,9 @@ plugin's apps work in Codex:
 | redact | Replaces personal data in a command's output with tags such as `[vsr:email]` before Codex reads it, and tells Codex the tags are vSR's and the values are hidden on purpose, not to be read another way. |
 | shield | Tells Codex to read an output that tries to give an AI agent instructions as data, when the injection score is at or over `shieldInject` (0.90). |
 
+With Codex pointed at a vLLM Semantic Router gateway, vSR also ends each turn with one line naming
+the models the gateway served it with, read from the Router's own records of that turn.
+
 ## Install
 
 You need Codex CLI 0.166 or later, Python 3, and a decision runtime: `vllm-srun serve` on your
@@ -22,7 +25,7 @@ codex plugin marketplace add vllm-project/semantic-router
 codex plugin add vsr@vllm-sr
 ```
 
-The next Codex session says `2 hooks are new or changed`. Choose **Review hooks** to read the two
+The next Codex session says `3 hooks are new or changed`. Choose **Review hooks** to read the three
 commands, or **Trust all and continue**. Codex runs a plugin's hooks only once they are trusted, and
 asks again after each update, since it hashes the plugin's files.
 
@@ -40,7 +43,8 @@ vSR reads `vsr.json` in the Codex home (`$CODEX_HOME`, by default `~/.codex`). E
   "guardReview": 0.9,
   "redactPii": 0.7,
   "shieldInject": 0.9,
-  "timeoutSeconds": 3
+  "timeoutSeconds": 3,
+  "managementUrl": "http://127.0.0.1:8080"
 }
 ```
 
@@ -51,11 +55,18 @@ token from when `VSR_RUNTIME_TOKEN` is unset: `vllm-sr connect codex` writes it 
 `vllm-sr connect codex`, set `runtimeUrl` to that listener's `/v1/decisions` and `runtimeModel` to the
 System One model it publishes, so one listener serves both the agent's calls and vSR's questions.
 
+`managementUrl` is the Router's management API, which the turn line reads; `vllm-sr connect codex`
+writes it for the Router it connects, and `""` leaves the line out. `VSR_MANAGEMENT_URL` overrides
+it, and `VSR_MANAGEMENT_TOKEN` is sent as a bearer token to a management API with bearer auth.
+The turn line follows no redirect, so the token reaches only that URL: point it at the address
+that answers.
+
 That listener can also turn `guard`, `redact` and `shield` on or off for every plugin pointed at it,
 under `apis.systemone.vsr` in the Router's config or as Default, On or Off in the Dashboard (Config ›
 Global Config › vSR agent plugins).
 vSR reads the listener's listing (`GET /v1/systemone/models`) at most once a minute and keeps the
-answer in `vsr-listener.json` in the Codex home. An app you name in `vsr.json` stays yours; the
+answer in `vsr-listener.json` in the Codex home. A rules answer for another revision, such as after
+a change in the Dashboard, makes it read the listing again and ask once more in the same call. An app you name in `vsr.json` stays yours; the
 listener sets the others.
 
 Rules the listener binds to guard and redact (`vsr.rules`) come with the same listing, by name and
@@ -83,6 +94,22 @@ Each decision is one line in the transcript, starting with vSR's mark:
 
 "Blocked by hook" is Codex's label for a hook that replaced what the model reads. For redact, the
 command ran and you see its full output; Codex's model reads the copy with the tags, shown under the
+line.
+
+Through a vLLM Semantic Router gateway, Codex only knows the model it asked for, such as
+`vllm-sr/auto`. When a turn ends, vSR asks the Router which models served it and shows one line:
+
+```text
+↳ Hook · ▚▞ vSR turn · 4 calls: gpt-6-luna (3), qwen3-coder (1) · decisions: coding, simple · 2 reviews: 1 allowed, 1 denied by codex-auto-review
+```
+
+The line counts the turn's calls by the model the gateway selected and names the decisions that
+selected them. Reviews are the turn's **Approve for me** reviews, with their verdicts (or `failed`,
+`invalid`, `cancelled`) and the model that answered. The records come from Router Replay
+(`GET /api/v1/observability/replays?turn_id=...`), found by the turn id Codex sends with every call;
+an approval review and a subagent name the turn that started them. Nothing is guessed from the
+answer or from timing. Router Replay has to be on for the recipes that serve the turn. When the
+Router has no record of the turn, or does not answer within 1.5 seconds, the turn ends without a
 line.
 
 ## How it differs from Claude Code

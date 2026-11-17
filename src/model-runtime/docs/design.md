@@ -336,8 +336,9 @@ An accelerator describes one device class and supplies kernels: detection,
 devices, capabilities, a kernel registry with pure-torch references, autocast
 and synchronisation. Every accelerated kernel registers the reference it must
 reproduce and whether it is bit-exact; a kernel that is not bit-exact runs
-only for a family that consents to approximate kernels
-(`DtypePolicy.approximate_kernels`), at `--dtype auto`. `xpu` and `mps` detect `torch.xpu` and the
+only for a family that consents to approximate kernels on that device class
+(`DtypePolicy.approximate_kernels` on GPUs and NPUs, `approximate_cpu_kernels`
+on CPUs), at `--dtype auto`. `xpu` and `mps` detect `torch.xpu` and the
 MPS backend and run the pure-torch references; they are marked unvalidated.
 
 `Accelerator.golden_reference(device)` names an optional hardware-qualified
@@ -424,7 +425,10 @@ oneDNN-packed FP32 copy on x86 CPUs (Decision 1.0 Kai, Lex and Route, Vela
 (`engines/native/reduced.py`) were measured and refused. Approximate kernels
 follow the same rule per question type (`DtypePolicy.approximate_kernels`):
 Decision 2.0 consents to CUDA's approximate fused kernels, and Vela 2.0 does
-not, because they change 7% of its span answers. Another `--dtype` holds every
+not, because they change 7% of its span answers. Consent is per device class,
+since a record on one says nothing about the other: vela3-fast consents on CPUs
+only, to zentorch's FP32 linear (`cpu-zentorch-linear-vela3.md`), and its GPU
+path stays exact. Another `--dtype` holds every
 backbone weight in that dtype and runs the reference kernels without copies;
 only references recorded at that dtype check it (Decision 3.0's BF16 on CPUs),
 so elsewhere its golden status is `unverified` (`dtypes.py`). Each family records the accuracy (label
@@ -1107,8 +1111,21 @@ trained question and label set, as on the vela3 family; the card lists the
 presets the package's span schemas hold. Span answers follow the contract (`spans`, `thresholds`, a Noul of
 the most probable word); the decoder is the package's (its unit class starts
 its compatibility block at U+F900, unlike the word splitter's). Open labels
-without a description run by name: the packages' label-definition writers
-(vela3-mini's base, vela3-flash's grafted head) are not run
+without a description are defined before the span pass when
+`definitions.writer` is `base` (vela3-mini: the tied input embedding is the
+LM head) or `grafted_head` (vela3-flash: `labeldef_lm_head.safetensors`, cast
+to the embedding dtype). The native engine generates each definition with
+every adapter off and causal attention: a user turn, thinking off, the label
+set as context for at most 60 labels, greedy, at most 40 new tokens, ending
+at the checkpoint's `eos_token_id`. The family keeps the first line and
+caches it per label set (per label above 60). Generated definitions live in a
+4,096-entry least-recently-used cache; the entries of `label_definitions.json`
+are never evicted. Rows are right-padded in batches of at most 64. A row's positions are its attention-mask
+cumsum, with padding at position 0, and the next token is read at the last
+position; that is what makes one definition differ from generating that label
+alone. `names` (vela3-lite and vela3-turbo)
+still runs those labels by name. Image inputs on span questions and a separate
+`labeldef_writer` model are not run
 ([record](records/vela3-d3-parity.md)).
 
 ### 8.9 Vela 3.1 picos (`vela3_pico`)
@@ -1155,8 +1172,10 @@ bundle  -> plan every task -> submit all at once -> await each -> results in tas
 
 Each model has its own scheduler and worker thread. Validation and rendering
 happen on the request thread, so malformed requests never take queue
-capacity. The batcher plans the rows of every queued job together (section
-5.4). A bundle's tasks for one model are queued at once as one job group,
+capacity. A small request plans on the event loop unless a served model runs
+forwards while it plans (`plans_run_forwards`: a vela3_d3 model that writes
+label definitions); then every request plans in a thread-pool task. The
+batcher plans the rows of every queued job together (section 5.4). A bundle's tasks for one model are queued at once as one job group,
 whatever their deadlines (each job keeps its own, measured from when the HTTP
 request arrived), so one forward serves every head and consumer that reads
 the same input. On a batch-invariant model the batcher runs the queued jobs
@@ -1307,7 +1326,7 @@ Section 13.4.
 
 | Accelerator | Status | Kernels |
 | --- | --- | --- |
-| `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
+| `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`); with `VLLM_SRUN_ZENTORCH` set on AMD EPYC Turin onwards (CPU family 1Ah), zentorch's prepacked FP32 linear as an approximate kernel for families that consent on CPUs (vela3-fast; `cpu-zentorch-linear-vela3.md`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
 | `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`); fused gated-delta prep (`gdn_prep`) needs FLA but does not require causal-conv1d to be installed; optional causal-conv1d is approximate on CUDA, so exact-only/non-consenting models use torch reference even when it is installed; [convolution evidence and released-runtime impact](records/cuda-causal-conv1d-exactness.md); [A/B model comparison](records/cuda-gdn-prep-without-causal-conv1d.md) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |

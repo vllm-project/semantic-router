@@ -73,7 +73,7 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
     assert response_api["redis"]["db"] == 0
 
     router_replay = effective["global"]["services"]["router_replay"]
-    assert router_replay == {"store_backend": "memory"}
+    assert router_replay == {"store_backend": "file"}
     assert effective["global"]["services"]["management_api"] == {
         "bind_address": "0.0.0.0",
         "port": 8080,

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, PluginOptions } from 'claude-code'
 
 import { headersOf, isRecord, listingUrlOf } from './classify'
-import { type ListenerRules, NO_RULES, rulesOf } from './rules'
+import { askRules, type ListenerRules, NO_RULES, type RulesAsked, rulesOf } from './rules'
 import { parseSettings, type Runtime, type Settings } from './settings'
 
 // The listener's vsr profile (listeners[].apis.systemone.vsr in the Router's config, set there or in the Dashboard):
@@ -53,12 +53,12 @@ export function profileOf(listing: unknown): Profile {
 type Listing = { profile: Profile; rules: ListenerRules | undefined }
 
 // The listener's listing, or undefined when it does not answer in time or gives an answer vSR cannot read.
-export async function readListing($: EngineInterface, runtime: Runtime): Promise<Listing | undefined> {
+export async function readListing($: EngineInterface, runtime: Runtime, timeoutMs = PROFILE_MS): Promise<Listing | undefined> {
   const url = listingOf(runtime)
   if (url === undefined) return { profile: {}, rules: NO_RULES }
   try {
     const request = $.http.fetch(url, { method: 'GET', headers: headersOf(runtime) })
-    const response = await Promise.race([request, $.clock.sleep(PROFILE_MS).then(() => undefined)])
+    const response = await Promise.race([request, $.clock.sleep(timeoutMs).then(() => undefined)])
     if (response?.ok !== true) return undefined
     const listing: unknown = JSON.parse(response.text)
     return { profile: profileOf(listing), rules: rulesOf(listing) }
@@ -144,6 +144,34 @@ export async function follow($: EngineInterface, settings: Settings, options: Pl
 // The next prompt asks the listener again: an answer came back for rules of another revision.
 export function followSoon() {
   askedAt = -Infinity
+}
+
+// Asks the listener's rules for one app about each text. An answer for rules of another revision, or one that names a
+// rule this session has not read, means the rules changed in the Dashboard: the listing is read again and the rules
+// asked once more within the time left, so the change applies to this call instead of leaving every rule unchecked.
+// The caller reads the bound rules from settings.rules afterwards.
+export async function askCurrentRules(
+  $: EngineInterface,
+  settings: Settings,
+  app: 'guard' | 'redact',
+  texts: readonly string[],
+  timeoutMs: number,
+): Promise<RulesAsked> {
+  const started = await $.clock.now()
+  const asked = await askRules($, settings.runtime, app, settings.rules[app], texts, timeoutMs)
+  if (asked.ok ? asked.revision === settings.rules.revision : asked.unreadable !== true) return asked
+  // One deadline covers the listing and the second call.
+  const left = async () => timeoutMs - ((await $.clock.now()) - started)
+  const forListing = await left()
+  const listing = forListing > 0 ? await readListing($, settings.runtime, Math.min(PROFILE_MS, forListing)) : undefined
+  if (listing?.rules === undefined || listing.rules.revision === settings.rules.revision) {
+    followSoon()
+    return asked
+  }
+  settings.rules = await rulesToFollow($, settings.runtime, listing)
+  const forCall = await left()
+  if (forCall <= 0 || settings.rules[app].length === 0) return asked
+  return askRules($, settings.runtime, app, settings.rules[app], texts, forCall)
 }
 
 // At a prompt, a minute or more after the last ask: a change in the Dashboard reaches a running session.

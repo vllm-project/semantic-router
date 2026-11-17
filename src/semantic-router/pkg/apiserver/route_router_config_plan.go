@@ -57,6 +57,12 @@ func (s *ClassificationAPIServer) handleConfigPlan(
 	if !ok {
 		return
 	}
+	save, err := s.storeConfigKeys(paths.sourcePath, candidate, false)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "KEY_STORE_ERROR", "Failed to read the configuration's stored keys: "+err.Error())
+		return
+	}
+	candidate = save.Data
 
 	s.writeJSONResponse(w, http.StatusOK, routerConfigPlanResponse{
 		Valid:         true,

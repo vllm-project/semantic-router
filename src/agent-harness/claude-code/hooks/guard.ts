@@ -2,8 +2,8 @@ import type { EngineInterface, Hook, ToolCallResult } from 'claude-code'
 
 import type { Decision, Outcome, Risk } from '../types'
 import { ANSWER_MS, type Classified, classify, failureOf, isRecord, numberAt, type Reply } from './lib/classify'
-import { followSoon } from './lib/profile'
-import { askRules, ruleFinds, type RulesAsked, uncheckedRules } from './lib/rules'
+import { askCurrentRules } from './lib/profile'
+import { ruleFinds, type RulesAsked, uncheckedRules } from './lib/rules'
 import { budgetOf, type Settings } from './lib/settings'
 import { stamp } from './lib/env'
 import { alwaysHeld, firstOf, partsOf } from './lib/shell'
@@ -97,7 +97,7 @@ export async function guardCheck(
   // The listener's rules read the whole command in one call, beside the model's questions and within the same wait.
   const budget = budgetOf(settings.waits.guard)
   const started = await $.clock.now()
-  const listened: Promise<RulesAsked> | undefined = bound.length > 0 ? askRules($, settings.runtime, 'guard', bound, [command], budget) : undefined
+  const listened: Promise<RulesAsked> | undefined = bound.length > 0 ? askCurrentRules($, settings, 'guard', [command], budget) : undefined
   // The runtime answers one request at a time, so the parts go one after another within one budget; once one
   // reaches the line the command is held whatever the rest score, and the rest are not asked.
   const asked: { part: string; result: Classified<Guarded> }[] = []
@@ -116,10 +116,11 @@ export async function guardCheck(
   const id = e.tool_use_id ?? at
   // A rule the listener matched holds the command; one it could not check holds it when required, and is recorded
   // when advisory. Neither depends on what the model answered.
+  // The rules as the call left them: a change in the Dashboard was read again there.
+  const current = listener === undefined ? bound : settings.rules.guard
   const listenerFound = listener === undefined ? undefined : ruleFinds(settings.rules, listener, 0)
-  const listenerRule = bound.find(rule => listenerFound?.matches.includes(rule.name))
-  const listenerUnchecked = listener === undefined ? [] : uncheckedRules(settings.rules, bound, listener, 0)
-  if (listener?.ok === true && listener.revision !== settings.rules.revision) followSoon()
+  const listenerRule = current.find(rule => listenerFound?.matches.includes(rule.name))
+  const listenerUnchecked = listener === undefined ? [] : uncheckedRules(settings.rules, current, listener, 0)
   const requiredUnchecked = listenerUnchecked.find(one => one.rule.required)
   const isListenerHeld = listenerRule !== undefined || requiredUnchecked !== undefined
   for (const { rule, reason } of listenerUnchecked.filter(one => !one.rule.required)) {

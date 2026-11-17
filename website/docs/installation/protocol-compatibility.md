@@ -250,8 +250,8 @@ backend:
 | Messages control | What happens |
 | --- | --- |
 | `thinking.type: adaptive` | The backend model's default reasoning behavior applies; `output_config.effort` is kept. |
-| `thinking.display: omitted` | Reasoning is removed from the translated response, including streaming output. |
-| `thinking.display: summarized` or `updates` (Claude Code sends these) | Rejected: they reach only Messages backends. |
+| `thinking.display: omitted` | Reasoning is removed from the translated response, including streaming output. An answer whose output limit went to reasoning comes back with no content blocks and the `max_tokens` stop reason, buffered or streamed. |
+| `thinking.display: summarized` or `updates` (Claude Code sends these) | The backend's reasoning comes back as thinking, as it does with no display, since the Router can't summarize it. `x-vsr-warnings` reports an `approximated` diagnostic for `thinking.display` when the model has a reasoning family and the decision doesn't turn reasoning off. |
 | `thinking.type: disabled` | Needs a configured reasoning family and an effective backend reasoning-off control. |
 | A `context_management` edit `clear_thinking_20251015` with `keep: all` | Omitted, since it has no effect. Edits that would change history are rejected. |
 | `cache_control` boundaries, toward a Responses backend | Omitted, since Responses can't represent them. The prompt and tool result still dispatch, and `x-vsr-warnings` reports a `dropped` diagnostic for `cache_control`. |
@@ -308,6 +308,22 @@ tool search on:
   backend as the tool's name.
 - **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
   `tools.defer_loading`.
+
+A `tool_addition` block, which Claude Code puts in a `role: "system"` message
+when a deferred tool becomes available mid-conversation, adds the tool it
+defines to the request's tools, after the declared ones and once per name, on
+every backend format. The system message keeps its other blocks, and a message
+that held nothing else is left out.
+
+### Auto mode's classifier context
+
+Claude Code in auto mode sends a top-level `safeguards` array for Anthropic's
+server-side classifier review. The Router carries it unchanged to a Messages
+backend. A Chat or Responses backend has no use for it, so the Router leaves it
+out and `x-vsr-warnings` reports a `dropped` diagnostic for `safeguards`. The
+array holds Claude Code's working directory, permission rules and git state, so
+on a decision with the `masking` plugin its string values are masked like a
+structured tool result's, and an array that will not decode refuses the request.
 
 ### Sampling controls a backend rejects
 
@@ -437,7 +453,9 @@ tools or error translation.
 ## Validation and failure behavior
 
 - Public requests are decoded into the neutral contract even when client and
-  backend formats match. Unknown or unsupported request fields fail closed.
+  backend formats match. Unknown or unsupported request fields fail closed,
+  and the error names an unknown field, such as
+  `request JSON contains a non-canonical field: unknown field "new_field"`.
 - Chat requests accept and don't forward the fields that client libraries add
   to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
   which holds the reply fields its message type lacks, and `parsed` and
@@ -554,8 +572,9 @@ tools or error translation.
   `response.completed` or `response.incomplete`. The Router accepts this
   difference while checking every other item field, output count, and output
   order. A non-empty string becoming missing, null, or empty still fails with
-  `stream_terminal_output_mismatch`. The field remains reported as `dropped`
-  during protocol translation.
+  `stream_terminal_output_mismatch`. For Responses clients, the Router keeps
+  the item-done ciphertext and reuses it in terminal output. Other client
+  formats omit it with the reasoning continuity diagnostic.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).
@@ -577,11 +596,29 @@ The Router handles them as follows:
 | Field | Router behavior |
 | --- | --- |
 | `prompt_cache_key` | Forwarded to `openai` and `responses` backends. A route to an `anthropic` backend omits it and reports `dropped`, because Messages has no equivalent. A decision's `request_params.blocked_params` can remove it before dispatch. |
-| `include: ["reasoning.encrypted_content"]` | Accepted and not forwarded. The Router never relays provider-encrypted reasoning, so reasoning items carry no `encrypted_content`. Other `include` values remain unsupported. |
+| `include: ["reasoning.encrypted_content"]` | Forwarded to OpenAI-hosted Responses targets. Responses clients receive `encrypted_content` verbatim on reasoning items, including encrypted-only items. Other `include` values remain unsupported. |
 | `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
 | `input[].internal_chat_message_metadata_passthrough` | Accepted and not forwarded. Codex CLI 0.163 attaches it to every input message to record which instructions the message carries; it is client metadata, not model input. |
 | `text.verbosity` | Forwarded to `responses` backends, mapped to `verbosity` for `openai` Chat backends, and reported as `dropped` for `anthropic` Messages backends. The only accepted values are `low`, `medium`, and `high`. |
+| `text.format` with `strict: false` | Codex CLI's Approve for me review asks for its answer this way, with a schema that requires only some of its properties. Forwarded with the flag to `openai` and `responses` backends. Messages always enforces an output schema, so an `anthropic` backend receives the schema without the flag, and `x-vsr-warnings` reports `output_format.strict` as `approximated`. The same applies to a Chat `response_format`. |
 | Omitted `max_output_tokens` | Codex CLI sends no output limit, so a route to an `anthropic` backend gets `max_tokens: 4096` as described above. A reasoning model can spend all of it before it answers, which Codex CLI reports as `Incomplete response returned, reason: max_output_tokens`. Set a positive integer `request_params.default_max_tokens` on the decisions that send Codex CLI to an `anthropic` backend. |
+
+Responses reasoning replay is projected separately for each selected backend,
+including fallbacks and shadows. A model is an OpenAI-hosted Responses target
+only when every endpoint in its pool has provider `type: openai` and a resolved
+address or profile base URL whose host is exactly `api.openai.com` or
+`chatgpt.com`, or ends in `.openai.azure.com`. A shadow checks only its own
+endpoint. Hosted targets receive encrypted reasoning items with `content: []`;
+unsigned plaintext-only reasoning items are omitted. Signed thinking stays
+subject to the signature capability check. Other targets receive the existing
+plaintext representation, with the Responses ciphertext and its `include`
+omitted. Internal Chat paths, including Looper, context recovery, and memory
+history, also drop Responses blobs and the include. Other reasoning continuity
+formats still fail closed on paths that cannot carry them. These omissions are
+reported through translation diagnostics.
+The Router's `previous_response_id` store retains the ciphertext with the item.
+A blob's format does not establish its account or model provenance; replay still
+requires a compatible provider context.
 
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-warnings`.
@@ -626,6 +663,12 @@ Point Codex at the Router through a model provider of your own, not
 - **The model.** Set `model` to a Router entrypoint as well, such as
   `vllm-sr/auto`; a name that matches no entrypoint is sent to a backend model
   of that name.
+- **The catalog.** On a ChatGPT login (`requires_openai_auth = true`, see
+  [Agent Harness](agent-harness#codex-on-its-own-chatgpt-login)), Codex also
+  asks for its own model catalog with `GET /v1/models?client_version=…`. The
+  Router answers that request with an empty `models` catalog beside the model
+  list, so Codex keeps its default model metadata instead of logging that it
+  cannot read the list.
 
 ```toml
 model = "vllm-sr/auto"
@@ -693,4 +736,6 @@ namespaces with a `tool_search` tool, which the Router does not support. For a
 Messages backend, also set `apply_patch_tool_type` to `null`, because Codex
 otherwise sends `apply_patch` as a custom tool. The `gpt-6` entries send tools
 in an `additional_tools` input item with `reasoning.context`, which the Router
-rejects.
+rejects. `vllm-sr connect codex` writes such a catalog: the bundled entries and
+one for the profile's model, with `apply_patch_tool_type` set to `null`
+whatever the backends; add an entry to it for each other name.

@@ -107,6 +107,7 @@ func (p *Profile) GetTestCases() []string {
 		"model-runtime-lifecycle",
 		"model-runtime-embeddings",
 		"decision-runtime-routing",
+		"model-runtime-vela31-described-noul",
 		"decision-runtime-set-span",
 		"model-runtime-bundles",
 		"model-runtime-fail-open",

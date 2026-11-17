@@ -265,6 +265,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 	decisionName := dispatch.decisionName
 	useReasoning := dispatch.useReasoning
 	envelope := ctx.ProtocolEnvelope
+	sourceFormat, requestID := ctx.SourceFormat, ctx.RequestID
 	return func(request llmprotocol.Request, target *shadowTarget) ([]byte, error) {
 		request.Model = target.upstreamModel
 		request.Stream = false
@@ -275,7 +276,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if decisionName != "" && target.format != llmprotocol.OpenAIChatV1 {
 			r.applySemanticReasoningMode(&request, target.logicalModel, target.format, useReasoning, decision)
 		}
-		projected, err := r.projectRequestForBackend(request, target.logicalModel, target.format)
+		projected, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(request, target.logicalModel, target.format, target)
 		if err != nil {
 			return nil, err
 		}
@@ -283,6 +284,9 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if err != nil {
 			return nil, err
 		}
+		// Shadows cannot add warnings to the primary reply. Report projection loss
+		// through metrics and logs using an immutable request identity.
+		recordProtocolDiagnostics(&RequestContext{SourceFormat: sourceFormat, TargetFormat: target.format, RequestID: requestID}, projectionDiagnostics)
 		body := encoded.Body
 		if decisionName != "" && target.format == llmprotocol.OpenAIChatV1 {
 			body, err = r.setReasoningModeToRequestBodyForModelAndProvider(

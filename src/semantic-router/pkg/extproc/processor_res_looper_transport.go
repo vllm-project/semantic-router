@@ -26,11 +26,11 @@ func (r *OpenAIRouter) handleLooperResponseBody(
 	if requiresClientResponseRewrite(ctx) {
 		semantic, err := r.decodeClientResponse(responseBody, ctx)
 		if err != nil {
-			return r.createErrorResponse(502, "The selected model returned an invalid response")
+			return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 		}
 		responseBody, err = r.encodeClientResponse(*semantic, ctx)
 		if err != nil {
-			return r.createErrorResponse(502, "The selected model returned an incompatible response")
+			return r.invalidUpstreamResponse(ctx, "The selected model returned an incompatible response")
 		}
 		setResponseBodyMutation(response, responseBody)
 		setResponseContentType(response, "application/json")
@@ -47,19 +47,21 @@ func (r *OpenAIRouter) handleLooperStreamingResponseBody(
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	if err := r.ensureSemanticResponseStream(ctx); err != nil {
-		return r.createErrorResponse(502, "The selected model returned an incompatible stream")
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an incompatible stream")
 	}
 	buffers := semanticStreamBuffers{}
 	buffers.push(responseBody, ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 		ctx.StreamingComplete = true
+		clean := buffers.streamErr == nil && !ctx.StreamingAborted
 		semantic, err := ctx.SemanticStreamState.response()
 		if err != nil {
 			ctx.StreamingAborted = true
 		} else if body, err := r.encodeClientResponse(*semantic, ctx); err == nil {
 			r.attachRouterReplayResponse(ctx, body, true)
 		}
+		r.endStreamRouterReplay(ctx, clean)
 	}
 	return buffers.processingResponse(ctx)
 }

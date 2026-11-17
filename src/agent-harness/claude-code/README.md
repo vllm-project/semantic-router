@@ -292,8 +292,10 @@ text the personal data check reads, and what a rule finds and the check finds ar
 a rule's find as `[vsr:<rule name>]`. A rule marked `required` that the listener could not check
 holds the command, or withholds the output, whatever the wait you chose; an advisory one is skipped
 with a `SKIPPED` row, as vSR's own checks are. The rules last read from a listener are kept (per
-listener and token), so an outage or a reload after that never drops a required rule; an answer for
-rules of another revision counts as unchecked until the next prompt reads them again. Before vSR has
+listener and token), so an outage or a reload after that never drops a required rule. An answer for
+rules of another revision, such as after a change in the Dashboard, makes vSR read the listing again
+and ask once more in the same call; it counts as unchecked only when the listing does not answer or
+still names the old revision. Before vSR has
 read a listener's listing once with this token, it knows no rules, and when the listing does not
 answer its checks step aside as they do for any outage. Turning guard or redact off turns their
 rules off too.

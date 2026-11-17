@@ -1,11 +1,13 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -25,6 +27,30 @@ type routerReplayFilters struct {
 	model       string
 	cacheStatus string
 	sessionID   string
+	turnID      string
+	since       time.Time
+	review      routerReplayReviewFilters
+}
+
+// cacheKey names the filters in one canonical form, so that two spellings of
+// one query share a cached answer.
+func (filters routerReplayFilters) cacheKey() string {
+	values := url.Values{}
+	for key, value := range map[string]string{
+		"search": filters.search, "recipe": filters.recipe, "decision": filters.decision,
+		"model": filters.model, "cache_status": filters.cacheStatus, "session_id": filters.sessionID,
+		"turn_id": filters.turnID, "request_kind": filters.review.requestKind,
+		"review_status": filters.review.status, "review_outcome": filters.review.outcome,
+		"review_risk": filters.review.risk,
+	} {
+		if value != "" {
+			values.Set(key, value)
+		}
+	}
+	if !filters.since.IsZero() {
+		values.Set("since", filters.since.UTC().Format(time.RFC3339Nano))
+	}
+	return values.Encode()
 }
 
 type routerReplayListQuery struct {
@@ -37,7 +63,8 @@ type routerReplayListQuery struct {
 type routerReplayListResponse = routerreplay.ListResponse
 
 // handleRouterReplayAPI serves read-only endpoints for router replay records.
-func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_proc.ProcessingResponse {
+// Reads end with ctx: a caller that leaves stops the storage queries it began.
+func (r *OpenAIRouter) handleRouterReplayAPI(ctx context.Context, method string, path string) *ext_proc.ProcessingResponse {
 	if !r.hasRouterReplayRecorders() {
 		return nil
 	}
@@ -49,15 +76,21 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 
 	switch {
 	case isRouterReplayListPath(normalizedPath):
-		return r.handleRouterReplayListAPI(method, rawQuery)
+		return r.handleRouterReplayListAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayAggregatePath:
-		return r.handleRouterReplayAggregateAPI(method, rawQuery)
+		return r.handleRouterReplayAggregateAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayTrajectoryPath:
-		return r.handleRouterReplayTrajectoryAPI(method, rawQuery)
+		return r.handleRouterReplayTrajectoryAPI(ctx, method, rawQuery)
+	case normalizedPath == routerReplayRunsPath:
+		return r.handleRouterReplayRunsAPI(ctx, method, rawQuery)
+	case normalizedPath == routerReplayRunPath:
+		return r.handleRouterReplayRunAPI(ctx, method, rawQuery)
+	case normalizedPath == routerReplayModelsPath:
+		return r.handleRouterReplayModelsAPI(method)
 	case normalizedPath == routerReplayDatasetPath:
-		return r.handleRouterReplayDatasetAPI(method, rawQuery)
+		return r.handleRouterReplayDatasetAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayJudgeTasksPath:
-		return r.handleRouterReplayJudgeTasksAPI(method, rawQuery)
+		return r.handleRouterReplayJudgeTasksAPI(ctx, method, rawQuery)
 	case strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/"):
 		replayID := strings.TrimPrefix(normalizedPath, routerReplayAPIBasePath+"/")
 		return r.handleRouterReplayRecordAPI(method, replayID)
@@ -88,7 +121,7 @@ func isRouterReplayListPath(path string) bool {
 	return path == routerReplayAPIBasePath || path == routerReplayAPIBasePath+"/"
 }
 
-func (r *OpenAIRouter) handleRouterReplayListAPI(method string, rawQuery string) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) handleRouterReplayListAPI(ctx context.Context, method string, rawQuery string) *ext_proc.ProcessingResponse {
 	if method != "GET" {
 		return r.createErrorResponse(405, "method not allowed")
 	}
@@ -98,7 +131,7 @@ func (r *OpenAIRouter) handleRouterReplayListAPI(method string, rawQuery string)
 		return r.createErrorResponse(400, err.Error())
 	}
 
-	payload, err := r.queryRouterReplayPage(query)
+	payload, err := r.queryRouterReplayPage(ctx, query)
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
@@ -199,6 +232,7 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		decision:  strings.TrimSpace(values.Get("decision")),
 		model:     strings.TrimSpace(values.Get("model")),
 		sessionID: strings.TrimSpace(values.Get("session_id")),
+		turnID:    strings.TrimSpace(values.Get("turn_id")),
 	}
 
 	cacheStatus := strings.TrimSpace(values.Get("cache_status"))
@@ -211,7 +245,17 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		return filters, fmt.Errorf("cache_status must be one of all, cached, or streamed")
 	}
 
-	return filters, nil
+	if raw := strings.TrimSpace(values.Get("since")); raw != "" {
+		since, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return filters, fmt.Errorf("since must be an RFC 3339 timestamp, such as 2026-11-15T15:00:00Z")
+		}
+		filters.since = since
+	}
+
+	review, err := parseRouterReplayReviewFilters(values)
+	filters.review = review
+	return filters, err
 }
 
 func parseRouterReplayQueryInt(values url.Values, key string, positiveOnly bool) (int, error) {
@@ -258,6 +302,9 @@ func doesRouterReplayRecordMatchFilters(
 		matchesOptionalValue(record.Recipe, filters.recipe),
 		matchesOptionalModel(record, filters.model),
 		matchesOptionalValue(record.SessionID, filters.sessionID),
+		matchesOptionalTurn(record, filters.turnID),
+		filters.since.IsZero() || !record.Timestamp.Before(filters.since),
+		filters.review.matches(record),
 		matchesReplaySearch(record, search),
 	}
 	for _, match := range matches {
@@ -278,6 +325,12 @@ func matchesOptionalValue(value, filter string) bool {
 
 func matchesOptionalModel(record routerreplay.RoutingRecord, model string) bool {
 	return model == "" || doesModelMatch(record, model)
+}
+
+// matchesOptionalTurn keeps the requests one agent turn sent and the ones it
+// started, such as its approval reviews, as the Postgres store filters them.
+func matchesOptionalTurn(record routerreplay.RoutingRecord, turnID string) bool {
+	return turnID == "" || record.TurnID == turnID || record.ParentTurnID == turnID
 }
 
 func matchesReplaySearch(record routerreplay.RoutingRecord, search string) bool {
