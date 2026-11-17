@@ -3,21 +3,21 @@ import { describe, expect, it } from 'vitest'
 
 import generatedCatalog from '../modelCatalogDocument'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
-import { EvaluationCard, ModelAccess, ModelDetail, VirtualPool } from './ModelHubDetail'
+import { EvaluationCard, ModelAccess, VirtualPool } from './ModelHubSheet'
 import { providerProtocolOperations } from './modelHubProviderOperations'
-import { modelHubRows, type ModelHubFilters } from './modelHubSupport'
+import { MODEL_HUB_DEFAULT_FILTERS, modelHubBackendLink, modelHubRows } from './modelHubSupport'
 
 const catalog = generatedCatalog as unknown as BuiltInModelCatalog
-const virtualFilters: ModelHubFilters = {
-  query: '',
-  kind: 'virtual',
-  distribution: 'all',
-  lifecycle: 'supported',
-  publisher: 'all',
-  provider: 'all',
-  capability: 'all',
-  sort: 'name',
-}
+const virtualRows = () =>
+  modelHubRows(catalog, {
+    ...MODEL_HUB_DEFAULT_FILTERS,
+    distribution: 'router_recipe',
+    sort: 'name',
+  })
+const physicalRows = () =>
+  modelHubRows(catalog, { ...MODEL_HUB_DEFAULT_FILTERS, sort: 'name' }).filter(
+    (row) => row.model.kind === 'physical',
+  )
 
 describe('model hub detail', () => {
   it('labels published evaluation conditions without inventing a configurable effort', () => {
@@ -59,9 +59,7 @@ describe('model hub detail', () => {
   })
 
   it('renders every virtual-model role and recommended backend candidate', () => {
-    const row = modelHubRows(catalog, virtualFilters).find(
-      (candidate) => candidate.model.id === 'vllm-sr/mom-v1-blend',
-    )
+    const row = virtualRows().find((candidate) => candidate.model.id === 'vllm-sr/mom-v1-blend')
     expect(row).toBeDefined()
     const markup = renderToStaticMarkup(<VirtualPool row={row!} catalog={catalog} />)
     for (const role of row!.model.roles ?? []) {
@@ -79,30 +77,21 @@ describe('model hub detail', () => {
   })
 
   it('keeps required roles visible when the operator owns all backend assignments', () => {
-    const row = modelHubRows(catalog, virtualFilters).find(
-      (candidate) => candidate.model.id === 'vllm-sr/mom-v1-vault',
-    )!
+    const row = virtualRows().find((candidate) => candidate.model.id === 'vllm-sr/mom-v1-vault')!
     expect(row.model.roles!.every((role) => role.recommended_pool.length === 0)).toBe(true)
     const markup = renderToStaticMarkup(<VirtualPool row={row} catalog={catalog} />)
     for (const role of row.model.roles!) {
-      expect(markup).toContain(role.name)
+      expect(markup).toContain(role.name.split('_').join(' '))
       expect(markup).toContain(`min ${role.minimum_candidates}`)
     }
     expect(markup).toContain('Required role')
     expect(markup).not.toContain('Custom model slot')
   })
 
-  it('exposes a linked, keyboard-roving tab pattern', () => {
-    const row = modelHubRows(catalog, { ...virtualFilters, kind: 'physical' })[0]
-    const markup = renderToStaticMarkup(<ModelDetail row={row} catalog={catalog} />)
-
-    expect(markup).toContain('role="tablist"')
-    expect(markup).toContain('role="tab"')
-    expect(markup).toContain('aria-controls="model-detail-')
-    expect(markup).toContain('tabindex="0"')
-    expect(markup).toContain('tabindex="-1"')
-    expect(markup).toContain('role="tabpanel"')
-    expect(markup).toContain('aria-labelledby="model-detail-')
+  it('proposes a catalog model to the backends page', () => {
+    expect(modelHubBackendLink('openai/gpt-oss-20b')).toBe(
+      '/models/backends?add=openai%2Fgpt-oss-20b',
+    )
   })
 })
 
@@ -110,9 +99,7 @@ describe('model hub provider detail', () => {
   it('labels the creator-to-serving-channel relationship for each access route', () => {
     const provider = catalog.providers.find((candidate) => candidate.id === 'openrouter')
     const binding = provider?.models?.[0]
-    const sourceRow = modelHubRows(catalog, { ...virtualFilters, kind: 'physical' }).find(
-      (candidate) => candidate.model.id === binding?.catalog,
-    )
+    const sourceRow = physicalRows().find((candidate) => candidate.model.id === binding?.catalog)
     expect(provider).toBeDefined()
     expect(binding).toBeDefined()
     expect(sourceRow).toBeDefined()
@@ -130,23 +117,16 @@ describe('model hub provider detail', () => {
     expect(markup).toContain(provider!.display_name)
   })
 
-  it.each([
-    ['minimax', '/v1/chat/completions'],
-  ])(
+  it.each([['minimax', '/v1/chat/completions']])(
     'renders only supported operations and the effective path for %s',
     (providerID, expectedPath) => {
       const provider = catalog.providers.find((candidate) => candidate.id === providerID)!
       const binding = provider.models?.[0]
-      const sourceRow = modelHubRows(catalog, { ...virtualFilters, kind: 'physical' }).find(
-        (candidate) => candidate.model.id === binding?.catalog,
-      )
+      const sourceRow = physicalRows().find((candidate) => candidate.model.id === binding?.catalog)
       expect(binding).toBeDefined()
       expect(sourceRow).toBeDefined()
 
-      const row = {
-        ...sourceRow!,
-        providers: [{ provider, model: binding! }],
-      }
+      const row = { ...sourceRow!, providers: [{ provider, model: binding! }] }
       const markup = renderToStaticMarkup(<ModelAccess row={row} catalog={catalog} />)
 
       expect(markup).toContain('POST')
@@ -178,16 +158,4 @@ describe('model hub provider detail', () => {
       expect(operation?.path).toBe(expectedPath)
     },
   )
-
-  it('exposes the compact detail as a labelled modal with an explicit close action', () => {
-    const row = modelHubRows(catalog, { ...virtualFilters, kind: 'physical' })[0]
-    const markup = renderToStaticMarkup(
-      <ModelDetail row={row} catalog={catalog} modal onClose={() => undefined} />,
-    )
-
-    expect(markup).toContain('role="dialog"')
-    expect(markup).toContain('aria-modal="true"')
-    expect(markup).toContain('aria-label="Close model details"')
-    expect(markup).toContain('aria-labelledby="model-detail-')
-  })
 })

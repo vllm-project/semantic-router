@@ -44,7 +44,7 @@ describe('inline task binding mutations', () => {
         }),
       )
       expect(html.match(/>primary</g)).toHaveLength(1)
-      if (model && model !== 'primary') expect(html).toContain(`<span>${model}</span>`)
+      if (model && model !== 'primary') expect(html).toContain(`>${model}<`)
       expect(html).toContain('coding · domain')
     },
   )

@@ -9,7 +9,7 @@ import {
 import type { RouterConfig } from './dashboardPageTypes'
 import type { ModelRuntimeInventory } from './decisionModelManagement'
 
-const entry = DECISION_RUNTIME_CATALOG[0]
+const entry = DECISION_RUNTIME_CATALOG.find((value) => value.family === 'decision2')!
 function snapshot(): RouterConfig {
   return {
     version: 'v0.3',
@@ -81,10 +81,31 @@ function snapshot(): RouterConfig {
 
 describe('Decision runtime catalog projection', () => {
   it('contains the projected release families and their supported question types', () => {
-    expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision2')).toHaveLength(6)
-    expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision1')).toHaveLength(7)
-    expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision3')).toHaveLength(8)
+    const family = (name: string) =>
+      DECISION_RUNTIME_CATALOG.filter((value) => value.family === name)
+    expect(family('decision2')).toHaveLength(6)
+    expect(family('decision1')).toHaveLength(7)
+    expect(family('decision3')).toHaveLength(8)
+    expect(family('vela2')).toHaveLength(4)
+    expect(
+      family('vela3').map((value) => [value.name, value.pending ? 'pending' : 'pinned']),
+    ).toEqual([
+      ['vela3-fast', 'pinned'],
+      ['vela3-fast-vision', 'pinned'],
+      ['vela3.1-fast', 'pending'],
+    ])
+    expect(
+      family('vela3_d3')
+        .map((value) => value.name)
+        .sort(),
+    ).toEqual(['vela3-flash', 'vela3-lite', 'vela3-mini', 'vela3-turbo'])
     expect(DECISION_RUNTIME_CAPABILITIES).toEqual(['choice', 'noul', 'score'])
+    for (const value of family('decision3'))
+      expect(value.questionTypes).toEqual(DECISION_RUNTIME_CAPABILITIES)
+    expect(family('vela3')[0]).toMatchObject({
+      questionTypes: ['choice', 'noul', 'span'],
+      spanHeads: ['router'],
+    })
   })
 
   it('shows decision models and bindings without misclassifying other runtime consumers', () => {
@@ -135,7 +156,7 @@ describe('Decision runtime canonical mutations', () => {
       entry,
       name: 'research-decider',
       device: 'auto',
-      consumerId: consumer.id,
+      consumerIds: [consumer.id],
     })
     expect(current).toEqual(before)
     const expected = structuredClone(before)
@@ -162,7 +183,7 @@ describe('Decision runtime canonical mutations', () => {
       entry,
       name: 'decider',
       device: 'cpu',
-      consumerId: consumers[0].id,
+      consumerIds: [consumers[0].id],
     })
     expect(next.routing?.signals?.systemone[0].deployment).toBe('decider')
     expect(next.recipes?.[0].routing.signals?.systemone[0].deployment).toBe('other')
@@ -175,7 +196,7 @@ describe('Decision runtime canonical mutations', () => {
       entry,
       name: 'selector-runtime',
       device: 'rocm:0',
-      consumerId: consumer.id,
+      consumerIds: [consumer.id],
     })
     expect(next.recipes?.[0].routing.decisions?.[0]).toEqual({
       ...current.recipes![0].routing.decisions![0],
@@ -196,7 +217,7 @@ describe('Decision runtime canonical mutations', () => {
       entry,
       name: 'saved-only',
       device: 'auto',
-      consumerId: '',
+      consumerIds: [],
     })
     expect(next.routing).toEqual(current.routing)
     expect(next.recipes).toEqual(current.recipes)
@@ -228,7 +249,7 @@ describe('Decision runtime canonical mutations', () => {
       name: 'managed',
       existingName: 'managed',
       device: 'rocm:0',
-      consumerId: compatibleRuntimeConsumers(current)[0].id,
+      consumerIds: [compatibleRuntimeConsumers(current)[0].id],
     })
     expect(
       (next.global?.model_catalog as { deployments: Record<string, unknown> }).deployments.managed,
@@ -247,7 +268,7 @@ describe('Decision runtime canonical mutations', () => {
     const current = snapshot()
     const consumerId = compatibleRuntimeConsumers(current)[0].id
     current.routing!.signals!.systemone[0].question = { type: 'set' }
-    const request = { entry, name: 'decider', device: 'auto', consumerId }
+    const request = { entry, name: 'decider', device: 'auto', consumerIds: [consumerId] }
     expect(() => withDecisionRuntimeDeployment(current, request)).toThrow('no longer compatible')
     expect(() => withDecisionRuntimeDeployment(snapshot(), { ...request, name: 'other' })).toThrow(
       'already in use',
@@ -258,6 +279,61 @@ describe('Decision runtime canonical mutations', () => {
     expect(() =>
       withDecisionRuntimeDeployment(snapshot(), { ...request, existingName: 'decider' }),
     ).toThrow('was removed')
+  })
+
+  it('makes a new pinned declaration the default while keeping explicit bindings', () => {
+    const current = snapshot()
+    const before = structuredClone(current)
+    const next = withDecisionRuntimeDeployment(current, {
+      entry,
+      name: 'judge',
+      device: 'cpu',
+      replicas: 2,
+      makeDefault: true,
+    })
+    const catalog = (next.global as { model_catalog: Record<string, unknown> }).model_catalog
+    expect(catalog.system).toEqual({ decision_model: { deployment: 'judge' } })
+    expect((catalog.deployments as Record<string, unknown>).judge).toEqual({
+      provider: 'model_runtime',
+      artifact: entry.id,
+      revision: entry.revision,
+      replicas: [{ device: 'cpu' }, { device: 'cpu' }],
+    })
+    expect(catalog.bindings).toEqual({ pii: 'private-specialist' })
+    expect(next.routing).toEqual(before.routing)
+    expect(next.recipes).toEqual(before.recipes)
+  })
+
+  it('binds several consumers to an existing deployment without redeclaring it', () => {
+    const current = snapshot()
+    const ids = compatibleRuntimeConsumers(current, ['choice', 'score', 'noul']).map(
+      (value) => value.id,
+    )
+    const next = withDecisionRuntimeDeployment(current, {
+      name: 'other',
+      existingName: 'other',
+      questionTypes: ['choice', 'score', 'noul'],
+      consumerIds: ids,
+    })
+    expect(next.global).toEqual(current.global)
+    expect(next.routing?.signals?.systemone[0].deployment).toBe('other')
+    expect(next.recipes?.[0].routing.decisions?.[0].algorithm).toMatchObject({
+      systemone: { deployment: 'other' },
+    })
+    expect(() =>
+      withDecisionRuntimeDeployment(current, { name: 'missing', existingName: 'missing' }),
+    ).toThrow('was removed')
+    expect(() => withDecisionRuntimeDeployment(current, { name: 'other' })).toThrow('to bind')
+  })
+
+  it('offers only the questions a model answers natively', () => {
+    const current = snapshot()
+    const span = compatibleRuntimeConsumers(current, ['choice', 'noul', 'span'])
+    expect(span.map((value) => [value.recipe, value.name, value.kind])).toEqual([
+      [null, 'task', 'question'],
+      [null, 'entities', 'question'],
+      ['research', 'select', 'selector'],
+    ])
   })
 
   it('does not introduce a revision pin when managing an existing unpinned runtime', () => {
@@ -272,7 +348,7 @@ describe('Decision runtime canonical mutations', () => {
       name: 'managed',
       existingName: 'managed',
       device: 'auto',
-      consumerId: '',
+      consumerIds: [],
     })
     expect(
       (next.global?.model_catalog as { deployments: Record<string, unknown> }).deployments.managed,
