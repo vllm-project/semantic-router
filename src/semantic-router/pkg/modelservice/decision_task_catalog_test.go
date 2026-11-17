@@ -12,8 +12,26 @@ func TestTaskCatalogSeparatesAvailableTasksFromActiveBindings(t *testing.T) {
 	if len(response.Bindings) != 0 {
 		t.Fatalf("unused task rows: %+v", response.Bindings)
 	}
-	if response.DefaultDeployment != "primary" || len(response.Tasks) != len(BuiltinTasks()) || len(response.Models) != 30 {
+	if response.DefaultDeployment != "primary" || len(response.Tasks) != len(BuiltinTasks()) || len(response.Models) != 32 {
 		t.Fatalf("catalog unavailable: %d %d", len(response.Tasks), len(response.Models))
+	}
+	// The picos answer every task vela3-fast answers.
+	supported := map[string]map[string]bool{}
+	for _, model := range response.Models {
+		supported[model.Model] = map[string]bool{}
+		for _, task := range model.Tasks {
+			supported[model.Model][task.TaskID] = task.Supported
+		}
+	}
+	for _, pico := range []string{"vllm-sr/vela3.1-pico-380m", "vllm-sr/vela3.1-pico-150m"} {
+		if len(supported[pico]) == 0 || len(supported[pico]) != len(supported["vllm-sr/vela3-fast"]) {
+			t.Fatalf("%s tasks: %v", pico, supported[pico])
+		}
+		for task, ok := range supported["vllm-sr/vela3-fast"] {
+			if supported[pico][task] != ok {
+				t.Fatalf("%s %s: %v, vela3-fast %v", pico, task, supported[pico][task], ok)
+			}
+		}
 	}
 	if response.DefaultBindings[config.SignalTypePII].Deployment != "primary" {
 		t.Fatal("the decision model does not answer the pii signal by default")

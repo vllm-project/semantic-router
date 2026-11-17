@@ -425,6 +425,36 @@
       "span_heads": [
         "router"
       ]
+    },
+    {
+      "id": "vllm-sr/vela3.1-pico-380m",
+      "family": "vela3_pico",
+      "question_types": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "span_heads": [
+        "router"
+      ]
+    },
+    {
+      "id": "vllm-sr/vela3.1-pico-150m",
+      "family": "vela3_pico",
+      "question_types": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "span_heads": [
+        "router"
+      ]
     }
   ]
 }
