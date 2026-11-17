@@ -85,7 +85,7 @@ const AppShellLayout: React.FC<AppShellLayoutProps> = ({ children }) => {
         role: user?.role || 'member',
       }}
       instance={instance}
-      status={{ tone: shellStatus.tone, label: shellStatus.label, detail: status?.version }}
+      status={{ tone: shellStatus.tone, label: shellStatus.label }}
       notifications={notifications}
       badges={badges}
       isItemVisible={isItemVisible}

@@ -132,32 +132,21 @@ function SidebarLink({
   )
 }
 
-function InstanceSwitcher({ instance, collapsed }: { instance: ShellInstance; collapsed: boolean }) {
+/** Version pill beside the wordmark (LiteLLM-style); opens the connected instance's details. */
+function VersionBadge({ instance }: { instance: ShellInstance }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={cn(
-            'flex w-full items-center gap-2.5 rounded-lg border border-sidebar-border bg-surface/70 px-2.5 py-2 text-left shadow-xs outline-none transition-colors hover:bg-surface focus-visible:ring-[3px] focus-visible:ring-sidebar-ring dark:bg-white/[0.03] dark:hover:bg-white/[0.06]',
-            collapsed && 'justify-center px-0',
-          )}
+          aria-label={`Version ${instance.version}, ${instance.statusLabel}`}
+          className="inline-flex h-5 max-w-[96px] shrink-0 items-center gap-1 rounded-full border border-sidebar-border bg-surface/80 px-1.5 font-mono text-[10.5px] font-medium text-muted-foreground outline-none transition-colors hover:border-border-strong hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-sidebar-ring data-[state=open]:text-foreground dark:bg-white/[0.04]"
         >
-          <StatusDot tone={instance.status} pulse />
-          {collapsed ? null : (
-            <>
-              <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className="truncate text-[12.5px] font-medium text-foreground">{instance.name}</span>
-                <span className="truncate text-[11px] text-subtle-foreground">
-                  {instance.mode} · {instance.version}
-                </span>
-              </span>
-              <ChevronsUpDown className="size-3.5 text-subtle-foreground" />
-            </>
-          )}
+          <StatusDot tone={instance.status} className="size-1.5" />
+          <span className="truncate">{instance.version}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" side={collapsed ? 'right' : 'bottom'} className="w-72 p-0">
+      <PopoverContent align="start" side="bottom" className="w-72 p-0">
         <div className="flex items-center gap-2.5 border-b border-border px-3.5 py-3">
           <StatusDot tone={instance.status} pulse />
           <div className="flex min-w-0 flex-col">
@@ -293,9 +282,10 @@ export function SidebarContents({
   return (
     <div className="flex h-full flex-col">
       <div className={cn('flex h-14 shrink-0 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
-        <NavLink to="/" className="min-w-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring">
+        <NavLink to="/" className="min-w-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring" aria-label="Home">
           <BrandLockup collapsed={collapsed} />
         </NavLink>
+        {collapsed ? null : <VersionBadge instance={instance} />}
         {showCollapse && !collapsed ? (
           <Tooltip content="Collapse sidebar" shortcut="⌘B" side="right">
             <Button variant="ghost" size="icon-xs" className="ml-auto text-subtle-foreground" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar">
@@ -303,9 +293,6 @@ export function SidebarContents({
             </Button>
           </Tooltip>
         ) : null}
-      </div>
-      <div className={cn('px-3 pb-2', collapsed && 'px-2')}>
-        <InstanceSwitcher instance={instance} collapsed={collapsed} />
       </div>
       <nav aria-label="Primary" className={cn('flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3', collapsed && 'px-2')}>
         {groups.filter((group) => group.placement !== 'footer').map((group) => (
