@@ -208,8 +208,8 @@ Vault 失败时关闭。若某项判断未得到回答，或输入超出决策�
    vllm-sr serve
    ```
 
-2. 在 Dashboard 中打开 **Models**，连接你的推理端点。
-3. 打开 **Build → Mixture-of-Models → Recipes**，在内置配方上选择 **Create model**。
+2. 在 Dashboard 中打开 **Models → Backend models**，连接你的推理端点。
+3. 打开 **Routing → Recipes**，选择 **Recipes** 标签页，在内置配方上选择 **Create model**。
 4. 为它的入口命名，并为每个决策分配模型。Vault 的 `guard` 不需要分配。
 5. 用 **Preview** 查看信号、决策和选中的候选；再发送真实请求，检查执行情况和延迟。
 

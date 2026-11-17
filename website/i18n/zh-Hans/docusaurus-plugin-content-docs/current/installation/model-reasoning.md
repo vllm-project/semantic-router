@@ -38,7 +38,7 @@ providers:
           protocol: http
 ```
 
-在控制面板中，打开 **Build → Routing → Models → Add Model**，选择 Provider，然后选择 **Advanced settings → Reasoning family**。Models 页面上的 **Built-in Reasoning Families** 表显示可用 ID 及其原生参数。
+在控制面板中，打开 **Models → Backend models**，选择 **Connect model**，选择 Provider，然后选择 **Advanced settings → Reasoning family**。Backend models 页面上的 **Reasoning families** 标签页显示可用 ID 及其原生参数。
 
 ## 内联定义自定义家族
 
@@ -66,7 +66,7 @@ providers:
 
 Canonical v0.5 没有用户编写的全局家族注册表。旧的 `providers.defaults.reasoning_families` 加上按模型的 `reasoning_family` 组合会迁移到 `providers.models[].reasoning`：内置 ID 变为 `family` 引用，而自定义定义会被内联复制到每个使用它们的自定义 Model 上。
 
-在控制面板中使用 **Manual setup** 编写内联家族。将 **Built-in Catalog Model** 和 **Reasoning Family** 留空，然后填写 **Inline Reasoning** 字段。
+在控制面板中使用 **Add manually** 编写内联家族。将 **Built-in Catalog Model** 和 **Reasoning Family** 留空，然后填写 **Inline Reasoning** 字段。
 
 ## 理解内联字段
 

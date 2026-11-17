@@ -11,9 +11,21 @@ Use it to:
 - inspect, edit, validate, deploy, and roll back Router configuration;
 - import and activate Recipe packages;
 - test routes in the Playground and inspect the selected path;
-- view topology, logs, evaluations, and monitoring tools;
+- view topology, requests, evaluations, status, logs, metrics, and traces;
 - manage security policies, ML selection workflows, and MCP tools when those
   features are enabled.
+
+The sidebar lists Home, Get started and Playground first, then groups pages
+under **Routing** (Recipes, Decisions, Signals, Projections, Topology, Config
+editor), **Models** (Backend models, Decision models, Model Hub) and
+**Observe** (Requests, Evaluations, Status, Logs, Metrics, Traces).
+**Settings** is one entry with its own navigation for Router settings,
+Integrations, Users & access, and Schema reference. The top bar shows the
+breadcrumb and router status, and ⌘K or Ctrl+K opens the command menu. Light
+and dark themes follow the operating system, with a toggle. `/` opens Home after
+sign-in. [`frontend/src/app/routeManifest.ts`](frontend/src/app/routeManifest.ts)
+lists every route and redirects each earlier path, such as `/insights` or
+`/config/:section`, to its new location.
 
 Playground starts with the default route advertised by the Router. Named recipe
 entrypoints and orchestration aliases remain selectable alongside it; adding a
@@ -131,7 +143,8 @@ Feature controls:
 
 ## sr-bench evaluation
 
-The Evaluation page is sr-bench 1.0. It uses the same durable Python service as
+The Evaluations page (**Observe → Evaluations**) is sr-bench 1.0. It uses the
+same durable Python service as
 `vllm-sr benchmark`; the Go backend authenticates each request and forwards the
 user identity. Closing the browser or restarting the Dashboard does not cancel
 a run. The benchmark service owns execution, persisted results and cancellation.
@@ -167,11 +180,12 @@ Targets contain endpoint and model identities, four token prices, and credential
 environment references. The Dashboard selects registered targets; it cannot
 redirect their credentials to another endpoint.
 
-Start in **Evaluation → Create evaluation**: choose benchmarks, a smoke, quick,
-or standard size, targets and limits. **Review plan** reuses available datasets
-and automatically prepares missing data and its supported dependencies. Progress
-stays in the creation flow; the service completes accepted preparation jobs even
-if the page closes. Review the frozen plan before **Start evaluation**.
+Start with **New evaluation** on **Observe → Evaluations**: choose benchmarks, a
+smoke, quick, or standard size, targets and limits. **Review plan** reuses
+available datasets and automatically prepares missing data and its supported
+dependencies. Progress stays in the **New evaluation** sheet; the service
+completes accepted preparation jobs even if the page closes. Review the frozen
+plan before **Start evaluation**.
 
 **Datasets → Prepare dataset** remains a management entry point. It and
 `vllm-sr benchmark dataset prepare` use the same worker, progress and frozen
@@ -193,11 +207,17 @@ explicit `dataset prepare --local` on the worker host or shared store, not an
 implicit upload from a remote CLI.
 
 Existing frozen datasets can also be selected explicitly. Live runs record
-capability and usage; preview runs record routing
-diagnostics only. The page shows per-target and per-benchmark results, four
-token buckets, latency, wall time, failures, routing distributions and case
-evidence. Comparisons require completed live runs on the same frozen cases.
-Unknown costs remain unknown.
+capability and usage; dry runs (route previews) record routing diagnostics only.
+The **Runs** table filters by status, benchmark, size, type and experiment; an
+experiment lists its runs as a sequence: reference, starting recipe, numbered
+versions and validation. For finished live runs the table shows the best fully
+scored accuracy and recorded cost; the Go backend reads each such report once and
+caches a compact per-target summary keyed by the run's last update. Select runs
+and choose **Compare**, or open a run and choose **Compare with…**. The run sheet
+shows per-target and per-benchmark results, four token buckets, latency, wall
+time, failures, routing distributions, case and call evidence, live activity and
+the frozen protocol. Comparisons require completed live runs on the same frozen
+cases. Unknown costs remain unknown.
 
 Mount the sr-bench store as writable persistent storage. Its SQLite ledger and
 run artifacts survive service restarts. Interrupted requests are preserved for
@@ -256,7 +276,7 @@ is committed the same way and answered `202` with `status: restart_required`;
 the Dashboard reads the stack's storage from what `vllm-sr serve` passed it and
 never inspects containers.
 
-The status page reads the Router's and Envoy's HTTP probes. For a service that
+The Status page (**Observe → Status**) reads the Router's and Envoy's HTTP probes. For a service that
 does not answer, it reads the stack's files instead: the runtime config's setup
 block (standby), the heartbeat of a `vllm-sr serve` that is starting the stack
 (starting), and the pending activation. Logs come from the bounded log spool.
@@ -327,24 +347,24 @@ return identities, IP addresses, client keys, or query content.
 
 ## Router contract access
 
-**System → Platform & Access → Integrations** opens MCP Servers. MCP keeps its
+**Settings → Integrations** manages MCP servers and their tools. MCP keeps its
 existing read and management permissions.
 
 ### Decision models
 
-**Build → System One** contains three independent pages:
-**Decision Models**, **Decision Playground**, and **Decision Monitoring**.
-Decision Models at `/decision-model` selects and deploys the router's decision
-models. Search and filter the provider catalog by family or question capability.
-Vela controls built-in router intelligence; the default remains Vela-2.0-0.3B.
+**Models → Decision models** (`/models/decision`) has three tabs, selected by
+`?tab=`: **Deploy**, **Playground**, and **Monitoring**. **Deploy** selects and
+deploys the router's decision models. Search and filter the provider catalog by
+family or question capability.
+Vela controls built-in router intelligence; the default is vela3-fast.
 Decision 1.0 and 2.0 are separate custom runtimes for Choice, Score and Noul
 questions or decision selectors. Their deployment dialog saves a pinned
 declaration and an explicitly selected consumer binding in one canonical config
 update. It preserves the Vela default, other bindings and existing runtime tuning.
 Saving an unbound declaration does not start a model. Saved configuration,
 activation and observed readiness remain separate states. Configuration readers
-can inspect the catalog but cannot deploy. **System → Runtime → Models → Model
-Hub** contains the broader backend model catalog.
+can inspect the catalog but cannot deploy. **Models → Model Hub** contains the
+broader backend model catalog.
 
 The lightweight Decision catalog is generated from the canonical model-runtime
 registry and family capabilities without importing ML dependencies. Run
@@ -353,7 +373,7 @@ registry and family capabilities without importing ML dependencies. Run
 contract and pre-commit gates. Production frontend builds consume the checked-in
 projection without requiring Python or downloading models.
 
-Decision Monitoring at `/decision-model/monitoring` charts runtime traffic,
+**Monitoring** (`/models/decision?tab=monitoring`) charts runtime traffic,
 unsuccessful calls, latency and result-cache behavior using Prometheus samples for each deployment. Select a
 time range to inspect trends. Missing samples remain unknown; statistics require
 observability read access and aggregate matching deployments across the routers
@@ -361,13 +381,12 @@ scraped by Prometheus.
 
 Management reads configuration on entry, explicit refresh, deployment, or an
 observed configuration change. Routine polling reads operational state only;
-metrics and chart code load on the monitoring page. Router or Engine mode is
-identified on the Dashboard homepage.
+metrics and chart code load on the Monitoring tab. Home identifies Router or
+Engine mode.
 
-**Decision Playground** is a separate System One workspace at
-`/decision-model/playground`. Compose a state and named Choice, Score, Noul, Set
-or Span questions, then inspect structured answers or the native request and
-response. Available question types come from the running model's capabilities.
+**Playground** (`/models/decision?tab=playground`) is a System One workspace.
+Compose a state and named Choice, Score, Noul, Set or Span questions, then
+inspect structured answers or the native request and response. Available question types come from the running model's capabilities.
 Viewing the workspace requires `config.read`; running a test requires
 `evaluation.run`. Tests run against an already configured deployment and do not
 change routing configuration or select a new model.
@@ -381,8 +400,8 @@ targets come from the connected service rather than a caller-supplied URL.
 
 ### Router API reference
 
-The **System → Platform & Access → Router API Docs** entry opens the running
-Router's Swagger UI through the authenticated Dashboard origin. Its companion
+**Router API reference** in the top bar's help menu opens the running Router's
+Swagger UI (`/api/router/docs`) through the authenticated Dashboard origin. Its companion
 proxies are `/api/router/api/v1` and `/api/router/openapi.json`; they expose the
 Router's `/api/v1` and `/openapi.json` responses through the existing read-only
 management proxy and do not maintain another API definition. Agents should
