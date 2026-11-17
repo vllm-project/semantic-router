@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import InsightsRecordSection from './InsightsRecordSection'
+import { ModelLabelsContext } from './insightsModelLabelSupport'
 import InsightsSessionRoutes from './InsightsSessionRoutes'
 import { fetchInsightsTrajectory } from './insightsPageApi'
 import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
@@ -67,6 +68,26 @@ function renderRecord(value: InsightsRecord) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('recorded routing explanation', () => {
+  it('names the eligible models by their labels', () => {
+    const protection = { ...record.learning!.protection!, candidate_models: ['alpha', 'beta'] }
+    const html = renderToStaticMarkup(
+      <ModelLabelsContext.Provider value={{ alpha: 'Alpha Model', beta: 'Beta Model' }}>
+        {buildInsightsRecordSections(
+          { ...record, learning: { ...record.learning, protection } },
+          { isReadonly: true },
+        ).map((section, index) => (
+          <InsightsRecordSection key={section.title} section={section} sectionIndex={index} />
+        ))}
+      </ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain('Eligible models</span><div><span')
+    expect(html).toContain('title="Configured as alpha">Alpha Model</span>, <span')
+    expect(html).toContain('title="Configured as beta">Beta Model</span>')
+    // the candidate scores name each model the same way
+    expect(html).toContain('<td><span')
+    expect(html).not.toContain('<td>alpha</td>')
+  })
+
   it('renders actual selection separately from an observed hold and preserves zero scores', () => {
     const html = renderRecord(record)
     expect(html).toContain('Actual selected model</span><div>beta')

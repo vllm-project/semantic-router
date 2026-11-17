@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"net/http"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -33,6 +34,21 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	response := r.handleDecodedResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), completionLatency, ctx)
 	deliverUpstreamResponseBody(response, ctx, responseBody, decoded)
 	return response, nil
+}
+
+// answerInPlaceOfUpstream answers with status in place of the upstream
+// response. No later phase sees that answer, so the replay record ends here
+// with what the client got, for reason.
+func (r *OpenAIRouter) answerInPlaceOfUpstream(ctx *RequestContext, status int, message, reason string) *ext_proc.ProcessingResponse {
+	response := r.createErrorResponse(status, message)
+	r.failAnsweredRouterReplay(ctx, status, response.GetImmediateResponse().GetBody(), reason)
+	return response
+}
+
+// invalidUpstreamResponse answers with 502 for an upstream response the Router
+// cannot pass on.
+func (r *OpenAIRouter) invalidUpstreamResponse(ctx *RequestContext, message string) *ext_proc.ProcessingResponse {
+	return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, message, "upstream_invalid_response")
 }
 
 // handleDecodedResponseBody runs the response phases on the upstream body as
@@ -69,7 +85,7 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 			"error":      recoveryErr.Error(),
 		})
 		if contextRecoveryFailClosed(r.Config, ctx) {
-			return r.createErrorResponse(502, "Context recovery followup failed")
+			return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, "Context recovery followup failed", "request_processing_failed")
 		}
 		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {

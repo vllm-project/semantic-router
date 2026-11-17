@@ -177,6 +177,9 @@ func effectiveBackendCredential(instance modelcatalog.ProviderInstance) effectiv
 	if credentials.APIKeyEnv != "" {
 		return effectiveCredentialIdentity{source: "environment", value: credentials.APIKeyEnv}
 	}
+	if credentials.APIKeyFile != "" {
+		return effectiveCredentialIdentity{source: "file", value: credentials.APIKeyFile}
+	}
 	return effectiveCredentialIdentity{}
 }
 

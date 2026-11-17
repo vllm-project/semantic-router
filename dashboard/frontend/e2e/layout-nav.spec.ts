@@ -998,7 +998,7 @@ test.describe('Layout top navigation', () => {
     await expect(page.getByText('Total Tokens').first()).toBeVisible()
     await expect(
       page.getByText(
-        '1 filtered record excluded from estimates. Each row explains what was not recorded. Historical rows without captured prices are not repriced.',
+        '1 filtered record excluded from savings estimates. Each row explains what was not recorded. Historical rows without captured prices are not repriced.',
       ),
     ).toBeVisible()
     await expect(

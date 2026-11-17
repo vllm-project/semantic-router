@@ -131,7 +131,8 @@ func catalogProviderBinding(
 		Headers:     copyStringMap(backend.Headers), APIVersion: backend.APIVersion, ChatPath: backend.ChatPath,
 	}
 	if auth := backend.Auth; auth != nil {
-		instance.Credentials.APIKeyEnv, instance.AuthHeader, instance.AuthCredential = auth.APIKeyEnv, auth.Header, auth.Credential
+		instance.Credentials.APIKeyEnv, instance.Credentials.APIKeyFile = auth.APIKeyEnv, auth.APIKeyFile
+		instance.AuthHeader, instance.AuthCredential = auth.Header, auth.Credential
 		if auth.Prefix != nil {
 			instance.AuthPrefix, instance.AuthPrefixSet = *auth.Prefix, true
 		}

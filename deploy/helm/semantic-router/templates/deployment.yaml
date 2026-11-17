@@ -152,6 +152,8 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: VLLM_SR_K8S_KEY_SECRET_NAME
+            value: {{ include "semantic-router.keySecretName" . | quote }}
           # One Router replica keeps its configuration history on the persistent
           # models volume, where rollback versions survive the rollout a ConfigMap
           # edit causes. Replicas that would share it, or a Pod without a persistent
@@ -172,13 +174,14 @@ spec:
         {{- with .Values.extraEnv }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
-        {{- with .Values.envFromSecrets }}
         envFrom:
-          {{- range . }}
+          # The keys config.yaml names by entry, which saves add.
+          - secretRef:
+              name: {{ include "semantic-router.keySecretName" . }}
+          {{- range .Values.envFromSecrets }}
           - secretRef:
               name: {{ . }}
           {{- end }}
-        {{- end }}
         volumeMounts:
         - name: runtime-tmp
           mountPath: /tmp

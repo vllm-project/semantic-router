@@ -299,6 +299,8 @@ type Request struct {
 	// ReasoningSummary asks a Responses provider for a reasoning summary: auto,
 	// concise or detailed. Chat Completions and Messages cannot carry it.
 	ReasoningSummary string
+	// IncludeEncryptedReasoning requests Responses encrypted continuation state.
+	IncludeEncryptedReasoning bool
 	// ReasoningDisplay controls whether a provider returns summarized reasoning
 	// content or only its signed continuation token. It is distinct from whether
 	// reasoning itself is enabled.

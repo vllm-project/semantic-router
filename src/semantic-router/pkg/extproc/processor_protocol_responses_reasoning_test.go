@@ -47,7 +47,7 @@ func TestExtProcResponsesReasoningParts(t *testing.T) {
 				ctx.SemanticResponse.Usage.Total.Value == nil || *ctx.SemanticResponse.Usage.Total.Value != 5 {
 				t.Fatalf("stream did not complete with usage: %+v", ctx.SemanticResponse)
 			}
-			if bytes.Contains(clientWire.Bytes(), []byte("encrypted_content")) {
+			if client != llmprotocol.OpenAIResponsesV1 && bytes.Contains(clientWire.Bytes(), []byte("encrypted_content")) {
 				t.Fatalf("ciphertext was included in the translated response: %s", clientWire.Bytes())
 			}
 			if client == llmprotocol.OpenAIResponsesV1 && ctx.SemanticResponse.ID != ctx.ResponseObjectState.GeneratedResponseID {

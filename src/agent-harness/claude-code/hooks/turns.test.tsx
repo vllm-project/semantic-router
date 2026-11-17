@@ -127,7 +127,7 @@ test('a move to a smaller model waits while re-reading the conversation costs mo
   expect(made.map(one => one.model)).toEqual(['claude-sonnet-5-5', 'claude-sonnet-5-5'])
   const { texts } = await rowTree($, userRow(EASY))
   expect(texts).toContain('≈  KEPT  your turn stays on Opus 5.5')
-  expect(texts).toContain('Sonnet would re-read 103K tokens uncached: $0.24, 3 turns save $0.06')
+  expect(texts).toContain('Sonnet would re-read 103K tokens uncached: $0.25, 3 turns save $0.09')
 })
 
 // What Claude Code reports after the session's model changed, and who changed it.

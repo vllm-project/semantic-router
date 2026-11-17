@@ -223,6 +223,9 @@ export interface Listener {
   port: number
   timeout?: string
   api_keys?: string[]
+  // Owner-only files that each hold one more client key, which a save
+  // writes in place of a literal api_keys entry.
+  api_key_files?: string[]
   // The APIs the listener serves, by API name (or alias); omitted, the four
   // LLM APIs and not systemone.
   apis?: Partial<Record<APIName | APIAlias, ListenerAPI>>

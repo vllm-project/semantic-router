@@ -33,6 +33,7 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	compressSignalEvaluationInput(&signalInput, ctx.Routing.SelectedRecipe().SignalsCompression())
 	observePromptCompression(ctx, signalInput.compression.outcome, signalInput.compression.elapsed)
 	signalInput.requestFacts.Context = selectionRequestContext(ctx)
+	signalInput.requestFacts.Agent = agentFacts(ctx, r.Config.RouterLearning.Protection)
 	ctx.VSRConversationFacts = signalInput.conversationFacts
 	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
 		signalInput.requestFacts.ContextHasNonText
@@ -293,6 +294,9 @@ func (r *OpenAIRouter) buildAgenticSessionContextForKey(
 		IdleKnown:                   idleKnown,
 		CacheWarmth:                 cacheWarmth,
 		CacheWarmthOK:               cacheWarmthOK,
+		CacheReceipt:                snapshot.LastCacheReceipt,
+		CacheReceiptAge:             cacheReceiptAge(snapshot.LastCacheReceipt, now),
+		ModelRates:                  r.modelRates(modelRefs),
 		Phase:                       phase,
 		ActiveToolLoop:              activeToolLoop,
 		HasNonPortableContext:       hasNonPortableContext,

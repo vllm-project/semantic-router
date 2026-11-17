@@ -3,6 +3,7 @@ package extproc
 import (
 	"bytes"
 	"errors"
+	"net/http"
 	"slices"
 	"strconv"
 	"time"
@@ -37,7 +38,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			decodeEvent["cause"] = cause.Error()
 		}
 		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
-		return r.createErrorResponse(502, "The selected model returned an invalid response")
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 	}
 	if ctx.SourceFormat == llmprotocol.OpenAIVideosV1 {
 		if stampVideoResponse(ctx, semanticResponse) || ctx.videosCreate {
@@ -54,7 +55,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	if rewriteClientBody {
 		clientBody, err = r.encodeClientResponse(*semanticResponse, ctx)
 		if err != nil {
-			return r.createErrorResponse(502, "The selected model returned an incompatible response")
+			return r.invalidUpstreamResponse(ctx, "The selected model returned an incompatible response")
 		}
 		ctx.ProtocolDiagnostics = deduplicateReencodedResponseDiagnostics(
 			ctx.ProtocolDiagnostics, diagnosticsBeforeBody, decodedDiagnosticsEnd,
@@ -71,6 +72,9 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
 	warnings, hasBufferedWarnings := bufferedWarnings(ctx)
 	if blocked != nil {
+		// The refusal replaces the answer, and no later phase sees it.
+		immediate := blocked.GetImmediateResponse()
+		r.failAnsweredRouterReplay(ctx, int(immediate.GetStatus().GetCode()), immediate.GetBody(), "request_rejected")
 		return blocked
 	}
 	// The cache keeps the answer the client receives: the guard passed it, and
@@ -175,6 +179,8 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	// is recorded before a block returns, so a blocked response leaves the same
 	// evidence in Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
+	observeApprovalReviewVerdict(ctx, semanticResponse)
+	observeSessionTitle(ctx, semanticResponse)
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	logResponseGuard(ctx, ctx.ResponseGuard)
 	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
@@ -182,9 +188,12 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	}
 	if rule := ctx.ResponseGuard.blocking(); rule != nil {
 		ctx.ResponsePath = headers.ResponsePathBlocked
+		refusal := responseGuardRefusal(rule)
+		ctx.ImmediateProtocolError = refusal
 		return &responsePolicyPlan{
-			blocked: r.createErrorResponseOnPath(403, responseGuardBlockMessage(rule), ctx.ResponsePath),
-			refusal: responseGuardRefusal(rule),
+			blocked: r.encodeImmediateResponseForClient(
+				r.createErrorResponseOnPath(http.StatusBadRequest, refusal.Message, ctx.ResponsePath), ctx),
+			refusal: refusal,
 			commitFunc: func() {
 				r.recordRouterReplayResponseGuard(ctx)
 				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "response_blocked", false)
@@ -261,7 +270,11 @@ func addResponseStageTrace(ctx *RequestContext, response *ext_proc.ProcessingRes
 // addResponseCostHeaders reports the priced cost of a buffered response. A
 // streamed response has already sent its headers by the time usage arrives.
 func addResponseCostHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
-	if ctx == nil || !ctx.RequestCostPriced {
+	if ctx == nil {
+		return
+	}
+	addResponseBudgetHeaders(ctx, response)
+	if !ctx.RequestCostPriced {
 		return
 	}
 	setResponseBodyHeader(response, headers.VSRCost, strconv.FormatFloat(ctx.RequestCost, 'f', -1, 64))

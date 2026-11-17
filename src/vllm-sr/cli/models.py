@@ -248,7 +248,14 @@ class Listener(BaseModel):
         description="Client keys required to call this listener. "
         "If set, requests must send one of these values as "
         "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
-        "'api-key: <key>'; other requests are rejected with HTTP 401.",
+        "'api-key: <key>'; other requests are rejected with HTTP 401. "
+        "A '${NAME}' entry reads the key from that environment variable.",
+    )
+    api_key_files: Optional[List[str]] = Field(
+        default=None,
+        description="Absolute paths of owner-only files that each hold one more "
+        "client key; the Router reads them at every load. Standalone mode reads "
+        "them; --gateway extproc rejects them.",
     )
     apis: Optional[Dict[str, ListenerAPI]] = Field(
         default=None,
@@ -280,6 +287,13 @@ class Listener(BaseModel):
                         f"{field} is removed; run `vllm-sr config migrate` ({becomes})"
                     )
         return data
+
+    @field_validator("api_key_files")
+    @classmethod
+    def absolute_key_files(cls, paths: Optional[List[str]]) -> Optional[List[str]]:
+        if any(not os.path.isabs(path) for path in paths or []):
+            raise ValueError("api_key_files must name absolute paths")
+        return paths
 
     @field_validator("apis")
     @classmethod
@@ -579,6 +593,42 @@ class InputModalityRule(BaseModel):
         return self
 
 
+class AgentRule(BaseModel):
+    """Matches the agent a request belongs to, from its harness's headers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    role: Optional[Literal["main", "subagent"]] = None
+    harness: Optional[Literal["claude_code", "codex"]] = None
+    types: Optional[List[str]] = None
+    request_classes: Optional[
+        List[Literal["main", "subagent", "workflow", "compaction", "auxiliary"]]
+    ] = None
+
+    @model_validator(mode="after")
+    def validate_contract(self):
+        if not self.name.strip() or self.name != self.name.strip():
+            raise ValueError("agent signal name must be nonempty and trimmed")
+        if not (self.role or self.harness or self.types or self.request_classes):
+            raise ValueError(
+                "set at least one of role, harness, types or request_classes"
+            )
+        if self.request_classes and self.harness == "codex":
+            raise ValueError(
+                "only Claude Code sends a request class, so request_classes"
+                " cannot go with harness codex"
+            )
+        if self.role == "main" and self.types:
+            raise ValueError(
+                "types name a subagent's type, so role must be subagent or unset"
+            )
+        if any(not item or item != item.strip() for item in self.types or []):
+            raise ValueError("agent types must be nonempty and trimmed")
+        return self
+
+
 class Signals(BaseModel):
     """All signal configurations."""
 
@@ -600,6 +650,7 @@ class Signals(BaseModel):
     conversation: Optional[List[ConversationRule]] = []
     metadata: Optional[List[MetadataRule]] = []
     input_modality: Optional[List[InputModalityRule]] = []
+    agent: Optional[List[AgentRule]] = []
     systemone: Optional[List[SystemOneRule]] = []
 
     @model_validator(mode="after")
@@ -609,7 +660,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "input_modality"}
+                    if family in {"metadata", "input_modality", "agent"}
                     else signal.name
                 )
                 if name in seen:
@@ -1058,6 +1109,8 @@ class FastResponsePluginConfig(BaseModel):
 
     enabled: bool = True
     message: Optional[str] = None
+    # block refuses the request with HTTP 403 and the message as the error.
+    block: bool = False
 
     @model_validator(mode="after")
     def message_when_enabled(self):
@@ -1272,7 +1325,9 @@ class RouterReplayPluginConfig(BaseModel):
     prompt keeps max_tool_trace_bytes's bound when that is above 0, else 65536.
     Where no layer sets max_tool_trace_bytes, each tool text field keeps 65536
     bytes, raw copies included, and max_tool_trace_total_bytes, the steps' text
-    in all, defaults to 262144; 0 removes either limit.
+    in all, defaults to 262144; 0 removes either limit. cost_baseline_model is
+    the configured, priced model a record's savings compare with; unset, the
+    baseline is the most expensive model of the recipe's pool.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1289,6 +1344,7 @@ class RouterReplayPluginConfig(BaseModel):
     max_tool_trace_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_total_bytes: Optional[int] = Field(default=None, ge=0)
     max_tool_trace_steps: Optional[int] = Field(default=None, ge=0)
+    cost_baseline_model: Optional[str] = Field(default=None, min_length=1)
     shadow: Optional["RouterReplayShadowConfig"] = None
 
 
@@ -1734,6 +1790,8 @@ RETRY_ON_CONDITIONS = (
 
 
 def _known_retry_on(value: str) -> str:
+    """value, trimmed as the Router reads it, when it names only known
+    conditions; a blank one is unset."""
     for raw in value.split(","):
         token = raw.strip()
         if token and token not in RETRY_ON_CONDITIONS:
@@ -1741,10 +1799,15 @@ def _known_retry_on(value: str) -> str:
                 f"has unknown condition {token!r}; expected any of "
                 + ", ".join(RETRY_ON_CONDITIONS)
             )
-    return value
+    return value.strip()
 
 
 RetryOn = Annotated[str, AfterValidator(_known_retry_on)]
+
+# The Router's config.DefaultProviderRetryCount: a provider model whose block
+# names no retries retries twice, on the template's default retry_on, which
+# retries only an attempt the backend never received.
+DEFAULT_RETRY_COUNT = 2
 
 # Decision reliability fields Envoy cannot apply to one request.
 DECISION_RELIABILITY_NATIVE_ONLY = (
@@ -2074,8 +2137,8 @@ class ProviderReliability(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     lb_policy: Literal["round_robin", "least_request"] = "round_robin"
-    retry_count: int = Field(default=0, ge=0, le=5)
-    retry_on: RetryOn = "connect-failure,refused-stream"
+    retry_count: Optional[int] = Field(default=None, ge=0, le=5)
+    retry_on: Optional[RetryOn] = None
     consecutive_5xx: int = Field(default=0, ge=0)
     base_ejection_time: str = "30s"
     max_ejection_percent: int = Field(default=50, ge=0, le=100)
@@ -2132,6 +2195,13 @@ class ProviderReliability(BaseModel):
         if parse_duration(self.retry_back_off_max) < base:
             raise ValueError("retry_back_off_max must not be below retry_back_off_base")
         return self
+
+    def retries(self) -> int:
+        """retry_count, else the default retries when retry_on is unset too, as
+        the Router's ProviderReliability.Retries reads it."""
+        if self.retry_count is not None:
+            return self.retry_count
+        return 0 if self.retry_on else DEFAULT_RETRY_COUNT
 
 
 TOKENIZER_BUILTINS = ("o200k_base", "cl100k_base")
@@ -2655,15 +2725,25 @@ REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
 
 class BackendAuth(BaseModel):
     """A backend's credential: the mode (delegated sends the requesting user's
-    credential instead of a key), the header (the provider's own when unset),
-    the prefix ("" sends the bare key) and the key's environment variable."""
+    credential instead of a key, caller the client's own provider login), the
+    header (the provider's own when unset), the prefix ("" sends the bare key)
+    and the key's environment variable or owner-only file, which the Router
+    reads at every load."""
 
     model_config = ConfigDict(extra="forbid")
 
-    credential: Optional[Literal["delegated"]] = None
+    credential: Optional[Literal["delegated", "caller"]] = None
     header: Optional[str] = None
     prefix: Optional[str] = None
     api_key_env: Optional[str] = None
+    api_key_file: Optional[str] = None
+
+    @field_validator("api_key_file")
+    @classmethod
+    def absolute_key_file(cls, value: Optional[str]) -> Optional[str]:
+        if value and not os.path.isabs(value):
+            raise ValueError("auth.api_key_file must be an absolute path")
+        return value
 
 
 class BackendTLS(BaseModel):
@@ -2833,6 +2913,8 @@ class Entrypoint(BaseModel):
     model_names: List[str] = Field(min_length=1)
     recipe: str = Field(min_length=1)
     default: Optional[bool] = None
+    review_model: Optional[str] = Field(default=None, min_length=1)
+    memory_model: Optional[str] = Field(default=None, min_length=1)
 
     @field_validator("model_names", mode="before")
     @classmethod
@@ -2846,12 +2928,14 @@ class Entrypoint(BaseModel):
             raise ValueError("model_names must contain at least one non-empty name")
         return normalized
 
-    @field_validator("recipe")
+    @field_validator("recipe", "review_model", "memory_model")
     @classmethod
-    def normalize_recipe(cls, value: str) -> str:
+    def normalize_recipe(cls, value: str | None, info) -> str | None:
+        if value is None:
+            return None
         normalized = value.strip()
         if not normalized:
-            raise ValueError("recipe must not be empty")
+            raise ValueError(f"{info.field_name} must not be empty")
         return normalized
 
 

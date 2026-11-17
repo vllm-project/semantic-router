@@ -19,6 +19,40 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           ],
         },
       ]
+    case 'agent':
+      return [
+        { key: 'description', label: 'Description', type: 'string' },
+        {
+          key: 'role',
+          label: 'Role',
+          type: 'select',
+          options: ['main', 'subagent'],
+          description: 'The main agent or a subagent, as protection reads the agent identity.',
+        },
+        {
+          key: 'harness',
+          label: 'Harness',
+          type: 'select',
+          options: ['claude_code', 'codex'],
+          description: 'The harness whose identity headers the request carries.',
+        },
+        {
+          key: 'types',
+          label: 'Subagent Types',
+          type: 'string[]',
+          placeholder: 'Explore',
+          description:
+            'Any of these matches, ignoring case: a Claude Code agent type (Explore, Plan, general-purpose, custom, teammate, fork) or a Codex child kind (collab_spawn, review).',
+        },
+        {
+          key: 'request_classes',
+          label: 'Request Classes',
+          type: 'string[]',
+          placeholder: 'compaction',
+          description:
+            'Any of these Claude Code request classes matches: main, subagent, workflow, compaction or auxiliary.',
+        },
+      ]
     case 'input_modality':
       return [
         { key: 'description', label: 'Description', type: 'string' },
