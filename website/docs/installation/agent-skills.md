@@ -65,11 +65,13 @@ produces a `smoke` development manifest with two cases and a source digest;
 it makes no model calls. The fixture test verifies the case count, source
 digest, split and normalized answers.
 
-For an actual A/B result, freeze two live manifests over the same case IDs,
-grader, request profile and prices; bind each Router target to its verified
-active config hash. Review the planned calls and cost before dispatch. Save
-both run IDs, use sr-bench's `comparison-options` and `compare`, and report
-paired/failed/missing denominators with the conservative quality interval.
+For a service comparison, freeze a direct single-model reference and each
+Router configuration over the same case IDs, grader, request profile and
+prices; bind each Router target to its verified active config hash. Review the
+planned calls and cost before dispatch. Use `comparison-options` with the
+single-model run as baseline, then compare each Router run to it. Report
+paired/failed/missing denominators and the conservative quality interval for
+each comparison. The service does not produce a direct A-versus-B interval.
 The [comparison example](https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/references/paired-evidence.md)
 shows why a valid two-case calculation still gives insufficient evidence for
 broad quality or savings claims. It contains illustrative values, not a live
@@ -92,12 +94,11 @@ boundary worked.
 
 The authored/public mirror, catalog and command checks protect these links and
 CLI examples. The two-backend fixture passes the canonical parser, and the
-synthetic dataset prepares deterministically without generation. Live route,
-model-runtime and paired benchmark transcripts require reachable backends and
-an sr-bench worker. Until those run IDs and receipts are attached, these
-examples demonstrate the workflow and its stopping points, not a measured
-performance result. Keep credentials, private prompts and hostnames out of
-published evidence.
+synthetic dataset prepares deterministically without generation. A local
+model-backed Router, public listener probe, and bounded sr-bench smoke now
+have the receipt below. This is not a full sr-bench score or a measured
+performance advantage. Keep credentials, private prompts and hostnames out
+of published evidence.
 
 ### Offline fixture receipt
 
@@ -115,7 +116,44 @@ recipe and entrypoint fields changed. Their SHA-256 digests were:
 The local sr-bench dataset preparation returned `case_count: 2`,
 `profile: smoke`, `split: dev`, `custom_subset: true`, and dataset SHA-256
 `0da687fda6ca748a07a0b0acc555f75f5f8d61976e418adb30391688e054fe20`.
-Those checks made no generation calls. Offline `config validate` reported that
-only structural checks ran because no Router image or management endpoint was
-available. No `config plan`, route preview/probe, replay or live comparison
-result is claimed by this receipt.
+Those checks made no generation calls. At that earlier point, offline
+`config validate` reported that only structural checks ran because no Router
+image or management endpoint was available. The later local run below has its
+own source, image and configuration identities.
+
+### Local live smoke receipt
+
+At source commit `be222e2758db67fcba9be90893e0611921d93800`, the checked-out
+v0.5 CLI and Router image digest
+`sha256:e6786409758befb7cf72b0d305ff9a86f126a527c384f73640af5a0e4015fc15`
+ran on a CPU Colima VM. The Router loaded
+`vllm-sr/Vela-2.0-0.3B` at revision
+`a3209a50dc3ebd7e3b7520440d8fba666000f4c4` and routed to a local
+Ollama `qwen3:8b` backend. The [base](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/vllm-sr-benchmark/fixtures/local-ollama-base.yaml)
+and [candidate](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/vllm-sr-benchmark/fixtures/local-ollama-candidate.yaml)
+configs differ only in the decision threshold (`0.5` versus `0.99`). The
+listener is loopback-only; `global.router.headers.debug: any` is for this
+local test so sr-bench can verify the active config hash. Do not expose that
+setting to untrusted clients.
+
+| Run | ID | Active config hash | Result |
+| --- | --- | --- | --- |
+| Direct `qwen3:8b` reference | `run-9533e461a7104c51ba2e` | N/A | 2/2 completed, graded and correct |
+| Router base | `run-2a1c73fb299543daba27` | `b2b40e41dc2c6d2ca6a736a957bc4d90ac2ce2afa660e032e31e10405723d352` | 2/2 completed, graded and correct; `code-route` twice |
+| Router candidate | `run-2a5fdfe4b440490a9642` | `17b95ddc357e7d2e0a2534f323391dc1d80495ad2fde6fd85ed3ac28b67d24a4` | 2/2 completed, graded and correct; `default-route` twice |
+
+An earlier preview with the base threshold showed the code decision for a debugging prompt and the
+default decision for a weather prompt. A public listener probe returned a
+complete answer with `code-route`, `qwen3:8b` and `upstream` response path.
+The frozen dataset SHA-256 remained
+`0da687fda6ca748a07a0b0acc555f75f5f8d61976e418adb30391688e054fe20`.
+`comparison-options` listed both Router runs for the direct baseline. Each
+service comparison paired two cases, found a quality delta of `0`, and gave
+a conservative 95% interval of `[-1, 1]`; cost savings were unavailable under
+`capability_only`. The two comparisons share a reference but do not provide
+a direct A-versus-B interval. Two synthetic development cases cannot support
+a broad quality, latency or savings claim. The
+[sanitized receipt](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/vllm-sr-benchmark/fixtures/local-ollama-smoke-receipt.json)
+records source, dataset, image, config and plan digests, local run IDs and
+the failed first attempt. Run IDs refer to a disposable local store, not a
+public benchmark service.
