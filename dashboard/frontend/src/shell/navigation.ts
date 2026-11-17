@@ -34,6 +34,8 @@ export interface NavItem {
   keywords?: string[]
   badge?: string
   end?: boolean
+  /** Other path prefixes that belong to this item, such as a detail route outside its own path. */
+  aliases?: string[]
 }
 
 export interface NavGroup {
@@ -172,6 +174,7 @@ export const navigation: NavGroup[] = [
         id: 'requests',
         label: 'Requests',
         to: '/observe/requests',
+        aliases: ['/observe/runs'],
         icon: ListTree,
         description: 'Every routed request with its decision, cost and trace',
         keywords: ['insights', 'replay', 'records'],
@@ -262,15 +265,26 @@ export const navigation: NavGroup[] = [
 
 export const allNavItems: NavItem[] = navigation.flatMap((group) => group.items)
 
+const underPrefix = (pathname: string, prefix: string) =>
+  pathname === prefix || pathname.startsWith(`${prefix}/`)
+
+/** Length of the longest path of `item` that `pathname` falls under, or 0 when none does. */
+export function navItemMatch(item: NavItem, pathname: string): number {
+  if (item.end) return pathname === item.to ? item.to.length : 0
+  return [item.to, ...(item.aliases ?? [])].reduce(
+    (best, prefix) =>
+      underPrefix(pathname, prefix) && prefix.length > best ? prefix.length : best,
+    0,
+  )
+}
+
 export function findNavItem(pathname: string): { item: NavItem; group: NavGroup } | undefined {
-  let best: { item: NavItem; group: NavGroup } | undefined
+  let best: { item: NavItem; group: NavGroup; length: number } | undefined
   for (const group of navigation) {
     for (const item of group.items) {
-      const matches = item.end
-        ? pathname === item.to
-        : pathname === item.to || pathname.startsWith(`${item.to}/`)
-      if (matches && (!best || item.to.length > best.item.to.length)) best = { item, group }
+      const length = navItemMatch(item, pathname)
+      if (length > 0 && (!best || length > best.length)) best = { item, group, length }
     }
   }
-  return best
+  return best ? { item: best.item, group: best.group } : undefined
 }

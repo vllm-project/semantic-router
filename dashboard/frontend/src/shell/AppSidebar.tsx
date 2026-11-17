@@ -37,7 +37,7 @@ import {
   cn,
   type StatusTone,
 } from '../ui'
-import { navigation, type NavItem } from './navigation'
+import { navigation, navItemMatch, type NavItem } from './navigation'
 import { useShell } from './shell-context'
 import { useTheme, type AccentPreset, type ThemePreference } from './theme'
 
@@ -76,9 +76,7 @@ function SidebarLink({
   const location = useLocation()
   const active = activePrefix
     ? location.pathname === activePrefix || location.pathname.startsWith(`${activePrefix}/`)
-    : item.end
-      ? location.pathname === item.to
-      : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+    : navItemMatch(item, location.pathname) > 0
   const link = (
     <NavLink
       to={item.to}
