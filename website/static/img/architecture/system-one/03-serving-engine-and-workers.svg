@@ -14,7 +14,7 @@
 <g data-box="140.0 795 390 128">
 <rect x="140.0" y="795" width="390" height="128" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
 <text x="335.0" y="840.74" font-size="22" text-anchor="middle" class="">Deployment A pool</text>
-<text x="335.0" y="866.48" font-size="22" text-anchor="middle" class="">same model + revision + profile</text>
+<text x="335.0" y="866.48" font-size="22" text-anchor="middle" class="">same model + revision + engine args</text>
 <text x="335.0" y="892.22" font-size="22" text-anchor="middle" class="">bounded admission</text>
 </g>
 <g data-box="575.0 795 390 128">
@@ -68,8 +68,8 @@
 </g>
 <g data-box="1170.0 675 520 82">
 <rect x="1170.0" y="675" width="520" height="82" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
-<text x="1430.0" y="710.365" font-size="23" text-anchor="middle" class="">Profile + work planning</text>
-<text x="1430.0" y="737.275" font-size="23" text-anchor="middle" class="">exact / batching / shared context</text>
+<text x="1430.0" y="710.365" font-size="23" text-anchor="middle" class="">Batch planning</text>
+<text x="1430.0" y="737.275" font-size="23" text-anchor="middle" class="">engine args: batching, shared context</text>
 </g>
 <g data-box="1170.0 825 520 84">
 <rect x="1170.0" y="825" width="520" height="84" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
@@ -94,7 +94,7 @@
 </g>
 <path d="M550,1225 L550,1165" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <text x="1430" y="1239.0" font-size="23" text-anchor="middle" class="">Pluggable runtime interfaces</text>
-<text x="1430" y="1265.91" font-size="23" text-anchor="middle" class="">Family · engine · accelerator · profile</text>
+<text x="1430" y="1265.91" font-size="23" text-anchor="middle" class="">Family · engine · accelerator</text>
 <text x="905" y="1347.0" font-size="22" text-anchor="middle" class="">DP replicates the model. Placing each replica on its own GPU is supported; TP / PP are follow-up work.</text>
 <text x="905" y="1380.0" font-size="20" text-anchor="middle" class="">HTTP in-flight counters are not GPU-forward concurrency. Some active forwards continue after caller cancellation.</text>
 </svg>

@@ -261,6 +261,36 @@ def test_inputs_fail_in_place_and_requests_fail_whole(client):
     assert wrong.json()["results"][0]["error"] == "invalid_input"
 
 
+@pytest.mark.parametrize("name", ["sequence", "scores", "token"])
+def test_windows_without_content_room_fail_the_request(runtime, client, name):
+    model = served(runtime, name).model
+    envelope_size = model.heads[model.primary].envelope.size
+    no_room = "window size must leave room for content after special tokens"
+    too_wide = "window overlap must be smaller than its content width"
+    for tokens, overlap, message in (
+        (envelope_size, 0, no_room),
+        (envelope_size + 2, 2, too_wide),
+        (envelope_size + 2, 9, too_wide),
+    ):
+        response = client.post(
+            "/v1/classify",
+            json={
+                "model": name,
+                "input": ["one two three", "four five six"],
+                "options": {
+                    "overflow": "window",
+                    "window": {"tokens": tokens, "overlap": overlap},
+                },
+            },
+        )
+        assert response.status_code == 400, (tokens, overlap, response.text)
+        error = response.json()["error"]
+        assert (error["code"], error["message"]) == ("invalid_request", message)
+    window = {"tokens": envelope_size + 2, "overlap": 1}
+    body = classify(client, name, ["one two three"], overflow="window", window=window)
+    assert "error" not in body["results"][0]
+
+
 def count_forwards(monkeypatch, runtime, name):
     model = served(runtime, name).model
     calls = []
@@ -316,8 +346,8 @@ def test_engines_learn_the_engines_of_their_processs_other_cpu_models(
     seen = []
     choose = runtime_module.choose_engine
 
-    def recording(name, spec, device, preferred=None):
-        chosen, engine = choose(name, spec, device, preferred)
+    def recording(name, spec, device, preferred=None, dtype="auto"):
+        chosen, engine = choose(name, spec, device, preferred, dtype)
         load = engine.load
 
         def load_and_record(spec, accelerator, device, options):
@@ -358,11 +388,19 @@ def test_planned_engines_need_nothing_loaded():
     )
 
 
-@pytest.mark.parametrize("profile", ["shared_context", "batching", "max_speed"])
-def test_approximate_profiles_serve_every_head(packages, profile):
+@pytest.mark.parametrize("shared", [None, True])
+def test_merged_forwards_serve_every_head(packages, shared):
     models = tuple(
-        ModelConfig(model=str(path), name=name, device="cpu", profile=profile)
+        config
         for name, path in packages.items()
+        for config in (
+            ModelConfig(
+                model=str(path), name=name, device="cpu", enable_shared_context=shared
+            ),
+            ModelConfig(
+                model=str(path), name=f"{name}-alone", device="cpu", max_num_seqs=1
+            ),
+        )
     )
     runtime = Runtime(ServeConfig(models=models, result_cache_entries=0))
     runtime.start(background=False)
@@ -370,7 +408,7 @@ def test_approximate_profiles_serve_every_head(packages, profile):
         client = TestClient(create_app(runtime))
         for name in packages:
             inputs = [GROUNDED] if name == "grounded" else [TEXT, LONG[:200]]
-            exact = classify(client, name, inputs, profile="exact")["results"]
+            exact = classify(client, f"{name}-alone", inputs)["results"]
             approximate = classify(client, name, inputs)["results"]
             for left, right in zip(exact, approximate, strict=True):
                 values = "scores" if name == "scores" else "probabilities"
@@ -409,7 +447,6 @@ def test_cpu_rows_are_bit_identical_alone_and_inside_other_requests_batches(runt
                     "classify",
                     {"model": name, "input": [value]},
                     None,
-                    "exact",
                     False,
                     0.0,
                 ),

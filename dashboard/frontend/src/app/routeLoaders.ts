@@ -15,8 +15,8 @@ export const loadSystemOnePlaygroundPage = () => import('../pages/SystemOnePlayg
 export const loadEvaluationPage = () => import('../pages/EvaluationPage')
 export const loadInsightsPage = () => import('../pages/InsightsPage')
 export const loadInsightsRecordPage = () => import('../pages/InsightsRecordPage')
+export const loadInsightsRunPage = () => import('../pages/InsightsRunPage')
 export const loadLogsPage = () => import('../pages/LogsPage')
-export const loadMLSetupPage = () => import('../pages/MLSetupPage')
 export const loadMonitoringPage = () => import('../pages/MonitoringPage')
 export const loadModelHubPage = () => import('../pages/ModelHubPage')
 export const loadPlaygroundFullscreenPage = () => import('../pages/PlaygroundFullscreenPage')
@@ -55,10 +55,10 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   },
   { matches: (pathname) => pathname.startsWith('/config'), load: loadConfigPage },
   { matches: (pathname) => pathname.startsWith('/topology'), load: loadTopologyPage },
+  { matches: (pathname) => pathname === '/insights/run', load: loadInsightsRunPage },
   { matches: (pathname) => /^\/insights\/[^/]+/.test(pathname), load: loadInsightsRecordPage },
   { matches: (pathname) => pathname.startsWith('/insights'), load: loadInsightsPage },
   { matches: (pathname) => pathname.startsWith('/evaluation'), load: loadEvaluationPage },
-  { matches: (pathname) => pathname.startsWith('/ml-setup'), load: loadMLSetupPage },
   { matches: (pathname) => pathname.startsWith('/status'), load: loadStatusPage },
   { matches: (pathname) => pathname.startsWith('/logs'), load: loadLogsPage },
   { matches: (pathname) => pathname.startsWith('/monitoring'), load: loadMonitoringPage },

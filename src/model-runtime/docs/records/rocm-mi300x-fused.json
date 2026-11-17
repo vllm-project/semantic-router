@@ -1,0 +1,421 @@
+{
+ "date": "2026-10-09",
+ "device": "AMD Instinct MI300X (gfx942), one GPU",
+ "image": "vllm/vllm-openai-rocm@sha256:1fd21abe66455b4df5a2e83629e97cdcc9d58913b16052d8118b92b239792339",
+ "stack": {
+  "torch": "2.12.0+git6bbd260",
+  "triton": "3.7.1",
+  "fla": "0.5.2",
+  "causal_conv1d": "1.7.0"
+ },
+ "prompts": "TIGER-Lab/MMLU-Pro test, first 512 questions, one five-way Choice",
+ "models": {
+  "Decision-2.0-Kai-0.6B": {
+   "default": {
+    "single_p50": 4.492,
+    "many16": 32.732,
+    "many64": 115.143,
+    "many128": 244.34,
+    "rps_exact16": 247.537,
+    "rps_batch16": 674.468
+   },
+   "no-fused": {
+    "single_p50": 10.215,
+    "many16": 48.824,
+    "many64": 173.608,
+    "many128": 362.361,
+    "rps_exact16": 103.269,
+    "rps_batch16": 432.696
+   },
+   "no-graphs": {
+    "single_p50": 14.205,
+    "many16": 33.011,
+    "many64": 115.524,
+    "many128": 243.003,
+    "rps_exact16": 72.327,
+    "rps_batch16": 673.38
+   },
+   "no-graphs-no-fused": {
+    "single_p50": 17.934,
+    "many16": 49.752,
+    "many64": 173.261,
+    "many128": 360.796,
+    "rps_exact16": 56.857,
+    "rps_batch16": 419.461
+   }
+  },
+  "Decision-2.0-Eos-0.8B": {
+   "default": {
+    "single_p50": 5.714,
+    "many16": 38.913,
+    "many64": 137.995,
+    "many128": 283.013,
+    "rps_exact16": 190.079,
+    "rps_batch16": 538.299
+   },
+   "no-fused": {
+    "single_p50": 10.739,
+    "many16": 49.205,
+    "many64": 170.116,
+    "many128": 350.996,
+    "rps_exact16": 99.618,
+    "rps_batch16": 427.881
+   },
+   "no-graphs": {
+    "single_p50": 25.465,
+    "many16": 39.066,
+    "many64": 137.895,
+    "many128": 284.822,
+    "rps_exact16": 39.977,
+    "rps_batch16": 525.655
+   },
+   "no-graphs-no-fused": {
+    "single_p50": 31.878,
+    "many16": 50.082,
+    "many64": 169.387,
+    "many128": 347.232,
+    "rps_exact16": 31.409,
+    "rps_batch16": 417.076
+   }
+  },
+  "Decision-2.0-Sol-2B": {
+   "default": {
+    "single_p50": 6.996,
+    "many16": 58.504,
+    "many64": 215.183,
+    "many128": 432.018,
+    "rps_exact16": 152.272,
+    "rps_batch16": 359.294
+   },
+   "no-fused": {
+    "single_p50": 11.267,
+    "many16": 71.679,
+    "many64": 263.384,
+    "many128": 528.418,
+    "rps_exact16": 91.7,
+    "rps_batch16": 287.761
+   },
+   "no-graphs": {
+    "single_p50": 24.539,
+    "many16": 58.599,
+    "many64": 215.704,
+    "many128": 432.348,
+    "rps_exact16": 40.641,
+    "rps_batch16": 356.93
+   },
+   "no-graphs-no-fused": {
+    "single_p50": 31.177,
+    "many16": 72.221,
+    "many64": 264.185,
+    "many128": 532.396,
+    "rps_exact16": 32.543,
+    "rps_batch16": 283.673
+   }
+  },
+  "Decision-2.0-Nox-4B": {
+   "default": {
+    "single_p50": 12.339,
+    "many16": 130.193,
+    "many64": 495.24,
+    "many128": 991.293,
+    "rps_exact16": 84.724,
+    "rps_batch16": 160.612
+   },
+   "no-fused": {
+    "single_p50": 20.121,
+    "many16": 152.399,
+    "many64": 589.616,
+    "many128": 1179.856,
+    "rps_exact16": 51.162,
+    "rps_batch16": 133.826
+   },
+   "no-graphs": {
+    "single_p50": 33.33,
+    "many16": 128.072,
+    "many64": 487.937,
+    "many128": 982.905,
+    "rps_exact16": 30.579,
+    "rps_batch16": 158.899
+   },
+   "no-graphs-no-fused": {
+    "single_p50": 41.665,
+    "many16": 151.971,
+    "many64": 586.585,
+    "many128": 1176.811,
+    "rps_exact16": 24.185,
+    "rps_batch16": 133.253
+   }
+  },
+  "Decision-2.0-Lux-9B": {
+   "default": {
+    "single_p50": 16.871,
+    "many16": 200.032,
+    "many64": 742.009,
+    "many128": 1507.048,
+    "rps_exact16": 60.899,
+    "rps_batch16": 101.863
+   },
+   "no-fused": {
+    "single_p50": 22.874,
+    "many16": 231.148,
+    "many64": 885.452,
+    "many128": 1782.546,
+    "rps_exact16": 44.444,
+    "rps_batch16": 87.767
+   },
+   "no-graphs": {
+    "single_p50": 33.387,
+    "many16": 199.591,
+    "many64": 738.932,
+    "many128": 1508.77,
+    "rps_exact16": 30.776,
+    "rps_batch16": 101.589
+   },
+   "no-graphs-no-fused": {
+    "single_p50": 40.843,
+    "many16": 232.336,
+    "many64": 887.641,
+    "many128": 1784.07,
+    "rps_exact16": 24.677,
+    "rps_batch16": 86.127
+   }
+  }
+ },
+ "vela2": {
+  "workload": "tools/vela2_bench.py: the router's signals as one Vela 2.0 request over a prompt of about N tokens, 40 requests per length, one client",
+  "models": {
+   "Vela-2.0-0.3B": {
+    "default": {
+     "p50_ms": {
+      "128": 9.05,
+      "512": 13.12,
+      "2048": 28.85
+     },
+     "p95_ms": {
+      "128": 11.2,
+      "512": 13.53,
+      "2048": 31.1
+     },
+     "fused_layers": 0,
+     "graph_replays": 0
+    },
+    "no-fused": {
+     "p50_ms": {
+      "128": 8.99,
+      "512": 13.09,
+      "2048": 28.46
+     },
+     "p95_ms": {
+      "128": 9.5,
+      "512": 13.47,
+      "2048": 30.63
+     },
+     "fused_layers": 0,
+     "graph_replays": 0
+    },
+    "no-graphs": {
+     "p50_ms": {
+      "128": 9.29,
+      "512": 13.18,
+      "2048": 28.75
+     },
+     "p95_ms": {
+      "128": 11.0,
+      "512": 13.57,
+      "2048": 31.08
+     },
+     "fused_layers": 0,
+     "graph_replays": null
+    },
+    "no-graphs-no-fused": {
+     "p50_ms": {
+      "128": 9.64,
+      "512": 13.24,
+      "2048": 28.82
+     },
+     "p95_ms": {
+      "128": 10.63,
+      "512": 14.13,
+      "2048": 31.07
+     },
+     "fused_layers": 0,
+     "graph_replays": null
+    }
+   },
+   "Vela-2.0-0.8B": {
+    "default": {
+     "p50_ms": {
+      "128": 62.49,
+      "512": 67.51,
+      "2048": 142.88
+     },
+     "p95_ms": {
+      "128": 81.63,
+      "512": 79.28,
+      "2048": 160.71
+     },
+     "fused_layers": 24,
+     "graph_replays": 0
+    },
+    "no-fused": {
+     "p50_ms": {
+      "128": 65.9,
+      "512": 79.7,
+      "2048": 164.95
+     },
+     "p95_ms": {
+      "128": 82.79,
+      "512": 94.27,
+      "2048": 180.6
+     },
+     "fused_layers": 0,
+     "graph_replays": 0
+    },
+    "no-graphs": {
+     "p50_ms": {
+      "128": 62.83,
+      "512": 64.57,
+      "2048": 139.47
+     },
+     "p95_ms": {
+      "128": 81.07,
+      "512": 86.85,
+      "2048": 150.35
+     },
+     "fused_layers": 24,
+     "graph_replays": null
+    },
+    "no-graphs-no-fused": {
+     "p50_ms": {
+      "128": 65.96,
+      "512": 79.45,
+      "2048": 164.1
+     },
+     "p95_ms": {
+      "128": 81.6,
+      "512": 94.07,
+      "2048": 178.41
+     },
+     "fused_layers": 0,
+     "graph_replays": null
+    }
+   },
+   "Vela-2.0-4B": {
+    "default": {
+     "p50_ms": {
+      "128": 112.77,
+      "512": 180.63,
+      "2048": 368.17
+     },
+     "p95_ms": {
+      "128": 129.28,
+      "512": 197.88,
+      "2048": 387.31
+     },
+     "fused_layers": 32,
+     "graph_replays": 0
+    },
+    "no-fused": {
+     "p50_ms": {
+      "128": 139.97,
+      "512": 215.86,
+      "2048": 432.52
+     },
+     "p95_ms": {
+      "128": 155.02,
+      "512": 232.02,
+      "2048": 450.95
+     },
+     "fused_layers": 0,
+     "graph_replays": 0
+    },
+    "no-graphs": {
+     "p50_ms": {
+      "128": 111.77,
+      "512": 178.92,
+      "2048": 364.31
+     },
+     "p95_ms": {
+      "128": 127.43,
+      "512": 195.53,
+      "2048": 383.77
+     },
+     "fused_layers": 32,
+     "graph_replays": null
+    },
+    "no-graphs-no-fused": {
+     "p50_ms": {
+      "128": 139.46,
+      "512": 215.25,
+      "2048": 432.1
+     },
+     "p95_ms": {
+      "128": 154.5,
+      "512": 230.86,
+      "2048": 450.53
+     },
+     "fused_layers": 0,
+     "graph_replays": null
+    }
+   },
+   "Vela-2.0-9B": {
+    "default": {
+     "p50_ms": {
+      "128": 166.12,
+      "512": 260.87,
+      "2048": 526.6
+     },
+     "p95_ms": {
+      "128": 181.21,
+      "512": 277.62,
+      "2048": 545.63
+     },
+     "fused_layers": 32,
+     "graph_replays": 0
+    },
+    "no-fused": {
+     "p50_ms": {
+      "128": 194.69,
+      "512": 300.29,
+      "2048": 599.54
+     },
+     "p95_ms": {
+      "128": 210.61,
+      "512": 316.86,
+      "2048": 617.13
+     },
+     "fused_layers": 0,
+     "graph_replays": 0
+    },
+    "no-graphs": {
+     "p50_ms": {
+      "128": 165.3,
+      "512": 260.79,
+      "2048": 525.94
+     },
+     "p95_ms": {
+      "128": 181.89,
+      "512": 277.44,
+      "2048": 545.5
+     },
+     "fused_layers": 32,
+     "graph_replays": null
+    },
+    "no-graphs-no-fused": {
+     "p50_ms": {
+      "128": 194.81,
+      "512": 300.05,
+      "2048": 600.29
+     },
+     "p95_ms": {
+      "128": 210.92,
+      "512": 317.07,
+      "2048": 618.06
+     },
+     "fused_layers": 0,
+     "graph_replays": null
+    }
+   }
+  }
+ }
+}

@@ -1,4 +1,6 @@
-import type { ASTProgram, SymbolTable } from '@/types/dsl'
+import { dslHeaderPattern } from '@/lib/dslMutations'
+import type { ASTProgram, ASTProjectionMappingDecl, ASTSignalDecl, SymbolTable } from '@/types/dsl'
+import type { AvailableSignal } from './builderPageTypes'
 
 export interface BuilderRoutingScope {
   id: string
@@ -6,8 +8,6 @@ export interface BuilderRoutingScope {
   recipeName: string | null
   modelNames: string[]
 }
-
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 export function listBuilderRoutingScopes(ast: ASTProgram | null): BuilderRoutingScope[] {
   if (!ast) return []
@@ -59,6 +59,39 @@ export function resolveBuilderRoutingScope(
   }
 }
 
+// Route conditions reference complexity signals by level and authz bindings by
+// the role they grant, which is what the Router's authz signal emits.
+export function listReferenceableSignals(
+  signals: ASTSignalDecl[] = [],
+  projectionMappings: ASTProjectionMappingDecl[] = [],
+): AvailableSignal[] {
+  const result: AvailableSignal[] = []
+  for (const s of signals) {
+    if (s.signalType === 'complexity') {
+      result.push({ signalType: s.signalType, name: `${s.name}:easy` })
+      result.push({ signalType: s.signalType, name: `${s.name}:medium` })
+      result.push({ signalType: s.signalType, name: `${s.name}:hard` })
+    } else if (s.signalType === 'authz') {
+      const role = s.fields.role
+      if (
+        typeof role === 'string' &&
+        role &&
+        !result.some((signal) => signal.signalType === 'authz' && signal.name === role)
+      ) {
+        result.push({ signalType: 'authz', name: role })
+      }
+    } else {
+      result.push({ signalType: s.signalType, name: s.name })
+    }
+  }
+  for (const mapping of projectionMappings) {
+    for (const output of mapping.outputs ?? []) {
+      result.push({ signalType: 'projection', name: output.name })
+    }
+  }
+  return result
+}
+
 export function chooseDefaultBuilderRoutingScope(ast: ASTProgram | null): string {
   if (!ast?.recipes?.length) return 'global'
 
@@ -86,13 +119,10 @@ export function mutateBuilderRecipeSource(
 ): string {
   if (!recipeName) return mutation(source)
 
-  const header = new RegExp(
-    `^RECIPE\\s+${escapeRegex(recipeName)}\\s*(?:\\([^)]*\\))?\\s*\\{`,
-    'm',
-  ).exec(source)
+  const header = new RegExp(dslHeaderPattern('RECIPE', recipeName), 'm').exec(source)
   if (!header) return source
 
-  const openBrace = source.indexOf('{', header.index)
+  const openBrace = header.index + header[0].length - 1
   let depth = 0
   let closeBrace = -1
   for (let index = openBrace; index < source.length; index += 1) {

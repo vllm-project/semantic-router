@@ -49,6 +49,9 @@ vllm-sr dashboard
 ```
 
 Open **Build → Models**, choose a provider, and enter the endpoint credentials.
+The Dashboard saves the API key to an owner-only file beside the configuration
+and writes only its path, `auth.api_key_file`, into `config.yaml`
+([Keys saved from the Dashboard or the management API](../../installation/security-hardening#keys-saved-from-the-dashboard-or-the-management-api)).
 For compatible providers the Dashboard discovers available model IDs, so you
 can import several in one step. Use **Advanced settings** only when you need to
 override metadata, pricing, connection behavior, or select a built-in reasoning
@@ -64,7 +67,8 @@ for the supported combinations.
 Open **Build → Mixture-of-Models → Recipes**. A Recipe describes the routing
 logic without embedding provider URLs or credentials. Review its decisions and
 probes, or create a custom Recipe from the Signals, Projections, and Decisions
-you already maintain.
+you already maintain. **Built-in recipes** lists the maintained Recipes
+installed with vLLM-SR; choose **Create model** on one to publish it.
 
 ### 3. Publish a Mixture-of-Model
 

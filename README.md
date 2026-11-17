@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
-  <a href="https://app.vllm-sr.ai/playground">Playground</a> |
+  <a href="https://app.vllm-sr.ai/">System Duo</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
   <a href="https://vllm-sr.ai/publications/">Publications</a> |
   <a href="https://huggingface.co/vllm-sr">Hugging Face</a> |
@@ -16,8 +16,8 @@
 <a href="https://trendshift.io/repositories/15581?utm_source=trendshift-badge&utm_medium=badge&utm_campaign=badge-trendshift-15581" target="_blank" rel="noopener noreferrer">
   <img src="https://trendshift.io/api/badge/trendshift/repositories/15581/daily?language=Go" alt="vllm-project%2Fsemantic-router | Trendshift" width="250" height="55"/>
 </a>
-<a href="https://huggingface.co/collections/vllm-sr/decision-20">
-  <img src="website/static/img/hf-trending.svg" alt="Decision 2.0 — #1 on Hugging Face Trending Collections, October 6, 2026" width="300" height="55"/>
+<a href="https://huggingface.co/collections/vllm-sr/decision-30">
+  <img src="website/static/img/hf-trending.svg" alt="Decision 3.0 — #1 on Hugging Face Trending Collections, October 14, 2026" width="300" height="55"/>
 </a>
 
 [![Main](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml/badge.svg)](https://github.com/vllm-project/semantic-router/actions/workflows/main.yml)
@@ -56,24 +56,14 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 
 For pip, uv, or agent-driven installation, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
-### Connect your agent harness
+### Try it online
 
-Point your harness at the Router's inference endpoint. Use a public model ID such as `vllm-sr/auto`.
-
-Follow **[Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness/)** for setup and compatibility.
-
-### Online playground
-
-Try the online playground at <https://app.vllm-sr.ai/playground>.
-
-Credentials:
-
-- Username: `love@vllm-sr.ai`
-- Password: `vllm-sr-read`
+Try [System Duo](https://app.vllm-sr.ai/#try): pick an example and it runs live in your browser, with a free key on first run.
 
 ## Latest News
 
-- [2026/10/06] [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20) reached #1 on Hugging Face Trending Collections.
+- [2026/10/14] [d3](https://huggingface.co/vllm-sr/d3) ranks #1 on text and vision in the [Jev Decision Index](https://huggingface.co/spaces/multimodalart/jev-decision-index), with smaller sizes on the Pareto frontier.
+- [2026/10/14] [Decision 3.0](https://huggingface.co/collections/vllm-sr/decision-30), [Decision 2.0](https://huggingface.co/collections/vllm-sr/decision-20), and [Vela 2.0](https://huggingface.co/collections/vllm-sr/vela-20) reached Hugging Face Trending Collections.
 - [2026/10/06] [Vela 2.0: Towards Open Foundation Routing Models](https://vllm-sr.ai/blog/vela-2-0-open-foundation-routing-models/)
 - [2026/09/24] [vLLM Semantic Router v0.4 Hermes: Many Models, One Improving System](https://vllm-sr.ai/blog/v0.4-vllm-sr-hermes-release/)
 - [2026/09/22] [Introducing Decision 1.0: Open Decision Foundation Models](https://vllm-sr.ai/blog/decision-models/)
@@ -117,10 +107,8 @@ We host two monthly community meetings across APAC and the Americas:
 
 - **APAC-friendly meeting — second Wednesday of the month**: 9:00-10:00 AM Singapore time (UTC+8; the same local time in Beijing)
   - [Google Meet](https://meet.google.com/sed-jmht-ddm)
-  - [Google Calendar Invite](https://calendar.app.google/w3r6mfKf4X4xCMAm9)
 - **Americas-friendly meeting — fourth Wednesday of the month**: 8:00-9:00 PM Eastern Time (`America/New_York`) / 5:00-6:00 PM Pacific Time
   - [Google Meet](https://meet.google.com/wvm-vbfy-xzj)
-  - [Google Calendar Invite](https://calendar.app.google/xHPHx8xhD1wHQfhH6)
 
 ## Contributing
 
@@ -147,6 +135,9 @@ An open ecosystem spanning research, infrastructure, and enterprise adoption.
 
 <div align="center">
   <a href="https://vllm-sr.ai/#ecosystem">
-    <img src="website/static/img/ecosystem/ecosystem.webp" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="website/static/img/ecosystem/ecosystem-dark-theme.png">
+      <img src="website/static/img/ecosystem/ecosystem-light-theme.png" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+    </picture>
   </a>
 </div>

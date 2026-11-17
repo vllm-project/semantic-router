@@ -1,0 +1,62 @@
+# events rules are keywords rules with operator OR over their event types, the
+# severities the event classifier knew, action codes and, with temporal, the
+# urgency markers; event conditions and projection inputs are keyword ones.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+  - {model_names: [vllm-sr/ops], recipe: ops}
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - {name: billing, operator: OR, keywords: [invoice, refund]}
+      events:
+        - name: critical_payment_event
+          description: Critical payment events that need incident-grade routing.
+          event_types: [payment_failed, transaction_declined]
+          severities: [critical, High, severe]
+          action_codes: [TXN_DECLINE]
+          temporal: true
+        - name: audit_event
+          event_types: [audit_log]
+    projections:
+      scores:
+        - name: incident_pressure
+          method: weighted_sum
+          inputs:
+            - {type: event, name: critical_payment_event, weight: 0.7}
+            - {type: keyword, name: billing, weight: 0.3}
+      mappings:
+        - name: incident_band
+          source: incident_pressure
+          method: threshold_bands
+          outputs: [{name: incident_high, gte: 0.5}]
+    decisions:
+      - name: incident
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - {type: event, name: critical_payment_event}
+            - {type: event, name: audit_event}
+        modelRefs: [{model: general}]
+      - name: pressure
+        priority: 50
+        rules: {type: projection, name: incident_high}
+        modelRefs: [{model: general}]
+  - name: ops
+    signals:
+      events:
+        - {name: outage, event_types: [outage], severities: [critical]}
+    decisions:
+      - name: outage
+        priority: 100
+        rules: {type: event, name: outage}
+        modelRefs: [{model: general}]

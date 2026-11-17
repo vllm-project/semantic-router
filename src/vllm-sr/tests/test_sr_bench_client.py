@@ -305,6 +305,25 @@ def test_submission_transport_failure_is_never_retried(tmp_path, monkeypatch):
     request.assert_called_once()
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        Mock(side_effect=ValueError("Expecting value: line 1 column 1 (char 0)")),
+        Mock(return_value=["not", "an", "object"]),
+    ],
+)
+def test_unexpected_service_response_body_is_reported_as_value_error(
+    tmp_path, monkeypatch, body
+):
+    client = Client(store=tmp_path)
+    monkeypatch.setattr(client, "ensure", lambda: None)
+    response = Mock(status_code=200)
+    response.json = body
+    monkeypatch.setattr(client_module.requests, "request", Mock(return_value=response))
+    with pytest.raises(ValueError, match="Service returned"):
+        client.request("GET", "/runs")
+
+
 def test_cli_compare_exposes_subject_and_total_spend_from_local_service(
     tmp_path, monkeypatch
 ):

@@ -30,6 +30,8 @@ type SessionPolicyTrace struct {
 	IdleForSeconds float64
 	IdleExpired    bool
 
+	ExplicitRelease bool
+
 	HasNonPortableContext    bool
 	NonPortableContextReason string
 	DecisionDrift            bool
@@ -61,6 +63,10 @@ type SessionPolicyTrace struct {
 	// evaluated this decision. Nil means the gate did not run.
 	SwitchGate       *SessionSwitchGateTrace
 	RescueSwitchGate *SessionSwitchGateTrace
+
+	// CacheEconomics prices the switch the routing proposed against the
+	// prompt cache it would throw away. Nil means no switch was priced.
+	CacheEconomics *CacheSwitchEconomics
 }
 
 // SessionSwitchGateTrace records why trajectory evidence allowed or suppressed
@@ -118,6 +124,8 @@ type SessionCandidateTrace struct {
 	SwitchHistoryPenalty   float64
 	FrontierCostMultiplier float64
 	NetSwitchAdvantage     float64
+
+	CacheEconomics *CacheSwitchEconomics
 }
 
 // ToMap converts the trace into a JSON-friendly representation for packages
@@ -148,6 +156,7 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 		"idle_known":                        t.IdleKnown,
 		"idle_for_seconds":                  t.IdleForSeconds,
 		"idle_expired":                      t.IdleExpired,
+		"explicit_release":                  t.ExplicitRelease,
 		"has_non_portable_context":          t.HasNonPortableContext,
 		"non_portable_context_reason":       t.NonPortableContextReason,
 		"decision_drift":                    t.DecisionDrift,
@@ -173,7 +182,7 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 	if len(t.CandidateTraces) > 0 {
 		candidates := make(map[string]interface{}, len(t.CandidateTraces))
 		for model, trace := range t.CandidateTraces {
-			candidates[model] = map[string]interface{}{
+			candidate := map[string]interface{}{
 				"current":                  trace.Current,
 				"base_score":               trace.BaseScore,
 				"final_score":              trace.FinalScore,
@@ -187,8 +196,15 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 				"frontier_cost_multiplier": trace.FrontierCostMultiplier,
 				"net_switch_advantage":     trace.NetSwitchAdvantage,
 			}
+			if trace.CacheEconomics != nil {
+				candidate["cache_economics"] = trace.CacheEconomics.ToMap()
+			}
+			candidates[model] = candidate
 		}
 		out["candidate_traces"] = candidates
+	}
+	if t.CacheEconomics != nil {
+		out["cache_economics"] = t.CacheEconomics.ToMap()
 	}
 	if t.SwitchGate != nil {
 		out["switch_gate"] = t.SwitchGate.ToMap()

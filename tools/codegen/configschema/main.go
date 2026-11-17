@@ -31,7 +31,7 @@ func main() {
 		path    string
 		payload []byte
 	}{
-		{filepath.Join(root, "src", "semantic-router", "pkg", "configschema", "router-config-v0.3.schema.json"), payload},
+		{filepath.Join(root, "src", "semantic-router", "pkg", "configschema", "router-config-v0.5.schema.json"), payload},
 		{filepath.Join(root, "dashboard", "frontend", "src", "generated", "routerConfigContract.ts"), typeScriptPayload},
 	}
 	for _, output := range outputs {

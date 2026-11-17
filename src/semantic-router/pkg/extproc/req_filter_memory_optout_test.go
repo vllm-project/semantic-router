@@ -12,7 +12,7 @@ func TestMemoryOptOut_DisabledRoutes(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			Memory: config.MemoryConfig{
-				Enabled: true,
+				InUse: true,
 				DisabledRoutes: []string{
 					"/v1/chat/completions",
 					"/v1/completions",
@@ -44,7 +44,7 @@ func TestMemoryOptOut_DisabledModels(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			Memory: config.MemoryConfig{
-				Enabled: true,
+				InUse: true,
 				DisabledModels: []string{
 					"gpt-4-with-mem0",
 					"claude-3-langmem",
@@ -76,7 +76,7 @@ func TestMemoryOptOut_NoDisabledRoutes(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			Memory: config.MemoryConfig{
-				Enabled:        true,
+				InUse:          true,
 				DisabledRoutes: nil,
 			},
 		},
@@ -90,7 +90,7 @@ func TestMemoryOptOut_NoDisabledModels(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
 			Memory: config.MemoryConfig{
-				Enabled:        true,
+				InUse:          true,
 				DisabledModels: []string{},
 			},
 		},

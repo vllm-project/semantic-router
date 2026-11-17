@@ -252,15 +252,7 @@ go test ./pkg/extproc/req_filter_rag_openai_test.go -v
 
 ### E2E 测试
 
-基于 OpenAI cookbook 的 E2E：
-
-```bash
-# Python E2E
-python e2e/testing/08-rag-openai-test.py --base-url http://localhost:8080
-
-# Go E2E（需要 Kubernetes 集群）
-make e2e-test E2E_TESTS=rag-openai
-```
+未接入 profile 的 Go 探针及其 Python 副本已退役。当前直接检索断言位于 `src/semantic-router/pkg/extproc/req_filter_rag_openai_test.go`；服务端 `tool_based` 文件检索明确不受支持。
 
 ### OpenAI API 校验测试套件
 

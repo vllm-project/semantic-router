@@ -22,8 +22,9 @@ import {
   type LayoutNavLink,
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
-import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessDashboardPath, canAccessMLSetup, canViewUsers } from '../utils/accessControl'
+import { useCapability } from '../contexts/CapabilitiesContext'
+import { isCapabilityUsable } from '../contexts/dashboardCapabilities'
+import { canAccessDashboardPath, canViewUsers } from '../utils/accessControl'
 import { preloadDashboardRoute } from '../app/routeLoaders'
 
 interface LayoutProps {
@@ -56,20 +57,18 @@ const Layout: React.FC<LayoutProps> = ({
   )
   const pendingMenuFocusRef = useRef<'active-tab' | 'last-link' | null>(null)
   const { user, logout } = useAuth()
-  const { srBenchAvailable, mlPipelineAvailable } = useReadonly()
+  const evaluationAvailable = isCapabilityUsable(useCapability('evaluation'))
   const location = useLocation()
   const configSection = getConfigSectionFromPathname(location.pathname)
   const navigate = useNavigate()
   const canAccessUsers = canViewUsers(user)
-  const canUseMLSetup = canAccessMLSetup(user) && mlPipelineAvailable
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(
     BUILD_MENU_CATEGORIES,
     (item) =>
       canAccessMenuItem(item) &&
-      (item.kind !== 'route' || item.to !== '/evaluation' || srBenchAvailable) &&
-      (canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'),
+      (item.kind !== 'route' || item.to !== '/evaluation' || evaluationAvailable),
   )
   const operateMenuCategories = filterLayoutMenuCategories(
     OPERATE_MENU_CATEGORIES,

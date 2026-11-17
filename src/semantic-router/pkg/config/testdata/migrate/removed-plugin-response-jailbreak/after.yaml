@@ -1,0 +1,31 @@
+# A response_jailbreak plugin is a response_guard rule over a jailbreak rule
+# with stage: response and predicate {gte: <the plugin's threshold>}.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - signals:
+      jailbreak:
+        - name: guarded_response
+          stage: response
+          predicate:
+            gte: 0.8
+          description: Answers that carry jailbreak content.
+    name: default
+    decisions:
+      - name: guarded
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: response_guard
+            configuration:
+              rules:
+                - when:
+                    type: jailbreak
+                    name: guarded_response
+                  action: block
+              on_unknown: block

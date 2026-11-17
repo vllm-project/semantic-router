@@ -139,6 +139,7 @@ type TurnParams struct {
 	PromptTokens                int
 	CachedPromptTokens          int
 	CacheWriteTokens            int
+	CacheWrite1hTokens          int
 	EstimatedCachedPromptTokens int
 	CompletionTokens            int
 	EstimatedCacheSavings       float64
@@ -201,7 +202,7 @@ func RecordTurn(p TurnParams) {
 	}
 	domain := normalizeDomain(p.Domain)
 
-	costThisTurn := computeCost(p.PromptTokens, p.CachedPromptTokens, p.CacheWriteTokens, p.CompletionTokens, p.Pricing)
+	costThisTurn := computeCost(p.PromptTokens, p.CachedPromptTokens, p.CacheWriteTokens, p.CacheWrite1hTokens, p.CompletionTokens, p.Pricing)
 
 	t := nowFn()
 	stateKey := scopedTelemetrySessionID(p.RoutingScope, key)
@@ -240,10 +241,11 @@ func recordTurnState(key string, p TurnParams, costThisTurn float64, t time.Time
 		store[key] = st
 	}
 	usage := modelpricing.Normalize(modelpricing.Usage{
-		PromptTokens:      p.PromptTokens,
-		CachedInputTokens: p.CachedPromptTokens,
-		CacheWriteTokens:  p.CacheWriteTokens,
-		CompletionTokens:  p.CompletionTokens,
+		PromptTokens:       p.PromptTokens,
+		CachedInputTokens:  p.CachedPromptTokens,
+		CacheWriteTokens:   p.CacheWriteTokens,
+		CacheWrite1hTokens: p.CacheWrite1hTokens,
+		CompletionTokens:   p.CompletionTokens,
 	})
 	st.cumulativePrompt += int64(usage.PromptTokens)
 	st.cumulativeCached += int64(usage.CachedInputTokens)
@@ -274,6 +276,7 @@ func recordRouterSessionUsage(publicSessionID string, model string, p TurnParams
 		PromptTokens:                p.PromptTokens,
 		CachedPromptTokens:          p.CachedPromptTokens,
 		CacheWriteTokens:            p.CacheWriteTokens,
+		CacheWrite1hTokens:          p.CacheWrite1hTokens,
 		EstimatedCachedPromptTokens: p.EstimatedCachedPromptTokens,
 		CompletionTokens:            p.CompletionTokens,
 		Cost:                        costThisTurn,
@@ -339,6 +342,7 @@ func logSessionTurn(
 		fields["pricing_completion_per_1m"] = p.Pricing.CompletionPer1M
 		fields["pricing_cached_input_per_1m"] = p.Pricing.CachedInputPer1M
 		fields["pricing_cache_write_per_1m"] = p.Pricing.EffectiveCacheWritePer1M()
+		fields["pricing_cache_write_1h_per_1m"] = p.Pricing.EffectiveCacheWrite1hPer1M()
 		fields["pricing_currency"] = currency
 		fields["cost_this_turn"] = costThisTurn
 		fields["cumulative_cost"] = cumulative.cost
@@ -348,15 +352,16 @@ func logSessionTurn(
 
 // computeCost returns the turn cost in the pricing currency given token counts
 // and rates. Cached reads and cache writes use their configured rates.
-func computeCost(promptTokens, cachedPromptTokens, cacheWriteTokens, completionTokens int, pricing TurnPricing) float64 {
+func computeCost(promptTokens, cachedPromptTokens, cacheWriteTokens, cacheWrite1hTokens, completionTokens int, pricing TurnPricing) float64 {
 	if !pricing.IsConfigured() {
 		return 0
 	}
 	return modelpricing.Cost(modelpricing.Usage{
-		PromptTokens:      promptTokens,
-		CachedInputTokens: cachedPromptTokens,
-		CacheWriteTokens:  cacheWriteTokens,
-		CompletionTokens:  completionTokens,
+		PromptTokens:       promptTokens,
+		CachedInputTokens:  cachedPromptTokens,
+		CacheWriteTokens:   cacheWriteTokens,
+		CacheWrite1hTokens: cacheWrite1hTokens,
+		CompletionTokens:   completionTokens,
 	}, pricing)
 }
 

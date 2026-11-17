@@ -29,6 +29,8 @@ export const modelCardPatch = (data: Record<string, unknown>): Omit<RoutingModel
   const capabilities = normalizeStringList(data.capabilities)
   const tags = normalizeStringList(data.tags)
   const loras = normalizeModelLoras(data.loras)
+  const input = normalizeStringList(data.input_modalities)
+  const output = normalizeStringList(data.output_modalities)
   return {
     param_size:
       typeof data.param_size === 'string' && data.param_size.trim()
@@ -42,8 +44,11 @@ export const modelCardPatch = (data: Record<string, unknown>): Omit<RoutingModel
     capabilities: capabilities.length ? capabilities : undefined,
     loras: loras.length ? loras : undefined,
     tags: tags.length ? tags : undefined,
-    modality:
-      typeof data.modality === 'string' && data.modality.trim() ? data.modality.trim() : undefined,
+    // A model reads and writes text unless it declares otherwise.
+    modalities:
+      input.length || output.length
+        ? { input: input.length ? input : ['text'], output: output.length ? output : ['text'] }
+        : undefined,
   }
 }
 
@@ -170,12 +175,6 @@ const identityFields = (
     placeholder: 'e.g., 131072',
   },
   {
-    name: 'modality',
-    label: 'Modality',
-    type: 'text',
-    placeholder: 'e.g., text, omni, diffusion',
-  },
-  {
     name: 'description',
     label: 'Description',
     type: 'textarea',
@@ -206,9 +205,10 @@ export const newModelFormData = (): Record<string, unknown> => ({
   context_window_size: '',
   description: '',
   capabilities: [],
+  input_modalities: [],
+  output_modalities: [],
   loras: [],
   tags: [],
-  modality: '',
   backend_refs: [
     {
       name: 'endpoint-1',
@@ -233,6 +233,9 @@ export const editModelFormData = (model: NormalizedModel): Record<string, unknow
   reliability: model.reliability || {},
 })
 
+const modelModalitiesLabel = (modalities?: { input: string[]; output: string[] }): string =>
+  `${modalities?.input.join(', ') || 'text'} → ${modalities?.output.join(', ') || 'text'}`
+
 const baseModelViewSection = (model: NormalizedModel, defaultModel: string): ViewSection => ({
   title: 'Basic Information',
   fields: [
@@ -245,7 +248,7 @@ const baseModelViewSection = (model: NormalizedModel, defaultModel: string): Vie
       label: 'API Format',
       value: model.api_format || (model.backend_refs?.length ? 'Unresolved' : 'Not connected'),
     },
-    { label: 'Modality', value: model.modality || 'N/A' },
+    { label: 'Modalities', value: modelModalitiesLabel(model.modalities) },
     { label: 'Param Size', value: model.param_size || 'N/A' },
     {
       label: 'Context Window',

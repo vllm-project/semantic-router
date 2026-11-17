@@ -46,14 +46,7 @@ func deterministicEmbeddingDimension(cfg EmbeddingConfig) int {
 	if cfg.Dimension > 0 {
 		return cfg.Dimension
 	}
-	switch cfg.Model {
-	case EmbeddingModelMMBERT:
-		return 256
-	case EmbeddingModelMulti:
-		return 384
-	default:
-		return 768
-	}
+	return 768
 }
 
 func deterministicEmbeddingFeatures(text string) []string {

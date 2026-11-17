@@ -32,7 +32,7 @@ MAX_INPUT_TOKENS = 1024
 READOUT_PADDING = 0.25
 # Below this many padded tokens one read costs less than several.
 READOUT_ONE_GRID = 1024
-# Larger coalesced batches run slower per token on CPUs (max_speed at 16 concurrent requests, 16 cores).
+# Larger coalesced batches run slower per token on CPUs (packed copies, 16 concurrent requests, 16 cores).
 CPU_BATCH_TOKENS = 1024
 NOUL_DEFAULTS = NoulDefaults(
     false="No. The statement or question is not satisfied.",
@@ -251,8 +251,8 @@ def packed_marker_logits(
     the type's head layers then read them padded with a key mask: by length
     group on CPUs (``readout_groups``), where padding costs compute, and as one
     grid on GPUs, where several reads' launches cost more than the padding.
-    Packing changes the attention and GEMM shapes, so this serves approximate
-    profiles, which also run the engine's reduced-precision copy when it loaded
+    Packing changes the attention and GEMM shapes, so this serves batches that
+    merge requests, which also run the engine's reduced copy when it loaded
     one.
     """
     lengths = [len(item.ids) for item in items]

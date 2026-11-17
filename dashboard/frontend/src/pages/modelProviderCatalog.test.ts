@@ -26,7 +26,7 @@ describe('model provider catalog contracts', () => {
 
   it('only emits upstream wire formats supported by the router', () => {
     const formats = new Set(modelProviderCatalog.map((provider) => provider.apiFormat))
-    expect([...formats].sort()).toEqual(['anthropic', 'openai', 'responses', 'systemone'])
+    expect([...formats].sort()).toEqual(['chat_completions', 'messages', 'responses', 'systemone'])
   })
 
   it('rejects an unknown default protocol instead of silently selecting OpenAI', () => {

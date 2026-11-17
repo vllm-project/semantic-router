@@ -14,6 +14,7 @@ import type {
   DSLFieldValue,
 } from "@/types/dsl";
 import {
+  formatDslName,
   getAlgorithmFieldSchema,
   getPluginFieldSchema,
   getSignalFieldSchema,
@@ -30,10 +31,11 @@ function generateSignalDslPreview(
   fields: DSLFieldObject,
 ): string {
   const body = serializeFields(fields);
+  const header = `SIGNAL ${signalType} ${formatDslName(signalName)}`;
   if (!body.trim()) {
-    return `SIGNAL ${signalType} ${signalName} {}`;
+    return `${header} {}`;
   }
-  return `SIGNAL ${signalType} ${signalName} {\n${body}\n}`;
+  return `${header} {\n${body}\n}`;
 }
 
 function generateGlobalDslPreview(fields: DSLFieldObject): string {
@@ -380,9 +382,9 @@ const SignalEditorForm: React.FC<{
   const [localFields, setLocalFields] = useState<DSLFieldObject>(() => ({ ...signal.fields }));
 
   const { data, scope } = useSignalCapabilities();
-  const availability = signalAvailability(data, scope, signal.signalType, signal.name, localFields);
+  const availability = signalAvailability(data, scope, signal.signalType, localFields);
   const schema =
-    signal.signalType === "decision"
+    signal.signalType === "systemone"
       ? signalCapabilitySchema(
           getSignalFieldSchema(signal.signalType),
           decisionQuestionTypes(data, scope, localFields),

@@ -6,6 +6,37 @@ feedback merely because it contains words such as “explain” or “wrong”. 
 text and supplied code belong to the task being discussed, not automatically to
 the user's assessment of an earlier answer.
 
+## Setup
+
+This directory is a uv project. `pyproject.toml` bounds the dependencies and
+`uv.lock` pins them. Create the environment from the lock, adding the `data`
+group for the download scripts in `data_processing/`:
+
+```bash
+uv sync --locked --project src/training/model_classifier/user_feedback_classifier
+uv sync --locked --project src/training/model_classifier/user_feedback_classifier --group data
+```
+
+Run everything from the repository root as modules under
+`src.training.model_classifier`, so the shared `training_args_compat` helper
+and the `sequence_repair` trainer resolve as packages. For example, the tests,
+as `make test` runs them:
+
+```bash
+uv run --project src/training/model_classifier/user_feedback_classifier \
+  python -m unittest discover \
+  -s src/training/model_classifier/user_feedback_classifier/tests -p 'test_*.py'
+```
+
+and the legacy LoRA trainer:
+
+```bash
+uv run --project src/training/model_classifier/user_feedback_classifier \
+  python -m src.training.model_classifier.user_feedback_classifier.train_feedback_detector --help
+```
+
+`requirements.txt` stays for anyone who installs with `pip`.
+
 ## Prepare training data
 
 Keep training, development, and final evaluation separate by conversation,
@@ -33,7 +64,7 @@ The data tools accept reviewed annotations as explicit inputs:
   annotations, retaining the declared family partitions and input hashes.
 
 Run these modules with
-`python -m src.training.model_classifier.user_feedback_classifier.<module>`.
+`uv run --project src/training/model_classifier/user_feedback_classifier python -m src.training.model_classifier.user_feedback_classifier.<module>`.
 Store annotation artifacts and dataset revisions with the dataset release.
 Historical review snapshots and training outputs do not belong in the source
 checkout. Authored family definitions remain generator inputs; correlated
@@ -74,7 +105,8 @@ measured `length_bucket` for context evaluation. Freeze the data recipe and
 training budget before comparing development scores.
 
 ```bash
-python -m src.training.model_classifier.sequence_repair.train \
+uv run --project src/training/model_classifier/user_feedback_classifier \
+  python -m src.training.model_classifier.sequence_repair.train \
   --base /artifacts/vela-base \
   --base-id vllm-sr/Vela-1.0-Encoder-307M \
   --base-revision fe9ccc074b781bc0e2e13c2c8d26f2640410636a \

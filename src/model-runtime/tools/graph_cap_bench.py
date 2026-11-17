@@ -1,4 +1,4 @@
-"""Exact-profile throughput on Index-like traffic under one graph-size cap (performance records).
+"""Throughput of requests in their released forwards on Index-like traffic under one graph-size cap (performance records).
 
     python3 tools/graph_cap_bench.py --package DIR --stream NAME:PROMPTS.jsonl:COUNT ... --cap 4096
         --output OUT.json [--questions 1,1,1,1,2,2,3,4,8] [--window 1000] [--device rocm:0] [--base-path DIR]
@@ -6,7 +6,7 @@
 Index-like traffic is many requests of a few questions each about states of very different lengths, so
 request shapes (rows, padded length) rarely repeat exactly. Request i asks about prompt i's state the
 questions of prompts i .. i+k-1, with k cycling through --questions. Every request runs once, in stream
-order, on the exact profile, with graphs captured only up to --cap padded tokens (0: no graphs; the
+order, alone in its released forwards, with graphs captured only up to --cap padded tokens (0: no graphs; the
 default cap is fast.MAX_GRAPH_TOKENS). Reported: requests/s and questions/s overall and per window of
 --window requests, latency percentiles, the graph cache (captures, replays, eager forwards, refusals once
 full, cached graphs), and a digest of every answer. Graphs and eager forwards compute the same bits, so
@@ -28,7 +28,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gpu_bench import percentile
 from gpu_parity import canonical, load, system_one
-from vllm_srun.profiles.exact import ExactProfile
 
 
 def stream(specs: list[str], sizes: list[int]) -> list[dict]:
@@ -68,14 +67,16 @@ def main() -> int:
     parser.add_argument("--device", default="rocm:0")
     parser.add_argument("--base-path")
     args = parser.parse_args()
+
+    requests = stream(args.stream, [int(size) for size in args.questions.split(",")])
+    if not requests:
+        raise SystemExit(f"--stream {args.stream} contains no requests")
     args.no_graphs = args.no_fused = False
     import torch
 
-    requests = stream(args.stream, [int(size) for size in args.questions.split(",")])
     model = load(args)
     graphs = model.engine_model.graphs
     graphs.max_tokens = args.cap
-    exact = ExactProfile()
     digest = hashlib.sha256()
     milliseconds, windows, questions = [], [], 0
     window_started, window_questions = time.perf_counter(), 0
@@ -83,7 +84,7 @@ def main() -> int:
     for index, request in enumerate(requests, 1):
         torch.cuda.synchronize()
         tick = time.perf_counter()
-        response = system_one(model, exact, request["state"], request["questions"])
+        response = system_one(model, None, request["state"], request["questions"])
         torch.cuda.synchronize()
         milliseconds.append(1000 * (time.perf_counter() - tick))
         digest.update(canonical([request["id"], response["answers"]]).encode())

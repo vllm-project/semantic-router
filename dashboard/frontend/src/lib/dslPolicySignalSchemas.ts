@@ -19,32 +19,39 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           ],
         },
       ]
-    case 'classifier':
+    case 'agent':
       return [
         { key: 'description', label: 'Description', type: 'string' },
         {
-          key: 'type',
-          label: 'Backend Type',
+          key: 'role',
+          label: 'Role',
           type: 'select',
-          options: ['local', 'llm', 'sequence_classifier'],
-          required: true,
+          options: ['main', 'subagent'],
+          description: 'The main agent or a subagent, as protection reads the agent identity.',
         },
-        { key: 'model', label: 'External Model', type: 'string' },
-        { key: 'model_path', label: 'Local Model Path', type: 'string' },
         {
-          key: 'labels',
-          label: 'Labels',
+          key: 'harness',
+          label: 'Harness',
+          type: 'select',
+          options: ['claude_code', 'codex', 'opencode'],
+          description: 'The harness whose identity headers the request carries.',
+        },
+        {
+          key: 'types',
+          label: 'Subagent Types',
           type: 'string[]',
-          required: true,
+          placeholder: 'Explore',
+          description:
+            'Any of these matches, ignoring case: a Claude Code agent type (Explore, Plan, general-purpose, custom, teammate, fork) or a Codex child kind (collab_spawn, review).',
         },
-        { key: 'instructions', label: 'Instructions', type: 'string' },
         {
-          key: 'disable_rationale',
-          label: 'Disable Rationale',
-          type: 'boolean',
-          description: 'Only LLM classifiers support this option.',
+          key: 'request_classes',
+          label: 'Request Classes',
+          type: 'string[]',
+          placeholder: 'compaction',
+          description:
+            'Any of these request classes matches: main, subagent, workflow, compaction or auxiliary. Claude Code sends the class; OpenCode session titles are auxiliary and its summaries compaction.',
         },
-        { key: 'use_cpu', label: 'Use CPU', type: 'boolean' },
       ]
     case 'input_modality':
       return [

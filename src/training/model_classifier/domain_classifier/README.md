@@ -28,11 +28,25 @@ weights or base pretraining. It also does not turn a benchmark question into a
 natural conversational request. Independently reviewed Aya requests are added
 with contributor-group splits and reported as a separate source.
 
-Fetch the pinned files and hydrate Aya labels using the
-[shared workflow](../sequence_repair/README.md), then prepare the corpus:
+## Setup
+
+This directory is a uv project. `pyproject.toml` bounds the dependencies and
+`uv.lock` pins them. Create the environment from the lock:
 
 ```bash
-python -m src.training.model_classifier.domain_classifier.prepare_data \
+uv sync --locked --project src/training/model_classifier/domain_classifier
+```
+
+## Prepare the corpus
+
+Fetch the pinned files and hydrate Aya labels using the
+[shared workflow](../sequence_repair/README.md), then prepare the corpus from
+the repository root, since `prepare_data.py` imports `sequence_repair` as a
+sibling package:
+
+```bash
+uv run --project src/training/model_classifier/domain_classifier \
+  python -m src.training.model_classifier.domain_classifier.prepare_data \
   --sources artifacts/vela/sources \
   --legacy-datasets artifacts/vela/sources \
   --annotations artifacts/vela/annotations/aya-reviewed-labels-v1.jsonl \

@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/openapischema"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -44,7 +45,7 @@ func TestOpenAPIWireRepresentationMatchesNullableScoreEncoding(t *testing.T) {
 				if !exists || (!available && value != nil) || (available && value != float64(0)) {
 					t.Fatalf("wrong wire score: %s", encoded)
 				}
-				schema := openAPISchemaFromType(reflect.TypeOf(test.value), make(map[reflect.Type]bool))
+				schema := openapischema.FromType(reflect.TypeOf(test.value), routerSchemaOverrides)
 				field := schema.Properties[test.field]
 				if field.Type != "number" || !field.Nullable {
 					t.Fatalf("wire score %s disagrees with schema %+v", encoded, field)
@@ -66,7 +67,7 @@ func TestOpenAPIWireRepresentationMatchesNullableScoreEncoding(t *testing.T) {
 func TestOpenAPIReplayHTTPMatchesScoreWireSchema(t *testing.T) {
 	body, err := json.Marshal(routerreplay.ListResponse{Data: []routerreplay.RoutingRecord{
 		{ID: "unavailable"},
-		{ID: "available-zero", ConfidenceScoreAvailable: true, JailbreakScoreAvailable: true, ResponseJailbreakScoreAvailable: true},
+		{ID: "available-zero", ConfidenceScoreAvailable: true, JailbreakScoreAvailable: true},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -86,7 +87,7 @@ func TestOpenAPIReplayHTTPMatchesScoreWireSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	schema := api.generateOpenAPISpec().Paths[apiObservabilityReplaysPath].Get.Responses["200"].Content["application/json"].Schema.Properties["data"].Items
-	for _, name := range []string{"confidence_score", "jailbreak_confidence", "response_jailbreak_confidence"} {
+	for _, name := range []string{"confidence_score", "jailbreak_confidence"} {
 		field := schema.Properties[name]
 		if field.Type != "number" || !field.Nullable || actual.Data[1][name] != float64(0) {
 			t.Fatalf("available-zero %s: schema=%+v actual=%v", name, field, actual.Data[1])

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // The rules below are Envoy's for applying ext_proc mutations (Envoy v1.35,
@@ -144,7 +146,7 @@ func mutationAllowed(name string, appending, removing bool) bool {
 	if isPseudoHeader(name) && appending {
 		return false
 	}
-	return !strings.HasPrefix(name, "x-envoy-")
+	return !strings.HasPrefix(name, headers.EnvoyPrefix)
 }
 
 func validSetValue(name, value string) bool {

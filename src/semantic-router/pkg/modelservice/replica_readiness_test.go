@@ -27,7 +27,8 @@ func failedReplicaLease(t *testing.T, count int, failure error) (*Lease, *replic
 		lease.groups = append(lease.groups, g)
 		workers = append(workers, replicaWorker{id: id, member: member{group: g, served: g.models["primary"]}})
 	}
-	pool := newReplicaPool(manager, "primary", config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: poolArtifact}, workers)
+	dtype := "auto"
+	pool := newReplicaPool(manager, "primary", config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: poolArtifact, Dtype: dtype}, workers)
 	lease.members["primary"] = member{group: workers[0].member.group, served: pool.served, pool: pool}
 	t.Cleanup(func() { _ = lease.Close() })
 	return lease, pool
@@ -72,7 +73,7 @@ func TestReplicaPreparationAcceptsReadyWorkerDespiteFailedPeer(t *testing.T) {
 	worker.member.group.failure = nil
 	worker.member.group.client = &Client{}
 	worker.member.group.client.bundleTasks.Store(DefaultBundleTasks)
-	worker.member.served.card = &ModelCard{ID: "primary", Repo: poolArtifact, Profile: "exact", ModelSHA256: strings.Repeat("a", 64)}
+	worker.member.served.card = &ModelCard{ID: "primary", Repo: poolArtifact, ModelSHA256: strings.Repeat("a", 64), EngineArgs: EngineArgs{Dtype: "auto"}}
 	worker.member.served.state = "ready"
 	worker.member.served.ready.Store(true)
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
@@ -80,7 +81,7 @@ func TestReplicaPreparationAcceptsReadyWorkerDespiteFailedPeer(t *testing.T) {
 	if card, err := pool.card(ctx); err != nil || !card.Ready {
 		t.Fatalf("failed peer blocked a healthy replica: %+v %v", card, err)
 	}
-	worker.member.served.card.Profile = "incompatible-profile"
+	worker.member.served.card.EngineArgs.Dtype = "bfloat16"
 	if _, err := pool.card(ctx); !errors.Is(err, ErrUnavailable) || errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("failed and incompatible workers must not leave preparation pending: %v", err)
 	}

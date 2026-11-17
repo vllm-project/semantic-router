@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
 
@@ -58,7 +59,7 @@ func TestPublicSystemOneForwardsClientCredentialsOnlyInsideNativeEnvelope(t *tes
 		request.Header.Set("Authorization", "Bearer client-key")
 		request.Header.Set("Api-Key", "client-fallback")
 		request.Header.Set("Cookie", "session=browser")
-		request.Header.Set(systemone.BackendRequestHeader, "1")
+		request.Header.Set(headers.VSRSystemOneBackend, "1")
 		response := httptest.NewRecorder()
 		handler(response, request)
 		if response.Code != want || response.Header().Get("Cache-Control") != "no-store" {
@@ -85,6 +86,17 @@ func TestPublicSystemOneDoesNotFollowManagementRedirectOrLeakFailures(t *testing
 	PublicSystemOneHandler(upstream.URL, decisionModelCredentialProvider{token: "trusted-management"})(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"judge"}`)))
 	if response.Code != 503 || redirected.Load() || strings.Contains(response.Body.String(), target.URL) {
 		t.Fatalf("redirect followed or target exposed: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestPublicSystemOneRefusesOverLimitBodiesAsTooLarge(t *testing.T) {
+	var calls atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls.Add(1) }))
+	defer upstream.Close()
+	response := httptest.NewRecorder()
+	PublicSystemOneHandler(upstream.URL)(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(strings.Repeat("x", systemone.RequestLimit+1))))
+	if response.Code != http.StatusRequestEntityTooLarge || !strings.Contains(response.Body.String(), `"code":"request_too_large"`) || calls.Load() != 0 {
+		t.Fatalf("over-limit native request: %d %s, upstream calls %d", response.Code, response.Body.String(), calls.Load())
 	}
 }
 

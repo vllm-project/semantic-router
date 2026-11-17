@@ -222,8 +222,8 @@ func testStandaloneFallback(ctx context.Context, client *kubernetes.Clientset, o
 	if reply.echo["mock"] != "provider-mocker" || reply.echo["model"] != standaloneFallbackModel {
 		return fmt.Errorf("the answer came from model %v, want the fallback %q", reply.echo["model"], standaloneFallbackModel)
 	}
-	if reply.headers.Get("x-vsr-fallback-attempts") == "" {
-		return fmt.Errorf("the response does not report the fallback attempts")
+	if path := reply.headers.Get(responsePathHeader); path != "fallback" {
+		return fmt.Errorf("the response path is %q, want fallback", path)
 	}
 	return nil
 }
@@ -267,13 +267,7 @@ func testStandaloneConfigRollout(ctx context.Context, client *kubernetes.Clients
 	if _, err = deployments.Patch(ctx, standaloneRouter, types.StrategicMergePatchType, []byte(restart), metav1.PatchOptions{}); err != nil {
 		return fmt.Errorf("roll out the Router: %w", err)
 	}
-	if err = wait.PollUntilContextTimeout(ctx, 5*time.Second, 15*time.Minute, true, func(ctx context.Context) (bool, error) {
-		deployment, getErr := deployments.Get(ctx, standaloneRouter, metav1.GetOptions{})
-		if getErr != nil {
-			return false, nil
-		}
-		return rolloutComplete(deployment), nil
-	}); err != nil {
+	if err = waitForRollout(ctx, client, standaloneNamespace, standaloneRouter, 15*time.Minute); err != nil {
 		return fmt.Errorf("wait for the Router rollout: %w", err)
 	}
 
@@ -288,8 +282,13 @@ func testStandaloneConfigRollout(ctx context.Context, client *kubernetes.Clients
 }
 
 func setDecisionModel(document map[string]any, decision, model string) error {
-	routing, _ := document["routing"].(map[string]any)
-	decisions, _ := routing["decisions"].([]any)
+	recipes, _ := document["recipes"].([]any)
+	var decisions []any
+	for _, raw := range recipes {
+		recipe, _ := raw.(map[string]any)
+		list, _ := recipe["decisions"].([]any)
+		decisions = append(decisions, list...)
+	}
 	for _, item := range decisions {
 		entry, _ := item.(map[string]any)
 		if entry["name"] != decision {
@@ -299,6 +298,18 @@ func setDecisionModel(document map[string]any, decision, model string) error {
 		return nil
 	}
 	return fmt.Errorf("the Router config has no decision %q", decision)
+}
+
+// waitForRollout waits until the Deployment's controller has seen its latest
+// spec and every replica is updated and available.
+func waitForRollout(ctx context.Context, client *kubernetes.Clientset, namespace, name string, timeout time.Duration) error {
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+		deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return rolloutComplete(deployment), nil
+	})
 }
 
 func rolloutComplete(deployment *appsv1.Deployment) bool {

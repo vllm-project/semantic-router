@@ -183,6 +183,8 @@ type workflowResumeTracker struct {
 	mu                  sync.Mutex
 	workerSawToolResult bool
 	finalCalled         bool
+	// tools are the tool names each backend call carried, in call order.
+	tools [][]string
 }
 
 func (tr *workflowResumeTracker) sawToolResult() bool {
@@ -204,11 +206,23 @@ func newWorkflowPauseResumeServer(t *testing.T) (*httptest.Server, *workflowResu
 		var payload struct {
 			Model    string                   `json:"model"`
 			Messages []map[string]interface{} `json:"messages"`
+			Tools    []struct {
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			} `json:"tools"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		names := []string{}
+		for _, tool := range payload.Tools {
+			names = append(names, tool.Function.Name)
+		}
+		tracker.mu.Lock()
+		tracker.tools = append(tracker.tools, names)
+		tracker.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		switch payload.Model {
 		case "worker-model":
@@ -291,6 +305,7 @@ type workflowRouteOptions struct {
 	recipe              config.RecipeName
 	streaming           bool
 	includeIntermediate *bool
+	plugins             []config.DecisionPlugin
 }
 
 func routeWorkflowRequestWith(t *testing.T, router *OpenAIRouter, body []byte, opts workflowRouteOptions) *ext_proc.ProcessingResponse {
@@ -316,6 +331,7 @@ func routeWorkflowRequestWithErr(router *OpenAIRouter, body []byte, opts workflo
 		include = *opts.includeIntermediate
 	}
 	decision := workflowTestDecisionWithIntermediateResponses(include)
+	decision.Plugins = opts.plugins
 	ctx := &RequestContext{
 		RequestID:               "workflow-independent-turn",
 		TraceContext:            context.Background(),

@@ -24,6 +24,7 @@ MAX_SAFETENSORS_HEADER = 256 << 20
 HEADER_LENGTH_BYTES = 8
 MIN_SAFETENSORS_HEADER = 2
 MAX_HASH_THREADS = 8
+SUMS_FILE = "SHA256SUMS"
 
 
 def sha256_file(path: Path) -> str:
@@ -199,3 +200,26 @@ def safetensors_elements(path: Path) -> int:
             raise PackageError(f"invalid tensor shape in {Path(path).name}: {name}")
         total += math.prod(shape)
     return total
+
+
+def package_file(value: Any, where: str) -> str:
+    """``value`` as a file of the package (a safe relative path), or a ``PackageError`` naming ``where``."""
+    if not isinstance(value, str) or not safe_relative(value):
+        raise PackageError(f"{where} must name a file in the package")
+    return value
+
+
+def read_sums(root: Path, *, required: bool = False) -> dict[str, str]:
+    """A package's ``SHA256SUMS`` by file name; empty when it has none, a ``PackageError`` if ``required``."""
+    path = Path(root) / SUMS_FILE
+    if not path.is_file():
+        if required:
+            raise PackageError(f"the package has no {SUMS_FILE}")
+        return {}
+    sums = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        digest, _, name = line.strip().partition(" ")
+        name = name.strip().lstrip("*")
+        if digest and name:
+            sums[name] = digest
+    return sums

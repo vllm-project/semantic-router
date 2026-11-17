@@ -7,13 +7,18 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -56,7 +61,7 @@ func TestDoDefaultRouteRewritesPathAndAddsRouteHeaders(t *testing.T) {
 		got <- seen{
 			uri: r.RequestURI, host: r.Host, tenant: r.Header.Get("X-Tenant"),
 			userAgent: r.Header.Get("User-Agent"), encoding: r.Header.Get("Accept-Encoding"),
-			looper: r.Header.Get("X-Vsr-Looper-Request"),
+			looper: r.Header.Get("X-Vsr-Internal-Auth"),
 		}
 	})
 	ep := endpointOf(t, "e", server)
@@ -68,7 +73,7 @@ func TestDoDefaultRouteRewritesPathAndAddsRouteHeaders(t *testing.T) {
 
 	for _, key := range []string{"", "unknown-model"} {
 		req := post(key)
-		req.Header.Set("X-Vsr-Looper-Request", "true")
+		req.Header.Set("X-Vsr-Internal-Auth", "forged")
 		resp, err := set.Do(t.Context(), req)
 		if err != nil {
 			t.Fatal(err)
@@ -323,7 +328,7 @@ func TestDoAnswersConnectionFailuresAsEnvoy(t *testing.T) {
 		body string
 	}{
 		"refused": {KindConnectFailure, "upstream connect error or disconnect/reset before headers. " +
-			"reset reason: remote connection failure, transport failure reason: delayed connect error: 111"},
+			"reset reason: remote connection failure, transport failure reason: delayed connect error: " + refusedErrno},
 		"reset": {KindReset, "upstream connect error or disconnect/reset before headers. " +
 			"reset reason: connection termination"},
 	}
@@ -340,6 +345,32 @@ func TestDoAnswersConnectionFailuresAsEnvoy(t *testing.T) {
 		if len(resp.Attempts) != 1 || resp.Attempts[0].Err != failure {
 			t.Fatalf("%s: attempts = %+v", key, resp.Attempts)
 		}
+	}
+}
+
+func TestDoLogsWhyNoAttemptGotAResponse(t *testing.T) {
+	core, logs := observer.New(zapcore.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+	reset := endpointOf(t, "e", backend(t, func(w http.ResponseWriter, r *http.Request) { hijackAndClose(w) }))
+	set := newSet(t, Options{}, clusterOf("reset", reset))
+	req := post("reset")
+	req.Header.Set(headers.RequestID, "req-1")
+
+	resp, err := set.Do(t.Context(), req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_, _ = readAll(t, resp)
+	entries := logs.FilterMessage("upstream_call_failed").All()
+	if len(entries) != 1 || resp.Local == nil {
+		t.Fatalf("upstream_call_failed events = %d, local reply %v; want one event", len(entries), resp.Local)
+	}
+	want := map[string]interface{}{
+		"request_id": "req-1", "cluster": "reset", "endpoint": "e", "kind": "reset",
+		"attempts": int64(1), "error": resp.Local.Error(), "event": "upstream_call_failed", "component": "upstream",
+	}
+	if got := entries[0].ContextMap(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("fields = %v, want %v", got, want)
 	}
 }
 

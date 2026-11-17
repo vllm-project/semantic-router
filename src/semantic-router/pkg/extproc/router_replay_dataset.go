@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -33,41 +34,58 @@ var errRouterReplayDatasetTooLarge = fmt.Errorf(
 // manifest holds identity and digests only, never prompt or response text, so
 // it carries no payload a replay reader could not already list.
 func (r *OpenAIRouter) handleRouterReplayDatasetAPI(
+	ctx context.Context,
 	method string,
 	rawQuery string,
 ) *ext_proc.ProcessingResponse {
+	_, manifest, _, failure := r.buildRouterReplayDataset(ctx, method, rawQuery)
+	if failure != nil {
+		return failure
+	}
+	return r.createJSONResponse(200, manifest)
+}
+
+// buildRouterReplayDataset reads the selection and policy from the query and
+// builds the manifest over it. Every route that serves a view of the dataset
+// starts here, so they all describe the same examples. A non-nil response is
+// the error to return.
+func (r *OpenAIRouter) buildRouterReplayDataset(
+	ctx context.Context,
+	method string,
+	rawQuery string,
+) (url.Values, shadowdataset.Manifest, []routerreplay.RoutingRecord, *ext_proc.ProcessingResponse) {
 	if method != "GET" {
-		return r.createErrorResponse(405, "method not allowed")
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(405, "method not allowed")
 	}
 
 	values, err := url.ParseQuery(rawQuery)
 	if err != nil {
-		return r.createErrorResponse(400, "invalid query parameters")
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, "invalid query parameters")
 	}
 	filters, err := parseRouterReplayFilters(values)
 	if err != nil {
-		return r.createErrorResponse(400, err.Error())
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 	}
 	policy, err := parseShadowDatasetPolicy(values)
 	if err != nil {
-		return r.createErrorResponse(400, err.Error())
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 	}
 
-	records, err := r.queryRouterReplayDatasetRecords(filters)
+	records, err := r.queryRouterReplayDatasetRecords(ctx, filters)
 	if err != nil {
 		if errors.Is(err, errRouterReplayDatasetTooLarge) {
-			return r.createErrorResponse(400, err.Error())
+			return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 		}
-		return r.createErrorResponse(500, "router replay storage query failed")
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(500, "router replay storage query failed")
 	}
 
 	// Build validates the policy, so a malformed seed or split plan is reported
 	// as the caller error it is rather than checked twice.
 	manifest, err := shadowdataset.Build(records, policy)
 	if err != nil {
-		return r.createErrorResponse(400, err.Error())
+		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 	}
-	return r.createRouterReplayJSONResponse(200, manifest)
+	return values, manifest, records, nil
 }
 
 // parseShadowDatasetPolicy reads the export policy from the query. Splits are
@@ -112,12 +130,14 @@ func parseShadowDatasetPolicy(values url.Values) (shadowdataset.Policy, error) {
 // captured bodies, because an example needs the digests the router recorded on
 // the observation rather than the summary a list page returns.
 func (r *OpenAIRouter) queryRouterReplayDatasetRecords(
+	ctx context.Context,
 	filters routerReplayFilters,
 ) ([]routerreplay.RoutingRecord, error) {
 	var records []routerreplay.RoutingRecord
 	total := 0
 	for _, reader := range r.routerReplayReaders() {
 		page, supported, err := reader.QueryPage(
+			ctx,
 			filters.storageFilters(),
 			routerReplayDatasetMaxRecords+1,
 			0,

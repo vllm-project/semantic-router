@@ -31,11 +31,12 @@ func (r *OpenAIRouter) sessionTurnPricing(model string) sessiontelemetry.TurnPri
 		return sessiontelemetry.TurnPricing{}
 	}
 	return sessiontelemetry.TurnPricing{
-		Currency:         p.Currency,
-		PromptPer1M:      p.PromptPer1M,
-		CompletionPer1M:  p.CompletionPer1M,
-		CachedInputPer1M: p.CachedInputPer1M,
-		CacheWritePer1M:  p.CacheWritePer1M,
+		Currency:          p.Currency,
+		PromptPer1M:       p.PromptPer1M,
+		CompletionPer1M:   p.CompletionPer1M,
+		CachedInputPer1M:  p.CachedInputPer1M,
+		CacheWritePer1M:   p.CacheWritePer1M,
+		CacheWrite1hPer1M: p.CacheWrite1hPer1M,
 	}
 }
 
@@ -62,6 +63,7 @@ func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing 
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
 		CacheWriteTokens:            usage.cacheWriteTokens,
+		CacheWrite1hTokens:          usage.cacheWrite1hTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		EstimatedCacheSavings:       accounting.estimatedSavings,
@@ -136,11 +138,14 @@ func recordRouterSessionUsageFromContext(
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
 		CacheWriteTokens:            usage.cacheWriteTokens,
+		CacheWrite5mTokens:          usage.cacheWrite5mTokens,
+		CacheWrite1hTokens:          usage.cacheWrite1hTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		Cost:                        sessionTurnCost(usage, pricing),
 		EstimatedCacheSavings:       accounting.estimatedSavings,
 		CacheAccountingSource:       accounting.source,
+		CacheReported:               usageReportsCache(usage),
 		Timestamp:                   time.Now(),
 	})
 	recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
@@ -165,13 +170,22 @@ func recordRouterLearningUsageFromContext(
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
 		CacheWriteTokens:            usage.cacheWriteTokens,
+		CacheWrite5mTokens:          usage.cacheWrite5mTokens,
+		CacheWrite1hTokens:          usage.cacheWrite1hTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		Cost:                        sessionTurnCost(usage, pricing),
 		EstimatedCacheSavings:       accounting.estimatedSavings,
 		CacheAccountingSource:       accounting.source,
+		CacheReported:               usageReportsCache(usage),
 		Timestamp:                   time.Now(),
 	})
+}
+
+// usageReportsCache is true when the backend counted cache reads or writes,
+// so a zero is a cold cache rather than an unknown one.
+func usageReportsCache(usage responseUsageMetrics) bool {
+	return usage.cachedPromptTokensReported || usage.cacheWriteTokensReported
 }
 
 func estimateRouterCacheAccounting(

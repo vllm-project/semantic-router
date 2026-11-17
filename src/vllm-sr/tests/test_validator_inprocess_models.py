@@ -1,6 +1,7 @@
 """`vllm-sr validate` mirrors the Router's backends check for in-process model calls."""
 
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,7 @@ from cli.validator import validate_user_config  # noqa: E402
 # Behind an external gateway (`listeners: []`) a provider model may go without
 # backend_refs; the Router still calls a Looper's models itself.
 CONFIG = """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -26,27 +27,25 @@ providers:
         - name: a-backend
           provider: vllm
           endpoint: 127.0.0.1:8000
-    - name: b
-      provider_model_id: b
-routing:
-  modelCards:
-    - name: a
       loras:
         - name: a-lora
     - name: b
-  decisions:
-    - name: panel
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
+      provider_model_id: b
+recipes:
+  - name: default
+    decisions:
+      - name: panel
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
 {decision}
 """
 
 
 def _errors(tmp_path, decision: str) -> list[str]:
     path = tmp_path / "config.yaml"
-    path.write_text(CONFIG.format(decision=decision))
+    path.write_text(CONFIG.format(decision=textwrap.indent(decision, "  ")))
     errors = validate_user_config(parse_user_config(str(path)), log_summary=False)
     return [error.message for error in errors if "in process" in error.message]
 
@@ -86,16 +85,16 @@ def _refused(model: str) -> str:
         pytest.param(
             """      modelRefs: [{model: a}, {model: b}]
       algorithm:
-        type: prompt
-        prompt: {model: b, instructions: Pick one.}""",
+        type: escalate
+        escalate: {accept: {confidence: {method: avg_logprob, gte: 0.6}}}""",
             "b",
-            id="the prompt helper",
+            id="an escalate candidate",
         ),
         pytest.param(
             """      modelRefs: [{model: b}]
       plugins:
-        - type: context_compression
-          configuration: {enabled: true, recovery: {enabled: true, store: response_cache}}""",
+        - type: context
+          configuration: {enabled: true, compress: {recovery: {enabled: true, store: response_cache}}}""",
             "b",
             id="context recovery",
         ),
@@ -117,6 +116,21 @@ def test_a_model_called_in_process_needs_backend_refs(tmp_path, decision, missin
             """      modelRefs: [{model: a}, {model: b}]
       algorithm: {type: static}""",
             id="a decision that only routes",
+        ),
+        pytest.param(
+            """      modelRefs: [{model: a}, {model: b}]
+      algorithm:
+        type: escalate
+        budget: {deadline: 3s, max_calls: 2}
+        escalate:
+          quality:
+            type: uncalibrated
+            accept:
+              native:
+                - {question_type: choice, field: top_probability, gte: 0.9}
+          stages:
+            - {name: fast, model: b}""",
+            id="System One escalate stages",
         ),
     ],
 )

@@ -69,7 +69,7 @@ func TestConfigDeploymentDetailHandlerNotFound(t *testing.T) {
 
 func testCanonicalYAMLForProjection() string {
 	return `
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -88,22 +88,21 @@ providers:
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 1
-routing:
-  modelCards:
-    - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business and management related queries
-  decisions:
-    - name: default-business
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business and management related queries
+    decisions:
+      - name: default-business
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
 `
 }

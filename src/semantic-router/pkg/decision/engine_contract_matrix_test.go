@@ -26,12 +26,10 @@ func TestDecisionEngineContractMatrix(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			engine := decision.NewDecisionEngine(
-				nil,
-				nil,
-				nil,
+
 				testCase.decisions,
-				testCase.strategy,
-			)
+				testCase.strategy)
+
 			result, err := engine.EvaluateDecisionsWithSignals(testCase.signals)
 			if err != nil {
 				t.Fatalf("normal evaluation: %v", err)
@@ -65,18 +63,18 @@ func logicalContractCases() []engineContractCase {
 		{
 			name:      "and/all-match",
 			strategy:  config.RoutingStrategyPriority,
-			decisions: []config.Decision{route("and", 0, 0, all(keywordA, leaf("embedding", "b")))},
+			decisions: []config.Decision{route("and", 0, 0, all(keywordA, leaf("systemone", "b")))},
 			signals: matches(
 				[]string{"a"},
 				[]string{"b"},
 				nil,
 				nil,
-				map[string]float64{"keyword:a": 0.8, "embedding:b": 0.6},
+				map[string]float64{"keyword:a": 0.8, "systemone:b": 0.6},
 			),
 			wantDecision: "and",
-			// The keyword leaf is policy, so only the embedding score ranks.
+			// The keyword leaf is policy, so only the systemone score ranks.
 			wantConfidence: 0.6,
-			wantRules:      []string{"keyword:a", "embedding:b"},
+			wantRules:      []string{"keyword:a", "systemone:b"},
 		},
 		{
 			name:      "and/missing-child",
@@ -87,17 +85,17 @@ func logicalContractCases() []engineContractCase {
 		{
 			name:      "or/best-confidence",
 			strategy:  config.RoutingStrategyPriority,
-			decisions: []config.Decision{route("or", 0, 0, any(keywordA, leaf("embedding", "b")))},
+			decisions: []config.Decision{route("or", 0, 0, any(keywordA, leaf("systemone", "b")))},
 			signals: matches(
 				[]string{"a"},
 				[]string{"b"},
 				nil,
 				nil,
-				map[string]float64{"keyword:a": 0.4, "embedding:b": 0.9},
+				map[string]float64{"keyword:a": 0.4, "systemone:b": 0.9},
 			),
 			wantDecision:   "or",
 			wantConfidence: 0.9,
-			wantRules:      []string{"embedding:b"},
+			wantRules:      []string{"systemone:b"},
 		},
 		{
 			name:           "not/absent-matches",
@@ -278,13 +276,13 @@ func predicateContractCase(
 		strategy:  config.RoutingStrategyPriority,
 		decisions: []config.Decision{route("bounded", 0, 0, predicateLeaf(predicate, ""))},
 		signals: &decision.SignalMatches{
-			SignalValues: map[string]float64{"structure:count": value},
+			SignalValues: map[string]float64{"keyword:count": value},
 		},
 	}
 	if wantMatch {
 		testCase.wantDecision = "bounded"
 		testCase.wantConfidence = 1
-		testCase.wantRules = []string{"structure:count"}
+		testCase.wantRules = []string{"keyword:count"}
 	}
 	return testCase
 }
@@ -295,20 +293,20 @@ func errorContractCase(name, onError string, wantMatch bool) engineContractCase 
 		strategy:  config.RoutingStrategyPriority,
 		decisions: []config.Decision{route("guarded", 0, 0, predicateLeaf(&config.NumericPredicate{GTE: floatPtr(0.8)}, onError))},
 		signals: &decision.SignalMatches{
-			SignalErrors: map[string]string{"structure:count": "unavailable"},
+			SignalErrors: map[string]string{"keyword:count": "unavailable"},
 		},
 	}
 	if wantMatch {
 		testCase.wantDecision = "guarded"
 		testCase.wantConfidence = 1
-		testCase.wantRules = []string{"structure:count"}
+		testCase.wantRules = []string{"keyword:count"}
 	}
 	return testCase
 }
 
 func predicateLeaf(predicate *config.NumericPredicate, onError string) config.RuleNode {
 	return config.RuleNode{
-		Type:      "structure",
+		Type:      "keyword",
 		Name:      "count",
 		Predicate: predicate,
 		OnError:   onError,
@@ -336,13 +334,13 @@ func route(name string, priority, tier int, rules config.RuleNode) config.Decisi
 }
 
 func matches(
-	keywords, embeddings, structures, projections []string,
+	keywords, systemOne, contexts, projections []string,
 	confidences map[string]float64,
 ) *decision.SignalMatches {
 	return &decision.SignalMatches{
 		KeywordRules:      keywords,
-		EmbeddingRules:    embeddings,
-		StructureRules:    structures,
+		SystemOneRules:    systemOne,
+		ContextRules:      contexts,
 		ProjectionRules:   projections,
 		SignalConfidences: confidences,
 	}

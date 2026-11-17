@@ -48,19 +48,23 @@ func (v *Validator) checkRecipeScope(recipe *RecipeDecl) {
 }
 
 func (v *Validator) checkEntrypointScopes(recipeNames map[string]Position) {
-	seenModels := make(map[string]Position)
+	seenModels := make(map[config.InferenceAPI]map[string]Position)
 	for _, entrypoint := range v.prog.Entrypoints {
 		if _, exists := recipeNames[entrypoint.Recipe]; !exists {
 			v.addDiag(DiagWarning, entrypoint.Pos,
 				fmt.Sprintf("Entrypoint references unknown recipe %q", entrypoint.Recipe), nil)
 		}
+		api := entrypointAPI(entrypoint)
+		if seenModels[api] == nil {
+			seenModels[api] = make(map[string]Position)
+		}
 		for _, modelName := range entrypoint.ModelNames {
-			if first, exists := seenModels[modelName]; exists {
+			if first, exists := seenModels[api][modelName]; exists {
 				v.addDiag(DiagWarning, entrypoint.Pos,
 					fmt.Sprintf("Entrypoint model %q is already mapped at %s", modelName, first), nil)
 				continue
 			}
-			seenModels[modelName] = entrypoint.Pos
+			seenModels[api][modelName] = entrypoint.Pos
 		}
 	}
 }

@@ -3,6 +3,7 @@ package upstream
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // Bounds on what a fallback decision sees of a failed response.
@@ -47,6 +49,10 @@ func (s *Set) Execute(ctx context.Context, call *routing.Call, listener string) 
 		case err != nil && primary == nil:
 			return nil, err
 		case err != nil:
+			if errors.Is(err, budget.ErrExhausted) {
+				_ = primary.Body.Close()
+				return nil, err
+			}
 			// A candidate that could not be sent ends the chain, unless the
 			// request itself is gone.
 			if ctx.Err() != nil || KindOf(err) == KindClosed {

@@ -105,6 +105,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/abhinav-m22.png',
         profile: 'https://github.com/abhinav-m22',
       },
+      {
+        name: 'ZiY1Ming',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
+      },
     ],
   },
   {
@@ -231,6 +236,51 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Roy214.png',
         profile: 'https://github.com/Roy214',
       },
+      {
+        name: 'ZiY1Ming',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
+      },
+      {
+        name: 'Alex Weng',
+        avatar: 'https://github.com/Alex-Wengg.png',
+        profile: 'https://github.com/Alex-Wengg',
+      },
+      {
+        name: 'YITIEN TSAI',
+        avatar: 'https://github.com/alexbuuuuuu.png',
+        profile: 'https://github.com/alexbuuuuuu',
+      },
+      {
+        name: 'DeveshValluru',
+        avatar: 'https://github.com/DeveshValluru.png',
+        profile: 'https://github.com/DeveshValluru',
+      },
+      {
+        name: 'swappy',
+        avatar: 'https://github.com/rycerzes.png',
+        profile: 'https://github.com/rycerzes',
+      },
+      {
+        name: 'Anup Sharma',
+        avatar: 'https://github.com/TwilightTechie.png',
+        profile: 'https://github.com/TwilightTechie',
+      },
+      {
+        name: 'Divyansh Lalotra',
+        avatar: 'https://github.com/nej1gotnochill.png',
+        profile: 'https://github.com/nej1gotnochill',
+      },
+      {
+        name: 'Henry Chen',
+        avatar: 'https://github.com/henry3260.png',
+        profile: 'https://github.com/henry3260',
+      },
+      {
+        name: 'Xiao Liu',
+        avatar: 'https://github.com/liuxiaocs7.png',
+        profile: 'https://github.com/liuxiaocs7',
+      },
     ],
   },
   {
@@ -307,6 +357,16 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/colinmcnamara.png',
         profile: 'https://github.com/colinmcnamara',
       },
+      {
+        name: 'Paramveer singh',
+        avatar: 'https://github.com/Paramveersingh-S.png',
+        profile: 'https://github.com/Paramveersingh-S',
+      },
+      {
+        name: 'ZiY1Ming',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
+      },
     ],
   },
   {
@@ -363,6 +423,11 @@ export const workGroups: WorkGroup[] = [
         name: 'zdy782',
         avatar: 'https://github.com/zdy782.png',
         profile: 'https://github.com/zdy782',
+      },
+      {
+        name: 'lyy26299',
+        avatar: 'https://github.com/lyy26299.png',
+        profile: 'https://github.com/lyy26299',
       },
     ],
   },
@@ -435,6 +500,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Kritoooo.png',
         profile: 'https://github.com/Kritoooo',
       },
+      {
+        name: 'PepperoniBlvd',
+        avatar: 'https://github.com/PepperoniBlvd.png',
+        profile: 'https://github.com/PepperoniBlvd',
+      },
     ],
   },
   {
@@ -486,6 +556,16 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/Zi-Yi-Ming.png',
         profile: 'https://github.com/Zi-Yi-Ming',
       },
+      {
+        name: 'Alex Weng',
+        avatar: 'https://github.com/Alex-Wengg.png',
+        profile: 'https://github.com/Alex-Wengg',
+      },
+      {
+        name: 'Rudraksh Karpe',
+        avatar: 'https://github.com/rudrakshkarpe.png',
+        profile: 'https://github.com/rudrakshkarpe',
+      },
     ],
   },
   {
@@ -536,6 +616,16 @@ export const workGroups: WorkGroup[] = [
         name: 'Haoyu Jing',
         avatar: 'https://github.com/PharosEast.png',
         profile: 'https://github.com/PharosEast',
+      },
+      {
+        name: 'ZiY1Ming',
+        avatar: 'https://github.com/Zi-Yi-Ming.png',
+        profile: 'https://github.com/Zi-Yi-Ming',
+      },
+      {
+        name: 'Anup Sharma',
+        avatar: 'https://github.com/TwilightTechie.png',
+        profile: 'https://github.com/TwilightTechie',
       },
     ],
   },

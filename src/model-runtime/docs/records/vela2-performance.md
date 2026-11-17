@@ -1,21 +1,27 @@
 # Vela 2.0 performance
 
-On the exact profile (answers identical to the packages' engine,
+With each request alone (answers identical to the packages' engine,
 `vela2-parity.md`) the `vela2` family is faster than the Vela 2.0 engine on
 every measured row on ROCm (15–30% at the median with one caller, 1.2–1.6×
 the requests per second with four). On CPU, where both run the same
 operations on MKL, the 0.3B is level with it or better, the 0.8B is level or
 better at 32 and 512 tokens (re-timed: the first run's 0.3–2.5% came from
 where the process's memory landed), and the 4B's CPU timings are informative
-only. The opt-in approximate profiles serve the
+only. Packed trees and batching, opt-in then and the default now, serve the
 0.8B 1.6–2.4× and the 4B and 9B 1.8–2.8× faster than the engine on ROCm, the
 4B 1.5× and the 0.8B 1.2× on CPU, and the 0.3B up to 1.9× the engine's
-throughput with four callers. On CPU, `max_speed` runs the 0.3B on a
-`float32-packed` copy of its linear layers, 1.6–1.7× faster than `exact` at
-every length. One
+throughput with four callers. On CPU the 0.3B's batched forwards run a
+`float32-packed` copy of its linear layers, 1.6–1.7× faster than each request
+alone at every length. One
 Vela 2.0 0.3B request also replaces the seven Vela 1.0 classifier calls a
 router request made: on CPU it is 2.2× faster than their sum at the median
-and 10× at p95, and 3.2× at the median under `max_speed`.
+and 10× at p95, and 3.2× at the median batched on the packed copy.
+
+Configurations: *alone* answers each request in its own forwards with the
+engine's operations (the runtime's default when this was measured); *shared*
+runs each request's trees packed (`enable_shared_context`); *batched* also
+merges concurrent requests (today's default); *batched, packed copy* is the
+0.3B's batched path on its `float32-packed` copy (today's default on CPU).
 
 - **Dates:** each section gives its own (2026-10-04 to 2026-10-06).
 - **Devices:** ROCm: one AMD Instinct MI325X (gfx942) per run, 8–16 host
@@ -26,8 +32,8 @@ and 10× at p95, and 3.2× at the median under `max_speed`.
 - **Engine side:** the package's `vela2_inference.py` in the same process,
   one request at a time as its server serves them (presets expanded to the
   questions they stand for).
-- **Runtime side:** the family through the runtime's scheduler and profiles:
-  `exact`, `shared_context`, and `batching` (2 ms window); FLA kernel choices
+- **Runtime side:** the family through the runtime's scheduler: alone,
+  shared and batched (2 ms window); FLA kernel choices
   pinned on both sides.
 - **Workload** (`tools/vela2_bench.py`): the router's signals as one request
   — domain over 14 subject areas, jailbreak, PII spans (the `pii` preset),
@@ -50,14 +56,14 @@ and 10× at p95, and 3.2× at the median under `max_speed`.
   node load at most 10, with the 4B and 9B runs below on two other GPUs.
 - **Rounds:** 10 interleaved rounds, side order rotated per round; each cell
   is 20 warm-up requests, then 30 requests at 1 or 4 concurrent callers.
-- **Reading:** `exact`, the default, is faster than the engine on every row,
-  with every interval on the better side (15–28% at the median with one
-  caller). `batching` (opt-in) is faster at 512 and 2,048 tokens and with 4
+- **Reading:** alone, the default then, is faster than the engine on every
+  row, with every interval on the better side (15–28% at the median with one
+  caller). Batched (opt-in then) is faster at 512 and 2,048 tokens and with 4
   callers. With 1 caller at 32–128 tokens it pays its 2 ms collection window
-  (p50 +1.1 to +1.2 ms, 14–18 fewer requests per second): the opt-in
-  profile's documented trade-off, never the default path.
+  (p50 +1.1 to +1.2 ms, 14–18 fewer requests per second): the documented
+  trade-off of the batching window, which `--batch-window-ms` sets.
 - **Earlier stack:** the same run on the official-wheel stack (`venv-rocm72-cc`,
-  at `fb67e3bb3`) read the same, with `batching` also behind at 512 × 1.
+  at `fb67e3bb3`) read the same, with batched also behind at 512 × 1.
 
 p50 ms, engine and Δ against it (mean [95% interval]):
 
@@ -113,17 +119,17 @@ Requests per second:
 - **Rounds:** 10 interleaved rounds, side order rotated per round; each cell
   is 10 warm-up requests, then 30 requests at 1 or 4 concurrent callers. The
   engine serves concurrent callers in arrival order, as its HTTP server does.
-  `max_speed` runs the consented `float32-packed` copy.
+  Batched, packed copy runs the consented `float32-packed` copy.
 - **Reading:** a row passes when its 95% interval on the difference is at or
   better than the engine. No row's interval lies on the worse side. Where
-  the point estimate is worse (`exact` at 32 × 4 and 2,048 × 4, `batching`
+  the point estimate is worse (alone at 32 × 4 and 2,048 × 4, batched
   at 32 × 1 and its 32 × 4 p95), the interval straddles zero after the
   10-round cap: these rows are level with the engine, within the intervals
   shown.
 
 p50 ms, engine and Δ against it (mean [95% interval]):
 
-| Tokens × callers | engine | exact | batching | max_speed |
+| Tokens × callers | engine | alone | batched | batched, packed copy |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 153.3 | −1.2 [−1.9, −0.4] | +0.6 [−0.3, +1.5] | −57.1 [−59.4, −54.9] |
 | 32 × 4 | 605.8 | +4.5 [−27.0, +36.0] | −45.4 [−71.5, −19.4] | −269.1 [−298.9, −239.3] |
@@ -136,7 +142,7 @@ p50 ms, engine and Δ against it (mean [95% interval]):
 
 p95 ms:
 
-| Tokens × callers | engine | exact | batching | max_speed |
+| Tokens × callers | engine | alone | batched | batched, packed copy |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 166.3 | +0.9 [−5.8, +7.7] | +7.0 [−2.3, +16.4] | −54.8 [−60.5, −49.0] |
 | 32 × 4 | 631.6 | +13.5 [−21.6, +48.7] | +50.7 [−23.6, +125.0] | −248.0 [−277.3, −218.7] |
@@ -149,7 +155,7 @@ p95 ms:
 
 Requests per second:
 
-| Tokens × callers | engine | exact | batching | max_speed |
+| Tokens × callers | engine | alone | batched | batched, packed copy |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 6.47 | +0.07 [+0.03, +0.10] | −0.04 [−0.11, +0.03] | +3.76 [+3.52, +4.00] |
 | 32 × 4 | 6.61 | −0.07 [−0.39, +0.26] | +0.44 [+0.13, +0.75] | +5.07 [+4.65, +5.48] |
@@ -160,24 +166,24 @@ Requests per second:
 | 2,048 × 1 | 1.27 | +0.02 [+0.02, +0.02] | +0.46 [+0.46, +0.47] | +1.39 [+1.37, +1.41] |
 | 2,048 × 4 | 1.27 | −0.00 [−0.03, +0.02] | +0.47 [+0.44, +0.50] | +1.42 [+1.35, +1.48] |
 
-- The exact path runs the engine's operations on the same MKL build, so its
+- Alone, the runtime runs the engine's operations on the same MKL build, so its
   latency is the engine's or slightly better.
 - On the parity requests, whose long documents run in windows with spans
-  over thousands of words, the exact path took 1,476 s against the engine's
+  over thousands of words, the runtime alone took 1,476 s against the engine's
   1,836 s for 300 requests (sides alternating per request): the span
   decoding the engine runs word by word in Python is vectorized here.
-- The approximate profiles run packed sequences with local layers in query
-  blocks from 1,024 tokens. `batching` and `max_speed` also merge concurrent
+- Batched, the runtime runs packed sequences with local layers in query
+  blocks from 1,024 tokens, and merges concurrent
   requests into one forward, but on CPU only up to 2,048 tokens per forward:
   measured with `vela2_bench --trace` at an earlier head, 2.7 packed
   2,048-token sequences cost 379 µs per token against 267 µs for one, and
-  without the budget `batching` served 0.95 against the engine's 1.15
+  without the budget batched served 0.95 against the engine's 1.15
   requests per second at 2,048 × 4. Short sequences of several requests still
   share a forward; GPUs and the 4B / 9B have no budget.
 
-## Vela-2.0-0.3B reduced copies (`max_speed`)
+## Vela-2.0-0.3B reduced copies
 
-`max_speed` serves the 0.3B as `batching` does (packed sequences, 2 ms
+Batched on a copy serves the 0.3B as batched does (packed sequences, 2 ms
 window), on a reduced copy of the backbone's linear layers where the built-in
 entry consents to one (design section 5.4). The 0.3B consents to
 `float32-packed` on CPU and to no copy on GPUs: `vela2-parity.md` has the
@@ -188,9 +194,9 @@ accuracy, and `vela2-reduced.json` the raw summaries of both records.
   noise; `vela2-reduced.json` has both. The CPU rows predate the heap freeze
   (`a1e1b4ccb`) and the huge-page default (`129be34ea`) and were not
   re-timed under them.
-- **Sides:** `exact` and `batching` on one model without a copy, and one
-  `max_speed` model per copy kind (consented for the run), all in one process
-  (`tools/vela2_bench.py --sides runtime,runtime-batching,max_speed:KIND`).
+- **Sides:** alone and batched on one model without a copy, and one
+  model batched on each copy kind (consented for the run), all in one process
+  (`tools/vela2_bench.py` at the time, with the sides of the runtime of then).
   Same workload, warm-up and request counts as above; at concurrency 1 the
   sides take turns per request.
 - **CPU:** 16 cores of an AMD EPYC with AVX-512 BF16 (no AMX), PyTorch 2.10's
@@ -225,19 +231,19 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
 | 2,048 | 27.3 / 30.2 | 24.4 / 26.4 | 17.7 / 19.8 | 36.6 | 48.0 | 78.2 |
 
 - **CPU, `float32-packed`:** oneDNN's pre-packed FP32 linear (weights
-  reordered once at load) is 1.5–1.8× faster than `exact` at concurrency 1,
+  reordered once at load) is 1.5–1.8× faster than alone at concurrency 1,
   on p50 and p95 at every length (1.6–1.7× at the median), and gives
-  1.1–1.9× its throughput at concurrency 4. It also beats `batching`, the
-  same packed path on MKL's `F.linear`, on every row. At concurrency 4
-  `max_speed` merges concurrent requests as `batching` does, which widens the
-  latency spread: at 512 tokens its p95 was 1,142 ms against `exact`'s
-  1,041 ms in this run, and 998 against 1,122 ms in the first. Its answers
-  stay within about 1e-5 of `exact`.
+  1.1–1.9× its throughput at concurrency 4. It also beats batched, the
+  same packed path on MKL's `F.linear`, on every row. At concurrency 4 it
+  merges concurrent requests as batched does, which widens the latency
+  spread: at 512 tokens its p95 was 1,142 ms against alone's 1,041 ms in this
+  run, and 998 against 1,122 ms in the first. Its answers stay within about
+  1e-5 of alone.
 - **CPU, `bfloat16` and `int8`:** faster still on this CPU (BF16 2.5× at
   2,048 tokens), but `int8` fails the accuracy floor; `vela2-parity.md`
   explains why BF16 gets no consent.
 - **ROCm, `bfloat16`:** faster at 2,048 tokens and in throughput, but a
-  single request up to 512 tokens is slower than `exact` (the batching window
+  single request up to 512 tokens is slower than alone (the batching window
   and the packed path on a launch-bound forward), and it fails the accuracy
   floor on spans, so GPUs load no copy.
 
@@ -252,18 +258,18 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
   node load at most 10. 10 interleaved rounds, side
   order rotated per round; each cell is 20 warm-up requests, then 30
   requests at 1 or 4 concurrent callers.
-- **Reading:** every profile is faster than the engine on every row of both
-  models, with every interval on the better side but two: the 9B's `exact`
+- **Reading:** every configuration is faster than the engine on every row of
+  both models, with every interval on the better side but two: the 9B's alone
   p95 at 32 tokens, −85 ms [−178, +8] with one caller and −549 ms
   [−1,111, +13] with 4, level to better at the 10-round cap (the same two as
-  on the earlier stack). With one caller `exact` is 21–30% faster at the
-  median on the 4B and 17–28% on the 9B; `shared_context` and `batching` are
+  on the earlier stack). With one caller alone is 21–30% faster at the
+  median on the 4B and 17–28% on the 9B; shared and batched are
   1.8–2.8× faster, and serve 1.9–2.9× the engine's requests per second with 4
   callers.
 
 4B, p50 ms, engine and Δ against it (mean [95% interval]):
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 115.3 | −34.1 [−34.3, −33.9] | −69.0 [−69.2, −68.7] | −67.1 [−67.5, −66.6] |
 | 32 × 4 | 584.8 | −262.3 [−473.3, −51.2] | −401.5 [−612.2, −190.9] | −402.2 [−613.3, −191.0] |
@@ -276,7 +282,7 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
 
 4B, p95 ms:
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 146.6 | −58.5 [−105.9, −11.0] | −99.2 [−155.9, −42.5] | −97.4 [−154.2, −40.5] |
 | 32 × 4 | 657.9 | −324.5 [−611.3, −37.6] | −468.6 [−753.1, −184.1] | −440.3 [−707.9, −172.8] |
@@ -289,7 +295,7 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
 
 4B, requests per second:
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 8.39 | +3.63 [+3.58, +3.68] | +13.18 [+12.70, +13.67] | +12.31 [+11.84, +12.78] |
 | 32 × 4 | 7.76 | +4.54 [+3.05, +6.03] | +13.84 [+12.52, +15.17] | +13.97 [+12.53, +15.42] |
@@ -302,7 +308,7 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
 
 9B, p50 ms, engine and Δ against it (mean [95% interval]):
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 161.3 | −44.4 [−45.1, −43.8] | −96.1 [−96.6, −95.6] | −94.1 [−94.6, −93.7] |
 | 32 × 4 | 916.1 | −448.9 [−893.5, −4.3] | −660.2 [−1,104.3, −216.0] | −669.1 [−1,110.8, −227.4] |
@@ -315,7 +321,7 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
 
 9B, p95 ms:
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 213.0 | −85.1 [−178.3, +8.0] | −146.6 [−252.4, −40.8] | −144.6 [−250.4, −38.8] |
 | 32 × 4 | 1,034.0 | −548.6 [−1,110.8, +13.5] | −772.9 [−1,334.7, −211.2] | −722.6 [−1,258.0, −187.3] |
@@ -328,7 +334,7 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
 
 9B, requests per second:
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 5.96 | +2.42 [+2.10, +2.74] | +9.35 [+8.84, +9.85] | +8.90 [+8.39, +9.41] |
 | 32 × 4 | 5.38 | +3.10 [+1.87, +4.32] | +10.14 [+8.92, +11.36] | +10.13 [+8.91, +11.35] |
@@ -345,14 +351,14 @@ ROCm, p50 / p95 ms at concurrency 1 and requests per second at concurrency 4:
   (kernel specialization and library algorithm choices), and prompt lengths
   vary within a cell.
 - With 4 callers the engine serves one request at a time in arrival order,
-  so its p50 is about four service times; `exact` runs one request per
-  forward as the engine does, and the approximate profiles run the packed
-  trees, `batching` also several requests per forward.
+  so its p50 is about four service times; alone runs one request per
+  forward as the engine does, and shared and batched run the packed
+  trees, batched also several requests per forward.
 
 4B on CPU (16 cores, 8 requests per length, concurrency 1, seconds;
 informative: no rounds or intervals, no verdict):
 
-| Tokens | exact | shared_context | engine |
+| Tokens | alone | shared | engine |
 | --- | --- | --- | --- |
 | 128 | 30.1 | 19.9 | 30.4 |
 | 512 | 55.7 | 36.4 | 57.3 |
@@ -370,15 +376,15 @@ informative: no rounds or intervals, no verdict):
   is 20 warm-up requests, then 30 requests at 1 or 4 concurrent callers. A
   first run read the same except for single slow rounds while models loaded
   on another GPU; this run replaces it (`vela2-reduced.json` keeps both).
-- **Reading:** every profile is faster than the engine on every row, with
-  every interval on the better side. With one caller `exact` is 22–30%
-  faster at the median, and `shared_context` and `batching` are 1.6–2.3×
-  faster; with 4 callers they serve 1.35–1.45× (`exact`) and 1.8–2.4× the
+- **Reading:** every configuration is faster than the engine on every row,
+  with every interval on the better side. With one caller alone is 22–30%
+  faster at the median, and shared and batched are 1.6–2.3×
+  faster; with 4 callers they serve 1.35–1.45× (alone) and 1.8–2.4× the
   engine's requests per second.
 
 0.8B, p50 ms, engine and Δ against it (mean [95% interval]):
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 54.3 | −11.8 [−12.4, −11.2] | −22.3 [−22.8, −21.8] | −21.3 [−21.8, −20.8] |
 | 32 × 4 | 227.1 | −59.9 [−80.6, −39.2] | −101.6 [−122.5, −80.7] | −107.2 [−128.7, −85.8] |
@@ -391,7 +397,7 @@ informative: no rounds or intervals, no verdict):
 
 0.8B, p95 ms:
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 58.3 | −12.9 [−15.0, −10.8] | −25.3 [−31.3, −19.2] | −24.4 [−30.4, −18.4] |
 | 32 × 4 | 247.4 | −78.1 [−122.7, −33.4] | −120.2 [−165.5, −75.0] | −79.3 [−123.9, −34.8] |
@@ -404,7 +410,7 @@ informative: no rounds or intervals, no verdict):
 
 0.8B, requests per second:
 
-| Tokens × callers | engine | exact | shared_context | batching |
+| Tokens × callers | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 × 1 | 18.01 | +5.19 [+4.85, +5.53] | +13.01 [+12.48, +13.54] | +12.14 [+11.47, +12.80] |
 | 32 × 4 | 17.61 | +6.21 [+4.73, +7.68] | +14.07 [+12.56, +15.59] | +14.44 [+12.85, +16.03] |
@@ -425,11 +431,11 @@ informative: no rounds or intervals, no verdict):
   caller; at 32–512 tokens 2 warm-up requests, then 6 per round over 5
   interleaved rounds; at 2,048 tokens 1 warm-up request, then 3 per round
   over 3 rounds.
-- **Reading:** `shared_context` and `batching` are 15–19% faster than the
+- **Reading:** shared and batched are 15–19% faster than the
   engine at the median at every length, with every interval on the better
-  side. In this run `exact` is level at 128 tokens and slightly slower at 32
+  side. In this run alone is level at 128 tokens and slightly slower at 32
   and 512 (+2.5% [+1.6, +3.5] and +0.3% [+0.1, +0.5] at the median), with
-  those intervals on the worse side. The re-time below finds `exact` level
+  those intervals on the worse side. The re-time below finds alone level
   or better at both lengths and shows where that difference came from. The
   2,048-token row
   has 3 rounds, below the standard's 5, and gives no verdict; with 6
@@ -442,7 +448,7 @@ informative: no rounds or intervals, no verdict):
 
 0.8B on CPU, p50 ms, engine and Δ against it (mean [95% interval]):
 
-| Tokens | engine | exact | shared_context | batching |
+| Tokens | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 | 4,614 | +117 [+73, +162] | −786 [−891, −682] | −785 [−844, −726] |
 | 128 | 6,619 | +76 [−178, +330] | −992 [−1,219, −766] | −1,042 [−1,313, −771] |
@@ -451,14 +457,14 @@ informative: no rounds or intervals, no verdict):
 
 0.8B on CPU, requests per second:
 
-| Tokens | engine | exact | shared_context | batching |
+| Tokens | engine | alone | shared | batched |
 | --- | --- | --- | --- | --- |
 | 32 | 0.216 | −0.005 [−0.007, −0.004] | +0.044 [+0.042, +0.046] | +0.044 [+0.041, +0.047] |
 | 128 | 0.148 | +0.001 [−0.003, +0.004] | +0.029 [+0.023, +0.035] | +0.028 [+0.024, +0.033] |
 | 512 | 0.094 | −0.001 [−0.001, +0.000] | +0.023 [+0.020, +0.025] | +0.022 [+0.019, +0.024] |
 | 2,048 | 0.057 | −0.001 [−0.003, +0.000] | +0.014 [+0.002, +0.027] | +0.014 [+0.000, +0.028] |
 
-### Vela-2.0-0.8B `exact` on CPU, re-timed
+### Vela-2.0-0.8B alone on CPU, re-timed
 
 - **Date:** 2026-10-06, at `0d8d76cec` (with the huge-page default and the
   heap freeze; no other change to the CPU request path since the first run).
@@ -489,7 +495,7 @@ p50 ms of the engine, and runtime − engine (mean [95% interval]):
 | unbound | 10,000 | 32 | 5,711 | −115.9 [−138.1, −93.7] | −212.9 [−260.1, −165.7] | +0.005 [+0.004, +0.005] |
 | unbound | 10,000 | 512 | 11,037 | −193.5 [−221.3, −165.7] | −211.0 [−236.1, −185.9] | +0.001 [+0.001, +0.002] |
 
-- **Every cell is level or better.** On local memory `exact` is 0.2–0.9%
+- **Every cell is level or better.** On local memory alone is 0.2–0.9%
   faster than the engine at the median, at both lengths and both spin
   counts. The two level cells (unbound 32-token p50 and local 512-token p95,
   both at 300,000) have the better point estimate.
@@ -542,14 +548,14 @@ legacy calls succeeded):
 | Vela 1.0, seven calls | 252.9 | 1,445.9 | 754.5 | 1.33 |
 | Vela 2.0 0.3B, exact | 117.6 | 141.7 | 141.1 | 7.09 |
 | Vela 2.0 0.3B engine | 118.4 | 143.6 | 141.9 | 7.05 |
-| Vela 2.0 0.3B, `max_speed` (`float32-packed`) | 82.9 | 107.7 | 96.5 | 10.37 |
+| Vela 2.0 0.3B, batched, packed copy (`float32-packed`) | 82.9 | 107.7 | 96.5 | 10.37 |
 
 Per input, the Vela 2.0 request is 2.2× faster than the seven calls at the
-median, and 3.2× under `max_speed`. Long inputs gain the most: the legacy
+median, and 3.2× batched on the packed copy. Long inputs gain the most: the legacy
 jailbreak and PII models read them in 512-token windows that overlap by half
 (the other five cut them at 512 tokens), where the Vela 2.0 request reads
-them once. The `max_speed` row comes from a later run at `7b76fdd29` that
-interleaved it with `exact` on the same inputs; `exact` measured 134.5 /
+them once. The packed-copy row comes from a later run at `7b76fdd29` that
+interleaved it with alone on the same inputs; alone measured 134.5 /
 168.2 / 157.6 ms and 6.34 requests per second there (the node was about 10%
 slower than in the first run).
 
@@ -577,14 +583,14 @@ more about that path than about the models.
   attention call per block) so it rounds identically, and runs its
   element-wise steps as the gfx942 fused kernels, which round exactly like
   them.
-- **Packed trees and sequences.** The approximate profiles pack the 4B / 9B
+- **Packed trees and sequences.** Shared and batched forwards pack the 4B / 9B
   trees into one row per prefix (blocks merged by log-sum-exp, no block
   padding) and the 0.3B sequences back to back (no padding; local layers in
   query blocks on long rows); `vela2-parity.md` records their accuracy.
-- **A reduced copy where the records allow one.** Under `max_speed` the
-  0.3B's packed batches run on a `float32-packed` copy of its linear layers on
-  CPU (oneDNN's pre-packed FP32 GEMMs), while `exact` keeps its own linear
-  weights; the copy shares every other parameter with it.
+- **A reduced copy where the records allow one.** The 0.3B's batched
+  forwards run on a `float32-packed` copy of its linear layers on CPU
+  (oneDNN's pre-packed FP32 GEMMs), while the reference path keeps its own
+  linear weights; the copy shares every other parameter with it.
 - **Graphs, measured and left out.** A graph per exact 4B tree shape replays
   in 1–2 ms less than the 80–165 ms eager forward at 32–512 prompt tokens
   (the forward is GPU-bound), while capturing a shape costs about four

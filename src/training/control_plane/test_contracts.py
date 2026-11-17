@@ -397,7 +397,7 @@ class ClassifierProvenanceTests(unittest.TestCase):
 
     def test_variant_file_inventory_must_match(self):
         original = copy.deepcopy(self.variant["files"])
-        for change in ("missing", "extra", "renamed", "size"):
+        for change in ("missing", "extra", "renamed", "digest", "size"):
             with self.subTest(change=change):
                 files = copy.deepcopy(original)
                 if change == "missing":
@@ -406,6 +406,8 @@ class ClassifierProvenanceTests(unittest.TestCase):
                     files["extra.json"] = files["config.json"]
                 elif change == "renamed":
                     files["other.json"] = files.pop("config.json")
+                elif change == "digest":
+                    files["config.json"]["digest"] = "sha256:" + "0" * 64
                 else:
                     files["config.json"]["size_bytes"] += 1
                 self.variant["files"] = files

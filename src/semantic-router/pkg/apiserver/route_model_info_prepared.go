@@ -103,23 +103,10 @@ func addPreparedInputLimits(metadata map[string]string, capability binding.Capab
 	}
 }
 
-// Keep the established API names for existing consumers; new typed tasks are
-// visible automatically, without adding another list of model families.
+// A prepared task is listed by its name and contract, an embedding task by
+// its adapter's embedding model; new typed tasks are visible without a list
+// of model families.
 func preparedModelNameAndType(id binding.Identity) (string, string) {
-	switch id.Name {
-	case "domain_classifier":
-		return "category_classifier", "intent_classification"
-	case "prompt_guard":
-		return "jailbreak_classifier", "security_detection"
-	case "pii_classifier":
-		return id.Name, "pii_detection"
-	case "fact_check_classifier":
-		return id.Name, "fact_check_classification"
-	case "hallucination_detector":
-		return id.Name, "hallucination_detection"
-	case "feedback_detector":
-		return id.Name, "feedback_detection"
-	}
 	if id.Contract == "embedding.v1" {
 		return id.Adapter + "_embedding_model", "embedding"
 	}

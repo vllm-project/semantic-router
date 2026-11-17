@@ -1,0 +1,294 @@
+# Masking
+
+## Overview
+
+`masking` is a route-local plugin that detects personal data (emails, phone numbers, names, and other configured entity types) in the provider-bound request and replaces each occurrence with a deterministic placeholder, such as `[EMAIL_ADDRESS_0]`, immediately before the request is encoded and sent to the model provider. The same value gets the same placeholder everywhere in one request; two different values get different placeholders.
+
+It can also mask what your own rules find, such as an employee ID pattern or the account numbers a System One span question finds, each under a placeholder of its own.
+
+## What Problem Does It Solve?
+
+Some routes send traffic to a model provider that should never see raw personal data — a third-party API, a lower-trust tier, or a route subject to a data-handling policy. The router can already detect PII and act on it by refusing a request or routing it to a safer model, but neither of those sends the request *with the PII removed*. `masking` rewrites the content in place so the provider only ever sees placeholders, without requiring every caller to redact input themselves.
+
+Because every wire format (Chat Completions, Responses, Anthropic Messages) is decoded into one neutral request before plugins run, this happens identically regardless of which API a client used to reach the router.
+
+## When to Use
+
+- a route dispatches to a provider that must not receive personal data
+- the same value should map to the same placeholder throughout one request, and different values should map to different placeholders
+- a missing or unavailable PII detector should block the request rather than silently send it unmasked
+
+## Configuration
+
+Masking masks what a [pii rule](../signal/application/pii) detects. Declare the
+rule under `recipes[].signals.pii` and name it in the plugin under
+`recipes[].decisions[].plugins`:
+
+```yaml
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: contact_details
+          predicate: {gte: 0.85}
+          description: Contact details masked before the request leaves the Router.
+    decisions:
+      - name: support
+        # ...rules, modelRefs...
+        plugins:
+          - type: masking
+            configuration:
+              enabled: true
+              signal: contact_details
+              entity_types:
+                - EMAIL_ADDRESS
+                - PHONE_NUMBER
+              placeholders:
+                EMAIL_ADDRESS: "[EMAIL_{index}]"
+                PHONE_NUMBER: "[PHONE_{index}]"
+```
+
+| Field | Meaning |
+|---|---|
+| `enabled` | Turns masking on for this decision. |
+| `signal` | The pii rule whose detections are masked: its deployment, its `predicate`, and the labels its `ignore_labels` lets through, which are not masked. No decision has to read the rule. It can be left out when `rules` is set. |
+| `rules` | Your own rules whose matches are masked as well, as `{type, name}` references to rules of the recipe that find text. See [Masking your own rules](#masking-your-own-rules). |
+| `entity_types` | An **include list** of PII labels (`PERSON`, `EMAIL_ADDRESS`, `PHONE_NUMBER`, `US_SSN`, `CREDIT_CARD`, `LOCATION`, `IP_ADDRESS`, `DATE_TIME`, `US_DRIVER_LICENSE`, `US_PASSPORT`, `IBAN_CODE`): only these types are masked. Empty means every type the rule detects is masked. Any other label is rejected at config load. It applies to the pii rule only; every rule in `rules` is always masked. |
+| `placeholders` | Maps a PII label, or the name of a rule in `rules`, to a template. The template must contain `{index}` exactly once, with a character other than a digit right before and right after it, as in `[EMAIL_{index}]` or `#{index}#`. A template without `{index}` would collapse distinct values onto one placeholder; a digit next to it joins the index, so `[X_{index}0]` at 1 writes `[X_10]`, which reads as `[X_{index}]` at 10; and an index at the template's edge runs into a digit the text has beside the value, so `#{index}` for the name in `Bob5` would write `#15`. Config load rejects all three. Types absent from the map get the default `[TYPE_n]` shape, which for a rule is its name in capitals, so `employee_id` becomes `[EMPLOYEE_ID_0]`. Two types with identical templates are rejected at config load. Different templates can still write the same string, as `[V{index}X0]` and `[V0X{index}]` both write `[V0X0]`. With `index: sequence` the request skips an index whose placeholder it has already issued, so different values still get different placeholders. With `index: registry` a value keeps its index for good, so config load rejects such templates as well. |
+| `index` | How placeholders are numbered. `registry` keeps one index per value for good in an identity namespace, so a value has the same placeholder in every request, session and restart. `sequence` numbers values in the order one request meets them. Left out, it is `registry` when `identity_namespace` is set and `sequence` otherwise. See [Placeholders that last](#placeholders-that-last). |
+| `identity_namespace` | The namespace of `global.services.masking_identity` that `index: registry` takes its indexes from. |
+
+The rule reads the request as it is sent, after every plugin that changes it
+has run, so personal data a [RAG](./context) document or a system prompt brought
+in is masked too. The rule's text is scanned once per request: a decision that
+also reads the rule at routing reuses the scan of the same text.
+
+The rule's detector must answer with positions. A rule that resolves to a
+deployment that cannot answer span questions, such as a decision model without
+span support, fails at load with `span_required`.
+
+A configuration that still sets `masking.threshold`, or names neither a
+`signal` nor `rules`, fails at load with a one-line hint; `vllm-sr config
+migrate` adds a pii rule with the plugin's threshold and names it.
+
+## Placeholders that last
+
+With `index: sequence` each request numbers its values afresh, from `_0`. That
+holds while an agent resends its whole history, since the value comes before
+every echo of its placeholder. It breaks when the history was compacted, when
+a new session reads a file an earlier one wrote, and across restarts: the
+echo `[PERSON_0]` arrives without Alice, and Alice, seen later, gets another
+index.
+
+With `index: registry` the Router keeps, per namespace, scope and type, which
+index each value holds, and never gives that index to another value. Alice is
+`[PERSON_0]` in every request of the scope, an echo of `[PERSON_0]` is known to
+be one even when Alice is not in the request, and a file written last week
+still means what it meant.
+
+```yaml
+global:
+  services:
+    masking_identity:
+      namespaces:
+        agents:
+          key_file: /var/lib/vsr/masking/agents.key   # 32 random bytes
+          scope: principal_or_installation
+          registry:
+            backend: file
+            path: /var/lib/vsr/masking/agents.log
+recipes:
+  - name: default
+    decisions:
+      - name: support
+        plugins:
+          - type: masking
+            configuration:
+              enabled: true
+              signal: contact_details
+              identity_namespace: agents
+```
+
+| Field | Meaning |
+|---|---|
+| `key_file` / `key_env` | The namespace secret, 32 bytes in a file or 64 hex digits in an environment variable. Exactly one is set. |
+| `scope` | `principal_or_installation`: placeholders are numbered per user that a trusted authenticator names in the user header (`x-authz-user-id` unless `authz.identity` changes it, with `x-authz-tenant-id`), or for the whole installation when the request names no such user. A forwarded account header such as `chatgpt-account-id` is not a user. |
+| `session_scope` | When `true`, numbering also starts afresh per session id, so placeholders stay consistent within a session only. |
+| `registry.backend` | `file`: an append-only log one Router process owns, synced to disk on every write. `postgres`: tables in the database that `registry.postgres` names, with the connection fields of the Router Replay Postgres store, shared by every replica. |
+
+`vllm-sr serve` provisions a namespace named `local` the first time it starts,
+with a new key and a file registry in its state directory
+(`.vllm-sr/masking/<stack>/`), and masking plugins that set neither `index` nor
+`identity_namespace` use it. On Kubernetes, mount the key from a Secret and use
+the Postgres backend, since a file registry belongs to one process.
+
+The registry stores a keyed digest of each value (HMAC-SHA-256 under a key
+derived from the namespace secret), the index it holds, and the placeholder
+indexes a request held before they were issued, which are reserved for good.
+It stores no value, no request text and no user id, and the digests cannot be
+checked against a guess without the key. Equal values are equal placeholders
+everywhere in a scope, which is the point, and the indexes show the order in
+which values first appeared.
+
+Back up the key and the registry together. The Router refuses to start when
+the key is missing or does not match the registry, or when an established
+registry is gone, because a fresh one would hand `[PERSON_0]` to a new value
+while old files still mean Alice by it. To start over on purpose, move the old
+key and registry aside and change the placeholder templates, for example to
+`[PERSON2_{index}]`, so old placeholders cannot be read as new values. If the
+registry cannot be read or written while serving, the request fails with the
+same 503 as any masking failure; it never falls back to per-request numbering.
+A Postgres registry that stops answering fails each registry call after 10
+seconds, so the client gets that 503 rather than a gateway timeout.
+
+## Masking your own rules
+
+`rules` adds rules of the recipe whose matches are masked next to the pii
+rule's. Each rule is written as an ordinary signal, so the same rule can also
+route or refuse a request in a decision, and it is masked under its own name:
+
+```yaml
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: employee_id
+          description: An employee ID such as E-104233.
+          operator: OR
+          method: regex
+          keywords: ['\bE-\d{6}\b']
+      systemone:
+        - name: customer_account
+          description: A customer's account number.
+          deployment: vela3
+          question:
+            type: span
+            instructions: Which spans are named entities of these types?
+            labels: [{key: account number}]
+          predicate: {gte: 0.8}
+    decisions:
+      - name: support
+        # ...rules, modelRefs...
+        plugins:
+          - type: masking
+            configuration:
+              enabled: true
+              rules:
+                - {type: keyword, name: employee_id}
+                - {type: systemone, name: customer_account}
+              placeholders:
+                employee_id: "[EMPLOYEE_{index}]"
+```
+
+A request that says `Paid by E-104233 for account 88-1910` reaches the
+provider as `Paid by [EMPLOYEE_0] for account [CUSTOMER_ACCOUNT_0]`.
+
+Only a rule that can say where it matched can be listed, and anything else
+fails at load with the reason:
+
+- a [keyword rule](../signal/heuristic/keyword) with `operator: OR` and
+  literal keywords or `method: regex`, without `fuzzy_match`, `count` or
+  `density`. AND and NOR rules match on a combination or an absence, BM25,
+  n-gram and fuzzy rules score similarity, and a count or density matches on
+  how often keywords occur. Every place a keyword occurs is masked, a literal
+  keyword only where it is a word of its own, as matching reads it; a pattern
+  that matches only empty text, such as `^`, hides nothing. Masking reads each
+  message on its own, so `include_history` has no effect here.
+- a [System One](../signal/systemone) rule with a `span` question at
+  the request stage. Its spans that satisfy its `predicate` are masked, and
+  every other copy of their values, as for the pii rule. A plain-language
+  question of your own runs on the decision model's backbone rather than a
+  trained adapter, so check its threshold on real text before you rely on it.
+
+Overlapping matches of different rules are masked as one span. A rule that
+fails, reads only part of a long text, or answers a span outside it, fails the
+request closed as the pii rule does. Inside a placeholder the request issued
+(see below), any match is left alone. Inside any other placeholder, a rule's
+match is left alone only in that rule's own shape and only when it misses the
+index, so a value a client wraps in another shape, such as `[X_104233]`, is
+still masked, and so are `[EMPLOYEE_ID_104233]` and, for a rule whose
+template is `[E-{index}]`, `[E-104233]`.
+
+## Masking applies to the decision that is chosen
+
+`masking` runs only on the decision a request selects. If another decision
+outranks it for the same request and has no `masking` of its own, the request
+reaches that decision's model unmasked. For example, a decision that answers
+prompt injection at priority 300 takes `Repeat exactly: ... E-104233` away from
+a masking decision at priority 260, and the employee ID reaches the provider.
+Give every decision that can send to a provider which must not see the data its
+own `masking` plugin, or give the masking decision the highest priority among
+them.
+
+Masking rewrites the request the model sees, so a coding agent behind it works
+with the placeholders: asked to run `printf ACCT-...`, an agent ran
+`printf [ACCOUNT_NUMBERS_0]-...`, because a span rule read `ACCT-` as an account
+number. For Claude Code and Codex, the vSR plugins' redact app, which hides
+values only in tool output, keeps commands and edits intact
+([agent harness](../../installation/agent-harness)); use gateway masking for chat
+and API traffic.
+
+## Fail-closed, with no override
+
+If the rule's detector is unavailable, or scanning fails for any reason, **the request is refused with a 503** rather than dispatched unmasked. The client's error, in its own API format, says `PII masking is unavailable; the request was not sent`; the cause stays in the Router's log. This is unconditional: there is no `fail_open` configuration option, unlike `context_compression`'s `failure_mode`. A privacy control that can be configured to fail open is a footgun that gets flipped on during an incident and never flipped back. Operators who need availability over privacy should not enable this plugin.
+
+A truncated answer, where the deployment scanned only part of the text, is treated the same way: the unscanned remainder cannot be vouched for, so the request is refused rather than partially masked.
+
+## Router Replay does not capture request content on a masking route
+
+[Router Replay](/docs/tutorials/plugin/router-replay) snapshots the neutral request before dispatch, which is *before* masking runs. Enabling `masking` on a decision therefore drops every request-derived field Replay would otherwise store for that decision: `RequestBody`, `Prompt`, and the request tool trace (user text, tool-call arguments, tool results) are all left empty. That applies on the internal Looper path and when masking itself fails, both of which also record before the final mask. Routing metadata, signals, and decisions are still recorded — only request content is not. Tool definitions are still recorded, since they are operator-authored, not user content. The response tool trace is unaffected: the model only ever saw masked content.
+
+Masking the stored Replay copy instead of suppressing it is a reasonable idea, but it needs a Replay update path that does not currently exist. It is not implemented here.
+
+## Masking is not reversible
+
+This plugin only ever removes information going forward to the provider. It does not:
+
+- remember a value-to-placeholder mapping beyond the lifetime of one request, except as a keyed digest under `index: registry`, which cannot be turned back into the value
+- restore a placeholder back to its original value anywhere, including in the model's response
+- give an operator, an API, or a log line any way to recover a masked value
+
+If a response happens to echo a placeholder like `[EMAIL_ADDRESS_0]` back to the client, that placeholder is not decoded — the client sees exactly that string. Restoring placeholders in responses is an explicit non-goal, not a missing feature.
+
+An agent that keeps working with placeholders sends them back in its later requests, for example in a file it writes with `Hi [PERSON_0],`. A detected span that lies inside a placeholder this plugin can write, for one of the pii labels or the rules in its configured template or the default `[TYPE_n]` shape, with an index of up to nine digits (nineteen under `index: registry`) and no leading zero, is not masked again, even when the detector reads part of it as personal data. Text that only looks like one, such as `[X_104233]` or `[PERSON_ALICE_0]`, is not a placeholder. A span that reaches past it, such as an email address whose local part is a placeholder, is still masked, and a template with no letter besides `{index}`, such as `#{index}#`, exempts nothing unless masking issued that placeholder, since its digits could be part of a real phone number. Without that, the agent would see its own earlier output turn into `[[PERSON_1]]` on the next turn and its edits would stop matching the file it wrote. Under `index: registry` only a placeholder the registry issued in the scope is left alone this way: it knows every one it issued, so any other placeholder-shaped text is something a client wrote and is masked like the rest of the text.
+
+A detector's span that takes in none of a placeholder's own letters, such as one over its index or over the tag of a `[vsr:<tag>]` mark alone, and a rule's match that reaches into the index, are left alone only when masking issued that very placeholder earlier in the same request, or under `index: registry` in any earlier request of the scope, whichever label or rule finds them there. An agent's history carries the value before the placeholder it echoes, since the conversation is resent each turn, so `[PERSON_0]` is issued again for that value before the echo is read; a value wrapped in a placeholder shape, such as `[ACCOUNT_NUMBERS_19104822]` or `[vsr:4111111111111111]`, was never issued and is masked. Placeholder-shaped text the request holds before masking issued it, which a client may have typed, is reserved, in any configured template, `#{index}#` included: `[ACCOUNT_NUMBERS_0] is overdue, and so is account 19104822` reaches the provider as `[ACCOUNT_NUMBERS_0] is overdue, and so is account [ACCOUNT_NUMBERS_1]`. Under `index: sequence` an echo that comes before its value in the request, for example after the history was compacted, is treated the same way: its index is reserved, and a detector reading only that index masks it. Under `index: registry` the registry knows the echo was issued, so it is left alone and its value gets the same placeholder when it appears.
+
+The same holds for the `[vsr:<tag>]` marks, such as `[vsr:email]` or `[vsr:employee_id]` for a listener rule, that the vSR plugins for Claude Code and Codex leave where their redact app hid a value from a tool's output. With the plugin and the gateway running together, a tool result reaches the Router already redacted, and the marks pass through as they are, also at the start of a tool result. A detector that reads a mark's tag alone as personal data masks the tag, and the value the mark stands for was never in the request.
+
+## What is deliberately not masked
+
+The masking walk touches message content, system/developer instructions, tool-call arguments, tool results, and the string values of the `safeguards` array Claude Code's auto mode sends — and nothing else.
+
+Tool payloads are masked according to their kind. A function call's JSON arguments and a structured tool result are decoded first and masked at their string leaves, so object keys stay intact, the payload stays valid JSON, and an escaped value such as `alice@example.com` is still caught. A custom tool's free-form input and a plain-text tool result are masked as text.
+
+A tool result is treated as structured when it opens the way JSON does: `{` before a member name or `}`, or `[` before `]`, a string, an object, an array, or a number or `true`, `false` or `null` followed by `,` or `]`. Text that only begins with a bracket, such as a log line `[INFO] build ok` or `[2026-11-14 10:00:00] ...`, a `[vsr:employee_id]` mark, or `{not json`, is ordinary text. A structured payload must decode faithfully — exactly one JSON value, nothing after it, and no object repeating a member name — or masking fails closed (D4). Both of these are refused rather than forwarded:
+
+- `{"note":"safe"} alice@example.com` — more than one value. Decoding reads only the first, leaving the rest unscanned.
+- `{"value":"alice@example.com","value":"safe"}` — a repeated member name. Decoding keeps only the last one.
+
+Masking as text is not used as a fallback for these, because the text path scans the undecoded bytes: it would miss an escaped value such as `{"value":"alice@example.com"} note`, which the provider still reads as `alice@example.com`. A payload that does not open as JSON is ordinary text and is masked as text, where the whole string is scanned.
+
+Specifically left alone:
+
+- **Reasoning blocks.** Anthropic-style thinking blocks carry a provider signature over their text; rewriting the text would invalidate it and the provider would reject the request.
+- **Tool definitions** (`Tools[].Description`, `InputSchema`). These are operator-authored, not user input — masking them would corrupt the model's understanding of its own tools for no privacy benefit.
+- **Media payloads and references** (image/audio/video/file `Data`, `URL`, `FileID`, `Filename`).
+- **Identifiers** used for correlation: `ToolCall.ID`, `ToolResult.CallID`, `Request.Model`, `PreviousResponseID`, `ConversationID`.
+- **`Request.Metadata`** (client-supplied key/value pairs) — out of the issue's stated scope.
+- **JSON object keys** inside tool-call arguments and structured tool results. Only string *values* are scanned; a key that happens to look like PII is never touched.
+
+## Citations
+
+If a text block carries citations and part of it gets masked, each citation is adjusted: one whose range overlaps a masked span is dropped, because its offsets no longer point at anything meaningful once the text has changed length. A citation that does not overlap any masked span is kept, with its offset corrected for the length change.
+
+## Observability
+
+Detected values never reach a log, a metric label, or a trace attribute. What is recorded:
+
+- the entity **type** (e.g. `EMAIL_ADDRESS`), never the value or the placeholder
+- a count of masked spans, by entity type and decision
+- byte/offset positions and confidence scores, where logged at all
+
+See a complete example:
+[`config/fragments/plugin/masking/basic.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/masking/basic.yaml).

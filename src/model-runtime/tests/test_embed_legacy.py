@@ -38,7 +38,7 @@ def test_the_baseline_child_serves_its_engine_from_its_own_tree(el):
         prepared="/bundles",
         jobs="omni_mini_audio",
         device="cpu",
-        profile="exact",
+        max_num_seqs=1,
         threads=16,
         baseline_runtime="/staging/src/model-runtime",
     )
@@ -47,7 +47,7 @@ def test_the_baseline_child_serves_its_engine_from_its_own_tree(el):
     flags = dict(zip(command[3::2], command[4::2], strict=True))
     assert flags["--omni-engine"] == "onnxruntime"
     assert flags["--runtime-src"] == "/staging/src/model-runtime"
-    assert flags["--threads"] == "16"
+    assert flags["--threads"] == "16" and flags["--max-num-seqs"] == "1"
     args.baseline_runtime = None
     assert "--runtime-src" not in el.baseline_command(args)
 

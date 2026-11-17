@@ -4,7 +4,7 @@
 configuration choose the Router's decision model,
 `global.model_catalog.system.decision_model` (`vllm-sr serve
 --decision-model`). That is the Vela model that answers every built-in signal
-it covers, and every `routing.signals.decision` question that names no
+it covers, and every `recipes[].signals.decision` question that names no
 `deployment`, in one call per request. This record measures each Vela 2.0
 size through the Router, as
 [vela2-router-signals.md](vela2-router-signals.md) did for the 0.3B, and gives
@@ -51,11 +51,13 @@ with the Vela 1.0 arm.
   <size> --gpu` for the 0.8B, 4B and 9B. Each sets only
   `global.model_catalog.system.decision_model` and puts the modules on the
   GPU, as `vllm-sr serve --platform amd` does, so every built-in signal runs
-  on the size's implicit deployment, `@Vela-2.0-<size>/auto`, on `exact`.
+  on the size's implicit deployment, `@Vela-2.0-<size>/auto`, each request
+  alone (the default of the time).
   The rows were split over three GPUs per size (two for the 0.8B), each
   shard with its own Router and recording runtime.
-- **The 0.3B** is vela2-router-signals.md's arm, on CPU under `max_speed`;
-  its scores are within 5e-6 of `exact`. The larger sizes ran on a GPU, where
+- **The 0.3B** is vela2-router-signals.md's arm, on CPU batched on its packed
+  FP32 copy (today's default); its scores are within 5e-6 of each request
+  alone. The larger sizes ran on a GPU, where
   their backbones run under bf16 autocast with FP32 heads, as their cards
   evaluate them.
 - **Hallucination:** asked as the Router's detector asks it
@@ -580,13 +582,14 @@ with `--decision-model`.
   the host, each on its own GPU and 12 cores, for {"0_3b": 3, "0_8b": 3, "4b": 3, "9b": 3} rounds.
 - **CPU:** every 8th input (68), once sequentially and once at concurrency 4
   per round after 5 warm-up requests, since the 0.8B takes seconds per request
-  on a CPU. The 0.3B (`max_speed`) and the 0.8B (`exact`) ran one at a time
+  on a CPU. The 0.3B (batched on its packed copy) and the 0.8B (each request
+  alone) ran one at a time
   with nothing else on the host, each on 12 cores of one NUMA node, for
   {"0_3b": 3, "0_8b": 3} rounds.
 - **Statistics:** the median of the rounds per metric, and the paired
   difference against the 0.3B per round with a 95% t interval.
 
-GPU (`exact`):
+GPU (each request alone):
 
 | Pass | Metric | 0.3B | 0.8B | 4B | 9B |
 | --- | --- | ---: | ---: | ---: | ---: |

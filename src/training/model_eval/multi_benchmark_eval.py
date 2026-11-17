@@ -39,6 +39,7 @@ def load_params(path):
         "top_p": float(p["top_p"]) if p.get("top_p") is not None else None,
         "max_tokens": int(p.get("max_tokens", 4096)),
         "chat_template_kwargs": p.get("chat_template_kwargs"),
+        "extra_body": p.get("extra_body"),
     }
 
 
@@ -63,6 +64,13 @@ def gen_one(task, client, model, params, chat_template_kwargs, request_timeout):
     ctk = chat_template_kwargs or params["chat_template_kwargs"]
     if ctk:
         kwargs["extra_body"] = ctk
+    # Params-file extra_body merges last: provider-specific request fields
+    # (e.g. reasoning_effort for a nothink round) ride here without touching
+    # the chat_template_kwargs contract.
+    if params.get("extra_body"):
+        merged = dict(kwargs.get("extra_body") or {})
+        merged.update(params["extra_body"])
+        kwargs["extra_body"] = merged
 
     err = None
     chunks, finish, usage, ttft, t0 = [], None, {}, None, 0.0
@@ -130,6 +138,12 @@ def main():
         help="Re-run all tasks even if records.jsonl already exists "
         "(default: resume, skip already completed task_ids)",
     )
+    ap.add_argument(
+        "--api-key",
+        default="dummy",
+        help="Bearer key for authenticated OpenAI-compatible endpoints "
+        "(default: dummy, matching unauthenticated local vLLM)",
+    )
     args = ap.parse_args()
 
     params = load_params(args.params)
@@ -138,7 +152,9 @@ def main():
         ctk = json.loads(args.chat_template_kwargs)
 
     client = OpenAI(
-        base_url=args.endpoint, api_key="dummy", timeout=args.request_timeout
+        base_url=args.endpoint,
+        api_key=args.api_key,
+        timeout=args.request_timeout,
     )
 
     with open(args.split, encoding="utf-8") as f:

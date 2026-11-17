@@ -20,7 +20,14 @@ const poolArtifact = "vllm-sr/Decision-2.0-Kai-0.6B"
 
 func testReplicaPool(t *testing.T, models ...runtimetest.Model) (*Lease, []*runtimetest.Runtime) {
 	t.Helper()
-	declaration := config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: poolArtifact}
+	return testDeclaredReplicaPool(t, config.ModelDeployment{}, models...)
+}
+
+// testDeclaredReplicaPool serves models as the replicas of one deployment with
+// the engine arguments of declaration.
+func testDeclaredReplicaPool(t *testing.T, declaration config.ModelDeployment, models ...runtimetest.Model) (*Lease, []*runtimetest.Runtime) {
+	t.Helper()
+	declaration.Provider, declaration.Artifact = config.ModelRuntimeProvider, poolArtifact
 	var runtimes []*runtimetest.Runtime
 	for _, model := range models {
 		if model.Repo == "" {
@@ -38,7 +45,7 @@ func testReplicaPool(t *testing.T, models ...runtimetest.Model) (*Lease, []*runt
 			runtime.Handler().ServeHTTP(w, r)
 		}))
 		t.Cleanup(server.Close)
-		declaration.Replicas = append(declaration.Replicas, config.ModelReplica{Endpoint: server.URL, ServedName: model.ID})
+		declaration.Replicas = append(declaration.Replicas, config.ModelReplica{Endpoint: server.URL, Model: model.ID})
 	}
 	manager := NewManager()
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
@@ -157,6 +164,57 @@ func TestReplicaPoolRejectsArtifactAndCapabilityMismatch(t *testing.T) {
 	}
 }
 
+func TestReplicaPoolAdmitsReplicasThatCalibratedDifferentBudgets(t *testing.T) {
+	lease, _ := testReplicaPool(t,
+		runtimetest.Model{ID: "rocm-0", MaxNumSeqs: 256, MaxNumBatchedTokens: 18944},
+		runtimetest.Model{ID: "rocm-1", MaxNumSeqs: 256, MaxNumBatchedTokens: 19200},
+	)
+	if status := lease.Statuses()[0]; status.ReadyReplicas != 2 || status.State != "ready" {
+		t.Fatalf("a replica with its own calibrated budget left the pool: %+v", status)
+	}
+	pool := lease.members["primary"].pool
+	first, releaseFirst, err := pool.retain(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseFirst(replicaOK)
+	second, releaseSecond, err := pool.retain(100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer releaseSecond(replicaOK)
+	if first.id == second.id {
+		t.Fatal("dispatch used one replica only")
+	}
+	if _, err := lease.Decide(context.Background(), "primary", sampleRequest("x")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReplicaPoolHoldsEveryReplicaToPinnedBatchLimits(t *testing.T) {
+	seqs, tokens := 128, 16384
+	lease, runtimes := testDeclaredReplicaPool(t,
+		config.ModelDeployment{MaxNumSeqs: &seqs, MaxNumBatchedTokens: &tokens},
+		runtimetest.Model{ID: "pinned", MaxNumSeqs: 128, MaxNumBatchedTokens: 16384},
+		runtimetest.Model{ID: "calibrated", MaxNumSeqs: 128, MaxNumBatchedTokens: 19200},
+	)
+	status := lease.Statuses()[0]
+	if status.ReadyReplicas != 1 || status.State != "degraded" {
+		t.Fatalf("a replica off the pinned limits was admitted: %+v", status)
+	}
+	for _, replica := range status.Replicas {
+		if replica.Ready == strings.Contains(replica.Reason, "max_num_batched_tokens") {
+			t.Fatalf("replica %+v", replica)
+		}
+	}
+	if _, err := lease.Decide(context.Background(), "primary", sampleRequest("x")); err != nil {
+		t.Fatal(err)
+	}
+	if runtimes[1].Calls("decisions") != 0 {
+		t.Fatal("the replica off the pinned limits received inference")
+	}
+}
+
 func TestReplicaPoolDrainsAcceptedExchangeAcrossLeaseClose(t *testing.T) {
 	started, finish := make(chan struct{}), make(chan struct{})
 	runtime := runtimetest.New(runtimetest.Model{ID: "worker", Repo: poolArtifact, ModelSHA256: strings.Repeat("a", 64)})
@@ -171,7 +229,7 @@ func TestReplicaPoolDrainsAcceptedExchangeAcrossLeaseClose(t *testing.T) {
 	defer server.Close()
 	manager := NewManager()
 	defer func() { _ = manager.Shutdown(context.Background()) }()
-	lease, err := manager.AcquireDeployments(map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: poolArtifact, Replicas: []config.ModelReplica{{Endpoint: server.URL, ServedName: "worker"}}}})
+	lease, err := manager.AcquireDeployments(map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: poolArtifact, Replicas: []config.ModelReplica{{Endpoint: server.URL, Model: "worker"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

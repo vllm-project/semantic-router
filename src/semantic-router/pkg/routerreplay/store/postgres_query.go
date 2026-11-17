@@ -56,7 +56,7 @@ func (p *PostgresStore) QueryPage(ctx context.Context, filters QueryFilters, lim
 func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	var clauses []string
 	var args []interface{}
-	add := func(clause string, value string) {
+	add := func(clause string, value interface{}) {
 		args = append(args, value)
 		clauses = append(clauses, strings.ReplaceAll(clause, "?", fmt.Sprintf("$%d", len(args))))
 	}
@@ -64,7 +64,12 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 		add("COALESCE(recipe, '') = ?", filters.Recipe)
 	}
 	for _, field := range []struct{ column, value string }{
-		{"decision", filters.Decision}, {"session_id", filters.SessionID},
+		{"decision", filters.Decision},
+		{"session_id", filters.SessionID},
+		{"request_kind", filters.RequestKind},
+		{"review_status", filters.ReviewStatus},
+		{"review_outcome", filters.ReviewOutcome},
+		{"review_risk", filters.ReviewRisk},
 	} {
 		if field.value != "" {
 			add(field.column+" = ?", field.value)
@@ -73,8 +78,15 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	if filters.Model != "" {
 		add("(selected_model = ? OR original_model = ?)", filters.Model)
 	}
+	if filters.TurnID != "" {
+		add("(turn_id = ? OR parent_turn_id = ?)", filters.TurnID)
+	}
 	if filters.Search != "" {
-		add("(strpos(lower(COALESCE(request_id, '')), lower(?)) > 0 OR strpos(lower(COALESCE(recipe, '')), lower(?)) > 0)", filters.Search)
+		add("(strpos(lower(COALESCE(request_id, '')), lower(?)) > 0 OR strpos(lower(COALESCE(recipe, '')), lower(?)) > 0 OR strpos(lower(COALESCE(session_id, '')), lower(?)) > 0)", filters.Search)
+	}
+	if !filters.Since.IsZero() {
+		// timestamp holds UTC wall-clock time without a zone.
+		add("timestamp >= ?", filters.Since.UTC())
 	}
 	switch filters.CacheStatus {
 	case "cached":
@@ -96,6 +108,8 @@ func postgresSummarySelectColumns() string {
 			columns[i] = "''"
 		case "projection_trace":
 			columns[i] = "NULL"
+		case "review":
+			columns[i] = postgresReviewSummaryColumn
 		case "tool_trace":
 			// Tool names remain discoverable without returning arguments/results.
 			columns[i] = `CASE WHEN tool_trace IS NULL OR tool_trace = 'null'::jsonb THEN NULL ELSE
@@ -110,40 +124,88 @@ func postgresSummarySelectColumns() string {
 	return strings.Join(columns, ",")
 }
 
-// ScanMetadata streams only the columns used by Insights. Large request,
-// response, tool, safety, and learning payloads never cross the database wire.
-func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) error) (err error) {
+// ScanMetadata streams only the columns used by Insights, with each record's
+// id and its place in its agent run, for the records the filters select.
+// Large request, response, tool, safety, and learning payloads never cross the
+// database wire. Its readers aggregate, so it asks for no order and the
+// database need not sort the history.
+func (p *PostgresStore) ScanMetadata(ctx context.Context, filters QueryFilters, visit func(Record) error) (err error) {
 	release, err := p.lifecycle.beginMutation()
 	if err != nil {
 		return err
 	}
 	defer release()
-	//nolint:gosec // tableName is validated during store creation
-	query := fmt.Sprintf(`SELECT COALESCE(request_id,''), COALESCE(recipe,''), COALESCE(decision,''),
+	where, args := postgresReplayWhere(filters)
+	//nolint:gosec // tableName is validated during store creation; filters are parameters
+	query := fmt.Sprintf(`SELECT id, COALESCE(request_id,''), COALESCE(recipe,''), COALESCE(decision,''),
 		COALESCE(original_model,''), COALESCE(selected_model,''), COALESCE(session_id,''),
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
-		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model
-		FROM %s ORDER BY timestamp DESC, id DESC`, p.tableName)
-	rows, err := p.db.QueryContext(ctx, query)
+		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model,
+		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, ''), cost_accounting,
+		routing_metadata
+		FROM %s%s`, postgresReviewMetadataColumn, p.tableName, where)
+	rows, err := p.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
 	defer func() { err = errors.Join(err, rows.Close()) }()
 	for rows.Next() {
 		row := postgresRecordRow{}
-		if err = rows.Scan(&row.record.RequestID, &row.record.Recipe, &row.record.Decision,
+		if err = rows.Scan(&row.record.ID, &row.record.RequestID, &row.record.Recipe, &row.record.Decision,
 			&row.record.OriginalModel, &row.record.SelectedModel, &row.record.SessionID,
 			&row.record.FromCache, &row.record.Streaming, &row.record.LifecycleState, &row.signalsJSON,
 			&row.promptTokens, &row.completionTokens, &row.totalTokens, &row.actualCost,
-			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel); err != nil {
+			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel, &row.providerCacheJSON,
+			&row.record.Timestamp, &row.record.DurationMS, &row.review.requestKind, &row.review.reviewJSON,
+			&row.record.TurnID, &row.record.ParentTurnID, &row.costAccountingJSON, &row.routingMetadataJSON); err != nil {
+			return err
+		}
+		if err = unmarshalPostgresRoutingMetadata(row.routingMetadataJSON, &row.record); err != nil {
+			return err
+		}
+		if err = row.review.assign(&row.record); err != nil {
 			return err
 		}
 		if err = json.Unmarshal(row.signalsJSON, &row.record.Signals); err != nil {
 			return err
 		}
+		if err = unmarshalReplayOptionalJSON(row.providerCacheJSON, &row.record.ProviderCache); err != nil {
+			return err
+		}
+		if err = unmarshalReplayOptionalJSON(row.costAccountingJSON, &row.record.CostAccounting); err != nil {
+			return err
+		}
 		assignUsageCostFields(&row.record, row.promptTokens, sql.NullInt64{}, sql.NullInt64{}, row.completionTokens,
 			row.totalTokens, row.actualCost, row.baselineCost, row.costSavings, row.currency, row.baselineModel)
 		if err = visit(row.record); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// ScanFilterOptions reads the distinct filter values in one grouped query, so
+// a filtered scan does not have to read every record for them.
+func (p *PostgresStore) ScanFilterOptions(ctx context.Context, visit func(Record) error) (err error) {
+	release, err := p.lifecycle.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`SELECT DISTINCT COALESCE(recipe,''), COALESCE(decision,''), COALESCE(selected_model,''),
+		COALESCE(original_model,''), COALESCE(request_kind,'') FROM %s`, p.tableName)
+	rows, err := p.db.QueryContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		var record Record
+		if err = rows.Scan(&record.Recipe, &record.Decision, &record.SelectedModel, &record.OriginalModel, &record.RequestKind); err != nil {
+			return err
+		}
+		if err = visit(record); err != nil {
 			return err
 		}
 	}

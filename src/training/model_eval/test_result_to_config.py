@@ -24,7 +24,7 @@ def test_parse_args_defaults_to_eval_config(monkeypatch):
     assert args.api_format == "openai"
 
 
-def test_generate_config_yaml_emits_canonical_v03_layout():
+def test_generate_config_yaml_emits_canonical_v05_layout():
     category_accuracies = {
         "math": {
             "qwen3-8b": 0.82,
@@ -47,8 +47,8 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
         provider_name="openai",
     )
 
-    assert set(config) == {"version", "listeners", "providers", "routing", "global"}
-    assert config["version"] == "v0.3"
+    assert set(config) == {"version", "listeners", "providers", "global", "recipes"}
+    assert config["version"] == "v0.5"
     assert config["listeners"] == []
 
     defaults = config["providers"]["defaults"]
@@ -61,13 +61,11 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     assert provider_models["phi4"]["backend_refs"][0]["provider"] == "vllm"
     assert provider_models["phi4"]["external_model_ids"] == {"openai": "phi4"}
 
-    routing_models = {model["name"]: model for model in config["routing"]["modelCards"]}
-    assert set(routing_models) == {"phi4", "qwen3-8b"}
-    assert all("evaluations" not in card for card in routing_models.values())
+    assert provider_models["phi4"]["capabilities"] == ["chat"]
+    assert all("evaluations" not in model for model in provider_models.values())
 
-    domains = {
-        domain["name"]: domain for domain in config["routing"]["signals"]["domains"]
-    }
+    (recipe,) = config["recipes"]
+    domains = {domain["name"]: domain for domain in recipe["signals"]["domains"]}
     math_scores = domains["math"]["model_scores"]
     assert math_scores[0] == {
         "model": "qwen3-8b",
@@ -75,17 +73,12 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
         "use_reasoning": True,
     }
     assert domains["law"]["model_scores"][0]["use_reasoning"] is False
-    assert config["routing"]["decisions"] == []
+    assert recipe["decisions"] == []
 
+    (cache,) = config["global"]["plugins"]
     assert (
-        config["global"]["stores"]["response_cache"]["similarity_threshold"]
+        cache["configuration"]["semantic"]["match"]["recall"]["min_similarity"]
         == EXPECTED_SIMILARITY_THRESHOLD
-    )
-    assert (
-        config["global"]["model_catalog"]["modules"]["classifier"]["domain"][
-            "fallback_category"
-        ]
-        == "other"
     )
 
     for legacy_key in (
@@ -103,30 +96,11 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     root = TEST_DIR.parents[2]
     schema = json.loads(
         (
-            root / "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json"
+            root / "src/semantic-router/pkg/configschema/router-config-v0.5.schema.json"
         ).read_text()
     )
     jsonschema.validate(config, schema)
     served = yaml.safe_load((root / "config/config.yaml").read_text())
     actual = config["global"]["model_catalog"]
     expected = served["global"]["model_catalog"]
-    guard = actual["modules"]["prompt_guard"]
-    for key in (
-        "model_id",
-        "threshold",
-        "variant",
-        "positive_labels",
-        "jailbreak_mapping_path",
-    ):
-        assert guard[key] == expected["modules"]["prompt_guard"][key]
-    for role, mapping in (
-        ("domain", "category_mapping_path"),
-        ("pii", "pii_mapping_path"),
-    ):
-        classifier = actual["modules"]["classifier"][role]
-        default = expected["modules"]["classifier"][role]
-        assert classifier["model_id"] == default["model_id"]
-        assert classifier[mapping] == default[mapping]
-    assert actual["embeddings"]["semantic"]["mmbert_model_path"] == (
-        expected["embeddings"]["semantic"]["mmbert_model_path"]
-    )
+    assert actual["embeddings"] == expected["embeddings"]

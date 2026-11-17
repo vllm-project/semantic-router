@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 冻结并运行
 translation:
   source_commit: "31fa0fdab6787b3b149894db259af13c8ce42f5a"

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 推理平台
 description: 将语义模型选择放在负责模型部署和副本调度的平台之上。
 translation:

@@ -8,6 +8,7 @@ import sys
 
 from cli.consts import PLATFORM_ROCM
 from cli.container_images import _normalize_platform
+from cli.terminal import HEADLINE
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -15,6 +16,24 @@ ORDINARY_PORT_MAPPING_LENGTH = 2
 HOST_GATEWAY_ALIAS = "host.docker.internal"
 HOST_GATEWAY_IP_ENV = "VLLM_SR_HOST_GATEWAY_IP"
 DOCKER_BRIDGE_PROBE_TIMEOUT_SECONDS = 10
+RESTART_POLICY_ENV = "VLLM_SR_RESTART_POLICY"
+RESTART_POLICIES = ("no", "on-failure", "unless-stopped", "always")
+
+
+def restart_policy_args():
+    """The `--restart` arguments every long-running stack container receives.
+
+    `vllm-sr serve --restart-policy` sets RESTART_POLICY_ENV for the start; the
+    runtime default (`no`) adds nothing, so containers keep today's behavior.
+    """
+    policy = os.getenv(RESTART_POLICY_ENV, "").strip().lower()
+    if not policy or policy == "no":
+        return []
+    if policy not in RESTART_POLICIES:
+        raise ValueError(
+            f"{RESTART_POLICY_ENV} must be one of {', '.join(RESTART_POLICIES)}; got {policy!r}"
+        )
+    return ["--restart", policy]
 
 
 def build_base_run_command(
@@ -33,6 +52,7 @@ def build_base_run_command(
             f"nofile={nofile_limit}:{nofile_limit}",
         ]
     )
+    cmd.extend(restart_policy_args())
     if network_name:
         cmd.extend(["--network", network_name])
     return cmd
@@ -64,7 +84,8 @@ def append_amd_gpu_passthrough(cmd, normalized_platform):
         cmd.extend(["--cap-add", "SYS_PTRACE"])
         cmd.extend(["--security-opt", "seccomp=unconfined"])
         log.info(
-            f"AMD GPU passthrough enabled with devices: {', '.join(mounted_devices)}"
+            f"AMD GPU passthrough enabled with devices: {', '.join(mounted_devices)}",
+            extra=HEADLINE,
         )
 
     if missing_devices:
@@ -205,12 +226,17 @@ def append_nvidia_gpu_passthrough(cmd, runtime: str):
         # `--gpus all` only for Docker, which understands the nvidia container
         # toolkit shim natively.
         cmd.extend(["--device", "nvidia.com/gpu=all"])
-        log.info("NVIDIA GPU passthrough enabled via CDI (--device nvidia.com/gpu=all)")
+        log.info(
+            "NVIDIA GPU passthrough enabled via CDI (--device nvidia.com/gpu=all)",
+            extra=HEADLINE,
+        )
         return
 
     cmd.extend(["--gpus", "all"])
     cmd.extend(["--runtime", "nvidia"])
-    log.info("NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)")
+    log.info(
+        "NVIDIA GPU passthrough enabled (--gpus all --runtime nvidia)", extra=HEADLINE
+    )
 
 
 def maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu: bool, runtime: str):

@@ -135,6 +135,42 @@ func TestBuildReplayUsageCostIncludesCacheWrites(t *testing.T) {
 	}
 }
 
+func TestBuildReplayUsageCostIncludesTieredCacheWrites(t *testing.T) {
+	rate5m := 2.5
+	rate1h := 5.0
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"tiered-model": {
+						Pricing: config.ModelPricing{
+							Currency:          "USD",
+							PromptPer1M:       1,
+							CacheWritePer1M:   &rate5m,
+							CacheWrite1hPer1M: &rate1h,
+							CompletionPer1M:   2,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	usage := responseUsageMetrics{
+		promptTokens:               1_000,
+		cacheWriteTokens:           400,
+		cacheWrite5mTokens:         100,
+		cacheWrite5mTokensReported: true,
+		cacheWrite1hTokens:         300,
+		cacheWrite1hTokensReported: true,
+		completionTokens:           100,
+	}
+	snapshot := router.buildReplayUsageCost(replayCostContext("tiered-model", "tiered-model", "tiered-model"), usage)
+
+	// standard = 600 * 1.0 + 100 * 2.5 + 300 * 5.0 + 100 * 2.0 = 600 + 250 + 1500 + 200 = 2550 / 1e6 = 0.00255
+	assertApproxFloat64(t, snapshot.ActualCost, 0.00255)
+}
+
 func TestBuildReplayUsageCostKeepsTokenCountsWhenPricingIsMissing(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
@@ -385,10 +421,10 @@ func TestBuildReplayUsageCostIncludesRecipeGenerationTargets(t *testing.T) {
 			baseline: "selected", cost: 0.001,
 		},
 		{
-			name: "auxiliary selector and unassigned default are excluded",
+			name: "decision-model selector and unassigned default are excluded",
 			decision: config.Decision{
 				ModelRefs: []config.ModelRef{{Model: "selected"}},
-				Algorithm: &config.AlgorithmConfig{Type: "prompt", Prompt: &config.PromptSelectionConfig{Model: "auxiliary"}},
+				Algorithm: &config.AlgorithmConfig{Type: "systemone", SystemOne: &config.SystemOneSelectionConfig{Instructions: "Choose."}},
 			},
 			baseline: "selected", cost: 0.001,
 		},

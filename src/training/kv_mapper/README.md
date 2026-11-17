@@ -27,18 +27,30 @@ same commits.
 
 ## Install
 
+This directory is a uv project (`pyproject.toml` and `uv.lock`). Create the
+environment from the lock:
+
 ```bash
 cd src/training/kv_mapper
-pip install -r requirements.txt
+uv sync --locked                  # numpy and safetensors: contract tests and fit
+uv sync --locked --group models   # also torch, transformers, datasets and accelerate
 ```
+
+The `models` group is only needed for `collect_run.py`, `distill_run.py` and
+`model_eval_run.py`. Run the commands below through
+`uv run --project src/training/kv_mapper` from the repository root.
+`requirements.txt` stays for anyone who installs with `pip`.
 
 ## Contract tests
 
-From the repository root:
+From the repository root, as `make test-training-contracts` runs them:
 
 ```bash
-python3 -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
+uv run --project src/training/kv_mapper \
+  python -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
 ```
+
+Without the `models` group, the torch tests are skipped.
 
 ## Fit
 

@@ -9,7 +9,7 @@ from a zero state; the suffixes run as variable-length sequences from the
 prefix-end recurrent state, each convolution window starting with the prefix's
 last inputs. These are the operations of the released runtime's shared-context
 switch (``decision2/shared_ctx.py`` tree mode), so the answers equal it; they
-can differ from the exact path by rounding (opt-in ``shared_context`` profile).
+can differ from the request's own batches by rounding (``--enable-shared-context``).
 """
 
 from __future__ import annotations

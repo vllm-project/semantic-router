@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"strings"
@@ -33,8 +34,8 @@ func boolToStatus(healthy bool) string {
 	return "unknown"
 }
 
-func checkRouterManagementHealth(url string, credentialProvider ...routerauth.CredentialProvider) bool {
-	resp, err := routerManagementGET(url, 2*time.Second, credentialProvider...)
+func checkRouterManagementHealth(ctx context.Context, url string, credentialProvider ...routerauth.CredentialProvider) bool {
+	resp, err := routerManagementGET(ctx, url, 2*time.Second, credentialProvider...)
 	if err != nil {
 		return false
 	}
@@ -44,9 +45,13 @@ func checkRouterManagementHealth(url string, credentialProvider ...routerauth.Cr
 
 // checkEnvoyHealth checks if Envoy is running and healthy.
 // Returns: (isRunning, isHealthy, message)
-func checkEnvoyHealth(url string) (bool, bool, string) {
+func checkEnvoyHealth(ctx context.Context, url string) (bool, bool, string) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false, false, ""
+	}
 	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := client.Do(request)
 	if err != nil {
 		return false, false, ""
 	}

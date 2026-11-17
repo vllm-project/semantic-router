@@ -1,3 +1,5 @@
+//go:build !windows
+
 package main
 
 import (
@@ -149,11 +151,11 @@ func readinessDocument(ports readinessPorts, backend string, deployments ...stri
       rules:
         operator: AND
         on_unknown: no_match
-        conditions: [{type: decision, name: hard_0}]
+        conditions: [{type: systemone, name: hard_0}]
       modelRefs: [{model: a}]
 `)
 	}
-	document := fmt.Sprintf(`version: v0.3
+	document := fmt.Sprintf(`version: v0.5
 listeners:
   - name: http
     address: 127.0.0.1
@@ -164,18 +166,17 @@ providers:
   models:
     - name: a
       backend_refs: [{endpoint: %s, protocol: http, provider: vllm}]
-routing:
-  modelCards:
-    - name: a
 `, ports.listener, strings.TrimPrefix(backend, "http://"))
+	recipe := ""
 	if signals.Len() > 0 {
-		document += "  signals:\n    decision:\n" + signals.String()
+		recipe += "  signals:\n    systemone:\n" + signals.String()
 	}
-	document += "  decisions:\n" + decision.String() + `    - name: default-route
+	recipe += "  decisions:\n" + decision.String() + `    - name: default-route
       priority: 100
       rules: {operator: AND, conditions: []}
       modelRefs: [{model: a}]
-global:
+`
+	document += "recipes:\n  - name: default\n  " + strings.ReplaceAll(strings.TrimSuffix(recipe, "\n"), "\n", "\n  ") + "\n" + `global:
   services:
     management_api:
       bind_address: 127.0.0.1
@@ -186,9 +187,6 @@ global:
     observability:
       tracing:
         enabled: false
-  stores:
-    semantic_cache:
-      enabled: false
 `
 	if catalog.Len() > 0 {
 		document += "  model_catalog:\n    deployments:\n" + catalog.String()
@@ -257,6 +255,12 @@ func getJSON(t *testing.T, url string, into interface{}) int {
 	}
 	return response.StatusCode
 }
+
+// readinessPollBudget is the shared polling budget for every readiness wait
+// in this file: generous enough that a loaded CI runner cannot outrun the
+// Router's own startup or reload windows, matching the failed-load path's
+// rejection wait.
+const readinessPollBudget = 60 * time.Second
 
 // eventually polls check until it returns nil, failing the test with its last
 // error after the deadline or when the Router exits.
@@ -340,7 +344,7 @@ func TestStartupWaitsForTheRouterManagedModelDeployments(t *testing.T) {
 			}
 
 			var loading startupstatus.State
-			eventually(t, process, 20*time.Second, func() error {
+			eventually(t, process, readinessPollBudget, func() error {
 				if getJSON(t, api+"/startup-status", &loading) != http.StatusServiceUnavailable || loading.Phase != startupstatus.PhaseLoadingModelDeployments {
 					return fmt.Errorf("startup does not report the deployment it waits for: %+v", loading)
 				}
@@ -373,7 +377,7 @@ func TestStartupWaitsForTheRouterManagedModelDeployments(t *testing.T) {
 				t.Fatal(err)
 			}
 			var ready readyBody
-			eventually(t, process, 20*time.Second, func() error {
+			eventually(t, process, readinessPollBudget, func() error {
 				if status := getJSON(t, api+"/ready", &ready); status != http.StatusOK || !ready.Ready {
 					return fmt.Errorf("/ready after the model loaded: %d %+v", status, ready)
 				}
@@ -489,7 +493,7 @@ func TestReloadKeepsServingUntilAnAddedManagedModelIsReady(t *testing.T) {
 	process := startRouterProcess(t, configPath, config.GatewayStandalone, ports)
 	api := fmt.Sprintf("http://127.0.0.1:%d", ports.api)
 	listener := fmt.Sprintf("http://127.0.0.1:%d", ports.listener)
-	eventually(t, process, 20*time.Second, func() error {
+	eventually(t, process, readinessPollBudget, func() error {
 		if status := getJSON(t, api+"/ready", nil); status != http.StatusOK {
 			return fmt.Errorf("a configuration without managed models is ready at once, /ready %d", status)
 		}
@@ -500,7 +504,7 @@ func TestReloadKeepsServingUntilAnAddedManagedModelIsReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	var hash configHashBody
-	eventually(t, process, 20*time.Second, func() error {
+	eventually(t, process, readinessPollBudget, func() error {
 		if getJSON(t, api+"/api/v1/config/hash", &hash); hash.ActivationStatus != "pending" {
 			return fmt.Errorf("the reload is not waiting for its model: %+v", hash)
 		}
@@ -516,7 +520,7 @@ func TestReloadKeepsServingUntilAnAddedManagedModelIsReady(t *testing.T) {
 	if err := os.WriteFile(hold, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, process, 20*time.Second, func() error {
+	eventually(t, process, readinessPollBudget, func() error {
 		if getJSON(t, api+"/api/v1/config/hash", &hash); hash.ActivationStatus != "active" {
 			return fmt.Errorf("the reload did not activate once its model loaded: %+v", hash)
 		}
@@ -528,7 +532,7 @@ func TestReloadKeepsServingUntilAnAddedManagedModelIsReady(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte(readinessDocument(ports, backend, "decider", "broken")), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, process, 60*time.Second, func() error {
+	eventually(t, process, readinessPollBudget, func() error {
 		getJSON(t, api+"/api/v1/config/hash", &hash)
 		if hash.ActivationStatus != "failed" || hash.LastRejection == nil || !strings.Contains(hash.LastRejection.Error, `model_runtime deployment "broken"`) {
 			return fmt.Errorf("a reload whose model cannot load is rejected with the deployment: %+v", hash)

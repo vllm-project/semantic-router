@@ -3,6 +3,7 @@ package modelservice
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"sync"
 	"testing"
@@ -27,7 +28,7 @@ func attachedLease(t *testing.T, runtimes map[*runtimetest.Runtime][]string) *Le
 		t.Cleanup(server.Close)
 		for _, name := range names {
 			deployments[name] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: server.URL}
-			cfg.DecisionRules = append(cfg.DecisionRules, config.DecisionSignalRule{Name: "r_" + name, Deployment: name, Question: config.DecisionQuestion{Type: "noul", Instructions: "x"}})
+			cfg.SystemOneRules = append(cfg.SystemOneRules, config.SystemOneRule{Name: "r_" + name, Deployment: name, Question: config.SystemOneQuestion{Type: "noul", Instructions: "x"}})
 		}
 	}
 	cfg.ModelDeployments = deployments
@@ -51,9 +52,11 @@ func TestBundleSendsOneCallPerLogicalDeploymentWhenEveryParticipantParks(t *test
 	encoders := runtimetest.New(classifyHead("domain"), classifyHead("guard"), classifyHead("feedback"))
 	decisions := runtimetest.New(runtimetest.Model{ID: "kai"})
 	lease := attachedLease(t, map[*runtimetest.Runtime][]string{encoders: {"domain", "guard", "feedback"}, decisions: {"kai"}})
-	ctx, bundle := WithBundle(context.Background(), 50*time.Millisecond)
+	ctx, bundle := WithBundle(context.Background(), 10*time.Second)
 	var wg sync.WaitGroup
 	errs := make(chan error, 4)
+	// decisions joins before any encoder starts, so the encoders alone are never all parked.
+	decide := bundle.Join()
 	for _, deployment := range []string{"domain", "guard", "feedback"} {
 		leave := bundle.Join()
 		wg.Add(1)
@@ -67,11 +70,10 @@ func TestBundleSendsOneCallPerLogicalDeploymentWhenEveryParticipantParks(t *test
 			errs <- err
 		}(deployment)
 	}
-	leave := bundle.Join()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer leave()
+		defer decide()
 		_, err := lease.Decide(ctx, "kai", sampleRequest("is this hard"))
 		errs <- err
 	}()
@@ -174,5 +176,29 @@ func TestCallsCarryTheirDeadline(t *testing.T) {
 	defer leave()
 	if _, err := lease.Classify(bundled, "domain", classifyText("later")); ErrorReason(err) != "timeout" {
 		t.Fatalf("a bundled late answer is a timeout, got %v", err)
+	}
+}
+
+// A per-candidate judge reads at most config.MaxMatchJudgeCandidates
+// candidates because that many states, asked as a judge asks them, fit one
+// bundle to an attached runtime at its default task cap. One more needs a
+// second bundle, sent at once, which the runtime refuses while the first runs.
+func TestAJudgeAtItsCandidateCapSendsOneBundle(t *testing.T) {
+	for _, test := range []struct{ states, bundles int }{{config.MaxMatchJudgeCandidates, 1}, {config.MaxMatchJudgeCandidates + 1, 2}} {
+		runtime := runtimetest.New(vela2Fake("vela"))
+		lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}})
+		stage, bundle := WithBundle(context.Background(), 0)
+		leave := bundle.Join()
+		errs := make([]error, test.states)
+		Fan(stage, test.states, func(i int) {
+			_, errs[i] = lease.Decide(stage, "vela", Request{State: fmt.Sprintf("candidate %d", i), Questions: []Question{{ID: "q", Type: "noul", Instructions: "Relevant?"}}})
+		})
+		leave()
+		if err := errors.Join(errs...); err != nil {
+			t.Fatal(err)
+		}
+		if calls, _ := runtime.Bundles(); calls != test.bundles {
+			t.Fatalf("%d candidates went in %d bundles, want %d", test.states, calls, test.bundles)
+		}
 	}
 }

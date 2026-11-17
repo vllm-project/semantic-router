@@ -410,3 +410,31 @@ func TestParseUserGroups(t *testing.T) {
 		Expect(ParseUserGroups("premium,,basic,")).To(Equal([]string{"premium", "basic"}))
 	})
 }
+
+// Header names are case-insensitive: identity.user_id_header may name
+// X-User-ID while the gateway hands the Router lowercase keys, as Envoy and
+// the standalone listener both do.
+func TestAuthzSignalReadsIdentityHeadersInAnyCase(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.Authz.Identity = config.IdentityConfig{UserIDHeader: "X-User-ID", UserGroupsHeader: "X-User-Groups"}
+	cfg.RoleBindings = []config.RoleBinding{
+		{Name: "alice-admin", Role: "admin", Subjects: []config.Subject{{Kind: "User", Name: "alice"}}},
+		{Name: "ops-oncall", Role: "oncall", Subjects: []config.Subject{{Kind: "Group", Name: "ops"}}},
+	}
+	cfg.Decisions = []config.Decision{{Name: "admin-route", Rules: config.RuleNode{Type: config.SignalTypeAuthz, Name: "admin"}}}
+	classifiers, err := BuildRecipeClassifiers(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	classifier, _ := classifiers.ForRecipe(cfg.DefaultRecipe().Name)
+	results, err := classifier.EvaluateAllSignalsWithHeaders(SignalEvaluationInput{
+		Text:    "hello",
+		Headers: map[string]string{"x-user-id": "alice", "x-user-groups": "ops"},
+	})
+	if err != nil {
+		t.Fatalf("authz evaluation failed: %v", err)
+	}
+	if len(results.MatchedAuthzRules) != 2 {
+		t.Fatalf("matched roles = %v, want admin from the user and oncall from the group", results.MatchedAuthzRules)
+	}
+}

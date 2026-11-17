@@ -3,7 +3,7 @@
 ``Decision1Model`` owns what both runtimes share: the request rules and
 presets, the bundled runtime's admission rule (one over-long question fails
 every question of the request, nothing is truncated), the physical batches of
-the ``exact`` profile and the answers. A subclass renders a question and runs
+a request that runs alone and the answers. A subclass renders a question and runs
 a batch on its engine model.
 """
 
@@ -37,7 +37,6 @@ class Decision1Model(DecisionModel[RenderedItem, list[float] | None]):
     """A loaded Decision 1.0 model; ``render``, ``physical_batches`` and ``run`` are per runtime."""
 
     noul_defaults: ClassVar[NoulDefaults]
-    fuse_bundled_jobs: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -181,9 +180,9 @@ class VelaDecisionModel(Decision1Model):
 
         The released runtime runs every type's stack over the whole padded
         batch; rows of other types and padding are wasted work, but dropping
-        them changes GEMM and attention shapes, so this is for approximate
-        profiles: up to three times fewer row passes on a mixed request and no
-        padding across coalesced requests.
+        them changes GEMM and attention shapes, so this is for batches that
+        merge requests: up to three times fewer row passes on a mixed request
+        and no padding across coalesced requests.
         """
         results: list[list[float] | None] = [None] * len(items)
         with torch.inference_mode():

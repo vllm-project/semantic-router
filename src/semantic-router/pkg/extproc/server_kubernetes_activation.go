@@ -73,7 +73,20 @@ func (s *Server) ActivateKubernetesConfig(ctx context.Context, cfg *config.Route
 func (s *Server) markServingReady() {
 	s.servingMu.Lock()
 	defer s.servingMu.Unlock()
-	if s.healthServer != nil && !s.lifecycle.isStopping() {
+	if s.lifecycle.isStopping() {
+		return
+	}
+	s.servingActive = true
+	if s.healthServer != nil {
 		s.healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	}
+}
+
+// ServingActive reports whether the server serves an active configuration:
+// from when it serves, or with config_source kubernetes from the first active
+// Kubernetes configuration, until shutdown begins.
+func (s *Server) ServingActive() bool {
+	s.servingMu.Lock()
+	defer s.servingMu.Unlock()
+	return s.servingActive && !s.lifecycle.isStopping()
 }

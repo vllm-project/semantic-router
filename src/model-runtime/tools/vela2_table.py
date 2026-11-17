@@ -5,7 +5,7 @@
 The entry (for ``registry/tables/vela2.py``) holds the SHA-256 of every file the
 family loads, the identity those digests define and the parameter count the
 family loads; the golden answers (for ``registry/golden_answers_vela2.json``)
-are the exact profile's answers to the family's golden request on the device.
+are the answers to the family's golden request on the device, alone in its released forwards.
 """
 
 from __future__ import annotations

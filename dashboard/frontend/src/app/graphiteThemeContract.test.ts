@@ -46,10 +46,6 @@ const legacyBrandTokens = [
 
 const graphiteSurfaceContracts = [
   {
-    path: '../pages/MLSetupPage.module.css',
-    forbiddenPatterns: [/#(?:3b82f6|2563eb|60a5fa)\b/i, /rgba?\(\s*59\s*,\s*130\s*,\s*246\b/i],
-  },
-  {
     path: '../components/MCPConfigPanel.module.css',
     forbiddenPatterns: [
       /#(?:1e1e2e|181825|313244|cdd6f4|a6adc8|89b4fa|cba6f7|a6e3a1|101311|0f1304)\b/i,
@@ -151,14 +147,15 @@ describe('graphite dashboard theme contract', () => {
 
   it('keeps the DSL editor and analytics surfaces on the shared palette', () => {
     const dslTheme = readFileSync(new URL('../lib/dslLanguage.ts', import.meta.url), 'utf8')
-    const insightsCharts = readFileSync(
-      new URL('../components/InsightsCharts.tsx', import.meta.url),
+    const insightsChartStyles = readFileSync(
+      new URL('../components/InsightsCharts.module.css', import.meta.url),
       'utf8',
     )
 
     expect(dslTheme).toContain("'editor.background': '#050505'")
     expect(dslTheme).toContain("'editorCursor.foreground': '#e31b23'")
-    expect(insightsCharts).toMatch(/const CHART_COLORS = \[\s*'#e31b23'/)
+    expect(insightsChartStyles).toMatch(/\.rankedFillLead\s*\{[^}]*var\(--brand-amd\)/)
+    expect(insightsChartStyles).toMatch(/\.tokenOutput\s*\{[^}]*var\(--brand-amd\)/)
   })
 
   it('does not reintroduce the retired legacy brand palette', () => {

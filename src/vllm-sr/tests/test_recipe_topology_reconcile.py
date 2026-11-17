@@ -151,6 +151,37 @@ def test_container_status_distinguishes_absence_from_runtime_failure(monkeypatch
     assert topology._container_status("missing") == "not found"
 
 
+def test_container_lookups_ask_podman_for_containers_only(monkeypatch):
+    """A kept `vllm-sr-redis-data` volume must not answer for `vllm-sr-redis`."""
+    calls = []
+
+    def podman(arguments):
+        calls.append(arguments)
+        name = arguments[-1]
+        typed = arguments[:2] == ["container", "inspect"]
+        if not typed and "vllm-sr-redis-data".startswith(name):
+            return subprocess.CompletedProcess(
+                args=arguments,
+                returncode=125,
+                stdout="",
+                stderr='Error: template: inspect:1:2: executing "inspect" at '
+                "<.State.Status>: can't evaluate field State in type interface {}",
+            )
+        return subprocess.CompletedProcess(
+            args=arguments,
+            returncode=125,
+            stdout="",
+            stderr=f"Error: no such container {name}",
+        )
+
+    monkeypatch.setattr(topology, "_run_raw", podman)
+
+    assert topology._container_status("vllm-sr-redis") == "not found"
+    with pytest.raises(topology.TopologyReconcileError, match="could not be inspected"):
+        topology._inspect("vllm-sr-redis")
+    assert [call[:2] for call in calls] == [["container", "inspect"]] * 2
+
+
 def test_host_hidden_state_dir_resolves_exact_split_dashboard_bind(monkeypatch):
     monkeypatch.setenv("VLLM_SR_DASHBOARD_CONTAINER_NAME", "vllm-sr-dashboard")
     monkeypatch.setattr(

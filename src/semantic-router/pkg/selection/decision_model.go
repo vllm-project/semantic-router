@@ -40,20 +40,20 @@ type DecisionModelInvoke func(
 // ModelRefs should answer. The probabilities become the candidate scores;
 // any failure falls back through the Router's selection fallback.
 type DecisionModelSelector struct {
-	config       config.DecisionSelectionConfig
+	config       config.SystemOneSelectionConfig
 	invoke       DecisionModelInvoke
 	descriptions map[string]string
 }
 
 func NewDecisionModelSelector(
-	cfg config.DecisionSelectionConfig,
+	cfg config.SystemOneSelectionConfig,
 	invoke DecisionModelInvoke,
 	descriptions map[string]string,
 ) *DecisionModelSelector {
 	return &DecisionModelSelector{config: cfg, invoke: invoke, descriptions: descriptions}
 }
 
-func (s *DecisionModelSelector) Method() SelectionMethod { return MethodDecision }
+func (s *DecisionModelSelector) Method() SelectionMethod { return MethodSystemOne }
 
 func (s *DecisionModelSelector) Tier() AlgorithmTier { return TierSupported }
 
@@ -65,8 +65,6 @@ func (s *DecisionModelSelector) ExternalDependencies() []Dependency {
 		Required:    false,
 	}}
 }
-
-func (s *DecisionModelSelector) UpdateFeedback(context.Context, *Feedback) error { return nil }
 
 func (s *DecisionModelSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if err := ValidateSelectionContext(selCtx); err != nil {
@@ -83,7 +81,7 @@ func (s *DecisionModelSelector) Select(ctx context.Context, selCtx *SelectionCon
 		}
 		return nil, fmt.Errorf("%w: %w", ErrDecisionModelInvocation, err)
 	}
-	selected := promptCandidateByModel(selCtx.CandidateModels, answer.Choice)
+	selected := candidateByModel(selCtx.CandidateModels, answer.Choice)
 	if selected == nil {
 		return nil, fmt.Errorf("%w: %q is not a candidate", ErrDecisionModelAnswer, answer.Choice)
 	}
@@ -103,13 +101,22 @@ func (s *DecisionModelSelector) Select(ctx context.Context, selCtx *SelectionCon
 		LoRAName:          selected.LoRAName,
 		Score:             answer.Probabilities[selected.Model],
 		Confidence:        answer.Confidence,
-		Method:            MethodDecision,
+		Method:            MethodSystemOne,
 		Tier:              s.Tier(),
 		Reasoning:         fmt.Sprintf("decision model %s chose %s", s.config.Deployment, selected.Model),
 		CandidateScores:   scores,
 		ScoreDirection:    HigherIsBetter,
 		AllScores:         all,
 	}, nil
+}
+
+func candidateByModel(candidates []config.ModelRef, model string) *config.ModelRef {
+	for i := range candidates {
+		if candidates[i].Model == model {
+			return &candidates[i]
+		}
+	}
+	return nil
 }
 
 func (s *DecisionModelSelector) choices(candidates []config.ModelRef) []DecisionModelChoice {

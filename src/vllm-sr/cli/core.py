@@ -1,5 +1,6 @@
 """Core management functions for vLLM Semantic Router."""
 
+import sys
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -73,7 +74,7 @@ from cli.storage_backends import (
     provision_storage_backends,
     storage_data_volume_is_recorded,
 )
-from cli.terminal import echo, fields, heading, hint, success, warning
+from cli.terminal import echo, fields, heading, hint, quiet_logs, success, warning
 from cli.utils import get_logger, load_config
 
 log = get_logger(__name__)
@@ -204,7 +205,8 @@ def _preflight_runtime_config(
     state_root_dir,
     stack_layout,
 ):
-    print_vllm_logo()
+    if not quiet_logs():
+        print_vllm_logo()
     recover_pending_recipe_activation_for_stack(
         runtime_config_path=runtime_config_file,
         state_root_dir=state_root_dir,
@@ -292,6 +294,8 @@ def _start_vllm_sr_locked(
         env_vars,
         stack_layout,
         enable_observability,
+        # A Dashboard can turn routing on in the running stack.
+        routing=_routing_enabled(user_config) or not dashboard_disabled,
     )
 
     setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
@@ -324,7 +328,6 @@ def _start_vllm_sr_locked(
         if setup_mode:
             # Until setup activates a config this command changes nothing, and
             # the Dashboard's activation needs the runtime config lock.
-            heartbeat(SERVE_WAITING)
             with runtime_lock.released() if runtime_lock else nullcontext():
                 maybe_finish_setup_mode(
                     setup_mode,
@@ -334,7 +337,9 @@ def _start_vllm_sr_locked(
                     envoy=runs_envoy(gateway),
                 )
                 activated = _wait_for_setup_activation(
-                    runtime_config_file, stack_layout
+                    runtime_config_file,
+                    stack_layout,
+                    on_waiting=lambda: heartbeat(SERVE_WAITING),
                 )
             if not activated:
                 return
@@ -403,6 +408,11 @@ def _readiness_token_env(
     return _configured_management_readiness_token_env(user_config, available)
 
 
+def _routing_enabled(user_config) -> bool:
+    router = (user_config.get("global") or {}).get("router") or {}
+    return router.get("enabled") is not False
+
+
 def _start_support_services(
     user_config,
     shared_network_name,
@@ -410,11 +420,13 @@ def _start_support_services(
     env_vars,
     stack_layout,
     enable_observability,
+    *,
+    routing=True,
 ):
     if not enable_observability:
         _stop_observability_containers(stack_layout)
     started_backends = provision_storage_backends(
-        user_config, stack_layout, state_root_dir=state_root_dir
+        user_config, stack_layout, state_root_dir=state_root_dir, routing=routing
     )
     env_vars[MANAGED_STORAGE_BACKENDS_ENV] = ",".join(sorted(started_backends))
     observability_network_name = start_observability_stack(
@@ -429,19 +441,25 @@ def _start_support_services(
 
 
 def _wait_for_setup_activation(
-    runtime_config_file, stack_layout: RuntimeStackLayout
+    runtime_config_file,
+    stack_layout: RuntimeStackLayout,
+    on_waiting=None,
 ) -> bool:
     """Wait until the Dashboard activates a config."""
 
     dashboard = stack_layout.dashboard_container_name
-    log.info(
+    message = (
         "Waiting for setup: the Router starts here once you activate a config "
-        "in the Dashboard (Ctrl-C stops waiting)"
+        "in the Dashboard"
     )
+    if sys.stdin.isatty():
+        message += " (Ctrl-C stops waiting)"
+    log.info(message)
     activated = (
         wait_for_pending_activation(
             runtime_config_file,
             dashboard_running=lambda: container_status(dashboard) == "running",
+            on_waiting=on_waiting,
         )
         is not None
     )
@@ -787,12 +805,13 @@ def show_status(service: str = "all"):
         echo()
 
     services = _requested_services(service)
-    if (
-        service == "all"
-        and container_status(stack_layout.envoy_container_name) == "not found"
-    ):
-        # A standalone stack has no Envoy container.
-        services.remove("envoy")
+    if service == "all":
+        # A standalone stack has no Envoy container, and a minimal one (Engine
+        # mode's default) no Dashboard.
+        for optional in ("envoy", "dashboard"):
+            name = stack_layout.service_container_name(optional)
+            if container_status(name) == "not found":
+                services.remove(optional)
     for requested_service in services:
         report_service_status(requested_service, stack_layout)
 

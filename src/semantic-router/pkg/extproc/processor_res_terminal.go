@@ -25,7 +25,10 @@ func responseUsageFromSemanticUsage(usage llmprotocol.Usage) responseUsageMetric
 	total, totalReported, totalOK := settlementTotalTokenCount(usage, input, output)
 	cacheRead, cacheReadReported, cacheReadOK := authoritativeTerminalTokenCount(usage.InputCacheRead)
 	cacheWrite, cacheWriteReported, cacheWriteOK := authoritativeTerminalTokenCount(usage.InputCacheWrite)
+	cacheWrite5m, cacheWrite5mReported, cacheWrite5mOK := authoritativeTerminalTokenCount(usage.InputCacheWrite5m)
+	cacheWrite1h, cacheWrite1hReported, cacheWrite1hOK := authoritativeTerminalTokenCount(usage.InputCacheWrite1h)
 	if !inputOK || !outputOK || !totalOK || !cacheReadOK || !cacheWriteOK ||
+		!cacheWrite5mOK || !cacheWrite1hOK ||
 		!inputReported || !outputReported {
 		return invalidResponseTerminalUsage("response_terminal_invalid")
 	}
@@ -35,6 +38,8 @@ func responseUsageFromSemanticUsage(usage llmprotocol.Usage) responseUsageMetric
 		totalTokens: total, totalTokensReported: totalReported,
 		cachedPromptTokens: cacheRead, cachedPromptTokensReported: cacheReadReported,
 		cacheWriteTokens: cacheWrite, cacheWriteTokensReported: cacheWriteReported,
+		cacheWrite5mTokens: cacheWrite5m, cacheWrite5mTokensReported: cacheWrite5mReported,
+		cacheWrite1hTokens: cacheWrite1h, cacheWrite1hTokensReported: cacheWrite1hReported,
 	})
 }
 

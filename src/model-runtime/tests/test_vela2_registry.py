@@ -94,8 +94,8 @@ def test_recorded_references_are_for_the_pinned_revisions(file_name) -> None:
 
 
 @pytest.mark.parametrize("model", MODELS, ids=size)
-def test_every_size_has_well_formed_cpu_and_rocm_golden_answers(model) -> None:
-    assert set(model.golden_answers) == {"cpu", "rocm"}
+def test_every_size_has_well_formed_reference_answers(model) -> None:
+    assert set(model.golden_answers) - {"npu"} == {"cpu", "rocm", "cuda:sm_90"}
     levels = GOLDEN_QUESTIONS["urgency"]["criteria"]
     for answers in model.golden_answers.values():
         assert set(answers) == GOLDEN_IDS
@@ -110,18 +110,28 @@ def test_every_size_has_well_formed_cpu_and_rocm_golden_answers(model) -> None:
         assert answers["urgency"]["legend"] == {
             str(index): level for index, level in enumerate(levels)
         }
-    cpu, rocm = model.golden_answers["cpu"], model.golden_answers["rocm"]
+    cpu, rocm, cuda = (
+        model.golden_answers["cpu"],
+        model.golden_answers["rocm"],
+        model.golden_answers["cuda:sm_90"],
+    )
     assert compare_answers(cpu, rocm, GPU_TOLERANCE) == (
         len(GOLDEN_IDS),
         len(GOLDEN_IDS),
     )
-    assert cpu["domain"]["choice"] == rocm["domain"]["choice"]
+    assert compare_answers(cpu, cuda, GPU_TOLERANCE) == (
+        len(GOLDEN_IDS),
+        len(GOLDEN_IDS),
+    )
+    assert (
+        cpu["domain"]["choice"] == rocm["domain"]["choice"] == cuda["domain"]["choice"]
+    )
 
 
 @pytest.mark.parametrize("model", DECODERS, ids=size)
 def test_decoders_pin_the_kernel_choices_of_the_backbone_they_continue(model) -> None:
     base = builtin.lookup(f"vllm-sr/Decision-2.0-{BASES[size(model)]}")
-    assert set(model.kernel_choices) == {"rocm:gfx942"}
+    assert set(model.kernel_choices) == {"rocm:gfx942", "cuda:sm_90"}
     assert model.kernel_choices == base.kernel_choices
     assert model.min_device_memory_gib == base.min_device_memory_gib
 

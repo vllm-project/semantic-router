@@ -100,10 +100,6 @@ func (c *InMemoryCache) cleanupExpiredEntriesDeferred() {
 // cleanupExpiredEntriesInternal optionally postpones HNSW rebuild until the caller finishes batching updates.
 // Uses expiration heap for O(k) cleanup where k = number of expired entries.
 func (c *InMemoryCache) cleanupExpiredEntriesInternal(deferRebuild bool) {
-	if c.ttlSeconds <= 0 {
-		return
-	}
-
 	now := time.Now()
 
 	// Use expiration heap for efficient O(k) cleanup where k = expired entries
@@ -184,7 +180,16 @@ func (c *InMemoryCache) isExpired(entry CacheEntry, now time.Time) bool {
 	return now.Sub(entry.LastAccessAt) >= time.Duration(c.ttlSeconds)*time.Second
 }
 
-// updateAccessInfo updates the access information for the given entry index
+// servedSemantic counts a semantic hit its caller served against the entry,
+// for the eviction policy. The entry keeps the expiry its write set.
+func (c *InMemoryCache) servedSemantic(requestID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.updateAccessInfo(c.entryMap[requestID], CacheEntry{RequestID: requestID})
+}
+
+// updateAccessInfo updates the access information for the given entry index.
+// It never moves the entry's expiry.
 func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
 	now := time.Now()
 
@@ -195,18 +200,6 @@ func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
 
 		// Update optimized eviction policy tracking
 		c.notifyAccessToEvictionPolicy(entryIndex, target.RequestID)
-
-		// Extend TTL in expiration heap (sliding window TTL)
-		// Use per-entry TTL if set, otherwise use global TTL
-		effectiveTTL := c.ttlSeconds
-		if c.entries[entryIndex].TTLSeconds > 0 {
-			effectiveTTL = c.entries[entryIndex].TTLSeconds
-		}
-		if effectiveTTL > 0 {
-			newExpiresAt := now.Add(time.Duration(effectiveTTL) * time.Second)
-			c.entries[entryIndex].ExpiresAt = newExpiresAt
-			c.expirationHeap.UpdateExpiration(target.RequestID, newExpiresAt)
-		}
 		return
 	}
 
@@ -218,18 +211,6 @@ func (c *InMemoryCache) updateAccessInfo(entryIndex int, target CacheEntry) {
 
 			// Update optimized eviction policy tracking
 			c.notifyAccessToEvictionPolicy(i, target.RequestID)
-
-			// Extend TTL in expiration heap (sliding window TTL)
-			// Use per-entry TTL if set, otherwise use global TTL
-			effectiveTTL := c.ttlSeconds
-			if c.entries[i].TTLSeconds > 0 {
-				effectiveTTL = c.entries[i].TTLSeconds
-			}
-			if effectiveTTL > 0 {
-				newExpiresAt := now.Add(time.Duration(effectiveTTL) * time.Second)
-				c.entries[i].ExpiresAt = newExpiresAt
-				c.expirationHeap.UpdateExpiration(target.RequestID, newExpiresAt)
-			}
 			break
 		}
 	}

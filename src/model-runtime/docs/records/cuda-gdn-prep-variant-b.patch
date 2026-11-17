@@ -1,0 +1,11 @@
+--- a/src/model-runtime/vllm_srun/accel/cuda.py
++++ b/src/model-runtime/vllm_srun/accel/cuda.py
+@@ -66,7 +66 @@
+-        if (
+-            any(
+-                kernel.source == "causal-conv1d"
+-                for kernel in kernels.available["causal_conv1d"]
+-            )
+-            and kernels.select("chunk_gated_delta_rule").source == "fla"
+-        ):
++        if kernels.select("chunk_gated_delta_rule").source == "fla":

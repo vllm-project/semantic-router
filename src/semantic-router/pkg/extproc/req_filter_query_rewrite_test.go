@@ -32,37 +32,15 @@ type mockChatChoice struct {
 	Message mockChatMessage `json:"message"`
 }
 
+// createMockRouterConfig names the mock chat server as the memory query
+// rewrite's openai_chat deployment.
 func createMockRouterConfig(serverURL string) *config.RouterConfig {
-	var address string
-	var port int
-	if serverURL != "" {
-		hostPort := serverURL[7:] // skip "http://"
-		for i := len(hostPort) - 1; i >= 0; i-- {
-			if hostPort[i] == ':' {
-				address = hostPort[:i]
-				portStr := hostPort[i+1:]
-				for _, c := range portStr {
-					port = port*10 + int(c-'0')
-				}
-				break
-			}
-		}
-	}
-
-	return &config.RouterConfig{
-		ExternalModels: []config.ExternalModelConfig{
-			{
-				Provider:  "vllm",
-				ModelRole: config.ModelRoleMemoryRewrite,
-				ModelEndpoint: config.ClassifierVLLMEndpoint{
-					Address: address,
-					Port:    port,
-				},
-				ModelName:      "test-model",
-				TimeoutSeconds: 5,
-			},
-		},
-	}
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"rewriter": {
+		Provider: config.OpenAIChatProvider, Endpoint: serverURL + "/v1", Model: "test-model", TimeoutMs: 5000,
+	}}
+	cfg.Memory.QueryRewrite = &config.MemoryQueryRewriteConfig{Deployment: "rewriter"}
+	return cfg
 }
 
 func TestBuildSearchQuery_NoExternalModel(t *testing.T) {
@@ -145,7 +123,9 @@ func TestBuildSearchQuery_ResponseLimit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			routerCfg := createMockRouterConfig(server.URL)
-			routerCfg.ExternalModels[0].MaxResponseBytes = tt.limit
+			rewriter := routerCfg.ModelDeployments["rewriter"]
+			rewriter.Limits = &config.DeploymentLimits{MaxResponseBytes: tt.limit}
+			routerCfg.ModelDeployments["rewriter"] = rewriter
 
 			result, err := BuildSearchQuery(context.Background(), nil, "original query", routerCfg)
 			require.NoError(t, err)

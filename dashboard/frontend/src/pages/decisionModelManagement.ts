@@ -1,3 +1,4 @@
+import { configSaveWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import { responseErrorMessage } from './configPageRequestErrors'
 
 export interface ModelRuntimeDeployment {
@@ -50,6 +51,7 @@ export interface DecisionModelActivation {
 export interface DecisionModelApplyResult {
   status: 'success' | 'restart_required' | 'persisted'
   message: string
+  warnings: RouterConfigWarning[]
 }
 
 export async function readDecisionModelApplyResult(
@@ -57,6 +59,7 @@ export async function readDecisionModelApplyResult(
 ): Promise<DecisionModelApplyResult> {
   if (!response.ok) throw new Error(await responseErrorMessage(response))
   const result = (await response.json()) as { status?: string; message?: string }
+  const warnings = configSaveWarnings(result)
   if (result.status === 'restart_required' || result.status === 'persisted') {
     return {
       status: result.status,
@@ -65,12 +68,14 @@ export async function readDecisionModelApplyResult(
         (result.status === 'restart_required'
           ? 'Configuration saved. Run vllm-sr serve to activate the selected model.'
           : 'Configuration saved. Roll out Router and Envoy to activate the selected model.'),
+      warnings,
     }
   }
   if (response.status === 200 && result.status === 'success') {
     return {
       status: 'success',
       message: 'Configuration applied. Check the observed runtime below for model readiness.',
+      warnings,
     }
   }
   throw new Error(

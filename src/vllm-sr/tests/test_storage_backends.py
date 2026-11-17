@@ -18,7 +18,7 @@ UNUSED_REDIS_CONF = "/nonexistent/vllm-sr/redis.conf"
 
 def test_detect_required_backends_uses_canonical_defaults():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
     }
 
@@ -54,20 +54,22 @@ def test_start_storage_backends_passes_state_root_to_milvus(monkeypatch, tmp_pat
 
 def test_detect_required_backends_skips_external_semantic_cache_milvus():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "stores": {
                 "response_cache": {
-                    "enabled": True,
                     "backend_type": "milvus",
                     "milvus": {
-                        "connection": {
-                            "host": "external-milvus",
-                            "port": 19530,
-                        }
+                        "connection": {"host": "external-milvus", "port": 19530}
                     },
                 }
-            }
+            },
+            "plugins": [
+                {
+                    "type": "response_cache",
+                    "configuration": {"enabled": True, "scope": "global"},
+                }
+            ],
         },
     }
 
@@ -80,7 +82,7 @@ def test_detect_required_backends_skips_external_semantic_cache_milvus():
 
 def test_detect_required_backends_with_stack_ignores_external_service_stores():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "services": {
                 "response_api": {
@@ -89,12 +91,12 @@ def test_detect_required_backends_with_stack_ignores_external_service_stores():
                     "redis": {"address": "redis.external.example:6379"},
                 },
                 "router_replay": {
-                    "enabled": True,
                     "store_backend": "postgres",
                     "postgres": {"host": "postgres.external.example"},
                 },
             },
             "stores": {"response_cache": {"backend_type": "memory"}},
+            "plugins": [{"type": "router_replay", "configuration": {"enabled": True}}],
         },
     }
 
@@ -103,7 +105,7 @@ def test_detect_required_backends_with_stack_ignores_external_service_stores():
 
 def test_detect_required_backends_with_stack_selects_exact_managed_services():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "services": {
                 "response_api": {
@@ -112,12 +114,12 @@ def test_detect_required_backends_with_stack_selects_exact_managed_services():
                     "redis": {"address": "vllm-sr-redis:6379"},
                 },
                 "router_replay": {
-                    "enabled": True,
                     "store_backend": "postgres",
                     "postgres": {"host": "postgres"},
                 },
             },
             "stores": {"response_cache": {"backend_type": "memory"}},
+            "plugins": [{"type": "router_replay", "configuration": {"enabled": True}}],
         },
     }
 
@@ -125,6 +127,29 @@ def test_detect_required_backends_with_stack_selects_exact_managed_services():
         "redis",
         "postgres",
     }
+
+
+def test_detect_required_backends_provisions_the_default_replay_record_store():
+    """Without a router_replay plugin the Router records routing data, so a
+    configured Postgres store is needed; enabled: false in global.plugins turns
+    that record off, unless a recipe or decision enables it again."""
+    services = {
+        "router_replay": {"store_backend": "postgres", "postgres": {"host": "postgres"}}
+    }
+    config = {"version": "v0.5", "global": {"services": services}}
+    assert "postgres" in detect_required_backends(config, resolve_runtime_stack())
+
+    off = {"type": "router_replay", "configuration": {"enabled": False}}
+    config["global"]["plugins"] = [off]
+    assert "postgres" not in detect_required_backends(config, resolve_runtime_stack())
+
+    config["recipes"] = [
+        {
+            "name": "audited",
+            "plugins": [{"type": "router_replay", "configuration": {"enabled": True}}],
+        }
+    ]
+    assert "postgres" in detect_required_backends(config, resolve_runtime_stack())
 
 
 def test_container_start_milvus_reuses_network_alias(monkeypatch, tmp_path):
@@ -314,12 +339,13 @@ def test_running_storage_with_loopback_binding_remains_reusable(monkeypatch):
 
     assert code == 0
     assert stderr == ""
-    assert len(calls) == 3
-    assert calls[0][1] == "inspect"
-    assert calls[1][1:3] == ["network", "connect"]
     # Reuse is also the migration step for a stack that predates the data
     # network, so the container leaves the application network here.
-    assert calls[2][1:3] == ["network", "disconnect"]
+    assert [call[1:3] for call in calls] == [
+        ["container", "inspect"],
+        ["network", "connect"],
+        ["network", "disconnect"],
+    ]
 
 
 def test_running_storage_with_host_network_is_not_reused(monkeypatch):
@@ -501,15 +527,9 @@ def test_detect_required_backends_uses_defaults_for_setup_mode_bootstrap_config(
 
 def test_detect_required_backends_respects_explicit_service_disable():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        "global": {
-            "services": {
-                "router_replay": {
-                    "enabled": False,
-                }
-            }
-        },
+        "global": {},
     }
 
     assert detect_required_backends(config) == {"redis"}
@@ -517,15 +537,16 @@ def test_detect_required_backends_respects_explicit_service_disable():
 
 def test_detect_required_backends_excludes_milvus_when_memory_override():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
-            "stores": {
-                "response_cache": {
-                    "enabled": True,
-                    "backend_type": "memory",
+            "stores": {"response_cache": {"backend_type": "memory"}},
+            "plugins": [
+                {
+                    "type": "response_cache",
+                    "configuration": {"enabled": True, "scope": "global"},
                 }
-            }
+            ],
         },
     }
 
@@ -537,15 +558,9 @@ def test_detect_required_backends_excludes_milvus_when_memory_override():
 
 def test_detect_required_backends_excludes_milvus_when_cache_disabled():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        "global": {
-            "stores": {
-                "response_cache": {
-                    "enabled": False,
-                }
-            }
-        },
+        "global": {},
     }
 
     required = detect_required_backends(config)
@@ -554,18 +569,10 @@ def test_detect_required_backends_excludes_milvus_when_cache_disabled():
 
 def test_detect_required_backends_includes_postgres_for_vector_store_metadata():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
-            "stores": {
-                "response_cache": {
-                    "enabled": False,
-                },
-                "vector_store": {
-                    "enabled": True,
-                    "metadata_store": "postgres",
-                },
-            }
+            "stores": {"vector_store": {"enabled": True, "metadata_store": "postgres"}}
         },
     }
 
@@ -574,25 +581,12 @@ def test_detect_required_backends_includes_postgres_for_vector_store_metadata():
 
 def test_detect_required_backends_ignores_disabled_vector_store_metadata():
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "global": {
-            "services": {
-                "router_replay": {
-                    "enabled": False,
-                },
-                "response_api": {
-                    "enabled": False,
-                },
-            },
+            "services": {"response_api": {"enabled": False}},
             "stores": {
-                "response_cache": {
-                    "enabled": False,
-                },
-                "vector_store": {
-                    "enabled": False,
-                    "metadata_store": "postgres",
-                },
+                "vector_store": {"enabled": False, "metadata_store": "postgres"}
             },
         },
     }

@@ -295,6 +295,86 @@ class ClassificationAPITest(SemanticRouterTestBase):
             f"Expected: {expected_categories}, Actual: {actual_categories}",
         )
 
+    def test_batch_classification_all(self):
+        """Test batch task_type "all" returns intent, PII and security (issue #4662)."""
+        self.print_test_header(
+            "Batch Classification 'all' Test",
+            "Verifies that task_type 'all' returns category, pii and security per text",
+        )
+
+        texts = [tc["text"] for tc in INTENT_TEST_CASES[:3]]
+        texts.append("Please contact me at john.doe@example.com about my account.")
+
+        payload = {"texts": texts, "task_type": "all"}
+
+        self.print_request_info(
+            payload={"texts": f"{len(texts)} texts", "task_type": "all"},
+            expectations="Expect: one result per text with category, pii and security",
+        )
+
+        response = requests.post(
+            f"{CLASSIFICATION_API_URL}/api/v1/diagnostics/classify/batch",
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=30,
+        )
+
+        response_json = response.json()
+        results = response_json.get("results", [])
+
+        self.print_response_info(
+            response,
+            {
+                "Total Texts": len(texts),
+                "Results Count": len(results),
+                "Processing Time (ms)": response_json.get("processing_time_ms", 0),
+            },
+        )
+
+        def is_number(value):
+            return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+        structure_ok = response.status_code == HTTPStatus.OK and len(results) == len(
+            texts
+        )
+
+        self.assertEqual(response.status_code, 200, "Batch request failed")
+        self.assertEqual(len(results), len(texts), "Result count mismatch")
+
+        for i, result in enumerate(results):
+            self.assertIsInstance(result, dict, f"Result {i} is not an object")
+
+            self.assertIsInstance(result.get("category"), str, f"Result {i} category")
+            self.assertTrue(is_number(result.get("confidence")), f"Result {i} conf")
+
+            pii = result.get("pii")
+            self.assertIsInstance(pii, dict, f"Result {i} missing pii object")
+            self.assertIsInstance(pii.get("has_pii"), bool, f"Result {i} has_pii")
+            pii_conf = pii.get("confidence")
+            self.assertTrue(
+                pii_conf is None or is_number(pii_conf),
+                f"Result {i} pii confidence must be a number or null",
+            )
+
+            security = result.get("security")
+            self.assertIsInstance(security, dict, f"Result {i} missing security")
+            self.assertIsInstance(
+                security.get("is_jailbreak"), bool, f"Result {i} is_jailbreak"
+            )
+            self.assertIsInstance(
+                security.get("threat_type"), str, f"Result {i} threat_type"
+            )
+            sec_conf = security.get("confidence")
+            self.assertTrue(
+                sec_conf is None or is_number(sec_conf),
+                f"Result {i} security confidence must be a number or null",
+            )
+
+        self.print_test_result(
+            passed=structure_ok,
+            message=f"All {len(results)} results contain category, pii and security",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

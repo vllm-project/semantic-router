@@ -18,7 +18,8 @@ decision they support.
   - This change: its code at `1219b9a56` on `main` `246dde1fe`, the same code
     as the merged commit.
   - Vela 2.0 0.3B: #4639's branch at `43bbb349b`, which makes the 0.3B the
-    default of the built-in signals (`max_speed` on CPU), merged with this
+    default of the built-in signals (batched on its packed FP32 copy on CPU,
+    today's default), merged with this
     change for the measurement only (`c172bc376`). Its router, runtime and
     E2E code is that of #4702, which merged it. Both commits are on the
     branch `xunzhuo/runtime-server-timing-measured`.
@@ -118,9 +119,9 @@ per second):
   | Concurrency 16 | 0.5–1.0% | 68–227 ms | 0.1% | 0.3% |
 
 - **The phases expose where a model's own time goes.** The 0.3B's 2.2 ms of
-  queue on a sequential pass is its `max_speed` profile holding the 2 ms
-  batching window (`--batch-window-ms`) for a request that has nothing to
-  batch with; Vela 1.0 on `exact` waits 0.2 ms.
+  queue on a sequential pass is its batching holding the 2 ms batching
+  window (`--batch-window-ms`) for a request that has nothing to batch with;
+  Vela 1.0, answering each request alone then, waits 0.2 ms.
 
 ## The timing's own cost
 

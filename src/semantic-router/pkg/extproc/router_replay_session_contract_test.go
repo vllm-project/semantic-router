@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
 	"testing"
@@ -100,7 +101,9 @@ func TestReplaySessionProtectionActualAndObservedRouting(t *testing.T) {
 }
 
 func TestReplayTrajectorySeparatesRecipeSessionsAndKeepsEachHop(t *testing.T) {
-	r := &OpenAIRouter{ReplayStoreShared: true, ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0))}
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
+	r := &OpenAIRouter{ReplayStoreShared: true, ReplayRecorder: recorder}
 	now := time.Now()
 	for index, recipe := range []string{"", "first", "other", "first"} {
 		record := routerreplay.RoutingRecord{
@@ -122,7 +125,7 @@ func TestReplayTrajectorySeparatesRecipeSessionsAndKeepsEachHop(t *testing.T) {
 		{"session_id=same-id&recipe=", "", 200, 1},
 		{"session_id=same-id&recipe=absent", "absent", 200, 0},
 	} {
-		response := r.handleRouterReplayTrajectoryAPI("GET", test.query).GetImmediateResponse()
+		response := r.handleRouterReplayTrajectoryAPI(context.Background(), "GET", test.query).GetImmediateResponse()
 		if int(response.Status.Code) != test.status {
 			t.Fatalf("%s: status %d", test.query, response.Status.Code)
 		}
@@ -167,7 +170,7 @@ func TestReplayTrajectorySeparatesRecipeSessionsAndKeepsEachHop(t *testing.T) {
 	if _, err := r.ReplayRecorder.AddRecord(routerreplay.RoutingRecord{SessionID: "unique", Recipe: "only"}); err != nil {
 		t.Fatal(err)
 	}
-	if response := r.handleRouterReplayTrajectoryAPI("GET", query).GetImmediateResponse(); int(response.Status.Code) != 200 {
+	if response := r.handleRouterReplayTrajectoryAPI(context.Background(), "GET", query).GetImmediateResponse(); int(response.Status.Code) != 200 {
 		t.Fatal("unambiguous legacy trajectory request should remain supported")
 	}
 }

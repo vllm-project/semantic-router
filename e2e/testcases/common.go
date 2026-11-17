@@ -23,17 +23,6 @@ func setupServiceConnection(ctx context.Context, client *kubernetes.Clientset, o
 	return session.LocalPort(), session.Close, nil
 }
 
-// setupRouterAPIConnection sets up port forwarding to the semantic-router API service
-// This is used for accessing /api/v1/feedback and /api/v1/ratings endpoints
-// which are not exposed through the Envoy Gateway
-func setupRouterAPIConnection(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, func(), error) {
-	session, err := fixtures.OpenRouterAPISession(ctx, client, opts)
-	if err != nil {
-		return "", nil, err
-	}
-	return session.LocalPort(), session.Close, nil
-}
-
 // Random content generation for stress tests
 
 var (

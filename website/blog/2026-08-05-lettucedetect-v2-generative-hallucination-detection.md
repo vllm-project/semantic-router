@@ -9,7 +9,7 @@ image: /img/blog/lettucedetect-v2-detection.png
 
 Semantic Router can now verify grounded responses with a **generative span detector served by vLLM**. The new `endpoint` detector backend runs [LettuceDetect v2](https://github.com/KRLabsOrg/LettuceDetect) against every fact-checkable answer: unsupported spans are located to the character, typed against a hallucination taxonomy, and explained — in one call, before the response reaches the user.
 
-The models come out of a joint paper between KR Labs and the Semantic Router team, *Beyond Document Grounding: Span-Level Hallucination Detection over Code, Tool Output, and Documents* ([arXiv:2607.00895](https://arxiv.org/abs/2607.00895)). This post walks through the paper — the benchmark, the taxonomy, the models, and what they score — and then through the integration that puts the detector into the serving stack.
+The models come out of a joint paper between KR Labs and the Semantic Router team, *Beyond Document Grounding: Span-Level Hallucination Detection over Code, Tool Output, and Documents* ([GroundLM 2026 at EMNLP 2026](https://aclanthology.org/2026.groundlm-1.44/), [arXiv:2607.00895](https://arxiv.org/abs/2607.00895)). This post walks through the paper — the benchmark, the taxonomy, the models, and what they score — and then through the integration that puts the detector into the serving stack.
 
 ![LettuceDetect v2 flagging contract hallucinations through Semantic Router](/img/blog/lettucedetect-v2-detection.png)
 
@@ -147,6 +147,6 @@ The benchmark, the models, and the pipeline around them are all open — contrib
 ## Links
 
 - Models & dataset: [huggingface.co/KRLabsOrg](https://huggingface.co/KRLabsOrg)
-- Paper: [arXiv:2607.00895](https://arxiv.org/abs/2607.00895)
+- Paper: [ACL Anthology](https://aclanthology.org/2026.groundlm-1.44/) (GroundLM 2026 workshop at EMNLP 2026), [arXiv:2607.00895](https://arxiv.org/abs/2607.00895)
 - LettuceDetect: [github.com/KRLabsOrg/LettuceDetect](https://github.com/KRLabsOrg/LettuceDetect)
 - Benchmark harness: `bench/hallucination/` in this repository

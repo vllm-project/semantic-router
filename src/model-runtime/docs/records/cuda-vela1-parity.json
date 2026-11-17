@@ -1,0 +1,440 @@
+{
+ "format": "vela1-legacy-parity/1",
+ "baseline": "legacy",
+ "device_class": "cuda",
+ "thresholds": {
+  "probability": 0.02,
+  "near_tie": 0.001,
+  "label": 0.995,
+  "spans": 0.98
+ },
+ "inputs_sha256": "568ff59b76ef3b6c61cefb5148c73ecb176bd62c3820c93adfc1fbab860e9872",
+ "context": {},
+ "jobs": [
+  {
+   "job": "domain",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+   "revision": "f6354f54adcf38770f635ad903be2b00577f6c11",
+   "mode": "sequence",
+   "options": {
+    "max_tokens": 512,
+    "overflow": "truncate",
+    "window": null
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 0.000334055234222419,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 132.597854,
+     "p95": 503.92568
+    },
+    "runtime": {
+     "p50": 9.286597,
+     "p95": 16.354599
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 144.45149220112197,
+     "p50_ms": 12.263447,
+     "p95_ms": 93.740717
+    }
+   }
+  },
+  {
+   "job": "guard",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+   "revision": "087f9e401012df839c83717b746967ac7aebfa3e",
+   "mode": "sequence_windows",
+   "options": {
+    "max_tokens": 8192,
+    "overflow": "window",
+    "window": [
+     512,
+     255
+    ]
+   },
+   "inputs": 553,
+   "compared": 550,
+   "both_rejected": 3,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 3.0155480003346558e-05,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 86.860679,
+     "p95": 461.885202
+    },
+    "runtime": {
+     "p50": 3.7656,
+     "p95": 86.130362
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 19.60895911608969,
+     "p50_ms": 7.774708,
+     "p95_ms": 105.487276
+    }
+   }
+  },
+  {
+   "job": "safety",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-Safety",
+   "revision": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85",
+   "mode": "sequence",
+   "options": {
+    "max_tokens": 512,
+    "overflow": "truncate",
+    "window": null
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 3.4234156799262117e-05,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 109.126355,
+     "p95": 589.899302
+    },
+    "runtime": {
+     "p50": 3.04782,
+     "p95": 71.216933
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 49.071324027102406,
+     "p50_ms": 11.293675,
+     "p95_ms": 396.452932
+    }
+   }
+  },
+  {
+   "job": "shield",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-Shield",
+   "revision": "a981a99eeb05a2859b88b5cee9af4352897ec4ec",
+   "mode": "sequence",
+   "options": {
+    "max_tokens": 512,
+    "overflow": "truncate",
+    "window": null
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 1,
+   "max_abs_delta": 4.642126178741601e-05,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 160.659603,
+     "p95": 1304.786886
+    },
+    "runtime": {
+     "p50": 3.080726,
+     "p95": 86.740201
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 127.3475772248733,
+     "p50_ms": 9.784798,
+     "p95_ms": 112.708116
+    }
+   }
+  },
+  {
+   "job": "factcheck",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+   "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274",
+   "mode": "sequence",
+   "options": {
+    "max_tokens": 512,
+    "overflow": "truncate",
+    "window": null
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 3.536645240781455e-05,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 107.998265,
+     "p95": 496.529373
+    },
+    "runtime": {
+     "p50": 3.086463,
+     "p95": 69.429871
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 87.64720361211658,
+     "p50_ms": 12.020431,
+     "p95_ms": 203.710396
+    }
+   }
+  },
+  {
+   "job": "feedback",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+   "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41",
+   "mode": "sequence",
+   "options": {
+    "max_tokens": 512,
+    "overflow": "truncate",
+    "window": null
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 8.758620864868227e-05,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 91.761337,
+     "p95": 464.296159
+    },
+    "runtime": {
+     "p50": 4.176863,
+     "p95": 69.740136
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 118.37112009995249,
+     "p50_ms": 13.154719,
+     "p95_ms": 99.665533
+    }
+   }
+  },
+  {
+   "job": "modality",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-Modality",
+   "revision": "5384b8997e3cbb79ca3a670e869577f4e4f4997e",
+   "mode": "sequence",
+   "options": {
+    "max_tokens": 512,
+    "overflow": "truncate",
+    "window": null
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 9.950138473491243e-06,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 87.23119,
+     "p95": 397.371384
+    },
+    "runtime": {
+     "p50": 4.611558,
+     "p95": 64.875361
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 142.78713683490142,
+     "p50_ms": 12.339854,
+     "p95_ms": 94.267962
+    }
+   }
+  },
+  {
+   "job": "hazard",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-Hazard",
+   "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
+   "mode": "operating_point",
+   "options": {
+    "max_tokens": 32768,
+    "overflow": "reject",
+    "window": null
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 9.000146789506225e-06,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 87.291442,
+     "p95": 422.91181
+    },
+    "runtime": {
+     "p50": 2.937564,
+     "p95": 10.305088
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 102.19412810923959,
+     "p50_ms": 14.337552,
+     "p95_ms": 40.28218
+    }
+   }
+  },
+  {
+   "job": "pii",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+   "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48",
+   "mode": "token_windows",
+   "options": {
+    "max_tokens": 32768,
+    "overflow": "window",
+    "window": [
+     512,
+     255
+    ]
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 0.0001325808847427723,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 154.895757,
+     "p95": 577.830274
+    },
+    "runtime": {
+     "p50": 7.829327,
+     "p95": 21.07971
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 120.43923384528524,
+     "p50_ms": 12.168811,
+     "p95_ms": 41.851877
+    }
+   }
+  },
+  {
+   "job": "pii_truncate",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+   "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48",
+   "mode": "tokens",
+   "options": {
+    "max_tokens": 512,
+    "overflow": "truncate",
+    "window": null
+   },
+   "inputs": 553,
+   "compared": 553,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 6.340228233336909e-05,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 204.501802,
+     "p95": 621.89379
+    },
+    "runtime": {
+     "p50": 5.317543,
+     "p95": 16.595081
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 88.74947985518496,
+     "p50_ms": 35.448518,
+     "p95_ms": 100.802837
+    }
+   }
+  },
+  {
+   "job": "halu",
+   "model": "vllm-sr/Vela-1.0-Encoder-307M-Halu",
+   "revision": "ca87531211e414ac21c641b2faa8b8e21619de8f",
+   "mode": "grounded",
+   "options": {
+    "max_tokens": 8192,
+    "overflow": "truncate",
+    "window": null
+   },
+   "inputs": 64,
+   "compared": 64,
+   "both_rejected": 0,
+   "agreement": 1.0,
+   "near_ties": 0,
+   "max_abs_delta": 3.7665183258095425e-05,
+   "passed": true,
+   "disagreements": [],
+   "latency_ms": {
+    "legacy": {
+     "p50": 4268.236751,
+     "p95": 184068.6671
+    },
+    "runtime": {
+     "p50": 32.599697,
+     "p95": 289.197583
+    }
+   },
+   "throughput": {
+    "legacy": null,
+    "runtime": {
+     "concurrency": 4,
+     "calls_per_s": 19.917904207512407,
+     "p50_ms": 142.023641,
+     "p95_ms": 691.074727
+    }
+   }
+  }
+ ],
+ "passed": true
+}

@@ -1,0 +1,23 @@
+# The semantic-cache spelling of the response cache is response_cache.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: faq
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: semantic-cache
+            configuration:
+              enabled: true
+              mode: exact
+global:
+  stores:
+    response_cache:
+      backend_type: memory

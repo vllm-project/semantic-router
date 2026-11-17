@@ -57,7 +57,7 @@ func DecisionModelHandler(upstream string, providers ...routerauth.CredentialPro
 
 func (t decisionModelTransport) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	get := r.URL.Path == "/api/decision-model/capabilities" && r.Method == http.MethodGet
+	get := r.URL.Path == "/api/decision-model/capabilities" && (r.Method == http.MethodGet || r.Method == http.MethodHead)
 	post := r.URL.Path == "/api/decision-model/test" && r.Method == http.MethodPost
 	if !get && !post {
 		decisionModelError(w, 405, "method_not_allowed", "Unsupported Decision Model operation")

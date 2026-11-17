@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -76,10 +77,10 @@ func TestStatusCollectorsRequireRoutingReadiness(t *testing.T) {
 					provider := statusCredentialProvider{token: token}
 					var status SystemStatus
 					if mode == "managed" {
-						status = collectManagedStackStatus(runtimePath, StackState{}, server.URL+test.suffix, server.URL, provider)
+						status = collectManagedStackStatus(context.Background(), runtimePath, StackState{}, server.URL+test.suffix, server.URL, provider)
 					} else {
 						var observed bool
-						status, observed = collectDirectStatus(runtimePath, server.URL+test.suffix, server.URL, provider)
+						status, observed = collectDirectStatus(context.Background(), runtimePath, server.URL+test.suffix, server.URL, provider)
 						if !observed {
 							t.Fatal("live Router process was not observed")
 						}
@@ -139,7 +140,7 @@ func TestManagedStatusTrustsTheStartupFileOfAStoppedRouterOnlyForAFailure(t *tes
 			if err := os.WriteFile(path, []byte(test.state), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			status := collectManagedStackStatus(path, StackState{}, stoppedRouter, stoppedRouter)
+			status := collectManagedStackStatus(context.Background(), path, StackState{}, stoppedRouter, stoppedRouter)
 			router := status.Services[1]
 			if router.Name != "Router" || router.Healthy || router.Status != "not running" || router.Message != test.message {
 				t.Errorf("router = %+v, want not running with message %q", router, test.message)

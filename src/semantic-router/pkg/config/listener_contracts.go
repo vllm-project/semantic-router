@@ -2,15 +2,24 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"net/netip"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 )
 
-// CapabilityListenerModels is a listener's model allow-list, which only the
-// standalone gateway enforces: the Envoy listener the CLI generates does not
-// yet, so behind Envoy every model would stay reachable.
+// CapabilityListenerModels is the model allow-list of a listener's LLM API,
+// which only the standalone gateway enforces: the Envoy listener the CLI
+// generates does not yet, so behind Envoy every model would stay reachable.
 const CapabilityListenerModels = "listener_models"
+
+// DefaultSystemOneMaxDeadlineMs is the longest a listener's System One API
+// waits for a model when its apis.systemone.max_deadline_ms is omitted: 10
+// minutes.
+const DefaultSystemOneMaxDeadlineMs = 600_000
 
 func init() {
 	GatewayCapabilities.MustRegister(CapabilityListenerModels, GatewayCapability{
@@ -18,11 +27,14 @@ func init() {
 		Uses: func(cfg *RouterConfig) []CapabilityUse {
 			var uses []CapabilityUse
 			for _, listener := range cfg.Listeners {
-				if len(listener.Models) > 0 {
-					uses = append(uses, CapabilityUse{
-						Path:    "listeners[" + listener.Name + "].models",
-						Subject: fmt.Sprintf("listener '%s': models", listener.Name),
-					})
+				for _, name := range listener.ServedAPIs() {
+					api, _ := apiregistry.Lookup(name)
+					if api.Kind == apiregistry.KindLLM && listener.APIs[name].Models != nil {
+						uses = append(uses, CapabilityUse{
+							Path:    listenerPath(listener, "apis."+name+".models"),
+							Subject: fmt.Sprintf("listener '%s': apis.%s.models", listener.Name, name),
+						})
+					}
 				}
 			}
 			return uses
@@ -35,15 +47,17 @@ func init() {
 // validateListenerContracts checks the listener settings every gateway mode
 // reads the same way.
 func validateListenerContracts(cfg *RouterConfig) error {
+	names := make(map[string]bool, len(cfg.Listeners))
 	for _, listener := range cfg.Listeners {
+		if names[listener.Name] {
+			return fmt.Errorf("listener '%s' is defined twice; give each listener its own name", listener.Name)
+		}
+		names[listener.Name] = true
 		if listener.TLS != nil &&
 			(strings.TrimSpace(listener.TLS.CertFile) == "" || strings.TrimSpace(listener.TLS.KeyFile) == "") {
 			return fmt.Errorf("listener '%s': tls needs both cert_file and key_file", listener.Name)
 		}
-		if err := validateListenerModels(listener); err != nil {
-			return err
-		}
-		if err := validateListenerSystemOne(cfg, listener); err != nil {
+		if err := validateListenerAPIs(cfg, listener); err != nil {
 			return err
 		}
 		if listener.Identity == nil {
@@ -54,29 +68,6 @@ func validateListenerContracts(cfg *RouterConfig) error {
 		}
 		if _, err := listener.Identity.PeerPrefixes(); err != nil {
 			return fmt.Errorf("listener '%s': %w", listener.Name, err)
-		}
-	}
-	return nil
-}
-
-func validateListenerSystemOne(cfg *RouterConfig, listener Listener) error {
-	if listener.SystemOne == nil {
-		return nil
-	}
-	if len(listener.SystemOne.Models) == 0 {
-		return fmt.Errorf("listener %q: systemone.models must explicitly name at least one public model", listener.Name)
-	}
-	seen := map[string]bool{}
-	for _, model := range listener.SystemOne.Models {
-		if model == "" || model != strings.TrimSpace(model) || seen[model] {
-			return fmt.Errorf("listener %q: systemone.models must contain distinct non-empty model names without surrounding spaces", listener.Name)
-		}
-		seen[model] = true
-		if _, routed := cfg.ResolveEntrypoint(SystemOneAPI, model); routed || cfg.IsSystemOneBackend(model) {
-			continue
-		}
-		if _, _, err := cfg.ResolveSystemOneDeployment(model); err != nil {
-			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
 		}
 	}
 	return nil
@@ -120,22 +111,6 @@ func (c *RouterConfig) ResolveSystemOneDeployment(model string) (string, ModelDe
 	return name, deployment, nil
 }
 
-// validateListenerModels checks that every allowed model is a distinct name
-// a request can send: request models are matched exactly, after trimming.
-func validateListenerModels(listener Listener) error {
-	seen := make(map[string]bool, len(listener.Models))
-	for index, model := range listener.Models {
-		if model == "" || strings.TrimSpace(model) != model {
-			return fmt.Errorf("listener '%s': models[%d] %q must be a model name without surrounding spaces", listener.Name, index, model)
-		}
-		if seen[model] {
-			return fmt.Errorf("listener '%s': models lists %q twice", listener.Name, model)
-		}
-		seen[model] = true
-	}
-	return nil
-}
-
 // PeerPrefixes parses TrustedPeers.
 func (i ListenerIdentity) PeerPrefixes() ([]netip.Prefix, error) {
 	prefixes := make([]netip.Prefix, 0, len(i.TrustedPeers))
@@ -171,4 +146,55 @@ func (t ListenerTLS) Files(baseDir string) (certFile, keyFile string) {
 		return filepath.Join(baseDir, path)
 	}
 	return resolve(t.CertFile), resolve(t.KeyFile)
+}
+
+// ListenerRestart is a listener change a standalone Router applies only by
+// restarting: Path names the changed field, Message what changed.
+type ListenerRestart struct {
+	Path    string
+	Message string
+}
+
+// ListenerRestarts lists what changes from the bound listeners to next that a
+// standalone Router, which binds its listeners at startup, cannot apply in
+// place: a new or removed listener, or a listener's address, port, timeout
+// (also its connections' idle timeout) or TLS file paths. Keys, APIs and
+// identity reload in place.
+func ListenerRestarts(bound, next []Listener) []ListenerRestart {
+	byName := make(map[string]Listener, len(bound))
+	for _, listener := range bound {
+		byName[listener.Name] = listener
+	}
+	var restarts []ListenerRestart
+	restart := func(path, message string) {
+		restarts = append(restarts, ListenerRestart{Path: path, Message: message})
+	}
+	for _, listener := range next {
+		path := "listeners[" + listener.Name + "]"
+		previous, ok := byName[listener.Name]
+		delete(byName, listener.Name)
+		switch {
+		case !ok:
+			restart(path, "the listener is new")
+		case listener.Address != previous.Address:
+			restart(path+".address", fmt.Sprintf("the address changes from %q to %q", previous.Address, listener.Address))
+		case listener.Port != previous.Port:
+			restart(path+".port", fmt.Sprintf("the port changes from %d to %d", previous.Port, listener.Port))
+		case listener.Timeout != previous.Timeout:
+			restart(path+".timeout", fmt.Sprintf("the timeout changes from %q to %q", previous.Timeout, listener.Timeout))
+		case !sameListenerTLS(listener.TLS, previous.TLS):
+			restart(path+".tls", "the TLS file paths change")
+		}
+	}
+	for _, removed := range slices.Sorted(maps.Keys(byName)) {
+		restart("listeners["+removed+"]", "the listener is removed")
+	}
+	return restarts
+}
+
+func sameListenerTLS(a, b *ListenerTLS) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }

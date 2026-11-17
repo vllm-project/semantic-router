@@ -2,10 +2,11 @@ package memory
 
 import "fmt"
 
-// milvusUserScopeFilter returns a Milvus boolean-expression clause that matches
-// a single user's records.
+// milvusEqString returns a Milvus boolean-expression clause that matches one
+// string field. Every interpolated scope value goes through this helper so
+// user ids and project ids share one escaping path.
 //
-// The user id is rendered with %q so it is emitted as a properly escaped Milvus
+// The value is rendered with %q so it is emitted as a properly escaped Milvus
 // string literal. This prevents filter-expression injection (CWE-943) when the
 // identifier contains expression metacharacters such as '"', '\\', '|' or '&':
 // without escaping, a crafted id like `x" || user_id != "y` would break out of
@@ -15,6 +16,10 @@ import "fmt"
 // This mirrors the escaping the Valkey backend already applies
 // (valkeyEscapeTagValue) and the %q convention used by buildTypeFilter for
 // memory-type values.
+func milvusEqString(field, value string) string {
+	return fmt.Sprintf("%s == %q", field, value)
+}
+
 func milvusUserScopeFilter(userID string) string {
-	return fmt.Sprintf("user_id == %q", userID)
+	return milvusEqString("user_id", userID)
 }

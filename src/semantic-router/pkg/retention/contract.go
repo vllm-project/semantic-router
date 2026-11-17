@@ -34,7 +34,7 @@ const (
 	StatusFailed       Status = "failed"
 )
 
-// Directive is an immutable, tri-state snapshot of config.RetentionDirective.
+// Directive is an immutable, tri-state snapshot of config.DecisionRetention.
 // Pointer fields preserve the difference between an unset value and an
 // explicit false or zero.
 type Directive struct {
@@ -45,7 +45,7 @@ type Directive struct {
 }
 
 // FromConfig copies the existing Router directive into the bridge contract.
-func FromConfig(value *config.RetentionDirective) *Directive {
+func FromConfig(value *config.DecisionRetention) *Directive {
 	if value == nil {
 		return nil
 	}
@@ -128,7 +128,7 @@ type Adapter interface {
 
 // Resolve evaluates one directive through an optional adapter. A nil adapter
 // is a safe, explicit no-op; it never claims that retention was enforced.
-func Resolve(ctx context.Context, directive *config.RetentionDirective, adapter Adapter) Outcome {
+func Resolve(ctx context.Context, directive *config.DecisionRetention, adapter Adapter) Outcome {
 	outcome := Outcome{SchemaVersion: SchemaVersion, Requested: FromConfig(directive)}
 	if directive == nil {
 		outcome.Status = StatusNotRequested

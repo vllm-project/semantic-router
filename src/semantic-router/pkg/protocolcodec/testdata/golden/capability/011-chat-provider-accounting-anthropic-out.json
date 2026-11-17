@@ -75,6 +75,10 @@
     {
       "field": "usage.prompt_tokens_details.text_tokens",
       "action": "dropped"
+    },
+    {
+      "field": "usage.cache_creation",
+      "action": "dropped"
     }
   ]
 }

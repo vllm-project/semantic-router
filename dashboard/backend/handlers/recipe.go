@@ -34,8 +34,8 @@ func NewRecipeHandler(service *recipe.Service, options ...RecipeHandlerOption) *
 }
 
 func (h *RecipeHandler) Descriptor(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeRecipeMethodNotAllowed(w, http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writeRecipeMethodNotAllowed(w, "GET, HEAD")
 		return
 	}
 	descriptor, err := h.service.Describe()
@@ -52,8 +52,8 @@ func (h *RecipeHandler) Descriptor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RecipeHandler) Probes(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeRecipeMethodNotAllowed(w, http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writeRecipeMethodNotAllowed(w, "GET, HEAD")
 		return
 	}
 	page, err := optionalPositiveInt(r, "page")
@@ -109,8 +109,8 @@ func parseProbeActionPath(path string) (string, string, string, bool) {
 }
 
 func (h *RecipeHandler) serveProbeDetail(w http.ResponseWriter, r *http.Request, decisionID, variantID string) {
-	if r.Method != http.MethodGet {
-		writeRecipeMethodNotAllowed(w, http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writeRecipeMethodNotAllowed(w, "GET, HEAD")
 		return
 	}
 	probe, digest, err := h.service.Probe(decisionID, variantID)

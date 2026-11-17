@@ -152,8 +152,18 @@ func TestCompareEvalResponseRejectsInvalidSelectionContracts(t *testing.T) {
 			wantFailure: `selection_method="fusion", want "static"`,
 		},
 		{
-			name: "selected model missing", algorithm: "latency_aware",
-			selectionStatus: "selected", selectionMethod: "latency_aware", recommendedModels: []string{"candidate-a"},
+			name: "single shortcut not widened to multi_factor", algorithm: "multi_factor", selectedModel: "candidate-a",
+			selectionStatus: "selected", selectionMethod: "single", recommendedModels: []string{"candidate-a"},
+			wantFailure: `selection_method="single", want "multi_factor"`,
+		},
+		{
+			name: "random method mismatch", algorithm: "random", selectedModel: "candidate-a",
+			selectionStatus: "selected", selectionMethod: "static", recommendedModels: []string{"candidate-a"},
+			wantFailure: `selection_method="static", want "random"`,
+		},
+		{
+			name: "selected model missing", algorithm: "multi_factor",
+			selectionStatus: "selected", selectionMethod: "multi_factor", recommendedModels: []string{"candidate-a"},
 			wantFailure: "selected_model is required for selected",
 		},
 		{
@@ -162,8 +172,8 @@ func TestCompareEvalResponseRejectsInvalidSelectionContracts(t *testing.T) {
 			wantFailure: "selected_model is not a recommended decision candidate",
 		},
 		{
-			name: "confidence fabricates final model", algorithm: "confidence", selectedModel: "candidate-a",
-			selectionStatus: "execution_required", selectionMethod: "confidence", recommendedModels: []string{"candidate-a"},
+			name: "escalate fabricates final model", algorithm: "escalate", selectedModel: "candidate-a",
+			selectionStatus: "execution_required", selectionMethod: "escalate", recommendedModels: []string{"candidate-a"},
 			wantFailure: "execution_required must not fabricate selected_model",
 		},
 	}
@@ -202,15 +212,18 @@ func TestCompareEvalResponseAcceptsAlgorithmSelectionContracts(t *testing.T) {
 	}{
 		{name: "static", algorithm: "static", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "static", recommendedModels: []string{"candidate-a"}},
 		{name: "static single method", algorithm: "static", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "single", recommendedModels: []string{"candidate-a"}},
+		{name: "random", algorithm: "random", selectedModel: "candidate-b", selectionStatus: "selected", selectionMethod: "random", recommendedModels: []string{"candidate-a", "candidate-b"}},
+		{name: "random single method", algorithm: "random", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "single", recommendedModels: []string{"candidate-a"}},
+		{name: "random deferred by runtime policy", algorithm: "random", selectionStatus: "execution_required", selectionMethod: "random", recommendedModels: []string{"candidate-a", "candidate-b"}},
 		{name: "multi factor", algorithm: "multi_factor", selectedModel: "candidate-b", selectionStatus: "selected", selectionMethod: "multi_factor", recommendedModels: []string{"candidate-a", "candidate-b"}},
-		{name: "latency aware", algorithm: "latency_aware", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "latency_aware", recommendedModels: []string{"candidate-a"}},
+		{name: "multi factor", algorithm: "multi_factor", selectedModel: "candidate-a", selectionStatus: "selected", selectionMethod: "multi_factor", recommendedModels: []string{"candidate-a"}},
 		{name: "workflows", algorithm: "workflows", selectedModel: "workflow-final", selectionStatus: "planned_final", selectionMethod: "workflows", recommendedModels: []string{"candidate-a"}},
 		{name: "fusion", algorithm: "fusion", selectedModel: "fusion-final", selectionStatus: "planned_final", selectionMethod: "fusion", recommendedModels: []string{"candidate-a"}},
 		{name: "remom", algorithm: "remom", selectedModel: "remom-final", selectionStatus: "planned_final", selectionMethod: "remom", recommendedModels: []string{"candidate-a"}},
-		{name: "confidence", algorithm: "confidence", selectionStatus: "execution_required", selectionMethod: "confidence", recommendedModels: []string{"candidate-a", "candidate-b"}},
+		{name: "escalate", algorithm: "escalate", selectionStatus: "execution_required", selectionMethod: "escalate", recommendedModels: []string{"candidate-a", "candidate-b"}},
 		{name: "static deferred by runtime policy", algorithm: "static", selectionStatus: "execution_required", selectionMethod: "static", recommendedModels: []string{"candidate-a", "candidate-b"}},
 		{name: "multi factor deferred by runtime policy", algorithm: "multi_factor", selectionStatus: "execution_required", selectionMethod: "multi_factor", recommendedModels: []string{"candidate-a", "candidate-b"}},
-		{name: "latency aware deferred by runtime policy", algorithm: "latency_aware", selectionStatus: "execution_required", selectionMethod: "latency_aware", recommendedModels: []string{"candidate-a", "candidate-b"}},
+		{name: "multi factor deferred by runtime policy", algorithm: "multi_factor", selectionStatus: "execution_required", selectionMethod: "multi_factor", recommendedModels: []string{"candidate-a", "candidate-b"}},
 		{name: "workflow requires execution", algorithm: "workflows", selectionStatus: "execution_required", selectionMethod: "workflows", recommendedModels: []string{"candidate-a"}},
 		{name: "fusion requires execution", algorithm: "fusion", selectionStatus: "execution_required", selectionMethod: "fusion", recommendedModels: []string{"candidate-a"}},
 		{name: "remom requires execution", algorithm: "remom", selectionStatus: "execution_required", selectionMethod: "remom", recommendedModels: []string{"candidate-a"}},

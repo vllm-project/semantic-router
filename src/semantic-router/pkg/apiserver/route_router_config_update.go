@@ -223,9 +223,6 @@ func validateParsedHotReloadCompatibilityInMode(
 		if err := config.ValidateRoutingPreviewReload(currentCfg, nextCfg); err != nil {
 			return err
 		}
-		if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
-			return err
-		}
 	}
 	if currentCfg != nil && nextCfg != nil &&
 		currentCfg.Observability.Tracing != nextCfg.Observability.Tracing {
@@ -234,9 +231,17 @@ func validateParsedHotReloadCompatibilityInMode(
 		)
 	}
 	if mode == config.GatewayStandalone {
-		if currentCfg != nil && nextCfg != nil && !reflect.DeepEqual(currentCfg.Listeners, nextCfg.Listeners) {
+		if currentCfg == nil || nextCfg == nil {
+			return nil
+		}
+		var changes []string
+		for _, restart := range config.ListenerRestarts(currentCfg.Listeners, nextCfg.Listeners) {
+			changes = append(changes, restart.Path+": "+restart.Message)
+		}
+		if len(changes) > 0 {
 			return fmt.Errorf(
-				"listeners changed; standalone mode binds its listeners at startup, so the Router hot-reload API cannot activate them; restart the Router with this configuration",
+				"%s; standalone mode binds its listeners at startup, so the Router hot-reload API cannot activate this; restart the Router with this configuration",
+				strings.Join(changes, ", "),
 			)
 		}
 		return nil
@@ -269,6 +274,7 @@ type envoyEndpointProjection struct {
 	Protocol     string
 	BaseURL      string
 	ExtraHeaders map[string]string
+	TLS          *config.DeploymentTLS
 }
 
 func envoyDeploymentProjectionFromConfig(
@@ -298,6 +304,7 @@ func envoyDeploymentProjectionFromConfig(
 			Protocol:     endpoint.Protocol,
 			BaseURL:      profile.BaseURL,
 			ExtraHeaders: extraHeaders,
+			TLS:          profile.TLS,
 		})
 		if endpoint.Model == "" {
 			continue
@@ -337,7 +344,7 @@ func normalizeRouterConfigDocumentWithParser(
 	if _, err := parse(rawYAML); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
-	// The submitted document is already canonical v0.3 because ParseYAMLBytes
+	// The submitted document is already canonical v0.5 because ParseYAMLBytes
 	// rejects legacy layouts. Persist that document rather than exporting the
 	// runtime representation back to YAML: runtime endpoint names and explicit
 	// zero values are implementation details and must not rewrite user intent.
@@ -375,7 +382,37 @@ func mergeConfigDocuments(base map[string]any, patch map[string]any) map[string]
 	if !ok {
 		return map[string]any{}
 	}
+	if recipes, ok := patch["recipes"].([]any); ok {
+		merged["recipes"] = mergeRecipes(base["recipes"], recipes)
+	}
 	return merged
+}
+
+// mergeRecipes merges a patch's recipes into the base's by name: a recipe of
+// the patch merges into the base recipe of its name, and the base recipes the
+// patch does not name stay.
+func mergeRecipes(base any, patch []any) []any {
+	recipes, _ := cloneYAMLValue(base).([]any)
+	index := make(map[string]int, len(recipes))
+	for at, recipe := range recipes {
+		if name := recipeNameOf(recipe); name != "" {
+			index[name] = at
+		}
+	}
+	for _, recipe := range patch {
+		if at, ok := index[recipeNameOf(recipe)]; ok {
+			recipes[at] = mergeYAMLValue(recipes[at], recipe)
+			continue
+		}
+		recipes = append(recipes, cloneYAMLValue(recipe))
+	}
+	return recipes
+}
+
+func recipeNameOf(recipe any) string {
+	mapping, _ := recipe.(map[string]any)
+	name, _ := mapping["name"].(string)
+	return name
 }
 
 func mergeYAMLValue(base any, patch any) any {
@@ -436,37 +473,45 @@ func (s *ClassificationAPIServer) writeRouterConfigFiles(
 	previousData []byte,
 	yamlBytes []byte,
 	origin configsnapshot.Origin,
-) bool {
+) (config.KeySave, bool) {
+	save, err := s.storeConfigKeys(paths.sourcePath, yamlBytes, true)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "KEY_STORE_ERROR", "Failed to store the configuration's keys: "+err.Error())
+		return config.KeySave{}, false
+	}
+	yamlBytes = save.Data
 	release := s.runtimeRegistry.LockConfigPublication()
 	defer release()
 	withdraw := func() {}
 	if !paths.usesRuntimeOverride() {
 		withdraw = s.attributeConfigWrite(configDocumentETagHash(yamlBytes), origin)
 	}
-	if err := writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
+	if err = writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
 		withdraw()
+		save.Discard()
 		if errors.Is(err, configwriter.ErrConfigMapChanged) {
 			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_CHANGED", "The ConfigMap changed during this request. Reload the configuration and retry.")
-			return false
+			return config.KeySave{}, false
 		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write source config: %v", err))
-		return false
+		return config.KeySave{}, false
 	}
 
 	if !paths.usesRuntimeOverride() {
-		return true
+		return save, true
 	}
 
-	if err := syncRuntimeConfigOrRestore(paths, previousData); err != nil {
+	if err = syncRuntimeConfigOrRestore(paths, previousData); err != nil {
+		save.Discard()
 		s.writeErrorResponse(w, http.StatusInternalServerError, "RUNTIME_SYNC_ERROR", err.Error())
-		return false
+		return config.KeySave{}, false
 	}
 	// The generated runtime document is known only now; the Router may
 	// already be loading it, so this attribution is best effort.
-	if runtimeHash, err := configFileHash(paths.runtimePath); err == nil {
+	if runtimeHash, hashErr := configFileHash(paths.runtimePath); hashErr == nil {
 		s.attributeConfigWrite(runtimeHash, origin)
 	}
-	return true
+	return save, true
 }
 
 func (s *ClassificationAPIServer) commitRouterConfigDocument(
@@ -485,9 +530,11 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		return false
 	}
 	afterAttempt := s.configActivationAttempt()
-	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes, managementOrigin(r, configsnapshot.SourceAPI)) {
+	save, ok := s.writeRouterConfigFiles(w, paths, previousData, yamlBytes, managementOrigin(r, configsnapshot.SourceAPI))
+	if !ok {
 		return false
 	}
+	yamlBytes = save.Data
 
 	etag := configDocumentETag(yamlBytes)
 	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath, yamlBytes, afterAttempt)
@@ -530,6 +577,7 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		ConfigVersion:        s.activatedConfigVersion(runtimeStatus, runtimeHash),
 		Message:              message,
 		Activation:           s.configActivationAfter(runtimeHash, afterAttempt),
+		Warnings:             save.Warnings(),
 	})
 	return true
 }
@@ -707,7 +755,11 @@ func writeConfigFileAtomically(configPath string, yamlBytes []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tmpFile.Write(yamlBytes); err != nil {
+	err = config.KeepReplacedFileMode(tmpFile, configPath)
+	if err == nil {
+		_, err = tmpFile.Write(yamlBytes)
+	}
+	if err != nil {
 		tmpFile.Close()
 		os.Remove(tmpConfigFile)
 		return err

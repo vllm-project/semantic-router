@@ -11,15 +11,15 @@ runtime side is `Runtime.call`, as its HTTP server calls it. Raw results
 - **Date:** 2026-10-05.
 - **Runtime commits:**
   - CPU: `efb5ec4d7`, the staging head `b604edeab` with `vela1`'s A/B tool
-    commit merged. On it, `exact` lets rows of every length share a batch on
-    models that pack rows, so a long input's windows of different lengths run
+    commit merged. On it, merged forwards let rows of every length share a
+    batch on models that pack rows, so a long input's windows of different lengths run
     in one forward. Every answer is bit-identical to the earlier runs at
     `93a3492c0` (max |Δp| 0 on all 11 jobs).
   - ROCm: `35ff3a8a5`, which adds the fixes for a shared GPU process (device
     work one model at a time, thread-local graph capture) and leaves the CPU
     code as it was. Its answers against the packages' release image are
     below.
-  - The `batching` and reduced-copy rows name their own commit.
+  - The batched and reduced-copy rows name their own commit.
   - The final head is `35ff3a8a5` with these records on top, so both
     comparisons hold for it.
 - **Packages:** the revisions `registry/tables/vela1.py` pins (Domain
@@ -50,7 +50,7 @@ runtime side is `Runtime.call`, as its HTTP server calls it. Raw results
   - the same deployment options, sent as request options;
   - one request at a time, each input twice (the first answer is compared,
     the second timed), then 4 closed-loop callers for 20 s per model;
-  - `exact` profile, FP32;
+  - each request on the reference path (the default of the time), FP32;
   - CPU: 16 EPYC 9575F cores pinned with `taskset` (node B 64–79; `torch`
     2.10 CPU, oneDNN packed linears). These latencies are not the gate:
     `vela1-performance.md` times both sides interleaved in one cgroup scope;
@@ -261,17 +261,17 @@ their last bits:
   answers, under design section 17's bars, and this stack passes them on
   every job (above).
 
-## Approximate profiles
+## Batching and reduced copies
 
-`batching` coalesces concurrent requests. A request alone runs as on
-`exact`, so its answers are the same (`35ff3a8a5`, ROCm, AMD-recipe
+Batching coalesces concurrent requests. A request alone runs as on the
+reference path, so its answers are the same (`35ff3a8a5`, ROCm, AMD-recipe
 inputs: every value identical one request at a time).
 
-The `max_speed` reduced copies (design section 5.4) were recorded against
-`exact` on the whole corpus before any consent. Agreement counts the label,
+The reduced copies (design section 5.4) were recorded against the reference
+path on the whole corpus before any consent. Agreement counts the label,
 or the identical span set.
 
-BF16 copy on MI325X (heads FP32), against `exact` on the same inputs
+BF16 copy on MI325X (heads FP32), against the reference path on the same inputs
 (`973842d9e`):
 
 | Job | Inputs | Agreement with exact | Max abs Δp | Floor (99%) |
@@ -297,7 +297,7 @@ BF16 copy on MI325X (heads FP32), against `exact` on the same inputs
 | halu | router CPU | 75.00% | 2.6e-02 | fail |
 
 BF16 copy on CPU (AVX-512 BF16, 16 EPYC 9575F cores, heads FP32), against
-`exact` on the router's CPU inputs (`0a2ced483`, both on node B 64–79):
+the reference path on the router's CPU inputs (`0a2ced483`, both on node B 64–79):
 
 | Job | Agreement with exact | Max abs Δp | Floor (99%) | p50 exact → copy (ms) | p95 exact → copy (ms) | 4 callers, calls/s |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -322,14 +322,14 @@ faster path (design section 5.4):
   autocast adds a cast per linear.
 - **CPU:** BF16 keeps every label of the sequence and scores heads but fails
   the floor for PII and Halu.
-  - It is about 1.5× slower per request than `exact`, whose linears already
+  - It is about 1.5× slower per request than the reference path, whose linears already
     run through oneDNN's packed FP32 kernel (Domain p50 7.68 → 12.10 ms).
     Only Halu's long grounded inputs run faster on it (p50 119 → 109 ms),
     and Halu fails the floor.
-  - Its higher throughput on short inputs comes from `max_speed` coalescing
-    requests for up to 2 ms; `batching` gives that gain without changing a
-    value.
-- A `float32-packed` copy would duplicate the `exact` path's own kernels,
+  - Its higher throughput on short inputs comes from coalescing requests
+    for up to 2 ms; batching on the FP32 weights gives that gain without
+    changing a value.
+- A `float32-packed` copy would duplicate the reference path's own kernels,
   and int8 breaks ModernBERT's activations (`decision1-performance.md`).
 
 ## Reproduce
@@ -347,5 +347,5 @@ python3 tools/legacy_parity.py runtime --recipe cpu|amd --inputs legacy.jobs.jso
   --device cpu|rocm:0 --cache <hf cache> --repeats 2 --concurrency 4 --out runtime.jsonl
 python3 tools/legacy_parity.py compare --legacy legacy.jsonl --runtime runtime.jsonl \
   --device-class cpu|rocm --context '{"runtime_commit": "..."}' --record record.json
-# a copy or a profile against exact: --baseline runtime --legacy exact.jsonl
+# a copy or batched answers against the reference path: --baseline runtime --legacy exact.jsonl
 ```

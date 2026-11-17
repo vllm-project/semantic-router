@@ -1,0 +1,147 @@
+{
+ "vllm-sr/vela3-fast": {
+  "answers": {
+   "cpu": {
+    "domain": {
+     "abstain_probability": 0.00016895470109934614,
+     "choice": "health",
+     "confidence": 0.944049390314016,
+     "probabilities": {
+      "biology": 0.0016804256434360134,
+      "business": 0.0014037737098295327,
+      "chemistry": 0.0005666962733739552,
+      "computer science": 0.0007353883901622095,
+      "economics": 0.00020218601302631,
+      "engineering": 0.0001272547738888059,
+      "health": 0.9480458624344434,
+      "history": 0.00014879463335147744,
+      "law": 0.0011583712863265836,
+      "math": 0.00781363771232029,
+      "other": 0.028384311740712313,
+      "philosophy": 0.0026941943517543123,
+      "physics": 0.00038275353654002454,
+      "psychology": 0.00665634950083456
+     },
+     "type": "choice"
+    },
+    "drugs": {
+     "noul": 0.7517135309636735,
+     "type": "noul"
+    },
+    "factcheck": {
+     "abstain_probability": 5.701900023269367e-06,
+     "choice": "FACT_CHECK_NEEDED",
+     "confidence": 0.9995460285228359,
+     "probabilities": {
+      "FACT_CHECK_NEEDED": 0.999773014261418,
+      "NO_FACT_CHECK_NEEDED": 0.0002269857385820124
+     },
+     "type": "choice"
+    },
+    "halu": {
+     "noul": 0.9966272030229427,
+     "type": "noul"
+    },
+    "jailbreak": {
+     "abstain_probability": 5.622545423136573e-07,
+     "choice": "benign",
+     "confidence": 0.9923705861465839,
+     "probabilities": {
+      "benign": 0.996185293073292,
+      "jailbreak": 0.0038147069267081136
+     },
+     "type": "choice"
+    },
+    "pii": {
+     "noul": 0.9999990759608349,
+     "type": "noul"
+    },
+    "topic": {
+     "choice": "medical",
+     "confidence": 0.9788984905751879,
+     "probabilities": {
+      "legal": 0.0034497240894171303,
+      "medical": 0.9859323270501252,
+      "other": 0.010617948860457568
+     },
+     "type": "choice"
+    },
+    "urgent": {
+     "noul": 0.183091094318108,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx2:bf16_emulated": {
+    "domain": {
+     "abstain_probability": 0.00016895470109934614,
+     "choice": "health",
+     "confidence": 0.944049390314016,
+     "probabilities": {
+      "biology": 0.0016804256434360134,
+      "business": 0.0014037737098295327,
+      "chemistry": 0.0005666962733739552,
+      "computer science": 0.0007353883901622095,
+      "economics": 0.00020218601302631,
+      "engineering": 0.0001272547738888059,
+      "health": 0.9480458624344434,
+      "history": 0.00014879463335147744,
+      "law": 0.0011583712863265836,
+      "math": 0.00781363771232029,
+      "other": 0.028384311740712313,
+      "philosophy": 0.0026941943517543123,
+      "physics": 0.00038275353654002454,
+      "psychology": 0.00665634950083456
+     },
+     "type": "choice"
+    },
+    "drugs": {
+     "noul": 0.7517135309636735,
+     "type": "noul"
+    },
+    "factcheck": {
+     "abstain_probability": 5.701900023269367e-06,
+     "choice": "FACT_CHECK_NEEDED",
+     "confidence": 0.9995460285228359,
+     "probabilities": {
+      "FACT_CHECK_NEEDED": 0.999773014261418,
+      "NO_FACT_CHECK_NEEDED": 0.0002269857385820124
+     },
+     "type": "choice"
+    },
+    "halu": {
+     "noul": 0.9966272030229427,
+     "type": "noul"
+    },
+    "jailbreak": {
+     "abstain_probability": 5.622545423136573e-07,
+     "choice": "benign",
+     "confidence": 0.9923705861465839,
+     "probabilities": {
+      "benign": 0.996185293073292,
+      "jailbreak": 0.0038147069267081136
+     },
+     "type": "choice"
+    },
+    "pii": {
+     "noul": 0.9999990759608349,
+     "type": "noul"
+    },
+    "topic": {
+     "choice": "medical",
+     "confidence": 0.9788984905751879,
+     "probabilities": {
+      "legal": 0.0034497240894171303,
+      "medical": 0.9859323270501252,
+      "other": 0.010617948860457568
+     },
+     "type": "choice"
+    },
+    "urgent": {
+     "noul": 0.183091094318108,
+     "type": "noul"
+    }
+   }
+  },
+  "revision": "7cbefd4b92b57234bd0ffb9872451e81abcdac79"
+ }
+}

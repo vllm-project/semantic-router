@@ -13,10 +13,13 @@ func reflectionDecision(name, algorithm string) config.Decision {
 	return config.Decision{
 		Name: name,
 		Plugins: []config.DecisionPlugin{{
-			Type: "memory",
+			Type: config.DecisionPluginContext,
 			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":    false,
-				"reflection": map[string]interface{}{"algorithm": algorithm},
+				"enabled": false,
+				"sources": []interface{}{map[string]interface{}{
+					"type":       config.ContextSourceMemory,
+					"reflection": map[string]interface{}{"algorithm": algorithm},
+				}},
 			}),
 		}},
 	}
@@ -39,7 +42,7 @@ func TestCreateMemoryRuntimeValidatesReflectionAlgorithm(t *testing.T) {
 		},
 		{
 			name:  "flat_decision",
-			field: "routing.decisions[memory_route].plugins[memory].reflection.algorithm",
+			field: "recipes[default].decisions[memory_route].plugins[context].sources[memory].reflection.algorithm",
 			build: func(algorithm string) *config.RouterConfig {
 				cfg := &config.RouterConfig{}
 				cfg.Decisions = []config.Decision{reflectionDecision("memory_route", algorithm)}
@@ -48,7 +51,7 @@ func TestCreateMemoryRuntimeValidatesReflectionAlgorithm(t *testing.T) {
 		},
 		{
 			name:  "recipe_decision",
-			field: "routing.decisions[recipe_memory_route].plugins[memory].reflection.algorithm",
+			field: "recipes[private].decisions[recipe_memory_route].plugins[context].sources[memory].reflection.algorithm",
 			build: func(algorithm string) *config.RouterConfig {
 				cfg := &config.RouterConfig{}
 				cfg.Recipes = []config.RoutingRecipe{
@@ -79,7 +82,7 @@ func TestCreateMemoryRuntimeValidatesReflectionAlgorithm(t *testing.T) {
 			t.Run(scope.name+"/"+tc.algorithm, func(t *testing.T) {
 				// Memory stays disabled, so no store is created and only the
 				// startup check can fail.
-				store, extractor, err := createMemoryRuntime(scope.build(tc.algorithm))
+				store, extractor, _, err := createMemoryRuntime(scope.build(tc.algorithm))
 				assert.Nil(t, store)
 				assert.Nil(t, extractor)
 				if !tc.wantErr {
@@ -102,7 +105,7 @@ func TestCreateMemoryRuntimeRejectsUnknownGlobalAlgorithmDespiteOverride(t *test
 	cfg.Memory.Reflection.Algorithm = "recency_semantic"
 	cfg.Decisions = []config.Decision{reflectionDecision("memory_route", "heuristic")}
 
-	_, _, err := createMemoryRuntime(cfg)
+	_, _, _, err := createMemoryRuntime(cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "global.stores.memory.reflection.algorithm")
 }

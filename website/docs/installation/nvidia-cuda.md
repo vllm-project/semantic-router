@@ -17,9 +17,10 @@ It does **not** download a language model or start a vLLM server.
 ## Prerequisites
 
 - Linux and an NVIDIA GPU supported by the vLLM release you plan to run;
-- an x86-64 host when using the current Semantic Router CUDA image;
+- an x86-64 or Arm64 host;
 - a GPU of compute capability 7.0 or newer (Volta and later) for the Router
-  image, the oldest architecture its PyTorch build (CUDA 12.8) includes;
+  image on x86-64, or 8.0 or newer on Arm64, the oldest architecture its
+  PyTorch build (CUDA 12.8) includes;
 - an NVIDIA driver, and GPU passthrough into the Router container for the
   Router-side models that run on CUDA;
 - Docker and NVIDIA Container Toolkit;
@@ -108,13 +109,15 @@ providers:
           weight: 1
 ```
 
-This is a provider fragment, not a complete Router config. Add the matching
-model card and route to your existing recipe, or configure the endpoint in the
-Dashboard. The `provider_model_id` must match a model returned by vLLM's
-`/v1/models` endpoint. See [Configuration](configuration) for a complete
-minimal document and
-[Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
-for backend binding and routing policy.
+This is a provider fragment, not a complete Router config:
+
+- **Add** the matching model card and route to your existing recipe, or
+  configure the endpoint in the Dashboard.
+- **Match `provider_model_id`** to a model returned by vLLM's `/v1/models`
+  endpoint.
+- **See** [Configuration](configuration) for a complete minimal document, and
+  [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
+  for backend binding and routing policy.
 
 The example publishes port `8000` on the host for direct testing. Restrict that
 port with host networking controls, or use private service discovery in a
@@ -134,13 +137,40 @@ Without `--platform cpu`, automatic platform detection can select CUDA on a
 GPU host.
 
 The Router's own models (classifiers, embeddings, decision models) run in the
-[model runtime](model-runtime/overview.md). To run them on CUDA, use
+[model runtime](../model-runtime/get-started/overview.md). To run them on CUDA, use
 `--platform cuda`: the CUDA image ships the runtime with the CUDA build of
 PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
-CUDA support works but is not yet validated; measure it on your hardware.
+
+CUDA is validated on documented H200, A100 and Tesla T4 workloads:
+
+- **Decision 1.0 and Decision 2.0** meet the recorded performance criteria.
+- **Vela 2.0 0.3B with 32-token inputs** has a known regression on H200: its
+  median latency is about 2.3% slower, with the whole confidence interval on
+  the slower side, while its p95 improves. On a Tesla T4 the same workload is
+  level, but each card is judged on its own, so that doesn't clear the H200
+  result.
+- **Fused kernels** without bit-exact evidence stay out of the exact profile.
+
+Model coverage and measurement environments are in the source-tree records:
+
+- [CUDA image smoke](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-router-image.md)
+- [Goldens](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-golden-answers.md)
+- [Decision 1.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-decision1-performance.md)
+- [Decision 2.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-decision2-performance.md)
+- [Vela 2.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-vela2-performance.md)
+- [Vela 1.0 vs CPU legacy](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-vela1-performance.md)
+
+:::note
+These records don't cover every built-in model, and don't claim that every
+NVIDIA GPU matches the recorded cards; measure other NVIDIA GPUs on your
+hardware. Some performance records used a separate RunPod stack rather than
+the published CUDA image.
+:::
+
 A stable CLI selects the matching published release image
-(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
-use `:latest` unless an image is specified explicitly:
+(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`), and a development CLI
+build selects the image published from its own `main` commit, tagged with that
+commit's SHA, unless an image is specified explicitly:
 
 ```bash
 vllm-sr config validate --config config.yaml
@@ -211,11 +241,12 @@ for CUDA cannot load.
 
 ### The Router uses the CPU
 
-Confirm that `--platform cuda` selected the `vllm-sr-cuda` image and that
-`VLLM_SR_CUDA_PRESERVE_CPU` is not enabled. Check the generated runtime
-configuration and startup logs, not only the source recipe. A recipe without a
-local signal model has nothing to move to CUDA. `GET /v1/models` on a runtime,
-or the Dashboard's model inventory, shows the device each model runs on.
+- Confirm that `--platform cuda` selected the `vllm-sr-cuda` image. Check the
+  generated runtime configuration and startup logs, not only the source
+  recipe.
+- A recipe without a local signal model has nothing to move to CUDA.
+- `GET /v1/models` on a runtime, or the Dashboard's model inventory, shows the
+  device each model runs on.
 
 ### vLLM or the Router runs out of GPU memory
 
@@ -234,9 +265,13 @@ service address.
 
 ### Kubernetes does not schedule a GPU
 
-On Kubernetes, `--platform cuda` selects the CUDA image and GPU resources from
-canonical replica placement. The NVIDIA device plugin and matching schedulable
-nodes must already exist. Configure node placement through Helm values or the
-Operator; `--platform auto` inspects the selected cluster, not the CLI host. See
-[Configuration Workflows](configuration-workflows#helm) for the deployment
+On Kubernetes, `--platform cuda` selects the CUDA image and GPU resources
+from canonical replica placement:
+
+- **Prerequisites.** The NVIDIA device plugin and matching schedulable nodes
+  must already exist.
+- **Placement.** Configure node placement through Helm values or the
+  Operator. `--platform auto` inspects the selected cluster, not the CLI host.
+
+See [Configuration Workflows](configuration-workflows#helm) for the deployment
 boundary.

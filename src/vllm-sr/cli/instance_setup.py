@@ -18,6 +18,7 @@ from cli.container_runtime import get_container_runtime
 from cli.container_start_paths import _prepare_runtime_paths
 from cli.instance_paths import (
     instance_control_directory,
+    instance_socket_address,
     prepare_instance_control_directory,
 )
 from cli.instance_state import write_private_json
@@ -29,7 +30,7 @@ def controller_request(directory, path, payload=None):
     connection.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     connection.sock.settimeout(35)
     try:
-        connection.sock.connect(str(Path(directory) / "socket" / "control.sock"))
+        connection.sock.connect(instance_socket_address(Path(directory)))
         body = json.dumps(payload).encode() if payload is not None else None
         connection.request(
             "POST" if body else "GET", path, body, {"Content-Type": "application/json"}
@@ -77,7 +78,16 @@ def ensure_controller(directory):
             if process.poll() is not None:
                 break
             time.sleep(0.1)
-    raise RuntimeError("Instance controller failed to start; inspect its private log")
+    raise RuntimeError(
+        f"Instance controller failed to start{_last_log_line(log)}; its log is {log}"
+    )
+
+
+def _last_log_line(log: Path) -> str:
+    with log.open("rb") as output:
+        output.seek(max(0, log.stat().st_size - 4096))
+        lines = output.read().decode("utf-8", "replace").strip().splitlines()
+    return f": {lines[-1].strip()}" if lines else ""
 
 
 def attach_controller(source, config, env, gateway, startup_timeout):
@@ -91,6 +101,7 @@ def attach_controller(source, config, env, gateway, startup_timeout):
         result = subprocess.run(
             [
                 runtime,
+                "container",
                 "inspect",
                 "--format",
                 "{{.Image}}",
@@ -112,6 +123,7 @@ def attach_controller(source, config, env, gateway, startup_timeout):
     inspected_env = subprocess.run(
         [
             runtime,
+            "container",
             "inspect",
             "--format",
             "{{json .Config.Env}}",
@@ -153,7 +165,7 @@ def stop_managed_controller():
     layout = resolve_runtime_stack()
     runtime = get_container_runtime()
     inspected = subprocess.run(
-        [runtime, "inspect", layout.dashboard_container_name],
+        [runtime, "container", "inspect", layout.dashboard_container_name],
         capture_output=True,
         timeout=10,
         check=False,

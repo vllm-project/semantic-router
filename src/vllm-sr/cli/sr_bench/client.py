@@ -146,7 +146,18 @@ class Client:
                 "Service request failed; inspect saved runs and dataset preparations "
                 "before submitting again (requests are never retried)"
             ) from exc
-        data = response.json()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise ValueError(
+                "Service returned a non-JSON response; inspect service.log "
+                "if the sr-bench service crashed mid-request"
+            ) from exc
+        if not isinstance(data, dict):
+            raise ValueError(
+                f"Service returned unexpected JSON ({type(data).__name__}), "
+                "expected an object; inspect service.log"
+            )
         if response.status_code >= HTTPStatus.BAD_REQUEST:
             raise ValueError(data.get("error", f"HTTP {response.status_code}"))
         return data

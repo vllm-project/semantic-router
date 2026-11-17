@@ -158,11 +158,6 @@ func (s *MultiFactorSelector) InitializeFromConfig(modelConfig map[string]config
 	}
 }
 
-// UpdateFeedback is a no-op: multi_factor uses live signals only.
-func (s *MultiFactorSelector) UpdateFeedback(_ context.Context, _ *Feedback) error {
-	return nil
-}
-
 // Select applies hard eligibility filters, then the configured objective.
 func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if len(selCtx.CandidateDemands) > 0 && s.config.ExpectedOutputTokens == nil {
@@ -190,7 +185,7 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		return s.applyNoCandidatePolicy(selCtx, "quality_evidence", qualityExcluded)
 	}
 	mins, maxs := signalExtrema(signals)
-	bestIdx, allScores, bestScore, secondBest, survivors, trace := s.chooseCandidate(signals, mins, maxs)
+	bestIdx, allScores, bestScore, secondBest, survivors, trace := s.chooseCandidate(signals, mins, maxs, selCtx.CacheAffinityCtx)
 
 	chosen := kept[bestIdx]
 	confidence := 0.5
@@ -535,7 +530,8 @@ func effectiveCostPer1M(pricing config.ModelPricing, selCtx *SelectionContext) (
 
 func modelPricingConfigured(pricing config.ModelPricing) bool {
 	return strings.TrimSpace(pricing.Currency) != "" || pricing.PromptPer1M != 0 ||
-		pricing.CompletionPer1M != 0 || pricing.CachedInputPer1M != 0 || pricing.CacheWritePer1M != nil
+		pricing.CompletionPer1M != 0 || pricing.CachedInputPer1M != 0 || pricing.CacheWritePer1M != nil ||
+		pricing.CacheWrite1hPer1M != nil
 }
 
 func selectionTokenCounts(selCtx *SelectionContext) (int, int) {

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 )
@@ -88,7 +89,7 @@ func RegisterAdminRoutes(mux RouteRegistrar, svc *Service) {
 }
 
 func writeAudit(r *http.Request, svc *Service, action, resource, actorID string) {
-	_ = svc.store.AddAuditLog(r.Context(), AuditLog{
+	if err := svc.store.AddAuditLog(r.Context(), AuditLog{
 		UserID:     actorID,
 		Action:     action,
 		Resource:   resource,
@@ -98,7 +99,9 @@ func writeAudit(r *http.Request, svc *Service, action, resource, actorID string)
 		UserAgent:  r.UserAgent(),
 		StatusCode: http.StatusOK,
 		CreatedAt:  time.Now().Unix(),
-	})
+	}); err != nil {
+		log.Printf("audit log write failed for action %s: %v", action, err)
+	}
 }
 
 func respondJSON(w http.ResponseWriter, payload interface{}) {

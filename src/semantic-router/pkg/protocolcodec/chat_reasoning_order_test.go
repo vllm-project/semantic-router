@@ -193,6 +193,38 @@ func TestChatHeldOpeningDeltaIsReleasedOnEveryExit(t *testing.T) {
 	}
 }
 
+// A Chat target carries reasoning and answer in separate fields, so there is
+// no block order to choose and the opening delta emits immediately.
+func TestChatTargetDoesNotHoldOpeningDelta(t *testing.T) {
+	choice := func(delta string) string {
+		return `data: {"id":"chatcmpl-3","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":` + delta + `,"finish_reason":null}]}` + "\n\n"
+	}
+	opening := choice(`{"role":"assistant","reasoning":"Short.","content":"Hello"}`)
+
+	policy := llmprotocol.DefaultPolicy()
+	streamCtx := llmprotocol.StreamContext{
+		Context: context.Background(),
+		Target:  llmprotocol.OpenAIChatV1,
+	}
+	decoder := OpenAIChatCodec{}.NewDecoder(streamCtx, policy)
+	events, _, err := decoder.Push([]byte(opening))
+	if err != nil {
+		t.Fatalf("unexpected push error: %v", err)
+	}
+	var emittedText, emittedReasoning bool
+	for _, event := range events {
+		if event.Type == llmprotocol.EventReasoningDelta && event.Delta == "Short." {
+			emittedReasoning = true
+		}
+		if event.Type == llmprotocol.EventOutputTextDelta && event.Delta == "Hello" {
+			emittedText = true
+		}
+	}
+	if !emittedReasoning || !emittedText {
+		t.Fatalf("expected immediate emission of reasoning and text for Chat target, got events: %+v", events)
+	}
+}
+
 // Once the answer is under way, a mixed delta keeps main's order, content first.
 func TestChatDeltaOutsideReasoningKeepsContentFirst(t *testing.T) {
 	answerStarted := chatStream(`{"role":"assistant","content":"Hello"}`, `{"content":" there","reasoning":"Check"}`, `{"reasoning":" again."}`)

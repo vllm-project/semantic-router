@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const defaultCacheBackendLabel = "milvus" // fallback label when none is provided
@@ -67,22 +69,30 @@ func (c *CachingStore) invalidate(ctx context.Context, userID string) {
 // Retrieve implements Store. It checks the cache first; on miss, calls the underlying store and caches the result.
 func (c *CachingStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
 	label := c.label()
+	generation := ""
 	if c.cache != nil {
 		start := time.Now()
-		results, ok := c.cache.Get(ctx, opts)
+		results, readGeneration, ok := c.cache.GetWithGeneration(ctx, opts)
 		elapsed := time.Since(start).Seconds()
 		if ok {
 			RecordMemoryCacheHit(label, elapsed)
-			return results, nil
+			// Cache entries written before project-scoped retrieval was enforced by
+			// every backend can contain memories from another project. Revalidate
+			// the stored metadata on a hit so an upgrade cannot keep serving those
+			// entries until their TTL expires.
+			return retainProjectMatches(results, opts.ProjectID), nil
 		}
+		generation = readGeneration
 		RecordMemoryCacheMiss(label)
 	}
 	results, err := c.store.Retrieve(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
-	if c.cache != nil {
-		c.cache.Set(ctx, opts, results)
+	if c.cache != nil && generation != "" {
+		if _, err := c.cache.SetIfGeneration(ctx, opts, results, generation); err != nil {
+			logging.Debugf("Memory Redis cache set error: %v", err)
+		}
 	}
 	return results, nil
 }
@@ -142,9 +152,7 @@ func (c *CachingStore) Forget(ctx context.Context, id string) error {
 // ForgetByScope implements Store; delegates then invalidates cache for the scope's user.
 func (c *CachingStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
 	err := c.store.ForgetByScope(ctx, scope)
-	if err == nil {
-		c.invalidate(ctx, scope.UserID)
-	}
+	c.invalidate(ctx, scope.UserID)
 	return err
 }
 

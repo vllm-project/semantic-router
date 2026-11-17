@@ -19,6 +19,7 @@ func (engine *Engine) ValidateNativeChatStream(body []byte) (llmprotocol.Diagnos
 	policy := engine.strictStreamPolicy()
 	decoders := make(map[int]llmprotocol.StreamDecoder)
 	var diagnostics llmprotocol.Diagnostics
+	reported := make(map[string]bool)
 	done := false
 	first := true
 	for len(body) > 0 {
@@ -50,8 +51,18 @@ func (engine *Engine) ValidateNativeChatStream(body []byte) (llmprotocol.Diagnos
 			continue
 		}
 		var chunk chatChunkWire
-		if decodeErr := decodeProviderWire(frame.Data, &chunk, policy); decodeErr != nil {
+		_, unknownFields, decodeErr := decodeChatProviderWire(frame.Data, &chunk, policy)
+		if decodeErr != nil {
 			return nil, decodeErr
+		}
+		if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
+			return nil, reservedErr
+		}
+		for _, field := range unknownFields {
+			if !reported[field] {
+				reported[field] = true
+				appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIChatV1, field, unknownUpstreamFieldReason)
+			}
 		}
 		if envelopeErr := validateChatStreamEnvelope(chunk); envelopeErr != nil {
 			return nil, envelopeErr

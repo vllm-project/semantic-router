@@ -2,207 +2,147 @@
   display: grid;
   gap: 0;
   overflow-x: clip;
-  background: var(--site-bg);
-  color: var(--site-text);
+  background: var(--paper);
+  color: var(--ink);
 }
 
-.bandBlack,
-.bandGraphite,
-.bandRaised,
-.bandArchitecture,
-.bandRuntime {
-  min-width: 0;
-  background: var(--site-bg);
-}
-
-.bandGraphite {
-  --site-bg: var(--site-bg-alt);
-}
-
-.bandRaised {
-  --site-bg: var(--site-surface);
-}
-
-.bandArchitecture {
-  --site-bg: #edf5fd;
-  background:
-    radial-gradient(ellipse at 50% 0%, var(--site-accent-soft), transparent 65%),
-    var(--site-bg);
-  border-block: 1px solid var(--site-border);
-}
-
-.bandRuntime {
-  --site-bg: var(--site-surface-raised);
-  --runtime-glow: rgba(118, 81, 203, 0.05);
-  background:
-    radial-gradient(ellipse at 100% 0%, var(--runtime-glow), transparent 55%),
-    var(--site-bg);
-  border-bottom: 1px solid var(--site-border);
-}
-
-:global([data-theme='dark']) .bandArchitecture {
-  --site-bg: #0c1520;
-}
-
-:global([data-theme='dark']) .bandRuntime {
-  --site-bg: #151319;
-  --runtime-glow: rgba(151, 107, 255, 0.1);
-}
-
-.finalCtaSection {
-  padding: clamp(2.5rem, 5vw, 5rem) 0;
-  background: var(--site-bg);
-}
-
-.finalCtaFrame {
+/* The close: a dusk from the paper into ink, with pixel stars, then the statement on ink. */
+.mission {
   position: relative;
+  background: var(--night);
+  color: var(--cream);
+}
+
+.dusk {
+  position: relative;
+  height: clamp(200px, 22vw, 320px);
+  background: linear-gradient(180deg, var(--paper) 0%, #f2e2d2 16%, #e2c3b4 34%, #9b8fa6 56%, #4d5672 76%, #262b38 90%, var(--night) 100%);
+}
+
+:global([data-theme='dark']) .dusk {
+  background: linear-gradient(180deg, var(--paper) 0%, #161a24 30%, #1d2132 52%, #141722 78%, var(--night) 100%);
+}
+
+.stars {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.missionIn {
+  width: min(100% - 2 * var(--gut), var(--wrap));
+  margin-inline: auto;
+  padding: clamp(8px, 2vw, 24px) 0 clamp(72px, 8vw, 112px);
+}
+
+.missionGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.95fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
   align-items: center;
-  gap: clamp(2rem, 5vw, 5rem);
-  padding: clamp(1.5rem, 4vw, 3.5rem);
-  border: 1px solid var(--site-border-strong);
-  border-radius: 1.3rem;
-  background:
-    radial-gradient(ellipse at 0% 100%, var(--site-accent-soft), transparent 65%),
-    var(--site-surface);
-  box-shadow: var(--site-shadow-soft);
+  gap: clamp(40px, 6vw, 96px);
 }
 
-.finalCtaCopy {
-  --site-text-h2: clamp(2rem, 3.8vw, 3.5rem);
-  display: grid;
-  justify-items: start;
-  gap: 1rem;
-  min-width: 0;
+:global(html.duo-home) .mission .missionLabel {
+  color: var(--ember-hi);
 }
 
-.finalCtaCopy h2 {
-  max-width: 10ch;
-  margin: 0;
-  color: var(--site-text-strong);
-  font-size: clamp(2rem, 3.8vw, 3.5rem);
-  font-weight: 620;
-  line-height: 1.08;
-  letter-spacing: -0.045em;
+.mission .statement {
+  margin: 16px 0 0;
+  color: var(--on-ink);
+  font: 500 clamp(48px, 6.4vw, 92px) / 0.98 var(--serif);
+  letter-spacing: -0.02em;
   text-wrap: balance;
 }
 
-.finalCtaCopy p {
-  max-width: 42ch;
+.statement em {
+  color: var(--ember-hi);
+  font-style: italic;
+}
+
+.mission .why {
+  max-width: 30em;
+  margin: 24px 0 0;
+  color: var(--on-ink-2);
+  font-size: clamp(17px, 1.5vw, 19px);
+  line-height: 1.55;
+}
+
+.principles {
   margin: 0;
-  color: var(--site-muted-bright);
-  font-size: 1rem;
-  line-height: 1.65;
+  padding: 0;
+  list-style: none;
 }
 
-.finalCtaActions {
+.principles li {
   display: grid;
-  gap: 0.85rem;
-  min-width: 0;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  padding: 24px 0;
+  border-top: 1px solid var(--ink-hair);
 }
 
-.finalCtaLink {
-  --action-accent: var(--site-accent-strong);
-  display: flex;
+.principles li:last-child {
+  border-bottom: 1px solid var(--ink-hair);
+}
+
+.principleIcon {
+  margin-top: 2px;
+  color: var(--cream);
+  --ember: var(--ember-hi);
+}
+
+.principles a {
+  display: block;
+  color: var(--on-ink);
+  text-decoration: none;
+}
+
+.principles h3 {
+  display: inline-flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1.2rem;
-  border: 1px solid var(--site-border-strong);
-  border-radius: 0.85rem;
-  background: var(--site-surface-alt);
-  color: var(--site-text-strong);
-  text-decoration: none;
-  transition: border-color 180ms ease, background 180ms ease;
+  gap: 4px;
+  margin: 0;
+  color: var(--on-ink);
+  font: 600 24px/1.2 var(--serif);
+  letter-spacing: -0.005em;
+  transition: color 0.2s;
 }
 
-.finalCtaInstall {
-  --action-accent: var(--site-muted-bright);
+.principles h3::after {
+  content: '\203A';
+  font-size: 1.1em;
+  line-height: 1;
+  transition: transform 0.3s var(--ease);
 }
 
-.finalCtaLink:hover {
-  border-color: var(--action-accent);
-  background: var(--site-surface-soft);
-  color: var(--site-text-strong);
-  text-decoration: none;
+.principles a:hover h3,
+.principles a:focus-visible h3 {
+  color: var(--ember-hi);
 }
 
-.finalCtaLink:focus-visible {
-  outline: 2px solid var(--action-accent);
-  outline-offset: 4px;
+.principles a:hover h3::after,
+.principles a:focus-visible h3::after {
+  transform: translateX(3px);
 }
 
-.finalCtaIcon {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 2.8rem;
-  height: 2.8rem;
-  border: 1px solid var(--site-border);
-  border-radius: 0.7rem;
-  background: var(--site-surface);
-  color: var(--action-accent);
-  font-size: 1.3rem;
-}
-
-.finalCtaLinkCopy {
-  display: grid;
-  gap: 0.3rem;
-  min-width: 0;
-}
-
-.finalCtaLinkCopy strong {
-  font-size: 1rem;
-  font-weight: 620;
-}
-
-.finalCtaLinkCopy > span {
-  color: var(--site-muted);
-  font-size: 0.8rem;
+.mission .principles p {
+  margin: 6px 0 0;
+  color: var(--on-ink-2);
+  font-size: 15.5px;
   line-height: 1.5;
 }
 
-.finalCtaArrow {
-  flex: 0 0 auto;
-  margin-left: auto;
-  color: var(--action-accent);
-  font-size: 1.35rem;
+:global(html[lang='zh-Hans']) .mission .statement {
+  font-size: clamp(40px, 5.2vw, 76px);
+  letter-spacing: 0;
+  line-height: 1.12;
 }
 
-@media (max-width: 768px) {
-  .finalCtaFrame {
+@media (max-width: 1000px) {
+  .missionGrid {
     grid-template-columns: minmax(0, 1fr);
-    gap: 1.8rem;
-  }
-
-  .finalCtaCopy h2 {
-    max-width: 14ch;
-  }
-}
-
-@media (max-width: 400px) {
-  .finalCtaLink {
-    gap: 0.7rem;
-    padding: 0.85rem;
-  }
-
-  .finalCtaIcon {
-    width: 2.2rem;
-    height: 2.2rem;
-    font-size: 1.1rem;
-  }
-
-  .finalCtaLinkCopy strong {
-    font-size: 0.9rem;
-  }
-
-  .finalCtaLinkCopy > span {
-    font-size: 0.75rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .finalCtaLink {
-    transition: none;
+    gap: 32px;
   }
 }

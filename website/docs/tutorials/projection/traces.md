@@ -41,7 +41,7 @@ There is no separate “trace on/off” switch—tracing is implicit whenever pr
 
 The trace is versioned for forward-compatible consumers.
 
-- **`partitions`**: one entry per `routing.projections.partitions` group that ran reduction on this request. Records **`contenders`** with **`raw_score`** (and **`normalized_score`** when semantics are `softmax_exclusive`), the chosen **`winner`**, **`winner_score`** (what the router stores on the signal afterward), **`raw_winner_score`**, **`margin`** (top minus second among comparison scores—normalized weights for softmax, raw confidences otherwise), and **`default_used`** when the partition synthesized its configured default member.
+- **`partitions`**: one entry per `recipes[].projections.partitions` group that ran reduction on this request. Records **`contenders`** with **`raw_score`** (and **`normalized_score`** when semantics are `softmax_exclusive`), the chosen **`winner`**, **`winner_score`** (what the router stores on the signal afterward), **`raw_winner_score`**, **`margin`** (top minus second among comparison scores—normalized weights for softmax, raw confidences otherwise), and **`default_used`** when the partition synthesized its configured default member.
 - **`scores`**: one entry per configured projection score with **`total`** and per-input **`contribution`** (`weight * value`), matching the weighted-sum runtime.
 - **`mappings`**: one entry per projection mapping. For each threshold band in order, the trace records **`matched`**, **`boundary_distance`** (distance to the nearest active threshold), and—for the first matching band—the **`selected_output`**, sigmoid **`confidence`**, and **`boundary_distance`** used for that band.
 

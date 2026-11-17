@@ -8,14 +8,16 @@ import (
 	"strings"
 )
 
-// InferenceIdentity records the observed model and execution profile. A public
-// alias is a transport selector; it never replaces the identity in metadata.
+// InferenceIdentity records the observed model and how it computed: its
+// precision (dtype) and whether batching can move its answers (numerics). A
+// public alias is a transport selector; it never replaces the identity in
+// metadata.
 type InferenceIdentity struct {
 	ModelID     string `json:"model_id"`
 	Revision    string `json:"revision"`
 	ModelSHA256 string `json:"model_sha256"`
 	Engine      string `json:"engine"`
-	Profile     string `json:"profile"`
+	Dtype       string `json:"dtype"`
 	Numerics    string `json:"numerics"`
 	Accelerator string `json:"accelerator"`
 }
@@ -23,7 +25,7 @@ type InferenceIdentity struct {
 // Valid requires every component used to bind inference evidence. In particular,
 // a mutable name or partial diagnostics cannot certify a model identity.
 func (i InferenceIdentity) Valid() bool {
-	for _, value := range []string{i.ModelID, i.Revision, i.Engine, i.Profile, i.Numerics, i.Accelerator} {
+	for _, value := range []string{i.ModelID, i.Revision, i.Engine, i.Dtype, i.Numerics, i.Accelerator} {
 		if value == "" || strings.TrimSpace(value) != value {
 			return false
 		}

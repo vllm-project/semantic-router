@@ -2,13 +2,19 @@
 
 A package is a Transformers ``Qwen3_5Model`` checkpoint (the text model and,
 for image inputs, its vision tower), a 255-way answer-code readout
-(``readout.safetensors``), ``decision_config.json`` (prompt family, answer
-codes, attention mode, temperature, input limit), the tokenizer, chat template
-and image processor settings, a card, and bundled Python that this runtime
-never imports. ``MODEL_MANIFEST.json`` lists the SHA-256 and size of every
-file, the parameter counts and the identity of the scored checkpoint. The
-checks reproduce the released runtime's ``verify_package`` and the package
+(``readout.safetensors``), ``decision_config.json`` (prompt family and layout,
+answer codes, attention mode, temperature, input limit), the tokenizer, chat
+template and image processor settings, a card, and bundled Python that this
+runtime never imports. ``MODEL_MANIFEST.json`` lists the SHA-256 and size of
+every file, the parameter counts and the identity of the scored checkpoint.
+The checks reproduce the released runtime's ``verify_package`` and the package
 builder's ``model_identity``; only the files the family loads are read.
+
+Two optional fields change how a request is read, and the identity covers
+them: ``prompt_layout`` ``header-v1`` puts a text-only request's question list
+in front of its state (``prompt.header_block``), and
+``temperature_by_questions`` sets a request's temperature from its number of
+questions (``temperature_table``).
 """
 
 from __future__ import annotations
@@ -18,10 +24,12 @@ import json
 import math
 import re
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
+from ...quantization import FP4_PER_BYTE, METADATA, PACK
 from ...registry.artifacts import (
     named_files,
     read_json,
@@ -34,13 +42,23 @@ MANIFEST_SCHEMA = "d3-package-manifest/1"
 FORMAT_ID = "d3-code-readout-v1"
 FORMAT_VERSION = 1
 PROMPTS = ("d3",)
-ATTENTION_MODES = ("causal", "noncausal_full_attention")
+NONCAUSAL = "noncausal_full_attention"
+# Layouts in which no state token attends to a question: a request's state block is
+# encoded once and each question branches from it (the native engine's ``branch``).
+# ``prefix_bidir``: the state attends within itself, both ways; a question block attends
+# to the state and within itself, both ways. ``prefix_causal``: the same with a
+# causal state. ``causal``: every token attends to itself and the tokens before it.
+STATE_ONCE_MODES = ("causal", "prefix_bidir", "prefix_causal")
+ATTENTION_MODES = (NONCAUSAL, *STATE_ONCE_MODES)
 READOUT_DTYPES = ("float32", "bfloat16")
 MAX_OPTIONS = 255
 MIN_INPUT_TOKENS = 16
 COLOUR_CHANNELS = 3
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
-# decision_config.json fields that change answers; the identity covers them.
+# ``header-v1``: a text-only request lists its questions in front of the state; absent, the d3 layout.
+HEADER_V1 = "header-v1"
+PROMPT_LAYOUTS = (HEADER_V1,)
+# decision_config.json fields that change answers; the identity covers the ones a package declares.
 INFERENCE_FIELDS = (
     "format_version",
     "format_id",
@@ -54,6 +72,8 @@ INFERENCE_FIELDS = (
     "pooling",
     "max_length",
     "readout_dtype",
+    "prompt_layout",
+    "temperature_by_questions",
 )
 # Files besides the weights that the identity covers.
 IDENTITY_FILES = (
@@ -69,6 +89,7 @@ MODEL_FILES = (
     *IDENTITY_FILES,
 )
 IMAGE_FILES = ("preprocessor_config.json",)
+VIDEO_FILES = ("video_preprocessor_config.json",)
 WEIGHT_INDEX = "model.safetensors.index.json"
 VISION_PREFIXES = ("visual.", "model.visual.")
 TEXT_PREFIXES = ("language_model.", "model.language_model.")
@@ -86,6 +107,7 @@ class Decision3Package:
     text_prefix: str
     vision_prefix: str | None
     processor_config: dict[str, Any] | None
+    video_config: dict[str, Any] | None
     model_sha256: str
     max_input_tokens: int
 
@@ -172,6 +194,10 @@ def verify_files(
     return actual
 
 
+def is_state_once(decision_config: dict[str, Any]) -> bool:
+    return decision_config.get("attention_mode", "causal") in STATE_ONCE_MODES
+
+
 def check_decision_config(config: Any) -> dict[str, Any]:
     """The released runtime's checks of ``decision_config.json``; returns it."""
     if not isinstance(config, dict):
@@ -215,7 +241,68 @@ def check_decision_config(config: Any) -> dict[str, Any]:
         raise PackageError(
             f"max_length must be null or an integer >= {MIN_INPUT_TOKENS}"
         )
+    validated = config.get("validated_length")
+    if validated is not None and (
+        type(validated) is not int or validated < MIN_INPUT_TOKENS
+    ):
+        raise PackageError(
+            f"validated_length must be null or an integer >= {MIN_INPUT_TOKENS}"
+        )
+    layout = config.get("prompt_layout")
+    if layout is not None and layout not in PROMPT_LAYOUTS:
+        raise PackageError(f"unknown prompt layout {layout!r}")
+    temperature_table(config)
     return config
+
+
+def temperature_table(
+    config: dict[str, Any],
+) -> tuple[tuple[int, ...], tuple[float, ...]] | None:
+    """``temperature_by_questions`` as (bounds, temperatures), None when absent.
+
+    ``{"max_questions": [n_1, ..., n_k], "temperature": [t_1, ..., t_k, t_rest]}``:
+    strictly increasing positive counts and one more finite, positive
+    temperature than counts. A request with n questions takes the ``t_i`` of the
+    first ``n <= n_i``, else ``t_rest`` (``temperature_for``).
+    """
+    value = config.get("temperature_by_questions")
+    if value is None:
+        return None
+    bounds = value.get("max_questions") if isinstance(value, dict) else None
+    temperatures = value.get("temperature") if isinstance(value, dict) else None
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"max_questions", "temperature"}
+        or not isinstance(bounds, list)
+        or not isinstance(temperatures, list)
+        or len(temperatures) != len(bounds) + 1
+        or any(type(bound) is not int or bound < 1 for bound in bounds)
+        or any(low >= high for low, high in pairwise(bounds))
+        or any(
+            type(t) not in (int, float) or not math.isfinite(t) or t <= 0
+            for t in temperatures
+        )
+    ):
+        raise PackageError(
+            "temperature_by_questions needs strictly increasing positive max_questions "
+            "and one more finite, positive temperature than max_questions"
+        )
+    return tuple(bounds), tuple(float(t) for t in temperatures)
+
+
+def temperature_for(
+    table: tuple[tuple[int, ...], tuple[float, ...]], questions: int
+) -> float:
+    """The temperature of a request with ``questions`` questions under ``temperature_table``."""
+    bounds, temperatures = table
+    return next(
+        (
+            t
+            for bound, t in zip(bounds, temperatures, strict=False)
+            if questions <= bound
+        ),
+        temperatures[-1],
+    )
 
 
 def check_config(config: Any) -> dict[str, Any]:
@@ -236,7 +323,12 @@ def check_config(config: Any) -> dict[str, Any]:
 def tensor_groups(
     root: Path, weights: tuple[str, ...]
 ) -> tuple[dict[str, int], str, str | None]:
-    """Parameter counts per group (text, vision) from the safetensors headers, and the two name prefixes."""
+    """Parameter counts per group (text, vision) from the safetensors headers, and the two name prefixes.
+
+    A quantized layer (``quantization.py``) counts its weights: an int4 one eight
+    per ``weight_packed`` int32 word, an NVFP4 one two per uint8 byte; scales,
+    global scales, zero points and shapes are not parameters.
+    """
     counts: dict[str, int] = {}
     prefixes: dict[str, set[str]] = {"text": set(), "vision": set()}
     for name in weights:
@@ -258,7 +350,14 @@ def tensor_groups(
                 )
             group = "vision" if vision else "text"
             prefixes[group].add(vision or text or "")
-            counts[group] = counts.get(group, 0) + math.prod(shape)
+            leaf = tensor.rpartition(".")[2]
+            if leaf in METADATA:
+                continue
+            per = 1
+            if leaf == "weight_packed":
+                per = FP4_PER_BYTE if meta.get("dtype") == "U8" else PACK
+            size = math.prod(shape) * per
+            counts[group] = counts.get(group, 0) + size
     if len(prefixes["text"]) != 1 or len(prefixes["vision"]) > 1:
         raise PackageError("checkpoint tensors use mixed name prefixes")
     vision_prefix = next(iter(prefixes["vision"]), None)
@@ -292,6 +391,26 @@ def check_processor(config: Any) -> dict[str, Any]:
         raise PackageError(
             f"unsupported image processor {config.get('image_processor_type')!r}"
         )
+    return _check_pixels(config, "preprocessor_config.json")
+
+
+def check_video_processor(config: Any) -> dict[str, Any]:
+    """``video_preprocessor_config.json`` of the Qwen3-VL video processor with the settings the family reproduces.
+
+    The runtime replaces its frame sampling and pixel budget (``videos.py``).
+    """
+    if not isinstance(config, dict):
+        raise PackageError("video_preprocessor_config.json must be an object")
+    if config.get("video_processor_type") != "Qwen3VLVideoProcessor":
+        raise PackageError(
+            f"unsupported video processor {config.get('video_processor_type')!r}"
+        )
+    if config.get("do_center_crop"):
+        raise PackageError("unsupported video processor settings: ['do_center_crop']")
+    return _check_pixels(config, "video_preprocessor_config.json")
+
+
+def _check_pixels(config: dict[str, Any], name: str) -> dict[str, Any]:
     defaults = {
         "do_resize": True,
         "do_rescale": True,
@@ -304,10 +423,10 @@ def check_processor(config: Any) -> dict[str, Any]:
         key for key, value in defaults.items() if config.get(key, value) != value
     )
     if changed:
-        raise PackageError(f"unsupported image processor settings: {changed}")
+        raise PackageError(f"unsupported {name} settings: {changed}")
     for key in ("patch_size", "temporal_patch_size", "merge_size"):
         if type(config.get(key)) is not int or config[key] < 1:
-            raise PackageError(f"preprocessor_config.json needs a positive {key}")
+            raise PackageError(f"{name} needs a positive {key}")
     for key in ("image_mean", "image_std"):
         values = config.get(key)
         if (
@@ -315,7 +434,7 @@ def check_processor(config: Any) -> dict[str, Any]:
             or len(values) != COLOUR_CHANNELS
             or any(type(v) not in (int, float) or not math.isfinite(v) for v in values)
         ):
-            raise PackageError(f"preprocessor_config.json needs three {key} values")
+            raise PackageError(f"{name} needs three {key} values")
     if any(v == 0 for v in config["image_std"]):
         raise PackageError("image_std must not contain zero")
     return config
@@ -329,8 +448,10 @@ def verify(root: Path) -> tuple[Decision3Package, str]:
     weights = weight_files(root)
     vision_config = config.get("vision_config")
     names = [*MODEL_FILES, *weights]
-    if vision_config is not None and (root / IMAGE_FILES[0]).is_file():
-        names.append(IMAGE_FILES[0])
+    if vision_config is not None:
+        names += [
+            name for name in (*IMAGE_FILES, *VIDEO_FILES) if (root / name).is_file()
+        ]
     hashes = verify_files(root, manifest, names)
     identity_files = {
         name: hashes[name]
@@ -364,12 +485,14 @@ def verify(root: Path) -> tuple[Decision3Package, str]:
         parameters.get(key) != value for key, value in expected.items()
     ):
         raise PackageError("tensor counts differ from the manifest's parameter counts")
-    processor = None
+    processor = video = None
     if vision_prefix is not None:
         if vision_config is None:
             raise PackageError("the checkpoint has vision weights but no vision_config")
         if IMAGE_FILES[0] in names:
             processor = check_processor(read_json(root / IMAGE_FILES[0]))
+        if processor is not None and VIDEO_FILES[0] in names:
+            video = check_video_processor(read_json(root / VIDEO_FILES[0]))
     limit = decision.get("max_length") or config["text_config"].get(
         "max_position_embeddings"
     )
@@ -384,6 +507,7 @@ def verify(root: Path) -> tuple[Decision3Package, str]:
         text_prefix=text_prefix,
         vision_prefix=vision_prefix,
         processor_config=processor,
+        video_config=video,
         model_sha256=model_sha256,
         max_input_tokens=limit,
     )

@@ -13,8 +13,8 @@ def test_choice_answer_with_confidence():
     assert answer["choice"] == "a"
     p = 1 / (1 + math.exp(-2))
     assert answer["probabilities"] == pytest.approx({"a": p, "b": 1 - p}, abs=1e-15)
-    entropy = -(p * math.log(p) + (1 - p) * math.log(1 - p))
-    assert answer["confidence"] == pytest.approx(1 - entropy / math.log(2))
+    # System One's Choice confidence: (p_max - 1/n) / (1 - 1/n).
+    assert answer["confidence"] == pytest.approx(2 * p - 1)
 
 
 def test_exact_ties_resolve_to_the_first_option():

@@ -507,7 +507,7 @@ func DefaultRegistry() *CapabilityRegistry {
 		Connector:           "sr.native.embedded.v1",
 	})
 	// The built-in model runtime (src/model-runtime) serves Router classifiers
-	// over its OpenAPI 2.x contract: ModernBERT sequence and token checkpoints
+	// over its OpenAPI 3.x contract: ModernBERT sequence and token checkpoints
 	// loaded from safetensors, with FP32 weights and heads on every device.
 	// Only the devices with readiness references qualify a classifier; the
 	// runtime's CUDA and Metal paths are unvalidated (design section 11).

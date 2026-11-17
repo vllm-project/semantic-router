@@ -28,19 +28,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: website/package-lock.json
-
-      - name: Install website dependencies
-        working-directory: website
-        run: npm ci
 
       - name: Regenerate contributor leaderboard data
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: website
-        run: npm run contributors:rank
+        run: node scripts/generate-contributor-rank.mjs
 
       - name: Commit and push branch
         id: push
@@ -67,6 +61,19 @@ jobs:
         with:
           script: |
             try {
+              const existing = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open',
+                head: `${context.repo.owner}:chore/contributor-leaderboard`,
+                base: 'main',
+                per_page: 1
+              });
+              if (existing.data.length > 0) {
+                console.log(`Updated existing PR #${existing.data[0].number}`);
+                return;
+              }
+
               await github.rest.pulls.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -82,5 +89,5 @@ jobs:
               });
               console.log('PR created successfully');
             } catch (e) {
-              console.log('Failed to create PR:', e.message);
+              core.setFailed(`Failed to publish contributor leaderboard PR: ${e.message}`);
             }

@@ -4,10 +4,13 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // waitRecorder is a Clock whose timers fire at once, recording each wait, so
@@ -41,6 +44,19 @@ func TestParseRetryOnIgnoresTokensItCannotAct(t *testing.T) {
 	got := ParseRetryOn(" 5xx, connect-failure ,retriable-status-codes,unavailable,typo")
 	if got != Retry5xx|RetryConnectFailure|RetryRetriableStatusCodes {
 		t.Fatalf("ParseRetryOn = %b", got)
+	}
+}
+
+// The config loader, like the CLI against the shared table, accepts the names
+// Envoy documents, and every condition this package acts on is one of them.
+func TestRetryOnConditionsTheConfigAcceptsCoverThisPackage(t *testing.T) {
+	if want := loadReliabilityDefaults(t).RetryOnConditions; !slices.Equal(config.RetryOnConditions, want) {
+		t.Fatalf("config.RetryOnConditions = %v, the shared table has %v", config.RetryOnConditions, want)
+	}
+	for condition := range retryOnTokens {
+		if !slices.Contains(config.RetryOnConditions, condition) {
+			t.Errorf("ParseRetryOn acts on %q, which the config refuses", condition)
+		}
 	}
 }
 
@@ -194,7 +210,7 @@ func TestDoReturnsTheLastOutcomeWhenRetriesRunOut(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertLocalReply(t, resp, http.StatusServiceUnavailable, "upstream connect error or disconnect/reset before headers. "+
-		"retried and the latest reset reason: remote connection failure, transport failure reason: delayed connect error: 111")
+		"retried and the latest reset reason: remote connection failure, transport failure reason: delayed connect error: "+refusedErrno)
 }
 
 func TestDoRetryPrefersAnotherEndpoint(t *testing.T) {

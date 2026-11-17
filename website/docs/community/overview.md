@@ -40,6 +40,11 @@ commands.
 
 ## Before opening a pull request
 
+Contributors without repository write access are limited to six open pull
+requests, including drafts. See
+[pull request limits](https://github.com/vllm-project/semantic-router/blob/main/CONTRIBUTING.md#submit-a-pull-request)
+in the contributor guide.
+
 Run the checks reported for your change. These repository-wide entrypoints are
 useful when their scope matches your work:
 

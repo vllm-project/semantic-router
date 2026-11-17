@@ -1,20 +1,19 @@
 # Vela 2.0 parity
 
 The `vela2` family answers exactly as the Vela 2.0 packages' own engine
-(`vela2_inference.py`) on the exact profile, on CPU and ROCm, for all four
+(`vela2_inference.py`) with each request alone, on CPU and ROCm, for all four
 sizes, on the packages' release image and on the router image's ROCm stack,
 which answers byte-identically to the release image. On the router image's
 earlier official-wheel stack the package's own answers differed, because its
-attention kernels round differently (section below). The opt-in approximate
-profiles change no Set decision, and no Choice, Score or Noul decision on the
+attention kernels round differently (section below). Packed trees and
+batching (opt-in then, the default now) change no Set decision, and no Choice, Score or Noul decision on the
 0.3B, 4B and 9B. On the 4B and 9B they change span sets in 6% of requests
 (short spans in long windowed documents) and move answers by up to 0.037,
 above the design's GPU bar of 0.02 (section 17). On the 0.8B they change span
 sets in 9% of requests and 9 of 360 requests' Choice, Score or Noul
 decisions, all near ties on the exact path, and move answers by up to 0.025.
 On the 0.3B they stay within 6e-6.
-Under `max_speed` the 0.3B runs a `float32-packed` copy of its linear layers
-on CPU, which keeps every Choice, Noul, Score and Set decision and 463 of
+Batched on CPU, the 0.3B runs a `float32-packed` copy of its linear layers, which keeps every Choice, Noul, Score and Set decision and 463 of
 464 span sets. On ROCm no copy
 qualifies: BF16 misses the 99% floor on spans and is slower for a single
 short request.
@@ -47,7 +46,7 @@ short request.
   for the 0.8B (0.5–109 s per request on 12 cores), fewer for the 4B and 9B
   (15–190 s per request on 16–32 cores).
 
-## Exact profile
+## Each request alone
 
 A request is identical when both responses are byte-identical JSON (Score
 legends compared as text, the runtime's `abstain_probability` set aside) and
@@ -164,7 +163,7 @@ Questions whose decision equals the release image's, per answer type:
   within 1%).
 - **The engine moves exactly as the runtime does,** and `causal-conv1d`
   changes nothing here: the exact 4B / 9B forest convolves with `F.conv1d`,
-  as the engine does; only the approximate profiles' packed trees call it.
+  as the engine does; only the packed trees call it.
 - **The size of the move is attention-rounding noise.** The last two rows
   are the release image itself with only its attention switched to MATH
   (flash and efficient SDPA off): its span sets move as much, 95.3% and 94.2%
@@ -209,7 +208,7 @@ Questions whose decision equals the release image's, per answer type:
 - **Span quality on that stack (B) against the release image (R)** showed no
   measurable change: every B − R interval contains 0 except the 4B's PII
   short texts (in B's favour), and no move is larger than 0.3 points. Both
-  images ran the runtime's `exact` profile on the same rows; the sets are
+  images ran the runtime with each request alone on the same rows; the sets are
   rebuilt from public data (Hallucination: LettuceDetect prose and code
   test; PII: ai4privacy 300k validation, English, mapped to the 17 types;
   toxic: SemEval-2021 test). Hallucination and RAGTruth reproduce the card
@@ -238,9 +237,9 @@ and reads the option and span logits the graph returns. On CPU, against the
 package engine's own ONNX backend, 60 / 60 requests are identical; against
 its PyTorch backend no decision changes and the largest difference is 4.2e-6.
 
-## Approximate profiles (opt-in)
+## Packed trees and batching
 
-`shared_context` and `batching` run the decoder trees packed (one row per
+Shared context and batching run the decoder trees packed (one row per
 prefix, blocks merged by log-sum-exp; `layout="packed"`) and the 0.3B
 sequences packed (no padding; local layers in query blocks on long rows).
 The same 360 requests on ROCm, `tools/vela2_parity.py --approximate` (the
@@ -272,14 +271,13 @@ The same 360 requests on ROCm, `tools/vela2_parity.py --approximate` (the
   154 s on the 4B and 74 s against 194 s on the 9B (`vela2-performance.md`
   has the per-request latencies).
 
-## Reduced copies (`max_speed`, 0.3B)
+## Reduced copies (0.3B)
 
-Under `max_speed` an encoder can load a reduced copy of its backbone's
-linear layers next to the FP32 weights: its approximate batches run on the
-copy and `exact` never does (design section 5.4). The built-in entry
-consents per device class (`BuiltinModel.reduced`) only where at least 99%
-of every answer type's decisions are unchanged against `exact` and the copy
-is faster (`vela2-performance.md`). **The 0.3B consents to `float32-packed`
+An encoder can load a reduced copy of its backbone's linear layers next to
+the FP32 weights: its batched forwards run on the copy and the reference
+path never does (design section 5.4). The built-in entry consents per device
+class (`BuiltinModel.reduced`) only where at least 99% of every answer type's
+decisions are unchanged against the reference path and the copy is faster (`vela2-performance.md`). **The 0.3B consents to `float32-packed`
 on CPU and to no copy on GPUs.**
 
 - **Date:** 2026-10-04, at `10ca64d02`; the merges since change no forward
@@ -287,7 +285,8 @@ on CPU and to no copy on GPUs.**
 - **Requests:** the 360 generated requests above (seeds 1 and 2).
 - **Reference:** the runtime's exact path, which answers these requests
   byte-identically to the package engine (above). `tools/vela2_parity.py
-  --reduced KIND` loads each copy as `max_speed` does (consenting for the run)
+  --reduced KIND` loads each copy as the runtime does at `--dtype auto`
+  (consenting for the run)
   and answers through its approximate batches: packed sequences on the copy.
 - **Decisions:** per question, the Choice label, the Score arg-max level, Noul
   above 0.5, the Set selection and the span set (label, start, end).
@@ -325,7 +324,7 @@ Questions whose decision is unchanged, per answer type:
   sets that change hold hallucination, PII and entity spans whose mean
   probability crosses its threshold, four of them in documents of 2,000
   tokens or more; one Choice and two Score decisions change too, all in such
-  documents. It is also slower than `exact` for a single request up to 512
+  documents. It is also slower than the reference path for a single request up to 512
   tokens (`vela2-performance.md`), so GPUs load no copy.
 - `vela2-reduced.json` has the raw summaries of this record and of the
   latency record, with every changed decision.

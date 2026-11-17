@@ -4,8 +4,8 @@ import { mockAuthenticatedAppShell } from './support/auth'
 
 const schemaIndex = {
   contract_version: 'vllm-sr/config-schema/v1',
-  config_version: 'v0.3',
-  schema_id: 'https://vllm-sr.ai/schemas/router-config-v0.3.schema.json',
+  config_version: 'v0.5',
+  schema_id: 'https://vllm-sr.ai/schemas/router-config-v0.5.schema.json',
   default_view: 'index',
   sections: [
     {

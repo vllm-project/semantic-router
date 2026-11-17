@@ -53,7 +53,7 @@ func (f fakeAdapter) Observe(_ context.Context, acknowledgement Acknowledgement)
 
 func TestResolveWithoutAdapterIsExplicitNoOp(t *testing.T) {
 	trueValue := true
-	outcome := Resolve(context.Background(), &config.RetentionDirective{Drop: &trueValue}, nil)
+	outcome := Resolve(context.Background(), &config.DecisionRetention{Drop: &trueValue}, nil)
 	if outcome.SchemaVersion != SchemaVersion || outcome.Status != StatusUnsupported {
 		t.Fatalf("outcome = %+v, want versioned unsupported result", outcome)
 	}
@@ -67,7 +67,7 @@ func TestResolveTracksTranslationAcknowledgementAndObservation(t *testing.T) {
 	adapter := fakeAdapter{capability: Capability{
 		Backend: "fake", Version: "v1", Features: []Feature{FeatureTTLTurns},
 	}}
-	outcome := Resolve(context.Background(), &config.RetentionDirective{TTLTurns: &turns}, adapter)
+	outcome := Resolve(context.Background(), &config.DecisionRetention{TTLTurns: &turns}, adapter)
 	if outcome.Status != StatusObserved || outcome.Translated == nil || outcome.Acknowledged == nil || outcome.Observed == nil {
 		t.Fatalf("outcome = %+v, want complete lifecycle receipt", outcome)
 	}
@@ -79,7 +79,7 @@ func TestResolveTracksTranslationAcknowledgementAndObservation(t *testing.T) {
 func TestResolveUnsupportedFeatureDoesNotAcknowledge(t *testing.T) {
 	trueValue := true
 	adapter := fakeAdapter{capability: Capability{Backend: "fake", Version: "v1", Features: []Feature{FeatureTTLTurns}}}
-	outcome := Resolve(context.Background(), &config.RetentionDirective{Drop: &trueValue}, adapter)
+	outcome := Resolve(context.Background(), &config.DecisionRetention{Drop: &trueValue}, adapter)
 	if outcome.Status != StatusUnsupported || outcome.Acknowledged != nil || outcome.Observed != nil {
 		t.Fatalf("outcome = %+v, want unsupported without fabricated acknowledgement", outcome)
 	}
@@ -88,7 +88,7 @@ func TestResolveUnsupportedFeatureDoesNotAcknowledge(t *testing.T) {
 func TestResolveAcknowledgementFailureIsNotEnforcement(t *testing.T) {
 	trueValue := true
 	adapter := fakeAdapter{capability: Capability{Backend: "fake", Version: "v1", Features: []Feature{FeatureDrop}}, ackErr: errors.New("offline")}
-	outcome := Resolve(context.Background(), &config.RetentionDirective{Drop: &trueValue}, adapter)
+	outcome := Resolve(context.Background(), &config.DecisionRetention{Drop: &trueValue}, adapter)
 	if outcome.Status != StatusFailed || outcome.Acknowledged != nil || outcome.Observed != nil {
 		t.Fatalf("outcome = %+v, want failed without acknowledgement", outcome)
 	}
@@ -96,7 +96,7 @@ func TestResolveAcknowledgementFailureIsNotEnforcement(t *testing.T) {
 
 func TestOutcomeCloneDoesNotAliasLifecycleSlices(t *testing.T) {
 	turns := 1
-	outcome := Resolve(context.Background(), &config.RetentionDirective{TTLTurns: &turns}, fakeAdapter{capability: Capability{Backend: "fake", Version: "v1", Features: []Feature{FeatureTTLTurns}}})
+	outcome := Resolve(context.Background(), &config.DecisionRetention{TTLTurns: &turns}, fakeAdapter{capability: Capability{Backend: "fake", Version: "v1", Features: []Feature{FeatureTTLTurns}}})
 	clone := outcome.Clone()
 	clone.Translated.Actions[0].Value = "9"
 	clone.Requested.TTLTurns = &turns

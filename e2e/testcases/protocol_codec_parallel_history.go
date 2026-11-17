@@ -86,3 +86,80 @@ func assertParallelHistoryProviderRequest(raw []byte) error {
 	}
 	return nil
 }
+
+// One Responses step (reasoning, a message and a call) must reach Chat and
+// Messages backends as one assistant turn: a model shown each item as its own
+// turn ends its turns in text without a call.
+func runResponsesStepHistory(ctx context.Context, router, provider *fixtures.ServiceSession, model, backendFormat string) error {
+	for _, stream := range []bool{false, true} {
+		sessionID := "step-history-" + uuid.NewString()
+		body := map[string]any{
+			"model": model, "store": false, "stream": stream,
+			"input": []map[string]any{
+				{"role": "user", "content": "Find the lost commit"},
+				{"type": "reasoning", "summary": []any{}, "content": []map[string]any{{"type": "reasoning_text", "text": "Check the reflog first"}}},
+				{"type": "message", "role": "assistant", "content": []map[string]any{{"type": "output_text", "text": "Let me read the reflog."}}},
+				{"type": "function_call", "call_id": "call_a", "name": "lookup", "arguments": `{"query":"reflog"}`},
+				{"type": "function_call_output", "call_id": "call_a", "output": "c499730 HEAD@{1}"},
+			},
+		}
+		result, err := sendProtocolMatrixRaw(ctx, router, "/v1/responses", body, stream,
+			map[string]string{"x-vsr-test-session-id": sessionID})
+		if err != nil {
+			return fmt.Errorf("step history stream=%t: %w", stream, err)
+		}
+		if result.StatusCode != http.StatusOK {
+			return fmt.Errorf("step history stream=%t: HTTP %d: %s", stream, result.StatusCode, truncateString(string(result.Body), 500))
+		}
+		if stream {
+			if streamErr := validateResponseAPIStreamingSSEBody(string(result.Body)); streamErr != nil {
+				return streamErr
+			}
+		}
+		raw, err := lastProviderSimulatorRequest(ctx, provider, sessionID)
+		if err != nil {
+			return err
+		}
+		if historyErr := assertStepHistoryProviderRequest(raw, backendFormat); historyErr != nil {
+			return historyErr
+		}
+	}
+	return nil
+}
+
+func assertStepHistoryProviderRequest(raw []byte, backendFormat string) error {
+	var observation struct {
+		Body struct {
+			Messages []struct {
+				Role      string            `json:"role"`
+				Content   json.RawMessage   `json:"content"`
+				Reasoning *string           `json:"reasoning_content"`
+				ToolCalls []json.RawMessage `json:"tool_calls"`
+			} `json:"messages"`
+		} `json:"body"`
+	}
+	if err := json.Unmarshal(raw, &observation); err != nil {
+		return err
+	}
+	messages := observation.Body.Messages
+	if len(messages) != 3 || messages[0].Role != "user" || messages[1].Role != "assistant" {
+		return fmt.Errorf("step history did not reach the backend as user/assistant/result: %s", truncateString(string(raw), 1200))
+	}
+	assistant := messages[1]
+	if backendFormat == "anthropic.messages.v1" {
+		var blocks []struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(assistant.Content, &blocks); err != nil {
+			return err
+		}
+		if len(blocks) != 3 || blocks[0].Type != "thinking" || blocks[1].Type != "text" || blocks[2].Type != "tool_use" {
+			return fmt.Errorf("step history assistant turn is not thinking/text/tool_use: %s", truncateString(string(raw), 1200))
+		}
+		return nil
+	}
+	if assistant.Reasoning == nil || string(assistant.Content) != `"Let me read the reflog."` || len(assistant.ToolCalls) != 1 {
+		return fmt.Errorf("step history assistant turn lost its reasoning, text or call: %s", truncateString(string(raw), 1200))
+	}
+	return nil
+}

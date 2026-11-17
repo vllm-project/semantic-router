@@ -152,7 +152,7 @@ test('shows runtime deployments before task observations in monitoring', async (
       ? [
           {
             metric: {
-              algorithm: 'cascade',
+              algorithm: 'escalate',
               stage: 'fast',
               model: 'decision-kai',
               outcome: 'accepted',
@@ -161,7 +161,7 @@ test('shows runtime deployments before task observations in monitoring', async (
           },
           {
             metric: {
-              algorithm: 'cascade',
+              algorithm: 'escalate',
               stage: 'fast',
               model: 'decision-kai',
               outcome: 'rejected',
@@ -187,7 +187,7 @@ test('shows runtime deployments before task observations in monitoring', async (
   const auto = page.getByRole('region', { name: 'Automatic routing', exact: true })
   await expect(auto).toContainText('not answer accuracy')
   await expect(auto.getByText('Stage activity', { exact: true })).toBeVisible()
-  await expect(auto.locator('.recharts-yAxis')).toContainText(/cascade \/ fast ·\s*decision-kai/)
+  await expect(auto.locator('.recharts-yAxis')).toContainText(/escalate \/ fast ·\s*decision-kai/)
   if (process.env.PLAYGROUND_SCREENSHOT_DIR)
     await page.screenshot({
       path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-monitoring.png'),
@@ -613,7 +613,7 @@ test('runs auto through its recipe and preserves the selected example across tar
           routing: {
             recipe: 'decisions',
             decision: 'task',
-            algorithm: 'cascade',
+            algorithm: 'escalate',
             stage: 'strong',
             selected_model: 'decision-eos',
             quality: 'uncalibrated',
@@ -630,9 +630,9 @@ test('runs auto through its recipe and preserves the selected example across tar
           {
             model: 'vllm-sr/auto',
             recipe: 'decisions',
-            algorithms: ['cascade'],
+            algorithms: ['escalate'],
             question_types: ['choice', 'score', 'noul'],
-            timeout_ms: 120000,
+            execution_timeout_ms: 120000,
           },
         ],
       }),
@@ -716,9 +716,9 @@ test('slow direct discovery does not delay auto routing', async ({ page }) => {
           {
             model: 'vllm-sr/auto',
             recipe: 'decisions',
-            algorithms: ['policy'],
+            algorithms: ['systemone'],
             question_types: ['choice', 'score', 'noul'],
-            timeout_ms: 5000,
+            execution_timeout_ms: 5000,
           },
         ],
       }),

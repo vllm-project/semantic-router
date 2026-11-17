@@ -3,9 +3,14 @@ info:
   title: Training management contract
   version: v2
   description: >-
-    Contract for the planned Go management API; these routes are not yet registered.
+    Contract for the Go management API. Dashboard registers uploads, data resources,
+    experiments, runs, events, comparisons, artifact/variant/evaluation reads and
+    file downloads. Qualification and binding-proposal operations remain planned;
+    worker scheduling and Console workflow integration are separate increments.
     Management assigns resource IDs and derives ownership from authenticated
-    Dashboard permissions. Request bodies contain no owner field. Every resource
+    Dashboard permissions. Registered operations require mlpipeline.manage.
+    JSON requests are limited to 1 MiB and must contain one document; unknown
+    resource fields are rejected. Request bodies contain no owner field. Every resource
     reference must resolve within the caller's accessible resources; handle syntax
     alone does not establish access. Cookie requests follow Dashboard session and
     CSRF rules.
@@ -20,7 +25,7 @@ paths:
       operationId: createUpload
       description: >-
         Accepts bytes and returns a server-owned handle, SHA-256 digest and byte
-        count. Clients cannot choose server filesystem paths.
+        count. The upload limit is 64 MiB. Clients cannot choose server filesystem paths.
       responses:
         '201':
           description: Success
@@ -81,7 +86,8 @@ paths:
         Creates an immutable snapshot of bytes, profile, source metadata and
         preprocessing. There is no update operation; changed bytes or metadata
         require a new snapshot. Source is optional for uploads; when supplied,
-        it identifies a pinned repository revision.
+        it identifies a pinned repository revision. Classifier label indices must
+        be non-null integers forming a unique, contiguous sequence starting at zero.
       responses:
         '201':
           description: Success
@@ -156,7 +162,9 @@ paths:
   /binding-proposals:
     post:
       operationId: createBindingProposal
+      x-management-implemented: false
       description: >-
+        Planned operation; this route is not registered by Dashboard.
         Records a reviewable variant and compatible qualification reference;
         creating a proposal does not activate the model.
       responses:
@@ -177,6 +185,8 @@ paths:
   /binding-proposals/{id}:
     get:
       operationId: getBindingProposal
+      x-management-implemented: false
+      description: Planned operation; this route is not registered by Dashboard.
       responses:
         '200':
           description: Success
@@ -253,6 +263,8 @@ paths:
   /qualifications/{id}:
     get:
       operationId: getQualification
+      x-management-implemented: false
+      description: Planned operation; this route is not registered by Dashboard.
       responses:
         '200':
           description: Success
@@ -274,7 +286,8 @@ paths:
       operationId: validateRun
       description: >-
         Returns valid=true for a valid spec, or 400 with APIError for invalid
-        input. Validation does not submit a run.
+        input. Checks resource ownership, profile compatibility and task dependencies.
+        Validation does not submit a run or verify trainer/hardware capabilities.
       responses:
         '200':
           description: Success
@@ -295,6 +308,11 @@ paths:
       operationId: submitRun
       description: >-
         Freezes the snapshot, trainer version, parameters and task plan.
+        New runs start pending; execution requires a coordinator integration.
+        Parameter integer literals decode as Go int; decimal and exponent literals
+        decode as float64, including nested values. Out-of-range numbers return 400.
+        Serialization preserves integer values and the integer/float distinction
+        in stored runs and worker requests.
         Idempotency keys are scoped to the authenticated owner: the same key and
         decoded spec return the existing run; a different spec returns 409.
         Changing the frozen spec requires a new run, not retry.
@@ -338,12 +356,11 @@ paths:
       operationId: getRun
       description: >-
         Returns the run, task attempt history, and published output IDs in outputs.
-        Follow artifact_ids to artifacts and their variants, evaluation_ids to
-        evaluations, and qualification_ids to qualification evidence for binding
-        proposals. Fetch GET /artifacts/{id}/variants for each artifact, then
-        GET /files/{id} for its named file handles. Fetch GET /qualifications/{id}
-        for each qualification; compatible evidence supplies the variant_id and
-        qualification ID for POST /binding-proposals.
+        Follow artifact_ids to artifacts and their variants and evaluation_ids to
+        evaluations. Fetch GET /artifacts/{id}/variants for each artifact, then
+        GET /files/{id} for its named file handles. The qualification_ids list is
+        reserved for qualification evidence used by binding proposals; it remains
+        empty while qualification publication is not implemented.
         All three output lists are required, empty until publication, and survive
         retry. Output IDs become visible together with their resources and task
         outcome; resource provenance identifies the producing task and attempt.
@@ -394,8 +411,10 @@ paths:
       description: >-
         Accepts only failed or cancelled runs; retry of an active or successful
         run returns 409. Keeps run/task IDs, frozen spec, published outputs and
-        attempt history. Work needing execution receives new attempt IDs and the
-        run returns to pending. Concurrent retries cannot create duplicate attempts.
+        attempt history. If every task succeeded while cancellation was in progress,
+        retry immediately reconciles the run to succeeded without new attempts.
+        Otherwise the run returns to pending and work needing execution receives
+        new attempt IDs when started. Concurrent retries cannot create duplicate attempts.
       responses:
         '202':
           description: Success
@@ -562,7 +581,8 @@ components:
       description: >-
         APIError.code is an open string. Well-known codes are 400 invalid_request;
         401 unauthenticated; 403 forbidden; 404 not_found; 409 conflict;
-        500 internal_error. New codes may be added in v2 without a contract-version
+        405 method_not_allowed; 413 payload_too_large; 500 internal_error;
+        503 unavailable. New codes may be added in v2 without a contract-version
         bump; existing codes retain their meanings. Clients must accept unknown
         codes and handle them as generic errors using HTTP status and message.
         Cookie requests also follow Dashboard CSRF protection.

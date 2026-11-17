@@ -3,13 +3,11 @@ package serving
 import (
 	"cmp"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"os"
 	"slices"
 	"strconv"
@@ -120,15 +118,12 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 	}
 	width := len(warm[0].Embedding)
 	capability := binding.Capability{
-		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype,
+		Contract: spec.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype,
 		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, DeploymentTokens: input.MaxTokens, Overflow: template.Overflow},
 		Embedding: &binding.EmbeddingCapability{
 			AvailableDimensions: slices.Clone(card.Embedding.Dimensions), Dimension: width, Layer: layer,
 			Pooling: card.Embedding.Pooling, Normalization: normalization(card), Modalities: modalities(card),
 		},
-	}
-	if slices.Contains(capability.Embedding.Modalities, "audio") {
-		capability.Embedding.Audio = &binding.AudioCapability{MaxSampleRate: 384000, MaxSeconds: 30, MaxChannels: 8, Layout: "channel-major-pcm"}
 	}
 	resource, err := r.acquire(ctx, spec, card)
 	if err != nil {
@@ -155,7 +150,7 @@ func (r *Runtime) Embedding(ctx context.Context, spec config.ResolvedModelBindin
 		info: embedding.ModelInfo{
 			Artifact: cmp.Or(card.Repo, card.ID), Backend: Provider, Dimension: width, Dimensions: slices.Clone(card.Embedding.Dimensions),
 			Layers: slices.Clone(card.Embedding.Layers), MaxTokens: capability.Limits.EffectiveTokens(), Pooling: card.Embedding.Pooling,
-			Normalization: normalization(card), Modalities: modalities(card), Audio: capability.Embedding.Audio,
+			Normalization: normalization(card), Modalities: modalities(card),
 		},
 	}
 	return provider, nil
@@ -179,10 +174,6 @@ func validateEmbeddingRequest(request embeddingRequest) error {
 	}
 	for _, input := range request.Inputs {
 		switch {
-		case input.ImageURL != "" || input.AudioWAV != "":
-			if input.Text != "" {
-				return fmt.Errorf("an embedding input has one modality")
-			}
 		case !utf8.ValidString(input.Text):
 			return fmt.Errorf("embedding text must be valid UTF-8")
 		default:
@@ -297,11 +288,12 @@ func poolingContract(card modelservice.ModelCard) string {
 }
 
 // numerics names everything besides the input and view that determines a
-// vector: package content, revision, engine, accelerator, dtype, profile and
-// the input budget that truncates long inputs.
+// vector: package content, revision, engine, accelerator, dtype, numerics
+// (whether batching can move a vector) and the input budget that truncates
+// long inputs.
 func numerics(card modelservice.ModelCard, limits binding.Limits) string {
 	encoded, _ := json.Marshal([]string{
-		card.ModelSHA256, card.Revision, card.Engine, card.Accelerator, card.Dtype, card.Profile,
+		card.ModelSHA256, card.Revision, card.Engine, card.Accelerator, card.Dtype, card.Numerics,
 		limits.Overflow, strconv.Itoa(limits.EffectiveTokens()),
 	})
 	return string(encoded)
@@ -326,10 +318,6 @@ func (p *EmbeddingProvider) EmbeddingInfo() embedding.ModelInfo {
 	info.Dimensions = slices.Clone(p.info.Dimensions)
 	info.Layers = slices.Clone(p.info.Layers)
 	info.Modalities = slices.Clone(p.info.Modalities)
-	if info.Audio != nil {
-		audio := *info.Audio
-		info.Audio = &audio
-	}
 	return info
 }
 
@@ -405,33 +393,6 @@ func (p *EmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][
 	return vectors, nil
 }
 
-// EmbedImage embeds raw image bytes (any format the model's processor reads).
-func (p *EmbeddingProvider) EmbedImage(ctx context.Context, data []byte, dimension int) ([]float32, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("%w: image is empty", binding.ErrInvalidInput)
-	}
-	url := "data:" + http.DetectContentType(data) + ";base64," + base64.StdEncoding.EncodeToString(data)
-	embedded, err := p.embed(ctx, []modelservice.EmbedInput{{ImageURL: url}}, embedding.Options{Dimension: dimension})
-	if err != nil {
-		return nil, err
-	}
-	return embedded[0].Vector, nil
-}
-
-// EmbedAudio embeds decoded PCM, sent to the runtime as 32-bit float WAV so
-// the samples arrive unchanged.
-func (p *EmbeddingProvider) EmbedAudio(ctx context.Context, request embedding.AudioRequest) ([]float32, error) {
-	if err := request.Validate(); err != nil {
-		return nil, fmt.Errorf("%w: %w", binding.ErrInvalidInput, err)
-	}
-	wav := base64.StdEncoding.EncodeToString(embedding.EncodeFloatWAV(request))
-	embedded, err := p.embed(ctx, []modelservice.EmbedInput{{AudioWAV: wav}}, embedding.Options{Dimension: request.Options.Dimension})
-	if err != nil {
-		return nil, err
-	}
-	return embedded[0].Vector, nil
-}
-
 // embed answers inputs from the shared cache and embeds the rest in calls of
 // at most maxInputs inputs.
 func (p *EmbeddingProvider) embed(ctx context.Context, inputs []modelservice.EmbedInput, options embedding.Options) ([]embedding.Embedded, error) {
@@ -450,14 +411,7 @@ func (p *EmbeddingProvider) embedWithPolicy(ctx context.Context, inputs []models
 	}
 	keys := make([]embedding.VectorKey, len(inputs))
 	for i, input := range inputs {
-		kind, content := embedding.InputText, input.Text
-		switch {
-		case input.ImageURL != "":
-			kind, content = embedding.InputImage, input.ImageURL
-		case input.AudioWAV != "":
-			kind, content = embedding.InputAudio, input.AudioWAV
-		}
-		keys[i] = embedding.NewVectorKey(numerics, options, kind, []byte(content))
+		keys[i] = embedding.NewVectorKey(numerics, options, []byte(input.Text))
 	}
 	// Inside a request bundle, waiting on another participant's call would
 	// hold the bundle until its window ends; the bundle carries both calls'
