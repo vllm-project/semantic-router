@@ -199,7 +199,7 @@ func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenF
 		delete(object, "usage")
 		changed = true
 	} else if hasUsage && !bytes.Equal(bytes.TrimSpace(usage), []byte("null")) {
-		usage, changed, err = stripOpenRouterUsageDecorations(usage, changed)
+		usage, changed, err = canonicalizeChatStreamUsage(usage, changed)
 		if err != nil {
 			return nil, false, true, false, err
 		}
@@ -292,11 +292,16 @@ func removeChatJSONFields(raw json.RawMessage, fields ...string) (json.RawMessag
 	return encoded, true, err
 }
 
-func stripOpenRouterUsageDecorations(raw json.RawMessage, changed bool) (json.RawMessage, bool, error) {
+func canonicalizeChatStreamUsage(raw json.RawMessage, changed bool) (json.RawMessage, bool, error) {
 	var usage map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &usage); err != nil {
 		return nil, false, err
 	}
+	movedFlat, err := moveFlatChatUsageDetails(usage)
+	if err != nil {
+		return nil, false, err
+	}
+	changed = changed || movedFlat
 	for _, field := range []string{"cost", "is_byok", "cost_details", "server_tool_use"} {
 		if _, present := usage[field]; present {
 			delete(usage, field)
@@ -325,4 +330,35 @@ func stripOpenRouterUsageDecorations(raw json.RawMessage, changed bool) (json.Ra
 	}
 	encoded, err := json.Marshal(usage)
 	return encoded, true, err
+}
+
+// moveFlatChatUsageDetails gives the public stream the nested shape the
+// buffered reply re-encodes: a flat count fills its details object only when
+// that object is absent, and the flat key is never replayed.
+func moveFlatChatUsageDetails(usage map[string]json.RawMessage) (bool, error) {
+	changed := false
+	for _, detail := range []struct{ flat, nested string }{
+		{"cached_tokens", "prompt_tokens_details"},
+		{"reasoning_tokens", "completion_tokens_details"},
+	} {
+		value, present := usage[detail.flat]
+		if !present {
+			continue
+		}
+		delete(usage, detail.flat)
+		changed = true
+		var count *int64
+		if err := json.Unmarshal(value, &count); err != nil {
+			return false, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_chat_stream", "Chat stream usage detail is invalid", err)
+		}
+		if nested, exists := usage[detail.nested]; count == nil || exists && !bytes.Equal(bytes.TrimSpace(nested), []byte("null")) {
+			continue
+		}
+		encoded, err := json.Marshal(map[string]int64{detail.flat: *count})
+		if err != nil {
+			return false, err
+		}
+		usage[detail.nested] = encoded
+	}
+	return changed, nil
 }

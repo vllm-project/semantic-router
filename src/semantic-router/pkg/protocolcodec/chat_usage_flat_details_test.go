@@ -142,3 +142,55 @@ func TestChatUsageFlatDetailFieldsStayStrictOnBadShapes(t *testing.T) {
 		})
 	}
 }
+
+func TestChatPublicStreamFilterCanonicalizesFlatUsageDetails(t *testing.T) {
+	for name, test := range map[string]struct {
+		usage           string
+		cached, reasons int64
+	}{
+		"flat_only":   {usage: `"cached_tokens":1,"reasoning_tokens":1`, cached: 1, reasons: 1},
+		"nested_wins": {usage: `"cached_tokens":9,"reasoning_tokens":9,"prompt_tokens_details":{"cached_tokens":1},"completion_tokens_details":{"reasoning_tokens":1}`, cached: 1, reasons: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			frame := []byte(`data: {"id":"chunk_1","choices":[],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5,` + test.usage + "}}\n\n")
+			filter := NewChatPublicStreamFilter(1<<20, true)
+			output, err := filter.Push(frame)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var chunk struct {
+				Usage map[string]json.RawMessage `json:"usage"`
+			}
+			if err := json.Unmarshal([]byte(strings.TrimSpace(strings.TrimPrefix(string(output), "data: "))), &chunk); err != nil {
+				t.Fatalf("filtered frame is not a data chunk: %q: %v", output, err)
+			}
+			if _, flat := chunk.Usage["cached_tokens"]; flat {
+				t.Fatalf("public stream replayed flat cached_tokens: %s", output)
+			}
+			if _, flat := chunk.Usage["reasoning_tokens"]; flat {
+				t.Fatalf("public stream replayed flat reasoning_tokens: %s", output)
+			}
+			var prompt struct {
+				CachedTokens *int64 `json:"cached_tokens"`
+			}
+			var completion struct {
+				ReasoningTokens *int64 `json:"reasoning_tokens"`
+			}
+			if err := json.Unmarshal(chunk.Usage["prompt_tokens_details"], &prompt); err != nil ||
+				prompt.CachedTokens == nil || *prompt.CachedTokens != test.cached {
+				t.Fatalf("prompt_tokens_details.cached_tokens wrong: %s", output)
+			}
+			if err := json.Unmarshal(chunk.Usage["completion_tokens_details"], &completion); err != nil ||
+				completion.ReasoningTokens == nil || *completion.ReasoningTokens != test.reasons {
+				t.Fatalf("completion_tokens_details.reasoning_tokens wrong: %s", output)
+			}
+		})
+	}
+}
+
+func TestChatPublicStreamFilterRejectsMalformedFlatUsageDetail(t *testing.T) {
+	frame := []byte(`data: {"id":"chunk_1","choices":[],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5,"cached_tokens":"many"}}` + "\n\n")
+	if output, err := NewChatPublicStreamFilter(1<<20, true).Push(frame); err == nil {
+		t.Fatalf("malformed flat usage detail reached the client: %s", output)
+	}
+}
