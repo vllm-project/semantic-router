@@ -203,6 +203,7 @@ var differentialWireTargets = []wireTarget{
 	{"responses", func() any { return &responsesRequestWire{} }, true},
 	{"anthropic", func() any { return &anthropicRequestWire{} }, true},
 	{"images", func() any { return &imagesRequestWire{} }, true},
+	{"speech", func() any { return &speechRequestWire{} }, true},
 	{"chat messages", func() any { return &[]chatMessageWire{} }, false},
 	{"raw values", func() any { return &[]json.RawMessage{} }, false},
 }
