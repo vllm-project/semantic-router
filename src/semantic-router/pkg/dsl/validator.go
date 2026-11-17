@@ -484,11 +484,6 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 
 	// Check field constraints
 	v.checkFieldConstraints(s.Fields, s.Pos, context)
-	if s.SignalType == "embedding" || s.SignalType == "complexity" {
-		if _, err := prototypeScoringFromSignal(s); err != nil {
-			v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
-		}
-	}
 
 	// Signal-type-specific required fields
 	switch s.SignalType {
@@ -499,25 +494,11 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 				nil,
 			)
 		}
-	case "embedding":
-		if _, ok := s.Fields["threshold"]; !ok {
-			v.addDiag(DiagConstraint, s.Pos,
-				fmt.Sprintf("%s: 'threshold' field is recommended", context),
-				nil,
-			)
-		}
-		if _, ok := s.Fields["candidates"]; !ok && s.Fields["image_candidates"] == nil {
-			v.addDiag(DiagConstraint, s.Pos,
-				fmt.Sprintf("%s: 'candidates' field is recommended", context),
-				nil,
-			)
-		}
+		v.checkKeywordSignalConstraints(s, context)
 	case "domain":
 		v.checkDomainSignalConstraints(s, context)
 	case "context":
 		v.checkContextSignalConstraints(s, context)
-	case "structure":
-		v.checkStructureSignalConstraints(s)
 	case "conversation":
 		v.checkConversationSignalConstraints(s)
 	}
@@ -533,30 +514,29 @@ func (v *Validator) checkContextSignalConstraints(s *SignalDecl, context string)
 	}
 }
 
-func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
+func (v *Validator) checkKeywordSignalConstraints(s *SignalDecl, context string) {
 	payload := dslFieldObjectFromValues(s.Fields)
 	payload.setString("name", s.Name)
 
 	raw, err := payload.marshalYAML()
 	if err != nil {
 		v.addDiag(DiagConstraint, s.Pos,
-			fmt.Sprintf("failed to encode structure signal %q: %v", s.Name, err),
+			fmt.Sprintf("failed to encode keyword signal %q: %v", s.Name, err),
 			nil,
 		)
 		return
 	}
 
-	var rule config.StructureRule
+	var rule config.KeywordRule
 	if err := yaml.Unmarshal(raw, &rule); err != nil {
 		v.addDiag(DiagConstraint, s.Pos,
-			fmt.Sprintf("failed to decode structure signal %q: %v", s.Name, err),
+			fmt.Sprintf("failed to decode keyword signal %q: %v", s.Name, err),
 			nil,
 		)
 		return
 	}
-	rule.Name = s.Name
-	if err := config.ValidateStructureRuleContract(rule); err != nil {
-		v.addDiag(DiagConstraint, s.Pos, err.Error(), nil)
+	if err := config.ValidateKeywordRuleContract(rule); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
 	}
 }
 
@@ -623,7 +603,8 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 		v.checkCandidateIterationConstraints(r, iter, context)
 	}
 
-	v.checkRouteEmits(r)
+	v.checkRouteRetention(r)
+	v.checkRouteOutput(r)
 }
 
 func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext string) {

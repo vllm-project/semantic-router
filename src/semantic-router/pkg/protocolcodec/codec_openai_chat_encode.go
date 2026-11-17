@@ -8,11 +8,17 @@ import (
 )
 
 func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	request, projectionDiagnostics := llmprotocol.ProjectResponsesReasoning(request, llmprotocol.OpenAIChatV1, false)
+	for _, message := range request.Messages {
+		if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, message.Content); err != nil {
+			return nil, projectionDiagnostics, err
+		}
+	}
 	if envelope.CanReplay(llmprotocol.OpenAIChatV1, request.Generation, policy, false) {
-		return append([]byte(nil), envelope.Request...), nil, nil
+		return append([]byte(nil), envelope.Request...), projectionDiagnostics, nil
 	}
 	if request.ReasoningDisplay != "" {
-		return nil, nil, llmprotocol.NewError(
+		return nil, projectionDiagnostics, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_reasoning_display",
 			"Chat Completions cannot represent reasoning display controls",
@@ -20,7 +26,7 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		)
 	}
 	if request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens < 0 {
-		return nil, nil, llmprotocol.NewError(
+		return nil, projectionDiagnostics, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_chat_max_output_tokens",
 			"Chat Completions cannot represent a negative output token limit",
@@ -28,7 +34,7 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		)
 	}
 	if len(request.Sampling.Stop) > 4 {
-		return nil, nil, llmprotocol.NewError(
+		return nil, projectionDiagnostics, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_chat_stop_sequence_limit",
 			"Chat Completions cannot represent more than four stop sequences",
@@ -36,6 +42,7 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		)
 	}
 	diagnostics, validationErr := chatRequestDiagnostics(request, policy)
+	diagnostics = appendDiagnostics(projectionDiagnostics, diagnostics, policy.Limits.Diagnostics)
 	if validationErr != nil {
 		return nil, diagnostics, validationErr
 	}
@@ -73,6 +80,9 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 	if request.ReasoningSummary != "" {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Chat Completions cannot request a reasoning summary")
 	}
+	if len(request.Safeguards) > 0 {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "safeguards", "only Anthropic reviews auto mode's classifier context")
+	}
 	if len(request.ContextManagement) > 0 {
 		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIChatV1,
 			"context_management", "Chat Completions cannot apply Anthropic context edits"); err != nil {
@@ -99,8 +109,8 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 		FrequencyPenalty: request.Sampling.FrequencyPenalty, PresencePenalty: request.Sampling.PresencePenalty,
 		ReasoningEffort: request.ReasoningEffort, ReasoningBudget: request.ReasoningBudgetTokens,
 		ChatTemplateKwargs: request.ChatTemplateKwargs, CacheSalt: request.CacheSalt,
-		TopK: request.Sampling.TopK, MinP: request.Sampling.MinP, RepetitionPenalty: request.Sampling.RepetitionPenalty,
-		PromptCacheKey: request.PromptCacheKey,
+		TopK: request.Sampling.TopK, MinP: request.Sampling.MinP, LogitBias: request.Sampling.LogitBias,
+		RepetitionPenalty: request.Sampling.RepetitionPenalty, PromptCacheKey: request.PromptCacheKey,
 	}
 	if request.TextVerbosity != "" {
 		wire.Verbosity, _ = json.Marshal(request.TextVerbosity)

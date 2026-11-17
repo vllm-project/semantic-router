@@ -10,16 +10,16 @@ This directory contains the Router image and lint toolchain Dockerfiles:
 | `Dockerfile.precommit` | Reproducible lint and agent-harness toolchain used by CI. |
 
 `Dockerfile.extproc` builds the three published Router images from one stage
-graph and one target, `vllm-sr`. The router binary and the image-routing
-assets are shared; `ACCELERATOR` selects the runtime's PyTorch build. Each
-image serves `vllm-sr serve`, the Helm chart and the Operator, in standalone
+graph and one target, `vllm-sr`. The router binary is shared; `ACCELERATOR`
+selects the runtime's PyTorch build. Each image serves `vllm-sr serve`, the
+Helm chart and the Operator, in standalone
 or extproc mode:
 
 | Image | `ACCELERATOR` | Platforms |
 | --- | --- | --- |
 | `vllm-sr` | `cpu` (default) | amd64, arm64 |
 | `vllm-sr-rocm` | `rocm` | amd64 |
-| `vllm-sr-cuda` | `cuda` | amd64 |
+| `vllm-sr-cuda` | `cuda` | amd64, arm64 |
 
 For one release, `vllm-sr` is also published as `extproc` and `vllm-sr-rocm`
 as `extproc-rocm`, with the same digests, for deployments that still name the
@@ -104,8 +104,7 @@ then passes it as `ROUTER_BUILD` to `Dockerfile.attached`. Use a native RISC-V
 worker with the Docker buildx driver for this local-image handoff. `GO_IMAGE` and
 `RUST_IMAGE` must provide Go 1.25, Rust 1.90 and native Debian-compatible build
 tools. The default official builder images do not supply RISC-V variants.
-`ASSETS_IMAGE=library/debian:trixie-slim` supplies the Python asset stage there;
-the attached runtime uses Debian trixie by default. Fully qualified local
+The attached runtime uses Debian trixie by default. Fully qualified local
 builder names require `IMAGE_REGISTRY=`. Pin builder and runtime image digests
 for reproducible builds; the image arguments do not make arbitrary distributions
 compatible. Native builds do not need QEMU.

@@ -110,7 +110,7 @@ func TestAPIOverviewFiltersOneCapability(t *testing.T) {
 	assertOverviewPathsAbsent(t, response, []string{
 		"/api/v1/config",
 		"/api/v1/config/schema",
-		"/api/v1/diagnostics/embeddings",
+		"/api/v1/diagnostics/models/embeddings",
 		"/api/v1/storage/memories",
 	})
 }
@@ -213,8 +213,6 @@ func documentedAPIOverviewPaths() []string {
 		"/api/v1/diagnostics/classify/security",
 		"/api/v1/diagnostics/classify/batch",
 		"/api/v1/routing/preview",
-		"/api/v1/diagnostics/embeddings",
-		"/api/v1/diagnostics/similarity/batch",
 		"/health",
 		"/ready",
 		"/startup-status",

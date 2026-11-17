@@ -28,7 +28,7 @@ func TestPreviewAndRuntimeServeHistoriesAboveTheWindowOnlyByReserves(t *testing.
 	router.Config.Decisions = []config.Decision{{
 		Name: "default", ModelRefs: []config.ModelRef{{Model: "worker"}},
 	}}
-	classifier, err := classification.NewClassifier(router.Config, nil, nil, nil)
+	classifier, err := classification.NewClassifier(router.Config)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = classifier.Close() })
 	router.Classifier = classifier
@@ -95,7 +95,7 @@ func TestReserveFallbackKeepsTheModelThatCanServeTheRequest(t *testing.T) {
 		Name: "default", ModelRefs: []config.ModelRef{{Model: "text-only"}, {Model: "vision"}},
 		Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmStatic},
 	}}
-	classifier, err := classification.NewClassifier(router.Config, nil, nil, nil)
+	classifier, err := classification.NewClassifier(router.Config)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = classifier.Close() })
 	router.Classifier = classifier
@@ -164,7 +164,7 @@ func TestKnownLimitsRefuseOnlyWithoutReserves(t *testing.T) {
 				Name: "default", ModelRefs: refs,
 				Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmStatic},
 			}}
-			classifier, err := classification.NewClassifier(router.Config, nil, nil, nil)
+			classifier, err := classification.NewClassifier(router.Config)
 			require.NoError(t, err)
 			t.Cleanup(func() { _ = classifier.Close() })
 			router.Classifier = classifier

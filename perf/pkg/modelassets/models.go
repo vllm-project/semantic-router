@@ -1,4 +1,4 @@
-// Package modelassets resolves the performance models from the router's canonical catalog.
+// Package modelassets resolves the performance models from the router's pre-declared deployments.
 package modelassets
 
 import (
@@ -21,23 +21,20 @@ type Artifact struct {
 	Path string
 }
 
-// Resolve returns the catalog model of a benchmark task: domain, pii,
-// jailbreak or embedding. The classifier tasks measure the per-task
-// label_distribution.v1 and token_spans.v1 contracts, which the Vela 1.0
-// specialists serve; the default Vela 2.0 0.3B deployment does not.
+// Resolve returns the model of a benchmark task, as a deployment every
+// configuration declares serves it: decision, the decision model that answers
+// the Router's question-style signals (primary), or embedding, the model
+// recall embeds with (vela-embedding, embeddings.default).
 func Resolve(name, root string) (Artifact, error) {
-	specialists := config.Vela1SystemModels()
-	paths := map[string]string{
-		"domain":    specialists.DomainClassifier,
-		"pii":       specialists.PIIClassifier,
-		"jailbreak": specialists.PromptGuard,
-		"embedding": config.DefaultGlobalConfig().EmbeddingModels.MmBertModelPath,
+	deployments := map[string]string{
+		"decision":  config.DefaultDecisionDeployment,
+		"embedding": config.EmbeddingDefaultDeployment,
 	}
-	spec := config.GetModelByPath(paths[name])
-	if spec == nil || spec.RepoID == "" || spec.Revision == "" {
+	declared, ok := config.DefaultModelDeployments()[deployments[name]]
+	if !ok || declared.Artifact == "" || declared.Revision == "" {
 		return Artifact{}, fmt.Errorf("missing pinned performance artifact %q", name)
 	}
-	artifact := Artifact{Name: name, RepoID: spec.RepoID, Revision: spec.Revision}
+	artifact := Artifact{Name: name, RepoID: declared.Artifact, Revision: declared.Revision}
 	if override := os.Getenv("VLLM_SR_" + strings.ToUpper(name) + "_MODEL"); override != "" {
 		if !filepath.IsAbs(override) {
 			override = filepath.Join(root, override)

@@ -151,7 +151,6 @@ func apiRoutes() []apiRoute {
 		applyRouteContract(apiPluginObservabilityRoutes(), routeContract("observability", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiContextRecoveryRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiConfigRoutes(), routeContract("config", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
-		applyRouteContract(apiKnowledgeBaseRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiMemoryRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiVectorStoreRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiFileRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),

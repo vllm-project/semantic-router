@@ -4,17 +4,27 @@ title: Component Architecture
 description: How the frontend, optional decision engine, and model runtime compose, and how model selection differs from replica dispatch.
 ---
 
+import Tabs from '@theme/Tabs'
+import TabItem from '@theme/TabItem'
+
 # Component Architecture
 
-vLLM-SR combines a request frontend, an optional routing decision engine, and
-model-serving resources. Run them together to route model calls, or serve a
-decision model directly without configuring Chat backends.
+vLLM-SR combines a request frontend, a decision engine and a model runtime.
+Run them together to route model calls, or serve a decision model on its own
+without any chat backend.
 
-These diagrams show the native HTTP frontend's logical components. They are
-not a container layout or the complete Envoy/ExtProc deployment topology. See
-[Gateway Modes](../installation/gateway-modes) for those deployment choices.
+- **Frontend:** listeners, access control and protocol adapters.
+- **Decision engine:** entrypoints, recipes, signals, decisions and
+  algorithms, in Router mode.
+- **Model runtime:** the Router's decision and embedding models, as managed or
+  attached workers.
+- **Chat backends:** your vLLM, Ollama or hosted models.
 
-Click a diagram to open its full-size SVG.
+:::note
+These diagrams show the native HTTP frontend's logical components, not a
+container layout. [Gateway Modes](../installation/gateway-modes) covers the
+Envoy and ExtProc topology. Click a diagram to open its full-size SVG.
+:::
 
 ## Compose the serving path
 
@@ -23,151 +33,185 @@ Click a diagram to open its full-size SVG.
 | Component | Responsibility |
 | --- | --- |
 | **Frontend** | Accept requests, enforce listener access, and adapt API protocols. |
-| **Decision Engine** | Resolve a routing entrypoint to its recipe, evaluate signals and decisions, and coordinate Chat or native decision-model backends. |
-| **Serving Engine / model runtime** | Serve decision, classifier, embedding, and reranking models through managed or attached workers. |
-| **Chat backends** | Generate responses using your vLLM, Ollama, or provider services. |
+| **Decision Engine** | Resolve an entrypoint to its recipe, evaluate signals and decisions, and call chat or native decision-model backends. |
+| **Serving Engine / model runtime** | Serve the decision and embedding models through managed or attached workers. |
+| **Chat backends** | Generate responses with your vLLM, Ollama or provider services. |
 
-The native System One API is available in both startup modes when the listener
-publishes its models. Router mode additionally enables recipe routing and Chat
-backends. Engine mode keeps the frontend and model management while leaving
-saved routing configuration inactive:
+### Router mode and Engine mode
+
+<Tabs groupId="startup-mode">
+<TabItem value="router" label="Router mode" default>
 
 ```bash
-# Router: MODEL overrides the default judgment model; Chat backends stay in YAML.
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
-
-# Engine: no Chat backend or user-authored routing YAML is needed.
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
+# MODEL overrides the default decision model; chat backends stay in the YAML.
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 ```
 
-Every invocation without `--engine` (`-e`) starts Router mode. Passing MODEL
-alone does not select Engine mode. Dashboard reports the startup mode and
-manages deployments; it does not switch the instance mode.
+- Recipe routing and chat backends are active.
+- The System One API is also served, for the models a listener publishes.
 
-Model workers are prepared only for deployments in actual use: native model
-grants, routing signals, and enabled model-backed services. Declaring an unused
-deployment does not start it. A rule-only Chat router can therefore run without
-model workers when no other feature needs them. Semantic cache, embeddings,
-memory, and RAG can put further deployments in use. “On demand” refers to this configuration
-demand, not loading every model on its first request.
+</TabItem>
+<TabItem value="engine" label="Engine mode">
+
+```bash
+# No chat backend or routing YAML is needed.
+vllm-sr serve vllm-sr/d3-edge -e
+```
+
+- The frontend serves the decision model through the System One API.
+- Saved routing configuration is kept, but inactive.
+
+</TabItem>
+</Tabs>
+
+Every `vllm-sr serve` without `--engine` (`-e`) starts Router mode; passing a
+MODEL alone does not select Engine mode. The Dashboard reports the mode and
+manages deployments, but does not switch the mode.
+
+### Models start on demand
+
+- **Only what is used starts.** A deployment gets workers when a native model
+  grant, a routing signal or an enabled model-backed feature uses it.
+- **Rule-only routers need none.** A chat router whose rules ask no model runs
+  without model workers.
+- **Recall starts the embedding model.** The response cache, memory and RAG
+  start it when they recall with it.
+
+"On demand" means configured demand: a used model is ready before its first
+request, not loaded by it.
 
 ## Separate protocol handling from routing policy
 
 [![Protocol adapters, recipe-scoped decision stages, task bindings, and the current native bypass](/img/architecture/system-one/02-frontend-and-decision-engine.svg)](/img/architecture/system-one/02-frontend-and-decision-engine.svg)
 
-For a routed request, the main decision path is:
+A routed request takes five steps:
 
 1. Resolve the public model name to an entrypoint and recipe.
 2. Evaluate the required **signals** and derive **projections**.
 3. Match a **decision** and its candidate set.
 4. Run its **algorithm** to select one backend or a bounded multi-model plan.
-5. Dispatch and return the response through the appropriate protocol adapter.
+5. Dispatch, and return the response through the matching protocol adapter.
 
-Recipe plugins run at their request, execution, or response hooks; they are
-not all one final step after model selection. Model-backed tasks resolve their
-bindings independently of the Chat backend they help select. See the
-[Routing Pipeline](signal-driven-decisions) for policy authoring.
+Plugins run at their request, execution or response hooks, not as one final
+step. A model-backed signal resolves its own deployment, independently of the
+chat backend it helps select. The [Routing Pipeline](signal-driven-decisions)
+covers policy authoring.
 
-Chat Completions, Responses, and Messages use protocol codecs. System One has
-its own typed request handler. A concrete native model ID bypasses recipe
-routing; an explicitly published native entrypoint enters its System One
-recipe. Concrete Chat backend IDs also bypass recipe signals, decisions, and
-plugins. Native recipes support a narrower set of signals and algorithms than
-Chat recipes; see the [cascade guide](../tutorials/algorithm/native/cascade.md).
+| Request | Handled by | Routing |
+| --- | --- | --- |
+| Chat Completions, Responses, Messages | Protocol codecs | The entrypoint's recipe |
+| Images API | The images codec | Only decisions whose output is an image |
+| System One, concrete model ID | The typed System One handler | None |
+| System One, published native entrypoint | The typed System One handler | Its System One recipe |
+| Concrete chat backend ID | Protocol codecs | None: skips signals, decisions and plugins |
+
+Native recipes support fewer signals and algorithms than chat recipes; see
+[Escalate on System One](../tutorials/algorithm/looper/escalate.md#on-system-one).
 
 ### Keep public and worker APIs distinct
 
 | Surface | Endpoints | Access and purpose |
 | --- | --- | --- |
-| Public Chat APIs | `/v1/chat/completions`, `/v1/responses`, `/v1/messages`; discovery at `/v1/models` | Router mode; listener access and the requested API's service requirements apply. |
-| Public System One API | `/v1/systemone`, alias `/v1/decisions`; discovery at `/v1/systemone/models` | Either startup mode; requires explicit `listeners[].systemone.models` publication and listener API keys when configured. |
-| Worker API | Classify, embeddings, rerank, decisions, and bundle APIs supported by the loaded model | An independently operated `vllm-srun` endpoint or a private managed socket; not automatically published by the frontend. |
+| Public Chat APIs | `/v1/chat/completions`, `/v1/responses`, `/v1/messages`; discovery at `/v1/models` | Router mode. Listener access and the API's own requirements apply. |
+| Public System One API | `/v1/systemone`, alias `/v1/decisions`; discovery at `/v1/systemone/models` | Either mode. Needs explicit publication in `listeners[].apis.systemone.models`, and the listener's API keys when set. |
+| Worker API | Classify, embeddings, rerank, decisions and bundle APIs, as the loaded model supports | An independently operated `vllm-srun` endpoint or a private managed socket. The frontend never publishes it. |
 
-Dashboard sessions do not replace public listener credentials. Native model
-grants are separate from the listener's Chat `models` allowlist. See the
-[System One quickstart](../model-runtime/quickstart.md) for a complete request.
+- Dashboard sessions do not replace listener credentials.
+- Native model grants are separate from the listener's chat `models`
+  allowlist.
+
+The [System One quickstart](../model-runtime/get-started/quickstart.md) walks through a
+complete request.
 
 ## Scale a deployment through replicas
 
 [![Deployment replica pools and the family, batch planning, execution engine, and accelerator inside a worker](/img/architecture/system-one/03-serving-engine-and-workers.svg)](/img/architecture/system-one/03-serving-engine-and-workers.svg)
 
-Model selection answers **which model should handle this task?** Replica
-dispatch answers **which ready worker of that deployment should execute it?**
-They are separate decisions.
+Two separate choices happen for every model call:
 
-Managed replicas have independent processes that vLLM-SR starts and supervises.
-Attached replicas point to independently operated runtimes. Compatible workers
-in a pool share model identity, revision, engine arguments, and capabilities. The diagram's
-GPU placement is an example; CPU workers are also supported.
+| Question | Answered by |
+| --- | --- |
+| Which model should handle this task? | Model selection: the recipe's decision and algorithm |
+| Which ready worker of that deployment runs it? | Replica dispatch, inside the deployment |
 
-Current dispatch prefers the ready worker with the fewest outstanding request
-bytes, breaking ties by the least recently assigned worker. Admission is
-bounded at 32 in-flight HTTP requests per worker; the pool reports overload
-instead of maintaining a waiting queue. These observations are not measured
-token counts or GPU-forward concurrency.
+- **Managed replicas** are processes vLLM-SR starts and supervises.
+- **Attached replicas** point to independently operated runtimes.
+- **One pool, one model.** Workers in a pool share model identity, revision,
+  engine arguments and capabilities. The diagram shows GPUs, but CPU workers
+  work too.
 
-Inside a worker, the model family defines inputs and typed outputs, the batch
-planner forms forwards from the deployment's engine arguments, and the execution
-engine and accelerator run them.
-Several questions can share a request or compatible work, but one API call can
-still require multiple forwards. These are software interfaces, not neural
-network layers.
+Dispatch picks the ready worker with the fewest outstanding request bytes,
+and breaks ties by the least recently assigned. Each worker admits at most 32
+in-flight requests; a full pool reports overload instead of queueing.
 
-```bash
-# Two independent copies on two host GPUs.
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+:::note
+Outstanding bytes are a local estimate. They are not token counts or
+GPU-forward concurrency.
+:::
+
+Inside a worker, the model family defines inputs and typed outputs, and the
+batch planner forms forwards from the deployment's engine arguments. The
+execution engine and accelerator run them. Several questions can share one
+forward, but one API call can still need several.
+
+```bash title="Two replicas on two GPUs"
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
-DP replicates the model; it does not shard weights through tensor or pipeline
-parallelism. Measure throughput and tail latency for your input lengths before
-adding replicas, especially when several workers share one GPU. See
-[Frontend and runtime deployments](../model-runtime/deploy.md) and
-[Engine arguments](../model-runtime/engine-args.md).
+:::warning Data parallel is not sharding
+`-dp` places a full copy of the model on each device; it does not split
+weights with tensor or pipeline parallelism. Measure throughput and tail
+latency for your input lengths before adding replicas, especially when
+workers share one GPU.
+:::
+
+See [Frontend and runtime deployments](../model-runtime/deploy/connect-the-router.md) and
+[Engine arguments](../model-runtime/deploy/engine-args.md).
 
 ## Route System One across decision models
 
 ```mermaid
 flowchart LR
-    Request["System One request"] --> Frontend["Frontend codec + listener grant"]
+    Request["System One request"] --> Frontend["Frontend:<br/>codec + listener grant"]
     Frontend -->|"concrete model"| Backends
-    Frontend -->|"native entrypoint"| Recipe["Recipe: signals → decision"]
-    Recipe --> Algorithm["Bounded cascade"]
+    Frontend -->|"native entrypoint"| Recipe["Recipe:<br/>signals → decision"]
+    Recipe --> Algorithm["escalate stages"]
     Algorithm --> Backends
     subgraph Backends["Declared model backends"]
         Local["Local model runtime"]
         Engine["Remote Engine frontend"]
         External["Compatible Decision API"]
     end
-    Local --> Replicas["Ready replicas"]
-    Engine --> RemoteReplicas["Ready replicas"]
-    Backends --> Evidence["Complete typed answer + evidence"]
-    Evidence -->|"another declared action"| Algorithm
-    Evidence -->|"accept"| Result["Native response"]
+    Backends --> Evidence["Complete typed answer"]
+    Evidence -->|"rejected: next stage"| Algorithm
+    Evidence -->|"accepted"| Result["Native response"]
 ```
 
-An explicit `api: systemone` entrypoint selects an isolated native recipe.
-Its signals and decisions choose an experimental `cascade` algorithm. Each
-cascade keeps a Choice / Score / Noul question bundle together and calls
-declared decision-model backends. Signals and the selected cascade share one
-request deadline and physical-call ledger. The selected decision's budget
-tightens both limits, while signal-specific timeouts remain upper bounds. A
-backend can be a local deployment, a separate
-vLLM-SR Engine service, or a compatible external System One API.
+- **A native recipe.** An `api: systemone` entrypoint selects an isolated
+  System One recipe.
+- **Escalation stages.** Its decision runs `escalate`: the fast stage answers
+  first, and a later stage runs only when the answer fails acceptance.
+- **Any backend.** A stage can call a local deployment, a separate vLLM-SR
+  Engine, or a compatible external System One API.
+- **One budget.** The signals and every stage share one request deadline and
+  call limit; the decision's own budget can tighten both.
+- **An optional judge.** An LLM judge can pick an earlier complete answer, or
+  abstain; it never invents native probabilities.
 
-The recipe chooses between models; each deployment separately chooses among
-its replicas. A cascade first tries its fast stage, then advances only when
-its acceptance conditions require another answer. An optional LLM judge can
-select an intact earlier candidate or abstain; it cannot manufacture native
-probabilities. See [System One cascade](../tutorials/algorithm/native/cascade.md).
+The recipe chooses between models; each deployment still chooses among its
+own replicas.
 
-Native discovery distinguishes concrete models (`routing: false`) from
-published native recipes (`routing: true`). Both require an explicit listener
-grant. The Chat default `vllm-sr/auto` does not implicitly enable native auto,
-and Engine mode continues to serve concrete models without recipe execution.
+`/v1/systemone/models` lists concrete models with `routing: false` and native
+recipes with `routing: true`; both need a listener grant. The chat default
+`vllm-sr/auto` does not enable native auto, and Engine mode serves only
+concrete models.
 
 ## Next
 
-- [System Overview](semantic-router-overview): configuration and deployment context.
-- [Quickstart](../installation/installation.md): send a routed Chat request.
-- [Model runtime quickstart](../model-runtime/quickstart.md): ask typed questions directly.
-- [Frontend and runtime deployments](../model-runtime/deploy.md): bindings, placement, and readiness.
+- [System Overview](semantic-router-overview): configuration and deployment
+  context.
+- [Quickstart](../installation/installation.md): send a routed chat request.
+- [Model runtime quickstart](../model-runtime/get-started/quickstart.md): ask typed
+  questions directly.
+- [Frontend and runtime deployments](../model-runtime/deploy/connect-the-router.md): bindings,
+  placement and readiness.

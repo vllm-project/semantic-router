@@ -3,7 +3,7 @@ import { mockAuthenticatedAppShell } from './support/auth'
 
 const artifact = 'vllm-sr/Vela-2.0-4B'
 const config = {
-  version: 'v0.3',
+  version: 'v0.5',
   global: {
     model_catalog: {
       system: { decision_model: { deployment: 'primary' } },
@@ -55,14 +55,15 @@ const tasks = {
   bindings: [
     {
       task_id: 'domain',
-      consumer: 'domain_classifier',
-      recipe: '',
+      consumer: 'domain',
+      key: 'domain',
+      recipe: 'default',
       deployment: 'primary',
       model: artifact,
       source: 'default',
       ready: true,
       editable: true,
-      path: ['routing', 'model_bindings', 'domain_classifier'],
+      path: ['recipes', '0', 'model_bindings', 'domain'],
       binding: 'primary',
     },
   ],

@@ -129,6 +129,7 @@ class ProbeReferenceContext:
     decisions: dict[tuple[str, str], dict[str, Any]]
     covered_decisions: set[tuple[str, str]]
     covered_entrypoints: set[str]
+    default_plugins: frozenset[str]
 
 
 def discover_recipe_directories(root: Path) -> list[Path]:
@@ -215,20 +216,24 @@ def load_recipe_identity(path: Path, directory_name: str) -> RecipeIdentity:
 
 
 def recipe_profiles(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    profiles: dict[str, dict[str, Any]] = {"default": _mapping(config.get("routing"))}
+    profiles: dict[str, dict[str, Any]] = {"default": {}}
     for raw_recipe in _sequence(config.get("recipes")):
         recipe = _mapping(raw_recipe)
         name = str(recipe.get("name") or "").strip()
         if not name:
             continue
-        profiles[name] = _mapping(recipe.get("routing"))
+        profiles[name] = recipe
     return profiles
 
 
+def is_portable_bundle(config: dict[str, Any]) -> bool:
+    # A portable recipe bundle has no providers and serves no traffic: the
+    # entrypoint it marks default only makes the bundle loadable on its own.
+    return bool(config.get("recipes")) and "providers" not in config
+
+
 def config_auto_entrypoints(config: dict[str, Any]) -> tuple[str, ...]:
-    if config.get("recipes") and not any(
-        key in config for key in ("providers", "routing", "entrypoints")
-    ):
+    if is_portable_bundle(config):
         return ()
     mappings = [
         entry
@@ -260,6 +265,8 @@ def config_named_entrypoints(config: dict[str, Any]) -> dict[str, str]:
 
 
 def config_entrypoints(config: dict[str, Any]) -> dict[str, str]:
+    if is_portable_bundle(config):
+        return {}
     result = dict.fromkeys(config_auto_entrypoints(config), "default")
     for model_name, recipe in config_named_entrypoints(config).items():
         existing = result.get(model_name)
@@ -338,6 +345,7 @@ def validate_probe_references(
         decisions=profile_decisions(profiles),
         covered_decisions=set(),
         covered_entrypoints=set(),
+        default_plugins=plugin_types(_mapping(config.get("global")).get("plugins")),
     )
     for probe in probes:
         _validate_probe_reference(context, probe)
@@ -367,7 +375,12 @@ def _validate_probe_reference(context: ProbeReferenceContext, probe: Probe) -> N
         )
     context.covered_decisions.add(key)
     _validate_probe_entrypoint(context, probe, recipe)
-    _validate_probe_decision_contract(context.path, probe, decision)
+    _validate_probe_decision_contract(
+        context.path,
+        probe,
+        decision,
+        context.default_plugins | plugin_types(context.profiles[recipe].get("plugins")),
+    )
     _validate_probe_signals(
         context.path,
         probe,
@@ -396,8 +409,17 @@ def _validate_probe_entrypoint(
         )
 
 
+def plugin_types(plugins: Any) -> frozenset[str]:
+    return frozenset(
+        str(_mapping(plugin).get("type") or "").strip() for plugin in _sequence(plugins)
+    ) - {""}
+
+
 def _validate_probe_decision_contract(
-    path: Path, probe: Probe, decision: dict[str, Any]
+    path: Path,
+    probe: Probe,
+    decision: dict[str, Any],
+    inherited_plugins: frozenset[str],
 ) -> None:
     model_refs = {
         str(_mapping(model_ref).get("model") or "").strip()
@@ -416,10 +438,8 @@ def _validate_probe_decision_contract(
             f"{path}: probe {probe.probe_id} expects algorithm "
             f"{probe.expected_algorithm!r}, configured {actual_algorithm!r}"
         )
-    configured_plugins = {
-        str(_mapping(plugin).get("type") or "").strip()
-        for plugin in _sequence(decision.get("plugins"))
-    }
+    # A decision also runs the global and recipe plugins it inherits.
+    configured_plugins = inherited_plugins | plugin_types(decision.get("plugins"))
     missing_plugins = set(probe.expected_plugins) - configured_plugins
     if missing_plugins:
         raise ValueError(
@@ -773,7 +793,7 @@ def command_prepare_runtime(args: argparse.Namespace) -> int:
     build_recipe_inventory(recipe_path)
     authored = load_yaml_mapping(recipe_path / "config.yaml")
     manifest, _probes = load_probe_manifest(recipe_path / "probes.yaml")
-    if not any(key in authored for key in ("providers", "routing", "entrypoints")):
+    if is_portable_bundle(authored):
         composed = prepare_builtin_runtime(
             recipe_path, args.config, REPO_ROOT, manifest
         )

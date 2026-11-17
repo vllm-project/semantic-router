@@ -37,11 +37,11 @@ func (r *OpenAIRouter) selectionCapabilityRequest(ctx *RequestContext) (*llmprot
 	}
 	request := *ctx.SemanticRequest
 	request.Stream = ctx.ExpectStreamingResponse
-	if tools := resolveDecisionToolsConfig(ctx); tools != nil && tools.Enabled && tools.EffectiveMode() == config.ToolsPluginModeNone {
-		if tools.StripToolHistory {
+	if policy := resolveDecisionToolsConfig(r.Config, ctx).ActivePolicy(); policy.EffectiveMode() == config.ToolsPolicyModeNone {
+		if policy.StripToolHistory {
 			request.Messages = cloneMessagesForToolStrip(request.Messages)
 		}
-		stripSemanticToolPolicy(&request, tools.StripToolHistory)
+		stripSemanticToolPolicy(&request, policy.StripToolHistory)
 	}
 	return &request, nil
 }
@@ -100,7 +100,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 
 func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.SelectionContext, algorithm *config.AlgorithmConfig, ctx *RequestContext) (*selection.SelectionContext, error) {
 	if r == nil || r.Config == nil || ctx == nil || ctx.SemanticRequest == nil ||
-		(algorithm != nil && config.IsLooperAlgorithmType(algorithm.Type)) {
+		(algorithm != nil && config.IsExecutorAlgorithmType(algorithm.Type)) {
 		return input, nil
 	}
 	if err := selection.ValidateSelectionContext(input); err != nil {
@@ -125,7 +125,7 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 		}
 	}
 	for _, ref := range input.CandidateModels {
-		if (!decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(requirements) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
+		if (!decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(requirements) && r.modelRefExceedsContextWindow(ctx, ref, ctx.VSRContextTokenCount)) ||
 			(ctx.VSREligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSREligibleModelRefs)) ||
 			(ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) {
 			onlyUnsupported = false

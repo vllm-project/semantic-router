@@ -1,0 +1,1 @@
+global.services.api.embeddings: removed_field: the embeddings API is removed: embeddings serve recall alone; run `vllm-sr config migrate` (nothing; the embedding deployment starts when the response cache, memory or a vector store recalls with it)

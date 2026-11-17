@@ -265,6 +265,8 @@
         "cost_in_usd_ticks",
         "is_byok",
         "num_sources_used",
+        "prompt_cache_hit_tokens",
+        "prompt_cache_miss_tokens",
         "prompt_time",
         "queue_time",
         "reasoning_tokens",
@@ -490,7 +492,7 @@
         "top_k",
         "top_p"
       ],
-      "extension_request_fields": [],
+      "extension_request_fields": ["safeguards"],
       "required_request_fields": [
         "max_tokens",
         "messages",

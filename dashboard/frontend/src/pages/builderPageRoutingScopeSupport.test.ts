@@ -199,7 +199,7 @@ RECIPE speed {
   })
 
   it('keeps bindings-only default routing visible and isolates recipe bindings', () => {
-    const binding = { deployment: 'shared', contract: 'embedding.v1', adapter: 'mmbert' }
+    const binding = { deployment: 'shared' }
     const ast: ASTProgram = { ...scopedAst, modelBindings: { embedding: binding } }
     expect(chooseDefaultBuilderRoutingScope(ast)).toBe('global')
     expect(resolveBuilderRoutingScope(ast, 'global')?.modelBindings).toEqual({ embedding: binding })

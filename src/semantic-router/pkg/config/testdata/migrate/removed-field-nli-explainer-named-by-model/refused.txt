@@ -1,0 +1,1 @@
+global.model_catalog.deployments.explainer: the retired NLI explainer's deployment is removed, but providers.models[native].deployment names it; point the model at the deployment that serves it first

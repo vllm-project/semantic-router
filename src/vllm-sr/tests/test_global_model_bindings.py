@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 def document():
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "model_catalog": {
                 "deployments": {
@@ -23,33 +23,34 @@ def document():
                     }
                 },
                 "bindings": {
-                    "pii": {
-                        "deployment": "shared",
-                        "contract": "token_spans.v1",
-                        "adapter": "mmbert",
-                    },
-                    "domain": {"deployment": "shared"},
-                    "jailbreak": {"deployment": "shared", "head": "guard"},
+                    "pii": "shared",
+                    "domain": "shared",
+                    "jailbreak": "shared",
                 },
             }
         },
         "recipes": [
+            {"name": "default"},
             {
                 "name": "active",
-                "routing": {
-                    "signals": {
-                        "classifiers": [
-                            {
-                                "name": "risk",
-                                "type": "local",
-                                "labels": ["safe", "unsafe"],
-                            }
-                        ],
-                        "safety": [{"name": "policy", "threshold": 0.8}],
-                    }
+                "signals": {
+                    "systemone": [
+                        {
+                            "name": "risk",
+                            "question": {
+                                "type": "choice",
+                                "instructions": "Is the request risky?",
+                                "choices": [{"key": "safe"}, {"key": "unsafe"}],
+                            },
+                        }
+                    ],
+                    "safety": [{"name": "policy", "predicate": {"gte": 0.8}}],
                 },
             },
-            {"name": "peer", "routing": {}},
+            {"name": "peer"},
+        ],
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
         ],
     }
 
@@ -59,7 +60,7 @@ def test_global_bindings_keep_their_authored_form():
     original = deepcopy(raw)
     assert validate_config_structure(raw) == []
     config = UserConfig.model_validate(raw)
-    assert config.recipes[0].routing.model_bindings == {}
+    assert config.recipes[0].model_bindings == {}
     assert raw == original
     emitted = config.model_dump(mode="json", by_alias=True, exclude_none=True)
     assert (
@@ -70,17 +71,20 @@ def test_global_bindings_keep_their_authored_form():
 
 def test_a_recipe_binding_overrides_only_its_recipe():
     raw = document()
-    local = {"deployment": "shared", "head": "token-spans"}
-    raw["recipes"][0]["routing"]["model_bindings"] = {"pii": local}
+    raw["global"]["model_catalog"]["deployments"]["local"] = {
+        "provider": "model_runtime",
+        "artifact": "/models/local-encoder",
+    }
+    raw["recipes"][0]["model_bindings"] = {"pii": {"deployment": "local"}}
     config = UserConfig.model_validate(raw)
-    assert config.recipes[0].routing.model_bindings["pii"].head == "token-spans"
-    assert config.recipes[1].routing.model_bindings == {}
-    assert "head" not in config.global_["model_catalog"]["bindings"]["pii"]
+    assert config.recipes[0].model_bindings["pii"].deployment == "local"
+    assert config.recipes[1].model_bindings == {}
+    assert config.global_["model_catalog"]["bindings"]["pii"] == "shared"
 
 
 def test_unknown_binding_fields_are_rejected():
     raw = document()
-    raw["recipes"][0]["routing"]["model_bindings"] = {"pii": {"deploymnt": "typo"}}
+    raw["recipes"][0]["model_bindings"] = {"pii": {"deploymnt": "typo"}}
     assert validate_config_structure(raw)
     with pytest.raises(ValidationError):
         UserConfig.model_validate(raw)

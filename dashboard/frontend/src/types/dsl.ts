@@ -76,8 +76,6 @@ export interface ASTProjectionPartitionDecl {
 export interface ASTProjectionScoreInput {
   signalType: string
   signalName: string
-  kb?: string
-  metric?: string
   weight: number
   valueSource?: string
   match?: number
@@ -175,6 +173,8 @@ export interface ASTTestBlockDecl {
 }
 
 export interface ASTEntrypointDecl {
+  reviewModel?: string
+  memoryModel?: string
   modelNames: string[]
   recipe: string
   pos: ASTPosition

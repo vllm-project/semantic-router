@@ -11,24 +11,18 @@ func rejectReasoningContinuity(format llmprotocol.WireFormat, required llmprotoc
 	return llmprotocol.RequireCapabilities(format, llmprotocol.Capabilities(), llmprotocol.Capabilities(llmprotocol.CapabilityReasoningContinuity))
 }
 
-// projectReasoningContinuity drops typed reasoning continuity blocks that the
-// client format cannot carry, instead of failing a reply the provider has
-// already produced. The plain reasoning text stays and the drop is diagnosed,
-// so the loss is never silent. Requests do not project: a backend that cannot
-// receive the blocks would lose the provider's tool-loop state, so request
-// translation still fails its capability check.
+// projectReasoningContinuity drops reply blocks the client cannot represent.
+// Other request continuity remains fail-closed; Responses blobs are dropped
+// by request encoders for formats that cannot carry them.
 func projectReasoningContinuity(
 	source, target llmprotocol.WireFormat,
 	capabilities llmprotocol.CapabilitySet,
 	response *llmprotocol.Response,
 ) llmprotocol.Diagnostics {
-	if capabilities.Supports(llmprotocol.CapabilityReasoningContinuity) {
-		return nil
-	}
-	output, dropped := withoutReasoningDetails(response.Output)
+	output, dropped := withoutReasoningDetails(response.Output, target, capabilities)
 	var alternatives [][]llmprotocol.OutputItem
 	for index, items := range response.Alternatives {
-		projected, droppedAlternative := withoutReasoningDetails(items)
+		projected, droppedAlternative := withoutReasoningDetails(items, target, capabilities)
 		if !droppedAlternative {
 			continue
 		}
@@ -50,9 +44,8 @@ func projectReasoningContinuity(
 // projectReasoningContinuityEvent is the streaming counterpart. The returned
 // error omits a delta that carries only a continuity block; the caller reports
 // the drop once per stream.
-func projectReasoningContinuityEvent(capabilities llmprotocol.CapabilitySet, event llmprotocol.Event) error {
-	if capabilities.Supports(llmprotocol.CapabilityReasoningContinuity) ||
-		event.Content == nil || event.Content.ReasoningDetail == nil {
+func projectReasoningContinuityEvent(target llmprotocol.WireFormat, capabilities llmprotocol.CapabilitySet, event llmprotocol.Event) error {
+	if event.Content == nil || reasoningDetailRepresentable(event.Content.ReasoningDetail, target, capabilities) {
 		return nil
 	}
 	return ErrOmitStreamEvent
@@ -69,13 +62,13 @@ func reasoningContinuityDropped(source, target llmprotocol.WireFormat) llmprotoc
 
 // withoutReasoningDetails never edits the caller's slices. An item left with
 // no content is removed rather than rendered empty.
-func withoutReasoningDetails(items []llmprotocol.OutputItem) ([]llmprotocol.OutputItem, bool) {
+func withoutReasoningDetails(items []llmprotocol.OutputItem, target llmprotocol.WireFormat, capabilities llmprotocol.CapabilitySet) ([]llmprotocol.OutputItem, bool) {
 	dropped := false
 	kept := make([]llmprotocol.OutputItem, 0, len(items))
 	for _, item := range items {
 		content := make([]llmprotocol.Content, 0, len(item.Content))
 		for _, block := range item.Content {
-			if block.ReasoningDetail == nil {
+			if reasoningDetailRepresentable(block.ReasoningDetail, target, capabilities) {
 				content = append(content, block)
 			}
 		}
@@ -94,4 +87,29 @@ func withoutReasoningDetails(items []llmprotocol.OutputItem) ([]llmprotocol.Outp
 		return items, false
 	}
 	return kept, true
+}
+
+func reasoningDetailRepresentable(detail *llmprotocol.ReasoningDetail, target llmprotocol.WireFormat, capabilities llmprotocol.CapabilitySet) bool {
+	if detail == nil {
+		return true
+	}
+	if llmprotocol.IsResponsesReasoning(detail) {
+		return target == llmprotocol.OpenAIResponsesV1
+	}
+	return capabilities.Supports(llmprotocol.CapabilityReasoningContinuity)
+}
+
+// requireReasoningRepresentation guards direct codec calls after the capability
+// check: continuity wire representations are not interchangeable.
+func requireReasoningRepresentation(target llmprotocol.WireFormat, contents []llmprotocol.Content) error {
+	capabilities := llmprotocol.Capabilities()
+	if target == llmprotocol.OpenAIChatV1 {
+		capabilities = (OpenAIChatCodec{}).Capabilities()
+	}
+	for _, content := range contents {
+		if !reasoningDetailRepresentable(content.ReasoningDetail, target, capabilities) {
+			return rejectReasoningContinuity(target, llmprotocol.Capabilities(llmprotocol.CapabilityReasoningContinuity))
+		}
+	}
+	return nil
 }

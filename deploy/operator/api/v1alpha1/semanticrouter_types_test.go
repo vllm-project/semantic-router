@@ -25,254 +25,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestEmbeddingModelsConfig(t *testing.T) {
-	tests := []struct {
-		name   string
-		config EmbeddingModelsConfig
-		want   string // Expected JSON output
-	}{
-		{
-			name: "qwen3 model configuration",
-			config: EmbeddingModelsConfig{
-				Qwen3ModelPath: "models/qwen3-embedding",
-				UseCPU:         true,
-			},
-			want: `{"qwen3_model_path":"models/qwen3-embedding","use_cpu":true}`,
-		},
-		{
-			name: "mmbert model configuration",
-			config: EmbeddingModelsConfig{
-				MmBertModelPath: "models/mmbert-embedding",
-				UseCPU:          true,
-				EmbeddingConfig: &HNSWEmbeddingConfig{
-					ModelType:       "mmbert",
-					TargetLayer:     6,
-					TargetDimension: 256,
-				},
-			},
-			want: `{"mmbert_model_path":"models/mmbert-embedding","use_cpu":true,"embedding_config":{"model_type":"mmbert","target_dimension":256,"target_layer":6}}`,
-		},
-		{
-			name: "all models configured",
-			config: EmbeddingModelsConfig{
-				Qwen3ModelPath:  "models/qwen3-embedding",
-				MmBertModelPath: "models/mmbert-embedding",
-				UseCPU:          true,
-			},
-			want: `{"qwen3_model_path":"models/qwen3-embedding","mmbert_model_path":"models/mmbert-embedding","use_cpu":true}`,
-		},
-		{
-			name: "remote endpoint configuration",
-			config: EmbeddingModelsConfig{
-				EmbeddingConfig: &HNSWEmbeddingConfig{
-					Backend:         "openai_compatible",
-					ModelType:       "remote",
-					TargetDimension: 1024,
-				},
-				Endpoint: &EmbeddingEndpointConfig{
-					BaseURL:          "http://embedding-service:8000/v1",
-					Model:            "BAAI/bge-m3",
-					APIKeyEnv:        "EMBEDDING_API_KEY",
-					TimeoutSeconds:   5,
-					MaxRetries:       2,
-					MaxResponseBytes: 16777216,
-					Dimensions:       1024,
-				},
-			},
-			want: `{"embedding_config":{"backend":"openai_compatible","model_type":"remote","target_dimension":1024},"endpoint":{"base_url":"http://embedding-service:8000/v1","model":"BAAI/bge-m3","api_key_env":"EMBEDDING_API_KEY","timeout_seconds":5,"max_retries":2,"max_response_bytes":16777216,"dimensions":1024}}`,
-		},
+func candidateCount(candidates *ComplexityCandidates) int {
+	if candidates == nil {
+		return 0
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			data, err := json.Marshal(tt.config)
-			if err != nil {
-				t.Errorf("json.Marshal() error = %v", err)
-				return
-			}
-			got := string(data)
-			if got != tt.want {
-				t.Errorf("json.Marshal() = %v, want %v", got, tt.want)
-			}
-
-			// Test unmarshaling
-			var config EmbeddingModelsConfig
-			if err := json.Unmarshal(data, &config); err != nil {
-				t.Errorf("json.Unmarshal() error = %v", err)
-			}
-		})
-	}
-}
-
-func TestEmbeddingModelsConfigDeepCopyWithRemoteEndpoint(t *testing.T) {
-	original := &EmbeddingModelsConfig{
-		EmbeddingConfig: &HNSWEmbeddingConfig{
-			Backend:         "openai_compatible",
-			ModelType:       "remote",
-			TargetDimension: 1024,
-		},
-		Endpoint: &EmbeddingEndpointConfig{
-			BaseURL:          "http://embedding-service:8000/v1",
-			Model:            "BAAI/bge-m3",
-			APIKeyEnv:        "EMBEDDING_API_KEY",
-			TimeoutSeconds:   5,
-			MaxRetries:       2,
-			MaxResponseBytes: 16777216,
-			Dimensions:       1024,
-		},
-	}
-
-	copy := original.DeepCopy()
-	if copy == original {
-		t.Fatal("DeepCopy returned the original EmbeddingModelsConfig pointer")
-	}
-	if copy.EmbeddingConfig == original.EmbeddingConfig {
-		t.Fatal("DeepCopy reused the original EmbeddingConfig pointer")
-	}
-	if copy.Endpoint == original.Endpoint {
-		t.Fatal("DeepCopy reused the original Endpoint pointer")
-	}
-	if *copy.Endpoint != *original.Endpoint {
-		t.Fatalf("Endpoint copy = %+v, want %+v", *copy.Endpoint, *original.Endpoint)
-	}
-
-	copy.Endpoint.Model = "changed-model"
-	if original.Endpoint.Model != "BAAI/bge-m3" {
-		t.Fatalf("mutating copied Endpoint changed original model to %q", original.Endpoint.Model)
-	}
-
-	var nilModels *EmbeddingModelsConfig
-	if nilModels.DeepCopy() != nil {
-		t.Fatal("nil EmbeddingModelsConfig DeepCopy returned non-nil")
-	}
-}
-
-func TestEmbeddingEndpointConfigDeepCopy(t *testing.T) {
-	original := &EmbeddingEndpointConfig{
-		BaseURL:          "http://embedding-service:8000/v1",
-		Model:            "BAAI/bge-m3",
-		APIKeyEnv:        "EMBEDDING_API_KEY",
-		TimeoutSeconds:   5,
-		MaxRetries:       2,
-		MaxResponseBytes: 16777216,
-		Dimensions:       1024,
-	}
-
-	copy := original.DeepCopy()
-	if copy == original {
-		t.Fatal("DeepCopy returned the original EmbeddingEndpointConfig pointer")
-	}
-	if *copy != *original {
-		t.Fatalf("Endpoint copy = %+v, want %+v", *copy, *original)
-	}
-
-	var nilEndpoint *EmbeddingEndpointConfig
-	if nilEndpoint.DeepCopy() != nil {
-		t.Fatal("nil EmbeddingEndpointConfig DeepCopy returned non-nil")
-	}
-}
-
-func TestHNSWEmbeddingConfig(t *testing.T) {
-	tests := []struct {
-		name   string
-		config HNSWEmbeddingConfig
-		valid  bool
-	}{
-		{
-			name: "valid qwen3 configuration",
-			config: HNSWEmbeddingConfig{
-				ModelType:          "qwen3",
-				PreloadEmbeddings:  true,
-				TargetDimension:    768,
-				EnableSoftMatching: true,
-				MinScoreThreshold:  "0.5",
-			},
-			valid: true,
-		},
-		{
-			name: "valid mmbert with layer 3 (fastest)",
-			config: HNSWEmbeddingConfig{
-				ModelType:       "mmbert",
-				TargetLayer:     3,
-				TargetDimension: 64,
-			},
-			valid: true,
-		},
-		{
-			name: "valid mmbert with layer 6 (balanced)",
-			config: HNSWEmbeddingConfig{
-				ModelType:       "mmbert",
-				TargetLayer:     6,
-				TargetDimension: 256,
-			},
-			valid: true,
-		},
-		{
-			name: "valid mmbert with layer 11 (high quality)",
-			config: HNSWEmbeddingConfig{
-				ModelType:       "mmbert",
-				TargetLayer:     11,
-				TargetDimension: 512,
-			},
-			valid: true,
-		},
-		{
-			name: "valid mmbert with layer 22 (full)",
-			config: HNSWEmbeddingConfig{
-				ModelType:       "mmbert",
-				TargetLayer:     22,
-				TargetDimension: 768,
-			},
-			valid: true,
-		},
-		{
-			name: "valid gemma configuration",
-			config: HNSWEmbeddingConfig{
-				ModelType:       "gemma",
-				TargetDimension: 768,
-			},
-			valid: true,
-		},
-		{
-			name: "remote OpenAI-compatible backend configuration",
-			config: HNSWEmbeddingConfig{
-				Backend:         "openai_compatible",
-				ModelType:       "remote",
-				TargetDimension: 1024,
-			},
-			valid: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Verify JSON marshaling/unmarshaling
-			data, err := json.Marshal(tt.config)
-			if err != nil {
-				t.Errorf("json.Marshal() error = %v", err)
-				return
-			}
-
-			var config HNSWEmbeddingConfig
-			if err := json.Unmarshal(data, &config); err != nil {
-				t.Errorf("json.Unmarshal() error = %v", err)
-			}
-
-			// Verify field values are preserved
-			if config.Backend != tt.config.Backend {
-				t.Errorf("Backend = %v, want %v", config.Backend, tt.config.Backend)
-			}
-			if config.ModelType != tt.config.ModelType {
-				t.Errorf("ModelType = %v, want %v", config.ModelType, tt.config.ModelType)
-			}
-			if config.TargetLayer != tt.config.TargetLayer {
-				t.Errorf("TargetLayer = %v, want %v", config.TargetLayer, tt.config.TargetLayer)
-			}
-			if config.TargetDimension != tt.config.TargetDimension {
-				t.Errorf("TargetDimension = %v, want %v", config.TargetDimension, tt.config.TargetDimension)
-			}
-		})
-	}
+	return len(candidates.Candidates)
 }
 
 func TestComplexityRulesConfig(t *testing.T) {
@@ -401,78 +158,18 @@ func TestComplexityRulesConfig(t *testing.T) {
 	}
 }
 
-func TestSemanticCacheEmbeddingModel(t *testing.T) {
-	tests := []struct {
-		name  string
-		model string
-		valid bool
-	}{
-		{
-			name:  "bert model (default)",
-			model: "bert",
-			valid: true,
-		},
-		{
-			name:  "qwen3 model",
-			model: "qwen3",
-			valid: true,
-		},
-		{
-			name:  "gemma model",
-			model: "gemma",
-			valid: true,
-		},
-		{
-			name:  "mmbert model",
-			model: "mmbert",
-			valid: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := SemanticCacheConfig{
-				Enabled:        true,
-				BackendType:    "memory",
-				EmbeddingModel: tt.model,
-			}
-
-			// Verify JSON marshaling includes the embedding_model
-			data, err := json.Marshal(config)
-			if err != nil {
-				t.Errorf("json.Marshal() error = %v", err)
-				return
-			}
-
-			var unmarshaled SemanticCacheConfig
-			if err := json.Unmarshal(data, &unmarshaled); err != nil {
-				t.Errorf("json.Unmarshal() error = %v", err)
-				return
-			}
-
-			if unmarshaled.EmbeddingModel != tt.model {
-				t.Errorf("EmbeddingModel = %v, want %v", unmarshaled.EmbeddingModel, tt.model)
-			}
-		})
-	}
-}
-
 func TestConfigSpecWithNewFields(t *testing.T) {
 	tests := []struct {
 		name   string
 		config ConfigSpec
 	}{
 		{
-			name: "config with embedding_models",
+			name: "config with a response cache embedding",
 			config: ConfigSpec{
-				EmbeddingModels: &EmbeddingModelsConfig{
-					Qwen3ModelPath: "models/qwen3-embedding",
-					UseCPU:         true,
-				},
-				SemanticCache: &SemanticCacheConfig{
-					Enabled:        true,
-					BackendType:    "memory",
-					EmbeddingModel: "qwen3",
+				ResponseCache: &SemanticCacheConfig{
+					Enabled:     true,
+					BackendType: "memory",
+					Embedding:   &EmbeddingBinding{Deployment: "qwen3-embedding", Dimension: 1024},
 				},
 			},
 		},
@@ -494,21 +191,11 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 			},
 		},
 		{
-			name: "config with both embedding_models and complexity_rules",
+			name: "config with both a response cache and complexity_rules",
 			config: ConfigSpec{
-				EmbeddingModels: &EmbeddingModelsConfig{
-					MmBertModelPath: "models/mmbert-embedding",
-					UseCPU:          true,
-					EmbeddingConfig: &HNSWEmbeddingConfig{
-						ModelType:       "mmbert",
-						TargetLayer:     6,
-						TargetDimension: 256,
-					},
-				},
-				SemanticCache: &SemanticCacheConfig{
-					Enabled:        true,
-					BackendType:    "memory",
-					EmbeddingModel: "mmbert",
+				ResponseCache: &SemanticCacheConfig{
+					Enabled:     true,
+					BackendType: "memory",
 				},
 				ComplexityRules: []ComplexityRulesConfig{
 					{
@@ -552,10 +239,10 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 				return
 			}
 
-			// Verify embedding_models if present
-			if tt.config.EmbeddingModels != nil {
-				if config.EmbeddingModels == nil {
-					t.Error("EmbeddingModels should not be nil")
+			// Verify the response cache's embedding if present
+			if tt.config.ResponseCache != nil && tt.config.ResponseCache.Embedding != nil {
+				if config.ResponseCache == nil || config.ResponseCache.Embedding == nil || *config.ResponseCache.Embedding != *tt.config.ResponseCache.Embedding {
+					t.Errorf("ResponseCache.Embedding = %+v, want %+v", config.ResponseCache, tt.config.ResponseCache.Embedding)
 					return
 				}
 			}
@@ -572,23 +259,23 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 
 func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 	config := ConfigSpec{
-		Routing: &apiextensionsv1.JSON{Raw: []byte(`{
+		Recipes: &apiextensionsv1.JSON{Raw: []byte(`[{"name": "default",
 			"signals": {
-				"events": [{"name": "critical_payment_event", "event_types": ["payment_failed"]}]
+				"keywords": [{"name": "critical_payment_event", "operator": "AND", "keywords": ["payment_failed", "critical"]}]
 			}
-		}`)},
+		}]`)},
 		Decisions: []DecisionConfig{
 			{
 				Name: "agentic-session-route",
 				Rules: RuleCombinationConfig{
 					Operator: "AND",
 					Conditions: []RuleConditionConfig{
-						{Type: "event", Name: "critical_payment_event"},
+						{Type: "keyword", Name: "critical_payment_event"},
 					},
 				},
 				Algorithm: &apiextensionsv1.JSON{Raw: []byte(`{
-					"type": "hybrid",
-					"hybrid": {"elo_weight": 0.4, "router_dc_weight": 0.4}
+					"type": "multi_factor",
+					"multi_factor": {"weights": {"quality": 0.6, "cost": 0.4}}
 				}`)},
 			},
 		},
@@ -599,22 +286,22 @@ func TestConfigSpecPreservesCanonicalRoutingAndAlgorithmObjects(t *testing.T) {
 		t.Fatalf("json.Marshal() error = %v", err)
 	}
 	serialized := string(data)
-	if !strings.Contains(serialized, `"routing"`) ||
-		!strings.Contains(serialized, `"events"`) ||
-		!strings.Contains(serialized, `"hybrid"`) {
-		t.Fatalf("expected canonical routing and algorithm objects to serialize as public fields, got %s", serialized)
+	if !strings.Contains(serialized, `"recipes"`) ||
+		!strings.Contains(serialized, `"keywords"`) ||
+		!strings.Contains(serialized, `"multi_factor"`) {
+		t.Fatalf("expected canonical recipes and algorithm objects to serialize as public fields, got %s", serialized)
 	}
 
 	var decoded ConfigSpec
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
-	if decoded.Routing == nil || !strings.Contains(string(decoded.Routing.Raw), "critical_payment_event") {
-		t.Fatalf("expected routing raw object to round-trip, got %#v", decoded.Routing)
+	if decoded.Recipes == nil || !strings.Contains(string(decoded.Recipes.Raw), "critical_payment_event") {
+		t.Fatalf("expected recipes raw array to round-trip, got %#v", decoded.Recipes)
 	}
 	if len(decoded.Decisions) != 1 ||
 		decoded.Decisions[0].Algorithm == nil ||
-		!strings.Contains(string(decoded.Decisions[0].Algorithm.Raw), "hybrid") {
+		!strings.Contains(string(decoded.Decisions[0].Algorithm.Raw), "multi_factor") {
 		t.Fatalf("expected decision algorithm raw object to round-trip, got %#v", decoded.Decisions)
 	}
 }
@@ -625,28 +312,18 @@ func TestSemanticRouterWithNewFeatures(t *testing.T) {
 		sr   *SemanticRouter
 	}{
 		{
-			name: "semantic router with mmbert embeddings",
+			name: "semantic router with a response cache",
 			sr: &SemanticRouter{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-mmbert",
+					Name:      "test-cache",
 					Namespace: "default",
 				},
 				Spec: SemanticRouterSpec{
 					Replicas: func() *int32 { i := int32(1); return &i }(),
 					Config: ConfigSpec{
-						EmbeddingModels: &EmbeddingModelsConfig{
-							MmBertModelPath: "models/mmbert-embedding",
-							UseCPU:          true,
-							EmbeddingConfig: &HNSWEmbeddingConfig{
-								ModelType:       "mmbert",
-								TargetLayer:     6,
-								TargetDimension: 256,
-							},
-						},
-						SemanticCache: &SemanticCacheConfig{
-							Enabled:        true,
-							BackendType:    "memory",
-							EmbeddingModel: "mmbert",
+						ResponseCache: &SemanticCacheConfig{
+							Enabled:     true,
+							BackendType: "memory",
 						},
 					},
 				},
@@ -662,10 +339,6 @@ func TestSemanticRouterWithNewFeatures(t *testing.T) {
 				Spec: SemanticRouterSpec{
 					Replicas: func() *int32 { i := int32(1); return &i }(),
 					Config: ConfigSpec{
-						EmbeddingModels: &EmbeddingModelsConfig{
-							Qwen3ModelPath: "models/qwen3-embedding",
-							UseCPU:         true,
-						},
 						ComplexityRules: []ComplexityRulesConfig{
 							{
 								Name:      "code-complexity",

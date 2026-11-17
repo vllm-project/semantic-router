@@ -156,8 +156,8 @@ func TestRollbackActivatesARecordedVersionAsANewOne(t *testing.T) {
 // rejectedFileEdits are edits of the watched file that the Router rejects at
 // parse: the file keeps them, and the version before them keeps serving.
 var rejectedFileEdits = map[string]string{
-	"YAML that does not parse":     "version: v0.3\nrouting: {decisions: [\n",
-	"a document out of its layout": "version: v0.3\nrouting: [not, a, map]\n",
+	"YAML that does not parse":     "version: v0.5\nrouting: {decisions: [\n",
+	"a document out of its layout": "version: v0.5\nrouting: [not, a, map]\n",
 }
 
 // rejectFileEdit writes document to the watched file and rejects it as the

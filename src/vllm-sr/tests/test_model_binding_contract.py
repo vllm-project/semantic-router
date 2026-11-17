@@ -13,37 +13,16 @@ from pydantic import ValidationError
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cli.config_schema.validation import validate_config_structure
-from cli.models import ModelBinding, OperatingPointReference, UserConfig
+from cli.models import ModelBinding, UserConfig
 from cli.validator_recipe_contracts import _recipe_name_contract
 
 
 def binding_document():
     return {
-        "version": "v0.3",
-        "routing": {
-            "model_bindings": {
-                "embedding": {
-                    "deployment": "shared",
-                    "contract": "embedding.v1",
-                    "adapter": "mmbert",
-                }
-            }
-        },
+        "version": "v0.5",
         "recipes": [
-            {
-                "name": "private",
-                "routing": {
-                    "model_bindings": {
-                        "pii_classifier": {
-                            "deployment": "shared",
-                            "contract": "token_spans.v1",
-                            "adapter": "mmbert",
-                            "head": "pii",
-                            "mapping_path": "mappings/pii.json",
-                        }
-                    }
-                },
-            }
+            {"name": "default", "model_bindings": {"jailbreak": "shared"}},
+            {"name": "private", "model_bindings": {"pii": "shared"}},
         ],
         "global": {
             "model_catalog": {
@@ -66,6 +45,9 @@ def binding_document():
                 },
             }
         },
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
+        ],
     }
 
 
@@ -74,17 +56,20 @@ def test_model_bindings_survive_typed_and_schema_roundtrip():
     assert validate_config_structure(document) == []
     parsed = UserConfig.model_validate(document)
     emitted = parsed.model_dump(mode="json", by_alias=True, exclude_none=True)
-    assert emitted["routing"]["model_bindings"] == document["routing"]["model_bindings"]
-    assert (
-        emitted["recipes"][0]["routing"]["model_bindings"]
-        == document["recipes"][0]["routing"]["model_bindings"]
-    )
+    for index in (0, 1):
+        assert (
+            emitted["recipes"][index]["model_bindings"]
+            == document["recipes"][index]["model_bindings"]
+        )
     assert emitted["global"] == document["global"]
 
 
 def test_model_binding_fields_are_strict():
     document = binding_document()
-    document["routing"]["model_bindings"]["embedding"]["deploymnt"] = "typo"
+    document["recipes"][0]["model_bindings"]["jailbreak"] = {
+        "deployment": "shared",
+        "deploymnt": "typo",
+    }
     assert validate_config_structure(document)
     with pytest.raises(ValidationError):
         UserConfig.model_validate(document)
@@ -103,29 +88,14 @@ def test_bindings_only_default_cannot_be_overwritten_by_explicit_default():
     "written",
     ["shared", " shared ", {"deployment": "shared"}],
 )
-def test_a_binding_that_names_only_its_deployment_is_written_as_the_name(written):
+def test_a_binding_is_written_as_its_deployments_name(written):
     binding = ModelBinding.model_validate(written)
 
     assert binding.deployment == "shared"
     assert binding.model_dump(mode="json") == "shared"
 
 
-def test_a_binding_object_keeps_its_head_and_deprecated_fields():
-    written = {"deployment": "shared", "head": "pii", "contract": "token_spans.v1"}
-
-    assert ModelBinding.model_validate(written).model_dump(exclude_none=True) == written
-
-
-@pytest.mark.parametrize(
-    "reference",
-    [
-        {"path": "../outside.json", "sha256": "a" * 64},
-        {"path": " point.json", "sha256": "a" * 64},
-        {"path": "point.json", "sha256": "missing"},
-        {"path": "point.json", "sha256": "A" * 64},
-        {"path": "point.json", "sha256": "a" * 64, "ignored": True},
-    ],
-)
-def test_operating_point_requires_unambiguous_immutable_reference(reference):
+@pytest.mark.parametrize("field", ["head", "contract", "adapter", "mapping_path"])
+def test_a_binding_object_sets_no_field_but_its_deployment(field):
     with pytest.raises(ValidationError):
-        OperatingPointReference.model_validate(reference)
+        ModelBinding.model_validate({"deployment": "shared", field: "pii"})

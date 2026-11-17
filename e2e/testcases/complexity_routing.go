@@ -9,7 +9,7 @@ import (
 )
 
 // targetComplexityDecision is the decision the complexity signal escalates to
-// (see e2e/profiles/complexity-routing/values.yaml). Complexity always emits a
+// (see the complexity recipe in e2e/profiles/signal-routing/values.yaml). Complexity always emits a
 // verdict, so no case expects an empty matched header: every case pins the
 // exact "<rule>:<difficulty>" it should produce.
 const targetComplexityDecision = "complexity_hard_routing"
@@ -25,9 +25,10 @@ func init() {
 func testComplexityRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runSignalRoutingTest(ctx, client, opts, signalRoutingConfig{
 		TestDataPath:   "e2e/testcases/testdata/complexity_routing_cases.json",
-		MatchedHeader:  "x-vsr-matched-complexity",
+		SignalType:     "complexity",
 		TargetDecision: targetComplexityDecision,
 		ResultsTitle:   "COMPLEXITY ROUTING TEST RESULTS",
 		LogLabel:       "Complexity",
+		Entrypoint:     "vllm-sr/complexity",
 	})
 }

@@ -1,0 +1,33 @@
+# The auto model names reached the default recipe beside the entrypoints the
+# document wrote, as auto_model_names lists them (auto_model_name added none).
+# They become an entrypoint of the default recipe of their own, after the
+# document's, whose names stay as written.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: chat
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+  - name: private
+    decisions:
+      - name: local
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+entrypoints:
+  - model_names: [team/default]
+    recipe: default
+    default: true
+  - model_names: [team/private]
+    recipe: private
+global:
+  router:
+    auto_model_name: reference
+    auto_model_names: [vllm-sr/auto, auto, reference]

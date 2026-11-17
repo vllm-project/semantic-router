@@ -15,7 +15,9 @@ func (s *Server) Pin() (*Lease, error) {
 // StartContextWithoutExtProc runs the server for the native gateway: the
 // config watcher, generation swaps and shutdown behave as in
 // StartContextWithReady, but no ext_proc gRPC listener is opened. onServing
-// runs once the server is ready; the call returns when ctx ends.
+// runs once the server is ready; the call returns when ctx ends or the server
+// begins to shut down, so that the gateway drains then, whatever else the
+// shutdown waits for first.
 func (s *Server) StartContextWithoutExtProc(ctx context.Context, onServing func()) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -34,6 +36,9 @@ func (s *Server) StartContextWithoutExtProc(ctx context.Context, onServing func(
 	}
 	s.servingMu.Unlock()
 	watch := s.prepareConfigWatch()
+	if !s.usesKubernetesConfigSource() {
+		s.markServingReady()
+	}
 	if onServing != nil {
 		onServing()
 	}
@@ -43,6 +48,9 @@ func (s *Server) StartContextWithoutExtProc(ctx context.Context, onServing func(
 		defer watcherDone()
 		watch(watchCtx)
 	}()
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+	case <-s.lifecycle.shuttingDown():
+	}
 	return nil
 }

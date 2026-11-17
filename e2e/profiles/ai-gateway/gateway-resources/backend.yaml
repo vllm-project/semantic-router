@@ -22,10 +22,10 @@ spec:
           env:
             - name: PROVIDER_MOCKER_RESPONSE_DELAY_MS
               value: "5"
-            # No upstream may receive the authenticator's gateway credential
+            # No upstream may receive the authenticator's delegated credential
             # header, whether or not the contract is enabled (issue #2286).
             - name: PROVIDER_MOCKER_FORBIDDEN_HEADERS
-              value: x-vsr-gateway-credential
+              value: x-vsr-delegated-credential
           ports:
             - containerPort: 8000
               name: http

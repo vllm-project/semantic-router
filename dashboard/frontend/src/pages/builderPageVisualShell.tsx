@@ -4,7 +4,8 @@ import React, { useCallback, useMemo, useState } from 'react'
 import type { Diagnostic, EditorMode, DSLFieldObject } from '@/types/dsl'
 import { useDSLStore } from '@/stores/dslStore'
 import type { RouteInput } from '@/lib/dslMutations'
-import { formatRoutingMetadataValue } from '@/components/routingMetadataDisplay'
+import { formatRoutingMetadataValue, matchedSignalKey } from '@/components/routingMetadataDisplay'
+import { X_VSR_SELECTED_DECISION } from '@/generated/vsrHeaders'
 
 import styles from './BuilderPage.module.css'
 import { ModelIcon, PluginIcon, RouteIcon, SignalIcon } from './builderPageFormPrimitives'
@@ -18,7 +19,13 @@ import { DashboardView, EntityListView, SidebarSection } from './builderPageDash
 import { EntityDetailView } from './builderPageEntityDetailView'
 import { AddRouteForm } from './builderPageRouteForms'
 import { BuilderValidationPanel } from './builderPageValidationPanel'
-import type { BuilderSelectedEntity, EntityKind, SectionState, Selection } from './builderPageTypes'
+import {
+  isSelectedSignal,
+  type BuilderSelectedEntity,
+  type EntityKind,
+  type SectionState,
+  type Selection,
+} from './builderPageTypes'
 import {
   listReferenceableSignals,
   type BuilderRoutingScope,
@@ -198,348 +205,354 @@ const VisualMode: React.FC<VisualModeProps> = ({
   const homeActive = selection === null && !addingEntity
 
   return (
-    <SignalCapabilityProvider active={addingEntity === 'signal' || selection?.kind === 'signal'} scope={{ recipe: routingScopes.find((scope) => scope.id === activeRoutingScopeId)?.recipeName || 'default', bindings: ast?.modelBindings }}>
-    <div className={styles.visualContainer}>
-      <BuilderRoutingScopeBar
-        scopes={routingScopes}
-        activeScopeId={activeRoutingScopeId}
-        onChange={onRoutingScopeChange}
-      />
-      <div className={styles.visualRow}>
-        {/* Sidebar */}
-        <div className={styles.sidebar} style={{ width: sidebarWidth }}>
-          {/* Dashboard home link */}
-          <button
-            type="button"
-            className={homeActive ? styles.sidebarHomeActive : styles.sidebarHome}
-            aria-current={homeActive ? 'page' : undefined}
-            onClick={() => {
-              onSetAddingEntity(null)
-              onSelect(null)
-            }}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+    <SignalCapabilityProvider
+      active={addingEntity === 'signal' || selection?.kind === 'signal'}
+      scope={{
+        recipe:
+          routingScopes.find((scope) => scope.id === activeRoutingScopeId)?.recipeName || 'default',
+        bindings: ast?.modelBindings,
+      }}
+    >
+      <div className={styles.visualContainer}>
+        <BuilderRoutingScopeBar
+          scopes={routingScopes}
+          activeScopeId={activeRoutingScopeId}
+          onChange={onRoutingScopeChange}
+        />
+        <div className={styles.visualRow}>
+          {/* Sidebar */}
+          <div className={styles.sidebar} style={{ width: sidebarWidth }}>
+            {/* Dashboard home link */}
+            <button
+              type="button"
+              className={homeActive ? styles.sidebarHomeActive : styles.sidebarHome}
+              aria-current={homeActive ? 'page' : undefined}
+              onClick={() => {
+                onSetAddingEntity(null)
+                onSelect(null)
+              }}
             >
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-            </svg>
-            Dashboard
-          </button>
-
-          <SidebarSection
-            title="Models"
-            count={modelCount}
-            open={sections.models}
-            onToggle={() => onToggleSection('models')}
-            onAdd={() => {
-              onSetAddingEntity('model')
-              onSelect(null)
-            }}
-          >
-            {ast?.models?.map((model) => (
-              <SidebarEntityItem
-                key={model.name}
-                active={selection?.kind === 'model' && selection.name === model.name}
-                onClick={() => {
-                  onSetAddingEntity(null)
-                  onSelect({ kind: 'model', name: model.name })
-                }}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <ModelIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>{model.name}</span>
-                <span className={styles.sidebarItemType}>catalog</span>
-              </SidebarEntityItem>
-            ))}
-          </SidebarSection>
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+              </svg>
+              Dashboard
+            </button>
 
-          {/* Signals */}
-          <SidebarSection
-            title="Signals"
-            count={signalCount}
-            open={sections.signals}
-            onToggle={() => onToggleSection('signals')}
-            onAdd={() => {
-              onSetAddingEntity('signal')
-              onSelect(null)
-            }}
+            <SidebarSection
+              title="Models"
+              count={modelCount}
+              open={sections.models}
+              onToggle={() => onToggleSection('models')}
+              onAdd={() => {
+                onSetAddingEntity('model')
+                onSelect(null)
+              }}
+            >
+              {ast?.models?.map((model) => (
+                <SidebarEntityItem
+                  key={model.name}
+                  active={selection?.kind === 'model' && selection.name === model.name}
+                  onClick={() => {
+                    onSetAddingEntity(null)
+                    onSelect({ kind: 'model', name: model.name })
+                  }}
+                >
+                  <ModelIcon className={styles.sidebarItemIcon} />
+                  <span className={styles.sidebarItemName}>{model.name}</span>
+                  <span className={styles.sidebarItemType}>catalog</span>
+                </SidebarEntityItem>
+              ))}
+            </SidebarSection>
+
+            {/* Signals */}
+            <SidebarSection
+              title="Signals"
+              count={signalCount}
+              open={sections.signals}
+              onToggle={() => onToggleSection('signals')}
+              onAdd={() => {
+                onSetAddingEntity('signal')
+                onSelect(null)
+              }}
+            >
+              {ast?.signals?.map((s) => (
+                <SidebarEntityItem
+                  key={`${s.signalType}:${s.name}`}
+                  active={isSelectedSignal(selection, s)}
+                  onClick={() => {
+                    onSetAddingEntity(null)
+                    onSelect({ kind: 'signal', name: s.name, signalType: s.signalType })
+                  }}
+                >
+                  <SignalIcon className={styles.sidebarItemIcon} />
+                  <span className={styles.sidebarItemName}>
+                    {formatRoutingMetadataValue(matchedSignalKey(s.signalType), s.name)}
+                  </span>
+                  <span className={styles.sidebarItemType}>{s.signalType}</span>
+                </SidebarEntityItem>
+              ))}
+            </SidebarSection>
+
+            <SidebarSection
+              title="Projection Partitions"
+              count={projectionPartitionCount}
+              open={sections.projectionPartitions}
+              onToggle={() => onToggleSection('projectionPartitions')}
+              onAdd={() => {
+                onSetAddingEntity('projection-partition')
+                onSelect(null)
+              }}
+            >
+              {ast?.projectionPartitions?.map((partition) => (
+                <SidebarEntityItem
+                  key={partition.name}
+                  active={
+                    selection?.kind === 'projection-partition' && selection.name === partition.name
+                  }
+                  onClick={() => {
+                    onSetAddingEntity(null)
+                    onSelect({ kind: 'projection-partition', name: partition.name })
+                  }}
+                >
+                  <SignalIcon className={styles.sidebarItemIcon} />
+                  <span className={styles.sidebarItemName}>
+                    {formatRoutingMetadataValue(matchedSignalKey('projection'), partition.name)}
+                  </span>
+                  <span className={styles.sidebarItemType}>partition</span>
+                </SidebarEntityItem>
+              ))}
+            </SidebarSection>
+
+            <SidebarSection
+              title="Projection Scores"
+              count={projectionScoreCount}
+              open={sections.projectionScores}
+              onToggle={() => onToggleSection('projectionScores')}
+              onAdd={() => {
+                onSetAddingEntity('projection-score')
+                onSelect(null)
+              }}
+            >
+              {ast?.projectionScores?.map((score) => (
+                <SidebarEntityItem
+                  key={score.name}
+                  active={selection?.kind === 'projection-score' && selection.name === score.name}
+                  onClick={() => {
+                    onSetAddingEntity(null)
+                    onSelect({ kind: 'projection-score', name: score.name })
+                  }}
+                >
+                  <RouteIcon className={styles.sidebarItemIcon} />
+                  <span className={styles.sidebarItemName}>
+                    {formatRoutingMetadataValue(matchedSignalKey('projection'), score.name)}
+                  </span>
+                  <span className={styles.sidebarItemType}>score</span>
+                </SidebarEntityItem>
+              ))}
+            </SidebarSection>
+
+            <SidebarSection
+              title="Projection Mappings"
+              count={projectionMappingCount}
+              open={sections.projectionMappings}
+              onToggle={() => onToggleSection('projectionMappings')}
+              onAdd={() => {
+                onSetAddingEntity('projection-mapping')
+                onSelect(null)
+              }}
+            >
+              {ast?.projectionMappings?.map((mapping) => (
+                <SidebarEntityItem
+                  key={mapping.name}
+                  active={
+                    selection?.kind === 'projection-mapping' && selection.name === mapping.name
+                  }
+                  onClick={() => {
+                    onSetAddingEntity(null)
+                    onSelect({ kind: 'projection-mapping', name: mapping.name })
+                  }}
+                >
+                  <RouteIcon className={styles.sidebarItemIcon} />
+                  <span className={styles.sidebarItemName}>
+                    {formatRoutingMetadataValue(matchedSignalKey('projection'), mapping.name)}
+                  </span>
+                  <span className={styles.sidebarItemType}>mapping</span>
+                </SidebarEntityItem>
+              ))}
+            </SidebarSection>
+
+            {/* Routes */}
+            <SidebarSection
+              title="Routes"
+              count={routeCount}
+              open={sections.routes}
+              onToggle={() => onToggleSection('routes')}
+              onAdd={() => {
+                onSetAddingEntity('route')
+                onSelect(null)
+              }}
+            >
+              {ast?.routes?.map((r) => (
+                <SidebarEntityItem
+                  key={r.name}
+                  active={selection?.kind === 'route' && selection.name === r.name}
+                  onClick={() => {
+                    onSetAddingEntity(null)
+                    onSelect({ kind: 'route', name: r.name })
+                  }}
+                >
+                  <RouteIcon className={styles.sidebarItemIcon} />
+                  <span className={styles.sidebarItemName}>
+                    {formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, r.name)}
+                  </span>
+                  <span className={styles.sidebarItemType}>P{r.priority}</span>
+                </SidebarEntityItem>
+              ))}
+            </SidebarSection>
+
+            {/* Plugins */}
+            <SidebarSection
+              title="Plugins"
+              count={pluginCount}
+              open={sections.plugins}
+              onToggle={() => onToggleSection('plugins')}
+              onAdd={() => {
+                onSetAddingEntity('plugin')
+                onSelect(null)
+              }}
+            >
+              {ast?.plugins?.map((p) => (
+                <SidebarEntityItem
+                  key={p.name}
+                  active={selection?.kind === 'plugin' && selection.name === p.name}
+                  onClick={() => {
+                    onSetAddingEntity(null)
+                    onSelect({ kind: 'plugin', name: p.name })
+                  }}
+                >
+                  <PluginIcon className={styles.sidebarItemIcon} />
+                  <span className={styles.sidebarItemName}>{p.name}</span>
+                  <span className={styles.sidebarItemType}>{p.pluginType}</span>
+                </SidebarEntityItem>
+              ))}
+            </SidebarSection>
+          </div>
+
+          <div
+            className={`${styles.resizeHandle} ${styles.sidebarResizeHandle}`}
+            onMouseDown={handleSidebarDragStart}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize builder navigation"
           >
-            {ast?.signals?.map((s) => (
-              <SidebarEntityItem
-                key={s.name}
-                active={selection?.kind === 'signal' && selection.name === s.name}
-                onClick={() => {
-                  onSetAddingEntity(null)
-                  onSelect({ kind: 'signal', name: s.name })
-                }}
-              >
-                <SignalIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue(
-                    `x-vsr-matched-${s.signalType.replace('_', '-')}`,
-                    s.name,
-                  )}
-                </span>
-                <span className={styles.sidebarItemType}>{s.signalType}</span>
-              </SidebarEntityItem>
-            ))}
-          </SidebarSection>
+            <span className={styles.resizeHandleLine} />
+          </div>
 
-          <SidebarSection
-            title="Projection Partitions"
-            count={projectionPartitionCount}
-            open={sections.projectionPartitions}
-            onToggle={() => onToggleSection('projectionPartitions')}
-            onAdd={() => {
-              onSetAddingEntity('projection-partition')
-              onSelect(null)
-            }}
-          >
-            {ast?.projectionPartitions?.map((partition) => (
-              <SidebarEntityItem
-                key={partition.name}
-                active={
-                  selection?.kind === 'projection-partition' && selection.name === partition.name
-                }
-                onClick={() => {
-                  onSetAddingEntity(null)
-                  onSelect({ kind: 'projection-partition', name: partition.name })
-                }}
-              >
-                <SignalIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue('x-vsr-matched-projections', partition.name)}
-                </span>
-                <span className={styles.sidebarItemType}>partition</span>
-              </SidebarEntityItem>
-            ))}
-          </SidebarSection>
-
-          <SidebarSection
-            title="Projection Scores"
-            count={projectionScoreCount}
-            open={sections.projectionScores}
-            onToggle={() => onToggleSection('projectionScores')}
-            onAdd={() => {
-              onSetAddingEntity('projection-score')
-              onSelect(null)
-            }}
-          >
-            {ast?.projectionScores?.map((score) => (
-              <SidebarEntityItem
-                key={score.name}
-                active={selection?.kind === 'projection-score' && selection.name === score.name}
-                onClick={() => {
-                  onSetAddingEntity(null)
-                  onSelect({ kind: 'projection-score', name: score.name })
-                }}
-              >
-                <RouteIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue('x-vsr-matched-projections', score.name)}
-                </span>
-                <span className={styles.sidebarItemType}>score</span>
-              </SidebarEntityItem>
-            ))}
-          </SidebarSection>
-
-          <SidebarSection
-            title="Projection Mappings"
-            count={projectionMappingCount}
-            open={sections.projectionMappings}
-            onToggle={() => onToggleSection('projectionMappings')}
-            onAdd={() => {
-              onSetAddingEntity('projection-mapping')
-              onSelect(null)
-            }}
-          >
-            {ast?.projectionMappings?.map((mapping) => (
-              <SidebarEntityItem
-                key={mapping.name}
-                active={selection?.kind === 'projection-mapping' && selection.name === mapping.name}
-                onClick={() => {
-                  onSetAddingEntity(null)
-                  onSelect({ kind: 'projection-mapping', name: mapping.name })
-                }}
-              >
-                <RouteIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue('x-vsr-matched-projections', mapping.name)}
-                </span>
-                <span className={styles.sidebarItemType}>mapping</span>
-              </SidebarEntityItem>
-            ))}
-          </SidebarSection>
-
-          {/* Routes */}
-          <SidebarSection
-            title="Routes"
-            count={routeCount}
-            open={sections.routes}
-            onToggle={() => onToggleSection('routes')}
-            onAdd={() => {
-              onSetAddingEntity('route')
-              onSelect(null)
-            }}
-          >
-            {ast?.routes?.map((r) => (
-              <SidebarEntityItem
-                key={r.name}
-                active={selection?.kind === 'route' && selection.name === r.name}
-                onClick={() => {
-                  onSetAddingEntity(null)
-                  onSelect({ kind: 'route', name: r.name })
-                }}
-              >
-                <RouteIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue('x-vsr-selected-decision', r.name)}
-                </span>
-                <span className={styles.sidebarItemType}>P{r.priority}</span>
-              </SidebarEntityItem>
-            ))}
-          </SidebarSection>
-
-          {/* Plugins */}
-          <SidebarSection
-            title="Plugins"
-            count={pluginCount}
-            open={sections.plugins}
-            onToggle={() => onToggleSection('plugins')}
-            onAdd={() => {
-              onSetAddingEntity('plugin')
-              onSelect(null)
-            }}
-          >
-            {ast?.plugins?.map((p) => (
-              <SidebarEntityItem
-                key={p.name}
-                active={selection?.kind === 'plugin' && selection.name === p.name}
-                onClick={() => {
-                  onSetAddingEntity(null)
-                  onSelect({ kind: 'plugin', name: p.name })
-                }}
-              >
-                <PluginIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>{p.name}</span>
-                <span className={styles.sidebarItemType}>{p.pluginType}</span>
-              </SidebarEntityItem>
-            ))}
-          </SidebarSection>
-        </div>
-
-        <div
-          className={`${styles.resizeHandle} ${styles.sidebarResizeHandle}`}
-          onMouseDown={handleSidebarDragStart}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize builder navigation"
-        >
-          <span className={styles.resizeHandleLine} />
-        </div>
-
-        {/* Main panel */}
-        <div className={styles.mainPanel}>
-          {!compilerReady && !compilerError && (
-            <div className={styles.wasmOverlay}>
-              <ProductLoadingState label="Loading compiler" compact />
-            </div>
-          )}
-
-          <div className={styles.mainPanelContent}>
-            {addingEntity === 'model' ? (
-              <AddModelForm onAdd={onAddModel} onCancel={() => onSetAddingEntity(null)} />
-            ) : addingEntity === 'signal' ? (
-              <AddSignalForm onAdd={onAddSignal} onCancel={() => onSetAddingEntity(null)} />
-            ) : addingEntity === 'projection-partition' ? (
-              <AddProjectionPartitionForm
-                onAdd={onAddProjectionPartition}
-                onCancel={() => onSetAddingEntity(null)}
-              />
-            ) : addingEntity === 'projection-score' ? (
-              <AddProjectionScoreForm
-                onAdd={onAddProjectionScore}
-                onCancel={() => onSetAddingEntity(null)}
-              />
-            ) : addingEntity === 'projection-mapping' ? (
-              <AddProjectionMappingForm
-                onAdd={onAddProjectionMapping}
-                onCancel={() => onSetAddingEntity(null)}
-              />
-            ) : addingEntity === 'plugin' ? (
-              <AddPluginForm onAdd={onAddPlugin} onCancel={() => onSetAddingEntity(null)} />
-            ) : addingEntity === 'route' ? (
-              <AddRouteForm
-                onAdd={onAddRoute}
-                onCancel={() => onSetAddingEntity(null)}
-                availableSignals={availableSignals}
-                availablePlugins={availablePlugins}
-                availableModels={availableModels}
-              />
-            ) : !selection ? (
-              <DashboardView
-                ast={ast}
-                modelCount={modelCount}
-                signalCount={signalCount}
-                routeCount={routeCount}
-                pluginCount={pluginCount}
-                isValid={isValid}
-                errorCount={errorCount}
-                onSelect={onSelect}
-                onAddEntity={onSetAddingEntity}
-                onModeSwitch={onModeSwitch}
-              />
-            ) : selection.name === '__list__' ? (
-              <EntityListView
-                kind={selection.kind}
-                ast={ast}
-                onSelect={onSelect}
-                onBack={() => onSelect(null)}
-                onAddEntity={onSetAddingEntity}
-              />
-            ) : (
-              <EntityDetailView
-                selection={selection}
-                entity={selectedEntity}
-                onDeleteEntity={onDeleteEntity}
-                onUpdateModelFields={onUpdateModelFields}
-                onUpdateSignalFields={onUpdateSignalFields}
-                onUpdateProjectionPartitionFields={onUpdateProjectionPartitionFields}
-                onUpdateProjectionScoreFields={onUpdateProjectionScoreFields}
-                onUpdateProjectionMappingFields={onUpdateProjectionMappingFields}
-                onUpdatePluginFields={onUpdatePluginFields}
-                onUpdateRoute={onUpdateRoute}
-                availableSignals={availableSignals}
-                availablePlugins={availablePlugins}
-                availableModels={availableModels}
-                onBack={() => onSelect(null)}
-              />
+          {/* Main panel */}
+          <div className={styles.mainPanel}>
+            {!compilerReady && !compilerError && (
+              <div className={styles.wasmOverlay}>
+                <ProductLoadingState label="Loading compiler" compact />
+              </div>
             )}
+
+            <div className={styles.mainPanelContent}>
+              {addingEntity === 'model' ? (
+                <AddModelForm onAdd={onAddModel} onCancel={() => onSetAddingEntity(null)} />
+              ) : addingEntity === 'signal' ? (
+                <AddSignalForm onAdd={onAddSignal} onCancel={() => onSetAddingEntity(null)} />
+              ) : addingEntity === 'projection-partition' ? (
+                <AddProjectionPartitionForm
+                  onAdd={onAddProjectionPartition}
+                  onCancel={() => onSetAddingEntity(null)}
+                />
+              ) : addingEntity === 'projection-score' ? (
+                <AddProjectionScoreForm
+                  onAdd={onAddProjectionScore}
+                  onCancel={() => onSetAddingEntity(null)}
+                />
+              ) : addingEntity === 'projection-mapping' ? (
+                <AddProjectionMappingForm
+                  onAdd={onAddProjectionMapping}
+                  onCancel={() => onSetAddingEntity(null)}
+                />
+              ) : addingEntity === 'plugin' ? (
+                <AddPluginForm onAdd={onAddPlugin} onCancel={() => onSetAddingEntity(null)} />
+              ) : addingEntity === 'route' ? (
+                <AddRouteForm
+                  onAdd={onAddRoute}
+                  onCancel={() => onSetAddingEntity(null)}
+                  availableSignals={availableSignals}
+                  availablePlugins={availablePlugins}
+                  availableModels={availableModels}
+                />
+              ) : !selection ? (
+                <DashboardView
+                  ast={ast}
+                  modelCount={modelCount}
+                  signalCount={signalCount}
+                  routeCount={routeCount}
+                  pluginCount={pluginCount}
+                  isValid={isValid}
+                  errorCount={errorCount}
+                  onSelect={onSelect}
+                  onAddEntity={onSetAddingEntity}
+                  onModeSwitch={onModeSwitch}
+                />
+              ) : selection.name === '__list__' ? (
+                <EntityListView
+                  kind={selection.kind}
+                  ast={ast}
+                  onSelect={onSelect}
+                  onBack={() => onSelect(null)}
+                  onAddEntity={onSetAddingEntity}
+                />
+              ) : (
+                <EntityDetailView
+                  selection={selection}
+                  entity={selectedEntity}
+                  onDeleteEntity={onDeleteEntity}
+                  onUpdateModelFields={onUpdateModelFields}
+                  onUpdateSignalFields={onUpdateSignalFields}
+                  onUpdateProjectionPartitionFields={onUpdateProjectionPartitionFields}
+                  onUpdateProjectionScoreFields={onUpdateProjectionScoreFields}
+                  onUpdateProjectionMappingFields={onUpdateProjectionMappingFields}
+                  onUpdatePluginFields={onUpdatePluginFields}
+                  onUpdateRoute={onUpdateRoute}
+                  availableSignals={availableSignals}
+                  availablePlugins={availablePlugins}
+                  availableModels={availableModels}
+                  onBack={() => onSelect(null)}
+                />
+              )}
+            </div>
           </div>
         </div>
-      </div>
-      {/* end visualRow */}
+        {/* end visualRow */}
 
-      <BuilderValidationPanel
-        diagnostics={diagnostics}
-        validationOpen={validationOpen}
-        errorDiags={errorDiags}
-        warnDiags={warnDiags}
-        constraintDiags={constraintDiags}
-        onToggle={() => setValidationOpen(!validationOpen)}
-        onApplyFix={handleApplyFix}
-      />
-      {sidebarDragging ? <div className={styles.dragOverlay} aria-hidden="true" /> : null}
-    </div>
+        <BuilderValidationPanel
+          diagnostics={diagnostics}
+          validationOpen={validationOpen}
+          errorDiags={errorDiags}
+          warnDiags={warnDiags}
+          constraintDiags={constraintDiags}
+          onToggle={() => setValidationOpen(!validationOpen)}
+          onApplyFix={handleApplyFix}
+        />
+        {sidebarDragging ? <div className={styles.dragOverlay} aria-hidden="true" /> : null}
+      </div>
     </SignalCapabilityProvider>
   )
 }

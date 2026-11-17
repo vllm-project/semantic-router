@@ -52,18 +52,20 @@ func TestIngressRejectionLogsCodeAndMessage(t *testing.T) {
 	if fields["request_id"] != "req-1" || fields["code"] != "unsupported_tools_defer_loading" || fields["status"] != int64(400) {
 		t.Fatalf("rejection fields = %v", fields)
 	}
-	if message, _ := fields["message"].(string); message != "tools.defer_loading is not supported by the protocol-neutral request contract" {
+	// the hint is empty until tools.defer_loading becomes a loss an operator may accept
+	want := "tools.defer_loading is not supported by the protocol-neutral request contract" + llmprotocol.OptInHint("tools.defer_loading")
+	if message, _ := fields["message"].(string); message != want {
 		t.Fatalf("rejection message = %q", message)
 	}
 }
 
-// Toward a Chat backend Claude Code's thinking display is refused by the
-// dispatch capability check, a path that never passes through the ingress or
-// the dispatch encoder.
+// Toward a Chat backend a context edit that would change history is refused
+// by the dispatch capability check, a path that never passes through the
+// ingress or the dispatch encoder.
 func TestDispatchCapabilityRejectionLogsCodeAndMessage(t *testing.T) {
 	logs := observeRejections(t)
 	router := routingTestRouter("chat")
-	body := `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"updates"}}`
+	body := `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"last"}]}}`
 	request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(body))
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +74,7 @@ func TestDispatchCapabilityRejectionLogsCodeAndMessage(t *testing.T) {
 	ctx.RequestID = "req-2"
 	_, err = router.prepareProviderDispatch(&request, "chat", "", false, ctx)
 	if err == nil {
-		t.Fatal("expected the thinking display to be refused toward a Chat backend")
+		t.Fatal("expected the context edit to be refused toward a Chat backend")
 	}
 	response, converted := router.processBodyRoutingError(err, ctx)
 	if !converted {
@@ -80,7 +82,7 @@ func TestDispatchCapabilityRejectionLogsCodeAndMessage(t *testing.T) {
 	}
 	router.encodeImmediateResponseForClient(response, ctx)
 	fields := rejectionFields(t, logs)
-	if fields["request_id"] != "req-2" || fields["code"] != "unsupported_reasoning_display" || fields["status"] != int64(400) {
+	if fields["request_id"] != "req-2" || fields["code"] != "lossy_translation" || fields["status"] != int64(400) {
 		t.Fatalf("rejection fields = %v", fields)
 	}
 }

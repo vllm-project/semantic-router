@@ -19,8 +19,8 @@ const DEFAULT_DSL = `# Welcome to the Signal DSL Editor
 #
 # Example:
 # MODEL "gpt-4o" {
-#   modality: "text"
-#   capabilities: ["general", "reasoning"]
+#   capabilities: ["general", "reasoning", "vision"]
+#   modalities: { input: ["text", "image"], output: ["text"] }
 # }
 #
 # SIGNAL keyword math_terms {

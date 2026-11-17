@@ -28,7 +28,7 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	plugin := activeContextRecoveryPlugin(requestCtx)
+	plugin := activeContextRecoveryPlugin(r.Config, requestCtx)
 	if plugin == nil {
 		return responseBody, nil
 	}
@@ -52,8 +52,8 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 		return responseBody, fmt.Errorf("context recovery retrieval limit exceeded")
 	}
 	// The followup keeps only this turn's retrieval calls and is sent through
-	// a Looper client, so neither this turn's nor the history's continuity
-	// blocks would reach the provider.
+	// a Looper client, so other continuity formats would lose required state.
+	// Responses blobs may be dropped by Chat encoding, as in ordinary dispatch.
 	if carriesReasoningContinuity(requestCtx.SemanticRequest, &decoded.Response) {
 		return responseBody, fmt.Errorf("context recovery cannot carry reasoning continuity blocks")
 	}
@@ -80,23 +80,23 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 }
 
 func activeContextRecoveryPlugin(
+	cfg *config.RouterConfig,
 	requestCtx *RequestContext,
-) *config.ContextCompressionPluginConfig {
+) *config.ContextCompressConfig {
 	if requestCtx == nil ||
-		requestCtx.VSRSelectedDecision == nil ||
 		requestCtx.ExpectStreamingResponse ||
 		len(requestCtx.ContextCompressionRecoveryKeys) == 0 {
 		return nil
 	}
-	plugin := requestCtx.VSRSelectedDecision.GetContextCompressionConfig()
-	if plugin == nil || plugin.Recovery == nil || !plugin.Recovery.Enabled {
+	plugin := contextCompression(requestPlugins(cfg, requestCtx))
+	if plugin == nil || plugin.Compress.Recovery == nil || !plugin.Compress.Recovery.Enabled {
 		return nil
 	}
-	return plugin
+	return plugin.Compress
 }
 
 func contextRecoveryLimit(
-	plugin *config.ContextCompressionPluginConfig,
+	plugin *config.ContextCompressConfig,
 ) int {
 	if plugin.Recovery.MaxRetrievals > 0 {
 		return plugin.Recovery.MaxRetrievals
@@ -107,7 +107,7 @@ func contextRecoveryLimit(
 func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 	ctx context.Context,
 	requestCtx *RequestContext,
-	plugin *config.ContextCompressionPluginConfig,
+	plugin *config.ContextCompressConfig,
 	calls []contextRecoveryCall,
 ) ([]llmprotocol.Message, error) {
 	store := r.contextCompressionRecoveryStore(plugin)
@@ -196,6 +196,21 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	)
 	if err != nil {
 		return nil, fmt.Errorf("encode context recovery followup: %w", err)
+	}
+	// The dispatch may already have reported what this encode drops again,
+	// such as a replayed Responses blob, so a loss is added only past the
+	// copies the context already holds, and two blobs still count as two.
+	type loss struct{ action, field, reason string }
+	held := map[loss]int{}
+	for _, seen := range requestCtx.ProtocolDiagnostics {
+		held[loss{string(seen.Action), seen.Field, seen.Reason}]++
+	}
+	for _, diagnostic := range encodedRequest.Diagnostics {
+		if key := (loss{string(diagnostic.Action), diagnostic.Field, diagnostic.Reason}); held[key] > 0 {
+			held[key]--
+			continue
+		}
+		requestCtx.ProtocolDiagnostics = append(requestCtx.ProtocolDiagnostics, diagnostic)
 	}
 	openAIRequest, err := parseOpenAIRequest(encodedRequest.Body)
 	if err != nil {

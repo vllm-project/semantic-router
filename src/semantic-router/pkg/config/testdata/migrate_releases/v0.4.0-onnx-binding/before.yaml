@@ -1,0 +1,96 @@
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    model: qwen2.5:3b
+  models:
+  - name: qwen2.5:3b
+    reasoning:
+      family: qwen3
+    backend_refs:
+    - name: ollama
+      endpoint: 127.0.0.1:11434
+      provider: ollama
+      weight: 1
+routing:
+  decisions:
+  - name: default
+    description: Default routing
+    priority: 100
+    rules:
+      operator: OR
+      conditions:
+      - type: domain
+        name: general
+    modelRefs:
+    - model: qwen2.5:3b
+      use_reasoning: false
+      weight: 100
+  signals:
+    domains:
+    - name: general
+      description: General queries
+    - name: engineering
+      description: Technical questions
+  modelCards:
+  - name: qwen2.5:3b
+  model_bindings:
+    embedding:
+      deployment: embedding-onnx
+      contract: embedding.v1
+      adapter: mmbert
+      head: onnx/model.onnx
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        use_cpu: true
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
+        embedding_config:
+          model_type: mmbert
+    modules:
+      classifier:
+        domain:
+          enabled: false
+        pii:
+          enabled: false
+      hallucination_mitigation:
+        enabled: false
+      prompt_guard:
+        enabled: false
+      feedback_detector:
+        enabled: false
+    deployments:
+      embedding-onnx:
+        artifact: models/Vela-1.0-Encoder-307M-Embedding
+        provider: ort
+        device: cpu
+        precision: fp32
+        input:
+          max_tokens: 32768
+          overflow: reject
+  router: {}
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
+      max_responses: 1000
+    router_replay:
+      store_backend: memory
+      ttl_seconds: 2592000
+      async_writes: true
+  stores:
+    response_cache:
+      enabled: true
+      backend_type: memory
+      similarity_threshold: 0.85
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+      embedding_model: mmbert
+  integrations:
+    tools:
+      enabled: true
+      tools_db_path: config/runtime/tools/tools_db.json
+      similarity_threshold: 0.7

@@ -24,18 +24,13 @@ func TestErrorFixtureDoesNotFallBackToThePositiveRoute(t *testing.T) {
 					Model string `yaml:"model"`
 				} `yaml:"defaults"`
 			} `yaml:"providers"`
-			Routing struct {
-				Decisions []decision `yaml:"decisions"`
-			} `yaml:"routing"`
 			Entrypoints []struct {
 				ModelNames []string `yaml:"model_names"`
 				Recipe     string   `yaml:"recipe"`
 			} `yaml:"entrypoints"`
 			Recipes []struct {
-				Name    string `yaml:"name"`
-				Routing struct {
-					Decisions []decision `yaml:"decisions"`
-				} `yaml:"routing"`
+				Name      string     `yaml:"name"`
+				Decisions []decision `yaml:"decisions"`
 			} `yaml:"recipes"`
 		} `yaml:"configOverride"`
 	}
@@ -65,7 +60,7 @@ func TestErrorFixtureDoesNotFallBackToThePositiveRoute(t *testing.T) {
 	for _, recipe := range values.Config.Recipes {
 		if recipe.Name == errorRecipe {
 			found = true
-			if len(recipe.Routing.Decisions) != 0 {
+			if len(recipe.Decisions) != 0 {
 				t.Fatal("the error recipe must not select a backend")
 			}
 		}
@@ -73,8 +68,14 @@ func TestErrorFixtureDoesNotFallBackToThePositiveRoute(t *testing.T) {
 	if !found {
 		t.Fatalf("the error recipe %q is missing", errorRecipe)
 	}
+	var defaultDecisions []decision
+	for _, recipe := range values.Config.Recipes {
+		if recipe.Name == "default" {
+			defaultDecisions = recipe.Decisions
+		}
+	}
 	modelsByDecision := map[string][]string{}
-	for _, route := range values.Config.Routing.Decisions {
+	for _, route := range defaultDecisions {
 		for _, ref := range route.ModelRefs {
 			modelsByDecision[route.Name] = append(modelsByDecision[route.Name], ref.Model)
 		}

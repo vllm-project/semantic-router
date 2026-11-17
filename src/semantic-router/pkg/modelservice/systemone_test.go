@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
@@ -32,8 +33,8 @@ func systemOneManager(t *testing.T, invoke http.HandlerFunc) *Manager {
 	manager := NewManager()
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"test-systemone": {Provider: config.ModelRuntimeProvider, Endpoint: upstream.URL, ServedName: "served"}}
-	cfg.DecisionRules = []config.DecisionSignalRule{{Name: "test", Deployment: "test-systemone", Question: config.DecisionQuestion{Type: "noul", Instructions: "test?"}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"test-systemone": {Provider: config.ModelRuntimeProvider, Endpoint: upstream.URL, Model: "served"}}
+	cfg.SystemOneRules = []config.SystemOneRule{{Name: "test", Deployment: "test-systemone", Question: config.SystemOneQuestion{Type: "noul", Instructions: "test?"}}}
 	if err := manager.Reconcile(cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -134,5 +135,25 @@ func TestSystemOneBoundsErrorsRedirectsAndCancellation(t *testing.T) {
 	}
 	if _, err := manager.SystemOne(context.Background(), "http://untrusted.invalid", json.RawMessage(`{}`)); !errors.Is(err, ErrUnknownDeployment) {
 		t.Fatalf("URL target accepted: %v", err)
+	}
+}
+
+// The deployment a System One diagnostic call names is caller text, so a name
+// the configuration does not declare is never a metric label: every such call
+// counts in the one unknown series.
+func TestUnknownDeploymentNamesShareOneRequestSeries(t *testing.T) {
+	manager := systemOneManager(t, func(http.ResponseWriter, *http.Request) {})
+	unknown := requestsTotal.WithLabelValues(consts.UnknownLabel, ErrorReason(ErrUnknownDeployment))
+	counted, series := testutil.ToFloat64(unknown), testutil.CollectAndCount(requestsTotal)
+	for _, name := range []string{"no-such-deployment-a", "no-such-deployment-b"} {
+		if _, err := manager.SystemOne(context.Background(), name, json.RawMessage(`{}`)); !errors.Is(err, ErrUnknownDeployment) {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if got := testutil.CollectAndCount(requestsTotal); got != series {
+		t.Fatalf("vsr_model_runtime_requests_total has %d series after unknown deployments, want %d", got, series)
+	}
+	if got := testutil.ToFloat64(unknown); got != counted+2 {
+		t.Fatalf("unknown deployments counted %v, want 2", got-counted)
 	}
 }

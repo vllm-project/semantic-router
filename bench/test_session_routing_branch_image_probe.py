@@ -25,9 +25,7 @@ class DiagnosticHandler(BaseHTTPRequestHandler):
         "x-vsr-selected-model": "qwen-small",
         "x-vsr-selected-decision": "agentic-session-route",
         "x-vsr-replay-id": "replay-1",
-        "x-vsr-session-phase": "user_turn",
-        "x-vsr-selected-confidence": "0.0000",
-        "x-vsr-context-token-count": "42",
+        "x-vsr-trace": "confidence=0.0, context_tokens=42, session_phase=user_turn",
     }
 
     def do_POST(self):
@@ -61,9 +59,7 @@ def test_branch_image_probe_passes_with_diagnostic_headers(tmp_path):
         "x-vsr-selected-model": "qwen-small",
         "x-vsr-selected-decision": "agentic-session-route",
         "x-vsr-replay-id": "replay-1",
-        "x-vsr-session-phase": "user_turn",
-        "x-vsr-selected-confidence": "0.0000",
-        "x-vsr-context-token-count": "42",
+        "x-vsr-trace": "confidence=0.0, context_tokens=42, session_phase=user_turn",
     }
     server, thread = run_server()
     try:
@@ -94,8 +90,7 @@ def test_branch_image_probe_fails_missing_or_invalid_diagnostics(tmp_path):
         "x-vsr-selected-model": "qwen-small",
         "x-vsr-selected-decision": "agentic-session-route",
         "x-vsr-replay-id": "replay-1",
-        "x-vsr-session-phase": "unknown",
-        "x-vsr-selected-confidence": "nan",
+        "x-vsr-trace": "confidence=nan, session_phase=unknown",
     }
     server, thread = run_server()
     try:
@@ -113,15 +108,6 @@ def test_branch_image_probe_fails_missing_or_invalid_diagnostics(tmp_path):
         thread.join(timeout=2)
 
     assert summary["checks"]["diagnostic_headers_ok"] is False
-    assert (
-        "invalid diagnostic header: x-vsr-selected-confidence"
-        in summary["validation_failures"]
-    )
-    assert (
-        "invalid diagnostic header: x-vsr-session-phase"
-        in summary["validation_failures"]
-    )
-    assert (
-        "missing diagnostic header: x-vsr-context-token-count"
-        in summary["validation_failures"]
-    )
+    assert "invalid diagnostic header: confidence" in summary["validation_failures"]
+    assert "invalid diagnostic header: session_phase" in summary["validation_failures"]
+    assert "missing diagnostic header: context_tokens" in summary["validation_failures"]

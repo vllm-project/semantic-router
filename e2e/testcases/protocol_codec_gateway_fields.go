@@ -46,7 +46,7 @@ func assertAnthropicGatewayFields(client protocolCodecE2EClient, streamed bool, 
 	if streamed {
 		return nil
 	}
-	warnings := result.Headers.Get("x-vsr-protocol-warnings")
+	warnings := result.Headers.Get(warningsHeader)
 	for _, field := range []string{"usage.total_cost", "gateway_trace_id"} {
 		if !hasProtocolFieldDiagnostic(warnings, "dropped", field) {
 			return fmt.Errorf("gateway field %s omitted without a warning: %q", field, warnings)

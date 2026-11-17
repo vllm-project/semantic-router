@@ -18,6 +18,8 @@ type routingFailure struct {
 	category llmprotocol.ErrorCategory
 	code     string
 	message  string
+	// param names the request field at fault, as OpenAI's error does.
+	param string
 }
 
 // These are the only routing failures a client can see, and the Router API
@@ -32,9 +34,12 @@ var (
 		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
 		code: "no_route", message: "no route matched the request",
 	}
+	// A refusal on the Router's count names the window and the count
+	// instead (contextLengthFailure).
 	routingFailureContextLength = routingFailure{
-		status: http.StatusUnprocessableEntity, category: llmprotocol.ErrorInvalidRequest,
+		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
 		code: "context_length_exceeded", message: "the request exceeds the context window of the models that can serve it",
+		param: "messages",
 	}
 	routingFailureDecisionUnresolved = routingFailure{
 		status: http.StatusServiceUnavailable, category: llmprotocol.ErrorInternal,
@@ -44,6 +49,14 @@ var (
 		status: http.StatusServiceUnavailable, category: llmprotocol.ErrorInternal,
 		code: "no_eligible_model", message: "no model is eligible to serve the request",
 	}
+	routingFailureToolSelection = routingFailure{
+		status: http.StatusServiceUnavailable, category: llmprotocol.ErrorInternal,
+		code: "tool_selection_failed", message: "the tools for the request could not be selected",
+	}
+	routingFailureImageRouteRequired = routingFailure{
+		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
+		code: "image_route_required", message: "the Images API needs a route that answers with a generated image",
+	}
 )
 
 // routingFailureResponse answers a request with failure. The client's error
@@ -51,6 +64,7 @@ var (
 func (r *OpenAIRouter) routingFailureResponse(ctx *RequestContext, failure routingFailure) *ext_proc.ProcessingResponse {
 	if ctx != nil {
 		ctx.ImmediateProtocolError = llmprotocol.NewError(failure.category, failure.code, failure.message, nil)
+		ctx.ImmediateProtocolError.Parameter = failure.param
 	}
 	return r.createErrorResponse(failure.status, failure.message)
 }

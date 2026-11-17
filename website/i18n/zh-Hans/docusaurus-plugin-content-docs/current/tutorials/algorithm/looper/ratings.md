@@ -33,9 +33,9 @@ translation:
 ```yaml
 algorithm:
   type: ratings
+  on_error: skip
   ratings:
     max_concurrent: 3
-    on_error: skip
 ```
 
 完整示例见：

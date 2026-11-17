@@ -11,15 +11,13 @@ from cli.parser import ConfigParseError, parse_user_config
 from cli.runtime_stack import resolve_runtime_stack
 
 
-def test_fresh_amd_bootstrap_reaches_standby_specs_with_real_envoy_render(
+def test_a_fresh_bootstrap_reaches_standby_specs_with_real_envoy_render(
     tmp_path: Path, monkeypatch
 ):
     bootstrap = ensure_bootstrap_workspace(tmp_path / "config.yaml")
     source_bytes = bootstrap.config_path.read_bytes()
     runtime = tmp_path / ".vllm-sr" / "runtime-config.setup-test.yaml"
-    realize_runtime_config(
-        bootstrap.config_path, runtime, algorithm=None, platform="rocm"
-    )
+    realize_runtime_config(bootstrap.config_path, runtime, algorithm=None)
     runtime_bytes = runtime.read_bytes()
     layout = resolve_runtime_stack(stack_name="setup-test", port_offset=12000)
     captured = []

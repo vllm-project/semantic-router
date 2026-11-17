@@ -1,0 +1,10 @@
+plugin:
+  type: context
+  configuration:
+    enabled: true
+    sources:
+      - type: memory
+        # Without a match block, memory recalls with the memory store's
+        # default_retrieval_limit and default_similarity_threshold.
+        store:
+          auto: true

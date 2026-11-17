@@ -234,6 +234,39 @@ def test_unrecorded_hardware_uses_only_its_legacy_device_class():
     assert result.status == "matched" and result.reference == "cuda:sm_89"
 
 
+def test_a_dtype_is_checked_only_against_the_references_recorded_at_it():
+    """D3: one FP32 ``cpu`` reference at ``auto``; ``--dtype bfloat16`` takes its CPU class's BF16 one."""
+    native = "cpu:x86_64:avx512:bf16_native"
+    golden = decisions_golden(
+        {
+            "cpu": answers(0.5),
+            "cpu@bfloat16": answers(0.7),
+            f"{native}@bfloat16": answers(0.6),
+        }
+    )
+
+    def checked(produced, reference_key, dtype="auto"):
+        return golden_check(
+            answers_of(answers(produced)),
+            decisions,
+            [golden],
+            "cpu",
+            reference_key,
+            dtype,
+        )
+
+    for hardware in (native, "cpu:x86_64:avx2:bf16_emulated"):
+        result = checked(0.5, hardware)
+        assert result.status == "matched" and result.reference == "cpu"
+    assert checked(0.6, native).status == "failed"
+    result = checked(0.6, native, "bfloat16")
+    assert result.status == "matched" and result.reference == f"{native}@bfloat16"
+    result = checked(0.6, "cpu:x86_64:avx2:bf16_emulated", "bfloat16")
+    assert result.status == "failed" and result.reference == "cpu@bfloat16"
+    result = checked(0.5, native, "float16")
+    assert result.status == "unverified" and result.reference is None
+
+
 @pytest.mark.parametrize("capability", ["AVX2", "AVX512", "NO AVX"])
 @pytest.mark.parametrize("bf16", [False, True])
 def test_accelerator_selects_the_cpu_instruction_set_reference(
@@ -253,6 +286,34 @@ def test_accelerator_selects_the_cpu_instruction_set_reference(
         == "cuda:sm_89"
     )
     assert CPUAccelerator().golden_reference(DeviceInfo("cpu", None, "unknown")) is None
+
+
+@pytest.mark.parametrize(
+    ("variable", "cap", "key"),
+    [
+        ("ONEDNN_MAX_CPU_ISA", "AVX2", "cpu:x86_64:avx2:bf16_emulated"),
+        ("DNNL_MAX_CPU_ISA", "avx2", "cpu:x86_64:avx2:bf16_emulated"),
+        ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE", "cpu:x86_64:avx2:bf16_emulated"),
+        ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16", "cpu:x86_64:avx2:bf16_native"),
+        ("ONEDNN_MAX_CPU_ISA", "ALL", "cpu:x86_64:avx2:bf16_native"),
+    ],
+)
+def test_onednn_capped_below_bf16_selects_the_emulated_reference(
+    monkeypatch, variable, cap, key
+):
+    """An AVX-512 BF16 host run with ``ATEN_CPU_CAPABILITY=avx2 ONEDNN_MAX_CPU_ISA=AVX2`` answers as an AVX2 host does."""
+    from vllm_srun.accel.cpu import CPUAccelerator
+
+    monkeypatch.setattr(torch.cpu, "_is_avx512_bf16_supported", lambda: True)
+    monkeypatch.setattr(torch.cpu, "_is_amx_tile_supported", lambda: False)
+    monkeypatch.setattr(torch.backends.cpu, "get_cpu_capability", lambda: "AVX2")
+    monkeypatch.setattr("platform.machine", lambda: "x86_64")
+    for name in ("ONEDNN_MAX_CPU_ISA", "DNNL_MAX_CPU_ISA"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(variable, cap)
+    accelerator = CPUAccelerator()
+    (device,) = accelerator.devices()
+    assert accelerator.golden_reference(device) == key
 
 
 def test_freeze_autotune_points_triton_at_one_cache(tmp_path, monkeypatch):

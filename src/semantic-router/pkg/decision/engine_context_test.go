@@ -59,12 +59,9 @@ func TestDecisionEngine_EvaluateDecisionsWithContext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			engine := NewDecisionEngine(
-				[]config.KeywordRule{},
-				[]config.EmbeddingRule{},
-				[]config.Category{},
+
 				tt.decisions,
-				"priority",
-			)
+				"priority")
 
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
 

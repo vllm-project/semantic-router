@@ -21,7 +21,7 @@ class TestConfigTemplate(unittest.TestCase):
         with open(TEMPLATE_PATH, "r") as f:
             data = yaml.safe_load(f)
 
-        self.assertEqual(data["version"], "v0.3")
+        self.assertEqual(data["version"], "v0.5")
         self.assertEqual(len(data["listeners"]), 1)
         self.assertEqual(
             data["providers"]["defaults"]["model"],
@@ -29,11 +29,10 @@ class TestConfigTemplate(unittest.TestCase):
         )
         self.assertEqual(len(data["providers"]["models"]), 1)
         self.assertIn("backend_refs", data["providers"]["models"][0])
-        self.assertEqual(len(data["routing"]["modelCards"]), 1)
-        self.assertEqual(len(data["routing"]["decisions"]), 1)
-        self.assertEqual(data["routing"]["decisions"][0]["name"], "default-route")
-        self.assertEqual(data["routing"]["decisions"][0]["rules"]["conditions"], [])
-        self.assertNotIn("signals", data.get("routing", {}))
+        self.assertEqual(len(data["recipes"][0]["decisions"]), 1)
+        self.assertEqual(data["recipes"][0]["decisions"][0]["name"], "default-route")
+        self.assertEqual(data["recipes"][0]["decisions"][0]["rules"]["conditions"], [])
+        self.assertNotIn("signals", data["recipes"][0])
         self.assertNotIn("memory", data)
 
     def test_template_excludes_legacy_demo_content(self):

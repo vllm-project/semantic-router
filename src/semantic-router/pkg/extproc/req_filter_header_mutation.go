@@ -9,21 +9,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 )
 
-// buildHeaderMutations builds header mutations based on the decision's header_mutation plugin configuration
+// buildHeaderMutations builds header mutations based on the header_mutation plugin the request runs
 // Returns (setHeaders, removeHeaders) to be applied to the request
-func (r *OpenAIRouter) buildHeaderMutations(decision *config.Decision) ([]*corev3.HeaderValueOption, []string) {
-	if decision == nil {
-		return nil, nil
-	}
-
+func (r *OpenAIRouter) buildHeaderMutations(ctx *RequestContext) ([]*corev3.HeaderValueOption, []string) {
 	// Get header mutation configuration
-	headerConfig := decision.GetHeaderMutationConfig()
+	headerConfig := config.HeaderMutationPluginOf(requestPlugins(r.Config, ctx))
 	if headerConfig == nil {
 		return nil, nil
 	}
 
 	logging.ComponentDebugEvent("extproc", "header_mutations_prepared", map[string]interface{}{
-		"decision":     decision.Name,
+		"request_id":   ctx.RequestID,
 		"add_count":    len(headerConfig.Add),
 		"update_count": len(headerConfig.Update),
 		"delete_count": len(headerConfig.Delete),

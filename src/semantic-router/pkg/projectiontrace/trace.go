@@ -46,8 +46,6 @@ type ScoreBreakdown struct {
 type ScoreInputPart struct {
 	Type         string  `json:"type"`
 	Name         string  `json:"name,omitempty"`
-	KB           string  `json:"kb,omitempty"`
-	Metric       string  `json:"metric,omitempty"`
 	Weight       float64 `json:"weight"`
 	Value        float64 `json:"value"`
 	Contribution float64 `json:"contribution"`

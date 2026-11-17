@@ -73,11 +73,11 @@ class RecipeConformanceTest(unittest.TestCase):
         self.assertEqual(len(mom.decisions), 23)
         self.assertEqual(mom.variants, 366)
         self.assertNotIn("classifier", mom.coverage["signals"]["by_family"])
-        self.assertEqual(len(mom.probe_shard_sizes), 16)
+        self.assertEqual(len(mom.probe_shard_sizes), 8)
         self.assertEqual(sum(mom.probe_shard_sizes), mom.variants)
         self.assertEqual(
             set(mom.algorithms),
-            {"static", "decision", "multi_factor", "fusion", "workflows"},
+            {"static", "systemone", "multi_factor", "fusion", "workflows"},
         )
         self.assertTrue(mom.coverage["passed"])
 
@@ -493,7 +493,7 @@ class RecipeConformanceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             recipe = Path(tempdir) / "incomplete"
             recipe.mkdir()
-            (recipe / "config.yaml").write_text("version: v0.3\n", encoding="utf-8")
+            (recipe / "config.yaml").write_text("version: v0.5\n", encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "five-file contract"):
                 recipe_conformance.validate_recipe_directory(recipe)
@@ -569,7 +569,7 @@ class RecipeConformanceTest(unittest.TestCase):
     def test_portable_recipe_defaults_do_not_create_runtime_entrypoints(self) -> None:
         config = {
             "global": {"router": {"learning": {"enabled": True}}},
-            "recipes": [{"name": "balanced", "routing": {}}],
+            "recipes": [{"name": "balanced"}],
         }
         probes = [
             recipe_conformance.Probe(
@@ -587,25 +587,74 @@ class RecipeConformanceTest(unittest.TestCase):
         )
         self.assertIsNone(probes[0].model)
 
+    def test_bundle_default_entrypoint_creates_no_runtime_entrypoints(self) -> None:
+        config = {
+            "recipes": [{"name": "balanced"}, {"name": "fast"}],
+            "entrypoints": [
+                {
+                    "model_names": ["vllm-sr/balanced"],
+                    "recipe": "balanced",
+                    "default": True,
+                }
+            ],
+        }
+
+        self.assertTrue(recipe_conformance.is_portable_bundle(config))
+        self.assertEqual(recipe_conformance.config_auto_entrypoints(config), ())
+        self.assertEqual(recipe_conformance.config_entrypoints(config), {})
+        self.assertFalse(
+            recipe_conformance.is_portable_bundle(
+                {**config, "providers": {"models": [{"name": "backend"}]}}
+            )
+        )
+
+    def test_probe_plugins_include_the_global_and_recipe_plugins(self) -> None:
+        config = {
+            "providers": {"models": [{"name": "backend"}]},
+            "global": {"plugins": [{"type": "router_replay"}]},
+            "recipes": [
+                {
+                    "name": "default",
+                    "plugins": [{"type": "header_mutation"}],
+                    "decisions": [
+                        {
+                            "name": "route",
+                            "modelRefs": [{"model": "backend"}],
+                            "plugins": [{"type": "request_params"}],
+                        }
+                    ],
+                }
+            ],
+        }
+        probe = recipe_conformance.Probe(
+            decision_id="route",
+            variant_id="plain",
+            probe_id="route:plain",
+            expected_decision="route",
+            model="vllm-sr/auto",
+            expected_plugins=("request_params", "header_mutation", "router_replay"),
+        )
+        manifest = {"acceptance": {}}
+
+        recipe_conformance.validate_probe_references(
+            Path("probes.yaml"), config, manifest, [probe]
+        )
+        with self.assertRaisesRegex(ValueError, r"expects missing plugins \['tools'\]"):
+            recipe_conformance.validate_probe_references(
+                Path("probes.yaml"),
+                config,
+                manifest,
+                [recipe_conformance.replace(probe, expected_plugins=("tools",))],
+            )
+
     def test_composed_recipe_keeps_runtime_entrypoint_coverage(self) -> None:
         bundle = {
             "global": {"router": {"learning": {"enabled": True}}},
-            "recipes": [{"name": "balanced", "routing": {}}],
+            "recipes": [{"name": "balanced"}],
         }
-        for field, value in (
-            ("providers", {"models": [{"name": "backend"}]}),
-            ("routing", {"decisions": [{"name": "fallback"}]}),
-            ("entrypoints", [{"recipe": "balanced", "model_names": ["route"]}]),
-        ):
-            with self.subTest(field=field):
-                config = {**bundle, field: value}
-                entrypoints = recipe_conformance.config_entrypoints(config)
-                self.assertEqual(
-                    {name: entrypoints[name] for name in ("vllm-sr/auto",)},
-                    dict.fromkeys(("vllm-sr/auto",), "default"),
-                )
-                if field == "entrypoints":
-                    self.assertEqual(entrypoints["route"], "balanced")
+        config = {**bundle, "providers": {"models": [{"name": "backend"}]}}
+        entrypoints = recipe_conformance.config_entrypoints(config)
+        self.assertEqual(entrypoints["vllm-sr/auto"], "default")
 
     def test_consolidated_report_marks_missing_recipes(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

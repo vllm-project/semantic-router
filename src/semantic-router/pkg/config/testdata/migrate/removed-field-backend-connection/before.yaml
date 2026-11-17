@@ -1,0 +1,29 @@
+# A request backend connects as a deployment does: base_url is its endpoint,
+# which it won over, auth_header, auth_prefix and api_key_env are auth, and
+# extra_headers are headers.
+version: v0.5
+providers:
+  defaults: {model: claude}
+  models:
+    - name: claude
+      backend_refs:
+        - provider: anthropic
+          base_url: https://gateway.example.com/anthropic
+          api_key_env: ANTHROPIC_KEY
+          auth_header: x-api-key
+          auth_prefix: ""
+          extra_headers: {X-Org: acme}
+    - name: general
+      backend_refs:
+        - name: local
+          endpoint: "127.0.0.1:8000"
+          protocol: http
+          weight: 1
+          extra_headers: {X-Team: routing}
+recipes:
+  - name: default
+    decisions:
+      - name: route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: claude}, {model: general}]

@@ -86,6 +86,9 @@ type RouterConfigUpdateResponse struct {
 	// Activation is the update's attempt; a rejected one (its NACK) carries
 	// structured reasons.
 	Activation *configActivationResponse `json:"activation,omitempty"`
+	// Warnings name the literal keys the update kept in the configuration
+	// because the deployment has no key store it can write.
+	Warnings []config.ConfigWarning `json:"warnings,omitempty"`
 }
 
 type configHashResponse struct {
@@ -166,9 +169,11 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	origin := managementOrigin(r, configsnapshot.SourceRollback)
 	origin.RollbackOf = target.version
 	afterAttempt := s.configActivationAttempt()
-	if !s.writeRouterConfigFiles(w, paths, existingData, target.document, origin) {
+	save, ok := s.writeRouterConfigFiles(w, paths, existingData, target.document, origin)
+	if !ok {
 		return
 	}
+	target.document = save.Data
 
 	logging.Infof(
 		"Config rolled back to version %s via API: sourceConfigPath=%s, runtimeConfigPath=%s",
@@ -177,7 +182,7 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 		paths.runtimePath,
 	)
 
-	s.writeRollbackSuccess(w, target, paths.runtimePath, backupDir, afterAttempt)
+	s.writeRollbackSuccess(w, target, paths.runtimePath, backupDir, afterAttempt, save.Warnings())
 }
 
 func backupFilePath(backupDir, version string) string {
@@ -265,6 +270,7 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 	runtimePath string,
 	backupDir string,
 	afterAttempt uint64,
+	warnings []config.ConfigWarning,
 ) {
 	version, backupData := target.id, target.document
 	etag := configDocumentETag(backupData)
@@ -299,6 +305,7 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 		RollbackOf:           target.version,
 		Message:              message,
 		Activation:           s.configActivationAfter(runtimeHash, afterAttempt),
+		Warnings:             warnings,
 	})
 }
 

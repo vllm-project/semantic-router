@@ -15,7 +15,7 @@ describe('recorded signal evidence', () => {
       decision_priority: 0,
       signals: {
         conversation: ['active_tool_loop'],
-        event: ['service_degraded'],
+        keyword: ['service_degraded'],
         metadata: ['customer_tier'],
         classifier: ['sensitive_content'],
         input_modality: ['has_image'],

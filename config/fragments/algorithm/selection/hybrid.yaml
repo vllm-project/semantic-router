@@ -1,8 +1,0 @@
-algorithm:
-  type: hybrid
-  hybrid:
-    experience_weight: 0.4
-    router_dc_weight: 0.4
-    automix_weight: 0.2
-    cost_weight: 0.1
-

@@ -11,51 +11,46 @@ import (
 )
 
 const entrypointTestConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
-  signals:
-    keywords:
-      - name: route_keyword
-        operator: OR
-        keywords: ["urgent"]
-  decisions:
-    - name: default_route
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: route_keyword
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
+version: v0.5
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: route_keyword
+          operator: OR
+          keywords: ["urgent"]
+    decisions:
+      - name: default_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: route_keyword
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
   - name: privacy
-    routing:
-      signals:
-        keywords:
-          - name: route_keyword
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: route_keyword
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: route_keyword
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: route_keyword
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
 entrypoints:
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy
   - model_names: ["vllm-sr/auto", "vllm-sr/default-alias"]
     recipe: default
+    default: true
 providers:
   defaults:
     model: model-a
@@ -64,10 +59,12 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
           provider: vllm
+      description: privacy tier
 `
 
 func newEntrypointTestRouter(t *testing.T) *OpenAIRouter {
@@ -221,7 +218,7 @@ func newEntrypointFlowRouter(t *testing.T) *OpenAIRouter {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
@@ -405,32 +402,29 @@ func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 // recipe: the flat Decisions field stays empty, which used to trip the
 // "no decisions configured" short-circuit before decision evaluation.
 const entrypointRecipesOnlyConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
+version: v0.5
 recipes:
+  - name: default
   - name: privacy
-    routing:
-      signals:
-        keywords:
-          - name: pii_keywords
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: pii_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: pii_keywords
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: pii_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy
 providers:
@@ -441,10 +435,12 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
           provider: vllm
+      description: privacy tier
 `
 
 func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
@@ -452,7 +448,7 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
@@ -510,35 +506,34 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 // declares signals but no decisions. Its traffic must not be routed by the
 // default profile's decisions.
 const entrypointDecisionlessRecipeYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-  signals:
-    keywords:
-      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent"]
-  decisions:
-    - name: default_route
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
+version: v0.5
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent_keywords
+          operator: OR
+          keywords: ["urgent"]
+    decisions:
+      - name: default_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
   - name: screening
-    routing:
-      signals:
-        keywords:
-          - name: screening_keywords
-            operator: OR
-            keywords: ["screening"]
+    signals:
+      keywords:
+        - name: screening_keywords
+          operator: OR
+          keywords: ["screening"]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["vllm-sr/screening"]
     recipe: screening
 providers:
@@ -549,6 +544,7 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
 `
 
 func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {
@@ -556,7 +552,7 @@ func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
 	}
@@ -598,7 +594,7 @@ func TestSemanticCacheScopeStaysRouteLocalForRecipesOnlyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	cfg.SemanticCache.Enabled = true
+	cfg.SemanticCache.InUse = true
 	router := &OpenAIRouter{Config: cfg}
 
 	privacy, ok := cfg.RecipeByName("privacy")
@@ -618,12 +614,37 @@ func TestSemanticCacheScopeStaysRouteLocalForRecipesOnlyConfig(t *testing.T) {
 
 func TestConcreteModelBypassesSemanticCache(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
+		SemanticCache: config.SemanticCache{InUse: true},
 	}}
 	ctx := &RequestContext{}
 	ctx.Routing.SelectPassthrough()
 
 	if router.semanticCacheEnabledForRequest(ctx) {
 		t.Fatal("a concrete backend request must not enter recipe cache state")
+	}
+}
+
+func TestModelsListingGivesCodexAnEmptyCatalogOfItsOwn(t *testing.T) {
+	router := newEntrypointTestRouter(t)
+
+	for path, wantCatalog := range map[string]bool{
+		"/v1/models?client_version=0.166.0": true,
+		"/v1/models":                        false,
+	} {
+		response, err := router.handleModelsRequest(path, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		var listed map[string]json.RawMessage
+		if err := json.Unmarshal(response.GetImmediateResponse().Body, &listed); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		models, ok := listed["models"]
+		if ok != wantCatalog || (wantCatalog && string(models) != "[]") {
+			t.Fatalf("%s: models = %s (present %v), want an empty catalog only for Codex", path, models, ok)
+		}
+		if len(listed["data"]) < 3 {
+			t.Fatalf("%s: data = %s, want the OpenAI list either way", path, listed["data"])
+		}
 	}
 }

@@ -13,19 +13,11 @@ metadata:
           },
           "spec": {
             "config": {
-              "prompt_guard": {
-                "enabled": true,
-                "threshold": "0.88"
-              },
               "response_cache": {
                 "enabled": true,
                 "max_entries": 1000,
                 "similarity_threshold": "0.85",
                 "ttl_seconds": 3600
-              },
-              "tools": {
-                "enabled": true,
-                "top_k": 3
               }
             },
             "persistence": {

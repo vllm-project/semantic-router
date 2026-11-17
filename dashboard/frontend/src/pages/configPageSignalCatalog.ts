@@ -9,7 +9,6 @@ export interface SignalCatalogEntry {
   label: SignalType
   collection: keyof ConfigSignals
   schemaRef: string
-  referenceSuffixes: readonly string[]
 }
 
 export const SIGNAL_CATALOG: SignalCatalogEntry[] = ROUTER_CONFIG_EXTENSION.signals.map(
@@ -18,7 +17,6 @@ export const SIGNAL_CATALOG: SignalCatalogEntry[] = ROUTER_CONFIG_EXTENSION.sign
     label: surface.display_name,
     collection: surface.collection as keyof ConfigSignals,
     schemaRef: surface.schema_ref,
-    referenceSuffixes: 'reference_suffixes' in surface ? (surface.reference_suffixes ?? []) : [],
   }),
 )
 
