@@ -101,6 +101,13 @@ func operatorResponseCacheConfig(
 	return cache, nil
 }
 
+// responseCacheEnabled reads the cache switch. The CRD defaults enabled to
+// true, so nil only reaches the controller on an object that never passed the
+// API server, where it reads as off like the plain bool it replaces.
+func responseCacheEnabled(cache *vllmv1alpha1.SemanticCacheConfig) bool {
+	return cache != nil && cache.Enabled != nil && *cache.Enabled
+}
+
 // applyOperatorResponseCacheSwitch keeps what config.response_cache's enabled
 // and similarity_threshold do on a router whose store has no switch: on, a
 // configuration without decisions caches every request in a response_cache
@@ -111,11 +118,12 @@ func applyOperatorResponseCacheSwitch(canonical *routerconfig.CanonicalConfig, s
 	if err != nil || cache == nil {
 		return err
 	}
+	enabled := responseCacheEnabled(cache)
 	decisions := 0
 	for index := range canonical.Recipes {
 		recipe := &canonical.Recipes[index]
 		decisions += len(recipe.Decisions)
-		if cache.Enabled {
+		if enabled {
 			continue
 		}
 		for decision := range recipe.Decisions {
@@ -124,7 +132,7 @@ func applyOperatorResponseCacheSwitch(canonical *routerconfig.CanonicalConfig, s
 			}
 		}
 	}
-	if !cache.Enabled || decisions > 0 {
+	if !enabled || decisions > 0 {
 		return nil
 	}
 	for _, plugin := range canonical.Global.Plugins {
