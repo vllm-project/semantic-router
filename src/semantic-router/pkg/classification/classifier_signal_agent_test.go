@@ -57,6 +57,9 @@ func TestAgentRulesRouteEachAgentToItsDecision(t *testing.T) {
 		{"main agent", AgentFacts{Role: config.AgentRoleMain, Harness: config.AgentHarnessCodex}, []string{"main"}, "main", ""},
 		{"claude code compaction", AgentFacts{Role: config.AgentRoleMain, Harness: config.AgentHarnessClaudeCode, RequestClass: "compaction"}, []string{"main", "housekeeping"}, "housekeeping", "low"},
 		{"a subagent's side request", AgentFacts{Role: config.AgentRoleSubagent, Harness: config.AgentHarnessClaudeCode, RequestClass: "auxiliary"}, []string{"housekeeping"}, "housekeeping", "low"},
+		{"opencode session title", AgentFacts{Role: config.AgentRoleMain, Harness: config.AgentHarnessOpenCode, RequestClass: "auxiliary"}, []string{"main", "housekeeping"}, "housekeeping", "low"},
+		{"opencode subagent compaction", AgentFacts{Role: config.AgentRoleSubagent, Harness: config.AgentHarnessOpenCode, RequestClass: "compaction"}, []string{"housekeeping"}, "housekeeping", "low"},
+		{"opencode subagent names no type", AgentFacts{Role: config.AgentRoleSubagent, Harness: config.AgentHarnessOpenCode, RequestClass: "subagent"}, nil, "", ""},
 		{"no harness", AgentFacts{}, nil, "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
