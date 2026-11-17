@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendtelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -21,6 +22,10 @@ const (
 	LBRoundRobin LBPolicy = "round_robin"
 	// LBLeastRequest prefers the endpoint with the fewest active requests.
 	LBLeastRequest LBPolicy = "least_request"
+	// LBLoadAware prefers the endpoint whose serving engine reports the
+	// least load, while every endpoint has fresh telemetry, and balances as
+	// LBLeastRequest otherwise.
+	LBLoadAware LBPolicy = "load_aware"
 )
 
 // Topology is the compiled, immutable description a Set serves: every
@@ -155,6 +160,9 @@ type EndpointSpec struct {
 	Weight int
 	// IPv4Only restricts name resolution to IPv4 addresses.
 	IPv4Only bool
+	// Telemetry identifies the endpoint's load observations; its zero value
+	// means the endpoint reports none.
+	Telemetry backendtelemetry.Identity
 }
 
 // TLSSpec describes the upstream TLS session of a cluster.

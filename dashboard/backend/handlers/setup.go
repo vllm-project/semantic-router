@@ -284,7 +284,9 @@ func SetupActivateHandler(
 			return
 		}
 
-		// The CLI that owns the stack starts the Router from here on.
+		// Capture the waiting CLI before publishing the activation: it can switch
+		// to starting as soon as the record appears.
+		activationMessage := setupActivatedMessage(configPath)
 		if err := recordPendingActivation(configPath, yamlData, activationReasonSetup, ""); err != nil {
 			log.Printf("Setup activation could not be recorded: %v", err)
 			failSetupActivation(w, configPath, previousData, setupResolver, "activation_record")
@@ -295,7 +297,7 @@ func SetupActivateHandler(
 		if err := json.NewEncoder(w).Encode(SetupActivateResponse{
 			Status:    "success",
 			SetupMode: false,
-			Message:   setupActivatedMessage(configPath),
+			Message:   activationMessage,
 		}); err != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		}

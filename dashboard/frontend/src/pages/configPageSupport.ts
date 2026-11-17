@@ -1,10 +1,19 @@
+import type { BackendEngine, ProviderLBPolicy } from '../generated/routerConfigContract'
 import type { ModelBindings } from './modelBindings'
 import type { CanonicalGlobalConfig, ModelPricing } from './configPageGlobalTypes'
-export type * from './configPageGlobalTypes'
 import type { Endpoint } from '../components/EndpointsEditor'
 import bundledCatalog from '../modelCatalogMetadata'
 import type { Listener, SafetySignal, SystemOneSignal } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
+export { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from '../generated/routerConfigContract'
+export type { BackendEngine, ProviderLBPolicy } from '../generated/routerConfigContract'
+export type * from './configPageGlobalTypes'
+
+export const PROVIDER_LB_POLICY_LABELS: Record<ProviderLBPolicy, string> = {
+  round_robin: 'Round robin',
+  least_request: 'Least requests',
+  load_aware: 'Least engine load',
+}
 
 export type ListenerConfig = Listener
 
@@ -56,7 +65,7 @@ export interface ReasoningFamily {
 }
 
 export interface ProviderReliability {
-  lb_policy?: string
+  lb_policy?: ProviderLBPolicy
   retry_count?: number
   retry_on?: string
   consecutive_5xx?: number
@@ -117,6 +126,13 @@ export interface BackendRefEntry {
   auth?: BackendRefAuth
   headers?: Record<string, string>
   tls?: BackendRefTLS
+  engine?: BackendEngine
+  metrics?: BackendMetrics
+}
+
+export interface BackendMetrics {
+  port?: number
+  path?: string
 }
 
 export interface ModelReasoningConfig {

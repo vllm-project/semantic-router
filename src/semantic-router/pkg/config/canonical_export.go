@@ -412,6 +412,7 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 		ref.Headers = copyStringMap(profile.ExtraHeaders)
 	}
 	ref.TLS = cloneDeploymentTLS(profile.TLS)
+	applyEndpointTelemetryToBackendRef(&ref, endpoint.Telemetry)
 	return ref
 }
 

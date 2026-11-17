@@ -142,7 +142,7 @@ providers:
 
 | 字段 | 默认值 | 作用 |
 | --- | --- | --- |
-| `lb_policy` | `round_robin` | `round_robin` 遵循后端权重；`least_request` 优先选择进行中请求最少的副本。 |
+| `lb_policy` | `round_robin` | `round_robin` 遵循后端权重；`least_request` 优先选择进行中请求最少的副本；`load_aware` 优先选择服务引擎报告负载最低的副本，见[按服务引擎负载均衡](#balance-on-serving-engine-load)。 |
 | `connect_timeout` | `10s` | 建立连接的时间，包括 TLS 握手。 |
 | `total_timeout` | listener 的 `timeout` | 整个调用的时间：所有尝试以及流式响应。`0s` 关闭它。 |
 | `idle_timeout` | listener 的 `timeout` | 等待流式响应后续内容的最长时间。`0s` 关闭它。 |
@@ -169,6 +169,77 @@ providers:
 Envoy 数据面没有首字节超时，因此设置了 `first_byte_timeout` 的配置会在 Router 渲染其 Envoy 配置时失败。
 
 主动健康检查在承载客户端流量的网关中运行。在 standalone 模式下，由 Router 探测每个副本。在 Envoy 之后，由 Envoy 探测它们，而 Router 自己发起的模型调用（例如执行器的调用）则依靠异常剔除（`consecutive_5xx`）退出轮转。
+
+### 指明每个副本的服务引擎 {#name-each-replicas-serving-engine}
+
+自托管后端可以声明其服务引擎，让 Router 读取该引擎的负载指标：
+
+```yaml
+      backend_refs:
+        - name: replica-a
+          provider: vllm
+          endpoint: 10.0.0.1:8000
+          engine: vllm
+        - name: replica-b
+          provider: vllm
+          endpoint: 10.0.0.2:8000
+          engine: tensorrt-llm
+          metrics:
+            port: 8002
+            path: /metrics
+```
+
+| 字段 | 默认值 | 作用 |
+| --- | --- | --- |
+| `engine` | 无 | `vllm`、`sglang`、`atom` 或 `tensorrt-llm`。未声明引擎的后端不提供负载指标。 |
+| `metrics.port` | 后端端口 | 引擎提供 Prometheus 指标的端口；Triton 使用 `8002`。 |
+| `metrics.path` | `/metrics` | 指标路径。 |
+
+仅声明引擎不会改变路由行为，它只说明副本的负载证据来自哪里。`https` 后端的指标也通过 `https` 读取，包括覆盖后的 `metrics.port`；抓取沿用后端的 `tls` 配置，与聊天请求一致，不经过环境代理。抓取会拒绝重定向，不跟随它访问其他目标；缺失或过期的遥测按下文的保守规则回退。
+
+### 按服务引擎负载均衡 {#balance-on-serving-engine-load}
+
+`lb_policy: load_aware` 优先选择引擎排队请求最少的副本，并计入 Router 已发往该副本、仍在处理中的请求。启用采集器，并为每个副本声明引擎：
+
+```yaml
+providers:
+  models:
+    - name: production
+      reliability:
+        lb_policy: load_aware
+      backend_refs:
+        - name: replica-a
+          provider: vllm
+          endpoint: 10.0.0.1:8000
+          engine: vllm
+        - name: replica-b
+          provider: vllm
+          endpoint: 10.0.0.2:8000
+          engine: vllm
+global:
+  services:
+    observability:
+      backend_telemetry:
+        enabled: true
+        poll_interval: 2s
+```
+
+| 字段 | 默认值 | 作用 |
+| --- | --- | --- |
+| `enabled` | `false` | 在请求路径之外抓取每个声明了引擎的后端。 |
+| `poll_interval` | `2s` | 抓取间隔。 |
+| `request_timeout` | `1s` | 抓取单个后端的超时。 |
+| `ttl` | 三个抓取间隔 | 一次抓取结果保持可用的时间。 |
+
+只有模型的每个健康副本都有新鲜且包含队列深度的抓取结果时，策略才使用遥测。否则，例如某个副本的指标不可达或首次抓取尚未完成时，行为与 `least_request` 完全一致，不会因为负载未知而优先选择某个副本。引擎上报为不健康的副本会被跳过，但健康检查和异常剔除仍决定哪些副本参与轮转。
+
+负载相同时优先选择权重更高的后端，再在同权重副本间均匀选择。权重只用于打破平局；与加权轮询不同，它不保证固定流量比例。重试优先选择尚未尝试过且符合条件的副本，遍历完候选池后才可能再次尝试同一副本。
+
+vLLM 适配器直接从 gauge 读取队列深度、活跃请求数和 KV 缓存使用率。TTFT、TPOT、E2E 和前缀命中率等可选字段仍保留在共享观测契约中，但在有消费者之前，此适配器不填充它们，也不保存上次抓取的计数器状态。
+
+遥测目标、采集器和样本属于同一个配置 generation。修改后端、指标来源或采集设置会创建新存储，并重新绑定 upstream reader；无关的 reload 会复用完整的遥测组件。已固定配置的请求可以继续使用旧 generation；旧 generation 的最后一个请求结束后，采集器停止，样本被清理。
+
+当前实现支持 vLLM 引擎。在 Envoy 之后，`load_aware` 按 `least_request` 均衡，因为 Envoy 不读取引擎遥测。`llm_upstream_load_aware_picks_total` 对每次多副本选择计数，区分遥测选择和回退；`llm_backend_telemetry_scrapes_total` 按后端记录抓取次数。只有配置成功激活后才切换遥测指标，被拒绝的候选配置或正在排空的旧采集器不会覆盖活跃 generation 的时间序列。`llm_backend_telemetry_queue_depth` 不导出缺失或过期的样本；其 `endpoint` 标签与 upstream 指标一致，例如 `production_replica-a`，而观测身份保留后端引用名 `replica-a`。
 
 ### 为单个决策覆盖超时和重试 {#override-timeouts-and-retries-for-one-decision}
 

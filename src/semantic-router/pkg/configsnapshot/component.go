@@ -21,16 +21,20 @@ const (
 	// ComponentUpstream is the upstream layer: clusters, endpoints, their
 	// connection pools and health.
 	ComponentUpstream Component = "upstream"
+	// ComponentBackendTelemetry collects serving-engine load metrics from the
+	// backends that name an engine.
+	ComponentBackendTelemetry Component = "backend_telemetry"
 )
 
 // Dependencies says which resources each component is built from. A
 // candidate whose resources of those kinds equal the active snapshot's keeps
 // the active component, the same instance, instead of building another.
 var Dependencies = map[Component][]Kind{
-	ComponentRouter:       Kinds,
-	ComponentModelService: {KindRuntimeModel, KindSettings, KindProgram, KindListener},
-	ComponentSignals:      {KindRuntimeModel, KindSettings, KindProgram},
-	ComponentUpstream:     {KindEndpoint, KindCluster, KindListener},
+	ComponentRouter:           Kinds,
+	ComponentModelService:     {KindRuntimeModel, KindSettings, KindProgram, KindListener},
+	ComponentSignals:          {KindRuntimeModel, KindSettings, KindProgram},
+	ComponentUpstream:         {KindEndpoint, KindCluster, KindListener},
+	ComponentBackendTelemetry: {KindEndpoint},
 }
 
 // ComponentKey identifies what component c is built from in the snapshot:
@@ -38,8 +42,17 @@ var Dependencies = map[Component][]Kind{
 // comparable within one process only.
 func (s *Snapshot) ComponentKey(c Component) string {
 	var inputs []any
+	cfg := s.Config()
+	if c == ComponentBackendTelemetry && cfg != nil {
+		inputs = append(inputs, cfg.Observability.BackendTelemetry)
+	}
 	if c == ComponentUpstream {
-		inputs = append(inputs, s.Config().RoutingEnabled())
+		inputs = append(inputs, cfg.RoutingEnabled())
+		if cfg != nil && cfg.Observability.BackendTelemetry.Enabled {
+			// Each Set must bind the reader of the telemetry generation it
+			// serves with, even when only collection settings changed.
+			inputs = append(inputs, s.ComponentKey(ComponentBackendTelemetry))
+		}
 	}
 	for _, kind := range Dependencies[c] {
 		for _, resource := range s.resources.List(kind) {
@@ -55,6 +68,14 @@ type Part interface {
 	// Close releases the part once no snapshot serves with it. ctx bounds a
 	// drain of work still in flight.
 	Close(ctx context.Context) error
+}
+
+// ActivatablePart publishes non-serving side effects, such as exported
+// metrics, only after its snapshot activates. Activate must not block or fail;
+// it can be called again when an unchanged part is reused.
+type ActivatablePart interface {
+	Part
+	Activate()
 }
 
 // PartBuilder builds one component for each snapshot.
