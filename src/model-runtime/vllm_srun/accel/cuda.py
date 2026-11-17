@@ -4,7 +4,8 @@ Fused Triton kernels require Ampere and family consent; gated-delta prep also
 needs FLA, but not causal-conv1d. Optional causal-conv1d is approximate on CUDA,
 so exact-only/non-consenting models use the torch reference even when it is
 installed. This can differ from their released package runtime; see the
-convolution record below.
+convolution record below. Packed rows run PyTorch's variable-length flash
+attention: ``varlen_attn`` from 2.10, the ATen op it calls before that.
 
 Evidence under ``docs/records/``: ``cuda-fused-approximate.md``,
 ``cuda-causal-conv1d-exactness.md`` and ``cuda-gdn-prep-without-causal-conv1d.md``.
@@ -21,7 +22,7 @@ from ..plugins.base import DeviceInfo
 from .gpu import GPUAccelerator, _flash_varlen, _optional, _wrap_varlen
 from .kernels import Kernel, KernelSet
 
-# BF16 Triton kernels need Ampere (compute capability 8.0) or newer.
+# BF16 Triton kernels and PyTorch's flash attention need Ampere (compute capability 8.0) or newer.
 MIN_FUSED_CAPABILITY = 80
 
 
