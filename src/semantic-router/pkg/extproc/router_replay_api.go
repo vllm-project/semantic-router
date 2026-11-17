@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -25,6 +26,9 @@ type routerReplayFilters struct {
 	model       string
 	cacheStatus string
 	sessionID   string
+	turnID      string
+	since       time.Time
+	review      routerReplayReviewFilters
 }
 
 type routerReplayListQuery struct {
@@ -54,6 +58,12 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 		return r.handleRouterReplayAggregateAPI(method, rawQuery)
 	case normalizedPath == routerReplayTrajectoryPath:
 		return r.handleRouterReplayTrajectoryAPI(method, rawQuery)
+	case normalizedPath == routerReplayRunsPath:
+		return r.handleRouterReplayRunsAPI(method, rawQuery)
+	case normalizedPath == routerReplayRunPath:
+		return r.handleRouterReplayRunAPI(method, rawQuery)
+	case normalizedPath == routerReplayModelsPath:
+		return r.handleRouterReplayModelsAPI(method)
 	case normalizedPath == routerReplayDatasetPath:
 		return r.handleRouterReplayDatasetAPI(method, rawQuery)
 	case normalizedPath == routerReplayJudgeTasksPath:
@@ -199,6 +209,7 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		decision:  strings.TrimSpace(values.Get("decision")),
 		model:     strings.TrimSpace(values.Get("model")),
 		sessionID: strings.TrimSpace(values.Get("session_id")),
+		turnID:    strings.TrimSpace(values.Get("turn_id")),
 	}
 
 	cacheStatus := strings.TrimSpace(values.Get("cache_status"))
@@ -211,7 +222,17 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		return filters, fmt.Errorf("cache_status must be one of all, cached, or streamed")
 	}
 
-	return filters, nil
+	if raw := strings.TrimSpace(values.Get("since")); raw != "" {
+		since, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return filters, fmt.Errorf("since must be an RFC 3339 timestamp, such as 2026-11-15T15:00:00Z")
+		}
+		filters.since = since
+	}
+
+	review, err := parseRouterReplayReviewFilters(values)
+	filters.review = review
+	return filters, err
 }
 
 func parseRouterReplayQueryInt(values url.Values, key string, positiveOnly bool) (int, error) {
@@ -258,6 +279,9 @@ func doesRouterReplayRecordMatchFilters(
 		matchesOptionalValue(record.Recipe, filters.recipe),
 		matchesOptionalModel(record, filters.model),
 		matchesOptionalValue(record.SessionID, filters.sessionID),
+		matchesOptionalTurn(record, filters.turnID),
+		filters.since.IsZero() || !record.Timestamp.Before(filters.since),
+		filters.review.matches(record),
 		matchesReplaySearch(record, search),
 	}
 	for _, match := range matches {
@@ -278,6 +302,12 @@ func matchesOptionalValue(value, filter string) bool {
 
 func matchesOptionalModel(record routerreplay.RoutingRecord, model string) bool {
 	return model == "" || doesModelMatch(record, model)
+}
+
+// matchesOptionalTurn keeps the requests one agent turn sent and the ones it
+// started, such as its approval reviews, as the Postgres store filters them.
+func matchesOptionalTurn(record routerreplay.RoutingRecord, turnID string) bool {
+	return turnID == "" || record.TurnID == turnID || record.ParentTurnID == turnID
 }
 
 func matchesReplaySearch(record routerreplay.RoutingRecord, search string) bool {

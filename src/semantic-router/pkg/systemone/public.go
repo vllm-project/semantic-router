@@ -93,7 +93,7 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 			return
 		}
 
-		if !systemOneAuthorized(r, listener.APIKeys) {
+		if !systemOneAuthorized(r, listener.ClientKeys()) {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="vllm-semantic-router"`)
 			publicSystemOneError(w, 401, "invalid_api_key")
 			return

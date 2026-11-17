@@ -47,6 +47,7 @@ func (s *SessionAwareSelector) adjustScores(
 			score, trace = currentAdjustedScore, currentTrace
 		} else {
 			score, trace = s.scoreSwitchCandidate(selCtx, session, current, candidate.Model, score, currentBaseScore, currentAdjustedScore, idleExpired, continuation.Mass, trace)
+			score, trace = s.priceCacheSwitch(session, current, candidate.Model, continuation, score, currentTrace, trace)
 		}
 		adjusted = append(adjusted, CandidateScore{Candidate: candidate, Score: score})
 		traces[candidateScoreKey(selCtx.CandidateModels, i)] = trace

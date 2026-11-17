@@ -100,7 +100,7 @@ func TestSessionCallerAnswersWithoutTheBackend(t *testing.T) {
 	}
 
 	local := backendDelivery(503, "upstream connect error")
-	local.Local = true
+	local.Local = &routing.LocalReply{Status: 503, Failure: "connect_failure"}
 	engine = &fakeEngine{respond: func(*routing.UpstreamResponse) (*routing.Response, error) {
 		t.Fatal("a local reply skips the response phases")
 		return nil, nil
@@ -108,6 +108,52 @@ func TestSessionCallerAnswersWithoutTheBackend(t *testing.T) {
 	resp, err = (&SessionCaller{Engine: engine, Upstream: &fakeUpstream{delivery: local}}).Call(context.Background(), hopRequest())
 	if err != nil || resp.Status != 503 || string(resp.Body) != "upstream connect error" {
 		t.Fatalf("err %v resp %+v", err, resp)
+	}
+}
+
+// closingProcessor opens sessions that change nothing and records how each
+// one ended.
+type closingProcessor struct{ closed []error }
+
+func (p *closingProcessor) Open(context.Context) (routing.Session, error) {
+	return &closingSession{p: p}, nil
+}
+
+type closingSession struct{ p *closingProcessor }
+
+func (*closingSession) RequestHeaders(routing.Header, bool) (*routing.Effect, error) {
+	return &routing.Effect{}, nil
+}
+
+func (*closingSession) RequestBody([]byte, bool) (*routing.Effect, error) {
+	return &routing.Effect{}, nil
+}
+
+func (*closingSession) ResponseHeaders(routing.Header, bool) (*routing.Effect, error) {
+	return &routing.Effect{}, nil
+}
+
+func (*closingSession) ResponseBody([]byte, bool) (*routing.Effect, error) {
+	return &routing.Effect{}, nil
+}
+
+func (*closingSession) Evidence() routing.Evidence { return routing.Evidence{} }
+
+func (s *closingSession) Close(err error) { s.p.closed = append(s.p.closed, err) }
+
+// A hop no backend answered ends its session with the local reply, as the
+// standalone gateway ends a client request, so the hop's record keeps it.
+func TestSessionCallerEndsAHopWithItsLocalReply(t *testing.T) {
+	processor := &closingProcessor{}
+	local := backendDelivery(503, "upstream connect error")
+	local.Local = &routing.LocalReply{Status: 503, Failure: "connect_failure"}
+	caller := &SessionCaller{Engine: routing.NewEngine(processor, routing.DefaultOptions), Upstream: &fakeUpstream{delivery: local}}
+	if _, err := caller.Call(context.Background(), hopRequest()); err != nil {
+		t.Fatal(err)
+	}
+	var reply *routing.LocalReply
+	if len(processor.closed) != 1 || !errors.As(processor.closed[0], &reply) || *reply != *local.Local {
+		t.Fatalf("the hop session closed with %v, want its local reply", processor.closed)
 	}
 }
 

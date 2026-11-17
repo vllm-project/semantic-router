@@ -330,6 +330,14 @@ func splitOutputUsage(total, reasoning int64, otherProvenance llmprotocol.UsageP
 }
 
 func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	for _, items := range append([][]llmprotocol.OutputItem{response.Output}, response.Alternatives...) {
+		for _, item := range items {
+			if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, item.Content); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
 	if response.Error != nil {
 		var diagnostics llmprotocol.Diagnostics
 		if response.Usage.State == llmprotocol.UsageAvailable {

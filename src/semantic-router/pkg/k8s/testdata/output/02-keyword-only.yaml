@@ -6,6 +6,7 @@ providers:
   models:
     - name: gemma-2-9b
       pricing:
+        currency: USD
         prompt_per_1m: 0.39999999999999997
         completion_per_1m: 0.7999999999999999
       loras:
@@ -13,6 +14,7 @@ providers:
           description: Optimized for greeting responses
     - name: gemma-2-27b
       pricing:
+        currency: USD
         prompt_per_1m: 2
         completion_per_1m: 4
       loras:

@@ -124,6 +124,7 @@ func TestRequiredManagedStorageDerivesExactEffectiveManagedSet(t *testing.T) {
 		{
 			name: "enabled services and vector metadata use only local endpoints",
 			mutate: func(config *routerconfig.RouterConfig) {
+				config.ResponseAPI.StoreBackend = "redis"
 				config.ResponseAPI.Redis.Address = "lane-a-vllm-sr-redis:6379"
 				recordReplay(config)
 				config.RouterReplay.StoreBackend = "postgres"

@@ -129,6 +129,29 @@ def test_detect_required_backends_with_stack_selects_exact_managed_services():
     }
 
 
+def test_detect_required_backends_provisions_the_default_replay_record_store():
+    """Without a router_replay plugin the Router records routing data, so a
+    configured Postgres store is needed; enabled: false in global.plugins turns
+    that record off, unless a recipe or decision enables it again."""
+    services = {
+        "router_replay": {"store_backend": "postgres", "postgres": {"host": "postgres"}}
+    }
+    config = {"version": "v0.5", "global": {"services": services}}
+    assert "postgres" in detect_required_backends(config, resolve_runtime_stack())
+
+    off = {"type": "router_replay", "configuration": {"enabled": False}}
+    config["global"]["plugins"] = [off]
+    assert "postgres" not in detect_required_backends(config, resolve_runtime_stack())
+
+    config["recipes"] = [
+        {
+            "name": "audited",
+            "plugins": [{"type": "router_replay", "configuration": {"enabled": True}}],
+        }
+    ]
+    assert "postgres" in detect_required_backends(config, resolve_runtime_stack())
+
+
 def test_container_start_milvus_reuses_network_alias(monkeypatch, tmp_path):
     def fail_run(_cmd, _label):
         raise AssertionError("Milvus container should not start when alias is present")
@@ -316,12 +339,13 @@ def test_running_storage_with_loopback_binding_remains_reusable(monkeypatch):
 
     assert code == 0
     assert stderr == ""
-    assert len(calls) == 3
-    assert calls[0][1:3] == ["container", "inspect"]
-    assert calls[1][1:3] == ["network", "connect"]
     # Reuse is also the migration step for a stack that predates the data
     # network, so the container leaves the application network here.
-    assert calls[2][1:3] == ["network", "disconnect"]
+    assert [call[1:3] for call in calls] == [
+        ["container", "inspect"],
+        ["network", "connect"],
+        ["network", "disconnect"],
+    ]
 
 
 def test_running_storage_with_host_network_is_not_reused(monkeypatch):

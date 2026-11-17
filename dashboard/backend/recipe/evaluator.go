@@ -32,6 +32,26 @@ type routerModelsResponse struct {
 	} `json:"data"`
 }
 
+// requestModel is the model a probe of recipe is sent as: a virtual model of
+// the recipe, one offered for chat before an entrypoint that serves only other
+// entrypoints' reviews or memory calls, which takes requests all the same.
+func (c routerModelsResponse) requestModel(recipe string) string {
+	found := ""
+	for _, model := range c.Data {
+		id := strings.TrimSpace(model.ID)
+		if model.Routing.Resolution != "virtual" || strings.TrimSpace(model.Routing.Recipe) != recipe || id == "" {
+			continue
+		}
+		if model.Routing.Selectable {
+			return id
+		}
+		if found == "" {
+			found = id
+		}
+	}
+	return found
+}
+
 func (e *HTTPRouterEvaluator) ResolveRequestModel(ctx context.Context, recipeName string) (string, error) {
 	if strings.TrimSpace(e.BaseURL) == "" {
 		return "", errors.New("router API URL is not configured")
@@ -69,11 +89,8 @@ func (e *HTTPRouterEvaluator) ResolveRequestModel(ctx context.Context, recipeNam
 		return "", errors.New("router models response is invalid")
 	}
 	recipeName = strings.TrimSpace(recipeName)
-	for _, model := range catalog.Data {
-		if model.Routing.Resolution == "virtual" && model.Routing.Selectable &&
-			strings.TrimSpace(model.Routing.Recipe) == recipeName && strings.TrimSpace(model.ID) != "" {
-			return strings.TrimSpace(model.ID), nil
-		}
+	if model := catalog.requestModel(recipeName); model != "" {
+		return model, nil
 	}
 	return "", fmt.Errorf("active Router does not advertise a model for Recipe %q", recipeName)
 }

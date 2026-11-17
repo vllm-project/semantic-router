@@ -21,22 +21,34 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
+// reportedReasoningEffort is the effort a log, a metric or a trace reports for
+// a request to model, and whether the Router projected reasoning onto it. A
+// model without a reasoning family passes the request through as the client
+// sent it, so no effort was applied and none is reported.
+func (r *OpenAIRouter) reportedReasoningEffort(decision *config.Decision, model string) (string, bool) {
+	if r.getModelReasoningFamily(model) == nil {
+		return "", false
+	}
+	return r.getReasoningEffort(decision, model), true
+}
+
 // logRoutingDecision logs routing decision with structured logging
 func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool) {
-	effortForMetrics := ""
-	if reasoningEnabled && decisionName != "" {
-		effortForMetrics = r.getReasoningEffort(ctx.VSRSelectedDecision, selectedModel)
+	effortForMetrics, projected := r.reportedReasoningEffort(ctx.VSRSelectedDecision, selectedModel)
+	if !reasoningEnabled || decisionName == "" {
+		effortForMetrics = ""
 	}
 
 	logging.ComponentEvent("extproc", "routing_decision", map[string]interface{}{
-		"reason_code":        reasonCode,
-		"request_id":         ctx.RequestID,
-		"original_model":     originalModel,
-		"selected_model":     selectedModel,
-		"decision":           decisionName,
-		"reasoning_enabled":  reasoningEnabled,
-		"reasoning_effort":   effortForMetrics,
-		"routing_latency_ms": time.Since(ctx.ProcessingStartTime).Milliseconds(),
+		"reason_code":         reasonCode,
+		"request_id":          ctx.RequestID,
+		"original_model":      originalModel,
+		"selected_model":      selectedModel,
+		"decision":            decisionName,
+		"reasoning_enabled":   reasoningEnabled,
+		"reasoning_effort":    effortForMetrics,
+		"reasoning_projected": projected,
+		"routing_latency_ms":  time.Since(ctx.ProcessingStartTime).Milliseconds(),
 	})
 	metrics.RecordRoutingReasonCode(reasonCode, selectedModel)
 }
@@ -54,7 +66,7 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 		"decision_reason":   reasoningDecision.DecisionReason,
 	})
 
-	effortForMetrics := r.getReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
+	effortForMetrics, _ := r.reportedReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
 	metrics.RecordReasoningDecision(requestDecisionStateKey(ctx), matchedModel, useReasoning, effortForMetrics)
 
 	// Resolution is a point-in-time event; it does not pretend to measure backend execution.
@@ -123,10 +135,13 @@ func (r *OpenAIRouter) startRouterReplay(
 		MaxToolTraceSteps:      policy.MaxToolTraceSteps,
 	})
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	record.CostAccounting = r.replaceReplayModelCalls(ctx, record.CostAccounting)
 	prompt := record.Prompt
 	ctx.RouterReplayContentOmitted = !r.replayPromptAllowed(ctx)
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
-	r.populateReplayIdentity(&record, ctx)
+	headerSession := r.populateReplayIdentity(&record, ctx) || ctx.SessionProvenance == SessionProvenanceHeader
+	applyReplayRunParent(&record, ctx.replayRunParent)
+	applyReplayReviewSession(&record, headerSession)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
 	}
@@ -138,18 +153,28 @@ func (r *OpenAIRouter) startRouterReplay(
 
 // populateReplayIdentity records the same explicit identity used by protection,
 // including custom header names, without enabling protection or changing request
-// state. Optional Responses lineage remains the fallback for older clients.
-func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) {
+// state, and the agent run the harness names. Optional Responses lineage
+// remains the fallback for clients that name no session. It reports whether
+// a header named the session.
+func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) bool {
 	if r == nil || ctx == nil || record == nil {
-		return
+		return false
 	}
 	cfg := config.RouterLearningProtectionConfig{}
 	if r.Config != nil {
 		cfg = r.Config.RouterLearning.Protection
 	}
+	record.Agent = harnessRunAgent(ctx, cfg)
 	identity, ok := r.protectionIdentity(ctx, cfg)
 	if !ok {
-		return
+		// Protection keys no state for the call, but the harness still names
+		// its run, which a per-call Responses key would split.
+		sessionID := harnessRunSession(ctx, cfg)
+		if sessionID == "" {
+			return false
+		}
+		record.SessionID = sessionID
+		return true
 	}
 	record.SessionID = identity.sessionID
 	if conversationID := identity.declaredConversationID(); conversationID != "" {
@@ -160,6 +185,7 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 	if record.Learning != nil {
 		record.Learning.ProtectionStateKey = routingLearningStateKey(ctx)
 	}
+	return true
 }
 
 func shouldStartRouterReplay(ctx *RequestContext) bool {
@@ -288,6 +314,10 @@ func buildReplayRoutingRecord(
 		record.PreviousResponseID = state.PreviousResponseID
 		record.ConversationID = state.ConversationID
 	}
+	record.RequestKind, record.Review = replayApprovalReview(ctx)
+	sessionKind, sessionName := replaySessionNaming(ctx)
+	record.RequestKind, record.SessionName = firstNonEmptyString(record.RequestKind, sessionKind), sessionName
+	record.ThreadID, record.TurnID, record.ParentTurnID = ctx.AgentTurn.ThreadID, ctx.AgentTurn.TurnID, ctx.AgentTurn.ParentTurnID
 	// The sanitiser drops tool-result payloads unless the route captures tool
 	// results; a masking route persists no request text at all, because Replay
 	// snapshots the request before masking runs (D3, #3566).
@@ -302,6 +332,7 @@ func buildReplayRoutingRecord(
 		// Tool definitions are operator-authored, not user content, so they
 		// are kept even when the prompt is suppressed.
 		record.ToolDefinitions = toolDefinitions
+		record.ReasoningEffort = ctx.SemanticRequest.ReasoningEffort
 		if !suppressBody {
 			if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
 				record.RequestBody = string(requestBody)
@@ -370,6 +401,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Conversation:  ctx.VSRMatchedConversation,
 		Metadata:      ctx.VSRMatchedMetadata,
 		InputModality: ctx.VSRMatchedInputModality,
+		Agent:         ctx.VSRMatchedAgent,
 		Decision:      ctx.VSRMatchedDecisionModel,
 	}
 }
@@ -475,6 +507,8 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 		return
 	}
 
+	r.refreshReplayModelCalls(ctx, recorder)
+	settleReplaySessionName(ctx, recorder, state)
 	if err := recorder.FinalizeLifecycle(ctx.RouterReplayID, state, reason); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_lifecycle_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -483,6 +517,21 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 			"error":      err.Error(),
 		})
 	}
+	settleReplayApprovalReview(ctx, recorder, state)
+}
+
+// failAnsweredRouterReplay fails a record whose client already got an error
+// the response phases never see: the Router's own refusal, a fallback chain's
+// answer, or the gateway's local reply for a backend that did not answer. The
+// record keeps what the client got, since the stream then ends without a
+// terminal response, which would otherwise read as a client abort. A record
+// the Router already ended keeps what it holds.
+func (r *OpenAIRouter) failAnsweredRouterReplay(ctx *RequestContext, status int, body []byte, reason string) {
+	if status < 400 || !r.routerReplayInProgress(ctx) {
+		return
+	}
+	r.updateRouterReplayStatus(ctx, status, false)
+	r.failStreamedRouterReplay(ctx, body, reason)
 }
 
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
@@ -534,7 +583,16 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 }
 
 func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
-	if ctx == nil || ctx.RouterReplayID == "" || (usage.TotalTokens == nil && usage.ProviderCache == nil) {
+	if usage.TotalTokens == nil && usage.ProviderCache == nil {
+		return
+	}
+	r.writeRouterReplayUsageCost(ctx, usage)
+}
+
+// writeRouterReplayUsageCost replaces the record's usage and cost, even with
+// none.
+func (r *OpenAIRouter) writeRouterReplayUsageCost(ctx *RequestContext, usage routerreplay.UsageCost) {
+	if ctx == nil || ctx.RouterReplayID == "" {
 		return
 	}
 
@@ -546,6 +604,7 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 		return
 	}
 
+	usage.CostAccounting = r.replaceReplayModelCalls(ctx, usage.CostAccounting)
 	if err := recorder.UpdateUsageCost(ctx.RouterReplayID, usage); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

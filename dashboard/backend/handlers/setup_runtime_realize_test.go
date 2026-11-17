@@ -94,7 +94,7 @@ func TestManagedSetupRealizesImportedConfigBeforePublishingOwnedPath(t *testing.
 		t.Fatalf("validation modified bootstrap: %v", err)
 	}
 	activated := httptest.NewRecorder()
-	SetupActivateHandler(configPath, false, filepath.Dir(filepath.Dir(configPath)), resolver)(activated, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
+	asSecretReader(SetupActivateHandler(configPath, false, filepath.Dir(filepath.Dir(configPath)), resolver))(activated, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 	if activated.Code != http.StatusOK {
 		t.Fatalf("activate = %d: %s", activated.Code, activated.Body.String())
 	}
@@ -158,7 +158,7 @@ func TestManagedSetupPreservesAuthoredGlobalThroughRealization(t *testing.T) {
 				t.Fatalf("managed candidate is not activatable: %+v", result)
 			}
 			assertManagedSetupAuthoredGlobal(t, tc.global, result.Config)
-			requireTransportHTTPResult(t, SetupActivateHandler(configPath, false, filepath.Dir(filepath.Dir(configPath)), resolver), "/api/setup/activate",
+			requireTransportHTTPResult(t, asSecretReader(SetupActivateHandler(configPath, false, filepath.Dir(filepath.Dir(configPath)), resolver)), "/api/setup/activate",
 				mustJSONRaw(t, SetupConfigRequest{Config: result.Config}))
 			published, err := os.ReadFile(configPath)
 			if err != nil {
@@ -261,7 +261,7 @@ func TestManagedSetupPreservesExplicitManagementAndMissingGlobalDefaults(t *test
 			}
 			body := mustJSONRaw(t, SetupConfigRequest{Config: importSetupRuntimePatch(t, configPath, resolver, patch)})
 			response := httptest.NewRecorder()
-			SetupActivateHandler(configPath, false, filepath.Dir(filepath.Dir(configPath)), resolver)(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
+			asSecretReader(SetupActivateHandler(configPath, false, filepath.Dir(filepath.Dir(configPath)), resolver))(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 			if response.Code != http.StatusOK {
 				t.Fatalf("activate = %d: %s", response.Code, response.Body.String())
 			}

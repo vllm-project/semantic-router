@@ -78,6 +78,7 @@ type SignalMatches struct {
 	ConversationRules  []string // Conversation-shape signal names matched
 	MetadataRules      []string // untrusted request metadata rule names matched
 	InputModalityRules []string // structural input-modality presence rule names matched
+	AgentRules         []string // agent rule names matched: the request's agent role, harness and type
 	SystemOneRules     []string
 	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
@@ -594,6 +595,8 @@ func resolvePolicySignalRules(
 		return signals.MetadataRules, true
 	case config.SignalTypeInputModality:
 		return signals.InputModalityRules, true
+	case config.SignalTypeAgent:
+		return signals.AgentRules, true
 	case config.SignalTypeProjection:
 		return signals.ProjectionRules, true
 	default:
@@ -662,10 +665,11 @@ func (e *DecisionEngine) evalAND(
 		evaluation.onError = evaluation.onError || childEvaluation.onError
 		evaluation.matchedRules = append(evaluation.matchedRules, childEvaluation.matchedRules...)
 	}
-	if evaluation.state == evaluationUnknown {
+	switch evaluation.state {
+	case evaluationUnknown:
 		evaluation.scored = false
 		evaluation.kind = config.ScoreKindNone
-	} else if evaluation.state == evaluationTrue {
+	case evaluationTrue:
 		evidence.apply(&evaluation, totalConfidence, matchedCount)
 	}
 	trace.finish(evaluation)

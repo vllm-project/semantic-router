@@ -48,8 +48,15 @@ func VSRRulesTryHandler(configPath, upstream string, providers ...routerauth.Cre
 		for _, listener := range cfg.Listeners {
 			if api, ok := listener.APIs["systemone"]; listener.Name == request.Listener && ok && api.VSR != nil && api.VSR.Rules != nil {
 				found = true
-				if len(listener.APIKeys) > 0 {
-					key = listener.APIKeys[0]
+				// The key the Router reads: an environment reference resolved,
+				// or the file a save moved the key to.
+				keys, keyErr := listener.ResolveClientKeys()
+				if keyErr != nil {
+					decisionModelError(w, http.StatusInternalServerError, "config_unavailable", "Unable to read the listener's key")
+					return
+				}
+				if len(keys) > 0 {
+					key = keys[0]
 				}
 			}
 		}

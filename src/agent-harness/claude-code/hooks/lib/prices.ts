@@ -8,12 +8,14 @@ import type { TurnUsage } from 'claude-code'
 type Price = { input: number; output: number; cacheRead: number }
 
 const PRICES: readonly (readonly [RegExp, Price | undefined])[] = [
-  [/fable-5-1|mythos/, { input: 10, output: 50, cacheRead: 0.25 }],
-  [/fable/, { input: 10, output: 50, cacheRead: 1 }],
+  [/fable-5-2|mythos-5-2/, { input: 8, output: 40, cacheRead: 0.2 }],
+  [/fable-5-1|mythos-5-1/, { input: 10, output: 50, cacheRead: 0.25 }],
+  [/fable|mythos-5/, { input: 10, output: 50, cacheRead: 1 }],
   [/opus-5-5|^opus$/, { input: 4, output: 20, cacheRead: 0.2 }],
   [/opus-4(-1)?(-\d{8})?$/, undefined],
   [/opus/, { input: 5, output: 25, cacheRead: 0.5 }],
-  [/sonnet-5|^sonnet$/, { input: 2, output: 10, cacheRead: 0.2 }],
+  [/sonnet-5-5|^sonnet$/, { input: 2, output: 10, cacheRead: 0.1 }],
+  [/sonnet-5/, { input: 2, output: 10, cacheRead: 0.2 }],
   [/sonnet/, { input: 3, output: 15, cacheRead: 0.3 }],
   [/haiku-5-5|^haiku$/, { input: 0.1, output: 0.5, cacheRead: 0.01 }],
   [/haiku/, { input: 1, output: 5, cacheRead: 0.1 }],

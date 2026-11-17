@@ -239,7 +239,7 @@ func scanSource(state modelservice.Request, size int) (string, int, func(scanWin
 	if state.Parts == nil {
 		text := state.State
 		return text, size, func(window scanWindow) modelservice.Request {
-			return modelservice.Request{State: text[window.start:window.end]}
+			return modelservice.Request{State: text[window.start:window.end], Images: state.Images, Videos: state.Videos}
 		}
 	}
 	if answer, ok := state.Parts["answer"]; ok {
@@ -255,7 +255,7 @@ func scanSource(state modelservice.Request, size int) (string, int, func(scanWin
 			for name, text := range others.Parts {
 				parts[name] = text
 			}
-			return modelservice.Request{Parts: parts}
+			return modelservice.Request{Parts: parts, Images: state.Images, Videos: state.Videos}
 		}
 	}
 	names := make([]string, 0, len(state.Parts))
@@ -282,7 +282,11 @@ func scanSource(state modelservice.Request, size int) (string, int, func(scanWin
 		parts = append(parts, scanPart{name: name, start: start, end: builder.Len()})
 	}
 	text := builder.String()
-	return text, size, func(window scanWindow) modelservice.Request { return windowParts(text, parts, window) }
+	return text, size, func(window scanWindow) modelservice.Request {
+		request := windowParts(text, parts, window)
+		request.Images, request.Videos = state.Images, state.Videos
+		return request
+	}
 }
 
 // windowParts is the state a window of text carries: every named part it

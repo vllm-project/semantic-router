@@ -8,6 +8,7 @@ import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import type {
   APIConfig,
   AuthzConfig,
+  BudgetsConfig,
   CanonicalEmbeddingCatalogConfig,
   CanonicalSystemModels,
   LooperConfig,
@@ -61,7 +62,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     max_responses: 1000,
   } satisfies ResponseAPIConfig,
   router_replay: {
-    store_backend: 'memory',
+    store_backend: 'file',
     ttl_seconds: 2592000,
     async_writes: false,
   } satisfies RouterReplayConfig,
@@ -77,8 +78,10 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     fail_open: false,
     providers: [],
   } satisfies RateLimitConfig,
+  budgets: {} satisfies BudgetsConfig,
   management_api: {},
   startup_status: {},
+  masking_identity: { namespaces: {} },
   memory: {
     auto_store: false,
     milvus: {
@@ -188,6 +191,12 @@ export const SECTION_META: Record<
     eyebrow: 'Services',
     description: 'Per-user, group, and model request throttling rules enforced by the router.',
   },
+  budgets: {
+    title: 'Spend Budgets',
+    eyebrow: 'Services',
+    description:
+      'Spend limits per agent run and per user over a window. Each call reserves its estimated cost before it is sent and settles its actual cost after.',
+  },
   management_api: {
     title: 'Management API',
     eyebrow: 'Services',
@@ -197,6 +206,12 @@ export const SECTION_META: Record<
     title: 'Startup Status',
     eyebrow: 'Services',
     description: 'Startup readiness and status-reporting behavior exposed by the router.',
+  },
+  masking_identity: {
+    title: 'Masking Identity',
+    eyebrow: 'Services',
+    description:
+      'Namespaces that keep one masking placeholder per value across requests, sessions and restarts, for masking plugins with index: registry.',
   },
   memory: {
     title: 'Agentic Memory',

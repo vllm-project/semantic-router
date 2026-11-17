@@ -888,6 +888,26 @@ func TestApply_ToolResultSiblingMembersStayStructured(t *testing.T) {
 	}
 }
 
+// Case: a client-written placeholder in an earlier block keeps its meaning:
+// the value a later block holds gets the next index instead (#6513).
+func TestApply_ClientPlaceholderInEarlierBlockIsNotReissued(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "[EMAIL_ADDRESS_0] then"}}},
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "write to alice@example.com"}}},
+		},
+	}
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanForValue("EMAIL_ADDRESS", "alice@example.com")); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := request.Messages[0].Content[0].Text, "[EMAIL_ADDRESS_0] then"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if got, want := request.Messages[1].Content[0].Text, "write to [EMAIL_ADDRESS_1]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 // Case: an agent's later request. The tool result still holds the real name,
 // and the agent's own tool call echoes the placeholder it got for that name
 // one turn earlier. A detector that also reads the placeholder's inner text
@@ -909,17 +929,7 @@ func TestApply_EchoedPlaceholderInLaterTurnUnchanged(t *testing.T) {
 			}},
 		},
 	}
-	scan := func(text string) ([]Span, error) {
-		var spans []Span
-		for _, value := range []string{"Minji Kim", "PERSON_0"} {
-			if idx := strings.Index(text, value); idx >= 0 {
-				spans = append(spans, Span{EntityType: "PERSON", Start: idx, End: idx + len(value), Confidence: 1.0})
-			}
-		}
-		return spans, nil
-	}
-
-	result, err := Apply(request, NewAllocator(defaultCfg()), scan)
+	result, err := Apply(request, NewAllocator(defaultCfg()), scanEchoAndName)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -932,5 +942,39 @@ func TestApply_EchoedPlaceholderInLaterTurnUnchanged(t *testing.T) {
 	}
 	if got, want := request.Messages[1].Content[0].ToolCall.Arguments, `{"content":"Hi [PERSON_0],"}`; got != want {
 		t.Fatalf("tool call arguments: got %q, want %q", got, want)
+	}
+}
+
+// scanEchoAndName reads the name, and the echoed placeholder both whole and
+// by its index alone.
+func scanEchoAndName(text string) ([]Span, error) {
+	var spans []Span
+	for _, value := range []string{"Minji Kim", "PERSON_0", "0"} {
+		if idx := strings.Index(text, value); idx >= 0 {
+			spans = append(spans, Span{EntityType: "PERSON", Start: idx, End: idx + len(value), Confidence: 1.0})
+		}
+	}
+	return spans, nil
+}
+
+// Case: the echo comes before the value it stands for, as after a compacted
+// history. Nothing issued it yet, so it is reserved like a typed one: the
+// name gets the next index, and a detector reading the echo's index alone
+// masks it (#6513).
+func TestApply_EchoBeforeItsValueIsReserved(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Hi [PERSON_0],"}}},
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "customer: Minji Kim"}}},
+		},
+	}
+	if _, err := Apply(request, NewAllocator(defaultCfg()), scanEchoAndName); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := request.Messages[0].Content[0].Text, "Hi [PERSON_[PERSON_1]],"; got != want {
+		t.Fatalf("echo: got %q, want %q", got, want)
+	}
+	if got, want := request.Messages[1].Content[0].Text, "customer: [PERSON_2]"; got != want {
+		t.Fatalf("name: got %q, want %q", got, want)
 	}
 }

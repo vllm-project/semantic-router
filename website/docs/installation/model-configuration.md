@@ -104,6 +104,14 @@ The Dashboard edits the same configuration document as YAML. Use one authoring o
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
+The Dashboard never writes a provider key you enter into that document, and
+neither does `vllm-sr config apply`. Saving stores it in an owner-only file
+beside the configuration and sets the backend's `auth.api_key_file`, which the
+Router reads at every load; on Kubernetes it stores the key in the chart's key
+Secret and sets `auth.api_key_env`. Any save also moves a key already written
+inline as `api_key`. See
+[Keys saved from the Dashboard or the management API](security-hardening#keys-saved-from-the-dashboard-or-the-management-api).
+
 ## Routing capabilities
 
 Author-declared model capabilities act as an eligibility filter before model
@@ -197,7 +205,7 @@ providers:
 | `idle_timeout` | the listener's `timeout` | Longest wait for more of a streamed response. `0s` turns it off. |
 | `per_try_timeout` | none | Time for each attempt until its response starts. |
 | `first_byte_timeout` | none | Time for the first response byte, so a stream that stalls before it starts can still be retried. Standalone mode only. |
-| `retry_count` | `0` | Retries after the first attempt, up to 5. |
+| `retry_count` | `2` when `retry_on` is unset too, else `0` | Retries after the first attempt, up to 5. `0` turns retries off. |
 | `retry_on` | `connect-failure,refused-stream` | When to retry, with Envoy's condition names. Both gateways act on `5xx`, `gateway-error`, `reset`, `connect-failure`, `refused-stream`, `retriable-status-codes`, `retriable-4xx`, `reset-before-request`, and `envoy-ratelimited`. Envoy's other names (`retriable-headers`, `http3-post-connect-failure`, and the gRPC `cancelled`, `deadline-exceeded`, `internal`, `resource-exhausted`, `unavailable`) load, and the standalone gateway ignores them. A name Envoy does not know fails the configuration load. |
 | `retriable_status_codes` | none | Statuses retried under `retriable-status-codes`, such as `429`. |
 | `retry_back_off_base`, `retry_back_off_max` | `25ms`, ten times the base | Bounds of the randomized exponential wait between retries. |
@@ -206,6 +214,34 @@ providers:
 | `consecutive_5xx` | none | Failures in a row that take a replica out of rotation. Needs two or more replicas. |
 | `base_ejection_time`, `max_ejection_percent` | `30s`, `50` | How long an ejected replica stays out (longer each time in a row), and the share that can be out at once. |
 | `health_check_path`, `health_check_interval`, `health_check_timeout` | none, `10s`, `2s` | Active `GET` checks; only a `200` passes. |
+
+A provider model whose block sets neither `retry_count` nor `retry_on`, or
+that has no block, retries twice on `connect-failure,refused-stream`. These
+conditions retry only an attempt the backend never received: a connection
+that was refused or timed out, a host name that did not resolve (standalone
+mode resolves it when it connects; Envoy resolves it in the background, so a
+failed lookup leaves no replica to try), or a stream the server refused before
+processing it. They never send a request again once its bytes reached the
+backend, so no reply is generated twice, and a backend that refuses one
+connection no longer fails the request. The waits are the back-off defaults,
+a random wait under 25 ms and then under 50 ms, so the retries add little when
+another replica takes the request, and at most three of them run at once per
+model. Set `retry_count: 0` to turn them off. A `retry_on` without a
+`retry_count` retries nothing, so it turns them off too, and the Router warns
+about it with `retry_on_without_count` when it loads the configuration.
+
+The standalone gateway and the Envoy configuration the CLI renders (`vllm-sr
+serve`, `vllm-sr config envoy`) apply these default retries. An Envoy
+configured elsewhere, such as Envoy Gateway in a Kubernetes deployment or your
+own Envoy, retries only as its routes say, and Envoy retries nothing by
+default; the Router reaches it only through a decision's `reliability` block
+(see below). Give its model routes the same policy to match:
+
+```yaml
+retry_policy:
+  retry_on: connect-failure,refused-stream
+  num_retries: 2
+```
 
 Retries and failures behave the same way whichever gateway serves the
 traffic:
@@ -263,9 +299,12 @@ with the provider model's settings the same way in every gateway:
 - `total_timeout`, `per_try_timeout`, `idle_timeout`, and `first_byte_timeout`
   replace the provider model's; `0s` turns one off.
 - `retry_count` replaces the provider model's. `retry_on` and
-  `retriable_status_codes` add to the provider model's conditions. Retries on
-  a provider model that has none use `connect-failure,refused-stream` unless
-  the decision names its own conditions.
+  `retriable_status_codes` add to the provider model's conditions and keep its
+  count: two by default, and one behind an Envoy configured elsewhere, which
+  has no route retry policy. A decision's `retry_count` on a provider model
+  that sets none of its own retries on `connect-failure,refused-stream` unless
+  the decision names its own conditions, so that it applies behind such an
+  Envoy too.
 - `retry_back_off_base`, `retry_back_off_max`, and `retry_after_max` replace
   the provider model's.
 - Connection timeouts, load balancing, retry budgets, ejection, and health
@@ -425,8 +464,12 @@ access, then ship it:
 ## Fall back to another model
 
 When a model fails, the Router can send the request to the decision's next
-ranked candidate instead. This cross-model fallback is off by default. Turn it
-on globally, for a recipe, or for one decision:
+ranked candidate instead. This cross-model fallback is off by default, since
+another model then answers, without the first one's prompt cache. A decision
+with one model has nowhere to fall back to. `vllm-sr connect` reports the
+decisions an agent's entrypoint reaches that have fallback off, timeouts too
+short for an agent call, or only one model. Turn it on globally, for a recipe,
+or for one decision:
 
 ```yaml
 global:
@@ -466,6 +509,15 @@ recipes:
 | `retryable_status_codes` | `[502, 503, 504]` | Statuses that move on to the next candidate. |
 | `circuit_breaker` | 3 failures, `30s`, 1 probe | Skips a backend that keeps failing, for a cool-down. Global and recipe policies only. |
 | `forward_request_headers` | none | Client request headers that a fallback attempt the Router sends itself copies; see [Carry client headers on a fallback attempt](#carry-client-headers-on-a-fallback-attempt). Global and recipe policies only. |
+
+The default timeouts suit calls that answer in seconds. A candidate that runs
+for minutes, such as an agent's, needs both as long as its call, or fallback
+ends a slower answer with `504`; `vllm-sr connect` asks for `1200s`. In
+standalone mode `per_attempt_timeout` bounds only the wait for a candidate's
+response to start. Behind Envoy the Router makes the fallback call itself and
+holds the response until that call ends, so Envoy also ends it at the
+listener's `timeout`, which is Envoy's stream idle timeout (300 seconds by
+default), and at the ext_proc filter's `message_timeout` of 1200 seconds.
 
 The policy a request runs under is merged field by field, the most specific
 layer first:
