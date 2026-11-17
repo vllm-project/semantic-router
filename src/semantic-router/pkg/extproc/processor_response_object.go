@@ -129,6 +129,7 @@ func cloneResponseInputItems(items []responseapi.InputItem) []responseapi.InputI
 		cloned[index].Content = append(json.RawMessage(nil), cloned[index].Content...)
 		cloned[index].Output = append(json.RawMessage(nil), cloned[index].Output...)
 		cloned[index].Summary = append(json.RawMessage(nil), cloned[index].Summary...)
+		cloned[index].Result = append(json.RawMessage(nil), cloned[index].Result...)
 	}
 	return cloned
 }

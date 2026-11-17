@@ -87,6 +87,9 @@ type FastResponsePluginConfig struct {
 	// Enabled false turns off the fast_response a decision inherits.
 	Enabled *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Message string `json:"message" yaml:"message"`
+	// Block refuses the request with HTTP 400 and Message as the error,
+	// instead of answering with Message as the model's reply.
+	Block bool `json:"block,omitempty" yaml:"block,omitempty"`
 }
 
 // IsEnabled reports whether the fast_response runs: unless enabled is false.
@@ -202,6 +205,11 @@ type RouterReplayPluginConfig struct {
 	// oldest steps are dropped and ToolTrace.StepsTruncated is set so callers
 	// can see that a cap was applied. 0 means no limit.
 	MaxToolTraceSteps int `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
+	// CostBaselineModel is the configured model a record's savings compare
+	// with: the same recorded tokens at that model's rates, so a request
+	// routed to a dearer model saves a negative amount. Unset, the baseline is
+	// the most expensive model of the selected recipe's pool.
+	CostBaselineModel string `json:"cost_baseline_model,omitempty" yaml:"cost_baseline_model,omitempty"`
 	// Shadow sends a sampled copy of the decision's requests to a shadow
 	// model, whose outcome the replay record keeps. It runs while the
 	// decision records replays.

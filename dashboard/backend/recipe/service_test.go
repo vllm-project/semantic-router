@@ -591,18 +591,21 @@ func TestHTTPRouterEvaluatorResolvesRequestModelByRecipe(t *testing.T) {
 		_, _ = w.Write([]byte(`{"data":[
   {"id":"leaf-a","routing":{"resolution":"passthrough","selectable":true}},
   {"id":"vllm-sr/mom-v1-lite","routing":{"resolution":"virtual","selectable":true,"recipe":"cost"}},
-  {"id":"vllm-sr/mom-v1-blend","routing":{"resolution":"virtual","selectable":true,"recipe":"balance"}}
+  {"id":"balance-memory","routing":{"resolution":"virtual","selectable":false,"delegates":["memory"],"recipe":"balance"}},
+  {"id":"vllm-sr/mom-v1-blend","routing":{"resolution":"virtual","selectable":true,"recipe":"balance"}},
+  {"id":"vllm-sr/review","routing":{"resolution":"virtual","selectable":false,"delegates":["review"],"recipe":"review"}}
 ]}`))
 	}))
 	defer server.Close()
 
 	evaluator := &HTTPRouterEvaluator{BaseURL: server.URL, Client: server.Client()}
-	model, err := evaluator.ResolveRequestModel(context.Background(), "balance")
-	if err != nil {
-		t.Fatalf("ResolveRequestModel(): %v", err)
-	}
-	if model != "vllm-sr/mom-v1-blend" {
-		t.Fatalf("model = %q", model)
+	// a model offered for chat comes first, and a recipe only a delegate
+	// entrypoint serves takes requests through it
+	for recipe, want := range map[string]string{"balance": "vllm-sr/mom-v1-blend", "review": "vllm-sr/review"} {
+		model, err := evaluator.ResolveRequestModel(context.Background(), recipe)
+		if err != nil || model != want {
+			t.Fatalf("ResolveRequestModel(%q) = %q, %v, want %q", recipe, model, err, want)
+		}
 	}
 }
 

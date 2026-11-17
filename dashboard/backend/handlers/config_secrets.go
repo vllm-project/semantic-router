@@ -17,7 +17,10 @@ import (
 //nolint:gosec // G101: this is a fixed redaction marker, not a credential.
 const redactedConfigSecret = "__VLLM_SR_REDACTED__"
 
-var configEnvReference = regexp.MustCompile(`^\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$`)
+// configEnvReference matches a value that is only an environment reference
+// the Router expands: an uppercase ${NAME} or $NAME. Any other value, such as
+// ${lowercase}, is a literal and is masked like one.
+var configEnvReference = regexp.MustCompile(`^\$(?:\{[A-Z_][A-Z0-9_]*\}|[A-Z_][A-Z0-9_]*)$`)
 
 func callerCanViewConfigSecrets(r *http.Request) bool {
 	if r == nil {

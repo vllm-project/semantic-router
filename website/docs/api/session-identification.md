@@ -35,17 +35,57 @@ Without the session header the request still routes, but protection does not
 retain a model.
 
 An agent harness that delegates work to subagents can also name each agent.
-Set `identity.headers.agent` to the header that carries that name, such as
-`x-claude-code-agent-id`, which Claude Code sends on subagent requests only.
-For Codex CLI, set `session: session-id` and `agent: thread-id`. Codex sends
-both on every request; on a root thread the two values are equal.
 Protection then holds each named agent on its own model inside the session,
-and requests without the header keep the session or conversation key. The
-agent header is optional, has no default, and is never required.
+and requests without an agent keep the session or conversation key. The agent
+is never required. The harnesses the Router supports need no identity headers
+configured, because protection reads what they send:
 
-Replay uses the same configured session and conversation header names when that
-explicit identity is available. Recording a conversation ID does not change the
-protection scope or reset model ownership under session scope.
+| Harness | Session | Agent |
+| --- | --- | --- |
+| Claude Code | `x-claude-code-session-id`, a `session_id_headers` default | `x-claude-code-agent-id`, sent on subagent requests only |
+| Codex CLI | `session-id` | `thread-id`; on a root thread it equals `session-id` |
+| OpenCode | `x-session-id`, a `session_id_headers` default; on a subagent's calls `x-parent-session-id` | on a subagent's calls, its own session in `x-session-id` |
+| Pi, with the provider `vllm-sr connect pi` writes, and the VS Code extension | `x-session-id`, a `session_id_headers` default | none |
+| DeepSeek Harness | none | none |
+
+- **Session.** With `identity.headers.session` unset, protection reads the
+  session the request pins, `x-vsr-session-id` or a `session_id_headers`
+  header, and without one Codex's `session-id`. An OpenCode subagent runs in
+  a child session of its own and sends the session that spawned it in
+  `x-parent-session-id`; unless the request pins a session in
+  `x-vsr-session-id`, protection keys the call by that parent session.
+- **Agent.** With `identity.headers.agent` unset, protection reads
+  `x-claude-code-agent-id`, then `thread-id`. A `thread-id` equal to the
+  request's `session-id` marks Codex's root thread, the main agent, and names no
+  agent, also when the request pins another session, as
+  `vllm-sr connect codex --launch` does. An OpenCode subagent's own session,
+  its `x-session-id`, is its agent. OpenCode is known by its User-Agent,
+  `opencode/<version>`, and DeepSeek Harness by its User-Agent,
+  `deepseek-harness/<version>`; DeepSeek Harness sends no session or agent
+  header, so its calls keep the session the Router derives unless the request
+  pins one in `x-vsr-session-id`.
+- **Codex's turn metadata.** Without those headers, protection reads the
+  `session_id` and `thread_id` of Codex's `x-codex-turn-metadata`, or of a
+  Responses request's `client_metadata`.
+- **A configured header replaces the defaults** for its part: set
+  `identity.headers.agent` to a header your harness does not send to hold its
+  subagents on their parent's model.
+
+Replay records the session and conversation protection reads, from the
+configured headers or the defaults above, when that identity is available.
+When protection cannot key a call, Replay still files it under the session
+the harness names: the configured session header, the pinned session, or
+Codex's `session-id`. A Codex Responses call under `scope: conversation`
+without `x-conversation-id`, which has no conversation start to name its
+conversation by, or under an `identity.headers.session` Codex does not send,
+is filed under its `session-id` that way, so a run is one session rather than
+one per call. An OpenCode subagent's calls are filed under the session that
+spawned it. Replay also records the agent of each call from the harness
+defaults above, whichever agent header protection reads, and the agent that
+spawned it, Codex's `x-codex-parent-thread-id`: see
+[Agent runs](../tutorials/plugin/router-replay#agent-runs). Recording a
+conversation ID does not change the protection scope or reset model ownership
+under session scope.
 
 The Responses API keeps explicit conversation membership separate from response
 lineage. A request's `conversation` value identifies that membership;

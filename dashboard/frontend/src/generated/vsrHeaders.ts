@@ -13,6 +13,12 @@ export const AUTHORIZATION = 'authorization'
 /** Azure API Management credential, which a model connection sets through `auth`. Surface: internal. */
 export const OCP_APIM_SUBSCRIPTION_KEY = 'ocp-apim-subscription-key'
 
+/** Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it. Surface: control. */
+export const SESSION_ID = 'session-id'
+
+/** Thread id Codex sends on every call, which protection and Router Replay read as the agent when `identity.headers.agent` is unset, except on a root thread, where it equals `session-id`; providers receive it. Surface: control. */
+export const THREAD_ID = 'thread-id'
+
 /** Provider credential of Anthropic-style APIs. Surface: internal. */
 export const X_API_KEY = 'x-api-key'
 
@@ -28,8 +34,23 @@ export const X_AUTHZ_USER_GROUPS = 'x-authz-user-groups'
 /** Authenticated user id; `identity.user_id_header` names another header. Surface: internal. */
 export const X_AUTHZ_USER_ID = 'x-authz-user-id'
 
+/** Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. Surface: control. */
+export const X_CLAUDE_CODE_AGENT_ID = 'x-claude-code-agent-id'
+
+/** Subagent type Claude Code sends on a subagent's own turns when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: a built-in agent's name such as `Explore`, `Plan` or `general-purpose`, or `custom`, `teammate` or `fork`; `agent` signal rules match it as a type, and providers receive it. Surface: control. */
+export const X_CLAUDE_CODE_AGENT_TYPE = 'x-claude-code-agent-type'
+
+/** Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, Router Replay reads an `auxiliary` call asking for a JSON object of one `title` field as the session's title request and names its run with the answer, and providers receive it. Surface: control. */
+export const X_CLAUDE_CODE_REQUEST_CLASS = 'x-claude-code-request-class'
+
 /** Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. Surface: control. */
 export const X_CLAUDE_CODE_SESSION_ID = 'x-claude-code-session-id'
+
+/** Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it. Surface: control. */
+export const X_CODEX_PARENT_THREAD_ID = 'x-codex-parent-thread-id'
+
+/** Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. Surface: control. */
+export const X_CODEX_TURN_METADATA = 'x-codex-turn-metadata'
 
 /** `nosniff` on Router Replay management responses. Surface: public. */
 export const X_CONTENT_TYPE_OPTIONS = 'x-content-type-options'
@@ -100,6 +121,12 @@ export const X_FORWARDED_PROTO = 'x-forwarded-proto'
 /** Provider credential of Google APIs. Surface: internal. */
 export const X_GOOG_API_KEY = 'x-goog-api-key'
 
+/** Kind of child thread Codex sends a request for, `collab_spawn` for a `spawn_agent` child whatever its role and `review` for a review child, which `agent` signal rules match as a type and Router Replay records with the agent; providers receive it. Surface: control. */
+export const X_OPENAI_SUBAGENT = 'x-openai-subagent'
+
+/** Session that spawned an OpenCode subagent's session, which OpenCode sends on every call of the child beside the child's own `x-session-id`; with `identity.headers` unset and no `x-vsr-session-id`, protection and Router Replay key the call by that session and the child as its agent, and the `agent` signal reads it as a subagent's; providers receive it. Surface: control. */
+export const X_PARENT_SESSION_ID = 'x-parent-session-id'
+
 /** Limit of the rate-limit window that rejected the request. Surface: public. */
 export const X_RATELIMIT_LIMIT = 'x-ratelimit-limit'
 
@@ -112,7 +139,7 @@ export const X_RATELIMIT_RESET = 'x-ratelimit-reset'
 /** Request correlation id, forwarded to providers; the native gateway adds one when absent, and the management API echoes it. Surface: public. */
 export const X_REQUEST_ID = 'x-request-id'
 
-/** Client session id `session_id_headers` accepts by default; providers receive it. Surface: control. */
+/** Client session id `session_id_headers` accepts by default, which OpenCode sends on every call; providers receive it. Surface: control. */
 export const X_SESSION_ID = 'x-session-id'
 
 /** Per-user Anthropic key the authenticator injects. Surface: internal. */
@@ -144,6 +171,12 @@ export const X_VSR_BENCH_EXPECTED_CONFIG_HASH = 'x-vsr-bench-expected-config-has
 
 /** Provider-call limit of an evaluation request; only `1` is supported. Surface: control. */
 export const X_VSR_BENCH_MAX_INFERENCE_CALLS = 'x-vsr-bench-max-inference-calls'
+
+/** What the tightest spend budget of the request has left, in `global.services.budgets.currency`: after the call's actual cost on a buffered response, after its reservation on a stream and on a `budget_exceeded` refusal. Surface: public. */
+export const X_VSR_BUDGET_REMAINING = 'x-vsr-budget-remaining'
+
+/** The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`. Surface: public. */
+export const X_VSR_BUDGET_SCOPE = 'x-vsr-budget-scope'
 
 /** Response-cache directives for the request, when the plugin's `request_controls` allow them. Surface: control. */
 export const X_VSR_CACHE_CONTROL = 'x-vsr-cache-control'

@@ -42,7 +42,8 @@ function backendRefAuth(value: unknown): BackendRefAuth | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const entry = value as Record<string, unknown>
   const auth: BackendRefAuth = {}
-  if (entry.credential === 'delegated') auth.credential = 'delegated'
+  if (entry.credential === 'delegated' || entry.credential === 'caller')
+    auth.credential = entry.credential
   if (typeof entry.header === 'string' && entry.header.trim()) auth.header = entry.header.trim()
   // Presence is semantic: an explicit empty prefix sends the bare key instead
   // of the provider's catalog default.

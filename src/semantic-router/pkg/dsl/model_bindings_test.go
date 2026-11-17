@@ -68,7 +68,7 @@ func TestGlobalModelBindingsStayGlobalThroughDSLRoundTrip(t *testing.T) {
 global:
   model_catalog:
     deployments:
-      guard: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
+      guard: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu, pricing: {currency: USD, prompt_per_1m: 0.2}}
     bindings:
       jailbreak: {deployment: guard}
 recipes:
@@ -102,6 +102,9 @@ recipes:
 	}
 	if !reflect.DeepEqual(merged.GlobalModelBindings, original.GlobalModelBindings) {
 		t.Errorf("global bindings %v after the round trip, want %v", merged.GlobalModelBindings, original.GlobalModelBindings)
+	}
+	if !reflect.DeepEqual(merged.ModelDeployments, original.ModelDeployments) {
+		t.Error("DSL base merge changed deployment pricing")
 	}
 	var recipes []config.RecipeName
 	for _, recipe := range merged.Recipes {
