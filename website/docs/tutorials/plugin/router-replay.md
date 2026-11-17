@@ -964,7 +964,7 @@ not send, is filed under its `session-id`. Each record keeps its agent in
 
 | Field | Holds |
 | --- | --- |
-| `harness` | `claude_code` or `codex` when the request carries their identity headers, `opencode` when its User-Agent names OpenCode. |
+| `harness` | `claude_code` or `codex` when the request carries their identity headers, `opencode` or `deepseek_harness` when its User-Agent names OpenCode or DeepSeek Harness. |
 | `id` | The short SHA-256 hash of the agent id, empty for the main agent. |
 | `parent_id` | The hash of the agent that spawned it, empty when the main agent did. |
 | `kind` | The subagent kind Codex sends in `x-openai-subagent`, such as `collab_spawn` or `review`. |
