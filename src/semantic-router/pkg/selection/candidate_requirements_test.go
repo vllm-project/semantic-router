@@ -47,7 +47,7 @@ func TestCandidateRequirementsBudgetAndMetadata(t *testing.T) {
 }
 
 func TestEffectiveCandidateDemandStripsToolsWithoutMutatingIngress(t *testing.T) {
-	tools, _ := config.NewStructuredPayload(map[string]any{"enabled": true, "mode": "none", "strip_tool_history": true})
+	tools, _ := config.NewStructuredPayload(map[string]any{"enabled": true, "policy": map[string]any{"mode": "none", "strip_tool_history": true}})
 	params, _ := config.NewStructuredPayload(map[string]any{"default_max_tokens": 32})
 	decision := &config.Decision{Plugins: []config.DecisionPlugin{{Type: "tools", Configuration: tools}, {Type: "request_params", Configuration: params}}}
 	request := &llmprotocol.Request{Messages: []llmprotocol.Message{

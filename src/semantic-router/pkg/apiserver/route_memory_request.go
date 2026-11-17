@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
@@ -64,17 +64,23 @@ func (s *ClassificationAPIServer) writeMemoryUnavailableResponse(w http.Response
 
 // extractUserID extracts the user_id with priority: auth header > query param fallback.
 //
-// Priority 1: x-authz-user-id header injected by the external auth service.
+// Priority 1: the user id header injected by the external auth service,
+// global.services.authz.identity.user_id_header (x-authz-user-id by default).
 // Priority 2: user_id query parameter for development/testing without a full auth stack.
 func (s *ClassificationAPIServer) extractUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	var identity config.IdentityConfig
+	if cfg := s.currentConfig(); cfg != nil {
+		identity = cfg.Authz.Identity
+	}
+	userHeader := identity.GetUserIDHeader()
 	var userID string
-	if h := r.Header.Get(headers.AuthzUserID); h != "" {
+	if h := r.Header.Get(userHeader); h != "" {
 		userID = h
 	} else if q := r.URL.Query().Get("user_id"); q != "" {
 		userID = q
 	} else {
 		s.writeErrorResponse(w, http.StatusUnauthorized, "MISSING_USER_ID",
-			"User identity required. Set the auth header (x-authz-user-id) via your auth layer, "+
+			"User identity required. Set the auth header ("+userHeader+") via your auth layer, "+
 				"or user_id query parameter for development")
 		return "", false
 	}

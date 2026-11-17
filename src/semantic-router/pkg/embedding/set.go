@@ -46,7 +46,7 @@ func (s *Set) Get(model string, dimension, layer int) (Provider, error) {
 	}
 	provider, ok := s.providers[model]
 	if !ok {
-		return nil, fmt.Errorf("%w: embedding model %q %w", binding.ErrCapability, model, ErrModelNotPrepared)
+		return nil, fmt.Errorf("%w: embedding deployment %q %w", binding.ErrCapability, model, ErrModelNotPrepared)
 	}
 	if dimension < 0 || dimension > math.MaxInt32 || layer < 0 || layer > math.MaxInt32 {
 		return nil, fmt.Errorf("%w: dimension and layer must fit nonnegative int32", binding.ErrCapability)
@@ -89,58 +89,16 @@ func (s *Set) Has(model string) bool {
 	return ok
 }
 
-// Select retains the existing embedding endpoint's priority policy, using only
-// providers prepared in this snapshot. It never loads a requested model.
-func (s *Set) Select(text string, quality, latency float32, dimension int) (string, error) {
-	words := len(strings.Fields(text))
-	// Input budgets belong to the selected deployment's tokenizer and overflow
-	// policy; whitespace counts here only guide the existing model preference.
-	order := []string{"qwen3", "mmbert"}
-	if (words <= 512 && quality <= 0.7 && latency > 0.7) || (words > 512 && words <= 2048) || (dimension > 0 && dimension < 768 && latency > 0.5) {
-		order = []string{"mmbert", "qwen3"}
-	}
-	for _, model := range order {
-		if s.Has(model) {
-			return model, nil
-		}
-	}
-	if s.Has("") {
-		return s.primary, nil
-	}
-	return "", fmt.Errorf("no prepared embedding model is available")
-}
-
-// SelectModalities chooses one already prepared representation for an entire
-// media batch. Prefer the scope's primary model, then deterministic alternatives;
-// aliases never imply an encoder capability or trigger model preparation.
-func (s *Set) SelectModalities(modalities []string, dimension, layer int) (string, error) {
+// Primary names the set's default provider: the deployment
+// global.model_catalog.embeddings.default names.
+func (s *Set) Primary() string {
 	if s == nil {
-		return "", fmt.Errorf("%w: embedding set was not prepared", binding.ErrCapability)
+		return ""
 	}
-	models := s.Models()
-	sort.SliceStable(models, func(i, j int) bool {
-		return models[i].Name == s.primary && models[j].Name != s.primary
-	})
-	for _, model := range models {
-		compatible := true
-		for _, modality := range modalities {
-			if !slices.Contains(model.Modalities, modality) || (modality == "audio" && model.Audio == nil) {
-				compatible = false
-				break
-			}
-		}
-		if !compatible {
-			continue
-		}
-		if _, err := s.Get(model.Name, dimension, layer); err == nil {
-			return model.Name, nil
-		}
-	}
-	return "", fmt.Errorf("%w: no prepared model supports modalities %v with dimension %d and layer %d", binding.ErrCapability, modalities, dimension, layer)
+	return s.primary
 }
 
 type ModelInfo struct {
-	Audio         *binding.AudioCapability
 	Name          string
 	Artifact      string
 	Backend       string
@@ -164,11 +122,6 @@ func (s *Set) Models() []ModelInfo {
 		if p, ok := provider.(Described); ok {
 			info = p.EmbeddingInfo()
 			info.Name = name
-		}
-		if info.Audio != nil {
-			a := *info.Audio
-			a.SampleRates = append([]int(nil), a.SampleRates...)
-			info.Audio = &a
 		}
 		info.Modalities = append([]string(nil), info.Modalities...)
 		info.Layers = append([]int(nil), info.Layers...)

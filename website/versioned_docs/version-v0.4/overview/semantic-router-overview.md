@@ -132,4 +132,4 @@ supported client endpoints, backend formats, and pairwise translation matrix.
 - [Routing Pipeline](signal-driven-decisions) for the policy layers.
 - [Mixture of Models](mom-model-family) for virtual models and multi-model
   execution.
-- [Quickstart](/docs/installation) to run the local stack.
+- [Quickstart](/docs/v0.4/installation) to run the local stack.

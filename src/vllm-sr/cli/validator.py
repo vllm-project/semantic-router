@@ -1,6 +1,7 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Any, List
+from cli.config_contract import iter_routing_profiles
 from cli.models import (
     UserConfig,
     PluginType,
@@ -8,16 +9,12 @@ from cli.models import (
     ResponseCachePluginConfig,
     FastResponsePluginConfig,
     RequestParamsPluginConfig,
-    ResponseJailbreakPluginConfig,
+    ResponseGuardPluginConfig,
     ToolsPluginConfig,
-    ToolSelectionPluginConfig,
     SystemPromptPluginConfig,
     HeaderMutationPluginConfig,
-    HallucinationPluginConfig,
     RouterReplayPluginConfig,
-    ShadowDispatchPluginConfig,
-    MemoryPluginConfig,
-    RAGPluginConfig,
+    ContextPluginConfig,
 )
 from cli.terminal import (
     echo,
@@ -28,15 +25,9 @@ from cli.terminal import (
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
-from cli.validator_classifier import validate_classifier_contracts
-from cli.validator_safety import validate_safety_contracts
-from cli.validator_latency import (
-    validate_latency_aware_algorithm_config,
-)
-from cli.validator_prompt import validate_prompt_dependencies
+from cli.validator_decision_model import validate_systemone_signals
 from cli.validator_inprocess_models import validate_inprocess_model_backends
 from cli.validator_projection_embedding import (
-    validate_embedding_modality_compatibility,
     validate_projection_score_dependencies,
 )
 from cli.validator_recipe_contracts import (
@@ -51,7 +42,7 @@ from cli.validator_signal_references import validate_signal_references
 from cli.validator_models import validate_model_references
 from cli.validator_native import validate_native_execution
 from cli.validator_reasoning import validate_reasoning_controls
-from cli.validator_model_runtime import validate_model_runtime_references
+from cli.validator_model_runtime import unpinned_hub_deployment_warnings
 from cli.config_schema import routing_surface_catalog
 
 log = get_logger(__name__)
@@ -75,12 +66,10 @@ MIGRATED_LEARNING_ALGORITHM_TARGETS = {
 
 
 def _routing_profiles(config: UserConfig):
-    profiles = [("decisions", config.routing)]
-    profiles.extend(
-        (f"recipes.{recipe.name}.decisions", recipe.routing)
-        for recipe in config.recipes
-    )
-    return profiles
+    return [
+        (f"recipes.{name}.decisions", recipe)
+        for name, recipe in iter_routing_profiles(config)
+    ]
 
 
 def _all_decisions(config: UserConfig):
@@ -281,16 +270,12 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.RESPONSE_CACHE.value: ResponseCachePluginConfig,
         PluginType.FAST_RESPONSE.value: FastResponsePluginConfig,
         PluginType.REQUEST_PARAMS.value: RequestParamsPluginConfig,
-        PluginType.RESPONSE_JAILBREAK.value: ResponseJailbreakPluginConfig,
+        PluginType.RESPONSE_GUARD.value: ResponseGuardPluginConfig,
         PluginType.SYSTEM_PROMPT.value: SystemPromptPluginConfig,
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
-        PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
-        PluginType.SHADOW_DISPATCH.value: ShadowDispatchPluginConfig,
-        PluginType.MEMORY.value: MemoryPluginConfig,
-        PluginType.RAG.value: RAGPluginConfig,
+        PluginType.CONTEXT.value: ContextPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
-        PluginType.TOOL_SELECTION.value: ToolSelectionPluginConfig,
         PluginType.PROMPT_CACHE.value: PromptCachePluginConfig,
     }
 
@@ -315,58 +300,6 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
             )
 
     return errors
-
-
-def _router_dc_missing_description_errors(
-    decision, algo, config: UserConfig
-) -> List[ValidationError]:
-    if (
-        algo.type != "router_dc"
-        or not algo.router_dc
-        or not algo.router_dc.require_descriptions
-    ):
-        return []
-    errs: List[ValidationError] = []
-    routing_cards = {card.name: card for card in config.routing.model_cards}
-    for model_ref in decision.modelRefs:
-        model_card = routing_cards.get(model_ref.model)
-        if model_card is None or model_card.description:
-            continue
-        errs.append(
-            ValidationError(
-                f"Decision '{decision.name}' uses router_dc with require_descriptions=true, "
-                f"but model '{model_ref.model}' has no description",
-                field=f"routing.modelCards.{model_ref.model}.description",
-            )
-        )
-    return errs
-
-
-def _maybe_hybrid_weight_error(
-    decision_name: str,
-    algo_type: str,
-    algo,
-    field_prefix: str = "decisions",
-) -> ValidationError | None:
-    if algo_type != "hybrid" or not algo.hybrid:
-        return None
-    h = algo.hybrid
-    # Per-weight non-negativity is enforced by the pydantic model (ge=0).
-    # Weights are normalized at runtime, so they need not sum to 1.0 — but an
-    # all-zero set leaves the selector with nothing to normalize, so reject it.
-    total = (
-        (0.3 if h.experience_weight is None else h.experience_weight)
-        + (0.3 if h.router_dc_weight is None else h.router_dc_weight)
-        + (0.2 if h.automix_weight is None else h.automix_weight)
-        + (0.2 if h.cost_weight is None else h.cost_weight)
-    )
-    if total <= 0:
-        return ValidationError(
-            f"Decision '{decision_name}' hybrid weights are all zero; "
-            "at least one weight must be positive",
-            field=f"{field_prefix}.{decision_name}.algorithm.hybrid",
-        )
-    return None
 
 
 def _decision_candidate_names(decision) -> set[str]:
@@ -470,10 +403,8 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     """
     Validate algorithm configurations in decisions.
 
-    Validates both looper algorithms (confidence, ratings, remom, fusion,
-    workflows)
-    and selection algorithms (static, router_dc, automix, hybrid,
-    knn, kmeans, svm, mlp, multi_factor, latency_aware, prompt).
+    Validates the executors (escalate, fusion, remom, ratings, workflows)
+    and the selectors (static, random, multi_factor, systemone).
 
     Args:
         config: User configuration
@@ -501,18 +432,8 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             )
             continue
 
-        errors.extend(_router_dc_missing_description_errors(decision, algo, config))
         errors.extend(_algorithm_quorum_errors(decision, algo, field_prefix))
         errors.extend(_workflow_configuration_errors(decision, algo, field_prefix))
-
-        hybrid_err = _maybe_hybrid_weight_error(
-            decision.name,
-            algo_type,
-            algo,
-            field_prefix,
-        )
-        if hybrid_err is not None:
-            errors.append(hybrid_err)
 
         remom_cfg = getattr(algo, "remom", None)
         if (
@@ -539,6 +460,9 @@ def validate_user_config(
     """
     Validate user configuration.
 
+    The Router validates model deployments, bindings and the rules that
+    resolve a signal to a deployment; these are the CLI's own checks.
+
     Args:
         config: User configuration
         log_summary: Emit the human-readable validation summary. Machine-readable
@@ -554,7 +478,7 @@ def validate_user_config(
     if not config.routing_enabled:
         # Engine mode keeps dormant routing configuration without constructing
         # its classifiers, algorithms or plugin dependencies.
-        return validate_model_runtime_references(config)
+        return errors
 
     errors.extend(validate_recipe_contracts(config))
     errors.extend(validate_native_execution(config))
@@ -562,7 +486,6 @@ def validate_user_config(
     # Validate signal references
     errors.extend(validate_signal_references(config))
     errors.extend(validate_algorithm_one_of(config))
-    errors.extend(validate_latency_aware_algorithm_config(config))
 
     # Validate domain references
     errors.extend(validate_domain_references(config))
@@ -570,23 +493,17 @@ def validate_user_config(
     # Validate model references
     errors.extend(validate_model_references(config))
     errors.extend(validate_reasoning_controls(config))
-    errors.extend(validate_model_runtime_references(config))
-    errors.extend(validate_classifier_contracts(config))
-    errors.extend(validate_safety_contracts(config))
+    errors.extend(validate_systemone_signals(config))
 
     # Validate plugin configurations
     errors.extend(validate_plugin_configurations(config))
 
     # Validate algorithm configurations
     errors.extend(validate_algorithm_configurations(config))
-    errors.extend(validate_prompt_dependencies(config))
     errors.extend(validate_inprocess_model_backends(config))
 
     # Validate projection score dependency ordering
     errors.extend(validate_projection_score_dependencies(config))
-
-    # Validate embedding query_modality compatibility with embedding model
-    errors.extend(validate_embedding_modality_compatibility(config))
 
     if errors and log_summary:
         log.warning(f"Found {len(errors)} validation error(s)")
@@ -600,7 +517,7 @@ def validate_user_config(
 
 def collect_validation_warnings(config: UserConfig) -> List[ValidationError]:
     """Return findings that leave the configuration valid but likely wrong."""
-    return []
+    return unpinned_hub_deployment_warnings(config)
 
 
 def print_validation_warnings(warnings: List[ValidationError]):

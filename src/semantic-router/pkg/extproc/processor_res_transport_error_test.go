@@ -128,3 +128,30 @@ func TestResponseWireFormatsDefaultsAndOrientation(t *testing.T) {
 		})
 	}
 }
+
+func TestUpstreamTransportErrorOpenRouterEnvelopeReachesEveryClientFormat(t *testing.T) {
+	router := &OpenAIRouter{}
+	engine := protocolcodec.NewBuiltinEngine()
+	upstream := []byte(`{"error":{"message":"Provider returned error","code":429,` +
+		`"metadata":{"raw":"quota","provider_name":"Provider"}},"user_id":"user_1"}`)
+	for _, target := range extProcMatrixFormats {
+		t.Run(string(target), func(t *testing.T) {
+			ctx := &RequestContext{
+				SourceFormat: target, TargetFormat: llmprotocol.OpenAIChatV1,
+				ResponseVendor:     llmprotocol.ResponseVendorOpenRouter,
+				UpstreamStatusCode: 429, RequestID: "request_1", RequestModel: "public-model",
+			}
+			response := router.handleUpstreamTransportError(upstream, ctx)
+			body := response.GetResponseBody().GetResponse().GetBodyMutation().GetBody()
+			translated, err := engine.TranslateTransportError(target, target, body, nil)
+			if err != nil {
+				t.Fatalf("not a valid %s error: %v\n%s", target, err, body)
+			}
+			protocolError := translated.TransportError.Error
+			if protocolError == nil || protocolError.Category != llmprotocol.ErrorRateLimited ||
+				protocolError.Message != "Provider returned error" {
+				t.Fatalf("semantics = %+v", protocolError)
+			}
+		})
+	}
+}

@@ -16,29 +16,22 @@ function compactSurfaceIcon(value: string): string {
 export const SIGNAL_TYPES: SignalType[] = [...ROUTER_SIGNAL_TYPES, 'projection']
 export const PLUGIN_TYPES: PluginType[] = [...ROUTER_PLUGIN_TYPES]
 export const ALGORITHM_TYPES: AlgorithmType[] = [...ROUTER_ALGORITHM_TYPES]
-const ALGORITHM_DISPLAY_TYPES: AlgorithmType[] = [...ALGORITHM_TYPES, 'concurrent', 'sequential']
 
 // ============== Signal Icons ==============
 const SIGNAL_ICON_OVERRIDES: Partial<Record<SignalType, string>> = {
   keyword: 'KW',
-  embedding: 'EMB',
   domain: 'DOM',
   fact_check: 'FC',
   user_feedback: 'UF',
-  reask: 'RA',
-  preference: 'PREF',
   language: 'LANG',
   context: 'CTX',
-  structure: 'STR',
   complexity: 'CPX',
   modality: 'MOD',
   authz: 'AUTH',
   jailbreak: 'JB',
   hallucination: 'HL',
   pii: 'PII',
-  kb: 'KB',
   conversation: 'CONV',
-  event: 'EVT',
   projection: 'PRJ',
 }
 
@@ -54,24 +47,18 @@ export const SIGNAL_COLORS = Object.fromEntries(
 // ============== Signal Latency ==============
 const SIGNAL_LATENCY_OVERRIDES: Partial<Record<SignalType, string>> = {
   keyword: '<1ms',
-  embedding: '10-50ms',
   domain: '10-50ms',
   fact_check: '10-50ms',
   user_feedback: '10-50ms',
-  reask: '10-50ms',
-  preference: '200-500ms',
   language: '<1ms',
   context: '<1ms',
-  structure: '<1ms',
   complexity: '50-100ms',
   modality: '50-100ms',
   authz: '<1ms',
   jailbreak: '10-50ms',
   hallucination: '200-500ms',
   pii: '10-50ms',
-  kb: '10-50ms',
   conversation: '<1ms',
-  event: '<1ms',
   projection: '<1ms',
 }
 
@@ -82,20 +69,16 @@ export const SIGNAL_LATENCY = Object.fromEntries(
 // ============== Plugin Icons ==============
 const PLUGIN_ICON_OVERRIDES: Partial<Record<PluginType, string>> = {
   response_cache: 'RC',
-  memory: 'MEM',
+  context: 'CTX',
   system_prompt: 'SP',
   header_mutation: 'HM',
-  hallucination: 'HAL',
   router_replay: 'RR',
-  rag: 'RAG',
   fast_response: 'FR',
   request_params: 'RP',
-  response_jailbreak: 'RJ',
+  response_guard: 'RG',
   tools: 'TL',
-  tool_selection: 'TS',
-  context_compression: 'CC',
   prompt_cache: 'PC',
-  shadow_dispatch: 'SD',
+  masking: 'MSK',
 }
 
 export const PLUGIN_ICONS = Object.fromEntries(
@@ -106,20 +89,16 @@ export const PLUGIN_ICONS = Object.fromEntries(
 const PLUGIN_COLOR_OVERRIDES: Partial<Record<PluginType, { background: string; border: string }>> =
   {
     response_cache: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
-    memory: { background: '#3f6b73', border: '#2e4f55' },
+    context: { background: '#2f855a', border: '#276749' },
     system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
     header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-    hallucination: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
     router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
-    rag: { background: '#2f855a', border: '#276749' },
     fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
     request_params: { background: '#805ad5', border: '#6b46c1' },
-    response_jailbreak: { background: '#c05621', border: '#9c4221' },
+    response_guard: { background: '#c05621', border: '#9c4221' },
     tools: { background: '#5a6c7d', border: '#3d4a59' },
-    tool_selection: { background: '#4b6f7f', border: '#344f5c' },
-    context_compression: { background: '#606c7a', border: '#3d4a59' },
     prompt_cache: { background: '#6b7280', border: '#4b5563' },
-    shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
+    masking: { background: '#4f6a7a', border: '#374d59' },
   }
 
 export const PLUGIN_COLORS = Object.fromEntries(
@@ -131,27 +110,17 @@ export const PLUGIN_COLORS = Object.fromEntries(
 
 // ============== Algorithm Icons ==============
 const ALGORITHM_ICON_OVERRIDES: Partial<Record<AlgorithmType, string>> = {
-  confidence: 'CF',
-  concurrent: 'CC',
-  sequential: 'SEQ',
+  escalate: 'ES',
   ratings: 'RT',
   static: 'ST',
-  router_dc: 'RDC',
-  automix: 'AM',
-  hybrid: 'HY',
   remom: 'RM',
   fusion: 'FU',
   workflows: 'FL',
-  latency_aware: 'LAT',
-  knn: 'KNN',
-  kmeans: 'KM',
-  svm: 'SVM',
-  mlp: 'MLP',
   multi_factor: 'MF',
 }
 
 export const ALGORITHM_ICONS = Object.fromEntries(
-  ALGORITHM_DISPLAY_TYPES.map((type) => [
+  ALGORITHM_TYPES.map((type) => [
     type,
     ALGORITHM_ICON_OVERRIDES[type] || compactSurfaceIcon(type),
   ]),
@@ -161,27 +130,17 @@ export const ALGORITHM_ICONS = Object.fromEntries(
 const ALGORITHM_COLOR_OVERRIDES: Partial<
   Record<AlgorithmType, { background: string; border: string }>
 > = {
-  confidence: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
-  concurrent: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
-  sequential: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
+  escalate: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
   ratings: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
   static: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-  router_dc: { background: '#556b7d', border: '#3d4a59' }, // Cool Gray
   remom: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy (same as plugins)
   fusion: { background: '#60784f', border: '#455a36' }, // Muted Alloy
   workflows: { background: '#4f6f78', border: '#38545c' }, // Flow Teal
-  automix: { background: '#5d6d7e', border: '#3d4a59' }, // Steel Gray
-  hybrid: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-  latency_aware: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray
-  knn: { background: '#687887', border: '#4b5968' },
-  kmeans: { background: '#596b5d', border: '#3f5144' },
-  svm: { background: '#6d687a', border: '#504a5c' },
-  mlp: { background: '#586d7a', border: '#40515d' },
   multi_factor: { background: '#4e6f63', border: '#38534a' },
 }
 
 export const ALGORITHM_COLORS = Object.fromEntries(
-  ALGORITHM_DISPLAY_TYPES.map((type) => [
+  ALGORITHM_TYPES.map((type) => [
     type,
     ALGORITHM_COLOR_OVERRIDES[type] || { background: '#607D8B', border: '#455A64' },
   ]),
@@ -202,8 +161,6 @@ export const MODEL_NODE_WIDTH = 220
 // ============== Global Plugin Display (Graphite Theme) ==============
 export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string; color: string }> =
   {
-    prompt_guard: { icon: 'PG', label: 'Jailbreak Guard', color: '#718096' }, // Medium Gray
-    pii_detection: { icon: 'PII', label: 'PII Detection', color: '#5a6c7d' }, // Blue Gray
     response_cache: { icon: 'RC', label: 'Response Cache', color: '#8f949c' }, // Graphite Alloy
   }
 

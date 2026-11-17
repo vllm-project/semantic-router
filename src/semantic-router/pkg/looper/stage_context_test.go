@@ -117,12 +117,12 @@ func TestWorkflowsRejectsOversizedGeneratedStageBeforeBackendDispatch(t *testing
 				"worker": {ContextWindowSize: 110},
 			},
 			Algorithm: &config.AlgorithmConfig{
-				Type: config.DecisionAlgorithmWorkflows,
+				Type:    config.DecisionAlgorithmWorkflows,
+				OnError: config.WorkflowOnErrorFail,
 				Workflows: &config.WorkflowsAlgorithmConfig{
 					Mode:        config.WorkflowModeStatic,
 					MaxSteps:    1,
 					MaxParallel: 1,
-					OnError:     config.WorkflowOnErrorFail,
 					Roles: []config.WorkflowRoleConfig{{
 						Name:   "worker",
 						Models: []string{"worker"},

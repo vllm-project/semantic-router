@@ -15,7 +15,7 @@ import (
 // RouteHeader is the request header whose value selects the upstream route:
 // the local Envoy template's route table matches it exactly on provider model
 // names.
-const RouteHeader = headers.SelectedModel
+const RouteHeader = headers.VSRRouteModel
 
 // Engine is the transport-agnostic routing core shared by every gateway mode.
 type Engine interface {
@@ -139,9 +139,10 @@ type engine struct {
 	opts      Options
 }
 
-// Finish ends the request lifecycle. err is nil when the response was
-// delivered and non-nil when the transport ended the request early. Only the
-// first call counts.
+// Finish ends the request lifecycle with err as Session.Close takes it: nil
+// when the response was delivered, a *LocalReply when the gateway answered
+// for a backend that did not, and another error when the transport ended the
+// request early. Only the first call counts.
 func (p *Plan) Finish(err error) {
 	if p == nil || p.session == nil {
 		return

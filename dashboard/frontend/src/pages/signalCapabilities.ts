@@ -1,12 +1,17 @@
 import { QUESTION_TYPES } from './systemOnePlayground'
 import type { FieldSchema } from '../lib/dslSchemas'
 import type { DecisionTasks } from './useDecisionTasks'
+import { bindingDeployment } from './modelBindings'
 
-export type SignalBindings = Record<string, { deployment?: string; contract?: string }>
+interface BoundResource {
+  deployment?: string
+  explicit?: boolean
+}
+export type SignalBindings = Record<string, BoundResource>
 export interface SignalCapabilityScope {
   recipe: string
-  bindings?: SignalBindings
-  globalBindings?: SignalBindings
+  bindings?: Record<string, unknown>
+  globalBindings?: Record<string, unknown>
   defaultDeployment?: string
 }
 export interface SignalAvailability {
@@ -15,12 +20,29 @@ export interface SignalAvailability {
 }
 const available: SignalAvailability = { supported: true }
 
-function selectedResource(data: DecisionTasks, scope: SignalCapabilityScope, key: string) {
+function boundResource(value: unknown): BoundResource | undefined {
+  const deployment = bindingDeployment(value)
+  return deployment ? { deployment } : undefined
+}
+
+function explicitResource(bindings: Record<string, unknown> | undefined, key: string) {
+  const resource = boundResource(bindings?.[key])
+  return resource ? { ...resource, explicit: true } : undefined
+}
+
+function selectedResource(
+  data: DecisionTasks,
+  scope: SignalCapabilityScope,
+  key: string,
+): BoundResource | undefined {
   const explicit =
-    scope.bindings?.[key] ??
-    (scope.globalBindings === undefined ? data.global_bindings?.[key] : scope.globalBindings[key])
+    explicitResource(scope.bindings, key) ??
+    explicitResource(
+      scope.globalBindings === undefined ? data.global_bindings : scope.globalBindings,
+      key,
+    )
   if (explicit) return explicit
-  const inherited = data.default_bindings?.[key]
+  const inherited = boundResource(data.default_bindings?.[key])
   return inherited?.deployment === data.default_deployment && scope.defaultDeployment
     ? { ...inherited, deployment: scope.defaultDeployment }
     : inherited
@@ -46,55 +68,44 @@ export function signalAvailability(
   data: DecisionTasks | null,
   scope: SignalCapabilityScope,
   signalType: string,
-  name = '',
   fields: Record<string, unknown> = {},
 ): SignalAvailability {
   if (!data) return { supported: false, reason: 'Model capabilities are not available yet.' }
-  if (signalType === 'decision') {
+  if (signalType === 'systemone') {
     const types = decisionQuestionTypes(data, scope, fields)
     const question = fields.question as Record<string, unknown> | undefined
     if (!types.length)
       return {
         supported: false,
         reason:
-          'Select a decision deployment with supported question types in System One → Decision Models.',
+          'Select a System One deployment with supported question types in System One → Decision Models.',
       }
     if (typeof question?.type === 'string' && !types.includes(question.type))
       return {
         supported: false,
-        reason: `The selected decision deployment does not support ${question.type} questions.`,
+        reason: `The selected System One deployment does not support ${question.type} questions.`,
       }
     return available
   }
-  if (
-    signalType === 'classifier' &&
-    (fields.model_path || (fields.type !== 'local' && fields.model))
-  )
-    return available
   const tasks = data.tasks.filter((task) =>
-    task.consumers?.some(
-      (item) =>
-        item.kind === 'signal' &&
-        item.type === signalType &&
-        (!item.optional || Boolean(fields.hazard)),
-    ),
+    task.consumers?.some((item) => item.kind === 'signal' && item.type === signalType),
   )
   for (const task of tasks) {
     const consumer = task.consumers?.find(
       (item) => item.kind === 'signal' && item.type === signalType,
     )
-    const key = consumer?.binding?.split('{name}').join(name) ?? ''
-    const binding = key ? selectedResource(data, scope, key) : undefined
-    const observed = data.bindings.find(
-      (item) =>
-        item.recipe === scope.recipe && item.task_id === task.id && (!key || item.consumer === key),
-    )
-    const resource = binding ?? (!key ? observed?.binding : undefined)
-    // Specialist contracts implement their own task; they are not native decision questions.
+    // Rules that ask a question of their own may name the deployment that answers it.
+    const own = bindingDeployment(fields.deployment)
+    const resource: BoundResource | undefined = own
+      ? { deployment: own, explicit: true }
+      : consumer?.binding
+        ? selectedResource(data, scope, consumer.binding)
+        : undefined
     const deployment = resource?.deployment || scope.defaultDeployment || data.default_deployment
     const target = data.deployments.find((item) => item.deployment === deployment)
-    if (!target && resource?.deployment && resource.contract && resource.contract !== 'decision.v1')
-      continue
+    // A deployment the task catalog does not list answers through its own
+    // head or API; the Router checks that it can when the config is saved.
+    if (!target && resource?.deployment && resource.explicit) continue
     const capability = target?.tasks.find((item) => item.task_id === task.id)
     if (!capability?.supported)
       return {
@@ -129,20 +140,13 @@ export function signalCapabilitySchema(schema: FieldSchema[], types: string[]): 
   )
 }
 
+/** Bindings written as a deployment name or an object, keyed as written. */
 export function signalBindings(value: unknown): SignalBindings | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   return Object.fromEntries(
     Object.entries(value).flatMap(([key, item]) => {
-      if (!item || typeof item !== 'object' || typeof item.deployment !== 'string') return []
-      return [
-        [
-          key,
-          {
-            deployment: item.deployment,
-            contract: typeof item.contract === 'string' ? item.contract : undefined,
-          },
-        ],
-      ]
+      const resource = boundResource(item)
+      return resource ? [[key, resource]] : []
     }),
   )
 }

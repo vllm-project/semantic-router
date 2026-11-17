@@ -10,6 +10,7 @@ import {
 } from './routeManifest'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import EvaluationAvailabilityRoute from './EvaluationAvailabilityRoute'
+import type { DashboardCapabilities } from '../contexts/dashboardCapabilities'
 import { canAccessDashboardPath, type PermissionUser } from '../utils/accessControl'
 import {
   loadBuilderPage,
@@ -21,8 +22,8 @@ import {
   loadEvaluationPage,
   loadInsightsPage,
   loadInsightsRecordPage,
+  loadInsightsRunPage,
   loadLogsPage,
-  loadMLSetupPage,
   loadModelHubPage,
   loadMonitoringPage,
   loadPlaygroundFullscreenPage,
@@ -35,16 +36,11 @@ import {
 } from './routeLoaders'
 
 interface AuthenticatedAppRoutesProps {
-  canAccessMLSetup: boolean
-  mlPipelineAvailable: boolean
-  mlPipelineUnavailableReason: string
-  mlPipelineAvailabilityChecked: boolean
   user: PermissionUser | null
   setupMode: boolean
-  settingsLoading: boolean
-  srBenchAvailable: boolean
-  srBenchUnavailableReason: string
-  settingsError: string | null
+  capabilities: DashboardCapabilities | null
+  capabilitiesLoading: boolean
+  capabilitiesError: string | null
   onRefreshAccess: () => void
 }
 
@@ -68,6 +64,7 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   'insights-record': (
     <RecoverableLazyRoute loader={loadInsightsRecordPage} routeLabel="Insight record" />
   ),
+  'insights-run': <RecoverableLazyRoute loader={loadInsightsRunPage} routeLabel="Agent run" />,
   logs: <RecoverableLazyRoute loader={loadLogsPage} routeLabel="Logs" />,
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   models: <RecoverableLazyRoute loader={loadModelHubPage} routeLabel="Model Hub" />,
@@ -92,20 +89,18 @@ const renderShellContent = (
 
 const renderShellElement = (
   route: ShellRouteDefinition,
-  settingsLoading: boolean,
-  srBenchAvailable: boolean,
-  srBenchUnavailableReason: string,
-  settingsError: string | null,
+  capabilities: DashboardCapabilities | null,
+  capabilitiesLoading: boolean,
+  capabilitiesError: string | null,
   onRefreshAccess: () => void,
 ) => {
   const content = renderShellContent(route, shellPageElements[route.page])
   if (route.page !== 'evaluation') return content
   return (
     <EvaluationAvailabilityRoute
-      available={srBenchAvailable}
-      isLoading={settingsLoading}
-      reason={srBenchUnavailableReason}
-      settingsError={settingsError}
+      capability={capabilities?.evaluation}
+      isLoading={capabilitiesLoading}
+      error={capabilitiesError}
       onRefreshAccess={onRefreshAccess}
     >
       {content}
@@ -114,16 +109,11 @@ const renderShellElement = (
 }
 
 export const renderAuthenticatedAppRoutes = ({
-  canAccessMLSetup,
-  mlPipelineAvailable,
-  mlPipelineUnavailableReason,
-  mlPipelineAvailabilityChecked,
   user,
   setupMode,
-  settingsLoading,
-  srBenchAvailable,
-  srBenchUnavailableReason,
-  settingsError,
+  capabilities,
+  capabilitiesLoading,
+  capabilitiesError,
   onRefreshAccess,
 }: AuthenticatedAppRoutesProps): React.ReactElement => (
   <>
@@ -139,10 +129,9 @@ export const renderAuthenticatedAppRoutes = ({
           canAccessDashboardPath(user, route.path) ? (
             renderShellElement(
               route,
-              settingsLoading,
-              srBenchAvailable,
-              srBenchUnavailableReason,
-              settingsError,
+              capabilities,
+              capabilitiesLoading,
+              capabilitiesError,
               onRefreshAccess,
             )
           ) : (
@@ -160,28 +149,6 @@ export const renderAuthenticatedAppRoutes = ({
           loader={loadPlaygroundFullscreenPage}
           routeLabel="Fullscreen playground"
         />
-      }
-    />
-    <Route
-      path="/ml-setup"
-      element={
-        canAccessMLSetup ? (
-          <EvaluationAvailabilityRoute
-            available={mlPipelineAvailable}
-            isLoading={settingsLoading}
-            reason={mlPipelineUnavailableReason}
-            settingsError={mlPipelineAvailabilityChecked ? null : settingsError}
-            onRefreshAccess={onRefreshAccess}
-            featureName="ML pipeline"
-          >
-            {renderShellContent(
-              {},
-              <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
-            )}
-          </EvaluationAvailabilityRoute>
-        ) : (
-          <Navigate to="/dashboard" replace />
-        )
       }
     />
     <Route path="*" element={<Navigate to={fallbackRouteTarget(setupMode)} replace />} />

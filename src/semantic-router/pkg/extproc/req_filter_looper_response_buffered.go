@@ -26,6 +26,7 @@ func prepareBufferedLooperResponse(
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
 		response.ID = responseID
 	}
+	requestToolNamespaces(ctx).RestoreResponse(&response)
 	response.Generation++
 	envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
 	encoded, err := engine.EncodeResponse(target, response, envelope)

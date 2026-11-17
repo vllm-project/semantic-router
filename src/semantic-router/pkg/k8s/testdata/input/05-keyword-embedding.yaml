@@ -40,15 +40,11 @@ spec:
         operator: "OR"
         keywords: ["urgent", "emergency", "critical"]
         caseSensitive: false
-
-    embeddings:
       - name: "support_request"
-        threshold: 0.70
-        candidates:
-          - "I need immediate assistance"
-          - "Please help me resolve this issue"
-          - "Can someone help me urgently?"
-        aggregationMethod: "max"
+        operator: "OR"
+        keywords: ["I need immediate assistance", "Please help me resolve this issue", "Can someone help me urgently?"]
+        caseSensitive: false
+
 
   decisions:
     - name: "urgent_support"
@@ -59,7 +55,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "urgent"
-          - type: "embedding"
+          - type: "keyword"
             name: "support_request"
       modelRefs:
         - model: "qwen-2.5-72b"
@@ -75,7 +71,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "urgent"
-          - type: "embedding"
+          - type: "keyword"
             name: "support_request"
       modelRefs:
         - model: "qwen-2.5-14b"

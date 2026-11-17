@@ -1,38 +1,61 @@
 package extproc
 
 import (
-	"sort"
+	"context"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
-// The accumulator retains buckets, never a row list or captured bodies. The
-// one-record builders keep cost, lifecycle, and usage eligibility in one place.
+// The accumulator retains buckets, never a row list or captured bodies. It
+// counts each record through the same one-record helpers as the batch
+// builders, so cost, lifecycle, and usage eligibility stay in one place, and
+// allocates almost nothing per record: a scan visits the whole history.
 type replayAggregateAccumulator struct {
 	payload                                               routerReplayAggregateResponse
 	models, decisions, signals                            map[string]int
-	currencies                                            map[string]*routerreplay.CurrencyCostSummary
+	costs                                                 *replayCostAccumulator
+	providerCache                                         *replayProviderCacheTotals
 	decisionTokens, modelTokens                           map[string]*routerReplayAggregateTokenEntry
 	availableRecipes, availableDecisions, availableModels map[string]struct{}
+	availableReviewModels                                 map[string]struct{}
+	reviews                                               *replayReviewAccumulator
+	decisionNames                                         map[[2]string]string
 }
 
 func newReplayAggregateAccumulator() *replayAggregateAccumulator {
 	return &replayAggregateAccumulator{
 		payload: routerReplayAggregateResponse{Object: "router_replay.aggregate"},
 		models:  make(map[string]int), decisions: make(map[string]int), signals: make(map[string]int),
-		currencies:     make(map[string]*routerreplay.CurrencyCostSummary),
+		costs:          newReplayCostAccumulator(),
+		providerCache:  newReplayProviderCacheTotals(),
 		decisionTokens: make(map[string]*routerReplayAggregateTokenEntry), modelTokens: make(map[string]*routerReplayAggregateTokenEntry),
 		availableRecipes: make(map[string]struct{}), availableDecisions: make(map[string]struct{}), availableModels: make(map[string]struct{}),
+		availableReviewModels: make(map[string]struct{}), reviews: newReplayReviewAccumulator(),
+		decisionNames: make(map[[2]string]string),
 	}
 }
 
-func (r *OpenAIRouter) queryRouterReplayAggregate(filters routerReplayFilters) (routerReplayAggregateResponse, error) {
+// queryRouterReplayAggregate scans the records the filters select. The filter
+// options cover every record: a database reader that narrows the scan reads
+// them in a separate grouped query, and otherwise the scan collects them.
+func (r *OpenAIRouter) queryRouterReplayAggregate(ctx context.Context, filters routerReplayFilters) (routerReplayAggregateResponse, error) {
 	accumulator := newReplayAggregateAccumulator()
 	search := strings.ToLower(filters.search)
+	storageFilters := filters.storageFilters()
 	for _, reader := range r.routerReplayReaders() {
-		if err := reader.ScanMetadata(func(record routerreplay.RoutingRecord) error {
+		separate, err := reader.ScanFilterOptions(ctx, storageFilters, func(record routerreplay.RoutingRecord) error {
 			accumulator.addOptions(record)
+			return nil
+		})
+		if err != nil {
+			return routerReplayAggregateResponse{}, err
+		}
+		if err := reader.ScanMetadata(ctx, storageFilters, func(record routerreplay.RoutingRecord) error {
+			if !separate {
+				accumulator.addOptions(record)
+			}
 			if doesRouterReplayRecordMatchFilters(record, filters, search) {
 				accumulator.add(record)
 			}
@@ -45,7 +68,10 @@ func (r *OpenAIRouter) queryRouterReplayAggregate(filters routerReplayFilters) (
 }
 
 func (a *replayAggregateAccumulator) addOptions(record routerreplay.RoutingRecord) {
-	for _, option := range []struct {
+	if record.RequestKind == store.RequestKindCodexApprovalReview && record.SelectedModel != "" {
+		a.availableReviewModels[record.SelectedModel] = struct{}{}
+	}
+	for _, option := range [...]struct {
 		set   map[string]struct{}
 		value string
 	}{
@@ -61,61 +87,42 @@ func (a *replayAggregateAccumulator) addOptions(record routerreplay.RoutingRecor
 }
 
 func (a *replayAggregateAccumulator) add(record routerreplay.RoutingRecord) {
-	part := buildRouterReplayAggregatePayload(nil, []routerreplay.RoutingRecord{record})
 	a.payload.RecordCount++
-	a.payload.Lifecycle.Completed += part.Lifecycle.Completed
-	a.payload.Lifecycle.Failed += part.Lifecycle.Failed
-	a.payload.Lifecycle.Aborted += part.Lifecycle.Aborted
-	a.payload.Lifecycle.InProgress += part.Lifecycle.InProgress
-	a.payload.Lifecycle.Unknown += part.Lifecycle.Unknown
-	a.payload.Summary.CostRecordCount += part.Summary.CostRecordCount
-	a.payload.Summary.ExcludedRecordCount += part.Summary.ExcludedRecordCount
-	for _, currency := range part.Summary.ByCurrency {
-		group := a.currencies[currency.Currency]
-		if group == nil {
-			group = &routerreplay.CurrencyCostSummary{Currency: currency.Currency}
-			a.currencies[currency.Currency] = group
-		}
-		group.TotalSaved += currency.TotalSaved
-		group.ActualSpend += currency.ActualSpend
-		group.BaselineSpend += currency.BaselineSpend
-		group.CostRecordCount += currency.CostRecordCount
+	countRouterReplayLifecycle(&a.payload.Lifecycle, record.LifecycleState)
+	a.costs.add(record)
+	a.providerCache.add(record)
+	a.reviews.add(record)
+	model := routerReplayFallbackName(record.SelectedModel)
+	decision := a.decisionName(record)
+	a.models[model]++
+	a.decisions[decision]++
+	countRouterReplaySignals(a.signals, record.Signals)
+	promptTokens, completionTokens, totalTokens, hasUsage := routerReplayUsageTriplet(record)
+	if !hasUsage {
+		a.payload.TokenVolume.ExcludedRecordCount++
+		return
 	}
-	for _, value := range part.ModelSelection {
-		a.models[value.Name] += value.Value
+	a.payload.TokenVolume.InputTokens += promptTokens
+	a.payload.TokenVolume.OutputTokens += completionTokens
+	a.payload.TokenVolume.TotalTokens += totalTokens
+	accumulateRouterReplayTokenEntry(a.decisionTokens, decision, promptTokens, completionTokens, totalTokens)
+	accumulateRouterReplayTokenEntry(a.modelTokens, model, promptTokens, completionTokens, totalTokens)
+}
+
+// decisionName is routerReplayDecisionName, built once per recipe and decision.
+func (a *replayAggregateAccumulator) decisionName(record routerreplay.RoutingRecord) string {
+	key := [2]string{record.Recipe, record.Decision}
+	name, ok := a.decisionNames[key]
+	if !ok {
+		name = routerReplayDecisionName(record)
+		a.decisionNames[key] = name
 	}
-	for _, value := range part.DecisionDistribution {
-		a.decisions[value.Name] += value.Value
-	}
-	for _, value := range part.SignalDistribution {
-		a.signals[value.Name] += value.Value
-	}
-	a.payload.TokenVolume.InputTokens += part.TokenVolume.InputTokens
-	a.payload.TokenVolume.OutputTokens += part.TokenVolume.OutputTokens
-	a.payload.TokenVolume.TotalTokens += part.TokenVolume.TotalTokens
-	a.payload.TokenVolume.ExcludedRecordCount += part.TokenVolume.ExcludedRecordCount
-	for _, value := range part.TokenBreakdown.ByDecision {
-		accumulateRouterReplayTokenEntry(a.decisionTokens, value.Name, value.InputTokens, value.OutputTokens, value.TotalTokens)
-	}
-	for _, value := range part.TokenBreakdown.BySelectedModel {
-		accumulateRouterReplayTokenEntry(a.modelTokens, value.Name, value.InputTokens, value.OutputTokens, value.TotalTokens)
-	}
+	return name
 }
 
 func (a *replayAggregateAccumulator) result() routerReplayAggregateResponse {
-	for _, group := range a.currencies {
-		a.payload.Summary.ByCurrency = append(a.payload.Summary.ByCurrency, *group)
-	}
-	sort.Slice(a.payload.Summary.ByCurrency, func(i, j int) bool {
-		return a.payload.Summary.ByCurrency[i].Currency < a.payload.Summary.ByCurrency[j].Currency
-	})
-	if len(a.payload.Summary.ByCurrency) == 1 {
-		group := a.payload.Summary.ByCurrency[0]
-		a.payload.Summary.Currency = group.Currency
-		a.payload.Summary.TotalSaved = group.TotalSaved
-		a.payload.Summary.BaselineSpend = group.BaselineSpend
-		a.payload.Summary.ActualSpend = group.ActualSpend
-	}
+	a.payload.Summary = a.costs.result()
+	a.payload.ProviderCache = a.providerCache.summary()
 	a.payload.ModelSelection = sortRouterReplayAggregateValues(a.models, 10)
 	a.payload.DecisionDistribution = sortRouterReplayAggregateValues(a.decisions, 0)
 	a.payload.SignalDistribution = sortRouterReplayAggregateValues(a.signals, 0)
@@ -124,5 +131,9 @@ func (a *replayAggregateAccumulator) result() routerReplayAggregateResponse {
 	a.payload.AvailableRecipes = sortRouterReplayOptionSet(a.availableRecipes)
 	a.payload.AvailableDecisions = sortRouterReplayOptionSet(a.availableDecisions)
 	a.payload.AvailableModels = sortRouterReplayOptionSet(a.availableModels)
+	a.payload.Reviews = a.reviews.result()
+	if len(a.availableReviewModels) > 0 {
+		a.payload.AvailableReviewModels = sortRouterReplayOptionSet(a.availableReviewModels)
+	}
 	return a.payload
 }

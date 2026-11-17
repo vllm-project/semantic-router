@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -860,13 +859,6 @@ func TestEnvoyActivationVerifierPollsUntilReady(t *testing.T) {
 	}
 }
 
-func TestRecipeRuntimeMaterializeArgsForceSideEffectFreePackageMode(t *testing.T) {
-	args := runtimeMaterializeArgs("/state/raw.yaml", "/state/realized.yaml", runtimeMaterialization{packageActivation: true})
-	if !slices.Contains(args, "--package-activation") {
-		t.Fatalf("runtime materialize args = %#v", args)
-	}
-}
-
 func importedActivationFixture(t *testing.T, recipeName string) (*recipe.Store, recipe.PackageSummary, string) {
 	t.Helper()
 	directory := filepath.Join("..", "..", "..", "config", "recipes", recipeName)
@@ -906,7 +898,7 @@ func withManagementBearer(config []byte) []byte {
 }
 
 func withManagedPostgresReplay(config []byte) []byte {
-	return []byte(strings.Replace(string(config), "global:\n", "global:\n  services:\n    router_replay:\n      enabled: true\n      store_backend: postgres\n      postgres:\n        host: postgres\n        port: 5432\n        database: vsr\n        user: router\n        password: test-only\n        ssl_mode: disable\n        table_name: router_replay\n", 1))
+	return []byte(strings.Replace(string(config), "global:\n", "global:\n  plugins:\n    - type: router_replay\n      configuration:\n        enabled: true\n  services:\n    router_replay:\n      store_backend: postgres\n      postgres:\n        host: postgres\n        port: 5432\n        database: vsr\n        user: router\n        password: test-only\n        ssl_mode: disable\n        table_name: router_replay\n", 1))
 }
 
 func importRecipeIntoStore(t *testing.T, store *recipe.Store, name string) recipe.PackageSummary {

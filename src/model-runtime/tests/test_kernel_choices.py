@@ -337,6 +337,31 @@ def test_a_pinned_model_without_a_device_thread_runs_inline_in_its_scope(
     assert fla.timed == []
 
 
+def test_a_model_at_another_dtype_runs_without_its_recorded_choices(
+    two_fla_models, fla
+):
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
+
+    roots, _, launched = two_fla_models
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(roots[0]), device="cpu", name="first", dtype="bfloat16"
+                ),
+            )
+        )
+    )
+    runtime.start(background=False)
+    try:
+        ask(runtime, "first")
+        assert runtime.served[0].kernel_choices is None
+    finally:
+        runtime.stop()
+    assert launched["first"] == {json.dumps({"timed": KEY})}
+
+
 def test_models_without_choices_never_enter_a_scope(tmp_path, monkeypatch):
     from vllm_srun.families.decision1.model import QwenDecisionModel
     from vllm_srun.testing.decision1 import write_package

@@ -55,7 +55,7 @@ def test_valid_states():
             "criteria": {"a": "A", "b": "B"},
             "over": "request",
         },
-        {"type": "choice", "criteria": {"a": "A", "b": "B"}},
+        {"type": "noul", "criteria": {"true": None}},
         {"type": "choice", "instructions": " \n", "criteria": {"a": "A", "b": "B"}},
         {"type": "choice", "instructions": "x", "criteria": {"a": "A"}},
         {"type": "choice", "instructions": "x", "criteria": {" ": "A", "b": "B"}},
@@ -141,12 +141,12 @@ def test_presets_fill_in_the_question():
     )
 
 
-def test_choice_answer_uses_the_top_two_margin():
+def test_choice_answer_uses_the_published_confidence():
     result = answer("choice", ["a", "b", "c"], ["A", "B", None], [0.5, 0.3, 0.2])
     assert result == {
         "type": "choice",
         "choice": "a",
-        "confidence": pytest.approx(0.2),
+        "confidence": pytest.approx((0.5 - 1 / 3) / (1 - 1 / 3)),
         "probabilities": {"a": 0.5, "b": 0.3, "c": 0.2},
     }
     tie = answer("choice", ["a", "b"], [None, None], [0.5, 0.5])

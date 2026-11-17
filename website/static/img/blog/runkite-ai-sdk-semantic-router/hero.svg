@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Runkite + vLLM Semantic Router</title>
+  <desc id="desc">A sample conversation follows the configured local-fast, local-specialist and local-fast routes. These are example configuration aliases for compatible model backends. Read tools remain allowed and a restart tool is denied by the same Runkite connector policy.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#101e33"/>
+      <stop offset="1" stop-color="#07101f"/>
+    </linearGradient>
+    <linearGradient id="thread" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#f5a524"/>
+      <stop offset="0.5" stop-color="#55c5ee"/>
+      <stop offset="1" stop-color="#f5a524"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#57718e" stroke-opacity=".1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <path d="M1040 0L1200 160V0Z" fill="#15394a" opacity=".45"/>
+  <path d="M1094 0L1200 106" fill="none" stroke="#55c5ee" stroke-opacity=".3"/>
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <g transform="translate(56 43)">
+      <rect width="48" height="48" rx="7" fill="#0a0a0b" stroke="#f5a524" stroke-width="1.5"/>
+      <text x="24" y="31" text-anchor="middle" fill="#f5a524" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="700">RK</text>
+      <text x="67" y="30" fill="#f1f5f9" font-size="22" font-weight="650">Runkite</text>
+      <path d="M175 11V37" stroke="#4b5d74"/>
+      <g transform="translate(197 9) scale(1.3)">
+        <path d="M0 4.973h9.324V23L0 4.973Z" fill="#fdb515"/>
+        <path d="M13.986 4.351L22.378 0l-6.216 23H9.324l4.662-18.649Z" fill="#30a2ff"/>
+      </g>
+      <text x="240" y="30" fill="#f1f5f9" font-size="22" font-weight="650">vLLM Semantic Router</text>
+    </g>
+    <text x="56" y="168" fill="#f6f8fc" font-size="53" font-weight="720" letter-spacing="-1.7">Runkite + vLLM Semantic Router</text>
+    <text x="58" y="218" fill="#c3d0df" font-size="28" letter-spacing="-.3">One conversation. Your models. The same tool permissions.</text>
+    <text x="58" y="278" fill="#899eb7" font-size="14" font-weight="700" letter-spacing="2.2">ONE DURABLE THREAD</text>
+    <path d="M95 313H1105" stroke="url(#thread)" stroke-width="2"/>
+    <g fill="#0b1526" stroke-width="2">
+      <circle cx="95" cy="313" r="6" stroke="#f5a524"/>
+      <circle cx="485" cy="313" r="6" stroke="#55c5ee"/>
+      <circle cx="875" cy="313" r="6" stroke="#f5a524"/>
+    </g>
+    <g transform="translate(56 337)">
+      <rect width="348" height="180" rx="14" fill="#132136" stroke="#344158"/>
+      <path d="M16 0H332" stroke="#f5a524" stroke-width="3"/>
+      <text x="24" y="34" fill="#9bacc2" font-size="15" font-weight="650" letter-spacing="1">RUN 01 · STATUS</text>
+      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">local-fast</text>
+      <text x="24" y="110" fill="#9eb3cb" font-size="17">Read the incident</text>
+      <rect x="24" y="131" width="300" height="30" rx="6" fill="#153b37"/>
+      <text x="37" y="151" fill="#92dfc3" font-size="16" font-weight="600">read_incident allowed</text>
+    </g>
+    <g transform="translate(426 337)">
+      <rect width="348" height="180" rx="14" fill="#122537" stroke="#36546b"/>
+      <path d="M16 0H332" stroke="#55c5ee" stroke-width="3"/>
+      <text x="24" y="34" fill="#a5bdd0" font-size="15" font-weight="650" letter-spacing="1">RUN 02 · DIAGNOSE</text>
+      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">local-specialist</text>
+      <text x="24" y="110" fill="#a5bfd2" font-size="17">Continue with retained history</text>
+      <rect x="24" y="131" width="300" height="30" rx="6" fill="#153b37"/>
+      <text x="37" y="151" fill="#92dfc3" font-size="16" font-weight="600">read_incident allowed</text>
+    </g>
+    <g transform="translate(796 337)">
+      <rect width="348" height="180" rx="14" fill="#132136" stroke="#344158"/>
+      <path d="M16 0H332" stroke="#f5a524" stroke-width="3"/>
+      <text x="24" y="34" fill="#9bacc2" font-size="15" font-weight="650" letter-spacing="1">RUN 03 · RESTART</text>
+      <text x="24" y="78" fill="#f5f8fc" font-size="31" font-weight="650" letter-spacing="-.7">local-fast</text>
+      <text x="24" y="110" fill="#9eb3cb" font-size="17">Request a service restart</text>
+      <rect x="24" y="131" width="300" height="30" rx="6" fill="#452d27"/>
+      <text x="37" y="151" fill="#ffb9a4" font-size="16" font-weight="600">restart_service denied</text>
+    </g>
+    <path d="M56 551H1144" stroke="#2a3b52"/>
+    <text x="58" y="586" fill="#a4b5ca" font-size="18">Native AI SDK loop</text>
+    <circle cx="252" cy="580" r="2.5" fill="#506780"/>
+    <text x="272" y="586" fill="#a4b5ca" font-size="18">Routed inference</text>
+    <circle cx="442" cy="580" r="2.5" fill="#506780"/>
+    <text x="462" y="586" fill="#a4b5ca" font-size="18">Governed tools</text>
+    <text x="1142" y="586" text-anchor="end" fill="#7e93ad" font-size="15">EXAMPLE ROUTES</text>
+  </g>
+</svg>

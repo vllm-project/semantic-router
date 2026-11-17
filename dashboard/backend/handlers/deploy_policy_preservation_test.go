@@ -1,10 +1,16 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -13,33 +19,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
 )
 
-type adaptationsRouting struct {
-	Decisions []struct {
-		Name        string                                 `yaml:"name"`
-		Adaptations routerconfig.DecisionAdaptationsConfig `yaml:"adaptations"`
-	} `yaml:"decisions"`
-}
-
-// decisionAdaptations maps each decision, as name or recipe/name, to its adaptations.
+// decisionAdaptations maps each decision to its adaptations: a decision of the
+// default recipe by its name, any other as recipe/name.
 func decisionAdaptations(t *testing.T, raw []byte) map[string]routerconfig.DecisionAdaptationsConfig {
 	t.Helper()
 	var doc struct {
-		Routing adaptationsRouting `yaml:"routing"`
 		Recipes []struct {
-			Name    string             `yaml:"name"`
-			Routing adaptationsRouting `yaml:"routing"`
+			Name      string `yaml:"name"`
+			Decisions []struct {
+				Name        string                                 `yaml:"name"`
+				Adaptations routerconfig.DecisionAdaptationsConfig `yaml:"adaptations"`
+			} `yaml:"decisions"`
 		} `yaml:"recipes"`
 	}
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("decode decisions: %v", err)
 	}
 	found := map[string]routerconfig.DecisionAdaptationsConfig{}
-	for _, decision := range doc.Routing.Decisions {
-		found[decision.Name] = decision.Adaptations
-	}
 	for _, recipe := range doc.Recipes {
-		for _, decision := range recipe.Routing.Decisions {
-			found[recipe.Name+"/"+decision.Name] = decision.Adaptations
+		for _, decision := range recipe.Decisions {
+			key := recipe.Name + "/" + decision.Name
+			if recipe.Name == string(routerconfig.DefaultRecipeName) {
+				key = decision.Name
+			}
+			found[key] = decision.Adaptations
 		}
 	}
 	return found
@@ -66,55 +69,58 @@ func assertDecisionAdaptations(t *testing.T, merged []byte, want map[string]rout
 }
 
 func TestMergeDeployPayloadKeepsBaseDecisionAdaptations(t *testing.T) {
-	base := `routing:
-  decisions:
-    - name: hard_policy
-      priority: 10
-      adaptations:
-        mode: bypass
-    - name: plain
-      priority: 5
-recipes:
+	base := `recipes:
+  - name: default
+    decisions:
+      - name: hard_policy
+        priority: 10
+        adaptations:
+          mode: bypass
+      - name: plain
+        priority: 5
   - name: alpha
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          adaptations: {mode: observe}
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations: {mode: observe}
   - name: beta
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          adaptations:
-            adaptation: {candidate_set: decision}
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations:
+          adaptation: {candidate_set: decision}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	// A compiled DSL fragment never carries adaptations.
-	fragment := `routing:
-  decisions:
-    - name: hard_policy
-      priority: 20
-    - name: plain
-      priority: 5
-    - name: added
-      priority: 1
-recipes:
+	fragment := `recipes:
+  - name: default
+    decisions:
+      - name: hard_policy
+        priority: 20
+      - name: plain
+        priority: 5
+      - name: added
+        priority: 1
   - name: alpha
-    routing:
-      decisions:
-        - name: shared
-          priority: 2
+    decisions:
+      - name: shared
+        priority: 2
   - name: beta
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          adaptations: {mode: apply}
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations: {mode: apply}
   - name: gamma
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
+    decisions:
+      - name: shared
+        priority: 1
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	want := map[string]routerconfig.DecisionAdaptationsConfig{
 		"hard_policy":  {Mode: routerconfig.DecisionAdaptationModeBypass},
@@ -136,9 +142,37 @@ recipes:
 	}
 }
 
+// decisionBaseFields maps each decision, as recipe/name, to its fields the
+// DSL cannot express, as written.
+func decisionBaseFields(t *testing.T, raw []byte) map[string]map[string]interface{} {
+	t.Helper()
+	var doc struct {
+		Recipes []struct {
+			Name      string                   `yaml:"name"`
+			Decisions []map[string]interface{} `yaml:"decisions"`
+		} `yaml:"recipes"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("decode decisions: %v", err)
+	}
+	found := map[string]map[string]interface{}{}
+	for _, recipe := range doc.Recipes {
+		for _, decision := range recipe.Decisions {
+			fields := map[string]interface{}{}
+			for _, field := range dsl.BaseDecisionFields() {
+				if value, ok := decision[field]; ok {
+					fields[field] = value
+				}
+			}
+			found[fmt.Sprintf("%s/%v", recipe.Name, decision["name"])] = fields
+		}
+	}
+	return found
+}
+
 // The Builder imports a config, decompiles it to DSL, compiles it back, and
 // deploys the compiled fragment in replace mode.
-func TestMergeDeployPayloadReplaceKeepsMaintainedDecisionAdaptations(t *testing.T) {
+func TestMergeDeployPayloadReplaceKeepsMaintainedBaseDecisionFields(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -184,7 +218,17 @@ func TestMergeDeployPayloadReplaceKeepsMaintainedDecisionAdaptations(t *testing.
 			if err != nil {
 				t.Fatalf("mergeDeployPayload error: %v", err)
 			}
-			assertDecisionAdaptations(t, merged, want)
+			wantFields, gotFields := decisionBaseFields(t, original), decisionBaseFields(t, merged)
+			var changed []string
+			for name, fields := range wantFields {
+				if !reflect.DeepEqual(gotFields[name], fields) {
+					changed = append(changed, name)
+				}
+			}
+			if len(changed) > 0 {
+				sort.Strings(changed)
+				t.Fatalf("base-only fields differ after deploy for decisions %v", changed)
+			}
 		})
 	}
 }
@@ -196,4 +240,36 @@ func hasDecisionAdaptations(adaptations map[string]routerconfig.DecisionAdaptati
 		}
 	}
 	return false
+}
+
+// The Builder sends no base for a draft loaded from the Router, so a deploy
+// keeps a Global Config change saved after the Builder loaded.
+func TestBuilderDeployKeepsGlobalChangeSavedAfterLoad(t *testing.T) {
+	dir := t.TempDir()
+	configPath := createValidTestConfig(t, dir)
+	w := httptest.NewRecorder()
+	UpdateGlobalConfigYAMLHandler(configPath, false, dir)(w, httptest.NewRequest(http.MethodPost, "/api/router/config/global/raw",
+		strings.NewReader("services:\n  response_api:\n    enabled: false\n")))
+	if w.Code != http.StatusOK {
+		t.Fatalf("global save = %d %s", w.Code, w.Body.String())
+	}
+
+	fragment := "recipes:\n  - name: default\n    decisions:\n      - name: deployed-route\n        priority: 2\n        rules: {operator: AND, conditions: []}\n        modelRefs: [{model: test-model}]\n"
+	body, _ := json.Marshal(DeployRequest{YAML: fragment, Mode: DeployModeReplace})
+	w = httptest.NewRecorder()
+	DeployHandler(configPath, false, dir)(w, httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(body)))
+	if w.Code != http.StatusOK {
+		t.Fatalf("deploy = %d %s", w.Code, w.Body.String())
+	}
+
+	deployed, err := routerconfig.ParseYAMLBytes(mustReadFile(t, configPath))
+	if err != nil {
+		t.Fatalf("parse deployed config: %v", err)
+	}
+	if deployed.ResponseAPI.Enabled {
+		t.Fatal("deploy reverted global.services.response_api.enabled to true")
+	}
+	if len(deployed.Decisions) != 1 || deployed.Decisions[0].Name != "deployed-route" || deployed.Decisions[0].Priority != 2 {
+		t.Fatalf("decisions = %+v, want only deployed-route at priority 2", deployed.Decisions)
+	}
 }

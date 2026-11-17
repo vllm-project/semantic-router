@@ -140,7 +140,7 @@ func (s *ClassificationAPIServer) handleContextCompressionPreview(
 	if !ok {
 		return
 	}
-	if !pluginConfig.Enabled {
+	if !pluginConfig.Enabled || !pluginConfig.Compress.CompressesRequest() {
 		s.writeJSONResponse(w, http.StatusOK, contextCompressionPreviewResponse{
 			Valid:      true,
 			SkipReason: contextcompression.SkipDisabled,
@@ -171,7 +171,7 @@ func (s *ClassificationAPIServer) parseContextCompressionPreviewRequest(
 	r *http.Request,
 ) (
 	contextCompressionPreviewRequest,
-	*config.ContextCompressionPluginConfig,
+	*config.ContextPluginConfig,
 	bool,
 ) {
 	var request contextCompressionPreviewRequest
@@ -188,7 +188,7 @@ func (s *ClassificationAPIServer) parseContextCompressionPreviewRequest(
 		)
 		return request, nil, false
 	}
-	var pluginConfig config.ContextCompressionPluginConfig
+	var pluginConfig config.ContextPluginConfig
 	if err := yaml.UnmarshalStrict(request.Configuration, &pluginConfig); err != nil {
 		s.writeErrorResponse(
 			w,
@@ -198,7 +198,7 @@ func (s *ClassificationAPIServer) parseContextCompressionPreviewRequest(
 		)
 		return request, nil, false
 	}
-	if err := config.ValidateContextCompressionPluginConfig(&pluginConfig); err != nil {
+	if err := config.ValidateContextCompressPreview(&pluginConfig); err != nil {
 		s.writeErrorResponse(
 			w,
 			http.StatusBadRequest,
@@ -213,7 +213,7 @@ func (s *ClassificationAPIServer) parseContextCompressionPreviewRequest(
 func executeContextCompressionPreview(
 	ctx context.Context,
 	request contextCompressionPreviewRequest,
-	pluginConfig *config.ContextCompressionPluginConfig,
+	pluginConfig *config.ContextPluginConfig,
 ) (contextcompression.ServiceResult, int, error) {
 	var requestBody map[string]interface{}
 	if err := json.Unmarshal(request.RequestBody, &requestBody); err != nil {
@@ -226,10 +226,7 @@ func executeContextCompressionPreview(
 	if request.TrustedScopePresent {
 		scope = "preview-scope"
 	}
-	policy := contextcompression.PolicyFromConfig(pluginConfig, nil)
-	if policy.Scoring.Method != config.ContextCompressionScoringBM25 {
-		policy.Scoring.Method = config.ContextCompressionScoringBM25
-	}
+	policy := contextcompression.PolicyFromConfig(pluginConfig.Compress, pluginConfig.Budget, nil)
 	result := contextcompression.NewService().Apply(
 		ctx,
 		contextcompression.Request{
@@ -254,13 +251,12 @@ func executeContextCompressionPreview(
 
 func addContextCompressionPreviewWarnings(
 	response *contextCompressionPreviewResponse,
-	pluginConfig *config.ContextCompressionPluginConfig,
+	pluginConfig *config.ContextPluginConfig,
 ) {
-	if pluginConfig.Scoring != nil &&
-		pluginConfig.Scoring.Method != config.ContextCompressionScoringBM25 {
+	if config.MatchCompress.Effective(pluginConfig.Compress.Match).Judge != nil {
 		response.Warnings = append(
 			response.Warnings,
-			"preview uses BM25 because runtime embedding scoring is not invoked by the management API",
+			"preview orders the targets by the query terms they contain: the management API does not ask the decision model to judge them",
 		)
 	}
 }

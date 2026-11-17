@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 贡献
 translation:
   source_commit: "b45450dfed60bc09e45f595278fe1ab8e0e3ee97"
@@ -64,4 +65,4 @@ git commit -s -m "describe the change"
 - [开发指南](./development)
 - [文档指南](./documentation)
 - [代码风格与质量](./code-style)
-- [架构概览](/zh-Hans/docs/overview/semantic-router-overview)
+- [架构概览](/docs/overview/semantic-router-overview)

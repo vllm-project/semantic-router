@@ -49,7 +49,8 @@ type LlamaStackBackendConfig struct {
 	RequestTimeoutSeconds int
 
 	// SearchType controls the search strategy: "vector" (default) or
-	// "hybrid" (vector + BM25 with RRF). Requires Milvus vector_io provider.
+	// "hybrid" (vector + keyword with RRF). Hybrid requires a vector_io
+	// provider with keyword search, such as sqlite-vec or Milvus.
 	SearchType string
 }
 
@@ -111,6 +112,9 @@ func NewLlamaStackBackend(cfg LlamaStackBackendConfig) (*LlamaStackBackend, erro
 				MaxIdleConnsPerHost: 10,
 				IdleConnTimeout:     90 * time.Second,
 			},
+			// The endpoint is configured by the operator: a redirect would
+			// replay the auth token to another origin.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 		storeIDs: make(map[string]string),
 	}, nil

@@ -1,0 +1,9 @@
+{
+  "label": "Quantization",
+  "key": "model-runtime-quantization",
+  "position": 3,
+  "link": {
+    "type": "doc",
+    "id": "overview"
+  }
+}

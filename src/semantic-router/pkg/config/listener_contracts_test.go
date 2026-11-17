@@ -4,6 +4,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"gopkg.in/yaml.v2"
 )
 
 func TestListenerTLSNeedsACertificateAndAKey(t *testing.T) {
@@ -42,7 +45,17 @@ func TestListenerTLSParsesFromTheCanonicalDocument(t *testing.T) {
 	}
 }
 
-const canonicalTLSDocument = `version: v0.3
+// Listeners are keyed by name: a reload compares them by name, and a second
+// listener of the same name would read as a changed one on every reload.
+func TestListenerNamesAreUnique(t *testing.T) {
+	twice := strings.Replace(canonicalTLSDocument, "providers:\n",
+		"  - name: https\n    address: 0.0.0.0\n    port: 8444\nproviders:\n", 1)
+	if _, err := ParseYAMLBytes([]byte(twice)); err == nil || !strings.Contains(err.Error(), "listener 'https' is defined twice") {
+		t.Fatalf("two listeners named https must not load, got %v", err)
+	}
+}
+
+const canonicalTLSDocument = `version: v0.5
 listeners:
   - name: https
     address: 0.0.0.0
@@ -59,9 +72,8 @@ providers:
         - endpoint: 127.0.0.1:8000
           protocol: http
           provider: vllm
-routing:
-  modelCards:
-    - name: m
+recipes:
+  - name: default
 `
 
 func TestSystemOneListenerScopeNeverInheritsChatModels(t *testing.T) {
@@ -69,18 +81,18 @@ func TestSystemOneListenerScopeNeverInheritsChatModels(t *testing.T) {
 	cfg.ModelDeployments = map[string]ModelDeployment{
 		"private-key": {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-2.0-0.3B", PublicName: "judgment"},
 	}
-	listener := Listener{Name: "public", Models: []string{"chat-only"}}
-	if err := validateListenerSystemOne(cfg, listener); err != nil {
+	listener := Listener{Name: "public", APIs: ListenerAPIs{"chat_completions": {Models: []string{"chat-only"}}}}
+	if err := validateListenerAPIs(cfg, listener); err != nil {
 		t.Fatal(err)
 	}
 	for _, names := range [][]string{{}, {"private-key"}, {"unknown"}, {" judgment "}, {"judgment", "judgment"}} {
-		listener.SystemOne = &ListenerSystemOne{Models: names}
-		if err := validateListenerSystemOne(cfg, listener); err == nil {
+		listener.APIs = ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: names}}
+		if err := validateListenerAPIs(cfg, listener); err == nil {
 			t.Fatalf("accepted invalid public scope %v", names)
 		}
 	}
-	listener.SystemOne = &ListenerSystemOne{Models: []string{"judgment"}}
-	if err := validateListenerSystemOne(cfg, listener); err != nil {
+	listener.APIs = ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"judgment"}}}
+	if err := validateListenerAPIs(cfg, listener); err != nil {
 		t.Fatal(err)
 	}
 	key, _, err := cfg.ResolveSystemOneDeployment("judgment")
@@ -88,7 +100,37 @@ func TestSystemOneListenerScopeNeverInheritsChatModels(t *testing.T) {
 		t.Fatalf("resolved %q: %v", key, err)
 	}
 	cfg.ModelDeployments["second-key"] = cfg.ModelDeployments["private-key"]
-	if err := validateListenerSystemOne(cfg, listener); err == nil {
+	if err := validateListenerAPIs(cfg, listener); err == nil {
 		t.Fatal("ambiguous public model accepted")
+	}
+}
+
+func TestSystemOneListenerBoundsTheRequestDeadline(t *testing.T) {
+	t.Setenv("NATIVE_TEST_TOKEN", "test-only-value")
+	cfg, err := ParseYAMLBytes([]byte(nativeRoutingTestYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if limit := cfg.Listeners[0].APIs["systemone"].MaxDeadline(); limit != 10*time.Minute {
+		t.Fatalf("default limit %s, want 10m", limit)
+	}
+	bounded := strings.Replace(nativeRoutingTestYAML, "models: [vllm-sr/auto]", "models: [vllm-sr/auto]\n        max_deadline_ms: 120000", 1)
+	cfg, err = ParseYAMLBytes([]byte(bounded))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	roundTrip, err := ParseYAMLBytes(encoded)
+	if err != nil || roundTrip.Listeners[0].APIs["systemone"].MaxDeadline() != 2*time.Minute {
+		t.Fatalf("max_deadline_ms did not survive canonical export: %v", err)
+	}
+	for _, value := range []string{"0", "-1"} {
+		invalid := strings.Replace(bounded, "max_deadline_ms: 120000", "max_deadline_ms: "+value, 1)
+		if _, err := ParseYAMLBytes([]byte(invalid)); err == nil || !strings.Contains(err.Error(), "apis.systemone.max_deadline_ms: invalid_value: must be greater than zero") {
+			t.Fatalf("max_deadline_ms %s: got %v", value, err)
+		}
 	}
 }

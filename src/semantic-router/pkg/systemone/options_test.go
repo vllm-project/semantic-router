@@ -29,8 +29,8 @@ func TestPublicOptionsRefuseWhatTheAPIDoesNotDefine(t *testing.T) {
 		`true`:                         "options must be an object",
 		`{"profile":"exact"}`:          removed,
 		`{"profile":null}`:             removed,
-		`{"verbose":true}`:             "options.verbose is not a System One option; the options are deadline_ms, max_tokens and return_meta",
-		`{"zeta":1,"alpha":1}`:         "options.alpha is not a System One option; the options are deadline_ms, max_tokens and return_meta",
+		`{"verbose":true}`:             "options.verbose is not a System One option; the options are deadline_ms, long_context, max_tokens and return_meta",
+		`{"zeta":1,"alpha":1}`:         "options.alpha is not a System One option; the options are deadline_ms, long_context, max_tokens and return_meta",
 		`{"deadline_ms":0}`:            "options.deadline_ms must be a number greater than 0",
 		`{"deadline_ms":-5}`:           "options.deadline_ms must be a number greater than 0",
 		`{"deadline_ms":"30000"}`:      "options.deadline_ms must be a number greater than 0",
@@ -43,7 +43,7 @@ func TestPublicOptionsRefuseWhatTheAPIDoesNotDefine(t *testing.T) {
 		`{"return_meta":"true"}`:       "options.return_meta must be true or false",
 		`{"return_meta":null}`:         "options.return_meta must be true or false",
 		`{"return_meta":1}`:            "options.return_meta must be true or false",
-		`{"return_meta":true,"x":[1]}`: "options.x is not a System One option; the options are deadline_ms, max_tokens and return_meta",
+		`{"return_meta":true,"x":[1]}`: "options.x is not a System One option; the options are deadline_ms, long_context, max_tokens and return_meta",
 	} {
 		got, problem := publicOptions([]byte(raw))
 		if got != nil || problem != want {

@@ -13,7 +13,6 @@ interface ConfigPageSchemaFieldsEditorProps {
 const COMPOUND_TYPES = new Set<FieldSchema['type']>([
   'string[]',
   'number[]',
-  'string[][]',
   'object',
   'object[]',
   'key-value',

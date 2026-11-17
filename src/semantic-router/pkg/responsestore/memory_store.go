@@ -2,10 +2,12 @@ package responsestore
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -173,14 +175,35 @@ func (m *MemoryStore) GetConversationChain(ctx context.Context, responseID strin
 	defer m.mu.RUnlock()
 	var chain []*responseapi.StoredResponse
 	currentID := responseID
-	for currentID != "" {
+	visited := make(map[string]bool)
+
+	// Maximum chain length to prevent infinite loops, mirroring the Redis backend.
+	const maxChainLength = 1000
+
+	for currentID != "" && len(chain) < maxChainLength {
+		// Prevent circular references from looping forever while holding the read lock.
+		// A cycle is corrupt data: the conversation it describes cannot be
+		// reconstructed, so it fails instead of serving a prefix of it.
+		if visited[currentID] {
+			logging.Warnf("MemoryStore: circular reference detected at %s", currentID)
+			return nil, fmt.Errorf("response chain loops back to %s", currentID)
+		}
+		visited[currentID] = true
+
 		response, exists := m.responses[currentID]
 		if !exists || (!response.TTL.IsZero() && time.Now().After(response.TTL)) {
-			break
+			// A gap anywhere in the chain leaves the history incomplete. The
+			// caller answers previous_response_not_found instead of continuing
+			// with the remainder as if it were the whole conversation.
+			return nil, ErrNotFound
 		}
 		result := *response
 		chain = append([]*responseapi.StoredResponse{&result}, chain...)
 		currentID = response.PreviousResponseID
+	}
+	if currentID != "" {
+		// The walk stopped at the cap with history still ahead of it.
+		return nil, fmt.Errorf("response chain is longer than %d entries", maxChainLength)
 	}
 	if len(chain) == 0 {
 		return nil, ErrNotFound

@@ -130,10 +130,9 @@ python3 src/model-runtime/tools/embed_parity.py omni \
 
 Mini 32K qualification needs a Mini bundle exported with `--full-context`, or
 `VELA_OMNI_FULL_CONTEXT_REFERENCE` naming a separately generated matching source
-reference; routine CI does not claim it. The image-calibration CI lane serves
-the pinned Nano release on the native engine instead, for image
-classification, cache and memory integration, and the complete frozen routing
-calibration.
+reference; routine CI does not claim it. The published-model contract
+(`make test-models`) serves the pinned Nano release on the native engine
+instead, for the cache's omni storage integration.
 
 `bundle.py` uses only Python's standard library to verify the complete inventory
 and receipt and to stage a new directory atomically. It rejects missing graphs,

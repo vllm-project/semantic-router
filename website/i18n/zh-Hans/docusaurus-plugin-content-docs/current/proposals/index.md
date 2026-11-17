@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 提案
 description: vLLM Semantic Router 的设计提案、概念验证探索、实现记录和架构决策。
 translation:
@@ -15,6 +16,7 @@ translation:
 
 | 提案 | 创建日期 | 状态 | 范围 |
 | --- | --- | --- | --- |
+| [决策模型作为一等模型](./decision-model-first-class) | 2026-11-05 | 已实现 | 一族决策模型通过 System One 回答每个路由判断，信号、算法、插件、v0.5 配置和响应头都围绕它重建（[#5886](https://github.com/vllm-project/semantic-router/pull/5886)）。 |
 | [路由范围：逐查询与容量感知路由](./batch-and-capacity-aware-routing) | 2026-07-14 | 决策记录 | 保持语义路由逐查询，容量处理留在服务层。 |
 | [路由学习](./router-learning-memory-and-adaptations) | 2026-06-20 | 已实现 | 在线适配、路由保护和离线配方改进。 |
 | [提示词分类路由](./prompt-classification-routing) | 2025-10-08 | 提案 | 关键词、正则、嵌入和分类器信号融合。 |
@@ -30,7 +32,7 @@ translation:
 | [审议算法](./deliberation-algorithms) | 2026-06-17 | 提案 | 感知依据的多模型综合。 |
 | [智能体记忆](./agentic-memory) | 2026-02-09 | 概念验证 | 跨会话记忆检索与持久化。 |
 | [OpenAI RAG 集成](./agentic-rag) | 2026-01-23 | 已实现 | 通过 OpenAI Files 和 Vector Stores 检索。 |
-| [高级工具过滤](./advanced-tool-filtering) | 2026-01-14 | 已实现 | 对工具候选做可解释的过滤和重排序。 |
+| [高级工具过滤](./advanced-tool-filtering) | 2026-01-14 | 已取代 | 对工具候选做可解释的过滤和重排序。 |
 
 ## 安全与韧性 {#safety--resilience}
 
@@ -51,6 +53,7 @@ translation:
 | [Open Intelligence Index 1.0 与 Unified Model Arena](./open-intelligence-index-and-model-arena) | 2026-09-09 | 已实现 | 定义六个开放核心基准、完整案例指数、物理/虚拟排名、运营方证据、路由目标和基准版本迁移。 |
 | [统一模型目录与评估指数](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | 已实现 | 统一提供商、协议、模型、推理、展示、Day-0 和基准比较元数据。 |
 | [Standalone 模式](./standalone-mode) | 2026-10-06 | 已实现 | Router 自己提供 OpenAI 兼容接口并代理到后端，standalone 与 extproc 模式共用一个路由核心（[#4623](https://github.com/vllm-project/semantic-router/issues/4623)）。 |
+| [System One API schema](./system-one-api-schemas) | 2026-11-11 | 已实现 | 每个决策模型 API 都有带版本的 schema（`systemone/0.2`、`vllm-sr/5.0`、`vllm-sr/4.0`），listener 和上游共用一个 API 注册表，并通过与 schema 无关的 IR 只用一层 codec（[#6143](https://github.com/vllm-project/semantic-router/issues/6143)）。 |
 | [统一配置契约 v0.3](./unified-config-contract-v0-3) | 2026-03-17 | 已实现 | 跨编写和部署面的单一配置契约。 |
 | [多协议适配器架构](./multi-protocol-adaptor) | 2026-02-18 | 已实现 | 与协议无关地访问路由引擎。 |
 | [独立 HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | 已取代 | 链接路由器包的独立网关二进制；已被 [Standalone 模式](./standalone-mode) 取代。 |

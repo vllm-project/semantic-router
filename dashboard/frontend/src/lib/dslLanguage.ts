@@ -80,38 +80,28 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
   pluginTypes: [
     'response_cache',
-    'memory',
+    'context',
     'system_prompt',
     'header_mutation',
-    'hallucination',
     'router_replay',
-    'rag',
     'tools',
     'fast_response',
     'request_params',
-    'response_jailbreak',
-    'tool_selection',
+    'response_guard',
     'prompt_cache',
+    'masking',
   ],
 
   algoTypes: [
-    'confidence',
-    'ratings',
-    'remom',
-    'fusion',
-    'workflows',
     'static',
-    'router_dc',
-    'automix',
-    'hybrid',
-    'latency_aware',
-    'knn',
-    'kmeans',
-    'svm',
-    'mlp',
-    'multi_factor',
-    'decision',
     'random',
+    'multi_factor',
+    'systemone',
+    'escalate',
+    'fusion',
+    'remom',
+    'ratings',
+    'workflows',
   ],
 
   booleans: ['true', 'false'],
@@ -145,13 +135,13 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
 
       // Plugin types
       [
-        /\b(response_cache|memory|system_prompt|header_mutation|hallucination|router_replay|rag|tools|fast_response|request_params|response_jailbreak|tool_selection|prompt_cache)\b/,
+        /\b(response_cache|memory|system_prompt|header_mutation|router_replay|rag|tools|fast_response|request_params|response_guard|prompt_cache|masking)\b/,
         'type.plugin',
       ],
 
       // Algorithm types
       [
-        /\b(confidence|ratings|remom|fusion|workflows|static|router_dc|automix|hybrid|latency_aware|knn|kmeans|svm|mlp|multi_factor|random)\b/,
+        /\b(static|random|multi_factor|systemone|escalate|fusion|remom|ratings|workflows)\b/,
         'type.algorithm',
       ],
 
@@ -282,7 +272,7 @@ const KEYWORD_SUGGESTIONS = [
   { label: 'MODEL', insertText: 'MODEL "${1:model-name}"', detail: 'Model reference' },
   {
     label: 'ALGORITHM',
-    insertText: 'ALGORITHM ${1:confidence} {\n\t$0\n}',
+    insertText: 'ALGORITHM ${1:escalate} {\n\t$0\n}',
     detail: 'Algorithm block',
   },
   { label: 'AND', insertText: 'AND', detail: 'Boolean AND' },
@@ -297,38 +287,28 @@ const SIGNAL_TYPE_SUGGESTIONS = ROUTER_CONFIG_EXTENSION.signals.map((surface) =>
 
 const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'response_cache', detail: 'Response caching plugin' },
-  { label: 'memory', detail: 'Conversation memory plugin' },
+  { label: 'context', detail: 'RAG, memory and compression context plugin' },
   { label: 'system_prompt', detail: 'System prompt injection plugin' },
   { label: 'header_mutation', detail: 'HTTP header mutation plugin' },
-  { label: 'hallucination', detail: 'Hallucination detection plugin' },
   { label: 'router_replay', detail: 'Request replay plugin' },
-  { label: 'rag', detail: 'RAG (Retrieval Augmented Generation) plugin' },
-  { label: 'tools', detail: 'Route-local tool policy and semantic selection plugin' },
-  { label: 'tool_selection', detail: 'Semantic tool add/filter plugin' },
+  { label: 'tools', detail: 'Route-local tool policy and decision-model tool selection plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },
   { label: 'request_params', detail: 'Request parameter mutation plugin' },
-  { label: 'response_jailbreak', detail: 'Response-side jailbreak screening plugin' },
+  { label: 'response_guard', detail: 'Block or annotate answers on the signals they are checked with' },
   { label: 'prompt_cache', detail: 'Route-local Anthropic prompt-cache marker injection' },
+  { label: 'masking', detail: 'Provider-bound PII masking plugin' },
 ]
 
 const ALGO_TYPE_SUGGESTIONS = [
-  { label: 'confidence', detail: 'Confidence-based routing' },
-  { label: 'ratings', detail: 'Ratings-based routing' },
-  { label: 'remom', detail: 'ReMoM algorithm' },
-  { label: 'fusion', detail: 'Fusion panel deliberation' },
-  { label: 'workflows', detail: 'Router Flow orchestration' },
   { label: 'static', detail: 'Static model assignment' },
-  { label: 'router_dc', detail: 'Router DC algorithm' },
-  { label: 'automix', detail: 'AutoMix algorithm' },
-  { label: 'hybrid', detail: 'Hybrid routing' },
-  { label: 'latency_aware', detail: 'Latency-aware routing' },
-  { label: 'knn', detail: 'KNN model-selection classifier' },
-  { label: 'kmeans', detail: 'KMeans model-selection classifier' },
-  { label: 'svm', detail: 'SVM model-selection classifier' },
-  { label: 'mlp', detail: 'MLP model-selection classifier' },
-  { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
-  { label: 'decision', detail: 'Decision model chooses a candidate' },
   { label: 'random', detail: 'Uniform pick among eligible candidates' },
+  { label: 'multi_factor', detail: 'Quality/latency/cost/load scoring' },
+  { label: 'systemone', detail: 'System One model chooses a candidate' },
+  { label: 'escalate', detail: 'Try candidates in order until an answer is accepted' },
+  { label: 'fusion', detail: 'Fusion panel deliberation' },
+  { label: 'remom', detail: 'ReMoM algorithm' },
+  { label: 'ratings', detail: 'Ratings-based routing' },
+  { label: 'workflows', detail: 'Router Flow orchestration' },
 ]
 
 /**

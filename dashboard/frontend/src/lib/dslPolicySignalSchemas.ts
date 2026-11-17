@@ -19,32 +19,39 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           ],
         },
       ]
-    case 'classifier':
+    case 'agent':
       return [
         { key: 'description', label: 'Description', type: 'string' },
         {
-          key: 'type',
-          label: 'Backend Type',
+          key: 'role',
+          label: 'Role',
           type: 'select',
-          options: ['local', 'llm', 'sequence_classifier'],
-          required: true,
+          options: ['main', 'subagent'],
+          description: 'The main agent or a subagent, as protection reads the agent identity.',
         },
-        { key: 'model', label: 'External Model', type: 'string' },
-        { key: 'model_path', label: 'Local Model Path', type: 'string' },
         {
-          key: 'labels',
-          label: 'Labels',
+          key: 'harness',
+          label: 'Harness',
+          type: 'select',
+          options: ['claude_code', 'codex', 'opencode'],
+          description: 'The harness whose identity headers the request carries.',
+        },
+        {
+          key: 'types',
+          label: 'Subagent Types',
           type: 'string[]',
-          required: true,
+          placeholder: 'Explore',
+          description:
+            'Any of these matches, ignoring case: a Claude Code agent type (Explore, Plan, general-purpose, custom, teammate, fork) or a Codex child kind (collab_spawn, review).',
         },
-        { key: 'instructions', label: 'Instructions', type: 'string' },
         {
-          key: 'disable_rationale',
-          label: 'Disable Rationale',
-          type: 'boolean',
-          description: 'Only LLM classifiers support this option.',
+          key: 'request_classes',
+          label: 'Request Classes',
+          type: 'string[]',
+          placeholder: 'compaction',
+          description:
+            'Any of these request classes matches: main, subagent, workflow, compaction or auxiliary. Claude Code sends the class; OpenCode session titles are auxiliary and its summaries compaction.',
         },
-        { key: 'use_cpu', label: 'Use CPU', type: 'boolean' },
       ]
     case 'input_modality':
       return [
@@ -56,38 +63,6 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           options: ['text', 'image', 'audio', 'video'],
           required: true,
           description: 'Input modality whose structural presence this signal matches.',
-        },
-      ]
-    case 'topic_continuity':
-      return [
-        { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'include_assistant',
-          label: 'Include Assistant Text',
-          type: 'boolean',
-          description: 'Read assistant text of prior turns as evidence (default true).',
-        },
-        {
-          key: 'thresholds',
-          label: 'Thresholds',
-          type: 'object',
-          description: 'Require 0 <= change < continuation < 1. Defaults: continuation 0.35, change 0.08.',
-          fields: [
-            { key: 'continuation', label: 'Continuation', type: 'number' },
-            { key: 'change', label: 'Change', type: 'number' },
-          ],
-        },
-        {
-          key: 'limits',
-          label: 'Evidence Limits',
-          type: 'object',
-          description:
-            'Defaults: 8 prior turns, 16384 bytes per turn, and (prior turns + 1) x turn bytes in total.',
-          fields: [
-            { key: 'max_prior_turns', label: 'Max Prior Turns', type: 'number' },
-            { key: 'max_turn_bytes', label: 'Max Turn Bytes', type: 'number' },
-            { key: 'max_input_bytes', label: 'Max Input Bytes', type: 'number' },
-          ],
         },
       ]
     default:

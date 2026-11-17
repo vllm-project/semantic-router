@@ -1534,20 +1534,11 @@
 }
 
 .structuredDescription,
-.structuredEmpty,
-.structuredInlineError {
+.structuredEmpty {
   margin: 0;
   font-size: var(--text-xs);
   line-height: 1.5;
-}
-
-.structuredDescription,
-.structuredEmpty {
   color: var(--color-text-muted);
-}
-
-.structuredInlineError {
-  color: var(--color-danger);
 }
 
 .structuredSurface,

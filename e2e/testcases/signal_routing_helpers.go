@@ -15,7 +15,7 @@ import (
 )
 
 // SignalRoutingCase is a single request/expectation pair for a signal that is
-// evaluated from one standalone request (e.g. event, language): the signal
+// evaluated from one standalone request (e.g. keyword, language): the signal
 // either matches a configured rule on that request or it doesn't. A case
 // carries either Query (a single user prompt) or Messages (a full message
 // array, for signals that read message-envelope facts like role counts,
@@ -48,9 +48,9 @@ type SignalRoutingResult struct {
 type signalRoutingConfig struct {
 	// TestDataPath is the JSON file of SignalRoutingCase entries.
 	TestDataPath string
-	// MatchedHeader is the response header carrying the matched rule name
-	// (e.g. "x-vsr-matched-event", "x-vsr-matched-language").
-	MatchedHeader string
+	// SignalType is the type whose matched rules the trace lists, such as
+	// "keyword" or "language".
+	SignalType string
 	// TargetDecision is the decision this signal's rule routes to; used to
 	// check negative cases without pinning the exact fallback decision.
 	TargetDecision string
@@ -58,6 +58,9 @@ type signalRoutingConfig struct {
 	ResultsTitle string
 	// LogLabel names the signal in progress/summary log lines (e.g. "Event").
 	LogLabel string
+	// Entrypoint is the model name the requests carry, which selects the
+	// signal's recipe; empty means vllm-sr/auto.
+	Entrypoint string
 }
 
 func runSignalRoutingTest(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, cfg signalRoutingConfig) error {
@@ -124,6 +127,9 @@ func loadSignalRoutingCases(filepath string) ([]SignalRoutingCase, error) {
 	if err := json.Unmarshal(data, &cases); err != nil {
 		return nil, fmt.Errorf("failed to parse test cases: %w", err)
 	}
+	if len(cases) == 0 {
+		return nil, fmt.Errorf("signal routing test corpus %q is empty", filepath)
+	}
 
 	return cases, nil
 }
@@ -137,12 +143,16 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 		ShouldMatch:           testCase.ShouldMatch,
 	}
 
+	entrypoint := cfg.Entrypoint
+	if entrypoint == "" {
+		entrypoint = "vllm-sr/auto"
+	}
 	var response *localChatCompletionResponse
 	var err error
 	if len(testCase.Messages) > 0 {
-		response, err = sendLocalChatConversation(ctx, localPort, "vllm-sr/auto", testCase.Messages, 30*time.Second)
+		response, err = sendLocalChatConversation(ctx, localPort, entrypoint, testCase.Messages, 30*time.Second)
 	} else {
-		response, err = sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Query, 30*time.Second)
+		response, err = sendLocalChatCompletion(ctx, localPort, entrypoint, testCase.Query, 30*time.Second)
 	}
 	if err != nil {
 		result.Error = err.Error()
@@ -159,7 +169,7 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 
 	decision := response.Headers.Get("x-vsr-selected-decision")
 	result.ActualDecision = decision
-	result.ActualMatchedSignal = response.Headers.Get(cfg.MatchedHeader)
+	result.ActualMatchedSignal = matchedSignals(response.Headers, cfg.SignalType)
 
 	if testCase.ShouldMatch {
 		result.DecisionCorrect = result.ActualDecision == testCase.ExpectedDecision

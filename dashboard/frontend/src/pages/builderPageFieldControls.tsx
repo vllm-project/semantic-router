@@ -224,7 +224,6 @@ export const FieldEditor: React.FC<{
     case 'json':
       return <JsonFieldEditor schema={schema} value={value} onChange={onChange} />
     case 'string[]':
-    case 'string[][]':
     case 'object':
     case 'object[]':
     case 'key-value':

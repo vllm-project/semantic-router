@@ -14,9 +14,10 @@ export interface ReplayCandidateTrace {
 
 export interface ReplaySessionPolicy {
   identity?: {
-    headers?: { session?: string; conversation?: string }
+    headers?: { session?: string; conversation?: string; agent?: string }
     session?: { source?: string; status?: string }
     conversation?: { source?: string; status?: string }
+    agent?: { source?: string; status?: string }
   }
   mode?: string
   scope?: string
@@ -63,8 +64,6 @@ export interface ReplayRouteDiagnostics {
   hard_lock_reason?: string
   decision_reason?: string
   signal_errors?: Record<string, string>
-  prompt_helper_model?: string
-  prompt_helper_latency_ms?: number
   request_demand_snapshots?: Array<{
     stage: string
     model?: string
@@ -90,6 +89,10 @@ export interface InsightsTrajectoryRoute {
   session_policy_applied: boolean
   session_action?: string
   session_reason?: string
+  agent?: string
+  /** The record's Codex turn ids, as on InsightsRecord. */
+  turn_id?: string
+  parent_turn_id?: string
   lifecycle_state: string
   response_status?: number
   duration_ms: number

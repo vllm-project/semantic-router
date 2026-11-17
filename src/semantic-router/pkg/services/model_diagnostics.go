@@ -21,6 +21,9 @@ func (s *ClassificationService) diagnosticClassifierSnapshot(recipe string) (*cl
 	defer s.configMutex.RUnlock()
 	classifier := s.classifier
 	scope := string(config.DefaultRecipeName)
+	if classifier != nil && classifier.Config != nil {
+		scope = string(classifier.Config.DefaultRecipe().Name)
+	}
 	if classifier != nil && classifier.Config != nil && classifier.Config.RoutingScope != "" {
 		scope = string(classifier.Config.RoutingScope)
 	}
@@ -102,7 +105,7 @@ func (s *ClassificationService) AcquireModelDiagnostics(recipe string) (ModelDia
 }
 
 // ModelDiagnostics holds one recipe's prepared bindings on its model runtime:
-// classify, embedding and relevance bindings.
+// its embedding bindings.
 type ModelDiagnostics struct {
 	Tasks *serving.Runtime
 }

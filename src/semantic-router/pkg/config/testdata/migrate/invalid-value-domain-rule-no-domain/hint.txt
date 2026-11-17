@@ -1,0 +1,1 @@
+recipes[default].signals.domains[general]: invalid_value: a domain rule without labels or mmlu_categories whose name is no domain never matched, since the domain classifier reports domains; run `vllm-sr config migrate` (drop it; to route on it, set labels to the domains it means)

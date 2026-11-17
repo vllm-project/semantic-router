@@ -40,7 +40,7 @@ and the generated CRD in
 | `service` | Service type and API, gRPC, and metrics ports. |
 | `resources` | Container CPU, memory, and other resource requests/limits. |
 | `persistence` | Model-storage PVC settings or an existing claim. |
-| `config` | Operator configuration adapters and canonical `routing` object. |
+| `config` | Operator configuration adapters and canonical `recipes`, `entrypoints`, `plugins` and `models`. |
 | `toolsDb` | Function-tool records materialized for Router tool selection. |
 | `vllmEndpoints` | Model services discovered as canonical providers and model cards. |
 | `autoscaling` | HPA enablement and CPU/memory targets. |
@@ -79,15 +79,15 @@ resolved model becomes the default unless configuration overrides it.
 
 ## `config`
 
-The Operator always renders a canonical v0.3 Router document. Its configuration
+The Operator always renders a canonical v0.5 Router document. Its configuration
 surface has two parts:
 
-- `config.routing` passes through the canonical routing object, including model
-  cards, signals, projections, decisions, algorithms, and route plugins;
-- typed adapter fields such as `response_cache`, `tools`, `prompt_guard`,
-  `classifier`, `complexity_rules`, `reasoning_effort`, `api`,
-  `observability`, and `streamed_body` are translated into their canonical
-  provider or `global` locations.
+- `config.recipes`, `config.entrypoints`, `config.plugins` and `config.models`
+  pass through canonical recipes, entrypoints, `global.plugins` and the facts of
+  provider models; `config.routing` is removed and refused;
+- typed adapter fields such as `response_cache`, `complexity_rules`,
+  `reasoning_effort`, `api`, `observability`, and `streamed_body` are
+  translated into their canonical provider or `global` locations.
 
 Do not assume an arbitrary local `config.yaml` key is valid directly under
 `spec.config`. Use the CRD schema and
@@ -96,6 +96,40 @@ between local YAML and the Operator.
 
 The deprecated `semantic_cache` adapter is retained for compatibility;
 `response_cache` is the canonical field. Do not set both.
+
+### Model deployments and the decision model
+
+`config.model_deployments`, `config.model_bindings` and `config.decision_model`
+become `global.model_catalog.deployments`, `global.model_catalog.bindings` and
+`global.model_catalog.system.decision_model`. They take the same forms as a
+local configuration; see the [model catalog reference](../installation/model-catalog.md).
+The decision model must be a `model_runtime` or `systemone` deployment, and a
+built-in signal that no binding names follows it.
+
+A remote deployment's key never goes in the resource: `auth.api_key_env` names
+a `spec.env` variable filled from a Secret. The Operator mounts no Secret file
+into the Router Pod, so `auth.api_key_file` is not available.
+
+```yaml
+spec:
+  env:
+    - name: SYSTEMONE_KEY
+      valueFrom:
+        secretKeyRef: {name: systemone-credentials, key: api-key}
+  config:
+    model_deployments:
+      d3-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
+        auth: {api_key_env: SYSTEMONE_KEY}
+        timeout_ms: 1500
+      local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
+    decision_model: {deployment: d3-remote}
+    model_bindings:
+      pii: local-vela
+```
 
 ## Status
 

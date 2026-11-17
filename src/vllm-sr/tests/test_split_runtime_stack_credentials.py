@@ -43,8 +43,7 @@ def _stub_valid_container_cli(monkeypatch, tmp_path):
 def _minimal_stack_config(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n"
-        "    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
     return config_path
 
@@ -162,7 +161,7 @@ def test_container_start_vllm_sr_omits_storage_credentials_without_state(
 def _bearer_stack_config(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n"
+        "version: v0.5\nlisteners:\n  - name: http-8899\n"
         "    address: 0.0.0.0\n    port: 8899\n"
         "global:\n  services:\n    management_api:\n"
         "      bind_address: 0.0.0.0\n      port: 8080\n      auth:\n"

@@ -9,15 +9,17 @@ import (
 )
 
 func TestRecipePoliciesRoundTripAndIsolation(t *testing.T) {
-	input := []byte(`version: v0.3
-routing:
-  candidate_requirements: {capabilities: declared}
+	input := []byte(`version: v0.5
 recipes:
+  - name: default
+    candidate_requirements: {capabilities: declared}
   - name: constrained
-    routing:
-      candidate_requirements: {context: known_limits}
+    candidate_requirements: {context: known_limits}
   - name: compatible
-    routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `)
 	cfg, err := ParseYAMLBytes(input)
 	if err != nil {
@@ -70,35 +72,31 @@ func TestCandidateRequirementsRejectInvalidCanonicalPolicies(t *testing.T) {
 			t.Errorf("routing fragment accepted invalid policy: %s", policy)
 		}
 		for _, prefix := range []string{"routing:\n  ", "recipes:\n  - name: isolated\n    routing:\n      "} {
-			input := "version: v0.3\n" + prefix + policy + "\n"
+			input := "version: v0.5\n" + prefix + policy + "\n"
 			if strings.HasPrefix(prefix, "recipes:") {
-				input = "version: v0.3\nrouting: {}\n" + prefix + policy + "\n"
+				input = "version: v0.5\nrouting: {}\n" + prefix + policy + "\n"
 			}
 			if _, err := ParseYAMLBytes([]byte(input)); err == nil {
 				t.Errorf("accepted invalid policy: %s", input)
 			}
 		}
 	}
-	if _, err := ParseYAMLBytes([]byte("version: v0.3\nrouting:\n  data_policy: {replay: false}\nrecipes:\n  - name: default\n    routing: {}\n")); err == nil {
-		t.Fatal("policy-only default scope did not conflict with explicit default recipe")
-	}
 }
 
 func TestModelOutputLimitSurvivesCanonicalAndFragment(t *testing.T) {
-	input := []byte(`version: v0.3
+	input := []byte(`version: v0.5
 providers:
   models:
     - name: local
       backend_refs:
         - name: local
           endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: local
       capabilities: [chat]
       context_window_size: 8192
       max_output_tokens: 1024
-  candidate_requirements: {context: known_limits}
+recipes:
+  - name: default
+    candidate_requirements: {context: known_limits}
 `)
 	cfg, err := ParseYAMLBytes(input)
 	if err != nil {
@@ -107,9 +105,12 @@ routing:
 	if cfg.ModelConfig["local"].MaxOutputTokens != 1024 {
 		t.Fatal("effective catalog lost output limit")
 	}
-	fragment, err := yaml.Marshal(struct {
-		Routing CanonicalRouting `yaml:"routing"`
-	}{CanonicalRoutingFromRouterConfig(cfg)})
+	canonical := CanonicalConfigFromRouterConfig(cfg)
+	facts := CanonicalProviderModel{Name: "local", ModelFacts: canonical.Providers.Models[0].ModelFacts}
+	fragment, err := yaml.Marshal(CanonicalConfig{
+		Providers: CanonicalProviders{Models: []CanonicalProviderModel{facts}},
+		Recipes:   canonical.Recipes,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

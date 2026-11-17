@@ -8,6 +8,8 @@ path the host's numerics take: serving on a bit-identical host, retired on
 one that drifts.
 """
 
+import contextlib
+import logging
 import types
 
 import pytest
@@ -258,6 +260,43 @@ def test_level_2_transition_only_when_serving():
     assert reporter.adopted and reporter._transition == 0
 
 
+def test_the_table_log_names_the_state_the_resolver_is_in(caplog):
+    """The learned-table log says what the learned counts now do.
+
+    ``record`` files each sample under its count in ``counts`` order, so
+    feeding a whole cycle per round times every count. A table that picked
+    only the configured count verifies nothing new: level 2 serves it at
+    once ("serving", no transition), level 1 keeps reporting ("report
+    only"), and a count new to execution first announces its transition.
+    """
+    with caplog.at_level(logging.INFO, logger=adaptive.log.name):
+        server = adaptive.AdaptiveThreads(base=8, explore=12, serve=True)
+        server.start()
+        for _ in range(3):
+            for count in server.counts:  # one record cycle: [1, 2, 4, 8]
+                server.record(16, 1.0 if count == server.base else 5.0)
+        assert server.adopted and server._transition == 0
+        assert "(serving): 0-31: 8 threads" in caplog.text
+
+        caplog.clear()
+        reporter = adaptive.AdaptiveThreads(base=8, explore=12, serve=False)
+        reporter.start()
+        for _ in range(3):
+            for count in reporter.counts:
+                reporter.record(16, 1.0 if count == reporter.base else 5.0)
+        assert "(report only): 0-31: 8 threads" in caplog.text
+        assert "; set --threads to apply them" in caplog.text
+
+        caplog.clear()
+        transitioning = adaptive.AdaptiveThreads(base=8, explore=12, serve=True)
+        transitioning.start()
+        for _ in range(3):
+            for count in transitioning.counts:
+                transitioning.record(16, 1.0 if count == 4 else 5.0)
+        assert transitioning._transition == adaptive._TRANSITION
+        assert "(serving after transition): 0-31: 4 threads" in caplog.text
+
+
 def test_exploration_starts_once_the_runtime_is_ready(
     qwen3_package, monkeypatch, default_cpu_threads
 ):
@@ -381,3 +420,37 @@ def test_opting_in_never_changes_an_answer(
     base = answers(env_on=False)
     adaptive_on = answers(env_on=True)
     assert adaptive_on == base
+
+
+def test_generate_runs_once_at_the_configured_count_untimed(monkeypatch):
+    """Decoding is one pass at the configured count; the resolver never times it."""
+    import threading
+
+    from vllm_srun.engines.native.models.gated_lora import Gate
+
+    from .test_qwen3_5_generate import backbone
+
+    applied: list[int] = []
+    monkeypatch.setattr(adaptive.CpuTeam, "apply", applied.append)
+
+    class Untimed:
+        def pick(self, tokens: int) -> int:
+            raise AssertionError("generate must not consult the thread resolver")
+
+    module = backbone()
+    engine = object.__new__(NativeEngineModel)
+    engine.__dict__.update(
+        lm_head=module.embed_tokens.weight,
+        backbone=module,
+        device=torch.device("cpu"),
+        gate=Gate(),
+        threads_resolver=Untimed(),
+        _cpu_threads=3,
+        _backbone_lock=threading.Lock(),
+    )
+    monkeypatch.setattr(engine, "autocast", contextlib.nullcontext, raising=False)
+    tokens = engine.generate(
+        [[5, 6, 7], [8, 9]], max_new_tokens=3, eos_token_id=None, pad_token_id=0
+    )
+    assert [len(row) for row in tokens] == [3, 3]
+    assert applied == [3]

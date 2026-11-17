@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // Provider computes text embeddings for router runtime features.
@@ -20,15 +18,6 @@ type FuncProvider struct {
 	backend   string
 	dimension int
 	embed     func(context.Context, string) ([]float32, error)
-}
-
-// NewProvider builds the provider of a remote embedding backend. Local
-// embeddings come from the model runtime's prepared set instead.
-func NewProvider(models config.EmbeddingModels) (Provider, error) {
-	if backend := models.EmbeddingBackend(); backend != config.EmbeddingBackendOpenAICompatible {
-		return nil, fmt.Errorf("unsupported embedding backend %q", backend)
-	}
-	return NewOpenAICompatibleProvider(openAICompatibleConfigFromModels(models))
 }
 
 func NewFuncProvider(backend string, dimension int, embed func(context.Context, string) ([]float32, error)) (*FuncProvider, error) {
@@ -64,21 +53,4 @@ func (p *FuncProvider) Dimension() int {
 
 func (p *FuncProvider) Backend() string {
 	return p.backend
-}
-
-func openAICompatibleConfigFromModels(models config.EmbeddingModels) OpenAICompatibleConfig {
-	expectedDimension := models.EmbeddingConfig.TargetDimension
-	if models.Endpoint.Dimensions > 0 {
-		expectedDimension = models.Endpoint.Dimensions
-	}
-	return OpenAICompatibleConfig{
-		BaseURL:           models.Endpoint.BaseURL,
-		Model:             models.Endpoint.Model,
-		APIKeyEnv:         models.Endpoint.APIKeyEnv,
-		TimeoutSeconds:    models.Endpoint.TimeoutSeconds,
-		MaxRetries:        models.Endpoint.MaxRetries,
-		MaxResponseBytes:  models.Endpoint.MaxResponseBytes,
-		Dimensions:        models.Endpoint.Dimensions,
-		ExpectedDimension: expectedDimension,
-	}
 }

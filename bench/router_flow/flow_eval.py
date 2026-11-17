@@ -110,7 +110,7 @@ def chat_completion(
     }
     payload.update(request_extra)
     body = json.dumps(payload).encode()
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "X-VSR-Debug": "true"}
     api_key = os.getenv(api_key_env, "").strip()
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -152,12 +152,11 @@ def usage(completion: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def looper_headers(headers: dict[str, str]) -> dict[str, str]:
-    return {
-        key.lower(): value
-        for key, value in headers.items()
-        if key.lower().startswith("x-vsr-looper")
-    }
+def router_trace(headers: dict[str, str]) -> str:
+    """The Router's x-vsr-trace, which names the Looper's models and settings."""
+    return next(
+        (value for key, value in headers.items() if key.lower() == "x-vsr-trace"), ""
+    )
 
 
 def heuristic_score(answer: str, rubric: str) -> dict[str, Any]:
@@ -287,7 +286,7 @@ def run_eval(args: argparse.Namespace) -> tuple[list[dict[str, Any]], dict[str, 
                     "grade": grade,
                     "latency_ms": round(latency_ms, 1),
                     "usage": usage(completion),
-                    "looper_headers": looper_headers(headers),
+                    "router_trace": router_trace(headers),
                     "error": error,
                     "created": int(started),
                 }

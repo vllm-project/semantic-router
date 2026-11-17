@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 入口
 description: 通过受支持推理 API 的 model 字段，暴露用于选择路由配方的稳定虚拟模型名。
 translation:
@@ -29,21 +30,23 @@ translation:
 
 ## 配置
 
-每个入口列出一个或多个别名，以及它们选择的命名配方：
+每个入口列出一个或多个别名，以及它们选择的配方。有多个配方时，恰好一个 chat 入口标记 `default: true`，其配方就是默认配方：
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names:
       - vllm-sr/mom-v1-flash
       - company/fast
     recipe: flash
-
 recipes:
+  - name: default
   - name: flash
     description: Low-latency routing for interactive requests.
-    routing:
-      strategy: priority
-      decisions: []
+    strategy: priority
+    decisions: []
 ```
 
 两个别名选择同一配方。客户端可以像使用任何其他 chat-completions 模型一样使用任一名称：
@@ -64,13 +67,13 @@ curl http://localhost:8899/v1/chat/completions \
 | 请求的模型 | Router 行为 |
 | --- | --- |
 | `entrypoints[].model_names` 中的值 | 只评估映射的配方。 |
-| 未显式声明 `default` 入口时的 `vllm-sr/auto` | 评估来自顶层 `routing` 的 `default` 配方。 |
+| 只有一个配方且没有其入口时的 `vllm-sr/auto` | 评估该配方。 |
 | 显式声明的 ReMoM、Fusion 或 Flow 入口 | 评估映射的配方，由匹配的决策选择 looper 算法。 |
-| 具体的提供商模型或 LoRA 名称 | 直接发送到该后端，不经过配方路由。 |
+| 具体的提供商模型或 LoRA 名称 | 直接发送到该后端，不经过配方路由。多个模型声明的同一 LoRA 名称会以 `model_not_found` 拒绝；决策通过 `model` 和 `lora_name` 选择它。 |
 
-入口会由 `/v1/models` 列出，并带有路由元数据。成功路由的响应会暴露 `x-vsr-selected-recipe`；路由回放和 Insights 也可以按配方过滤记录。
+入口会由 `/v1/models` 列出，并带有路由元数据。设置 `global.router.list_backend_models: true` 时，该列表还会按名称排序列出直接请求可以送达的每个模型和 LoRA 名称。成功路由的响应会暴露 `x-vsr-selected-recipe`；路由回放和 Insights 也可以按配方过滤记录。
 
-要改名默认入口，声明 `recipe: default` 并设置 `model_names`。这会替换内置的
+要改名默认入口，为标记 `default: true` 的入口设置 `model_names`。这会替换内置的
 `vllm-sr/auto`；如果旧客户端仍需使用它，请显式保留该名称。
 裸 `auto` 和 looper 名称都没有隐式行为。
 

@@ -59,7 +59,7 @@ func OverlayModelBaseline(baseline, current, models *Baseline) error {
 			return fmt.Errorf("a reset model baseline cannot carry measurements")
 		}
 		if len(models.LegacyComparisonRecords) == 0 {
-			return fmt.Errorf("a reset model baseline must cite the legacy-versus-runtime records")
+			return fmt.Errorf("a reset model baseline must cite the records that compare both sides")
 		}
 		baseline.ModelBaselineReset = models.ModelBaselineReset
 		baseline.LegacyComparisonRecords = models.LegacyComparisonRecords

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RECIPES="${RECIPES:-}"
+PROBE_SHARD="${PROBE_SHARD:-}"
 RECIPES_ROOT="${RECIPES_ROOT:-${ROOT_DIR}/config/recipes}"
 ROUTER_IMAGE="${ROUTER_IMAGE:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-docker}"
@@ -82,7 +83,7 @@ configure_management_auth() {
 }
 
 collect_logs() {
-  local destination="${REPORT_ROOT}/$1" container
+  local destination="${REPORT_ROOT}/$1${PROBE_SHARD:+/shards/${PROBE_SHARD%%/*}}" container
   mkdir -p "${destination}"
   for container in ${CONTAINERS}; do
     "${CONTAINER_RUNTIME}" logs "${container}" >"${destination}/${container}.log" 2>&1 || true
@@ -113,6 +114,7 @@ for recipe in "${recipe_names[@]}"; do
   fi
   if ! python3 "${CONFORMANCE}" --recipes-root "${RECIPES_ROOT}" \
     --output-dir "${REPORT_ROOT}" eval --recipe "${recipe}" \
+    ${PROBE_SHARD:+--probe-shard "${PROBE_SHARD}"} \
     --runtime-config "${config}" --router-url "${ROUTER_URL}"; then
     collect_logs "${recipe}"
     exit 1

@@ -20,9 +20,6 @@ func TestSRBenchRoutesUseIndependentServiceAndRetireEvaluation(t *testing.T) {
 	cfg := &config.Config{SRBenchURL: upstream.URL, SRBenchTokenEnv: "BENCH_TEST_TOKEN"}
 	mux := http.NewServeMux()
 	registerSRBenchRoutes(mux, cfg)
-	if !cfg.SRBenchAvailable || cfg.SRBenchUnavailableReason != "" {
-		t.Fatal("configured sr-bench was unavailable")
-	}
 	request := httptest.NewRequest("GET", "/api/sr-bench/v1/catalog", nil)
 	request = request.WithContext(dashboardauth.WithAuthContext(request.Context(), dashboardauth.AuthContext{UserID: "user", Role: dashboardauth.RoleAdmin}))
 	response := httptest.NewRecorder()
@@ -44,9 +41,6 @@ func TestSRBenchMissingAuthenticationFailsClosedWithoutLeakingConfig(t *testing.
 	cfg := &config.Config{SRBenchURL: "http://127.0.0.1:8090", SRBenchTokenEnv: "BENCH_TEST_TOKEN"}
 	mux := http.NewServeMux()
 	registerSRBenchRoutes(mux, cfg)
-	if cfg.SRBenchAvailable || cfg.SRBenchUnavailableReason == "" {
-		t.Fatal("missing token did not disable sr-bench")
-	}
 	request := httptest.NewRequest("GET", "/api/sr-bench/v1/catalog", nil)
 	request = request.WithContext(dashboardauth.WithAuthContext(request.Context(), dashboardauth.AuthContext{UserID: "user", Role: dashboardauth.RoleAdmin}))
 	response := httptest.NewRecorder()

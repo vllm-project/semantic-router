@@ -21,7 +21,7 @@ func TestBundledEmbeddingsOfOneTextFlushAtOnce(t *testing.T) {
 		"emb": {Embedding: &runtimetest.Embedder{Dimensions: []int{8}}},
 	})
 	provider, err := runtime.Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: "default", Name: "embedding", Binding: config.ModelBinding{Deployment: "emb", Contract: "embedding.v1"},
+		Recipe: "default", Name: "embedding", Contract: "embedding.v1", Binding: config.ModelBinding{Deployment: "emb"},
 		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Input: config.ModelInputBudget{Overflow: "truncate"}},
 	}, 0, 0)
 	if err != nil {
@@ -36,8 +36,13 @@ func TestBundledEmbeddingsOfOneTextFlushAtOnce(t *testing.T) {
 	started := time.Now()
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
+	leaves := make([]func(), len(errs))
 	for i := range errs {
-		leave := bundle.Join()
+		leaves[i] = bundle.Join()
+	}
+	// A bundle may flush when all registered participants are waiting, so
+	// register everyone before starting any caller.
+	for i, leave := range leaves {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

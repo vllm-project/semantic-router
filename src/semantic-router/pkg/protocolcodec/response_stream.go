@@ -30,12 +30,15 @@ func (engine *Engine) EncodeResponseStream(
 	if encodeResponseStreamErr != nil {
 		return nil, nil, encodeResponseStreamErr
 	}
+	diagnostics := projectReasoningContinuity(context.Source, format, pair.buffered.Capabilities(), &response)
+	diagnostics = appendDiagnostics(diagnostics,
+		projectReasoningSignature(engine.policy, context.Source, format, pair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(
 		format,
 		pair.buffered.Capabilities(),
 		llmprotocol.RequiredResponseCapabilities(response),
 	); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	context.PublicModel = response.Model
 	context.ResponseID = response.ID
@@ -48,7 +51,6 @@ func (engine *Engine) EncodeResponseStream(
 		return nil, nil, encodeResponseStreamErr
 	}
 	var body bytes.Buffer
-	var diagnostics llmprotocol.Diagnostics
 	for _, event := range events {
 		frames, eventDiagnostics, pushErr := encoder.Push(event)
 		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.policy.Limits.Diagnostics)
@@ -260,7 +262,7 @@ func neutralToolCallEvents(started, completed llmprotocol.Event, content llmprot
 		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_call_missing", "neutral tool call is missing", nil)
 	}
 	call := *content.ToolCall
-	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name}
+	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name, Namespace: call.Namespace}
 	completed.ToolCall = &call
 	delta := started
 	delta.Type = llmprotocol.EventToolCallDelta

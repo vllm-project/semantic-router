@@ -228,15 +228,19 @@ class AudioProcessor:
             audio.Spectrum.from_config(config["clap"], clap=True),
         )
 
-    def features(self, data: bytes, media_type: str | None) -> AudioFeatures | str:
-        if media_type not in (
+    @staticmethod
+    def supports_media_type(media_type: str | None) -> bool:
+        return media_type in (
             None,
             "wav",
             "wave",
             "audio/wav",
             "audio/wave",
             "audio/x-wav",
-        ):
+        )
+
+    def features(self, data: bytes, media_type: str | None) -> AudioFeatures | str:
+        if not self.supports_media_type(media_type):
             return INVALID_INPUT
         try:
             pcm = audio.decode_wav(data)

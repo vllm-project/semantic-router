@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"slices"
 	"testing"
 )
@@ -13,7 +14,16 @@ func TestMultiObjectiveRecipeDefinesObjectiveProfiles(t *testing.T) {
 
 	assertMultiObjectiveMappings(t, cfg)
 	assertMultiObjectivePoolReasoningCapability(t, cfg)
+	assertMultiObjectiveDecisionModel(t, cfg)
 	assertMultiObjectiveRecipes(t, cfg)
+}
+
+func assertMultiObjectiveDecisionModel(t *testing.T, cfg *RouterConfig) {
+	t.Helper()
+	name, deployment, ok, err := cfg.DecisionModelDeployment()
+	if err != nil || !ok || name != "primary" || deployment.Artifact != "vllm-sr/Vela-2.0-0.8B" || (deployment.Device != "" && deployment.Device != "auto") {
+		t.Fatalf("multi-objective decision model = %s %+v %v, want primary Vela-2.0-0.8B with no fixed device", name, deployment, err)
+	}
 }
 
 func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
@@ -25,14 +35,14 @@ func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 		"vllm-sr/mom-v1-ultra": "accuracy-first",
 		"vllm-sr/mom-v1-vault": "privacy-first",
 	}
-	if len(cfg.Entrypoints) != len(expectedEntrypoints) {
-		t.Fatalf("entrypoint count = %d, want %d", len(cfg.Entrypoints), len(expectedEntrypoints))
+	if len(cfg.Entrypoints) != len(expectedEntrypoints)+1 {
+		t.Fatalf("entrypoint count = %d, want %d and the default one", len(cfg.Entrypoints), len(expectedEntrypoints))
 	}
 	if len(cfg.Recipes) != len(expectedEntrypoints)+1 {
-		t.Fatalf("normalized recipe count = %d, want %d named recipes plus internal default", len(cfg.Recipes), len(expectedEntrypoints))
+		t.Fatalf("recipe count = %d, want %d named recipes and the default one", len(cfg.Recipes), len(expectedEntrypoints))
 	}
-	if defaultRecipe := cfg.DefaultRecipe(); defaultRecipe == nil || len(defaultRecipe.Profile.Decisions) != 0 {
-		t.Fatalf("expected decisionless internal default recipe, got %+v", defaultRecipe)
+	if defaultRecipe := cfg.DefaultRecipe(); defaultRecipe == nil || defaultRecipe.Name != DefaultRecipeName || len(defaultRecipe.Profile.Decisions) != 0 {
+		t.Fatalf("expected the empty default recipe, got %+v", defaultRecipe)
 	}
 	if len(cfg.DefaultEntrypointNames()) != 1 || cfg.DefaultEntrypointNames()[0] != DefaultEntrypointModel {
 		t.Fatalf("expected entrypoint-only public catalog, got auto aliases %#v", cfg.DefaultEntrypointNames())
@@ -89,40 +99,22 @@ func assertMultiObjectiveRecipes(t *testing.T, cfg *RouterConfig) {
 	assertMultiObjectivePrivacyRecipe(t, cfg)
 }
 
-func assertMultiObjectiveBalancedRecipe(t *testing.T, cfg *RouterConfig) {
-	t.Helper()
-	balanced, _ := cfg.RecipeByName("balanced")
-	if len(balanced.Profile.Projections.Scores) == 0 || len(balanced.Profile.Projections.Mappings) == 0 {
-		t.Fatal("balanced recipe must derive an effort projection from recipe-local signals")
-	}
-	recovery := multiObjectiveDecision(t, balanced, "unified_balance_recovery")
-	if recovery.HasPlugin(DecisionPluginSystemPrompt) {
-		t.Fatal("balanced recovery route must not mutate the user-visible system prompt")
-	}
-	if rules := balanced.Profile.Signals.FactCheckRules; len(rules) != 1 || rules[0].Name != "needs_fact_check" {
-		t.Fatalf("balanced fact-check rules must use the runtime classifier label: %+v", rules)
-	}
-	if rules := balanced.Profile.Signals.UserFeedbackRules; len(rules) != 1 || rules[0].Name != "wrong_answer" {
-		t.Fatalf("balanced feedback rules must use the runtime classifier label: %+v", rules)
-	}
-	if rules := balanced.Profile.Signals.ComplexityRules; len(rules) != 1 || rules[0].Threshold != 0.08 {
-		t.Fatalf("balanced complexity threshold must use a calibrated margin: %+v", rules)
-	}
-	assertMultiObjectiveLanguageCodes(t, balanced, []string{"zh", "es", "fr", "ja", "de"})
-}
-
 func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	speed, _ := cfg.RecipeByName("speed-first")
+	assertMultiObjectiveQuestions(t, speed, map[string]float64{"heavy": 0.5})
 	speedAlgorithm := multiObjectiveDecision(t, speed, "unified_speed_first_route").Algorithm
 	speedWeights := requireMultiObjectiveMultiFactorWeights(t, speedAlgorithm, "speed-first")
 	if speedWeights.Latency != 0.85 {
 		t.Fatalf("speed-first recipe lost its latency-first selector: %+v", speedWeights)
 	}
 	heavyAlgorithm := multiObjectiveDecision(t, speed, "unified_speed_heavy_route").Algorithm
-	requireMultiObjectiveAlgorithmType(t, heavyAlgorithm, DecisionAlgorithmLatencyAware, "speed-first heavy route")
+	if heavyWeights := requireMultiObjectiveMultiFactorWeights(t, heavyAlgorithm, "speed-first heavy route"); heavyWeights.Latency != 1 {
+		t.Fatalf("speed-first heavy route must choose by latency alone: %+v", heavyWeights)
+	}
 
 	cost, _ := cfg.RecipeByName("cost-first")
+	assertMultiObjectiveQuestions(t, cost, map[string]float64{"depth": 0.6})
 	costOmni := multiObjectiveDecision(t, cost, "omni")
 	if len(costOmni.ModelRefs) != 1 || costOmni.ModelRefs[0].Model != "local/omni" {
 		t.Fatalf("cost-first visual lane must use the dedicated local model: %+v", costOmni.ModelRefs)
@@ -147,7 +139,7 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 			"cost-first decision "+decision.Name,
 		)
 	}
-	if !multiObjectiveDecision(t, cost, "unified_cost_first_route").HasPlugin(DecisionPluginSemanticCache) {
+	if !multiObjectiveDecision(t, cost, "unified_cost_first_route").HasPlugin(DecisionPluginResponseCache) {
 		t.Fatal("cost-first direct route must reuse semantically equivalent answers")
 	}
 }
@@ -155,12 +147,9 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	accuracy, _ := cfg.RecipeByName("accuracy-first")
-	if rules := accuracy.Profile.Signals.FactCheckRules; len(rules) != 0 {
-		t.Fatalf("accuracy recipe must not let learned fact-check classification drive orchestration: %+v", rules)
-	}
-	if rules := accuracy.Profile.Signals.ComplexityRules; len(rules) != 1 || rules[0].Threshold != 0.15 {
-		t.Fatalf("accuracy complexity threshold must use a calibrated margin: %+v", rules)
-	}
+	assertMultiObjectiveQuestions(t, accuracy, map[string]float64{
+		"workflow": 0.7, "mode": 0.7, "verification": 0.9, "depth": 0.5, "quoted": 0.5,
+	})
 	accuracyAlgorithm := multiObjectiveDecision(t, accuracy, "unified_frontier_direct").Algorithm
 	accuracyWeights := requireMultiObjectiveMultiFactorWeights(t, accuracyAlgorithm, "accuracy-first")
 	if accuracyWeights.Quality != 1.0 {
@@ -168,7 +157,7 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	}
 	assertMultiObjectiveVerifiedDecision(t, accuracy)
 	for decisionName, algorithmType := range map[string]string{
-		"unified_frontier_verified_answer": DecisionAlgorithmConfidence,
+		"unified_frontier_verified_answer": DecisionAlgorithmEscalate,
 		"unified_frontier_workflow":        DecisionAlgorithmWorkflows,
 		"unified_frontier_fusion":          DecisionAlgorithmFusion,
 		"unified_frontier_remom":           DecisionAlgorithmReMoM,
@@ -177,26 +166,26 @@ func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 		requireMultiObjectiveAlgorithmType(t, algorithm, algorithmType, "accuracy-first decision "+decisionName)
 	}
 	for _, decision := range accuracy.Profile.Decisions {
-		if decision.HasPlugin(DecisionPluginHallucination) {
+		if guard := decision.GetResponseGuardConfig(); guard != nil && guard.Reads(SignalTypeHallucination) {
 			t.Fatalf(
-				"accuracy-first decision %q must not advertise an unavailable hallucination plugin",
+				"accuracy-first decision %q must not advertise an unavailable hallucination check",
 				decision.Name,
 			)
 		}
 	}
-	assertMultiObjectiveLanguageCodes(t, accuracy, []string{"zh", "es", "fr", "ja", "de"})
 }
 
 func assertMultiObjectiveVerifiedDecision(t *testing.T, accuracy *RoutingRecipe) {
 	t.Helper()
 	verified := multiObjectiveDecision(t, accuracy, "unified_frontier_verified_answer")
-	if len(verified.Rules.Conditions) != 1 ||
-		verified.Rules.Conditions[0].Type != SignalTypeKeyword ||
-		verified.Rules.Conditions[0].Name != "unified_frontier_verification_markers" {
-		t.Fatalf("frontier verification must require explicit user intent: %+v", verified.Rules)
+	if verified.Rules.Operator != "AND" || len(verified.Rules.Conditions) != 2 ||
+		verified.Rules.Conditions[0].Type != SignalTypeSystemOne ||
+		verified.Rules.Conditions[0].Name != "verification" {
+		t.Fatalf("frontier verification must require the user's explicit verification request: %+v", verified.Rules)
 	}
-	if verified.Algorithm == nil || verified.Algorithm.Confidence == nil ||
-		verified.Algorithm.Confidence.ConfidenceMethod != "avg_logprob" {
+	if verified.Algorithm == nil || verified.Algorithm.Escalate == nil || verified.Algorithm.Escalate.Accept == nil ||
+		verified.Algorithm.Escalate.Accept.Confidence == nil ||
+		verified.Algorithm.Escalate.Accept.Confidence.EffectiveMethod() != ConfidenceMethodAverageLogprob {
 		t.Fatalf("frontier verification must use supported streaming confidence: %+v", verified.Algorithm)
 	}
 	verifiedModels := make([]string, 0, len(verified.ModelRefs))
@@ -234,30 +223,12 @@ func requireMultiObjectiveMultiFactorWeights(
 	return algorithm.MultiFactor.Weights
 }
 
-func assertMultiObjectiveLanguageCodes(t *testing.T, recipe *RoutingRecipe, expected []string) {
-	t.Helper()
-	if recipe == nil {
-		t.Fatal("recipe is unavailable")
-	}
-	actual := make([]string, 0, len(recipe.Profile.Signals.LanguageRules))
-	for _, rule := range recipe.Profile.Signals.LanguageRules {
-		actual = append(actual, rule.Name)
-	}
-	for _, code := range expected {
-		if !slices.Contains(actual, code) {
-			t.Fatalf("recipe %q language rules = %v, missing ISO code %q", recipe.Name, actual, code)
-		}
-	}
-}
-
 func assertMultiObjectivePrivacyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	privacy, _ := cfg.RecipeByName("privacy-first")
-	if len(privacy.Profile.Signals.JailbreakRules) != 1 || len(privacy.Profile.Signals.PIIRules) != 1 {
-		t.Fatalf("privacy-first recipe must keep jailbreak and PII signals: %+v", privacy.Profile.Signals)
-	}
-	if len(privacy.Profile.Projections.Scores) == 0 || len(privacy.Profile.Signals.KBRules) != 1 {
-		t.Fatal("privacy-first recipe must derive local policy from detector and KB evidence")
+	assertMultiObjectiveQuestions(t, privacy, map[string]float64{"attack": 0.6, "confidential": 0.5, "personal_data": 0.5})
+	if sensitive := multiObjectiveDecision(t, privacy, "unified_privacy_sensitive_route"); sensitive.Rules.OnUnknown != "match" {
+		t.Fatalf("an unanswered privacy question must keep the request on the local sensitive route: %+v", sensitive.Rules)
 	}
 	for _, decision := range privacy.Profile.Decisions {
 		wantModel := "local/qwen3.5-9b-private"
@@ -284,4 +255,41 @@ func multiObjectiveDecision(t *testing.T, recipe *RoutingRecipe, name string) *D
 	}
 	t.Fatalf("decision %q not found in recipe %q", name, recipe.Name)
 	return nil
+}
+
+func assertMultiObjectiveBalancedRecipe(t *testing.T, cfg *RouterConfig) {
+	t.Helper()
+	balanced, _ := cfg.RecipeByName("balanced")
+	assertMultiObjectiveQuestions(t, balanced, map[string]float64{"correction": 0.6, "deliberate": 0.3, "verification": 0.7})
+	recovery := multiObjectiveDecision(t, balanced, "unified_balance_recovery")
+	if recovery.HasPlugin(DecisionPluginSystemPrompt) {
+		t.Fatal("balanced recovery route must not mutate the user-visible system prompt")
+	}
+	if rules := balanced.Profile.Signals.TurnRelationRules; len(rules) != 1 || rules[0].Name != "unified_balance_reask" {
+		t.Fatalf("balanced recovery must keep the re-ask judgment, which compares the last two user turns: %+v", rules)
+	}
+}
+
+// assertMultiObjectiveQuestions checks that a profile routes on exactly these
+// named decision-model questions, with no keyword, application or projection
+// signals left beside them.
+func assertMultiObjectiveQuestions(t *testing.T, recipe *RoutingRecipe, want map[string]float64) {
+	t.Helper()
+	signals := recipe.Profile.Signals
+	got := map[string]float64{}
+	for _, rule := range signals.SystemOneRules {
+		if rule.Predicate == nil || rule.Predicate.GTE == nil {
+			t.Fatalf("recipe %q question %q has no threshold", recipe.Name, rule.Name)
+		}
+		got[rule.Name] = *rule.Predicate.GTE
+	}
+	if !maps.Equal(got, want) {
+		t.Fatalf("recipe %q decision questions = %v, want %v", recipe.Name, got, want)
+	}
+	legacy := len(signals.KeywordRules) + len(signals.ComplexityRules) +
+		len(signals.LanguageRules) + len(signals.FactCheckRules) + len(signals.UserFeedbackRules) +
+		len(signals.JailbreakRules) + len(signals.PIIRules)
+	if legacy != 0 || len(recipe.Profile.Projections.Scores) != 0 || len(recipe.Profile.Projections.Mappings) != 0 {
+		t.Fatalf("recipe %q still routes on keyword, application or projection signals: %+v", recipe.Name, signals)
+	}
 }

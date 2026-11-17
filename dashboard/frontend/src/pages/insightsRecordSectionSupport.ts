@@ -14,6 +14,11 @@ const SECTION_PRESENTATION: Record<
     secondaryTitle?: string
   }
 > = {
+  'Approval Review': {
+    size: 'wide',
+    description: 'What the agent planned and what the reviewer decided',
+    metricColumns: 4,
+  },
   Lifecycle: { size: 'compact' },
   'Decision Information': { size: 'compact' },
   'Model Selection': { size: 'compact' },
@@ -34,11 +39,17 @@ const SECTION_PRESENTATION: Record<
     size: 'wide',
     description: 'Recorded token usage and configured-rate estimates',
     metricColumns: 4,
-    noteFields: ['Cost basis'],
+    noteFields: ['Cost basis', 'Router calls'],
     secondaryFields: ['Baseline basis', 'Current pricing'],
     secondaryTitle: 'How these estimates are calculated',
   },
   Signals: { size: 'half' },
+  'Provider Prompt Cache': {
+    size: 'wide',
+    description: 'Provider input and output costs, separate from Router response caching',
+    metricColumns: 4,
+    secondaryFields: ['Savings basis'],
+  },
   'Plugin Status': { size: 'half', metricColumns: 3 },
   'Routing Metadata': {
     size: 'wide',

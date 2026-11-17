@@ -39,3 +39,19 @@ func TestListSummaryRecordStripsLargeFields(t *testing.T) {
 		t.Fatalf("expected metadata preserved")
 	}
 }
+
+// A list keeps a review's summary and verdict but not the action's full
+// arguments, and leaves the stored record whole.
+func TestListSummaryRecordDropsReviewArguments(t *testing.T) {
+	rec := RoutingRecord{ID: "review", Review: &Review{
+		Status: "completed", Assessment: &ReviewAssessment{Outcome: "allow"},
+		Action: &ReviewAction{Tool: "exec_command", Summary: "ls", Arguments: `{"command":["ls"]}`, ArgumentsTruncated: true},
+	}}
+	out := ListSummaryRecord(rec)
+	if out.Review.Action.Arguments != "" || out.Review.Action.ArgumentsTruncated || out.Review.Action.Summary != "ls" || out.Review.Outcome() != "allow" {
+		t.Fatalf("summary review = %+v", out.Review.Action)
+	}
+	if rec.Review.Action.Arguments == "" {
+		t.Fatal("the summary changed the stored record")
+	}
+}

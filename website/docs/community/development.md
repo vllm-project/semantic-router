@@ -9,7 +9,8 @@ local validation.
 - Git
 - GNU Make
 - Docker or Podman
-- Python 3.10 or newer for the CLI, tests, training, and simulator tools
+- Python 3.10 or newer for the CLI, tests, and simulator tools, and Python 3.11
+  or newer for the training projects under `src/training/`
 
 The repository bootstrap target creates its Python environment and installs the
 tooling used by the validation harness:
@@ -153,7 +154,7 @@ offset.
 - Inspect component logs with `vllm-sr logs <service>` before relying on
   container names.
 - Inspect worker readiness and failure reasons through the model-runtime status
-  and logs; see [runtime troubleshooting](../model-runtime/troubleshooting.md).
+  and logs; see [runtime troubleshooting](../model-runtime/deploy/troubleshooting.md).
 - Set `SR_LOG_LEVEL=debug` for Router diagnostics.
 - Run `vllm-sr config validate --config <file>` before debugging a configuration at
   runtime.

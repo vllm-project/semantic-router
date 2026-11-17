@@ -190,6 +190,9 @@ export default function DecisionModelCatalog({ model, writable, busy, onDeploy, 
               <span key={task.task_id} title={task.reason} data-supported={task.supported}>
                 {tasks?.tasks.find((item) => item.id === task.task_id)?.title ?? task.task_id}
                 {task.implementation === 'composed_noul' ? ' · composed' : ''}
+                {task.implementation === 'trained' || task.implementation === 'trained_noul'
+                  ? ' · trained'
+                  : ''}
                 {!task.supported ? ' · unavailable' : ''}
               </span>
             ))}

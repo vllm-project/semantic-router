@@ -30,6 +30,7 @@ func EnsureModelsForConfigWithProgressContext(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	PrefetchTokenizers(cfg.ContextWindowTokenizers())
 	logging.ComponentEvent("router", "required_models_check_started", map[string]interface{}{})
 
 	specs, err := BuildModelSpecs(cfg)

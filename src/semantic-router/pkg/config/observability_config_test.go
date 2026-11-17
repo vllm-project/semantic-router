@@ -2,11 +2,9 @@ package config
 
 import "testing"
 
-const profilingConfigBaseYAML = `version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
+const profilingConfigBaseYAML = `version: v0.5
+recipes:
+  - name: default
 providers:
   defaults:
     model: model-a
@@ -15,6 +13,7 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
 `
 
 func TestProfilingDefaultsWhenSectionOmitted(t *testing.T) {

@@ -57,7 +57,7 @@ func init() {
 
 func pickDocument(backend, block string) string {
 	host := strings.TrimPrefix(backend, "http://")
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: http-8899
     address: 127.0.0.1
@@ -76,35 +76,35 @@ providers:
         - endpoint: ` + host + `
           protocol: http
           provider: vllm
-global:
-  stores:
-    semantic_cache:
-      enabled: false
-routing:
-  modelCards:
-    - name: a
-    - name: b
-  signals:
-    keywords:
-      - name: greeting
-        operator: OR
-        keywords: ["hello"]
-  decisions:
-    - name: greet
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: greeting
-      modelRefs:
-        - model: a
-          use_reasoning: false
-        - model: b
-          use_reasoning: false
-      algorithm:
-        type: ` + pickType + `
-` + block
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: greeting
+          operator: OR
+          keywords: ["hello"]
+    decisions:
+      - name: greet
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: greeting
+        modelRefs:
+          - model: a
+            use_reasoning: false
+          - model: b
+            use_reasoning: false
+        algorithm:
+          type: ` + pickType + `
+` + nested(block)
+}
+
+// nested indents a block written for a decision's fields by the recipe
+// item a v0.5 decision sits in.
+func nested(block string) string {
+	return strings.ReplaceAll(strings.TrimSuffix("  "+strings.ReplaceAll(block, "\n", "\n  "), "  "), "\n  \n", "\n\n")
 }
 
 func TestARegisteredAlgorithmChoosesTheCandidate(t *testing.T) {
@@ -113,7 +113,7 @@ func TestARegisteredAlgorithmChoosesTheCandidate(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
 		mu.Lock()
-		selected = r.Header.Get("X-Selected-Model")
+		selected = r.Header.Get("X-Vsr-Route-Model")
 		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, completion)

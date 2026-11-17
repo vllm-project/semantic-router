@@ -1,0 +1,1 @@
+listeners[decisions].systemone: removed_field: a listener's systemone block is its systemone API; run `vllm-sr config migrate` (apis: {systemone: {schema: vllm-sr/4.0, models: [...], max_deadline_ms: ...}} next to the LLM APIs it serves)

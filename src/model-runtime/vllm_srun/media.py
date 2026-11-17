@@ -4,7 +4,7 @@ A family hands decoding (a module-level function and picklable arguments) to
 ``submit``. With workers it runs in one of the process's media worker
 processes, so decoding and resizing several images at once neither holds the
 interpreter lock the request threads and the device worker share nor waits
-for one preprocessing thread; without workers it runs on the calling thread.
+for the CPU device thread; without workers it runs on the calling thread.
 Either way the caller gets a future. Tensors come back through PyTorch's
 shared-memory pickling, so a decoded image is not copied through a pipe.
 
@@ -133,8 +133,12 @@ def _discard(pool: ProcessPoolExecutor | None) -> None:
 
 
 def stop() -> None:
-    """Stop the workers; later decoding starts them again if workers are configured."""
+    """Stop the workers and wait for them to exit; later decoding starts them again if workers are configured.
+
+    The server re-raises its stop signal right after the runtime stops, so a
+    worker still exiting then outlives it as an orphan.
+    """
     with _state.lock:
         pool, _state.pool = _state.pool, None
     if pool is not None:
-        pool.shutdown(wait=False, cancel_futures=True)
+        pool.shutdown(wait=True, cancel_futures=True)

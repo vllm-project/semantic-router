@@ -9,7 +9,7 @@ import (
 func TestReplicaAliasesPreserveObservedNativeProvenance(t *testing.T) {
 	meta := `{"revision":"revision-a","model_sha256":"` + strings.Repeat("a", 64) + `","engine":"native","dtype":"float32","numerics":"exact","accelerator":"cpu"}`
 	answers := `{"meta":{"type":"noul","noul":0.9,"extension":{"meta":"answer data"}}}`
-	native := `{"model":"native-artifact","meta":` + meta + `,"answers":` + answers + `,"states":{"meta":{"model":"native-artifact","meta":` + meta + `,"answers":` + answers + `}}}`
+	native := `{"model":"native-artifact","meta":` + meta + `,"states":{"meta":{"model":"native-artifact","meta":` + meta + `,"answers":` + answers + `}}}`
 	for _, bundle := range []bool{false, true} {
 		t.Run(map[bool]string{false: "native", true: "bundle"}[bundle], func(t *testing.T) {
 			body := []byte(native)
@@ -42,9 +42,9 @@ func TestReplicaAliasesPreserveObservedNativeProvenance(t *testing.T) {
 				if string(envelope["model"]) != `"public-alias"` || string(provenance["model_id"]) != `"native-artifact"` {
 					t.Fatalf("identity lost through alias hops: %s", body)
 				}
-				if string(envelope["answers"]) != answers {
-					t.Fatalf("answer payload changed: %s", body)
-				}
+			}
+			if string(states["meta"]["answers"]) != answers {
+				t.Fatalf("answer payload changed: %s", body)
 			}
 		})
 	}

@@ -1,0 +1,41 @@
+# Reuse the profile's provider-mocker for both STREAMED and FULL_DUPLEX_STREAMED.
+# It emits a stable response ID, finish reason and [DONE], as required for a
+# completed stream to enter the response cache. The shared llm-d simulator
+# generates a new ID for each chunk and cannot qualify this contract.
+# full-duplex.yaml owns the Deployment; the profile waits for it to be ready.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-llama3-8b-instruct
+  namespace: default
+spec:
+  selector:
+    app: full-duplex-selected
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: vllm-llama3-8b-instruct
+  namespace: default
+spec:
+  schema:
+    name: OpenAI
+  backendRef:
+    name: vllm-llama3-8b-instruct
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: vllm-llama3-8b-instruct
+  namespace: default
+spec:
+  endpoints:
+  - fqdn:
+      hostname: vllm-llama3-8b-instruct.default.svc.cluster.local
+      port: 8000

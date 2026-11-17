@@ -6,18 +6,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from cli.config_schema import routing_surface_catalog, schema_document
+from cli.config_schema import routing_surface_catalog
 
 CANONICAL_VERSION = str(routing_surface_catalog()["config_version"])
-
-CLASSIFIER_TYPE_LOCAL = "local"
-CLASSIFIER_TYPE_LLM = "llm"
-CLASSIFIER_TYPE_SEQUENCE = "sequence_classifier"
-ClassifierSignalType = Literal[
-    "local",
-    "llm",
-    "sequence_classifier",
-]
 
 UNKNOWN_POLICY_VALUES = ("no_match", "match", "fail_request")
 UnknownPolicy = Literal["no_match", "match", "fail_request"]
@@ -30,38 +21,6 @@ QuorumFailurePolicy = Literal["fail", "fallback"]
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
 
-CANONICAL_TOP_LEVEL_KEYS = frozenset(schema_document()["properties"])
-
-LEGACY_PROVIDER_DEFAULT_KEYS = (
-    "default_model",
-    "reasoning_families",
-    "default_reasoning_effort",
-)
-
-LEGACY_PROVIDER_KEYS = frozenset(
-    {
-        *LEGACY_PROVIDER_DEFAULT_KEYS,
-        "model_config",
-        "vllm_endpoints",
-        "provider_profiles",
-    }
-)
-
-LEGACY_PROVIDER_MODEL_SURFACE_KEYS = frozenset(
-    {
-        "endpoints",
-        "access_key",
-        "param_size",
-        "context_window_size",
-        "description",
-        "capabilities",
-        "loras",
-        "quality_score",
-        "modality",
-        "tags",
-    }
-)
-
 
 @dataclass(frozen=True)
 class SignalFamilySpec:
@@ -71,8 +30,6 @@ class SignalFamilySpec:
     signal_attr: str
     condition_type: str
     display_name: str
-    legacy_key: str | None = None
-    reference_suffixes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -84,39 +41,12 @@ class ProjectionFamilySpec:
     display_name: str
 
 
-_LEGACY_SIGNAL_KEYS = {
-    "keywords": "keyword_rules",
-    "embeddings": "embedding_rules",
-    "domains": "categories",
-    "fact_check": "fact_check_rules",
-    "user_feedbacks": "user_feedback_rules",
-    "reasks": "reask_rules",
-    "preferences": "preference_rules",
-    "language": "language_rules",
-    "context": "context_rules",
-    "structure": "structure_rules",
-    "complexity": "complexity_rules",
-    "modality": "modality_rules",
-    "role_bindings": "role_bindings",
-    "jailbreak": "jailbreak",
-    "hallucination": "hallucination",
-    "pii": "pii",
-    "kb": "kb",
-    "conversation": "conversation",
-    "events": "events",
-    "metadata": "metadata",
-    "classifiers": "classifiers",
-    "input_modality": "input_modality",
-}
-
 SIGNAL_FAMILY_SPECS = tuple(
     SignalFamilySpec(
         canonical_key=surface["collection"],
         signal_attr=surface["collection"],
         condition_type=surface["type"],
         display_name=surface["display_name"],
-        legacy_key=_LEGACY_SIGNAL_KEYS.get(surface["collection"]),
-        reference_suffixes=tuple(surface.get("reference_suffixes", ())),
     )
     for surface in routing_surface_catalog()["signals"]
 )
@@ -130,26 +60,18 @@ PROJECTION_FAMILY_SPECS = tuple(
     for surface in routing_surface_catalog()["projections"]
 )
 
-LEGACY_SIGNAL_KEY_TO_CANONICAL = {
-    spec.legacy_key: spec.canonical_key
-    for spec in SIGNAL_FAMILY_SPECS
-    if spec.legacy_key is not None
-}
-
-LEGACY_ROUTING_KEYS = frozenset(
-    {"signals", "decisions", *LEGACY_SIGNAL_KEY_TO_CANONICAL}
-)
-
 _SIGNAL_FAMILY_BY_CONDITION_TYPE = {
     spec.condition_type: spec for spec in SIGNAL_FAMILY_SPECS
 }
 
 
 def iter_routing_profiles(config: Any) -> Iterable[tuple[str, Any]]:
-    """Yield the default and named routing profiles through one contract."""
-    yield "default", config.routing
+    """Yield each recipe by name; a document without recipes routes through an
+    empty recipe named default."""
+    if not config.recipes:
+        yield "default", config.default_recipe
     for recipe in config.recipes:
-        yield recipe.name, recipe.routing
+        yield recipe.name, recipe
 
 
 def iter_condition_leaves(conditions: Any) -> Iterable[Any]:
@@ -162,6 +84,11 @@ def iter_condition_leaves(conditions: Any) -> Iterable[Any]:
             yield condition
 
 
+# The Router emits a matched role binding's role, never the binding's name, so
+# authz conditions reference the role.
+_SIGNAL_REFERENCE_FIELDS = {"role_bindings": "role"}
+
+
 def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:
     """Index valid decision references by canonical condition type."""
     names: dict[str, set[str]] = {}
@@ -170,15 +97,11 @@ def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:
 
     for spec in SIGNAL_FAMILY_SPECS:
         family_names = names.setdefault(spec.condition_type, set())
+        field = _SIGNAL_REFERENCE_FIELDS.get(spec.signal_attr, "name")
         for signal in getattr(signals, spec.signal_attr, None) or []:
-            name = getattr(signal, "name", None)
-            if not name:
-                continue
-            if spec.reference_suffixes:
-                for suffix in spec.reference_suffixes:
-                    family_names.add(f"{name}:{suffix}")
-                continue
-            family_names.add(name)
+            name = getattr(signal, field, None)
+            if name:
+                family_names.add(name)
 
     return names
 

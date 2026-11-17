@@ -24,7 +24,7 @@ type Request struct {
 	Header http.Header
 	// Body is the complete request body. Every attempt sends it again.
 	Body []byte
-	// RouteKey selects the cluster (the x-selected-model value). An empty key,
+	// RouteKey selects the cluster (the x-vsr-route-model value). An empty key,
 	// or one no cluster serves, takes the default route.
 	RouteKey string
 	// ExactRoute rejects an unknown route key instead of using the default
@@ -41,16 +41,11 @@ type Request struct {
 	Policy *Policy
 }
 
-// internalRequestHeaders never reach a model backend: the Envoy template
-// removes them from every upstream request.
-var internalRequestHeaders = []string{
-	headers.VSRLooperRequest,
-	"x-vsr-looper-secret",
-	headers.VSRLooperDecision,
-	headers.VSRLooperIteration,
-	headers.AuthzUserID,
-	headers.AuthzUserGroups,
-}
+// keptFromProviders never reach a model backend (headers.KeptFromProviders):
+// the Router's control and internal headers, identity and secrets. A
+// cluster's RemoveHeaders add the identity header names the configuration
+// reads.
+var keptFromProviders = headers.KeptFromProviders()
 
 // hopByHopHeaders are scoped to one connection and are never forwarded.
 var hopByHopHeaders = []string{
@@ -87,9 +82,9 @@ func invalidTargetRune(r rune) bool { return r <= ' ' || r == 0x7f }
 
 // outbound builds the request for one attempt against one endpoint, applying
 // the route behavior of the Envoy template in its order: route headers are
-// set (replacing existing values), internal headers are removed, the host is
-// rewritten to the endpoint's authority, and the default route rewrites a
-// /v1 path onto the provider's base path.
+// set (replacing existing values), headers kept from providers are removed,
+// the host is rewritten to the endpoint's authority, and the default route
+// rewrites a /v1 path onto the provider's base path.
 func outbound(ctx context.Context, req *Request, spec *ClusterSpec, ep *EndpointSpec, defaultRoute bool) (*http.Request, error) {
 	target := req.Path
 	if defaultRoute {
@@ -103,7 +98,10 @@ func outbound(ctx context.Context, req *Request, spec *ClusterSpec, ep *Endpoint
 	for _, h := range spec.RouteHeaders {
 		header.Set(h.Name, h.Value)
 	}
-	for _, name := range internalRequestHeaders {
+	for _, name := range keptFromProviders {
+		header.Del(name)
+	}
+	for _, name := range spec.RemoveHeaders {
 		header.Del(name)
 	}
 	body := req.Body

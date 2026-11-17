@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 
+from cli.config_contract import CANONICAL_VERSION
 from cli.consts import DEFAULT_LISTENER_PORT
 
 SETUP_MODE_ENV = "VLLM_SR_SETUP_MODE"
@@ -43,7 +44,7 @@ def build_bootstrap_config(port: int = DEFAULT_SETUP_LISTENER_PORT) -> dict[str,
     """Build the minimal config needed for dashboard-first setup."""
 
     return {
-        "version": "v0.3",
+        "version": CANONICAL_VERSION,
         "listeners": [
             {
                 "name": f"http-{port}",
@@ -81,7 +82,7 @@ def _load_yaml_dict(config_path: Path) -> dict[str, Any]:
     if not config_path.exists():
         return {}
 
-    with open(config_path) as f:
+    with open(config_path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
     return data if isinstance(data, dict) else {}
@@ -117,7 +118,7 @@ def ensure_bootstrap_workspace(
 
     if not path.exists():
         bootstrap_config = build_bootstrap_config()
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             yaml.safe_dump(bootstrap_config, f, sort_keys=False)
         created_config = True
 
