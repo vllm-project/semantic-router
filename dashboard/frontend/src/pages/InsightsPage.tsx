@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
-import ProductLoadingState from '../components/ProductLoadingState'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
 import InsightsEmptyState from './InsightsEmptyState'
+import InsightsSkeleton from './InsightsSkeleton'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import {
@@ -244,16 +244,21 @@ export default function InsightsPage() {
     [navigate],
   )
 
+  const layout = {
+    eyebrow: 'Insights',
+    title: 'Insights',
+    description: 'See what the router picked, what signals fired, and how much it saved.',
+  }
   if (loading && !hasReplayData && records.length === 0) {
-    return <ProductLoadingState label="Loading insights" />
+    return (
+      <ConfigPageManagerLayout {...layout}>
+        <InsightsSkeleton />
+      </ConfigPageManagerLayout>
+    )
   }
 
   return (
-    <ConfigPageManagerLayout
-      eyebrow="Insights"
-      title="Insights"
-      description="See what the router picked, what signals fired, and how much it saved."
-    >
+    <ConfigPageManagerLayout {...layout}>
       {error ? (
         <div className={styles.error}>
           <span>{error}</span>
@@ -261,7 +266,7 @@ export default function InsightsPage() {
       ) : null}
 
       {aggregate ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<InsightsSkeleton />}>
           <InsightsCharts aggregate={aggregate} />
         </Suspense>
       ) : null}

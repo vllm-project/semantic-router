@@ -21,6 +21,11 @@ const (
 	// of long prompts cannot exhaust the router's memory. 0 means no limit.
 	DefaultMaxPromptBytes   = 64 << 10
 	DefaultOperationTimeout = 5 * time.Second
+	// DefaultReadTimeout bounds a management read: a page, a session or a
+	// scan of the whole retained history. A read holds the router generation
+	// that serves it until it returns, so the bound stays under the
+	// generation's 30 s drain budget.
+	DefaultReadTimeout = 25 * time.Second
 	// DefaultMaxToolTraceSteps caps the number of ToolTraceStep entries kept
 	// per record. Long agent sessions can otherwise produce hundreds of
 	// steps and OOM the router process (see issue #1835). 0 means no limit;
@@ -92,6 +97,9 @@ type recorderState struct {
 	// request. It is immutable after construction in production; tests may
 	// shorten it before issuing operations to exercise stalled backends.
 	operationTimeout time.Duration
+	// readTimeout bounds management reads; tests may shorten it like
+	// operationTimeout.
+	readTimeout time.Duration
 
 	lifecycleMu          sync.Mutex
 	lifecycleTransitions map[string]*lifecycleTransition
@@ -109,6 +117,7 @@ func NewRecorder(storage store.Storage) *Recorder {
 			storage:              storage,
 			outcomes:             newOutcomeQueue(DefaultOutcomeQueueCapacity, outcomeShutdownGrace),
 			operationTimeout:     DefaultOperationTimeout,
+			readTimeout:          DefaultReadTimeout,
 			lifecycleTransitions: make(map[string]*lifecycleTransition),
 		},
 		maxBodyBytes:      DefaultMaxBodyBytes,
@@ -516,6 +525,17 @@ func (r *Recorder) replayOperationContextFrom(parent context.Context) (context.C
 	timeout := r.operationTimeout
 	if timeout <= 0 {
 		timeout = DefaultOperationTimeout
+	}
+	return context.WithTimeout(parent, timeout)
+}
+
+// replayReadContext bounds a read by DefaultReadTimeout rather than the write
+// bound: a read follows its caller, so a client that leaves stops the read,
+// while a large but healthy history still gets the time a full scan takes.
+func (r *Recorder) replayReadContext(parent context.Context) (context.Context, context.CancelFunc) {
+	timeout := r.readTimeout
+	if timeout <= 0 {
+		timeout = DefaultReadTimeout
 	}
 	return context.WithTimeout(parent, timeout)
 }

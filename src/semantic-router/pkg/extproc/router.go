@@ -116,6 +116,10 @@ type OpenAIRouter struct {
 	RecipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
 	fallbackCaller              fallbackTransportCaller
 
+	// replayAggregates keeps this generation's recent answers to the replay
+	// aggregate, which scans the whole history.
+	replayAggregates replayReadCache[routerReplayAggregateResponse]
+
 	routerLearningMu      sync.Mutex
 	routerLearningRuntime *routerLearningRuntime
 	generation            *routerGeneration

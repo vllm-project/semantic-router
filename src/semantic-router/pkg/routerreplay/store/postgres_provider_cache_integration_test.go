@@ -118,7 +118,7 @@ func TestPostgresProviderCacheIntegration(t *testing.T) {
 		t.Fatalf("summary list returned the record %d times", listed)
 	}
 	scanned := 0
-	if err = postgres.ScanMetadata(ctx, func(metadata Record) error {
+	if err = postgres.ScanMetadata(ctx, QueryFilters{}, func(metadata Record) error {
 		switch metadata.RequestID {
 		case record.RequestID:
 			scanned++

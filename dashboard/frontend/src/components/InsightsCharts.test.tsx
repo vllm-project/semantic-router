@@ -42,7 +42,7 @@ describe('Insights cost charts', () => {
     }
     const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
     expect(html).toContain('&lt;$0.0001')
-    expect(html).toContain('>$0.0000<')
+    expect(html).toContain('>$0.00<')
   })
 
   it('keeps missing pricing unknown and states the estimate and lifecycle scope', () => {
@@ -93,6 +93,45 @@ describe('Insights cost charts', () => {
     expect(html).toContain('no exchange-rate conversion is applied')
     expect(html).toContain('$10.00')
     expect(html).not.toContain('$11.00')
+  })
+
+  it('shows prices that name no currency as plain amounts in price units', () => {
+    const summary = {
+      total_saved: 579.0035,
+      baseline_spend: 1740.2211,
+      actual_spend: 1161.2176,
+      currency: 'XXX',
+      cost_record_count: 610147,
+      excluded_record_count: 57906,
+    }
+    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
+    expect(html).toContain('>579.00<')
+    expect(html).toContain('>1,740.22<')
+    expect(html).toContain('>1,161.22<')
+    expect(html).toContain('Price units')
+    expect(html).not.toMatch(/XXX(\s|&nbsp;|\u00a0)?[0-9]/)
+    expect(html).toContain('57,906 filtered records excluded')
+  })
+
+  it('ranks each distribution with its share of the filtered records', () => {
+    const html = renderToStaticMarkup(
+      <InsightsCharts
+        aggregate={{
+          ...aggregate,
+          record_count: 4000,
+          model_selection: [
+            { name: 'model-b', value: 1000 },
+            { name: 'model-a', value: 3000 },
+          ],
+          decision_distribution: [{ name: 'agents::code', value: 4000 }],
+        }}
+      />,
+    )
+    expect(html.indexOf('model-a')).toBeLessThan(html.indexOf('model-b'))
+    expect(html).toContain('3,000')
+    expect(html).toContain('75.0%')
+    expect(html).toContain('100.0%')
+    expect(html).toContain('4,000 records')
   })
 
   it('continues rendering a single-currency flat summary', () => {

@@ -1,45 +1,44 @@
+import type { CSSProperties } from 'react'
+
 import type {
   InsightsAggregateProviderCache,
   InsightsProviderCacheCurrencyTotal,
   InsightsProviderCacheSpendEntry,
 } from '../pages/insightsPageTypes'
 import styles from './InsightsCharts.module.css'
-import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
+import { InsightsStatGrid, InsightsUnitsBadge, type InsightsStat } from './InsightsStats'
+import {
+  formatInsightsCost,
+  formatInsightsCount,
+  formatInsightsShare,
+  insightsCurrencyLabel,
+} from '../utils/insightsCost'
 
 interface InsightsProviderCacheSummaryProps {
   summary?: InsightsAggregateProviderCache
 }
 
-const netClassName = (value: number) =>
-  value < 0 ? styles.summaryValueNegative : styles.summaryValuePositive
+const netTone = (value: number) => (value < 0 ? ('negative' as const) : undefined)
 
-const formatNetShare = (group: InsightsProviderCacheCurrencyTotal) =>
-  group.no_cache_spend > 0 ? `${((group.net_savings / group.no_cache_spend) * 100).toFixed(1)}%` : 'N/A'
-
-const providerCacheCards = (group: InsightsProviderCacheCurrencyTotal) => [
+const providerCacheStats = (group: InsightsProviderCacheCurrencyTotal): InsightsStat[] => [
   {
     label: 'Net Cache Saving',
-    value: formatCurrency(group.net_savings, group.currency),
-    accentClassName: netClassName(group.net_savings),
-    cardClassName: '',
+    value: formatInsightsCost(group.net_savings, group.currency, { total: true }),
+    lead: true,
+    tone: netTone(group.net_savings),
   },
   {
     label: 'Net Saved %',
-    value: formatNetShare(group),
-    accentClassName: netClassName(group.net_savings),
-    cardClassName: styles.summaryCardHighlight,
+    value: formatInsightsShare(group.net_savings, group.no_cache_spend),
+    tone: netTone(group.net_savings),
   },
   {
     label: 'No-Cache Estimate',
-    value: formatCurrency(group.no_cache_spend, group.currency),
-    accentClassName: '',
-    cardClassName: '',
+    value: formatInsightsCost(group.no_cache_spend, group.currency, { total: true }),
   },
   {
     label: 'Provider Cost',
-    value: formatCurrency(group.actual_spend, group.currency),
-    accentClassName: styles.summaryValueNeutral,
-    cardClassName: '',
+    value: formatInsightsCost(group.actual_spend, group.currency, { total: true }),
   },
 ]
 
@@ -49,39 +48,61 @@ interface SpendTableProps {
   entries: InsightsProviderCacheSpendEntry[]
 }
 
+// One currency names its columns and leaves the cells bare; mixed currencies
+// keep theirs in each cell. A row's bar is its net saving against the largest.
 function SpendTable({ title, nameLabel, entries }: SpendTableProps) {
+  const currencies = new Set(entries.map((entry) => entry.currency))
+  const shared = currencies.size === 1
+  const unit = shared ? insightsCurrencyLabel(entries[0]?.currency) : ''
+  const heading = (label: string) => (unit ? `${label} (${unit})` : label)
+  const amount = (value: number, currency: string) =>
+    formatInsightsCost(value, currency, { total: true, bare: shared })
+  const peak = Math.max(0, ...entries.map((entry) => Math.abs(entry.net_savings)))
+  const bar = (value: number) =>
+    ({ '--share': peak > 0 ? Math.abs(value) / peak : 0 }) as CSSProperties
   return (
     <div className={styles.chartSection}>
-      <h3 className={styles.chartTitle}>{title}</h3>
-      <table className={styles.spendTable}>
-        <thead>
-          <tr>
-            <th scope="col">{nameLabel}</th>
-            <th scope="col">Requests</th>
-            <th scope="col">No-cache</th>
-            <th scope="col">Provider cost</th>
-            <th scope="col">Net saving</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <tr key={`${entry.name}\u0000${entry.currency}`}>
-              <th scope="row">{entry.name}</th>
-              <td>{entry.priced_records.toLocaleString('en-US')}</td>
-              <td>{formatCurrency(entry.no_cache_spend, entry.currency)}</td>
-              <td>{formatCurrency(entry.actual_spend, entry.currency)}</td>
-              <td className={entry.net_savings < 0 ? styles.spendNegative : undefined}>
-                {formatCurrency(entry.net_savings, entry.currency)}
-              </td>
+      <h4 className={styles.chartTitle}>{title}</h4>
+      <div className={styles.tableScroll}>
+        <table className={styles.spendTable}>
+          <thead>
+            <tr>
+              <th scope="col">{nameLabel}</th>
+              <th scope="col">Requests</th>
+              <th scope="col">{heading('No-cache')}</th>
+              <th scope="col">{heading('Provider cost')}</th>
+              <th scope="col">{heading('Net saving')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {entries.map((entry) => (
+              <tr key={`${entry.name}\u0000${entry.currency}`}>
+                <th scope="row">{entry.name}</th>
+                <td>{formatInsightsCount(entry.priced_records)}</td>
+                <td>{amount(entry.no_cache_spend, entry.currency)}</td>
+                <td>{amount(entry.actual_spend, entry.currency)}</td>
+                <td
+                  className={
+                    entry.net_savings < 0
+                      ? `${styles.spendNegative} ${styles.spendBarNegative}`
+                      : styles.spendBar
+                  }
+                  style={bar(entry.net_savings)}
+                >
+                  {amount(entry.net_savings, entry.currency)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
 
-export default function InsightsProviderCacheSummary({ summary }: InsightsProviderCacheSummaryProps) {
+export default function InsightsProviderCacheSummary({
+  summary,
+}: InsightsProviderCacheSummaryProps) {
   if (!summary || summary.priced_records === 0) {
     return null
   }
@@ -98,11 +119,14 @@ export default function InsightsProviderCacheSummary({ summary }: InsightsProvid
       ]
 
   return (
-    <section className={styles.providerCacheSection} aria-label="Provider prompt cache">
-      <h3 className={styles.chartTitle}>Provider Prompt Cache</h3>
+    <section className={styles.block} aria-label="Provider prompt cache">
+      <header className={styles.blockHeader}>
+        <h3 className={styles.blockTitle}>Provider Prompt Cache</h3>
+        <InsightsUnitsBadge currencies={groups.map((group) => group.currency)} />
+      </header>
       <div className={styles.estimateContext}>
         <p className={styles.summaryHint}>
-          Net saving over {summary.priced_records.toLocaleString('en-US')} settled request
+          Net saving over {formatInsightsCount(summary.priced_records)} settled request
           {summary.priced_records === 1 ? '' : 's'}: what the same model would have cost without
           prompt caching, minus what the provider cache actually cost.
         </p>
@@ -117,23 +141,13 @@ export default function InsightsProviderCacheSummary({ summary }: InsightsProvid
         </details>
       </div>
       {groups.map((group) => (
-        <div key={group.currency || 'unavailable'}>
+        <div key={group.currency || 'unavailable'} className={styles.group}>
           {groups.length > 1 ? (
-            <h3 className={styles.chartTitle}>{group.currency} provider cache</h3>
+            <h4 className={styles.chartTitle}>
+              {insightsCurrencyLabel(group.currency) || 'Price unit'} provider cache
+            </h4>
           ) : null}
-          <div className={styles.summaryGrid}>
-            {providerCacheCards(group).map((card) => (
-              <article
-                key={card.label}
-                className={`${styles.summaryCard} ${card.cardClassName}`.trim()}
-              >
-                <span className={styles.summaryLabel}>{card.label}</span>
-                <strong className={`${styles.summaryValue} ${card.accentClassName}`.trim()}>
-                  {card.value}
-                </strong>
-              </article>
-            ))}
-          </div>
+          <InsightsStatGrid stats={providerCacheStats(group)} />
           {group.net_savings < 0 ? (
             <p className={styles.summaryHint}>
               Cache writes cost more than cache reads saved across these requests.
@@ -143,13 +157,17 @@ export default function InsightsProviderCacheSummary({ summary }: InsightsProvid
       ))}
       {summary.excluded_records > 0 ? (
         <p className={styles.summaryHint}>
-          {summary.excluded_records.toLocaleString('en-US')} filtered record
+          {formatInsightsCount(summary.excluded_records)} filtered record
           {summary.excluded_records === 1 ? '' : 's'} excluded: not completed, served from the
           Router cache, or without complete provider usage and prices.
         </p>
       ) : null}
       <div className={styles.tokenBreakdownRow}>
-        <SpendTable title="Net Saving by Decision" nameLabel="Decision" entries={summary.by_decision} />
+        <SpendTable
+          title="Net Saving by Decision"
+          nameLabel="Decision"
+          entries={summary.by_decision}
+        />
         <SpendTable
           title="Net Saving by Selected Model"
           nameLabel="Model"

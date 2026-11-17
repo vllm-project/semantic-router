@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func newTrajectoryTestRouter(t *testing.T) (*OpenAIRouter, string) {
 func TestHandleRouterReplayTrajectoryConvertsToolTraceToOpenAIMessages(t *testing.T) {
 	router, sessionID := newTrajectoryTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate trajectory response")
 	}
@@ -128,7 +129,7 @@ func TestHandleRouterReplayTrajectoryCoalescesConsecutiveToolCalls(t *testing.T)
 		ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder},
 	}
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate trajectory response")
 	}
@@ -189,7 +190,7 @@ func TestHandleRouterReplayTrajectoryDoesNotReparseStoredWireBodies(t *testing.T
 		ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder},
 	}
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate trajectory response")
 	}
@@ -234,7 +235,7 @@ func TestHandleRouterReplayTrajectoryCollapsesCumulativeToolLoopRecords(t *testi
 	}
 
 	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder}}
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
 	assertIntField(t, body, "record_count", 2)
 	assertIntField(t, body, "turn_count", 1)
@@ -251,7 +252,7 @@ func TestHandleRouterReplayTrajectoryCollapsesCumulativeToolLoopRecords(t *testi
 func TestHandleRouterReplayTrajectoryReturnsEmptyMessagesForUnknownSession(t *testing.T) {
 	router, _ := newTrajectoryTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id=unknown")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id=unknown")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate trajectory response")
 	}
@@ -269,7 +270,7 @@ func TestHandleRouterReplayTrajectoryReturnsEmptyMessagesForUnknownSession(t *te
 func TestHandleRouterReplayTrajectoryMethodNotAllowed(t *testing.T) {
 	router, sessionID := newTrajectoryTestRouter(t)
 
-	response := router.handleRouterReplayAPI("POST", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "POST", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}
@@ -281,7 +282,7 @@ func TestHandleRouterReplayTrajectoryMethodNotAllowed(t *testing.T) {
 func TestHandleRouterReplayTrajectoryMissingSessionID(t *testing.T) {
 	router, _ := newTrajectoryTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}

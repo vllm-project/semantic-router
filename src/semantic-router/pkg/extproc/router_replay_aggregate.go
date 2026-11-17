@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"math"
 	"net/url"
 	"sort"
@@ -26,6 +27,7 @@ type routerReplayAggregateTokenBuckets = routerreplay.AggregateTokenBuckets
 type routerReplayAggregateTokenEntry = routerreplay.AggregateTokenEntry
 
 func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
+	ctx context.Context,
 	method string,
 	rawQuery string,
 ) *ext_proc.ProcessingResponse {
@@ -42,7 +44,9 @@ func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 		return r.createErrorResponse(400, err.Error())
 	}
 
-	payload, err := r.queryRouterReplayAggregate(filters)
+	payload, err := r.replayAggregates.get(ctx, filters.cacheKey(), func(ctx context.Context) (routerReplayAggregateResponse, error) {
+		return r.queryRouterReplayAggregate(ctx, filters)
+	})
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
@@ -75,18 +79,7 @@ func buildRouterReplayLifecycleSummary(
 ) routerReplayLifecycleSummary {
 	summary := routerReplayLifecycleSummary{}
 	for _, record := range records {
-		switch record.LifecycleState {
-		case routerreplay.LifecycleCompleted:
-			summary.Completed++
-		case routerreplay.LifecycleFailed:
-			summary.Failed++
-		case routerreplay.LifecycleAborted:
-			summary.Aborted++
-		case routerreplay.LifecycleInProgress:
-			summary.InProgress++
-		default:
-			summary.Unknown++
-		}
+		countRouterReplayLifecycle(&summary, record.LifecycleState)
 	}
 	return summary
 }
@@ -94,29 +87,48 @@ func buildRouterReplayLifecycleSummary(
 func buildRouterReplayAggregateCostSummary(
 	records []routerreplay.RoutingRecord,
 ) routerReplayAggregateCostSummary {
-	summary := routerReplayAggregateCostSummary{}
 	byCurrency := make(map[string]*routerreplay.CurrencyCostSummary)
+	compared := 0
 	for _, record := range records {
-		if record.LifecycleState != routerreplay.LifecycleCompleted ||
-			record.TotalTokens == nil || record.BaselineModel == nil || *record.BaselineModel == "" ||
-			record.Currency == nil || normalizeReplayCurrency(*record.Currency) == "" {
-			continue
+		if addRouterReplayComparedCost(byCurrency, record) {
+			compared++
 		}
-		if !finiteReplayCost(record.ActualCost) || !finiteReplayCost(record.BaselineCost) || !finiteReplayCost(record.CostSavings) {
-			continue
-		}
-		currency := normalizeReplayCurrency(*record.Currency)
-		group := byCurrency[currency]
-		if group == nil {
-			group = &routerreplay.CurrencyCostSummary{Currency: currency}
-			byCurrency[currency] = group
-		}
-		group.TotalSaved += *record.CostSavings
-		group.BaselineSpend += *record.BaselineCost
-		group.ActualSpend += *record.ActualCost
-		group.CostRecordCount++
-		summary.CostRecordCount++
 	}
+	return routerReplayCostSummary(byCurrency, len(records), compared)
+}
+
+// addRouterReplayComparedCost adds one record's cost to its currency when the
+// record can be compared: completed, with usage, a baseline and finite prices.
+func addRouterReplayComparedCost(
+	byCurrency map[string]*routerreplay.CurrencyCostSummary,
+	record routerreplay.RoutingRecord,
+) bool {
+	if record.LifecycleState != routerreplay.LifecycleCompleted ||
+		record.TotalTokens == nil || record.BaselineModel == nil || *record.BaselineModel == "" ||
+		record.Currency == nil || normalizeReplayCurrency(*record.Currency) == "" {
+		return false
+	}
+	if !finiteReplayCost(record.ActualCost) || !finiteReplayCost(record.BaselineCost) || !finiteReplayCost(record.CostSavings) {
+		return false
+	}
+	currency := normalizeReplayCurrency(*record.Currency)
+	group := byCurrency[currency]
+	if group == nil {
+		group = &routerreplay.CurrencyCostSummary{Currency: currency}
+		byCurrency[currency] = group
+	}
+	group.TotalSaved += *record.CostSavings
+	group.BaselineSpend += *record.BaselineCost
+	group.ActualSpend += *record.ActualCost
+	group.CostRecordCount++
+	return true
+}
+
+func routerReplayCostSummary(
+	byCurrency map[string]*routerreplay.CurrencyCostSummary,
+	records, compared int,
+) routerReplayAggregateCostSummary {
+	summary := routerReplayAggregateCostSummary{CostRecordCount: compared, ExcludedRecordCount: records - compared}
 	for _, group := range byCurrency {
 		summary.ByCurrency = append(summary.ByCurrency, *group)
 	}
@@ -130,7 +142,6 @@ func buildRouterReplayAggregateCostSummary(
 		summary.BaselineSpend = group.BaselineSpend
 		summary.ActualSpend = group.ActualSpend
 	}
-	summary.ExcludedRecordCount = len(records) - summary.CostRecordCount
 	return summary
 }
 
@@ -138,16 +149,33 @@ func finiteReplayCost(value *float64) bool {
 	return value != nil && !math.IsNaN(*value) && !math.IsInf(*value, 0)
 }
 
+// countRouterReplayLifecycle counts one record's lifecycle state.
+func countRouterReplayLifecycle(summary *routerReplayLifecycleSummary, state string) {
+	switch state {
+	case routerreplay.LifecycleCompleted:
+		summary.Completed++
+	case routerreplay.LifecycleFailed:
+		summary.Failed++
+	case routerreplay.LifecycleAborted:
+		summary.Aborted++
+	case routerreplay.LifecycleInProgress:
+		summary.InProgress++
+	default:
+		summary.Unknown++
+	}
+}
+
+// routerReplayDecisionName is the recipe-scoped decision a record counts under.
+func routerReplayDecisionName(record routerreplay.RoutingRecord) string {
+	return routerReplayFallbackName(config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision))
+}
+
 func buildRouterReplayModelSelection(
 	records []routerreplay.RoutingRecord,
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		name := record.SelectedModel
-		if name == "" {
-			name = "Unknown"
-		}
-		counts[name]++
+		counts[routerReplayFallbackName(record.SelectedModel)]++
 	}
 	return sortRouterReplayAggregateValues(counts, 10)
 }
@@ -157,11 +185,7 @@ func buildRouterReplayDecisionDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		name := config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)
-		if name == "" {
-			name = "Unknown"
-		}
-		counts[name]++
+		counts[routerReplayDecisionName(record)]++
 	}
 	return sortRouterReplayAggregateValues(counts, 0)
 }
@@ -171,20 +195,48 @@ func buildRouterReplaySignalDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		s := record.Signals
-		for name, matched := range map[string][]string{
-			"keyword": s.Keyword, "domain": s.Domain, "fact_check": s.FactCheck,
-			"user_feedback": s.UserFeedback, "turn_relation": s.TurnRelation, "language": s.Language,
-			"context": s.Context, "complexity": s.Complexity, "modality": s.Modality, "authz": s.Authz,
-			"jailbreak": s.Jailbreak, "safety": s.Safety, "pii": s.PII, "conversation": s.Conversation,
-			"metadata": s.Metadata, "input_modality": s.InputModality, "decision": s.Decision,
-		} {
-			if len(matched) > 0 {
-				counts[name] += len(matched)
-			}
-		}
+		countRouterReplaySignals(counts, record.Signals)
 	}
 	return sortRouterReplayAggregateValues(counts, 0)
+}
+
+// countRouterReplaySignals counts one record's matched signals by type.
+func countRouterReplaySignals(counts map[string]int, signals routerreplay.Signal) {
+	for _, family := range replaySignalFamilies(signals) {
+		if len(family.matched) > 0 {
+			counts[family.name] += len(family.matched)
+		}
+	}
+}
+
+// replaySignalFamily is one signal type and the signals of it a record matched.
+type replaySignalFamily struct {
+	name    string
+	matched []string
+}
+
+// replaySignalFamilies is a record's matched signals by signal type, as an
+// array so that a scan over the whole history allocates nothing for them.
+func replaySignalFamilies(s routerreplay.Signal) [17]replaySignalFamily {
+	return [...]replaySignalFamily{
+		{"keyword", s.Keyword},
+		{"domain", s.Domain},
+		{"fact_check", s.FactCheck},
+		{"user_feedback", s.UserFeedback},
+		{"turn_relation", s.TurnRelation},
+		{"language", s.Language},
+		{"context", s.Context},
+		{"complexity", s.Complexity},
+		{"modality", s.Modality},
+		{"authz", s.Authz},
+		{"jailbreak", s.Jailbreak},
+		{"safety", s.Safety},
+		{"pii", s.PII},
+		{"conversation", s.Conversation},
+		{"metadata", s.Metadata},
+		{"input_modality", s.InputModality},
+		{"decision", s.Decision},
+	}
 }
 
 func buildRouterReplayTokenVolume(
@@ -223,7 +275,7 @@ func buildRouterReplayTokenBreakdown(
 
 		accumulateRouterReplayTokenEntry(
 			decisionBuckets,
-			routerReplayFallbackName(config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)),
+			routerReplayDecisionName(record),
 			promptTokens,
 			completionTokens,
 			totalTokens,
