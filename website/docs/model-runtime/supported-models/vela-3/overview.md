@@ -26,6 +26,7 @@ global:
 | Model | Parameters | Answers | Spans | Reads | Device memory |
 | --- | --- | --- | --- | --- | --- |
 | [vela3-fast](./vela3-fast) | 1.52B | choice, noul, span | router | text | 12 GiB |
+| [vela3.1-fast](./vela3-1-fast) | 1.93B | choice, noul, span | router | text | 15 GiB |
 | [vela3-lite](./vela3-lite) | 0.903B | choice, noul, score, span | router | text, image, video | 4 GiB |
 | [vela3-mini](./vela3-mini) | 4.79B | choice, noul, score, span | router | text, image, video | 16 GiB |
 | [vela3-flash](./vela3-flash) | 8.83B | choice, noul, score, span | router | text, image, video | 32 GiB |

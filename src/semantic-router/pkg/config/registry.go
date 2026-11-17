@@ -138,6 +138,24 @@ var DefaultModelRegistry = []ModelSpec{
 		SharedDeployment:   true,
 		Tags:               []string{"vela", "vela3", "multi-task", "spans"},
 	},
+	// Vela 3.1 vela3.1-fast is the Vela 3.1 release of vela3-fast: the same
+	// router questions and adapter roster with new weights, plus described
+	// yes/no questions through its released renderer. Opt-in: vela3-fast
+	// stays the default, and it has no calibrated thresholds yet. The model
+	// runtime downloads and verifies it; it runs at its published FP32.
+	{
+		LocalPath:          "models/vela3.1-fast",
+		RepoID:             "vllm-sr/vela3.1-fast",
+		Revision:           "0ed6ed301fbbf0c312f11a13ad17e3a6f8887262",
+		Aliases:            []string{"vela3.1-fast"},
+		Purpose:            PurposeRoutingSignals,
+		Description:        "Answer the built-in routing signals in one call with the Vela 3.1 release of vela3-fast: domain, prompt attacks, safety, fact-check need, feedback and modality, with PII and hallucination spans and described yes/no questions. Supports up to 32K input.",
+		ParameterSize:      "380M encoder with adapters",
+		MaxContextLength:   32768,
+		RuntimeProvisioned: true,
+		SharedDeployment:   true,
+		Tags:               []string{"vela", "vela3", "multi-task", "spans"},
+	},
 	// The Vela 3.1 picos answer the same built-in signals as vela3-fast on one
 	// fine-tuned UltraBERT encoder each, reading a whole mixed call in one
 	// forward when it fits 8,192 tokens. Opt-in only: neither is a default.

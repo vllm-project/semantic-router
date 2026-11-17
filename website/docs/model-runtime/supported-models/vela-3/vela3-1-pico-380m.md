@@ -1,7 +1,7 @@
 ---
 title: "vela3.1-pico-380m"
 sidebar_label: "vela3.1-pico-380m"
-sidebar_position: 8
+sidebar_position: 9
 description: "A small Vela 3.1 model: one 380M encoder answers the built-in routing questions and the PII and hallucination spans, a whole call in one pass when it fits 8,192 tokens."
 custom_edit_url: null
 ---

@@ -1,7 +1,7 @@
 ---
 title: "vela3-turbo"
 sidebar_label: "vela3-turbo"
-sidebar_position: 6
+sidebar_position: 7
 description: "Vela 3.0 on d3-turbo, the largest Vela: it answers each request on d3-turbo's state-once path, then asks the router questions again with their adapters on."
 custom_edit_url: null
 ---

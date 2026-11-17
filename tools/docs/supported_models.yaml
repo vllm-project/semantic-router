@@ -3,7 +3,9 @@
 # comes from the built-in catalog; this file only says what each model is for
 # and which records to link. tools/docs/generate_model_pages.py fails when a
 # catalog model has no entry here, or an entry names a model or record that
-# does not exist. Regenerate with: make docs-model-pages
+# does not exist. A model entry may set family_label when its release is not
+# its runtime family's label (vela3.1-fast loads with the vela3 family).
+# Regenerate with: make docs-model-pages
 
 families:
   decision3:
@@ -175,6 +177,13 @@ models:
       for every built-in routing question, calibrated thresholds, and spans for
       PII and hallucination checks.
     records: [vela3-parity.md, vela3-router-signals.md]
+  vllm-sr/vela3.1-fast:
+    page: vela3-1-fast
+    family_label: Vela 3.1
+    summary: >-
+      The Vela 3.1 release of vela3-fast: the same router questions and spans
+      with new weights, and described yes/no questions such as "can wait" or
+      "needs immediate action". Opt-in; it has no calibrated thresholds yet.
   vllm-sr/vela3-lite:
     page: vela3-lite
     summary: >-
