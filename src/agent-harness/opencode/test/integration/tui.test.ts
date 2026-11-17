@@ -26,7 +26,7 @@ test(
     const screen = await native.terminal(
       first.sessionID,
       [
-        { at: 2500, keys: "\u001b[15~" },
+        { at: 2500, keys: "\u0018v" }, // Leader (ctrl+x), v: the panel
         { at: 4000, keys: "\u001b[17~" }, // F6: apps
         { at: 4500, keys: "\u001b[B".repeat(5) + "\r" }, // Check is the final option.
         { at: 6000, keys: "\u001b[18~" }, // F7: waits
@@ -35,7 +35,7 @@ test(
         { at: 8500, keys: "\u001b[19~" }, // F8: feedback
         { at: 9000, keys: "\r" },
         { at: 9500, keys: "\u001b[B\r" }, // Wrong decision.
-        { at: 11000, keys: "\u001b[20~" }, // F9: check the runtime
+        { at: 11000, keys: "\u0018h" }, // Leader, h: check the runtime
         { at: 12500, keys: "\r" }, // Close its report.
         { at: 13500, keys: "\u001b[21~" }, // F10: sessions
         { at: 14000, keys: "\u001b[B\r" },
@@ -47,7 +47,7 @@ test(
     assert.ok(
       screen.text.includes("vSR decision runtime") &&
         screen.text.includes("Runtime: from the plugin options"),
-      "F9 reports the runtime check: " + screen.text.slice(-8000),
+      "/vsr-check reports the runtime check: " + screen.text.slice(-8000),
     );
     assert.ok(screen.text.includes("vSR decisions"), screen.text.slice(-8000));
     assert.ok(
@@ -87,14 +87,14 @@ test(
       "UI rendering and controls must not generate model requests",
     );
     const asked = native.states.slice(classifications);
-    assert.ok(asked.length > 0, "F9 asks the runtime");
+    assert.ok(asked.length > 0, "/vsr-check asks the runtime");
     assert.ok(
       asked.every((state) =>
         ["Ticket #1042", "Acme Payments SDK", "No, task 2 is wrong"].some(
           (sample) => state.includes(sample),
         ),
       ),
-      "only F9's cases are classified, never the rendering: " +
+      "only /vsr-check's cases are classified, never the rendering: " +
         JSON.stringify(asked),
     );
     assert.notEqual(second.data.id, first.sessionID);

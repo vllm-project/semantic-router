@@ -80,7 +80,7 @@ listener that publishes a System One model.
    own credential store, and vSR switches to the connected runtime at once,
    without a restart. Without a connection, vSR uses the runtime in the
    [options](#options), by default `http://127.0.0.1:8790/v1/decisions`.
-3. **Check it.** Press **F9** in a session. vSR lists the runtime's models and
+3. **Check it.** Run `/vsr-check` in a session. vSR lists the runtime's models and
    asks one case per enabled app through the path that app takes (a force push
    for guard, a support ticket for redact, a page with hidden instructions for
    shield, an easy task for router, pushback for escalate, an invented summary
@@ -91,9 +91,9 @@ listener that publishes a System One model.
 ## What you see
 
 Above the prompt, one line counts the session's decisions:
-`vSR · 12 decisions · 0 partial · 0 withheld · F5`. A held command is OpenCode's
+`vSR · 12 decisions · 0 partial · 0 withheld · leader v`. A held command is OpenCode's
 own permission prompt, with the reason vSR held it. Everything else is in the
-decisions panel, **F5**:
+decisions panel, `/vsr` or leader `v`:
 
 - At the top: whether the runtime answers, which apps are on, each app's wait,
   the router's goal, when you last calibrated, and the tokens and estimated cost
@@ -122,21 +122,24 @@ decisions panel, **F5**:
   - `skipped`: an app got no answer in time; the model went on without it.
   - `allowed`: a command guard let run.
 
-The keys work in any session, and each has a command:
+Each command has a key: press OpenCode's leader key (`ctrl+x` unless you
+changed `keybinds.leader`), then the letter. F5 to F10 work too, where the
+terminal passes them on; some take them for themselves, such as F10 and F11 in
+GNOME Terminal, and macOS sends media keys unless you hold Fn.
 
-| Key     | Command          | What it does                                                           |
-| ------- | ---------------- | ---------------------------------------------------------------------- |
-| F5      | `/vsr`           | Open the decisions panel                                               |
-| F6      | `/vsr-apps`      | Turn an app on or off, or hand the apps back to a Router listener      |
-| F7      | `/vsr-waits`     | Choose how long redact, shield and guard wait: 1 to 3 s, or until done |
-| F8      | `/vsr-feedback`  | Say whether a decision was right; for router, whether the model fit    |
-| F9      | `/vsr-check`     | Check the decision runtime: one case per enabled app                   |
-| F10     | `/vsr-sessions`  | Show another session's decisions                                       |
-| Palette | `/vsr-goal`      | Choose the router's goal: balanced, quality or save                    |
-| Palette | `/vsr-refresh`   | Refresh the panel                                                      |
-| Palette | `/vsr-calibrate` | Fit an app's thresholds to your answers                                |
+| Command          | Key        | Also | What it does                                                           |
+| ---------------- | ---------- | ---- | ---------------------------------------------------------------------- |
+| `/vsr`           | leader `v` | F5   | Open the decisions panel                                               |
+| `/vsr-apps`      | leader `o` | F6   | Turn an app on or off, or hand the apps back to a Router listener      |
+| `/vsr-waits`     | leader `d` | F7   | Choose how long redact, shield and guard wait: 1 to 3 s, or until done |
+| `/vsr-feedback`  | leader `f` | F8   | Say whether a decision was right; for router, whether the model fit    |
+| `/vsr-check`     | leader `h` | F9   | Check the decision runtime: one case per enabled app                   |
+| `/vsr-sessions`  | leader `p` | F10  | Show another session's decisions                                       |
+| `/vsr-goal`      |            |      | Choose the router's goal: balanced, quality or save                    |
+| `/vsr-refresh`   |            |      | Refresh the panel                                                      |
+| `/vsr-calibrate` |            |      | Fit an app's thresholds to your answers                                |
 
-What you change with F6, F7 and the goal is saved and applies to every session,
+What you change in `/vsr-apps`, `/vsr-waits` and `/vsr-goal` is saved and applies to every session,
 also after a restart. Changing the same setting in the options later wins over
 it.
 
@@ -219,7 +222,7 @@ Check is off by default because it is slow without a GPU: it reads the answer
 and what the model read that turn, each up to 8,000 characters, and a CPU
 runtime takes several seconds for a long answer, past check's 1.5 s limit. Past
 the limit it steps aside (`skipped`); it never holds the agent up and never
-changes the answer. Turn it on with F6 or `apps.check` when the runtime has a
+changes the answer. Turn it on with `/vsr-apps` or `apps.check` when the runtime has a
 GPU.
 
 It checks the main session's final answer against the `read` and shell output
@@ -246,7 +249,7 @@ kept. Run `/vsr-calibrate` and pick an app:
 3. It shows the new lines, and how many of your answers the current and the new
    ones agree with. Apply, or keep the current ones.
 
-Some answers come without asking: F8 feedback on a decision, a held command you
+Some answers come without asking: `/vsr-feedback` on a decision, a held command you
 declined (it should have asked), and pushback within 15 minutes of a route to
 the lighter two tiers (it needed a stronger one). An app needs 8 answers before
 its lines move, and each line moves at most 0.15 per calibration, the same fit
@@ -266,8 +269,8 @@ at a prompt a minute or more later. Its `vsr` profile (`apis.systemone.vsr` in
 the Router's config, or Default, On or Off in the Dashboard under Config ›
 Global Config › vSR agent plugins) turns each app on or off for every plugin
 pointed at it. An app you name under `apps` in the options, or turn on or off
-with F6, stays yours; the listener sets the others. "Follow the Router
-listener" in F6 hands the apps you changed there back to the listener. A plain
+with `/vsr-apps`, stays yours; the listener sets the others. "Follow the Router
+listener" in `/vsr-apps` hands the apps you changed there back to the listener. A plain
 decision runtime sets nothing.
 
 Rules the listener binds to guard and redact (`vsr.rules`) come with the same
@@ -300,7 +303,7 @@ panel or returned by the plugin.
 - **Your tiers, your provider.** Instead of Haiku, Sonnet and Opus, the router
   uses the three models you list, and only when your session runs on one of
   them.
-- **One panel instead of cards.** Decisions are in the F5 panel and the line
+- **One panel instead of cards.** Decisions are in the `/vsr` panel and the line
   above the prompt, not under each row of the conversation.
 - **OpenCode's own setup.** The runtime is connected through `/connect`, its
   token stays in OpenCode's credential store, and options live in
@@ -337,14 +340,14 @@ token cannot be sent to another host.
 
 ## Troubleshooting
 
-- **F9 says an app has no answer.** The runtime is not answering at the
+- **`/vsr-check` says an app has no answer.** The runtime is not answering at the
   connected URL, refuses the token, or is slower than the app's wait. Check
   that `vllm-srun serve` is running, or ask for `vsr-setup` again.
 - **A configuration change has no effect.** Run `opencode service restart`.
 - **Reads feel slower.** On a CPU runtime, redact and shield add up to their
   waits to a long output, and guard a fraction of a second per command part. A
-  GPU runtime is several times faster; you can also shorten a wait (F7) or turn
-  off apps you do not need (F6).
+  GPU runtime is several times faster; you can also shorten a wait (`/vsr-waits`) or
+  turn off apps you do not need (`/vsr-apps`).
 - **A subagent stayed on its model.** The panel's `kept` row says why: the
   router was not sure enough, `routing.goal` is `quality`, or your session's
   model is not one of your tiers.

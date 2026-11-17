@@ -288,7 +288,7 @@ export default Plugin.define({
         {
           id: "vsr.panel",
           title: "vSR decisions",
-          bind: "f5",
+          bind: "<leader>v,f5",
           slash: { name: "vsr" },
           palette: true,
           run: open,
@@ -296,7 +296,7 @@ export default Plugin.define({
         {
           id: "vsr.apps",
           title: "vSR app controls",
-          bind: "f6",
+          bind: "<leader>o,f6",
           slash: { name: "vsr-apps" },
           palette: true,
           run: apps,
@@ -304,7 +304,7 @@ export default Plugin.define({
         {
           id: "vsr.waits",
           title: "vSR wait controls",
-          bind: "f7",
+          bind: "<leader>d,f7",
           slash: { name: "vsr-waits" },
           palette: true,
           run: waits,
@@ -312,7 +312,7 @@ export default Plugin.define({
         {
           id: "vsr.feedback",
           title: "vSR decision feedback",
-          bind: "f8",
+          bind: "<leader>f,f8",
           slash: { name: "vsr-feedback" },
           palette: true,
           run: feedback,
@@ -320,7 +320,7 @@ export default Plugin.define({
         {
           id: "vsr.diagnose",
           title: "vSR check the decision runtime",
-          bind: "f9",
+          bind: "<leader>h,f9",
           slash: { name: "vsr-check" },
           palette: true,
           run: async () => {
@@ -342,7 +342,7 @@ export default Plugin.define({
         {
           id: "vsr.sessions",
           title: "vSR select session",
-          bind: "f10",
+          bind: "<leader>p,f10",
           slash: { name: "vsr-sessions" },
           palette: true,
           run: async () => {
@@ -424,7 +424,7 @@ export default Plugin.define({
         <text fg={ctx.theme.textMuted}>
           vSR · {view.loading ? "syncing · " : ""}
           {total().total} decisions · {total().outcomes.partial ?? 0} partial ·{" "}
-          {total().outcomes.withheld ?? 0} withheld · F5
+          {total().outcomes.withheld ?? 0} withheld · leader v
         </text>
       ),
     });
@@ -447,7 +447,7 @@ export default Plugin.define({
               {/* The list scrolls; the summary lines keep their height instead of drawing over each other. */}
               <text flexShrink={0}>vSR decisions · {panel.sessionID}</text>
               <text flexShrink={0} fg={ctx.theme.textMuted}>
-                F6 apps · F7 waits · F8 feedback · F9 check · F10 session
+                leader o apps · d waits · f feedback · h check · p session
               </text>
               <Show when={view.error}>
                 <text flexShrink={0} fg={ctx.theme.warning}>

@@ -28,7 +28,7 @@ rules, ported from the Claude Code plugin's `lib/profile.ts` and `lib/rules.ts`.
 `connection.ts` defines the `/connect` integration and reads its credential;
 `index.ts` switches the runtime client to it on load, at each prompt and when a
 credential changes, and drops the previous runtime's listener rules.
-`verify.ts` asks F9's cases through each app's own policy path; its cases and
+`verify.ts` asks the runtime check's (`/vsr-check`) cases through each app's own policy path; its cases and
 expected verdicts are the Claude Code plugin's smoke probes. `skills/vsr-setup`
 is registered as an OpenCode skill and carries no scripts: its commands mirror
 the Claude Code plugin's `local.py` and share its pin, venv and port.
@@ -261,7 +261,7 @@ config, or Default, On or Off in the Dashboard under Config â€º Global Config â€
 agent plugins) turns `router`, `escalate`, `redact`, `shield`, `guard` and
 `check` on or off for every plugin pointed at it. An app you name under `apps` in
 this plugin's options, or turn on or off in the decision view, stays yours; the listener sets the others.
-"Follow the Router listener" in the app dialog (F6) hands the apps you changed
+"Follow the Router listener" in the app dialog (`/vsr-apps`) hands the apps you changed
 there back to the listener; the ones in the options stay yours. A plain decision
 runtime, whose listing answers HTTP 404, sets nothing.
 
@@ -326,7 +326,7 @@ are valid. These estimates are not billing receipts or savings measurements.
 
 The server registers RPC `vsr.opencode.v1` with `snapshot`, `diagnose`, `verify`,
 `controls`, `feedback` and the `calibration*` methods. `diagnose` queries runtime capabilities and
-`verify` asks F9's cases; loading the package alone sends no content to a model. Import the exported `./rpc`
+`verify` asks the runtime check's cases; loading the package alone sends no content to a model. Import the exported `./rpc`
 definition to call these through an OpenCode client. Snapshots are scoped to the
 requested session. Of a decision's text only its subject is kept: the command,
 child task, prompt or output source (file, address or command, never the output

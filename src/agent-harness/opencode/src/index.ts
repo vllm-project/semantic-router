@@ -86,7 +86,7 @@ export default Plugin.define({
         id: "vsr-setup",
         name: "vsr-setup",
         description:
-          "Installs and starts vSR's decision runtime (vllm-srun with vela3-lite) on this machine's GPU or CPU, or points vSR at one that already answers, then hands over to /connect and F9. Use when vSR was just installed, when F9 says the runtime does not answer, or when the user wants to change where vSR's decision model runs.",
+          "Installs and starts vSR's decision runtime (vllm-srun with vela3-lite) on this machine's GPU or CPU, or points vSR at one that already answers, then hands over to /connect and /vsr-check. Use when vSR was just installed, when /vsr-check says the runtime does not answer, or when the user wants to change where vSR's decision model runs.",
         path: skillPath,
         content: skillText,
         // The schema brands its IDs and paths; these are plain strings of the right form.
@@ -183,7 +183,7 @@ export default Plugin.define({
           .catch(() => {});
         return result;
       },
-      // F9: the runtime in use, then one case per enabled app through the path its hook takes.
+      // /vsr-check: the runtime in use, then one case per enabled app through the path its hook takes.
       verify: async (_input, request) => {
         await connect();
         const listed = await runtime.discover(3000, request.signal);

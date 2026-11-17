@@ -303,7 +303,7 @@ export function report(found: Verification): string {
   if (middle !== undefined) lines.push(`Median ${Math.round(middle)} ms`);
   if (asked.some((probe) => probe.verdict === "no answer"))
     lines.push(
-      "No answer: offline, timeout or HTTP 401/403 mean the runtime is down, slower than the app's wait (F7) or refuses the token; HTTP 503 that its model did not load.",
+      "No answer: offline, timeout or HTTP 401/403 mean the runtime is down, slower than the app's wait (/vsr-waits) or refuses the token; HTTP 503 that its model did not load.",
     );
   return lines.join("\n");
 }

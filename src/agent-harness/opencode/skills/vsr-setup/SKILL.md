@@ -50,7 +50,7 @@ The runtime is the same one the Claude Code plugin installs: `~/.local/share/vsr
 6. **Hand over.** Tell the user, in this order:
 
    - Run `/connect`, pick **vSR decision runtime**, then **Runtime without a token** for this machine (URL `http://127.0.0.1:8790/v1/decisions`), or **Runtime with a token** for one that needs a key. OpenCode keeps the token in its own credential store; never ask the user to paste it into the chat. Leave the model empty unless the runtime serves several.
-   - Press **F9** in a session: it asks one case per enabled app and shows whether each decides as it does on vela3-lite, and how long each took.
-   - **F6** turns apps on or off; check is off by default, and on a CPU runtime a long answer can outlast its wait.
+   - Run `/vsr-check` in a session (or press the leader key, `ctrl+x` by default, then `h`): it asks one case per enabled app and shows whether each decides as it does on vela3-lite, and how long each took.
+   - `/vsr-apps` (leader, then `o`) turns apps on or off; check is off by default, and on a CPU runtime a long answer can outlast its wait.
 
    Done when the user has these steps.
