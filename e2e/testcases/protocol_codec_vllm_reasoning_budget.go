@@ -42,7 +42,7 @@ func testProtocolCodecVLLMReasoningBudget(
 
 	sessionID := "vllm-reasoning-budget-projection-" + uuid.NewString()
 	result, err := sendProtocolMatrixRaw(ctx, session, "/v1/chat/completions", map[string]any{
-		"model":                   chatBackendModel,
+		"model":                   "vllm-sr/auto",
 		"messages":                []map[string]string{{"role": "user", "content": vllmReasoningBudgetMarker}},
 		"reasoning_effort":        "medium",
 		"reasoning_budget_tokens": 1024,
