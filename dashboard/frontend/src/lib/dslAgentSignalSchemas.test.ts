@@ -16,7 +16,7 @@ describe('agent routing in the Builder', () => {
     expect(field(schema, 'harness')).toMatchObject({
       label: 'Harness',
       type: 'select',
-      options: ['claude_code', 'codex', 'opencode'],
+      options: ['claude_code', 'codex', 'opencode', 'deepseek_harness'],
     })
     expect(field(schema, 'types')).toMatchObject({ label: 'Subagent Types', type: 'string[]' })
     expect(field(schema, 'request_classes')).toMatchObject({ label: 'Request Classes', type: 'string[]' })

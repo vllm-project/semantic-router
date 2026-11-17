@@ -93,7 +93,15 @@ def test_a_decision_routes_and_blocks_by_agent_rule():
         ({"name": "x", "request_classes": ["title"]}, "request_classes"),
         (
             {"name": "x", "harness": "codex", "request_classes": ["compaction"]},
-            "only Claude Code sends a request class",
+            "request_classes cannot go with harness codex",
+        ),
+        (
+            {
+                "name": "x",
+                "harness": "deepseek_harness",
+                "request_classes": ["auxiliary"],
+            },
+            "request_classes cannot go with harness deepseek_harness",
         ),
         ({"name": "x", "role": "child"}, "role"),
         ({"name": "x", "harness": "cursor"}, "harness"),
@@ -108,6 +116,15 @@ def test_a_decision_routes_and_blocks_by_agent_rule():
 def test_agent_rule_refuses_what_the_router_refuses(rule, message):
     with pytest.raises(ValidationError, match=message):
         AgentRule.model_validate(rule)
+
+
+@pytest.mark.parametrize(
+    "harness", ["claude_code", "codex", "opencode", "deepseek_harness"]
+)
+def test_agent_rule_accepts_every_harness_the_router_names(harness):
+    assert (
+        AgentRule.model_validate({"name": "x", "harness": harness}).harness == harness
+    )
 
 
 def test_agent_rule_matches_request_classes():
