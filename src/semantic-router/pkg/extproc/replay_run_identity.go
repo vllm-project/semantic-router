@@ -126,6 +126,8 @@ func requestHarness(ctx *RequestContext) string {
 		return store.HarnessCodex
 	case isOpenCode(ctx):
 		return store.HarnessOpenCode
+	case isDeepSeekHarness(ctx):
+		return store.HarnessDeepSeekHarness
 	default:
 		return ""
 	}

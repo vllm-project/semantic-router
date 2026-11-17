@@ -36,6 +36,7 @@ export const HARNESS_LABELS: Record<string, string> = {
   claude_code: 'Claude Code',
   codex: 'Codex',
   opencode: 'OpenCode',
+  deepseek_harness: 'DeepSeek Harness',
 }
 
 // One color per model, in the order the run used them most: the hues the

@@ -62,7 +62,7 @@ recipes:
 | Field | Meaning |
 | --- | --- |
 | `role` | `main` or `subagent`. |
-| `harness` | `claude_code`, `codex` or `opencode`. |
+| `harness` | `claude_code`, `codex`, `opencode` or `deepseek_harness`. |
 | `types` | Subagent types, any of which matches. The comparison ignores case. A rule with `types` matches subagents only, so `role: main` is refused with it. |
 | `request_classes` | Request classes, any of which matches: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`. Claude Code sends the class and OpenCode calls get one as the table below shows; Codex calls carry none, so `harness: codex` is refused with it. |
 
@@ -101,6 +101,11 @@ side requests are known by the instructions they open with: `You are a title
 generator.` for a session title and `You are an anchored context summarization
 assistant` for a summary of the session. A project that replaces those prompts
 sends calls that read as `main`. This was checked with OpenCode 1.18.10.
+
+DeepSeek Harness is known by its User-Agent, `deepseek-harness/<version>`. It
+names no session, subagent or request class, so `request_classes` cannot go
+with `harness: deepseek_harness`, and its calls take the `main` role only when
+the request pins a session in `x-vsr-session-id`.
 
 ## Decision Usage
 
