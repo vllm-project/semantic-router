@@ -283,3 +283,55 @@ test(
     );
   },
 );
+
+test(
+  "packed output is checked once: after a restart the context keeps it masked, does not ask again, and still guards writes",
+  { timeout: 90000 },
+  async (t) => {
+    const native = await fixture(t);
+    const run = await native.run("OUTPUT_CASE READ");
+    const asked = native.states.length;
+    await native.restart();
+    const start = native.requests.length;
+    await native.run("OUTPUT_CASE ISOLATED_WRITE", run.sessionID);
+    const content = modelContent(native.requests.slice(start));
+    assert.ok(content.includes("[vsr:secret]"), "the stored output is masked");
+    assert.ok(!content.includes(secret) && !content.includes(email));
+    assert.equal(
+      native.states.length,
+      asked,
+      "an output checked when it finished is not classified again",
+    );
+    const snapshot = (await native.rpc("snapshot", {
+      sessionID: run.sessionID,
+    })) as Snapshot;
+    assert.deepEqual(
+      snapshot.decisions.map((decision) => decision.reason),
+      ["placeholder-write"],
+      "a restart records no new decisions for old outputs",
+    );
+    await assert.rejects(access(join(native.root, "write-marker.txt")));
+  },
+);
+
+test(
+  "packed native error result is checked at the context boundary and names its source",
+  { timeout: 60000 },
+  async (t) => {
+    const native = await fixture(t);
+    const asked = native.states.length;
+    const run = await native.run("OUTPUT_CASE MISSING");
+    assert.ok(native.states.length > asked, "the error result is classified");
+    const snapshot = (await native.rpc("snapshot", {
+      sessionID: run.sessionID,
+    })) as Snapshot;
+    const subjects = new Set(
+      snapshot.decisions.map((decision) => decision.subject),
+    );
+    assert.deepEqual(
+      [...subjects],
+      [`read ${join(native.root, "missing.txt")}`],
+      JSON.stringify(snapshot.decisions),
+    );
+  },
+);

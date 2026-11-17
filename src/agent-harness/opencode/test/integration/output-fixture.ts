@@ -116,7 +116,14 @@ export async function fixture(t: TestContext, strict = false) {
         (["WRITE", "EDIT"].includes(label) && results.length === 1));
     let name = "read",
       args: Record<string, unknown> = {
-        path: join(root, label === "IMAGE" ? "fixture.png" : "fixture.txt"),
+        path: join(
+          root,
+          label === "IMAGE"
+            ? "fixture.png"
+            : label === "MISSING"
+              ? "missing.txt"
+              : "fixture.txt",
+        ),
       };
     if (["SHELL", "FAIL", "LARGE", "BACKGROUND"].includes(label)) {
       name = "shell";

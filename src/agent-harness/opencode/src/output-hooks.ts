@@ -280,14 +280,24 @@ export async function registerOutput(
   });
   // Last content boundary: also covers native error results and synthetic background completions.
   await ctx.session.hook("context", async (event) => {
-    const assistantIDs = new Map<string, string>();
+    const assistantIDs = new Map<string, string>(),
+      sources = new Map<string, string>();
     const messages: typeof event.messages = [];
+    // The placeholders already in the context keep guarding writes after a reload forgets them.
+    const remember = (text: string) => {
+      for (const match of text.matchAll(
+        markerOf(listener?.rules.redact.map((rule) => rule.name) ?? []),
+      ))
+        state(event.sessionID).tags.add(match[1]!);
+    };
     for (const message of event.messages) {
       if (message.role === "assistant") {
         messages.push(message);
         for (const part of message.content)
-          if (part.type === "tool-call")
+          if (part.type === "tool-call") {
             assistantIDs.set(part.id, message.id ?? "context");
+            sources.set(part.id, sourceOf(part.name, part.input));
+          }
       } else if (message.role === "tool") {
         const content = [...message.content];
         for (const [index, part] of content.entries()) {
@@ -296,18 +306,21 @@ export async function registerOutput(
             part.result.type === "content"
               ? render(part.result.value)
               : render(undefined, part.result.value);
+          // A completed result was checked once when it finished, and OpenCode keeps the checked text, as the Claude
+          // Code plugin checks each output once. Only an error result reaches the model without that check.
+          if (part.result.type !== "error") {
+            remember(rendered.text);
+            continue;
+          }
           const result = await inspect(
             event.sessionID,
             part.id,
             `${assistantIDs.get(part.id) ?? "context"}:${part.id}`,
             part.name,
             rendered,
+            sources.get(part.id) ?? part.name,
           );
-          if (!result.withheld)
-            for (const match of result.text.matchAll(
-              markerOf(listener?.rules.redact.map((rule) => rule.name) ?? []),
-            ))
-              state(event.sessionID).tags.add(match[1]!);
+          if (!result.withheld) remember(result.text);
           if (result.text === rendered.text && !result.withheld) continue;
           content[index] = {
             ...part,

@@ -202,9 +202,13 @@ baseline tool coverage. Other custom tools and ordinary human prompts are
 outside these output adapters. Checks rewrite model-visible content; they do
 not erase original files or the host's output artifacts.
 
-Both apps inspect after tool completion and at the outgoing context boundary.
-The second boundary also covers native error results and synthetic background
-notifications. Classification runs in overlapping windows (initially 2000 UTF-16
+Both apps inspect each output once, when its tool completes, as the Claude Code
+plugin does; OpenCode keeps the checked text in the session, so later requests
+and a restarted server send it as it was checked, and record no new decisions.
+The outgoing context boundary inspects only what tool completion never sees:
+native error results (named by their call's source) and synthetic background
+notifications. It also recovers the session's placeholders from the context, so
+writes stay guarded after a restart. Classification runs in overlapping windows (initially 2000 UTF-16
 units, at most 8000, with a 256-unit overlap), without splitting surrogate pairs.
 Each app gets its own total wait budget, including HTTP queue time. Defaults are
 3000 ms for Redact and 2000 ms for Shield; `"done"` has a 60-second maximum per
