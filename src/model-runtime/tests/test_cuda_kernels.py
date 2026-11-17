@@ -72,6 +72,56 @@ def test_the_receipt_lists_only_the_kernels_the_model_may_select(fused_module):
     assert kernels.describe()["add_rmsnorm"] == "triton-gfx942"
 
 
+def flash_built(monkeypatch, available, varlen_attn=None):
+    """PyTorch with (or without) flash attention and the public varlen_attn."""
+    from vllm_srun.accel import gpu
+
+    found = {"triton": "3.6.0", "torch.backends.cuda": lambda: available}
+    monkeypatch.setattr(cuda, "_optional", lambda module, attribute: found.get(module))
+    monkeypatch.setattr(
+        gpu,
+        "_optional",
+        lambda module, attribute: (
+            varlen_attn if module == "torch.nn.attention.varlen" else None
+        ),
+    )
+
+
+@pytest.mark.parametrize("arch", ["sm_80", "sm_89", "sm_121"])
+def test_without_varlen_attn_ampere_takes_the_aten_flash_kernel(
+    fused_module, monkeypatch, arch
+):
+    flash_built(monkeypatch, available=True)
+    kernels = cuda.CUDAAccelerator().kernels(device(arch))
+    assert kernels.preferred_source("varlen_attention") == "aten-flash-attention"
+    # Only merged forwards run it; single requests keep the reference.
+    assert kernels.select("varlen_attention").source == "torch-reference"
+
+
+@pytest.mark.parametrize(
+    ("arch", "available"), [("sm_75", True), (None, True), ("sm_89", False)]
+)
+def test_the_aten_flash_kernel_needs_ampere_and_a_flash_build(
+    fused_module, monkeypatch, arch, available
+):
+    flash_built(monkeypatch, available=available)
+    kernels = cuda.CUDAAccelerator().kernels(device(arch))
+    assert kernels.preferred_source("varlen_attention") == "torch-reference"
+
+
+def test_varlen_attn_comes_before_the_aten_flash_kernel(fused_module, monkeypatch):
+    def varlen_attn(query, key, value, cu_q, cu_k, max_q, max_k, is_causal=False):
+        return query
+
+    flash_built(monkeypatch, available=True, varlen_attn=varlen_attn)
+    kernels = cuda.CUDAAccelerator().kernels(device("sm_89"))
+    assert kernels.preferred_source("varlen_attention") == "torch-varlen-attention"
+    assert [kernel.source for kernel in kernels.available["varlen_attention"]] == [
+        "torch-varlen-attention",
+        "torch-reference",
+    ]
+
+
 @pytest.fixture(params=[False, True], ids=["without-FLA", "with-FLA"])
 def fla_installed(request):
     return request.param
