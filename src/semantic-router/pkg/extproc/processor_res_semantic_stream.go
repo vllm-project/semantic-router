@@ -664,7 +664,7 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 		calibrationPromptTokens,
 	)
 
-	if responseErr != nil || (ctx.LooperStreamingActive && usage.invalid) {
+	if ctx.LooperStreamingActive && (responseErr != nil || usage.invalid) {
 		ctx.StreamingAborted = true
 		r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "upstream_stream_incomplete")
 	}

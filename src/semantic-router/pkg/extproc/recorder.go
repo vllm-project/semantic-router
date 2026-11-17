@@ -558,9 +558,6 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 		if ctx.UpstreamStatusCode >= 400 {
 			state = routerreplay.LifecycleFailed
 			reason = "upstream_error_response"
-		} else if ctx.StreamingAborted {
-			state = routerreplay.LifecycleFailed
-			reason = "upstream_stream_incomplete"
 		}
 		r.finalizeRouterReplay(ctx, state, reason)
 		if rec, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
