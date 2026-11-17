@@ -393,3 +393,42 @@ test("interrupting a pending classification stops routing and never leaks its es
   assert.equal(store.snapshot("one").decisions.length, 0);
   routing.close();
 });
+
+test("a model without variants routes without one: OpenCode's `default` placeholder is not a variant", () => {
+  // Found qualifying against a gateway whose models declare no variants: the parent reports variant `default`, and
+  // a child asked for `model#default` fails to spawn.
+  const plain = ["light", "middle", "strong"].map((model) => ({
+    model: `gateway/${model}`,
+  }));
+  const bare: Candidate[] = plain.map((tier) => ({
+    providerID: "gateway",
+    id: tier.model.split("/")[1]!,
+    enabled: true,
+    variants: [],
+    capabilities: { tools: true },
+  }));
+  const parent = { providerID: "gateway", id: "middle", variant: "default" };
+  const routing = parseSettings({ routing: { tiers: plain } }).routing;
+  assert.equal(
+    choose(routing, parent, bare, scores(0.8, 0.95), false).model,
+    "gateway/middle",
+  );
+  assert.equal(
+    choose(routing, parent, bare, scores(0.8, 0.95), true).model,
+    "gateway/strong",
+  );
+  // A tier with efforts treats the placeholder as no variant chosen, not as one outside its ladder.
+  const laddered = parseSettings({
+    routing: {
+      tiers: plain.map((tier) => ({ ...tier, efforts: ["low", "high"] })),
+    },
+  }).routing;
+  const withEfforts = bare.map((item) => ({
+    ...item,
+    variants: [{ id: "low" }, { id: "high" }],
+  }));
+  assert.equal(
+    choose(laddered, parent, withEfforts, scores(0.8, 0.95, 0.1), false).model,
+    "gateway/middle#low",
+  );
+});

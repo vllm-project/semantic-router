@@ -109,7 +109,14 @@ export function choose(
     )
   )
     return { reason: "invalid-tier", ...facts };
-  let variant = rank === parentRank ? parent.variant : undefined;
+  // A variant the model does not list is no variant: OpenCode reports `default` for a model without any, and a
+  // child asked for `model#default` fails to spawn.
+  const parentVariant =
+    parent.variant &&
+    candidate.variants.some((item) => item.id === parent.variant)
+      ? parent.variant
+      : undefined;
+  let variant = rank === parentRank ? parentVariant : undefined;
   if (tier.efforts.length) {
     const steps = scores?.steps;
     const index =
@@ -121,8 +128,8 @@ export function choose(
             : 2
         : 1;
     let picked = Math.min(index + (escalate ? 1 : 0), tier.efforts.length - 1);
-    if (rank === parentRank && parent.variant) {
-      const floor = tier.efforts.indexOf(parent.variant);
+    if (rank === parentRank && parentVariant) {
+      const floor = tier.efforts.indexOf(parentVariant);
       // A user-selected variant outside the declared ladder cannot be ordered safely.
       if (floor < 0) return { reason: "invalid-tier", ...facts };
       if (escalate || rank === 2 || settings.goal === "quality")
