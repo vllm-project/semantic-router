@@ -89,7 +89,7 @@ describe('run diagram', () => {
     expect(html).toContain('high')
     expect(html).toContain('failed 502')
     expect(html).toContain('Hidden from this viewer')
-    expect(html).toContain('href="/insights/rec-2"')
+    expect(html).toContain('href="/observe/requests/rec-2"')
   })
 
   it('shows each model by its label and keeps the configured name beside it', () => {
@@ -99,7 +99,11 @@ describe('run diagram', () => {
       <MemoryRouter>
         <ModelLabelsContext.Provider value={labels}>
           <RunLegend run={response.run} />
-          <RunDiagram run={response.run} lanes={buildRunLanes(response)} onSelect={() => undefined} />
+          <RunDiagram
+            run={response.run}
+            lanes={buildRunLanes(response)}
+            onSelect={() => undefined}
+          />
           <RunSegmentPanel
             segment={subagent.segments[0]}
             call={failed}

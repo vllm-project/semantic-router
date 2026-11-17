@@ -100,16 +100,42 @@ export interface ProjectionTrace {
   mappings?: ProjectionTraceMapping[]
 }
 
+/**
+ * The agent of its run that sent a request (routerreplay/store/agent.go). An
+ * absent id is the run's main agent and a present one a subagent; redaction
+ * keeps an id or parent_id as an empty string. kind is the subagent kind Codex
+ * names, such as collab_spawn or review.
+ */
+export interface InsightsAgentIdentity {
+  harness?: string
+  id?: string
+  parent_id?: string
+  kind?: string
+}
+
 export interface InsightsRecord {
   provider_cache?: ProviderCacheAccounting
   conversation_id?: string
   id: string
   timestamp: string
   request_id?: string
-  /** codex_approval_review for an agent approval review; absent otherwise. */
+  /**
+   * codex_approval_review for an agent approval review, session_title for the
+   * call a harness makes to title its session; absent otherwise.
+   */
   request_kind?: string
   review?: InsightsReview
   session_id?: string
+  /** The name the harness gave the session, on the call that named it. */
+  session_name?: string
+  agent?: InsightsAgentIdentity | null
+  /** The client request a Looper hop was made for. */
+  parent_request_id?: string
+  previous_response_id?: string
+  reasoning_effort?: string
+  prompt?: string
+  prompt_truncated?: boolean
+  cached_prompt_tokens?: number
   /**
    * The Codex thread and turn that sent the request. parent_turn_id is the
    * turn that started the thread, such as the turn a review judges or a

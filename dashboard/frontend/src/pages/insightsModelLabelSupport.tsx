@@ -1,6 +1,17 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
-import styles from './InsightsRun.module.css'
+import { ProviderLogo, cn } from '../ui'
+
+import {
+  buildAgentRuleIndex,
+  buildModelProviders,
+  EMPTY_CONFIG_FACTS,
+  InsightsConfigContext,
+  modelProviderId,
+  useInsightsConfig,
+  type ConfigDocument,
+  type InsightsConfigFacts,
+} from './insightsConfigFacts'
 import { fetchAbortableInsightsJSON } from './insightsPageRequestSupport'
 
 // The label each configured model reads by, as the Router resolves it from
@@ -64,9 +75,70 @@ export function ModelName({
   if (!name) return <>{fallback}</>
   if (label === name) return <>{name}</>
   return (
-    <span className={styles.modelLabel} title={`Configured as ${name}`}>
+    <span
+      className="inline-flex min-w-0 items-baseline gap-1.5 [&>small]:truncate [&>small]:font-mono [&>small]:text-[11px] [&>small]:font-normal [&>small]:text-subtle-foreground"
+      title={`Configured as ${name}`}
+    >
       {label}
       {compact ? null : <small>{name}</small>}
     </span>
+  )
+}
+
+/** A model with its provider's logo when the model id or the configuration names one. */
+export function ModelChip({
+  name,
+  fallback = '-',
+  size = 14,
+  className,
+}: {
+  name?: string
+  fallback?: string
+  size?: number
+  className?: string
+}) {
+  const labels = useModelLabels()
+  const { modelProviders } = useInsightsConfig()
+  if (!name) return <span className="text-subtle-foreground">{fallback}</span>
+  const provider = modelProviderId(name, modelProviders)
+  const label = modelLabel(labels, name)
+  return (
+    <span
+      className={cn('inline-flex min-w-0 items-center gap-1.5', className)}
+      title={label === name ? name : `${label} · configured as ${name}`}
+    >
+      {provider ? <ProviderLogo provider={provider} size={size} /> : null}
+      <span className="truncate">{label}</span>
+    </span>
+  )
+}
+
+export function InsightsConfigProvider({ children }: { children: ReactNode }) {
+  const [facts, setFacts] = useState<InsightsConfigFacts>(EMPTY_CONFIG_FACTS)
+  useEffect(() => {
+    const abort = new AbortController()
+    fetchAbortableInsightsJSON<ConfigDocument>(
+      '/api/router/config/all',
+      'router config',
+      abort.signal,
+    )
+      .then((config) =>
+        setFacts({
+          agentRules: buildAgentRuleIndex(config),
+          modelProviders: buildModelProviders(config),
+        }),
+      )
+      .catch(() => undefined)
+    return () => abort.abort()
+  }, [])
+  return <InsightsConfigContext.Provider value={facts}>{children}</InsightsConfigContext.Provider>
+}
+
+/** Model labels and the configuration facts every Insights page reads. */
+export function InsightsDataProviders({ children }: { children: ReactNode }) {
+  return (
+    <ModelLabelsProvider>
+      <InsightsConfigProvider>{children}</InsightsConfigProvider>
+    </ModelLabelsProvider>
   )
 }

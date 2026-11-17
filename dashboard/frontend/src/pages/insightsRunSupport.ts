@@ -1,5 +1,7 @@
+import type { StatusTone } from '../ui'
 import { formatInsightsCost } from '../utils/insightsCost'
 
+import { displaySessionId } from './insightsAgentIdentity'
 import { compactID } from './insightsReviewSupport'
 import type { RunAgent, RunCall, RunCost, RunResponse, RunSummary } from './insightsRunTypes'
 
@@ -24,6 +26,15 @@ export const RUN_MARKER_GLYPHS: Record<string, string> = {
   tool_failure: '⚠',
 }
 
+// How a run ended, as a status: only state is colored.
+export const RUN_STATUS_TONES: Record<string, StatusTone> = {
+  answered: 'success',
+  in_progress: 'info',
+  failed: 'danger',
+  aborted: 'neutral',
+  unknown: 'neutral',
+}
+
 export const RUN_OUTCOME_LABELS: Record<string, string> = {
   answered: 'Answered',
   failed: 'Failed',
@@ -32,25 +43,25 @@ export const RUN_OUTCOME_LABELS: Record<string, string> = {
   unknown: 'No final answer',
 }
 
-export const HARNESS_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-}
-
-// One color per model, in the order the run used them most: the hues the
-// session routing history gives its agents.
-const MODEL_HUES = ['#5cc8b8', '#a395e8', '#e0a84f', '#e8798f', '#7aa7e8', '#c9cbd0']
+// One color per model, in the order the run used them most.
+const MODEL_HUES = [
+  'var(--chart-4)',
+  'var(--chart-3)',
+  'var(--chart-2)',
+  'var(--chart-5)',
+  'var(--chart-1)',
+  'var(--chart-7)',
+]
 
 export function modelHue(models: { name: string }[], model?: string): string {
   const index = models.findIndex((entry) => entry.name === model)
-  return index < 0 ? '#8a94a6' : MODEL_HUES[index % MODEL_HUES.length]
+  return index < 0 ? 'var(--chart-8)' : MODEL_HUES[index % MODEL_HUES.length]
 }
 
 export function getRunPath(sessionId: string, step?: string) {
   const query = new URLSearchParams({ session: sessionId })
   if (step) query.set('step', step)
-  return `/insights/run?${query.toString()}`
+  return `/observe/runs?${query.toString()}`
 }
 
 export function formatRunCost(cost: RunCost): string {
@@ -73,7 +84,11 @@ export function formatRunDuration(ms: number): string {
 // A run reads by the name its harness gave the session, else its main
 // agent's first prompt, else its session.
 export function runTitle(run: RunSummary): string {
-  return run.session_name || run.prompt?.trim() || `Session ${compactID(run.session_id)}`
+  return (
+    run.session_name ||
+    run.prompt?.trim() ||
+    `Session ${compactID(displaySessionId(run.session_id))}`
+  )
 }
 
 export function countText(count: number, noun: string): string {

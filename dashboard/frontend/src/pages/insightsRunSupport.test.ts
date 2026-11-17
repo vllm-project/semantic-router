@@ -126,7 +126,7 @@ describe('run labels', () => {
   it('reads the agent tree at a glance and links a run with its step', () => {
     expect(runAgentTreeText(run([]).run)).toBe('main, 2 subagents')
     expect(getRunPath('tenant:a/b', 'rec-1')).toBe(
-      '/insights/run?session=tenant%3Aa%2Fb&step=rec-1',
+      '/observe/runs?session=tenant%3Aa%2Fb&step=rec-1',
     )
   })
 })

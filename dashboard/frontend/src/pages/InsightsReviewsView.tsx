@@ -1,8 +1,15 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
-import configStyles from './ConfigPage.module.css'
-import styles from './InsightsPage.module.css'
-import { isInsightsReplayUnavailableError } from './insightsPageApi'
+import { Card, Skeleton } from '../ui'
+
+import {
+  InsightsLoadError,
+  InsightsUnavailable,
+  LiveToggle,
+  Pager,
+  RefreshButton,
+} from './InsightsDisplay'
+import { insightsUnavailableReason, type InsightsUnavailableReason } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import type {
   InsightsAggregateResponse,
@@ -25,6 +32,7 @@ interface ReviewData {
   total: number
   aggregate: InsightsAggregateResponse | null
   error: string | null
+  unavailable?: InsightsUnavailableReason
   loading: boolean
 }
 
@@ -67,13 +75,13 @@ function useReviewData(filters: ReviewFilters, page: number, autoRefresh: boolea
       })
     } catch (err) {
       if (isAbortError(err)) return
-      const unavailable = isInsightsReplayUnavailableError(err)
-      const message = err instanceof Error ? err.message : 'Unknown error'
+      const unavailable = insightsUnavailableReason(err)
       setData({
         records: [],
         total: 0,
         aggregate: null,
-        error: unavailable ? null : message,
+        error: unavailable ? null : err instanceof Error ? err.message : 'Unknown error',
+        unavailable,
         loading: false,
       })
     }
@@ -99,8 +107,11 @@ export default function InsightsReviewsView({ initialSession = '' }: { initialSe
   const [sessionInput, setSessionInput] = useState(initialSession)
   const [page, setPage] = useState(1)
   const [autoRefresh, setAutoRefresh] = useState(false)
-  const { records, total, aggregate, error, refresh } = useReviewData(filters, page, autoRefresh)
-  const totalPages = Math.max(1, Math.ceil(total / reviewPageSize))
+  const { records, total, aggregate, error, unavailable, loading, refresh } = useReviewData(
+    filters,
+    page,
+    autoRefresh,
+  )
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -117,77 +128,46 @@ export default function InsightsReviewsView({ initialSession = '' }: { initialSe
     setPage(1)
   }, [])
 
+  if (unavailable) {
+    return (
+      <Card className="border-dashed shadow-none">
+        <InsightsUnavailable reason={unavailable} noun="reviews" onRetry={() => void refresh()} />
+      </Card>
+    )
+  }
+
   return (
     <>
       {error ? (
-        <div className={styles.error}>
-          <span>{error}</span>
-        </div>
+        <InsightsLoadError
+          title="Reviews could not load"
+          message={error}
+          onRetry={() => void refresh()}
+        />
       ) : null}
       {aggregate?.reviews ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<Skeleton className="mb-4 h-40 w-full rounded-xl" />}>
           <InsightsReviewCharts reviews={aggregate.reviews} />
         </Suspense>
       ) : null}
-      <div className={configStyles.sectionPanel}>
-        <section className={configStyles.sectionTableBlock}>
-          <div className={styles.toolbar}>
-            <div>
-              <h2 className={styles.sectionTitle}>Reviews</h2>
-              <p className={styles.sectionSubtitle}>
-                Each approval review an agent asked for: the planned action, the verdict, and what
-                it cost. Open a row for the rationale and the reviewed session.
-              </p>
-            </div>
-            <div className={styles.toolbarActions}>
-              <label className={styles.toggle}>
-                <input
-                  type="checkbox"
-                  checked={autoRefresh}
-                  onChange={(event) => setAutoRefresh(event.target.checked)}
-                />
-                <span>Auto-refresh</span>
-              </label>
-              <button type="button" onClick={() => void refresh()} className={styles.refreshButton}>
-                Refresh
-              </button>
-            </div>
-          </div>
-          <InsightsReviewsTable
-            records={records}
-            total={total}
-            filters={filters}
-            sessionInput={sessionInput}
-            modelOptions={aggregate?.available_review_models ?? []}
-            hasReviews={total > 0 || Boolean(aggregate?.available_review_models?.length)}
-            onSessionInput={setSessionInput}
-            onFilterChange={onFilterChange}
-          />
-        </section>
-      </div>
-      {total > reviewPageSize ? (
-        <div className={styles.pagination}>
-          <button
-            type="button"
-            className={styles.paginationButton}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page === 1}
-          >
-            Previous
-          </button>
-          <span className={styles.paginationInfo}>
-            Page {page} of {totalPages} ({total} reviews)
-          </span>
-          <button
-            type="button"
-            className={styles.paginationButton}
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            disabled={page === totalPages}
-          >
-            Next
-          </button>
-        </div>
-      ) : null}
+      <InsightsReviewsTable
+        records={records}
+        total={total}
+        filters={filters}
+        sessionInput={sessionInput}
+        modelOptions={aggregate?.available_review_models ?? []}
+        hasReviews={total > 0 || Boolean(aggregate?.available_review_models?.length) || loading}
+        loading={loading}
+        onSessionInput={setSessionInput}
+        onFilterChange={onFilterChange}
+        actions={
+          <>
+            <LiveToggle live={autoRefresh} onLiveChange={setAutoRefresh} />
+            <RefreshButton onClick={() => void refresh()} loading={loading && records.length > 0} />
+          </>
+        }
+      />
+      <Pager page={page} pageSize={reviewPageSize} total={total} noun="review" onPage={setPage} />
     </>
   )
 }

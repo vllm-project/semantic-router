@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { ArrowUpRight } from 'lucide-react'
 
+import { cn } from '../ui'
 import { formatInsightsCost } from '../utils/insightsCost'
 
-import styles from './InsightsRun.module.css'
 import { ModelName, modelLabel, modelText, useModelLabels } from './insightsModelLabelSupport'
 import { getInsightsRecordPath } from './insightsPageSupport'
 import {
@@ -18,15 +20,22 @@ import {
 } from './insightsRunSupport'
 import type { RunCall, RunSummary } from './insightsRunTypes'
 
+const MARKER_TONE: Record<string, string> = {
+  failure: 'text-destructive-foreground',
+  block: 'text-destructive-foreground',
+  tool_failure: 'text-warning-foreground',
+  guard: 'text-warning-foreground',
+}
+
 function Markers({ markers }: { markers?: string[] }) {
   return (
     <>
       {(markers ?? []).map((marker) => (
         <span
           key={marker}
-          className={styles.marker}
           data-marker={marker}
           title={RUN_MARKER_LABELS[marker] ?? marker}
+          className={cn('font-semibold leading-none', MARKER_TONE[marker] ?? 'text-foreground/80')}
         >
           {RUN_MARKER_GLYPHS[marker] ?? '•'}
         </span>
@@ -39,6 +48,7 @@ interface RunDiagramProps {
   run: RunSummary
   lanes: RunLane[]
   selected?: string
+  activeAgent?: string
   onSelect: (segment: RunSegment) => void
 }
 
@@ -48,15 +58,24 @@ function modelTitle(labels: Record<string, string>, model: string): string {
 }
 
 // A lane per agent, in tree order, with its calls as segments on one time axis.
-export function RunDiagram({ run, lanes, selected, onSelect }: RunDiagramProps) {
+export function RunDiagram({ run, lanes, selected, activeAgent, onSelect }: RunDiagramProps) {
   const labels = useModelLabels()
   return (
-    <div className={styles.diagram} role="list" aria-label="Run timeline">
+    <div className="flex flex-col gap-1.5" role="list" aria-label="Run timeline">
       {lanes.map((lane) => (
-        <div key={lane.agent.label} className={styles.lane} role="listitem">
-          <div className={styles.laneLabel} style={{ paddingLeft: `${lane.depth * 0.9}rem` }}>
-            <strong>{lane.depth > 0 ? `↳ ${lane.agent.label}` : lane.agent.label}</strong>
-            <span>
+        <div
+          key={lane.agent.label}
+          role="listitem"
+          className={cn(
+            'grid grid-cols-[minmax(0,170px)_minmax(0,1fr)] items-center gap-3 rounded-md transition-opacity',
+            activeAgent && activeAgent !== lane.agent.label && 'opacity-45',
+          )}
+        >
+          <div className="flex min-w-0 flex-col" style={{ paddingLeft: `${lane.depth * 0.9}rem` }}>
+            <strong className="truncate font-mono text-[12px] font-medium">
+              {lane.depth > 0 ? `↳ ${lane.agent.label}` : lane.agent.label}
+            </strong>
+            <span className="truncate text-[11px] text-subtle-foreground">
               {[
                 lane.agent.kind,
                 countText(lane.agent.calls, 'call'),
@@ -66,10 +85,10 @@ export function RunDiagram({ run, lanes, selected, onSelect }: RunDiagramProps) 
                 .join(' · ')}
             </span>
           </div>
-          <div className={styles.track}>
+          <div className="relative h-7 rounded-md bg-surface-subtle ring-1 ring-inset ring-border">
             {lane.spawnAt !== undefined ? (
               <span
-                className={styles.spawn}
+                className="absolute inset-y-0 w-px border-l border-dashed border-chart-3"
                 style={{ left: `${lane.spawnAt}%` }}
                 title={`Spawned by ${lane.agent.parent ?? 'main'}`}
               />
@@ -78,8 +97,8 @@ export function RunDiagram({ run, lanes, selected, onSelect }: RunDiagramProps) 
               <button
                 key={segment.key}
                 type="button"
-                className={styles.segment}
                 data-selected={segment.key === selected}
+                className="absolute inset-y-1 flex min-w-1.5 items-center justify-center gap-0.5 overflow-hidden rounded-[5px] px-0.5 text-[10px] text-primary-foreground shadow-xs outline-none transition-[box-shadow,filter] hover:brightness-110 focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[selected=true]:ring-2 data-[selected=true]:ring-foreground"
                 style={{
                   left: `${segment.left}%`,
                   width: `${segment.width}%`,
@@ -89,18 +108,23 @@ export function RunDiagram({ run, lanes, selected, onSelect }: RunDiagramProps) 
                 onClick={() => onSelect(segment)}
               >
                 {segment.calls.length > 1 ? (
-                  <span className={styles.count}>{segment.calls.length}</span>
+                  <span className="font-mono font-semibold tabular">{segment.calls.length}</span>
                 ) : null}
-                <Markers markers={segment.markers} />
+                <span className="rounded-sm bg-surface/85 px-0.5 empty:hidden">
+                  <Markers markers={segment.markers} />
+                </span>
               </button>
             ))}
           </div>
         </div>
       ))}
-      <div className={styles.axis}>
-        <span>0s</span>
-        <span>{formatRunDuration(Math.round(run.duration_ms / 2))}</span>
-        <span>{formatRunDuration(run.duration_ms)}</span>
+      <div className="grid grid-cols-[minmax(0,170px)_minmax(0,1fr)] gap-3">
+        <span aria-hidden />
+        <div className="flex justify-between font-mono text-[10.5px] text-subtle-foreground tabular">
+          <span>0s</span>
+          <span>{formatRunDuration(Math.round(run.duration_ms / 2))}</span>
+          <span>{formatRunDuration(run.duration_ms)}</span>
+        </div>
       </div>
     </div>
   )
@@ -108,27 +132,32 @@ export function RunDiagram({ run, lanes, selected, onSelect }: RunDiagramProps) 
 
 export function RunLegend({ run }: { run: RunSummary }) {
   return (
-    <div className={styles.legend}>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
       {run.models.map((model) => (
-        <span key={model.name}>
-          <i style={{ background: modelHue(run.models, model.name) }} />
+        <span key={model.name} className="inline-flex items-center gap-1.5">
+          <i
+            className="size-2 rounded-[3px]"
+            style={{ background: modelHue(run.models, model.name) }}
+          />
           <ModelName name={model.name} />
         </span>
       ))}
-      {Object.entries(RUN_MARKER_LABELS).map(([marker, label]) => (
-        <span key={marker}>
-          <Markers markers={[marker]} /> {label}
-        </span>
-      ))}
+      {Object.entries(RUN_MARKER_LABELS)
+        .filter(([marker]) => run.events?.[marker])
+        .map(([marker, label]) => (
+          <span key={marker} className="inline-flex items-center gap-1">
+            <Markers markers={[marker]} /> {label}
+          </span>
+        ))}
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className={styles.field}>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 py-1.5">
+      <dt className="text-xs text-subtle-foreground">{label}</dt>
+      <dd className="min-w-0 break-words text-[13px]">{children}</dd>
     </div>
   )
 }
@@ -150,7 +179,7 @@ export function RunCallDetails({ call }: { call: RunCall }) {
   const labels = useModelLabels()
   const tokens = `${call.prompt_tokens ?? '-'} in / ${call.completion_tokens ?? '-'} out`
   return (
-    <dl className={styles.details}>
+    <dl className="divide-y divide-border">
       <Field label="Decision">{call.decision || '-'}</Field>
       <Field label="Signals">{call.signals?.join(', ') || 'none matched'}</Field>
       <Field label="Model">
@@ -183,7 +212,9 @@ export function RunCallDetails({ call }: { call: RunCall }) {
       {call.hops?.length ? (
         <Field label="Hops">
           {call.hops
-            .map((hop) => `${modelLabel(labels, hop.model) || 'no model'} ${describeCallStatus(hop)}`)
+            .map(
+              (hop) => `${modelLabel(labels, hop.model) || 'no model'} ${describeCallStatus(hop)}`,
+            )
             .join(', ')}
         </Field>
       ) : null}
@@ -193,10 +224,22 @@ export function RunCallDetails({ call }: { call: RunCall }) {
         </Field>
       ) : null}
       <Field label="Markers">
-        {call.markers?.length ? <Markers markers={call.markers} /> : 'none'}
+        {call.markers?.length ? (
+          <span className="inline-flex gap-1.5">
+            <Markers markers={call.markers} />
+          </span>
+        ) : (
+          'none'
+        )}
       </Field>
       <Field label="Record">
-        <Link to={getInsightsRecordPath(call.record_id)}>Open the replay record</Link>
+        <Link
+          to={getInsightsRecordPath(call.record_id)}
+          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+        >
+          Open the replay record
+          <ArrowUpRight className="size-3.5" />
+        </Link>
       </Field>
     </dl>
   )
@@ -212,28 +255,36 @@ interface RunSegmentPanelProps {
 export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanelProps) {
   const labels = useModelLabels()
   return (
-    <aside className={styles.panel} aria-label="Step details">
-      <header>
-        <strong title={modelTitle(labels, segment.model)}>
+    <aside className="flex flex-col gap-3" aria-label="Step details">
+      <header className="flex items-baseline justify-between gap-2">
+        <strong
+          className="truncate text-[13px] font-semibold"
+          title={modelTitle(labels, segment.model)}
+        >
           {segment.agent} · {modelLabel(labels, segment.model) || 'no model'}
         </strong>
-        <span>
+        <span className="shrink-0 text-xs text-subtle-foreground">
           {segment.calls.length} call{segment.calls.length === 1 ? '' : 's'}
         </span>
       </header>
       {segment.calls.length > 1 ? (
-        <ol className={styles.steps}>
+        <ol className="flex max-h-56 flex-col overflow-y-auto rounded-lg border border-border">
           {segment.calls.map((entry) => (
-            <li key={entry.record_id}>
+            <li key={entry.record_id} className="border-b border-border last:border-0">
               <button
                 type="button"
                 data-selected={entry.record_id === call?.record_id}
                 onClick={() => onSelectCall(entry)}
+                className="grid w-full grid-cols-[72px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-surface-subtle data-[selected=true]:bg-primary-soft/60"
               >
-                <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                <span>{entry.decision || '-'}</span>
-                <span>{describeCallStatus(entry)}</span>
-                <Markers markers={entry.markers} />
+                <span className="font-mono tabular text-subtle-foreground">
+                  {new Date(entry.timestamp).toLocaleTimeString()}
+                </span>
+                <span className="truncate">{entry.decision || '-'}</span>
+                <span className="text-muted-foreground">{describeCallStatus(entry)}</span>
+                <span className="inline-flex gap-1">
+                  <Markers markers={entry.markers} />
+                </span>
               </button>
             </li>
           ))}
@@ -242,7 +293,7 @@ export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanel
       {call ? (
         <RunCallDetails call={call} />
       ) : (
-        <p className={styles.muted}>Pick a call for its details.</p>
+        <p className="text-[13px] text-muted-foreground">Pick a call for its details.</p>
       )}
     </aside>
   )
