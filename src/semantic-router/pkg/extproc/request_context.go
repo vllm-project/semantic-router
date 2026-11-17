@@ -8,6 +8,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/codexreview"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
@@ -15,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -112,6 +114,8 @@ type RequestContext struct {
 	RequestCost                   float64
 	RequestCostCurrency           string
 	RequestCostPriced             bool
+	// spend is the request's place in the spend budgets; nil without any.
+	spend *requestSpend
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter
 	IsStreamingResponse     bool // set from response Content-Type
@@ -205,6 +209,9 @@ type RequestContext struct {
 	// serialization or dump of the context carries it; read it through
 	// requestDelegatedCredential.
 	delegatedCredential string
+	// callerCredential is the provider login the client sent, kept for a
+	// backend whose auth is credential: caller (see captureCallerCredential).
+	callerCredential    callerCredential
 	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
 	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
 	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
@@ -339,6 +346,7 @@ type RequestContext struct {
 	VSRMatchedConversation    []string // Matched conversation-shape signal names
 	VSRMatchedMetadata        []string // Matched untrusted request metadata signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
+	VSRMatchedAgent           []string // Matched agent signal names: the request's agent role, harness and type
 	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
@@ -347,6 +355,13 @@ type RequestContext struct {
 	VSRSignalValues           map[string]float64
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
+	// VSRGuardOverload are the rules ("type:name") unread on an overloaded
+	// decision runtime that decide the request: alone they refuse it, or one
+	// would refuse it. It then gets a retryable error instead
+	// (global.model_catalog.on_signal_overload).
+	VSRGuardOverload []string
+	// guardOverloadAnswered is whether the request got that retryable error.
+	guardOverloadAnswered bool
 	// VSRScanCoverage is how much of their input the guard rules that read
 	// it in windows read, by "type:name".
 	VSRScanCoverage map[string]string
@@ -396,6 +411,7 @@ type RequestContext struct {
 	PIIBlocked         bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
+	ModelCallMeter    *modelservice.RequestMeter
 	TraceContext      context.Context // OpenTelemetry trace context for span propagation
 	RequestSpan       trace.Span      // Spans the complete ext_proc request, including streaming
 	UpstreamSpan      trace.Span      // Spans provider dispatch through final response body
@@ -423,9 +439,24 @@ type RequestContext struct {
 	// trusted-facts gate and its selection) recorded before Replay created
 	// its record; startRouterReplay appends them.
 	pendingToolsOutcomes []routerreplay.Outcome
+	// ApprovalReview is the agent approval review this request carries, seen
+	// at ingress and given its verdict from the response. Observational only:
+	// nothing routes, authorizes or masks on it.
+	ApprovalReview        *routerreplay.Review
+	approvalReviewSettled bool
+	// AgentTurn is the Codex turn the request belongs to, read from its turn
+	// metadata at ingress. Replay records it; protection and the agent signal
+	// read its session and thread when no header carries them.
+	AgentTurn codexreview.Turn
+	// SessionTitleRequest marks the side request a harness sends to name its
+	// session, and sessionName is the name its answer gave. Observational
+	// only, like ApprovalReview.
+	SessionTitleRequest bool
+	sessionName         string
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process
+	replayRunParent *replayRunParent      // The client request a hop is made for
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
 	// LooperTrace is what the Looper's execution reports in x-vsr-trace.

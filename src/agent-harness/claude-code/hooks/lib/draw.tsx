@@ -1,6 +1,6 @@
 import type { EngineInterface } from 'claude-code'
 
-import type { App, Calibration, Decision, Spend } from '../../types'
+import type { App, Calibration, Decision, Spend, TurnRoute } from '../../types'
 import { APP_NAMES, APPS, type Color, LOOKS, SECTIONS, sectionOf } from './apps'
 import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth, type Weight } from './describe'
 import { ANSWERS, type Answer, answersFor } from './labels'
@@ -173,10 +173,15 @@ function framedLine(elements: Elements, described: Described, columns: number) {
 export function rowView(elements: Elements, described: Described, columns: number, narrow: Described, display: Display) {
   if (display === 'verbose' || described.weight === 'act') return inlineView(elements, described, columns, narrow)
   if (display === 'quiet' || described.weight === 'quiet') return null
-  // The plain words go first when the row is short: a cut word reads worse than none.
+  // The plain words go first when the row is short: the headline stays whole, and the brief, what a redact hid,
+  // gives way.
   const room = columns - CARD_CHROME >= MIN_FRAMED_COLUMNS ? columns - CARD_CHROME : columns
   const fits = `${BRAND}  ${described.badge}  ${described.line}`.length <= room
-  return framedLine(elements, { ...described, headline: fits ? described.line : described.headline, detail: '' }, columns)
+  return framedLine(
+    elements,
+    { ...described, headline: fits ? described.line : described.headline, detail: fits ? '' : described.brief },
+    columns,
+  )
 }
 
 // A card for a decision worth noticing, a compact line for an allowed command, the one-line form where the row is narrow.
@@ -258,7 +263,15 @@ export function band(
 // What the pane's foot says of the setup: where the classifier runs, the lines in force, the last calibration (the
 // controls at its top show the apps and the waits).
 // `spend` is what routing cost against the session's model; `labeled`, the answers given this session.
-export type Overview = { settings: Settings; calibration: Calibration; isOffline: boolean; spend: Spend; labeled: number }
+export type Overview = {
+  settings: Settings
+  calibration: Calibration
+  isOffline: boolean
+  spend: Spend
+  // Where your turns run while the router routes them, and the model you picked with /model when that paused it.
+  turns: { route: TurnRoute | null; paused: string }
+  labeled: number
+}
 
 const dollars = (value: number) => (value < 0.01 ? '<$0.01' : `$${value.toFixed(2)}`)
 
@@ -268,17 +281,27 @@ function spendWords({ spend }: Overview) {
   if (spend.turns === 0 || sessionModel === undefined || spend.baseline === 0) return undefined
   const change = 1 - spend.actual / spend.baseline
   const verdict = change >= 0 ? `saved ${Math.round(change * 100)}%` : `cost ${Math.round(-change * 100)}% more`
-  return `${dollars(spend.actual)} for ${spend.turns} subagent ${spend.turns === 1 ? 'turn' : 'turns'} vs ${dollars(spend.baseline)} on ${modelName(sessionModel)} · ${verdict} · est. at list price`
+  return `${dollars(spend.actual)} for ${spend.turns} routed ${spend.turns === 1 ? 'turn' : 'turns'} vs ${dollars(spend.baseline)} on ${modelName(sessionModel)} · ${verdict} · est. at list price`
 }
 
 const tokenWords = ({ url, token }: Settings['runtime']) =>
   token === '' ? '' : isCleartextRemote(url) ? ' · token set, sent unencrypted' : ' · token set'
 
+// Where your turns run: off, on the session's model, on another, or paused on the one you picked.
+export function turnsWords({ settings, turns }: Pick<Overview, 'settings' | 'turns'>) {
+  if (!settings.apps.router) return undefined
+  if (!settings.routerTurns) return 'on the model you picked · /vsr turns on lets the router pick'
+  if (turns.paused !== '') return `paused on ${modelName(turns.paused)}, which you picked · /vsr turns on`
+  return turns.route === null ? 'the router picks · on your model now' : `the router picks · on ${modelName(turns.route.model)} at ${turns.route.picked} now`
+}
+
 function overviewRows(about: Overview) {
   const { settings: { runtime, thresholds: t, log }, calibration, isOffline, labeled } = about
   const routing = spendWords(about)
+  const turns = turnsWords(about)
   const since = `${calibration.since} ${calibration.since === 1 ? 'decision' : 'decisions'} since`
   return [
+    ...(turns === undefined ? [] : [['your turns', turns] as const]),
     ...(routing === undefined ? [] : [['routing', routing] as const]),
     ['model', `${runtime.kind} · ${runtime.url}${tokenWords(runtime)}${isOffline ? ' · not answering' : ''}`],
     [

@@ -10,10 +10,23 @@ import {
   ModelExternalIdsEditor,
   ModelLorasEditor,
   ModelPricingEditor,
+  ModelReliabilityEditor,
   ModelTagsEditor,
 } from './configPageModelStructuredEditors'
 
 describe('model structured editors', () => {
+  it('shows the retry count the gateways apply', () => {
+    const render = (value: object) =>
+      renderToStaticMarkup(createElement(ModelReliabilityEditor, { value, readOnly: true }))
+
+    expect(render({ retry_count: 0 })).toContain('0 retries')
+    expect(render({})).toContain('2 retries by default')
+    // retry_on without a count retries nothing
+    const conditionsOnly = render({ retry_on: '5xx' })
+    expect(conditionsOnly).toContain('0 retries')
+    expect(conditionsOnly).not.toContain('by default')
+  })
+
   it('renders model tags as discrete values', () => {
     const markup = renderToStaticMarkup(
       createElement(ModelTagsEditor, {
@@ -48,6 +61,58 @@ describe('model structured editors', () => {
     expect(markup).toContain('••••••••')
     expect(markup).not.toContain('10.0.0.4:8000')
     expect(markup).not.toContain('secret-key')
+  })
+
+  it.each(['delegated', 'caller'] as const)(
+    'keeps a %s credential when a backend is edited',
+    (credential) => {
+      const backend = {
+        name: 'claude',
+        endpoint: 'https://api.anthropic.com',
+        provider: 'anthropic',
+        auth: { credential },
+      }
+      let saved: unknown
+      const editor = ModelBackendRefsEditor({
+        value: [backend],
+        onChange: (value) => {
+          saved = value
+        },
+      })
+
+      expect(renderToStaticMarkup(editor)).toContain(`<option value="${credential}" selected="">`)
+      editor.props.onChange(editor.props.value)
+      expect(saved).toEqual([backend])
+    },
+  )
+
+  it('keeps the stored key file when a backend is edited, and a new inline key replaces it', () => {
+    const backend = {
+      name: 'openai-primary',
+      endpoint: 'https://api.openai.com/v1',
+      provider: 'openai',
+      auth: { api_key_file: '/app/.vllm-sr/provider-keys/key-1' },
+    }
+    let saved: unknown
+    const editor = ModelBackendRefsEditor({
+      value: [backend],
+      onChange: (value) => {
+        saved = value
+      },
+    })
+
+    editor.props.onChange(editor.props.value)
+    expect(saved).toEqual([backend])
+
+    editor.props.onChange([{ ...editor.props.value[0], api_key: 'replacement-key' }])
+    expect(saved).toEqual([
+      {
+        name: 'openai-primary',
+        endpoint: 'https://api.openai.com/v1',
+        provider: 'openai',
+        api_key: 'replacement-key',
+      },
+    ])
   })
 
   it('renders capabilities, LoRAs, provider IDs, and pricing without JSON input', () => {

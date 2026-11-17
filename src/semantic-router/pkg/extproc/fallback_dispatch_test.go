@@ -2584,8 +2584,8 @@ func guardedFallbackAnswer(t *testing.T, streaming bool, server *responseStageDe
 
 func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 	imm, _, responseCache := guardedFallbackAnswer(t, false, newJailbreakDecider(0.95))
-	if imm.GetStatus().GetCode() != typev3.StatusCode_Forbidden {
-		t.Fatalf("expected HTTP 403 Forbidden due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
+	if imm.GetStatus().GetCode() != typev3.StatusCode_BadRequest {
+		t.Fatalf("expected HTTP 400 Bad Request due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
 	}
 	bodyStr := string(imm.GetBody())
 	if !strings.Contains(bodyStr, "Response blocked: jailbreak content detected in LLM output") {
@@ -3540,17 +3540,17 @@ func TestFallbackBlockedResponseNotCached(t *testing.T) {
 	}
 
 	imm := resp.GetImmediateResponse()
-	if imm.GetStatus().GetCode() != typev3.StatusCode_Forbidden {
-		t.Fatalf("expected HTTP 403 Forbidden due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
+	if imm.GetStatus().GetCode() != typev3.StatusCode_BadRequest {
+		t.Fatalf("expected HTTP 400 Bad Request due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
 	}
 
-	// Verify that Router Replay recorded the terminal blocked response as HTTP 403 (not HTTP 200)
+	// Verify that Router Replay recorded the terminal blocked response as HTTP 400 (not HTTP 200)
 	rec, ok := recorder.GetRecord(ctx.RouterReplayID)
 	if !ok {
 		t.Fatal("expected replay record to be found")
 	}
-	if rec.ResponseStatus != http.StatusForbidden {
-		t.Errorf("expected replay response status %d (Forbidden), got %d", http.StatusForbidden, rec.ResponseStatus)
+	if rec.ResponseStatus != http.StatusBadRequest {
+		t.Errorf("expected replay response status %d (Bad Request), got %d", http.StatusBadRequest, rec.ResponseStatus)
 	}
 	if ctx.FallbackRecord == nil || ctx.FallbackRecord.FinalStatus != "policy_blocked" {
 		t.Fatalf("expected policy_blocked fallback status, got %+v", ctx.FallbackRecord)
@@ -4133,11 +4133,12 @@ func TestResponsePolicyPersistenceIsDeferredUntilCommit(t *testing.T) {
 
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
-		RequestID:            "request-deferred-policy-commit",
-		RouterReplayID:       recordID,
-		RouterReplayRecorder: recorder,
-		SourceFormat:         llmprotocol.OpenAIChatV1,
-		UpstreamStatusCode:   http.StatusOK,
+		RequestID:                "request-deferred-policy-commit",
+		RouterReplayID:           recordID,
+		RouterReplayRecorder:     recorder,
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureResponseBody: true},
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		UpstreamStatusCode:       http.StatusOK,
 	}
 	response := &llmprotocol.Response{
 		ID:    "chatcmpl-deferred",

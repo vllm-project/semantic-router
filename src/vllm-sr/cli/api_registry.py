@@ -24,7 +24,7 @@ SCHEMAS = {
 LISTENER_SCHEMAS = {"systemone": ("vllm-sr/5.0", "vllm-sr/4.0")}
 UPSTREAM_DEFAULTS = {"systemone": "systemone/0.2"}
 # The settings an API takes on a listener besides schema and models.
-SETTINGS = {"systemone": ("max_deadline_ms",)}
+SETTINGS = {"systemone": ("max_deadline_ms", "vsr")}
 # Every request path each API answers (RE2, anchored), the Azure OpenAI forms
 # among them, as the Router gates them; the generated Envoy listener routes by
 # them too.

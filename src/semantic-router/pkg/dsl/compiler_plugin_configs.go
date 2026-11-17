@@ -195,40 +195,19 @@ func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) (int
 	// Preserve omission and explicit false/zero overrides. Serializing the
 	// effective capture config here would replace inherited global defaults.
 	raw := fieldsToMap(fields)
-	if shadow, ok := fields["shadow"].(ObjectValue); ok {
-		if budget, ok := shadow.Fields["budget"]; ok && !c.compileShadowBudget(budget) {
-			return nil, false
-		}
-	}
+	var replay config.RouterReplayPluginConfig
 	payload, err := config.NewStructuredPayload(raw)
 	if err == nil {
-		err = payload.DecodeIntoStrict(&config.RouterReplayPluginConfig{})
+		err = payload.DecodeIntoStrict(&replay)
+	}
+	if err == nil {
+		err = replay.ValidatePromptCapture()
 	}
 	if err != nil {
 		c.addError(Position{}, "invalid router_replay configuration: %v", err)
 		return nil, false
 	}
 	return raw, true
-}
-
-// compileShadowBudget validates router_replay.shadow.budget on its own. A
-// malformed budget must fail the compile instead of decoding to a zero budget,
-// because zero means "unlimited" on every dimension.
-func (c *Compiler) compileShadowBudget(raw Value) bool {
-	obj, ok := raw.(ObjectValue)
-	if !ok {
-		c.addError(Position{}, "router_replay.shadow.budget must be an object")
-		return false
-	}
-	payload, err := config.NewStructuredPayload(fieldsToMap(obj.Fields))
-	if err == nil {
-		err = payload.DecodeIntoStrict(&config.ShadowDispatchBudgetConfig{})
-	}
-	if err != nil {
-		c.addError(Position{}, "invalid router_replay.shadow.budget: %v", err)
-		return false
-	}
-	return true
 }
 
 func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) config.FastResponsePluginConfig {
@@ -238,6 +217,9 @@ func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) conf
 	}
 	if v, ok := getStringField(fields, "message"); ok {
 		cfg.Message = v
+	}
+	if v, ok := getBoolField(fields, "block"); ok {
+		cfg.Block = v
 	}
 	return cfg
 }

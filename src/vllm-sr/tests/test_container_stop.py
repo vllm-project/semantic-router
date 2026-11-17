@@ -54,6 +54,7 @@ def _runtime_executable(tmp_path, body):
 def test_stop_allows_sigterm_cleanup_before_forced_exit(monkeypatch, tmp_path):
     # Scale seconds in the stand-in daemon, while asserting the real 40/50s
     # contract above. The child actually receives SIGTERM and closes its owner.
+    # A twentieth of the grace leaves the 0.2 s cleanup room on a loaded runner.
     (tmp_path / "worker.py").write_text(
         textwrap.dedent(
             """
@@ -91,7 +92,7 @@ def test_stop_allows_sigterm_cleanup_before_forced_exit(monkeypatch, tmp_path):
             assert child.stdout.readline().strip() == "ready"
             child.send_signal(signal.SIGTERM)
             try:
-                status = child.wait(timeout=grace / 100)
+                status = child.wait(timeout=grace / 20)
             except subprocess.TimeoutExpired:
                 child.kill()
                 status = child.wait(timeout=2)

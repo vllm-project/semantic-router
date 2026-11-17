@@ -47,7 +47,7 @@ func recordReplayUserTurn(t *testing.T, router *OpenAIRouter, format llmprotocol
 	ctx := &RequestContext{
 		SourceFormat: format, TraceContext: t.Context(),
 		Headers:                  map[string]string{"x-session-id": "shared-session", "x-conversation-id": conversation},
-		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, CaptureRequestBody: true, CaptureResponseBody: true},
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureRequestBody: true, CaptureResponseBody: true},
 	}
 	request, immediate := router.prepareProtocolRequest(body, ctx)
 	require.Nil(t, immediate)

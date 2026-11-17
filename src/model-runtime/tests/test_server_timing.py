@@ -88,6 +88,30 @@ def test_requests_planned_off_the_event_loop_report_their_phases(client, tasks):
     assert timing["tokenize"] > 0 and timing["forward"] > 0
 
 
+@pytest.mark.parametrize("forwards", [False, True])
+def test_a_model_that_runs_forwards_while_planning_never_plans_on_the_event_loop(
+    qwen3_runtime, client, monkeypatch, forwards
+):
+    """A small body plans on the event loop unless a served model ``plans_run_forwards``."""
+    import asyncio
+
+    monkeypatch.setattr(qwen3_runtime.served[0].model, "plans_run_forwards", forwards)
+    on_loop: list[bool] = []
+    prepare = qwen3_runtime.prepare
+
+    def recording(*args, **kwargs):
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(True)
+        except RuntimeError:
+            on_loop.append(False)
+        return prepare(*args, **kwargs)
+
+    monkeypatch.setattr(qwen3_runtime, "prepare", recording)
+    assert client.post("/v1/decisions", json=decisions()).status_code == 200
+    assert on_loop == [not forwards]
+
+
 @pytest.mark.parametrize(
     "path, payload, status",
     [

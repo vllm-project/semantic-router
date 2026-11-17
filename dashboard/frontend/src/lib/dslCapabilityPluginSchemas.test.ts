@@ -65,6 +65,13 @@ describe('capability plugin field schemas', () => {
     ])
   })
 
+  it('lets router_replay name the model savings compare with', () => {
+    const baseline = getCuratedPluginFieldSchema('router_replay').find(
+      (field) => field.key === 'cost_baseline_model',
+    )
+    expect(baseline).toMatchObject({ type: 'string', label: 'Cost Baseline Model' })
+  })
+
   it('exposes canonical response cache fields', () => {
     const fields = resolveCapabilityPluginFieldSchema('response_cache')
     expect(fields?.map((field) => field.key)).toEqual([

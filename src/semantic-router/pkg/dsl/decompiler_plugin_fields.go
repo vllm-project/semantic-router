@@ -71,6 +71,9 @@ func pluginFieldsFastResponse(p *config.DecisionPlugin) map[string]Value {
 	if cfg.Message != "" {
 		fields["message"] = StringValue{V: cfg.Message}
 	}
+	if cfg.Block {
+		fields["block"] = BoolValue{V: true}
+	}
 	return fields
 }
 

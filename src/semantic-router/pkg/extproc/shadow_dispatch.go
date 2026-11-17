@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/shadow"
@@ -59,6 +60,9 @@ const (
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
 	shadowReasonBudgetConcurrency    = "budget_concurrency_limit"
+
+	// shadowReasonBackendLacksCapability shares the plugin gate's typed reason.
+	shadowReasonBackendLacksCapability = string(pluginruntime.SkipBackendLacksCapability)
 
 	// shadowDispatchDrainTimeout is how long Close lets in-flight shadows
 	// finish before cancelling them. Their primary requests already completed
@@ -119,6 +123,10 @@ type shadowJob struct {
 	recorder        *routerreplay.Recorder
 	enqueuedAt      time.Time
 	deadline        time.Time
+	// keepsExcerpt is whether the request's prompt_capture keeps generated
+	// text, as only raw does: under none and verified, an outcome stores no
+	// excerpt of the shadow's answer.
+	keepsExcerpt bool
 }
 
 type shadowResult struct {
@@ -225,18 +233,30 @@ func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch 
 	}
 	cfg := replay.Shadow.WithDefaults()
 	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
-		routerConfig: r.Config,
-		engine:       engine,
-		encode:       r.shadowRequestEncoder(ctx, dispatch, engine),
-		extraHeaders: r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		routerConfig:         r.Config,
+		engine:               engine,
+		encode:               r.shadowRequestEncoder(ctx, dispatch, engine),
+		extraHeaders:         r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		modelLacksCapability: r.shadowModelLacksCapability(ctx, cfg.Model),
 	})
 }
 
 type shadowSubmitDeps struct {
-	routerConfig *config.RouterConfig
-	engine       *protocolcodec.Engine
-	encode       shadowRequestEncoder
-	extraHeaders map[string]string
+	routerConfig         *config.RouterConfig
+	engine               *protocolcodec.Engine
+	encode               shadowRequestEncoder
+	extraHeaders         map[string]string
+	modelLacksCapability bool // the shadow model's card omits a task capability the request needs
+}
+
+// shadowModelLacksCapability reports whether the shadow model's declared capabilities
+// leave out a task capability the request needs, so the media never reaches it.
+func (r *OpenAIRouter) shadowModelLacksCapability(ctx *RequestContext, model string) bool {
+	if ctx.SemanticRequest == nil {
+		return false
+	}
+	declared, annotated := r.declaredModelCapabilities(model)
+	return !pluginruntime.CoversRequest(llmprotocol.RequiredCapabilities(*ctx.SemanticRequest), declared, annotated)
 }
 
 // shadowRequestEncoder mirrors the primary pipeline for the shadow model:
@@ -251,6 +271,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 	decisionName := dispatch.decisionName
 	useReasoning := dispatch.useReasoning
 	envelope := ctx.ProtocolEnvelope
+	sourceFormat, requestID := ctx.SourceFormat, ctx.RequestID
 	return func(request llmprotocol.Request, target *shadowTarget) ([]byte, error) {
 		request.Model = target.upstreamModel
 		request.Stream = false
@@ -261,7 +282,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if decisionName != "" && target.format != llmprotocol.OpenAIChatV1 {
 			r.applySemanticReasoningMode(&request, target.logicalModel, target.format, useReasoning, decision)
 		}
-		projected, err := r.projectRequestForBackend(request, target.logicalModel, target.format)
+		projected, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(request, target.logicalModel, target.format, target)
 		if err != nil {
 			return nil, err
 		}
@@ -269,6 +290,9 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if err != nil {
 			return nil, err
 		}
+		// Shadows cannot add warnings to the primary reply. Report projection loss
+		// through metrics and logs using an immutable request identity.
+		recordProtocolDiagnostics(&RequestContext{SourceFormat: sourceFormat, TargetFormat: target.format, RequestID: requestID}, projectionDiagnostics)
 		body := encoded.Body
 		if decisionName != "" && target.format == llmprotocol.OpenAIChatV1 {
 			body, err = r.setReasoningModeToRequestBodyForModelAndProvider(
@@ -400,6 +424,9 @@ func (d *shadowDispatcher) submit(
 	case ctx.SemanticRequest == nil || deps.routerConfig == nil || deps.engine == nil || deps.encode == nil:
 		dropEarly(shadowReasonRequestUnavailable)
 		return
+	case deps.modelLacksCapability:
+		dropEarly(shadowReasonBackendLacksCapability)
+		return
 	}
 	rate := cfg.EffectiveSampleRate()
 	if rate <= 0 || d.sampler() >= rate {
@@ -435,6 +462,7 @@ func (d *shadowDispatcher) submit(
 		}
 		job := &shadowJob{
 			cfg:             cfg,
+			keepsExcerpt:    ctx.RouterReplayPluginConfig.CapturesRawContent(),
 			model:           model,
 			budget:          budget,
 			routerConfig:    deps.routerConfig,
@@ -673,7 +701,7 @@ func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Dur
 	metadata["response_chars"] = strconv.Itoa(utf8.RuneCountInString(result.text))
 	sum := sha256.Sum256([]byte(result.text))
 	metadata["response_sha256"] = hex.EncodeToString(sum[:])
-	if job.cfg.CaptureResponseBody {
+	if job.cfg.CaptureResponseBody && job.keepsExcerpt {
 		if len(result.text) > job.cfg.MaxCaptureBytes {
 			metadata["response_excerpt_truncated"] = "true"
 		}

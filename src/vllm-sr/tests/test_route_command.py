@@ -24,6 +24,7 @@ from cli.commands.recipe_learning import (
     EvalCase,
     build_recipe_learning_artifact,
     fetch_replay_payload,
+    load_replay_records,
     normalize_replay_payload,
 )
 from cli.commands.recipe_learning_metrics import (
@@ -347,6 +348,34 @@ def test_recipe_learning_stops_when_next_offset_does_not_advance(
 
     assert payload["data"] == [{"id": "r1"}]
     assert requested == [{"limit": "500"}]
+
+
+def test_recipe_learning_caps_its_limit_and_the_fetch_takes_filters(
+    monkeypatch,
+) -> None:
+    # recipe learning keeps its 500-record cap; vllm-sr usage reads a whole
+    # window through the same fetch, with its filters on every page
+    requested: list[dict[str, str]] = []
+
+    class _Response:
+        status_code = 200
+        ok = True
+        headers: ClassVar[dict[str, str]] = {}
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {"data": []}
+
+    def _fake_request(_method: str, _url: str, **kwargs: Any) -> _Response:
+        requested.append(kwargs["params"])
+        return _Response()
+
+    monkeypatch.setattr("cli.router_management_client.requests.request", _fake_request)
+
+    load_replay_records(None, "http://router.example:8080", 1000, 1)
+    fetch_replay_payload("http://router.example:8080", 1000, 1, {"since": "t"})
+
+    assert requested == [{"limit": "500"}, {"since": "t", "limit": "1000"}]
 
 
 def test_recipe_learning_rejects_endpoint_credentials() -> None:

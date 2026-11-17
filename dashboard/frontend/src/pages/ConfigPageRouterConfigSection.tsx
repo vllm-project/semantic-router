@@ -4,6 +4,7 @@ import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import ProductIcon from '../components/ProductIcon'
 import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import styles from './ConfigPageRouterConfigSection.module.css'
+import ConfigPageListenerVSRPanel from './ConfigPageListenerVSRPanel'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
@@ -22,6 +23,7 @@ interface ConfigPageRouterConfigSectionProps {
   isReadonly: boolean
   openEditModal: OpenEditModal
   refreshConfig: () => Promise<void>
+  saveConfig: (config: ConfigData) => Promise<void>
 }
 
 function badgeClassName(badge: RouterSectionBadge): string {
@@ -40,6 +42,7 @@ export default function ConfigPageRouterConfigSection({
   isReadonly,
   openEditModal,
   refreshConfig,
+  saveConfig,
 }: ConfigPageRouterConfigSectionProps) {
   const { hash } = useLocation()
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
@@ -356,6 +359,11 @@ export default function ConfigPageRouterConfigSection({
                   </div>
                 </section>
               ))}
+              <ConfigPageListenerVSRPanel
+                config={config}
+                isReadonly={isReadonly}
+                saveConfig={saveConfig}
+              />
             </div>
           </div>
         ) : (
