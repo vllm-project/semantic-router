@@ -294,7 +294,7 @@ export default function InsightsRoutingTrace({
                 {record.decision}
               </span>
               <Link
-                to={`/routing/decisions?d=${encodeURIComponent(record.decision)}`}
+                to={`/routing/decisions?${new URLSearchParams({ ...(record.recipe ? { recipe: record.recipe } : {}), id: record.decision })}`}
                 className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
               >
                 Open decision

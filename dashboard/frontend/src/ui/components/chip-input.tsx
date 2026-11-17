@@ -6,7 +6,9 @@ import { mergeChips } from './chip-input-support'
 /**
  * Editable list of short strings shown as chips (keywords, model names, tags).
  * Enter, Tab or a comma adds the typed value; pasting splits on commas and new
- * lines; Backspace in an empty field removes the last chip. Duplicates are
+ * lines; Backspace in an empty field removes the last chip. With
+ * `splitOnComma={false}` (for values that contain commas, such as regular
+ * expressions) only Enter, Tab and new lines separate values. Duplicates are
  * ignored (case-insensitively unless `caseSensitive`), and `validate` may
  * refuse a value with a message.
  */
@@ -15,6 +17,7 @@ export function ChipInput({
   onChange,
   placeholder = 'Type and press Enter',
   caseSensitive = false,
+  splitOnComma = true,
   validate,
   disabled,
   invalid,
@@ -27,6 +30,7 @@ export function ChipInput({
   onChange: (next: string[]) => void
   placeholder?: string
   caseSensitive?: boolean
+  splitOnComma?: boolean
   validate?: (candidate: string) => string | null
   disabled?: boolean
   invalid?: boolean
@@ -105,7 +109,7 @@ export function ChipInput({
           placeholder={value.length ? '' : placeholder}
           onChange={(event) => {
             const text = event.target.value
-            if (text.includes(',')) {
+            if (splitOnComma && text.includes(',')) {
               const parts = text.split(',')
               const tail = parts.pop() ?? ''
               if (add(parts)) setDraft(tail)
@@ -125,9 +129,10 @@ export function ChipInput({
           }}
           onPaste={(event) => {
             const text = event.clipboardData.getData('text')
-            if (!/[,\n]/.test(text)) return
+            const separator = splitOnComma ? /[,\n]/ : /\n/
+            if (!separator.test(text)) return
             event.preventDefault()
-            add(text.split(/[,\n]/))
+            add(text.split(separator))
           }}
           onBlur={() => commitDraft()}
           className="h-6 min-w-[8ch] flex-1 bg-transparent text-[13px] outline-none placeholder:text-subtle-foreground disabled:cursor-not-allowed"
