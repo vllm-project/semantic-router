@@ -73,36 +73,27 @@ export function canAccessDashboardPath(
   pathname: string,
 ): boolean {
   const normalizedPath = pathname.trim().toLowerCase()
+  const startsWith = (...prefixes: string[]) => prefixes.some((prefix) => normalizedPath.startsWith(prefix))
 
-  if (normalizedPath.startsWith('/users')) return canViewUsers(user)
-  if (normalizedPath.startsWith('/topology')) {
+  if (startsWith('/settings/access', '/users')) return canViewUsers(user)
+  if (startsWith('/routing/topology', '/topology', '/observe/status', '/status')) {
     return canAccessWithPermission(user, TOPOLOGY_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
-  if (normalizedPath.startsWith('/status')) {
-    return canAccessWithPermission(user, TOPOLOGY_READ_PERMISSION, READ_CAPABLE_ROLES)
-  }
-  if (
-    normalizedPath.startsWith('/logs') ||
-    normalizedPath.startsWith('/monitoring') ||
-    normalizedPath.startsWith('/tracing')
-  ) {
+  if (startsWith('/observe/logs', '/observe/metrics', '/observe/traces', '/logs', '/monitoring', '/tracing')) {
     return canAccessWithPermission(user, LOGS_READ_PERMISSION)
   }
-  if (normalizedPath.startsWith('/insights')) {
+  if (startsWith('/observe/requests', '/observe/runs', '/insights')) {
     return canAccessWithPermission(user, REPLAY_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
-  if (normalizedPath.startsWith('/evaluation')) {
+  if (startsWith('/observe/evaluations', '/evaluation')) {
     return canAccessWithPermission(user, EVALUATION_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
-  if (normalizedPath.startsWith('/config/mcp')) {
+  if (startsWith('/settings/integrations', '/config/mcp')) {
     return canAccessWithPermission(user, MCP_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
   if (
     normalizedPath === '/api/router/docs' ||
-    normalizedPath.startsWith('/builder') ||
-    normalizedPath.startsWith('/models') ||
-    normalizedPath.startsWith('/decision-model') ||
-    normalizedPath.startsWith('/config')
+    startsWith('/routing/', '/models/', '/settings/router', '/settings/schema', '/builder', '/models', '/decision-model', '/config')
   ) {
     return canAccessWithPermission(user, CONFIG_READ_PERMISSION, READ_CAPABLE_ROLES)
   }

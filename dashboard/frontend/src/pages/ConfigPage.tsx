@@ -1,5 +1,4 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react'
-import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { type EditFormData, FieldConfig } from '../components/EditModal'
 import ViewModal, { ViewSection } from '../components/ViewModal'
@@ -7,7 +6,9 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
 import { canRunEvaluation, canWriteConfig } from '../utils/accessControl'
 import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
-import ProductLoadingState from '../components/ProductLoadingState'
+import { TriangleAlert } from 'lucide-react'
+import RouteLoadingFallback from '../app/RouteLoadingFallback'
+import { Button, EmptyState, PageContainer } from '../ui'
 import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import {
   canonicalizeConfigForManagerSave,
@@ -299,40 +300,37 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const pageLoading = loading
 
   return (
-    <div className={styles.container}>
-      <div className={styles.content}>
-        {!isMCPSection && pageLoading && <ProductLoadingState label="Loading configuration" />}
+    <div className="flex min-h-0 flex-1 flex-col">
+      {!isMCPSection && pageLoading ? <RouteLoadingFallback /> : null}
 
-        {!isMCPSection && error && !pageLoading && (
-          <div className={styles.error}>
-            <span className={styles.errorIcon}></span>
-            <div>
-              <h3>Error Loading Config</h3>
-              <p>{error}</p>
-              <button type="button" className={styles.button} onClick={() => fetchConfig()}>
-                Retry
-              </button>
+      {!isMCPSection && error && !pageLoading ? (
+        <PageContainer>
+          <EmptyState
+            icon={TriangleAlert}
+            tone="orange"
+            title="The configuration could not be loaded"
+            description={error}
+            actions={<Button onClick={() => void fetchConfig()}>Try again</Button>}
+          />
+        </PageContainer>
+      ) : null}
+
+      {isMCPSection ? (
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <ConfigPageMCPSection />
+        </Suspense>
+      ) : null}
+
+      {!isMCPSection && config && !pageLoading && !error ? (
+        <>
+          {saveWarnings.length > 0 ? (
+            <div className="mx-auto w-full max-w-[1360px] px-5 pt-6 md:px-8">
+              <ConfigSaveWarnings warnings={saveWarnings} />
             </div>
-          </div>
-        )}
-
-        {isMCPSection && (
-          <div className={styles.contentArea}>
-            <Suspense fallback={<ProductLoadingState label="Loading configuration" />}>
-              <ConfigPageMCPSection />
-            </Suspense>
-          </div>
-        )}
-
-        {!isMCPSection && config && !pageLoading && !error && (
-          <div className={styles.contentArea}>
-            <ConfigSaveWarnings warnings={saveWarnings} />
-            <Suspense fallback={<ProductLoadingState label="Loading configuration" />}>
-              {renderActiveSection()}
-            </Suspense>
-          </div>
-        )}
-      </div>
+          ) : null}
+          <Suspense fallback={<RouteLoadingFallback />}>{renderActiveSection()}</Suspense>
+        </>
+      ) : null}
 
       {/* Edit Modal */}
       <EditModal

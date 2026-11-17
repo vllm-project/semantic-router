@@ -9,7 +9,7 @@ import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import SetupStatusPage from './SetupStatusPage'
 import ProductLoadingState from '../components/ProductLoadingState'
-import { loadInviteAcceptPage, loadLandingPage, loadLoginPage } from './routeLoaders'
+import { loadInviteAcceptPage, loadLoginPage } from './routeLoaders'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useCapabilities } from '../contexts/CapabilitiesContext'
 
@@ -46,10 +46,6 @@ const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/"
-          element={<RecoverableLazyRoute loader={loadLandingPage} routeLabel="Landing page" />}
-        />
         <Route
           path="/login"
           element={<RecoverableLazyRoute loader={loadLoginPage} routeLabel="Login" />}

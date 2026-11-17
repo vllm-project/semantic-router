@@ -4,79 +4,59 @@ import { CapabilitiesProvider } from './contexts/CapabilitiesContext'
 import { SetupProvider } from './contexts/SetupContext'
 import { AuthProvider } from './contexts/AuthContext'
 import AppRouter from './app/AppRouter'
+import { ThemeProvider, useTheme } from './shell/theme'
+import { ShellProvider } from './shell/shell-context'
+import { Button, Toaster, TooltipProvider } from './ui'
+
+function ThemedToaster() {
+  const { resolved } = useTheme()
+  return <Toaster theme={resolved} />
+}
+
+function NestedDashboardNotice() {
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-6 text-center text-foreground">
+      <h1 className="text-xl font-semibold tracking-[-0.02em]">Nested Dashboard detected</h1>
+      <p className="max-w-xl text-[13.5px] leading-relaxed text-muted-foreground">
+        The Dashboard is running inside an iframe, which usually means a Grafana path or proxy points back at the
+        Dashboard itself. Check the Grafana dashboard path and the backend proxy configuration.
+      </p>
+      <Button onClick={() => window.top?.location.reload()}>Open the Dashboard in a new tab</Button>
+    </div>
+  )
+}
 
 const App: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false)
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    document.documentElement.setAttribute('data-design', 'graphite')
-    document.documentElement.style.colorScheme = 'dark'
-
     if (window.self !== window.top) {
       setIsInIframe(true)
       console.warn('Dashboard detected it is running inside an iframe - this may indicate a loop')
     }
   }, [])
 
-  if (isInIframe) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          padding: '2rem',
-          textAlign: 'center',
-          backgroundColor: 'var(--color-bg)',
-          color: 'var(--color-text)',
-        }}
-      >
-        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>⚠️</div>
-        <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: 'var(--color-danger)' }}>
-          Nested Dashboard Detected
-        </h1>
-        <p style={{ maxWidth: '600px', lineHeight: '1.6', color: 'var(--color-text-secondary)' }}>
-          The dashboard has detected that it is running inside an iframe. This usually indicates a
-          configuration error where the dashboard is trying to embed itself.
-        </p>
-        <p style={{ marginTop: '1rem', color: 'var(--color-text-secondary)' }}>
-          Please check your Grafana dashboard path and backend proxy configuration.
-        </p>
-        <button
-          onClick={() => {
-            window.top?.location.reload()
-          }}
-          style={{
-            marginTop: '1.5rem',
-            padding: '0.75rem 1.5rem',
-            backgroundColor: 'var(--color-primary)',
-            color: '#09090a',
-            border: 'none',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.875rem',
-            fontWeight: '500',
-            cursor: 'pointer',
-          }}
-        >
-          Open Dashboard in New Tab
-        </button>
-      </div>
-    )
-  }
-
   return (
-    <AuthProvider>
-      <ReadonlyProvider>
-        <CapabilitiesProvider>
-          <SetupProvider>
-            <AppRouter />
-          </SetupProvider>
-        </CapabilitiesProvider>
-      </ReadonlyProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <ShellProvider>
+        <TooltipProvider delayDuration={250} skipDelayDuration={150}>
+          {isInIframe ? (
+            <NestedDashboardNotice />
+          ) : (
+            <AuthProvider>
+              <ReadonlyProvider>
+                <CapabilitiesProvider>
+                  <SetupProvider>
+                    <AppRouter />
+                  </SetupProvider>
+                </CapabilitiesProvider>
+              </ReadonlyProvider>
+            </AuthProvider>
+          )}
+          <ThemedToaster />
+        </TooltipProvider>
+      </ShellProvider>
+    </ThemeProvider>
   )
 }
 
