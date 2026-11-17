@@ -1,28 +1,33 @@
 package routerreplay
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+import (
+	"context"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+)
 
 // QueryPage uses backend pagination when available. The boolean distinguishes
 // unsupported queries from failures; callers must not turn a failure into an
 // empty successful response.
-func (r *Recorder) QueryPage(filters store.QueryFilters, limit, offset int, details bool) (store.RecordPage, bool, error) {
+func (r *Recorder) QueryPage(ctx context.Context, filters store.QueryFilters, limit, offset int, details bool) (store.RecordPage, bool, error) {
 	reader, ok := r.storage.(store.QueryReader)
 	if !ok {
 		return store.RecordPage{}, false, nil
 	}
-	ctx, cancel := r.replayOperationContext()
+	ctx, cancel := r.replayReadContext(ctx)
 	defer cancel()
 	page, err := reader.QueryPage(ctx, filters, limit, offset, details)
 	return page, true, err
 }
 
-// ScanMetadata visits every retained record, without retaining captured bodies
-// on database backends. Bounded stores keep their existing List implementation.
-func (r *Recorder) ScanMetadata(visit func(RoutingRecord) error) error {
-	ctx, cancel := r.replayOperationContext()
+// ScanMetadata visits the retained records without their captured bodies.
+// Database backends visit only the records the filters select; bounded stores
+// visit every record, so callers still apply the filters themselves.
+func (r *Recorder) ScanMetadata(ctx context.Context, filters store.QueryFilters, visit func(RoutingRecord) error) error {
+	ctx, cancel := r.replayReadContext(ctx)
 	defer cancel()
 	if reader, ok := r.storage.(store.QueryReader); ok {
-		return reader.ScanMetadata(ctx, visit)
+		return reader.ScanMetadata(ctx, filters, visit)
 	}
 	records, err := r.storage.List(ctx)
 	if err != nil {
@@ -34,6 +39,19 @@ func (r *Recorder) ScanMetadata(visit func(RoutingRecord) error) error {
 		}
 	}
 	return nil
+}
+
+// ScanFilterOptions visits the values the replay filters offer, from every
+// retained record, when ScanMetadata with these filters would not visit every
+// record. It reports false, visiting nothing, when that scan already does.
+func (r *Recorder) ScanFilterOptions(ctx context.Context, filters store.QueryFilters, visit func(RoutingRecord) error) (bool, error) {
+	reader, ok := r.storage.(store.QueryReader)
+	if !ok || filters == (store.QueryFilters{}) {
+		return false, nil
+	}
+	ctx, cancel := r.replayReadContext(ctx)
+	defer cancel()
+	return true, reader.ScanFilterOptions(ctx, visit)
 }
 
 // GetRecordWithError preserves storage failures for management API readers.
