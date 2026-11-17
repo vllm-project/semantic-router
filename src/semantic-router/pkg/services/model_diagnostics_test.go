@@ -11,7 +11,7 @@ import (
 
 func TestConvenienceDiagnosticsRecipeSelectionNeverFallsBack(t *testing.T) {
 	cfg := &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}, {Name: "private"}}}
-	classifiers, setupErr := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, setupErr := classification.BuildRecipeClassifiers(cfg)
 	if setupErr != nil {
 		t.Fatal(setupErr)
 	}

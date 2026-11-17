@@ -1,14 +1,13 @@
 import React from 'react'
 import styles from './ConfigNav.module.css'
 
-// New navigation structure aligned with Python CLI config format
 export type ConfigSection =
-  | 'signals' // config.yaml: signals (keywords, embeddings, domains, etc.)
-  | 'projections' // config.yaml: routing.projections (partitions, scores, mappings)
-  | 'decisions' // config.yaml: decisions (routing rules)
+  | 'signals' // config.yaml: recipes[].signals (keywords, domains, safety, systemone, etc.)
+  | 'projections' // config.yaml: recipes[].projections (partitions, scores, mappings)
+  | 'decisions' // config.yaml: recipes[].decisions (routing rules)
   | 'models' // config.yaml: providers.models
   | 'entrypoints-recipes' // config.yaml: top-level entrypoints + recipes
-  | 'global-config' // config.yaml: global runtime overrides (cache, prompt guard, tools, etc.)
+  | 'global-config' // config.yaml: global runtime overrides (stores, services, plugins, model catalog)
   | 'mcp' // MCP servers configuration
   | 'topology' // Separate page for visualization
 
@@ -47,7 +46,7 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       id: 'signals' as ConfigSection,
       icon: 'SG',
       title: 'Signals',
-      description: 'Keywords, embeddings, domains & preferences',
+      description: 'Keywords, domains, safety & System One',
     },
     {
       id: 'projections' as ConfigSection,

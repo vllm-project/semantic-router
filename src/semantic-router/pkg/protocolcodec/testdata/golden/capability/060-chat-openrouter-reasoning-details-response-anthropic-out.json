@@ -1,0 +1,154 @@
+{
+  "cases": [
+    {
+      "name": "openrouter_nvidia_recorded_tool_turn",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "thinking": "The user is asking for the current weather in Paris and wants me to use the tool. I need to call the get_weather function with city set to \"Paris\". Let me do that.",
+              "type": "thinking"
+            },
+            {
+              "id": "call_1",
+              "input": {
+                "city": "Paris"
+              },
+              "name": "get_weather",
+              "type": "tool_use"
+            }
+          ],
+          "id": "gen-openrouter-1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 282,
+            "output_tokens": 65,
+            "output_tokens_details": {
+              "thinking_tokens": 41
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "choices.message.tool_calls.index",
+            "action": "dropped"
+          },
+          {
+            "field": "choices.native_finish_reason",
+            "action": "dropped"
+          },
+          {
+            "field": "provider",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.completion_tokens_details.image_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.cost",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.cost_details",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.is_byok",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.prompt_tokens_details.video_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "reasoning_details",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "openrouter_all_detail_variants",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "thinking": "Plan the lookup. Use the tool.",
+              "type": "thinking"
+            },
+            {
+              "id": "call_9",
+              "input": {
+                "city": "Paris"
+              },
+              "name": "get_weather",
+              "type": "tool_use"
+            }
+          ],
+          "id": "gen-openrouter-1",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 20,
+            "output_tokens": 30,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "choices.native_finish_reason",
+            "action": "dropped"
+          },
+          {
+            "field": "provider",
+            "action": "dropped"
+          },
+          {
+            "field": "reasoning_details",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}

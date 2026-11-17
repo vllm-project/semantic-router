@@ -384,7 +384,7 @@ func privateContextEvalRequest(
 
 func newContextEvalServer(t *testing.T, cfg *config.RouterConfig) *ClassificationAPIServer {
 	t.Helper()
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	if err != nil {
 		t.Fatalf("create classifier: %v", err)
 	}

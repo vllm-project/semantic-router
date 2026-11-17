@@ -19,6 +19,16 @@ type CandidateDemand struct {
 	InputTokens       int
 	MaxOutputTokens   *int64
 	AutomaticOutput   bool
+
+	// InputReserveTokens is the part of InputTokens that the input estimate
+	// reserves for structured data and media. A refusal does not count it.
+	InputReserveTokens int
+}
+
+// WithoutReserves is the demand a refusal rests on.
+func (d CandidateDemand) WithoutReserves() CandidateDemand {
+	d.InputTokens, d.InputReserveTokens = d.InputTokens-d.InputReserveTokens, 0
+	return d
 }
 
 func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
@@ -26,10 +36,15 @@ func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
 		return CandidateDemand{}
 	}
 	required := llmprotocol.RequiredCapabilities(*request)
-	modelMask := llmprotocol.Capabilities(
-		llmprotocol.CapabilityText, llmprotocol.CapabilityTools,
-		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema,
-	)
+	masked := []llmprotocol.Capability{
+		llmprotocol.CapabilityText, llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema,
+	}
+	// A forced hosted image_generation operation is framed as a tool choice,
+	// but it asks the model for an image, not for tool calls.
+	if len(request.Tools) > 0 || request.ToolChoice.Mode != llmprotocol.ToolChoiceImageGeneration {
+		masked = append(masked, llmprotocol.CapabilityTools)
+	}
+	modelMask := llmprotocol.Capabilities(masked...)
 	modelRequired := required.TaskCapabilities()
 	// Model declarations and transport fidelity have different semantics:
 	// parallel tool framing, for example, does not require a separate model tag.
@@ -51,10 +66,11 @@ func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
 		}
 	}
 	modelRequired, _ = llmprotocol.ParseCapabilities(filtered)
-	demand := CandidateDemand{Known: true, Capabilities: required, ModelCapabilities: modelRequired, InputTokens: llmprotocol.EstimateInput(request).Tokens}
+	estimate := llmprotocol.EstimateInput(request)
+	demand := CandidateDemand{Known: true, Capabilities: required, ModelCapabilities: modelRequired, InputTokens: estimate.Tokens, InputReserveTokens: estimate.ReserveTokens}
 	demand.AutomaticOutput = request.Sampling.AutomaticOutput
 	if request.Sampling.AutomaticInputTokens != nil {
-		demand.InputTokens = int(*request.Sampling.AutomaticInputTokens)
+		demand.InputTokens, demand.InputReserveTokens = int(*request.Sampling.AutomaticInputTokens), 0
 	}
 	if request.Sampling.MaxOutputTokens != nil {
 		value := *request.Sampling.MaxOutputTokens

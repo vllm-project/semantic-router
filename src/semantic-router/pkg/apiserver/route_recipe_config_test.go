@@ -21,7 +21,7 @@ func TestRecipeLifecycleRequiresFreshETagAndProtectsReferences(t *testing.T) {
 
 	createBody := recipeMutationRequest{
 		Description: stringPointer("Managed test recipe"),
-		Routing:     managedTestRouting("managed_route"),
+		Profile:     managedTestProfile("managed_route"),
 		Entrypoints: stringSlicePointer([]string{"vllm-sr/managed"}),
 	}
 	missingPrecondition := executeRecipePut(t, server, "managed", createBody, "")
@@ -97,6 +97,9 @@ func requireManagedRecipeConfig(t *testing.T, configPath string) {
 	if recipe, ok := parsed.RecipeForRequestModel("vllm-sr/managed"); !ok || recipe.Name != "managed" {
 		t.Fatalf("managed entrypoint was not created: %+v", recipe)
 	}
+	if recipe, ok := parsed.RecipeForRequestModel(config.DefaultEntrypointModel); !ok || recipe.Name != "default" || parsed.DefaultRecipe().Name != "default" {
+		t.Fatalf("the first recipe stopped being the default once a second joined it: %+v", recipe)
+	}
 }
 
 func requireRecipeAbsent(t *testing.T, configPath, recipeName string) {
@@ -118,7 +121,7 @@ func TestValidateRecipeDoesNotWriteConfig(t *testing.T) {
 	body := recipeMutationRequest{
 		Name:        "preview",
 		Description: stringPointer("Preview recipe"),
-		Routing:     managedTestRouting("preview_route"),
+		Profile:     managedTestProfile("preview_route"),
 		Entrypoints: stringSlicePointer([]string{"vllm-sr/preview"}),
 	}
 	payload, err := json.Marshal(body)
@@ -143,7 +146,7 @@ func TestValidateRecipeRejectsUnknownFields(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/api/v1/config/recipes/validate",
-		bytes.NewBufferString(`{"name":"preview","routing":{"strategy":"priority","decisions":[]},"legacy":true}`),
+		bytes.NewBufferString(`{"name":"preview","profile":{"strategy":"priority","decisions":[]},"legacy":true}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
@@ -212,7 +215,7 @@ func executeRecipeDelete(
 	return rr
 }
 
-func managedTestRouting(decisionName string) map[string]any {
+func managedTestProfile(decisionName string) map[string]any {
 	return map[string]any{
 		"strategy": "priority",
 		"decisions": []any{
@@ -244,12 +247,14 @@ func mustReadFile(t *testing.T, path string) []byte {
 }
 
 func TestDefaultRecipeEntrypointsOverrideAndReset(t *testing.T) {
-	doc := map[string]any{"routing": managedTestRouting("default-route")}
+	recipe := managedTestProfile("default-route")
+	recipe["name"] = "default"
+	doc := map[string]any{"recipes": []any{recipe}}
 	original := collectManagedRecipes(doc)[0]
 	if original.EntrypointSource != config.EntrypointBuiltin || len(original.Entrypoints) != 1 || original.Entrypoints[0] != config.DefaultEntrypointModel {
 		t.Fatalf("builtin default=%+v", original)
 	}
-	_, err := applyRecipeMutation(doc, "default", recipeMutationRequest{Routing: managedTestRouting("default-route"), Entrypoints: stringSlicePointer([]string{"our/route", "MoM"})})
+	_, err := applyRecipeMutation(doc, "default", recipeMutationRequest{Profile: managedTestProfile("default-route"), Entrypoints: stringSlicePointer([]string{"our/route", "MoM"})})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +262,7 @@ func TestDefaultRecipeEntrypointsOverrideAndReset(t *testing.T) {
 	if changed.EntrypointSource != config.EntrypointExplicit || len(changed.Entrypoints) != 2 || changed.Entrypoints[0] != "our/route" {
 		t.Fatalf("override=%+v", changed)
 	}
-	_, err = applyRecipeMutation(doc, "default", recipeMutationRequest{Routing: managedTestRouting("default-route"), Entrypoints: stringSlicePointer([]string{})})
+	_, err = applyRecipeMutation(doc, "default", recipeMutationRequest{Profile: managedTestProfile("default-route"), Entrypoints: stringSlicePointer([]string{})})
 	if err != nil {
 		t.Fatal(err)
 	}

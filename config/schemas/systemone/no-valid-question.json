@@ -1,0 +1,39 @@
+{
+  "description": "Requests to POST /v1/decisions with no valid question, in the whole request or in one batch entry, and the model runtime's answer to each. The Router gives the same answer whatever schema its upstream speaks: 400 invalid_request naming the first question, and its entry in a batch, only when nothing in the request is valid; otherwise 200, each invalid question failed in its answer.",
+  "cases": [
+    {
+      "name": "a request",
+      "request": {
+        "state": "Another text.",
+        "questions": {
+          "q": {"type": "choice", "instructions": "Which?", "criteria": {}},
+          "r": {"type": "choice", "instructions": "Which?", "criteria": {}}
+        }
+      },
+      "status": 400,
+      "error": {"code": "invalid_request", "reason": "question_malformed", "question": "q"}
+    },
+    {
+      "name": "a batch",
+      "request": {
+        "states": {
+          "1": {"state": "One text.", "questions": {"q": {"type": "choice", "instructions": "Which?", "criteria": {}}}},
+          "2": {"state": "Another text.", "questions": {"r": {"type": "choice", "instructions": "Which?", "criteria": {}}}}
+        }
+      },
+      "status": 400,
+      "error": {"code": "invalid_request", "reason": "question_malformed", "question": "q", "state": "1"}
+    },
+    {
+      "name": "a batch with a valid entry",
+      "request": {
+        "states": {
+          "1": {"state": "One text.", "questions": {"ok": {"type": "noul", "instructions": "Supported?"}}},
+          "2": {"state": "Another text.", "questions": {"q": {"type": "choice", "instructions": "Which?", "criteria": {}}}}
+        }
+      },
+      "status": 200,
+      "failed": {"2": {"q": "question_malformed"}}
+    }
+  ]
+}

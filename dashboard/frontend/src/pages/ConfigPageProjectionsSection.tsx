@@ -150,8 +150,6 @@ export default function ConfigPageProjectionsSection({
           ...(score.inputs || []).flatMap((input) => [
             input.type,
             input.name,
-            input.kb,
-            input.metric,
             input.value_source || '',
           ]),
         ]
@@ -197,7 +195,7 @@ export default function ConfigPageProjectionsSection({
         section: 'Definition',
         type: 'custom',
         required: true,
-        description: 'Declared domain or embedding signals coordinated by this partition.',
+        description: 'Declared domain signals coordinated by this partition.',
         customRender: (value, onChange) => (
           <ProjectionMembersEditor value={value} onChange={onChange} />
         ),

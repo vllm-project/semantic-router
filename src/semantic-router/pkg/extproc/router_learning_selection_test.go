@@ -53,12 +53,10 @@ func TestRouterLearningProtectionCannotRestoreModelOutsideDecisionCandidates(t *
 				CandidateModels: []config.ModelRef{{Model: "cheap"}},
 			}, nil, ctx)
 
-			if activeToolLoop {
-				if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
-					t.Fatalf("tool ownership conflict must reject: selected=%+v err=%v", selected, err)
-				}
-				return
-			}
+			// Decision drift releases the tool-loop lock: ownership follows the
+			// drifted decision's candidates exactly like a portable turn. Within
+			// one decision state the hard lock still rejects an excluded owner
+			// (TestSessionHardBoundaryConflictsRejectBeforeChangingOwnership).
 			if err != nil || selected == nil || selected.Model != "cheap" {
 				t.Fatalf("expected learning to stay inside decision candidates, got %#v", selected)
 			}
@@ -135,9 +133,15 @@ func TestRouterLearningProtectionFallbackCannotEscapeDecisionCandidates(t *testi
 		ctx,
 	)
 
-	if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
-		t.Fatalf("fallback transferred hard ownership: selected=%+v err=%v", selected, err)
+	// Decision drift released the tool-loop lock, so the fallback must stay
+	// inside the drifted decision's own candidate set: it may not freeze on
+	// the locked owner and may not escape to an undeclared model. Within one
+	// decision state the fallback still cannot transfer hard ownership
+	// (TestSessionHardBoundaryConflictsRejectBeforeChangingOwnership).
+	if err != nil || selected == nil || selected.Model != "cheap" {
+		t.Fatalf("fallback left the drifted decision candidates: selected=%+v err=%v", selected, err)
 	}
+	assertCandidateBoundaryRelease(t, ctx)
 }
 
 func TestRouterLearningProtectionReleasesOnNewConversationScope(t *testing.T) {

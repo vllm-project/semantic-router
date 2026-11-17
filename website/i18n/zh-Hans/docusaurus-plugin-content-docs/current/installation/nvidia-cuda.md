@@ -3,7 +3,7 @@ is_mtpe: false
 title: NVIDIA CUDA 部署
 description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 Semantic Router 的本地信号模型。
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/installation/nvidia-cuda.md"
   outdated: false
 ---
@@ -17,8 +17,8 @@ translation:
 ## 前置条件
 
 - Linux，以及你计划运行的 vLLM 发行版所支持的 NVIDIA GPU；
-- 使用当前 Semantic Router CUDA 镜像时需要 x86-64 主机；
-- Router 镜像需要计算能力为 7.0 或更高的 GPU（Volta 及更新架构），这是其 PyTorch 构建（CUDA 12.8）包含的最旧架构；
+- x86-64 或 Arm64 主机；
+- Router 镜像在 x86-64 上需要计算能力为 7.0 或更高的 GPU（Volta 及更新架构），在 Arm64 上需要 8.0 或更高，这是其 PyTorch 构建（CUDA 12.8）包含的最旧架构；
 - NVIDIA 驱动，以及为在 CUDA 上运行的 Router 侧模型传入 Router 容器的 GPU；
 - Docker 和 NVIDIA Container Toolkit；
 - 有足够的 GPU 内存用于 vLLM 模型、KV cache 以及任何 Router 侧模型；以及
@@ -90,20 +90,47 @@ providers:
           weight: 1
 ```
 
-这是 provider 片段，而不是完整的 Router 配置。将匹配的 model card 和路由添加到现有配方，或在控制面板中配置端点。`provider_model_id` 必须匹配 vLLM `/v1/models` 端点返回的模型。完整的最小文档见[配置](configuration)，后端绑定和路由策略见[模型、入口点与服务](../tutorials/global/models-entrypoints-serving)。
+这是 provider 片段，而不是完整的 Router 配置：
+
+- **添加**匹配的 model card 和路由到现有配方，或在控制面板中配置端点。
+- **`provider_model_id`** 必须匹配 vLLM `/v1/models` 端点返回的模型。
+- **参见**[配置](configuration)了解完整的最小文档，参见[模型、入口点与服务](../tutorials/global/models-entrypoints-serving)了解后端绑定和路由策略。
 
 该示例在主机上发布端口 `8000` 以便直接测试。用主机网络控制限制该端口，或在生产部署中使用私有服务发现。不要将未认证的 vLLM 端点暴露给不受信任的网络。
 
 ## 在 NVIDIA 上运行 Router
 
-如果 vLLM 应拥有全部 GPU 内存，用 `--platform cpu` 将 Router 的自动设备选择限制为 CPU；省略时 CLI 会自动检测平台：
+如果 vLLM 应拥有全部 GPU 内存，请显式地把 Router 侧推理留在 CPU 上：
 
 ```bash
 vllm-sr config validate --config config.yaml
-vllm-sr serve --config config.yaml --platform cpu
+vllm-sr serve --platform cpu --config config.yaml
 ```
 
-要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform cuda`。CUDA 已经验证（H200、A100、Tesla T4 记录）。H200 上 Vela 2.0 0.3B@32 的 p50 是已知回归；T4 的 Level 不能抵消该行。无 bit-exact 证据的融合 kernel 不进入精确配置。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`），开发版本的 CLI 则选择从它自己的 `main` commit 发布、以该 commit SHA 为 tag 的镜像，除非显式指定镜像：
+不加 `--platform cpu` 时，自动平台检测可能在 GPU 主机上选择 CUDA。
+
+Router 自己的模型（分类器、嵌入、决策模型）运行在[模型运行时](model-runtime/get-started/overview.md)中。要在 CUDA 上运行它们，使用 `--platform cuda`：CUDA 镜像附带使用 CUDA 版 PyTorch 的运行时，`device: auto` 或 `device: cuda:0` 的部署会使用 GPU。
+
+CUDA 已在有记录的 H200、A100 和 Tesla T4 工作负载上验证：
+
+- **Decision 1.0 和 Decision 2.0** 达到记录的性能标准。
+- **输入 32 个 token 的 Vela 2.0 0.3B** 在 H200 上有已知回归：其中位延迟慢约 2.3%，整个置信区间都落在更慢的一侧，而其 p95 有所改善。同一工作负载在 Tesla T4 上持平，但每张卡单独评判，因此这不能抵消 H200 的结果。
+- **没有 bit-exact 证据的融合 kernel** 不进入精确配置。
+
+模型覆盖范围和测量环境见源码树中的记录：
+
+- [CUDA image smoke](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-router-image.md)
+- [Goldens](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-golden-answers.md)
+- [Decision 1.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-decision1-performance.md)
+- [Decision 2.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-decision2-performance.md)
+- [Vela 2.0 performance](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-vela2-performance.md)
+- [Vela 1.0 vs CPU legacy](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cuda-vela1-performance.md)
+
+:::note
+这些记录并未覆盖所有内置模型，也不代表每张 NVIDIA GPU 都与记录的卡一致；其他 NVIDIA GPU 请在你的硬件上测量。部分性能记录使用的是单独的 RunPod 栈，而不是发布的 CUDA 镜像。
+:::
+
+稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`），开发版本的 CLI 则选择从它自己的 `main` commit 发布、以该 commit SHA 为 tag 的镜像，除非显式指定镜像：
 
 ```bash
 vllm-sr config validate --config config.yaml
@@ -157,7 +184,9 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ### Router 使用 CPU
 
-确认 `--platform cuda` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_CUDA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
+- 确认 `--platform cuda` 选择了 `vllm-sr-cuda` 镜像。检查生成的运行时配置和启动日志，而不仅仅是源配方。
+- 没有本地信号模型的配方没有什么可以移到 CUDA。
+- 运行时上的 `GET /v1/models` 或控制面板的模型清单会显示每个模型运行的设备。
 
 ### vLLM 或 Router 耗尽 GPU 内存
 
@@ -169,4 +198,9 @@ vLLM 模型、KV cache 和 Router 侧模型争夺同一设备内存。将 Router
 
 ### Kubernetes 不调度 GPU
 
-`--platform cuda` 是本地容器快捷方式。对于 Kubernetes，通过 Helm values 或 Operator 选择 CUDA 镜像，并配置 GPU 资源、NVIDIA 设备插件和节点放置。部署边界见[配置工作流](configuration-workflows#helm)。
+在 Kubernetes 上，`--platform cuda` 根据规范的副本放置选择 CUDA 镜像和 GPU 资源：
+
+- **前提条件。**NVIDIA 设备插件和匹配的可调度节点必须已经存在。
+- **放置。**通过 Helm values 或 Operator 配置节点放置。`--platform auto` 检查的是选定的集群，而不是 CLI 所在的主机。
+
+部署边界见[配置工作流](configuration-workflows#helm)。

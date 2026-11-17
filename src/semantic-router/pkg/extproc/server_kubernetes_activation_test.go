@@ -32,18 +32,15 @@ func TestKubernetesActivationWaitsForListenerAndKeepsServingOnFailure(t *testing
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	candidate := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes, DocumentHash: "candidate"}
-	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
-		return &OpenAIRouter{Config: cfg}, nil
-	}
-	warmupEntered := make(chan struct{})
-	allowWarmup := make(chan struct{})
+	buildEntered := make(chan struct{})
+	allowBuild := make(chan struct{})
 	var releaseOnce sync.Once
-	releaseWarmup := func() { releaseOnce.Do(func() { close(allowWarmup) }) }
-	defer releaseWarmup()
-	warmupReloadRouter = func(*OpenAIRouter) error {
-		close(warmupEntered)
-		<-allowWarmup
-		return nil
+	releaseBuild := func() { releaseOnce.Do(func() { close(allowBuild) }) }
+	defer releaseBuild()
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
+		close(buildEntered)
+		<-allowBuild
+		return &OpenAIRouter{Config: cfg}, nil
 	}
 	applied := make(chan error, 1)
 	go func() { applied <- server.ActivateKubernetesConfig(ctx, candidate) }()
@@ -56,7 +53,7 @@ func TestKubernetesActivationWaitsForListenerAndKeepsServingOnFailure(t *testing
 	go func() { serving <- server.StartContext(ctx) }()
 	t.Cleanup(func() { cancel(); server.Stop(); <-serving })
 	select {
-	case <-warmupEntered:
+	case <-buildEntered:
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
@@ -77,7 +74,7 @@ func TestKubernetesActivationWaitsForListenerAndKeepsServingOnFailure(t *testing
 		}
 	}
 	check(healthpb.HealthCheckResponse_NOT_SERVING)
-	releaseWarmup()
+	releaseBuild()
 	if err := <-applied; err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +106,7 @@ func TestKubernetesActivationCancellationBeforeListener(t *testing.T) {
 	}
 }
 
-func TestKubernetesActivationCancellationDuringWarmupDoesNotPublish(t *testing.T) {
+func TestKubernetesActivationCancellationDuringBuildDoesNotPublish(t *testing.T) {
 	restore := stubReloadSeams(t)
 	defer restore()
 	initial := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
@@ -119,9 +116,9 @@ func TestKubernetesActivationCancellationDuringWarmupDoesNotPublish(t *testing.T
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
+		cancel()
 		return &OpenAIRouter{Config: cfg}, nil
 	}
-	warmupReloadRouter = func(*OpenAIRouter) error { cancel(); return nil }
 	if err := server.ActivateKubernetesConfig(ctx, &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("activation = %v", err)
 	}

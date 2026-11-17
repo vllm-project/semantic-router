@@ -46,13 +46,9 @@ func acquireBenchmarkLease() *modelservice.Lease {
 	return lease
 }
 
-func benchmarkModel(b *testing.B, name, contract string) config.ResolvedModelBinding {
-	return benchmarkDeployment(b, name, contract, "perf-"+name, benchmarkInput)
-}
-
 // benchmarkDeployment starts a deployment of a catalog model once and records
 // the identity of the package the runtime actually loaded.
-func benchmarkDeployment(b *testing.B, name, contract, deployment string, input config.ModelInputBudget) config.ResolvedModelBinding {
+func benchmarkDeployment(b *testing.B, name, deployment string, input config.ModelInputBudget) config.ResolvedModelBinding {
 	b.Helper()
 	benchmarkModelMu.Lock()
 	defer benchmarkModelMu.Unlock()
@@ -83,7 +79,7 @@ func benchmarkDeployment(b *testing.B, name, contract, deployment string, input 
 	benchmarkCards[name] = card
 	spec := config.ResolvedModelBinding{
 		Recipe: "perf", Name: name,
-		Binding:    config.ModelBinding{Deployment: deployment, Contract: contract},
+		Binding:    config.ModelBinding{Deployment: deployment},
 		Deployment: definition,
 	}
 	benchmarkSpecs[deployment] = spec
@@ -148,15 +144,6 @@ func closeBenchmarkOwners(code int, owners ...io.Closer) (int, error) {
 func TestMain(m *testing.M) {
 	code := m.Run()
 	var owners []io.Closer
-	if benchClassifier != nil {
-		owners = append(owners, benchClassifier)
-	}
-	if domainTask != nil {
-		owners = append(owners, domainTask)
-	}
-	if inputLengthDomain != nil {
-		owners = append(owners, inputLengthDomain)
-	}
 	if cacheEmbeddingOwner != nil {
 		owners = append(owners, cacheEmbeddingOwner)
 	}

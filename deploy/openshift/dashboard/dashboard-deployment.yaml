@@ -16,7 +16,6 @@ data:
   # the Kubernetes API and waits for a router rollout to activate changes.
   DASHBOARD_RUNTIME_CONFIG_WRITABLE: "true"
   DASHBOARD_RECIPE_STORE_WRITABLE: "false"
-  ML_PIPELINE_ENABLED: "false"
 
 ---
 apiVersion: apps/v1

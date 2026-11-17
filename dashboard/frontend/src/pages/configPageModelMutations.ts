@@ -6,13 +6,7 @@ import {
   removeModelCardDataIfUnreferenced,
   writeRoutingModelCard,
 } from './configPageCanonicalization'
-import {
-  buildProviderModelPayload,
-  effectiveModelCardFormData,
-  normalizeModelBackendRefs,
-  normalizeModelPricing,
-  normalizeModelStringMap,
-} from './configPageModelFormSupport'
+import { buildProviderModelPayload, effectiveModelCardFormData } from './configPageModelFormSupport'
 import { validateNewModelName } from './configPageModelInventory'
 import { modelCardPatch } from './configPageModelsSectionSupport'
 import type { ConfigData, NormalizedModel, RoutingModelCard } from './configPageSupport'
@@ -22,36 +16,16 @@ type ProviderModel = NonNullable<ConfigData['providers']>['models'][number]
 const catalogIDFromForm = (data: Record<string, unknown>, fallback: string): string =>
   typeof data.catalog === 'string' && data.catalog.trim() ? data.catalog.trim() : fallback
 
-const legacyModelConfig = (data: Record<string, unknown>, fallbackModelID: string) => ({
-  reasoning_family: typeof data.reasoning_family === 'string' ? data.reasoning_family : undefined,
-  pricing: normalizeModelPricing(data.pricing),
-  api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
-  external_model_ids: normalizeModelStringMap(data.external_model_ids),
-  preferred_endpoints: normalizeModelBackendRefs(data.backend_refs)
-    .map((backendRef) => backendRef.name || '')
-    .filter(Boolean),
-  model_id:
-    typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
-      ? data.provider_model_id.trim()
-      : fallbackModelID,
-})
-
 export function buildAddedModelConfig(
   config: ConfigData,
   modelName: string,
   data: Record<string, unknown>,
-  isPythonCLI: boolean,
 ): ConfigData {
   const next = cloneConfigData(config)
-  if (isPythonCLI) {
-    const providers = ensureProvidersConfig(next)
-    const catalogID = catalogIDFromForm(data, modelName)
-    writeRoutingModelCard(next, catalogID, modelCardPatch(data))
-    providers.models.push(buildProviderModelPayload(modelName, data))
-  } else {
-    next.model_config ??= {}
-    next.model_config[modelName] = legacyModelConfig(data, modelName)
-  }
+  const providers = ensureProvidersConfig(next)
+  const catalogID = catalogIDFromForm(data, modelName)
+  writeRoutingModelCard(next, catalogID, modelCardPatch(data))
+  providers.models.push(buildProviderModelPayload(modelName, data))
   return next
 }
 
@@ -81,10 +55,9 @@ export function buildEditedModelConfig(
   config: ConfigData,
   model: NormalizedModel,
   data: Record<string, unknown>,
-  isPythonCLI: boolean,
 ): ConfigData {
   const next = cloneConfigData(config)
-  if (isPythonCLI && next.providers?.models) {
+  if (next.providers?.models) {
     const providers = ensureProvidersConfig(next)
     const oldCardID = model.catalog || model.name
     const nextCatalog = catalogIDFromForm(data, '') || undefined
@@ -99,12 +72,6 @@ export function buildEditedModelConfig(
     const patch = editedModelCardPatch(model, data, existingCard)
     if (existingCard || Object.values(patch).some((value) => value !== undefined)) {
       writeRoutingModelCard(next, nextCardID, patch, { removeWhenEmpty: true })
-    }
-  } else if (next.model_config) {
-    next.model_config[model.name] = {
-      ...next.model_config[model.name],
-      ...legacyModelConfig(data, model.name),
-      model_id: typeof data.provider_model_id === 'string' ? data.provider_model_id : model.name,
     }
   }
   return next
@@ -144,11 +111,10 @@ export function buildDeletedModelsConfig(
   config: ConfigData,
   models: NormalizedModel[],
   modelNames: string[],
-  isPythonCLI: boolean,
 ): ConfigData {
   const next = cloneConfigData(config)
   const namesToDelete = new Set(modelNames)
-  if (isPythonCLI && next.providers?.models) {
+  if (next.providers?.models) {
     const providers = ensureProvidersConfig(next)
     providers.models = providers.models.filter(
       (providerModel: ProviderModel) => !namesToDelete.has(providerModel.name),
@@ -157,8 +123,6 @@ export function buildDeletedModelsConfig(
       const model = models.find((candidate) => candidate.name === modelName)
       removeModelCardDataIfUnreferenced(next, model?.catalog || modelName)
     }
-  } else if (next.model_config) {
-    for (const modelName of namesToDelete) delete next.model_config[modelName]
   }
   return next
 }

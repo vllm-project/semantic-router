@@ -4,12 +4,6 @@
 
 ##@ Models
 
-test-model-selection-parity: ## Compare Python-trained selectors with the router's selectors
-	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_selector_parity.py
-	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_service_boundary.py
-
-.PHONY: test-model-selection-parity
-
 ONNX_ARTIFACT_PYTHON_DEPS ?= onnx==1.22.0 onnxruntime==1.24.2
 
 .PHONY: onnx-artifact-deps onnx-artifact-test
@@ -34,6 +28,7 @@ test-training-contracts: harness-venv-install ## Run dependency-light model trai
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_selection/policy_eval/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/kv_connector/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m pytest -q \
 		bench/redteam \
@@ -73,27 +68,18 @@ MMBERT_32K_LORA_ADAPTERS := \
 download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
 	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
 
-# The published-model contract and image calibration serve the runtime's pinned
-# releases; the pinned Omni Nano snapshot is downloaded once into the models directory.
+# The published-model contract serves the runtime's pinned releases; the pinned
+# Omni Nano snapshot is downloaded once into the models directory.
 MODEL_TEST_MODELS_DIR ?= $(CURDIR)/$(MODELS_DIR)
-MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests/image-calibration
-MODEL_TEST_MANIFEST ?= $(MODEL_TEST_REPORT_DIR)/models.json
+MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests
 
-download-models-image-calibration: ## Download the pinned Omni Nano release and attest its files
+download-models-omni: ## Download the pinned Omni Nano release and attest its files
 	@"$(AGENT_PYTHON)" tools/ci/prepare_model_test_assets.py \
 		--variants nano --output "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts"
-	@"$(AGENT_PYTHON)" tools/ci/image_calibration.py --prepare-manifest \
-		--artifact "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
-		--manifest "$(MODEL_TEST_MANIFEST)"
 
-verify-image-routing-calibration: download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
-	@VLLM_SRUN_COMMAND="$${VLLM_SRUN_COMMAND:-$(AGENT_VENV)/bin/vllm-srun}" \
-		"$(AGENT_PYTHON)" tools/ci/image_calibration.py \
-		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)"
+.PHONY: download-models-omni
 
-.PHONY: download-models-image-calibration verify-image-routing-calibration
-
-test-models: download-models-image-calibration ## Run the published-model contract through the model runtime
+test-models: download-models-omni ## Run the published-model contract through the model runtime
 	@VLLM_SRUN_COMMAND="$${VLLM_SRUN_COMMAND:-$(AGENT_VENV)/bin/vllm-srun}" \
 		"$(AGENT_PYTHON)" tools/ci/run_model_tests.py \
 		--models-dir "$(MODEL_TEST_MODELS_DIR)" \

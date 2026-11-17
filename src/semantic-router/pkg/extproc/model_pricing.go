@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"time"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 )
@@ -36,6 +38,28 @@ func modelPricingRates(pricing config.ModelPricing) modelpricing.Rates {
 		CacheWrite1hPer1M: pricing.CacheWrite1hPer1M,
 		CompletionPer1M:   pricing.CompletionPer1M,
 	}
+}
+
+// modelRates resolves the configured prices of a candidate pool the way usage
+// is priced; a model without prices is left out.
+func (r *OpenAIRouter) modelRates(refs []config.ModelRef) map[string]modelpricing.Rates {
+	if r == nil || r.Config == nil || len(refs) == 0 {
+		return nil
+	}
+	rates := make(map[string]modelpricing.Rates, len(refs))
+	for _, ref := range refs {
+		if pricing, ok := r.Config.GetFullModelPricing(ref.Model); ok {
+			rates[ref.Model] = modelPricingRates(pricing)
+		}
+	}
+	return rates
+}
+
+func cacheReceiptAge(receipt *modelpricing.Receipt, now time.Time) time.Duration {
+	if receipt == nil || now.Before(receipt.At) {
+		return 0
+	}
+	return now.Sub(receipt.At)
 }
 
 func costForResponseUsage(usage responseUsageMetrics, pricing config.ModelPricing) float64 {

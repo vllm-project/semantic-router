@@ -7,6 +7,13 @@ status: Proposal
 
 > **Status:** Proposal · **Created:** 2026-09-01
 
+:::note
+This proposal names classifier rules by their earlier `type: llm` field, which
+is deprecated: a classifier rule now names its `deployment`.
+[Migrate model resources](../installation/model-resource-migration.md#what-else-changes)
+shows the current form.
+:::
+
 ## Problem
 
 Decision selection blends three concepts into one number: whether a decision matched,

@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from .chat_request import ChatRequest
+from .mock_tools import mock_tool_name
 from .tokens import estimate_tokens
 
 
@@ -56,6 +57,10 @@ def chat_requests_mock_tool(req: ChatRequest) -> bool:
     return bool(req.tools) and chat_contains(req, "__mock_tool_call__")
 
 
+def chat_mock_tool_name(req: ChatRequest) -> str:
+    return mock_tool_name([message.content for message in req.messages])
+
+
 def chat_contains(req: ChatRequest, marker: str) -> bool:
     for message in req.messages:
         content = message.content
@@ -103,7 +108,7 @@ def mock_chat_tool_response(req: ChatRequest, created_ts: int) -> dict[str, Any]
                             "id": "call_mock_lookup",
                             "type": "function",
                             "function": {
-                                "name": "lookup",
+                                "name": chat_mock_tool_name(req),
                                 "arguments": '{"query":"weather"}',
                             },
                         }
@@ -130,7 +135,10 @@ def generate_chat_tool_stream(req: ChatRequest, created_ts: int) -> Iterator[str
                     "index": 0,
                     "id": "call_mock_lookup",
                     "type": "function",
-                    "function": {"name": "lookup", "arguments": '{"query":'},
+                    "function": {
+                        "name": chat_mock_tool_name(req),
+                        "arguments": '{"query":',
+                    },
                 }
             ],
         },

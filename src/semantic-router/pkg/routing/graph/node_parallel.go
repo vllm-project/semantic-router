@@ -114,7 +114,7 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 			}
 			// Run-wide ceilings fail closed even when this parallel step is
 			// configured to skip ordinary branch failures.
-			if errors.Is(run.err, ErrHopLimit) {
+			if isRunCeiling(run.err) {
 				stop(run.err)
 			}
 			if n.OnError != OnErrorSkip {
@@ -141,7 +141,7 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 		n.afterStop()
 	}
 	if cause := context.Cause(step); cause != nil && !errors.Is(cause, errEnough) &&
-		(!errors.Is(cause, firstErr) || errors.Is(cause, ErrHopLimit)) {
+		(!errors.Is(cause, firstErr) || isRunCeiling(cause)) {
 		// The run itself was stopped: a ceiling, its timeout or the client.
 		return cause
 	}
@@ -170,6 +170,11 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 	}
 	st.Results = results
 	return nil
+}
+
+func isRunCeiling(err error) bool {
+	return errors.Is(err, ErrHopLimit) || errors.Is(err, ErrTokenLimit) ||
+		errors.Is(err, ErrCostLimit) || errors.Is(err, ErrCostUnknown)
 }
 
 // drainBranches takes results that arrive after the step has stopped. It

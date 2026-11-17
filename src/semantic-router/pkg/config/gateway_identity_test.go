@@ -32,7 +32,7 @@ func TestStandaloneRefusesPolicyOnGatewayAssertedIdentity(t *testing.T) {
 		{
 			name: "authz signal in a nested rule",
 			cfg:  &RouterConfig{IntelligentRouting: IntelligentRouting{Decisions: []Decision{authzDecision}}},
-			path: "routing.decisions[admins].rules",
+			path: "recipes[default].decisions[admins].rules",
 			want: "decision 'admins': the authz signal 'admin'",
 		},
 		{
@@ -48,6 +48,14 @@ func TestStandaloneRefusesPolicyOnGatewayAssertedIdentity(t *testing.T) {
 			cfg:  &RouterConfig{Authz: AuthzConfig{Providers: []AuthzProviderConfig{{Type: "header"}}}},
 			path: "global.services.authz.providers",
 			want: "resolve per-user API keys",
+		},
+		{
+			name: "debug headers for authenticated principals",
+			cfg: &RouterConfig{RouterOptions: RouterOptions{Headers: RouterHeadersConfig{
+				Debug: DebugHeadersAuthenticated, DebugPrincipals: DebugPrincipals{Groups: []string{"sre"}},
+			}}},
+			path: "global.router.headers.debug",
+			want: "global.router.headers.debug: authenticated",
 		},
 	}
 	for _, tt := range tests {
@@ -73,19 +81,16 @@ func TestStandaloneRefusesPolicyOnGatewayAssertedIdentity(t *testing.T) {
 }
 
 func TestUntrustedIdentityWarningNamesTheFeaturesThatRecordAUser(t *testing.T) {
-	cfg := &RouterConfig{
-		APIServer:    APIServer{Listeners: []Listener{{Name: "public", Port: 8899}}},
-		Memory:       MemoryConfig{Enabled: true},
-		RouterReplay: RouterReplayConfig{Enabled: true},
-	}
+	cfg := layeredRouting([]DecisionPlugin{
+		{Type: DecisionPluginContext, Configuration: MustStructuredPayload(ContextPluginConfig{
+			Enabled: true, Sources: []ContextSource{{Type: ContextSourceMemory}},
+		})},
+		{Type: DecisionPluginRouterReplay, Configuration: MustStructuredPayload(map[string]interface{}{"enabled": true})},
+	}, Decision{Name: "plain"})
+	cfg.Listeners = []Listener{{Name: "public", Port: 8899}}
 	warning := UntrustedIdentityWarning(cfg)
 	if !strings.Contains(warning, "memory and router replay record") ||
 		!strings.Contains(warning, "listeners[].identity.trust_headers") {
-		t.Fatalf("warning = %q", warning)
-	}
-	cfg.Decisions = []Decision{{Name: "personal", Algorithm: &AlgorithmConfig{Type: "gmtrouter"}}}
-	if warning := UntrustedIdentityWarning(cfg); !strings.Contains(warning,
-		"memory, router replay and per-user model selection (gmtrouter) record") {
 		t.Fatalf("warning = %q", warning)
 	}
 	cfg.Listeners[0].Identity = &ListenerIdentity{TrustHeaders: true}

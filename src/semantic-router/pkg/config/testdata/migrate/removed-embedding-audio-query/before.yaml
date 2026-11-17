@@ -1,0 +1,22 @@
+# No decision model reads audio, so an embedding rule over an audio query has
+# no question that replaces it.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    signals:
+      embeddings:
+        - name: spoken_order
+          threshold: 0.7
+          candidates: [I would like to order a pizza]
+          aggregation_method: max
+          query_modality: audio
+    decisions:
+      - name: orders
+        priority: 100
+        rules: {type: embedding, name: spoken_order}
+        modelRefs: [{model: general}]

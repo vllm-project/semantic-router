@@ -15,8 +15,8 @@ The paths below were measured on Ascend 910B1 and 950DT hosts
 (torch_npu 2.10.0.post4, CANN 8.5 / 9.1).
 
 Large-model inference on Ascend belongs to vLLM behind an HTTP endpoint; the
-`npu` accelerator covers the Router's own 307M signal encoders and
-decision models inside the model runtime.
+`npu` accelerator covers the models the Router runs inside the model runtime,
+from the 307M encoders to the decision models.
 
 ## Prerequisites
 
@@ -52,8 +52,23 @@ serving unverified answers.
 `device: auto` still selects the CPU on an Ascend host: accelerators that are
 not yet validated are only used when named explicitly. In a full
 configuration, place a deployment on the NPU with `device: npu:0` — the same
-[placement rules](../model-runtime/deploy.md#place-and-scale-replicas) as for
+[placement rules](../model-runtime/deploy/placement-and-scaling.md#place-and-scale-replicas) as for
 GPUs, with the runtime installed next to torch_npu.
+
+### Precision: bf16 as an opt-in
+
+`--dtype bfloat16` runs a model at bf16 precision on the NPU (held bf16
+weights with the reference kernels); it is an explicit engine argument, and
+`--dtype auto` keeps each model's published (fp32) precision. Readiness
+reports unverified under bf16 — the golden references are recorded at
+`--dtype auto` — and accuracy rests on an offline per-request diff
+(the [bf16 record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/npu-bf16-ascend950dt.md)):
+2.5x on the 665-token Vela 2.0 member (84.8 → 214.1 requests/s at
+concurrency 8) and no change on the 195-token member; zero label flips on
+both models over this corpus. Confidence leaves can drift past the 0.02
+tolerance (0.8% / 4.3% of them per model), so a routing rule whose threshold
+sits on a confidence boundary can flip under bf16 — prefer fp32 for those
+deployments.
 
 ## Run the NPU runtime in a container
 
@@ -108,7 +123,7 @@ container sees. The torch_npu version must match the PyTorch the image ships.
 `vllm-sr serve` orchestration provisions its own runtime container without
 these mounts, so a fully orchestrated local stack keeps its models on the CPU.
 Run the runtime in the prepared container and point the Router's deployments
-at it ([External runtime](runtime/external.md)), or keep the whole stack on
+at it ([External runtime](../model-runtime/deploy/remote-services.md)), or keep the whole stack on
 the host.
 
 ## Troubleshooting

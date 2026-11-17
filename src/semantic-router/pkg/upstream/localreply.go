@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // Envoy 1.35's router local-reply bodies.
@@ -42,9 +44,10 @@ func (e *Error) answered() bool {
 }
 
 // localReply is the response Envoy's router sends when a call ends without an
-// upstream response: the same status, text/plain body and headers, so the
-// router core's response phases translate it exactly as they do in Envoy
-// mode. Response.Local carries the failure.
+// upstream response: the same status, text/plain body and headers. The
+// fallback acts on it as a failure, and the gateway writes it to the client
+// without the response phases, as Envoy does. Response.Local carries the
+// failure.
 func (c *call) localReply(failure *Error) *Response {
 	status, body := envoyReply(failure, len(c.attempts) > 1)
 	header := http.Header{
@@ -52,7 +55,7 @@ func (c *call) localReply(failure *Error) *Response {
 		"Content-Length": {strconv.Itoa(len(body))},
 	}
 	if failure.Kind == KindOverflow {
-		header.Set("X-Envoy-Overloaded", "true")
+		header.Set(headers.EnvoyOverloaded, "true")
 	}
 	return &Response{
 		StatusCode:   status,

@@ -1,30 +1,30 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import Head from '@docusaurus/Head'
 import Link from '@docusaurus/Link'
-import { FiArrowUpRight, FiGlobe, FiTerminal } from 'react-icons/fi'
+import { HtmlClassNameProvider } from '@docusaurus/theme-common'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
-import useBaseUrl from '@docusaurus/useBaseUrl'
-import ArchitectureCapabilities from '@site/src/components/homepage/ArchitectureCapabilities'
+import Architecture from '@site/src/components/homepage/Architecture'
 import RuntimeModes from '@site/src/components/homepage/RuntimeModes'
 import SovereigntyAI from '@site/src/components/homepage/SovereigntyAI'
 import EcosystemSection from '@site/src/components/homepage/EcosystemSection'
-import AcknowledgementsSection from '@site/src/components/AcknowledgementsSection'
 import InstallQuickStartSection from '@site/src/components/InstallQuickStartSection'
 import YouTubeSection from '@site/src/components/YouTubeSection'
 import ResearchPaperCarousel from '@site/src/components/ResearchPaperCarousel'
 import TeamCarousel from '@site/src/components/TeamCarousel'
 import TestimonialsRail from '@site/src/components/TestimonialsRail'
 import TrendingHighlights from '@site/src/components/TrendingHighlights'
-import { researchPapers } from '@site/src/data/researchContent'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import SemanticTerrainHero from '@site/src/components/site/SemanticTerrainHero'
 import ScrollReveal from '@site/src/components/site/ScrollReveal'
 import { SectionLabel } from '@site/src/components/site/Chrome'
+import Ground from '@site/src/components/duo/Ground'
+import PixelIcon from '@site/src/components/duo/PixelIcon'
+import Stars from '@site/src/components/duo/Stars'
+import { DawnInterlude, EmberInterlude, NightInterlude } from '@site/src/components/duo/Interlude'
 import styles from './index.module.css'
 
-const paperCount = researchPapers.length
 const homepageMetaTitle = translate({
   id: 'homepage.meta.title',
   message: 'Intelligence Beyond Any One Model',
@@ -39,87 +39,50 @@ const homepageSocialTitle = translate({
   message: 'Intelligence Beyond Any One Model | vLLM Semantic Router',
 })
 
-const heroStats = [
-  {
-    label: translate({
-      id: 'homepage.stats.signals.label',
-      message: 'Signals',
-    }),
-    value: '20',
-    description: translate({
-      id: 'homepage.stats.signals.description',
-      message:
-        'Context, intent, safety, preferences, and system state.',
-    }),
-  },
-  {
-    label: translate({
-      id: 'homepage.stats.algorithms.label',
-      message: 'Algorithms',
-    }),
-    value: '16',
-    description: translate({
-      id: 'homepage.stats.algorithms.description',
-      message:
-        '11 selection algorithms and 5 loopers.',
-    }),
-  },
-  {
-    label: translate({ id: 'homepage.stats.papers.label', message: 'Papers' }),
-    value: String(paperCount).padStart(2, '0'),
-    description: translate(
-      {
-        id: 'homepage.stats.papers.description',
-        message:
-          '{count} papers on routing, safety, and inference.',
-      },
-      { count: paperCount },
-    ),
-  },
-]
-
+/* The close, as System Duo's mission: a dusk with pixel stars falls into ink, and the footer continues it. */
 function FinalCtaSection(): JSX.Element {
   return (
-    <section id="get-started" className={styles.finalCtaSection} aria-labelledby="get-started-title">
-      <div className="site-shell-container">
+    <section id="get-started" className={styles.mission} aria-labelledby="get-started-title">
+      <div className={styles.dusk} aria-hidden="true">
+        <Stars className={styles.stars} />
+      </div>
+      <div className={styles.missionIn}>
         <ScrollReveal>
-          <div className={styles.finalCtaFrame}>
-            <div className={styles.finalCtaCopy}>
-              <SectionLabel>
+          <div className={styles.missionGrid}>
+            <div>
+              <SectionLabel className={styles.missionLabel}>
                 <Translate id="homepage.finalCta.label">Make it yours</Translate>
               </SectionLabel>
-              <h2 id="get-started-title">
-                <Translate id="homepage.finalCta.title">Make every request count.</Translate>
+              <h2 id="get-started-title" className={styles.statement}>
+                <Translate
+                  id="homepage.finalCta.title"
+                  values={{ count: <em><Translate id="homepage.finalCta.count">count</Translate></em> }}
+                >
+                  {'Make every request {count}.'}
+                </Translate>
               </h2>
-              <p>
+              <p className={styles.why}>
                 <Translate id="homepage.finalCta.description">
-                  Explore intelligent routing in the Playground. Bring it to your own stack when you're ready.
+                  Explore intelligent routing in System Duo. Bring it to your own stack when you're ready.
                 </Translate>
               </p>
             </div>
-            <div className={styles.finalCtaActions}>
-              <Link
-                className={styles.finalCtaLink}
-                href="https://app.vllm-sr.ai/playground"
-                rel="noreferrer"
-                target="_blank"
-              >
-                <span className={styles.finalCtaIcon} aria-hidden="true"><FiGlobe /></span>
-                <span className={styles.finalCtaLinkCopy}>
-                  <strong><Translate id="homepage.finalCta.playground">Try the Playground</Translate></strong>
-                  <span><Translate id="homepage.finalCta.playgroundDetail">See how requests find the right model.</Translate></span>
-                </span>
-                <FiArrowUpRight className={styles.finalCtaArrow} aria-hidden="true" />
-              </Link>
-              <Link className={`${styles.finalCtaLink} ${styles.finalCtaInstall}`} to="/docs/installation/">
-                <span className={styles.finalCtaIcon} aria-hidden="true"><FiTerminal /></span>
-                <span className={styles.finalCtaLinkCopy}>
-                  <strong><Translate id="homepage.finalCta.docs">Run it yourself</Translate></strong>
-                  <span><Translate id="homepage.finalCta.docsDetail">From installation to your first request.</Translate></span>
-                </span>
-                <FiArrowUpRight className={styles.finalCtaArrow} aria-hidden="true" />
-              </Link>
-            </div>
+            <ul className={styles.principles}>
+              <li>
+                <PixelIcon name="bolt" size={32} className={styles.principleIcon} />
+                <a href="https://app.vllm-sr.ai/#try" target="_blank" rel="noreferrer">
+                  <h3><Translate id="homepage.finalCta.playground">Try System Duo</Translate></h3>
+                  <p><Translate id="homepage.finalCta.playgroundDetail">See how requests find the right model.</Translate></p>
+                </a>
+              </li>
+              <li>
+                <PixelIcon name="code" size={32} className={styles.principleIcon} />
+                <Link to="/docs/installation/">
+                  <h3><Translate id="homepage.finalCta.docs">Run it yourself</Translate></h3>
+                  <p><Translate id="homepage.finalCta.docsDetail">From installation to your first request.</Translate></p>
+                </Link>
+              </li>
+            </ul>
           </div>
         </ScrollReveal>
       </div>
@@ -127,9 +90,33 @@ function FinalCtaSection(): JSX.Element {
   )
 }
 
+// The navbar turns from clear to frosted paper after a little scroll; its pill appears once the hero's actions pass.
+function useHomeChrome(): void {
+  useEffect(() => {
+    const root = document.documentElement
+    const actions = document.querySelector('[data-hero-actions]')
+    let frame = 0
+    const update = () => {
+      frame = 0
+      root.toggleAttribute('data-duo-scrolled', window.scrollY > 8)
+      root.toggleAttribute('data-duo-cta', !actions || actions.getBoundingClientRect().bottom < 80)
+    }
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(update)
+    }
+    update()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+      root.removeAttribute('data-duo-scrolled')
+      root.removeAttribute('data-duo-cta')
+    }
+  }, [])
+}
+
 export default function Home(): JSX.Element {
   const { siteConfig } = useDocusaurusContext()
-  const filmPoster = useBaseUrl('/videos/vllm-sr-intro/vllm-sr-intro-poster.webp')
   const ogImage = new URL(
     SITE_SOCIAL_PREVIEW_IMAGE_PATH,
     siteConfig.url,
@@ -151,102 +138,110 @@ export default function Home(): JSX.Element {
       'https://huggingface.co/vllm-sr',
     ],
   }
+  useHomeChrome()
 
   return (
-    <Layout title={homepageMetaTitle} description={homepageMetaDescription}>
-      <Head>
-        <link rel="preload" as="image" href={filmPoster} fetchPriority="high" />
-        <meta property="og:title" content={homepageSocialTitle} />
-        <meta property="og:description" content={homepageMetaDescription} />
-        <meta property="og:image" content={ogImage} />
-        <meta
-          property="og:image:alt"
-          content="vLLM Semantic Router social preview"
-        />
-        <meta property="og:type" content="website" />
-        <meta
-          name="keywords"
-          content="programmable decision layer, agent harness, models and compute, Mixture-of-Models, open-source LLM router, multi-model routing, model selection, bounded model collaboration, semantic router, policy-aware routing, vLLM"
-        />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={homepageSocialTitle} />
-        <meta name="twitter:description" content={homepageMetaDescription} />
-        <meta name="twitter:image" content={ogImage} />
-        <meta
-          name="twitter:image:alt"
-          content="vLLM Semantic Router social preview"
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(homepageStructuredData),
-          }}
-        />
-      </Head>
-      <main className={styles.page}>
-        <SemanticTerrainHero />
+    <HtmlClassNameProvider className="duo-home">
+      <Layout title={homepageMetaTitle} description={homepageMetaDescription}>
+        <Head>
+          {/* In the server-rendered head, before the first paint: reveals hide sections only when JavaScript runs. */}
+          <script>{'document.documentElement.setAttribute(\'data-js\', \'\')'}</script>
+          {/* The same root URLs that the site-wide cormorant.css resolves, in every locale. */}
+          <link rel="preload" as="font" type="font/woff2" href="/fonts/CormorantGaramond.woff2" crossOrigin="anonymous" />
+          <link rel="preload" as="font" type="font/woff2" href="/fonts/CormorantGaramond-Italic.woff2" crossOrigin="anonymous" />
+          <meta property="og:title" content={homepageSocialTitle} />
+          <meta property="og:description" content={homepageMetaDescription} />
+          <meta property="og:image" content={ogImage} />
+          <meta
+            property="og:image:alt"
+            content="vLLM Semantic Router social preview"
+          />
+          <meta property="og:type" content="website" />
+          <meta
+            name="keywords"
+            content="programmable decision layer, agent harness, models and compute, Mixture-of-Models, open-source LLM router, multi-model routing, model selection, bounded model collaboration, semantic router, policy-aware routing, vLLM"
+          />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content={homepageSocialTitle} />
+          <meta name="twitter:description" content={homepageMetaDescription} />
+          <meta name="twitter:image" content={ogImage} />
+          <meta
+            name="twitter:image:alt"
+            content="vLLM Semantic Router social preview"
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(homepageStructuredData),
+            }}
+          />
+        </Head>
+        <main className={styles.page}>
+          <SemanticTerrainHero />
 
-        <div className={styles.bandGraphite}>
-          <ScrollReveal>
-            <TestimonialsRail />
-          </ScrollReveal>
-          <ScrollReveal delay={40}>
-            <TrendingHighlights />
-          </ScrollReveal>
-        </div>
+          <Ground variant="blueprint">
+            <ScrollReveal>
+              <InstallQuickStartSection />
+            </ScrollReveal>
+          </Ground>
 
-        <div className={styles.bandGraphite}>
-          <ScrollReveal delay={50}>
-            <InstallQuickStartSection />
-          </ScrollReveal>
-        </div>
+          <DawnInterlude />
 
-        <div className={styles.bandRaised}>
-          <ScrollReveal delay={50}>
-            <YouTubeSection />
-          </ScrollReveal>
-        </div>
+          <Ground variant="band" tone="blue" rule seed={2}>
+            <Architecture />
+          </Ground>
 
-        <div className={styles.bandArchitecture}>
-          <ArchitectureCapabilities stats={heroStats} />
-        </div>
+          <Ground variant="blueprint">
+            <RuntimeModes />
+          </Ground>
 
-        <div className={styles.bandRuntime}>
-          <RuntimeModes />
-        </div>
+          <NightInterlude />
 
-        <div className={styles.bandRaised}>
-          <SovereigntyAI />
-        </div>
+          <Ground variant="paper" rule seed={3}>
+            <ScrollReveal>
+              <YouTubeSection />
+            </ScrollReveal>
+          </Ground>
 
-        <div className={styles.bandBlack}>
-          <ScrollReveal delay={40}>
-            <ResearchPaperCarousel />
-          </ScrollReveal>
-        </div>
+          <Ground variant="band" tone="ember" rule seed={4}>
+            <SovereigntyAI />
+          </Ground>
 
-        <div className={styles.bandGraphite}>
-          <ScrollReveal delay={40}>
-            <TeamCarousel />
-          </ScrollReveal>
-        </div>
+          <Ground variant="blueprint">
+            <ScrollReveal>
+              <ResearchPaperCarousel />
+            </ScrollReveal>
+          </Ground>
 
-        <div className={styles.bandBlack}>
-          <ScrollReveal delay={40}>
-            <EcosystemSection />
-          </ScrollReveal>
-        </div>
+          <EmberInterlude />
 
-        <div className={styles.bandBlack}>
-          <ScrollReveal delay={40}>
-            <AcknowledgementsSection />
-          </ScrollReveal>
-        </div>
+          <Ground variant="paper" rule seed={5}>
+            <ScrollReveal>
+              <TestimonialsRail />
+            </ScrollReveal>
+          </Ground>
 
-        <div className={styles.bandGraphite}>
+          <Ground variant="blueprint">
+            <ScrollReveal>
+              <TeamCarousel />
+            </ScrollReveal>
+          </Ground>
+
+          <Ground variant="paper">
+            <ScrollReveal>
+              <TrendingHighlights />
+            </ScrollReveal>
+          </Ground>
+
+          <Ground variant="band" tone="violet" rule seed={6}>
+            <ScrollReveal>
+              <EcosystemSection />
+            </ScrollReveal>
+          </Ground>
+
           <FinalCtaSection />
-        </div>
-      </main>
-    </Layout>
+        </main>
+      </Layout>
+    </HtmlClassNameProvider>
   )
 }

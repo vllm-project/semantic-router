@@ -75,7 +75,7 @@ def arguments(tmp_path, **updates):
     parser = argparse.ArgumentParser()
     live.add_parser(parser.add_subparsers(dest="command", required=True))
     config = tmp_path / "config.yaml"
-    config.write_text("version: v0.3\n")
+    config.write_text("version: v0.5\n")
     args = parser.parse_args(
         [
             "jevbench",

@@ -654,16 +654,19 @@ def test_each_named_state_counts_once(runtimes):
     status, body = call(
         runtime,
         {
-            "state": STATE,
-            "questions": QUESTIONS,
-            "states": {"other": {"state": other, "questions": QUESTIONS}},
+            "states": {
+                "this": {"state": STATE, "questions": QUESTIONS},
+                "other": {"state": other, "questions": QUESTIONS},
+            },
         },
     )
     assert status == 200
-    assert body["usage"]["input_tokens"] == usage_of(model, STATE, QUESTIONS)
+    this = usage_of(model, STATE, QUESTIONS)
+    assert body["states"]["this"]["usage"]["input_tokens"] == this
     assert body["states"]["other"]["usage"]["input_tokens"] == usage_of(
         model, other, QUESTIONS
     )
+    assert body["usage"]["input_tokens"] == this + usage_of(model, other, QUESTIONS)
 
 
 def test_an_image_is_part_of_the_state(runtimes, png_url, monkeypatch):

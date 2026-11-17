@@ -3,7 +3,6 @@ package modeldownload
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"slices"
 	"testing"
@@ -13,93 +12,9 @@ import (
 
 // The balance recipe's classifiers are runtime-served; the router downloads
 // only the embedding it runs itself.
-var expectedAMDModelSpecs = []string{
-	"models/Vela-1.0-Encoder-307M-Embedding",
-}
-
-func TestExtractModelPaths(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   *config.RouterConfig
-		expected []string
-	}{
-		{
-			name: "Extract Qwen3ModelPath",
-			config: &config.RouterConfig{
-				InlineModels: config.InlineModels{
-					EmbeddingModels: config.EmbeddingModels{
-						Qwen3ModelPath: "models/mom-embedding-pro",
-					},
-				},
-			},
-			expected: []string{"models/mom-embedding-pro"},
-		},
-		{
-			name: "Extract both embedding models",
-			config: &config.RouterConfig{
-				InlineModels: config.InlineModels{
-					EmbeddingModels: config.EmbeddingModels{
-						Qwen3ModelPath:  "models/mom-embedding-pro",
-						MmBertModelPath: "models/mmbert-embed-32k-2d-matryoshka",
-					},
-				},
-			},
-			expected: []string{"models/mom-embedding-pro", "models/mmbert-embed-32k-2d-matryoshka"},
-		},
-		{
-			name: "Extract ModelID from classifier",
-			config: &config.RouterConfig{
-				InlineModels: config.InlineModels{
-					Classifier: config.Classifier{
-						CategoryModel: config.CategoryModel{
-							ModelID: "models/lora_intent_classifier_bert-base-uncased_model",
-						},
-					},
-				},
-			},
-			expected: []string{"models/mom-domain-classifier"},
-		},
-		{
-			name: "Extract multiple model paths",
-			config: &config.RouterConfig{
-				InlineModels: config.InlineModels{
-					EmbeddingModels: config.EmbeddingModels{
-						Qwen3ModelPath: "models/mom-embedding",
-					},
-					Classifier: config.Classifier{
-						CategoryModel: config.CategoryModel{
-							ModelID: "models/mom-domain-classifier",
-						},
-					},
-				},
-			},
-			expected: []string{"models/mom-embedding", "models/mom-domain-classifier"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			paths := ExtractModelPaths(tt.config)
-
-			if len(paths) != len(tt.expected) {
-				t.Errorf("Expected %d paths, got %d: %v", len(tt.expected), len(paths), paths)
-				return
-			}
-
-			// Check if all expected paths are present (order doesn't matter)
-			pathMap := make(map[string]bool)
-			for _, p := range paths {
-				pathMap[p] = true
-			}
-
-			for _, expected := range tt.expected {
-				if !pathMap[expected] {
-					t.Errorf("Expected path %s not found in result: %v", expected, paths)
-				}
-			}
-		})
-	}
-}
+// The balance recipe routes on decision-model questions; the model runtime
+// serves that model, so the router downloads nothing for it.
+var expectedAMDModelSpecs = []string{}
 
 func TestIsModelDirectory(t *testing.T) {
 	tests := []struct {
@@ -127,317 +42,9 @@ func TestIsModelDirectory(t *testing.T) {
 	}
 }
 
-func TestExtractModelPathsSkipsRootLevelModelFiles(t *testing.T) {
-	cfg := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{
-					Name: "default-route",
-					Algorithm: &config.AlgorithmConfig{
-						GMTRouter: &config.GMTRouterSelectionConfig{
-							ModelPath: "models/gmtrouter.pt",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if got := ExtractModelPaths(cfg); slices.Contains(got, "models/gmtrouter.pt") {
-		t.Fatalf("ExtractModelPaths() unexpectedly included root-level model file: %v", got)
-	}
-}
-
-func TestExtractModelPathsIncludesLocalClassifierSignals(t *testing.T) {
-	cfg := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
-				Name:      "risk",
-				Type:      "local",
-				ModelPath: "models/risk-classifier",
-				Labels:    []string{"SAFE", "RISKY"},
-			}}},
-		},
-	}
-
-	if got := ExtractModelPaths(cfg); !slices.Contains(got, "models/risk-classifier") {
-		t.Fatalf("ExtractModelPaths() = %v, want local classifier model path", got)
-	}
-}
-
-func TestExtractRequiredFilesByModel(t *testing.T) {
-	cfg := &config.RouterConfig{
-		InlineModels: config.InlineModels{
-			Classifier: config.Classifier{
-				CategoryModel: config.CategoryModel{
-					ModelID:             "models/mmbert32k-intent-classifier-merged",
-					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
-				},
-				PIIModel: config.PIIModel{
-					ModelID:        "models/mmbert32k-pii-detector-merged",
-					PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
-				},
-			},
-			PromptGuard: config.PromptGuardConfig{
-				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
-			},
-		},
-	}
-
-	got := ExtractRequiredFilesByModel(cfg)
-	want := map[string][]string{
-		"models/mmbert32k-intent-classifier-merged":  {"category_mapping.json"},
-		"models/mmbert32k-pii-detector-merged":       {"pii_type_mapping.json"},
-		"models/mmbert32k-jailbreak-detector-merged": {"jailbreak_type_mapping.json"},
-	}
-
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("ExtractRequiredFilesByModel() = %#v, want %#v", got, want)
-	}
-}
-
-func TestBuildModelSpecsIncludesConfigDerivedRequiredFiles(t *testing.T) {
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			"models/mmbert32k-intent-classifier-merged": "vllm-sr/mmbert32k-intent-classifier-merged",
-		},
-		InlineModels: config.InlineModels{
-			Classifier: config.Classifier{
-				CategoryModel: config.CategoryModel{
-					ModelID:             "models/mmbert32k-intent-classifier-merged",
-					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
-				},
-			},
-		},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
-				Name:  "domain-route",
-				Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"},
-			}},
-		},
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	if len(specs) != 1 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want 1", len(specs))
-	}
-
-	wantRequiredFiles := []string{"config.json", "category_mapping.json"}
-	if !reflect.DeepEqual(specs[0].RequiredFiles, wantRequiredFiles) {
-		t.Fatalf("RequiredFiles = %#v, want %#v", specs[0].RequiredFiles, wantRequiredFiles)
-	}
-}
-
-func TestBuildModelSpecsSkipsDisabledHallucinationFeatureModels(t *testing.T) {
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			"models/mmbert32k-factcheck-classifier-merged": "vllm-sr/mmbert32k-factcheck-classifier-merged",
-			"models/mom-halugate-detector":                 "vllm-sr/mom-halugate-detector",
-		},
-		InlineModels: config.InlineModels{
-			HallucinationMitigation: config.HallucinationMitigationConfig{
-				Enabled: false,
-				FactCheckModel: config.FactCheckModelConfig{
-					ModelID: "models/mmbert32k-factcheck-classifier-merged",
-				},
-				HallucinationModel: config.HallucinationModelConfig{
-					ModelID: "models/mom-halugate-detector",
-				},
-			},
-		},
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	if len(specs) != 0 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want 0", len(specs))
-	}
-}
-
-func TestBuildModelSpecsIncludesFactCheckClassifierWhenSignalConfigured(t *testing.T) {
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			"models/mmbert32k-factcheck-classifier-merged": "vllm-sr/mmbert32k-factcheck-classifier-merged",
-		},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				FactCheckRules: []config.FactCheckRule{
-					{Name: "needs_fact_check"},
-				},
-			},
-			Decisions: []config.Decision{{
-				Name:  "verified-route",
-				Rules: config.RuleNode{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
-			}},
-		},
-		InlineModels: config.InlineModels{
-			HallucinationMitigation: config.HallucinationMitigationConfig{
-				FactCheckModel: config.FactCheckModelConfig{
-					ModelID: "models/mmbert32k-factcheck-classifier-merged",
-				},
-			},
-		},
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	if len(specs) != 1 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want 1", len(specs))
-	}
-	if specs[0].LocalPath != "models/mmbert32k-factcheck-classifier-merged" {
-		t.Fatalf("LocalPath = %q, want fact-check classifier", specs[0].LocalPath)
-	}
-}
-
-func TestBuildModelSpecsSkipsUnusedCoreClassifierModels(t *testing.T) {
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			"models/mmbert32k-intent-classifier-merged":  "vllm-sr/mmbert32k-intent-classifier-merged",
-			"models/mmbert32k-pii-detector-merged":       "vllm-sr/mmbert32k-pii-detector-merged",
-			"models/mmbert32k-jailbreak-detector-merged": "vllm-sr/mmbert32k-jailbreak-detector-merged",
-		},
-		InlineModels: config.InlineModels{
-			Classifier: config.Classifier{
-				CategoryModel: config.CategoryModel{
-					ModelID:             "models/mmbert32k-intent-classifier-merged",
-					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
-				},
-				PIIModel: config.PIIModel{
-					ModelID:        "models/mmbert32k-pii-detector-merged",
-					PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
-				},
-			},
-			PromptGuard: config.PromptGuardConfig{
-				Enabled:              true,
-				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
-			},
-		},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
-				Name:  "default-route",
-				Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{}},
-			}},
-		},
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	if len(specs) != 0 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want 0", len(specs))
-	}
-}
-
-func TestBuildModelSpecsIncludesUsedCoreClassifierModels(t *testing.T) {
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			"models/mmbert32k-intent-classifier-merged":  "vllm-sr/mmbert32k-intent-classifier-merged",
-			"models/mmbert32k-pii-detector-merged":       "vllm-sr/mmbert32k-pii-detector-merged",
-			"models/mmbert32k-jailbreak-detector-merged": "vllm-sr/mmbert32k-jailbreak-detector-merged",
-		},
-		InlineModels: config.InlineModels{
-			Classifier: config.Classifier{
-				CategoryModel: config.CategoryModel{
-					ModelID:             "models/mmbert32k-intent-classifier-merged",
-					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
-				},
-				PIIModel: config.PIIModel{
-					ModelID:        "models/mmbert32k-pii-detector-merged",
-					PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
-				},
-			},
-			PromptGuard: config.PromptGuardConfig{
-				Enabled:              true,
-				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
-			},
-		},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
-				Name: "guarded-route",
-				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
-					{Type: config.SignalTypeDomain, Name: "billing"},
-					{Type: config.SignalTypePII, Name: "contains_pii"},
-					{Type: config.SignalTypeJailbreak, Name: "detector"},
-				}},
-			}},
-		},
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	if len(specs) != 3 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want 3", len(specs))
-	}
-	assertContainsAllModelSpecs(t, specs,
-		"models/mmbert32k-intent-classifier-merged",
-		"models/mmbert32k-pii-detector-merged",
-		"models/mmbert32k-jailbreak-detector-merged",
-	)
-}
-
-func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			"models/mmbert32k-jailbreak-detector-merged": "vllm-sr/mmbert32k-jailbreak-detector-merged",
-		},
-		InlineModels: config.InlineModels{
-			PromptGuard: config.PromptGuardConfig{
-				Enabled:              true,
-				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
-			},
-		},
-		IntelligentRouting: config.IntelligentRouting{
-			Projections: config.Projections{
-				Scores: []config.ProjectionScore{{
-					Name:   "risk_score",
-					Method: "weighted_sum",
-					Inputs: []config.ProjectionScoreInput{{Type: config.SignalTypeJailbreak, Name: "detector", Weight: 1.0}},
-				}},
-				Mappings: []config.ProjectionMapping{{
-					Name:   "risk_map",
-					Source: "risk_score",
-					Method: "threshold",
-					Outputs: []config.ProjectionMappingOutput{{
-						Name: "high_risk",
-					}},
-				}},
-			},
-			Decisions: []config.Decision{{
-				Name:  "guarded-route",
-				Rules: config.RuleNode{Type: config.SignalTypeProjection, Name: "high_risk"},
-			}},
-		},
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	if len(specs) != 1 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want 1", len(specs))
-	}
-	if specs[0].LocalPath != "models/mmbert32k-jailbreak-detector-merged" {
-		t.Fatalf("LocalPath = %q, want jailbreak classifier", specs[0].LocalPath)
-	}
-}
-
 func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8888
     address: 0.0.0.0
@@ -454,19 +61,17 @@ providers:
           endpoint: localhost:8000
           protocol: http
           weight: 100
-routing:
-  modelCards:
-    - name: openai/gpt-oss-120b
-      modality: text
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: openai/gpt-oss-120b
+            use_reasoning: false
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
@@ -484,7 +89,7 @@ routing:
 
 func TestBuildModelSpecsSkipsUnusedRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8888
     address: 0.0.0.0
@@ -501,39 +106,24 @@ providers:
           endpoint: localhost:8000
           protocol: http
           weight: 100
-routing:
-  modelCards:
-    - name: openai/gpt-oss-120b
-      modality: text
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: openai/gpt-oss-120b
+            use_reasoning: false
 global:
   model_catalog:
-    embeddings:
-      semantic:
-        use_cpu: false
-    modules:
-      prompt_guard:
-        use_cpu: false
-      classifier:
-        domain:
-          use_cpu: false
-        pii:
-          use_cpu: false
-      hallucination_mitigation:
-        fact_check:
-          use_cpu: false
-        detector:
-          use_cpu: false
-      feedback_detector:
-        use_cpu: false
+    deployments:
+      vela-embedding:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+        device: rocm:0
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
@@ -546,28 +136,6 @@ global:
 
 	if len(specs) != 0 {
 		t.Fatalf("unused defaults requested model downloads: %+v", specs)
-	}
-}
-
-func TestBuildModelSpecsSkipsUnusedFeedbackDetectorDefaults(t *testing.T) {
-	cfg := &config.RouterConfig{
-		MoMRegistry: map[string]string{
-			"models/mmbert32k-feedback-detector-merged": "vllm-sr/mmbert32k-feedback-detector-merged",
-		},
-		InlineModels: config.InlineModels{
-			FeedbackDetector: config.FeedbackDetectorConfig{
-				Enabled: true,
-				ModelID: "models/mmbert32k-feedback-detector-merged",
-			},
-		},
-	}
-
-	specs, err := BuildModelSpecs(cfg)
-	if err != nil {
-		t.Fatalf("BuildModelSpecs() error = %v", err)
-	}
-	if len(specs) != 0 {
-		t.Fatalf("BuildModelSpecs() returned %d specs, want 0", len(specs))
 	}
 }
 
@@ -593,7 +161,8 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 		t.Fatalf("BuildModelSpecs() error = %v", err)
 	}
 
-	assertContainsAllModelSpecs(t, specs, "models/Vela-1.0-Encoder-307M-Embedding")
+	// embeddings.default names vela-embedding, so the model runtime serves it.
+	assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Embedding")
 	served := cfg.RuntimeServedModelPaths()
 	for _, spec := range specs {
 		if served[spec.LocalPath] && !spec.FilesOnly {
@@ -667,7 +236,7 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 	}
 }
 
-func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing.T) {
+func TestBuildModelSpecsLeavesTheMemoryEmbeddingToTheRuntimeForMemoryE2EConfigs(t *testing.T) {
 	for _, relParts := range [][]string{
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user.yaml"},
 		{"..", "..", "..", "..", "e2e", "config", "config.memory-user-valkey.yaml"},
@@ -694,14 +263,10 @@ func TestBuildModelSpecsDownloadsOnlyVelaEmbeddingForMemoryE2EConfigs(t *testing
 			if err != nil {
 				t.Fatalf("BuildModelSpecs() error = %v", err)
 			}
-			if len(specs) != 1 {
-				t.Fatalf("BuildModelSpecs() returned %d specs, want only the memory embedding: %#v", len(specs), specs)
+			if len(specs) != 0 {
+				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
 			}
-			if specs[0].LocalPath != "models/Vela-1.0-Encoder-307M-Embedding" ||
-				specs[0].RepoID != "vllm-sr/Vela-1.0-Encoder-307M-Embedding" ||
-				specs[0].Revision == "" || specs[0].CheckONNX {
-				t.Fatalf("memory E2E must download the pinned native Vela embedding: %#v", specs[0])
-			}
+			assertRuntimeServed(t, cfg, specs, "models/Vela-1.0-Encoder-307M-Embedding")
 		})
 	}
 }

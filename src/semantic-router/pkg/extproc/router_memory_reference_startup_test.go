@@ -99,20 +99,21 @@ func writeReferenceConfigCopy(t *testing.T, from, to string) string {
 func memoryStartupBuildConfig(loaded *config.RouterConfig) *config.RouterConfig {
 	cfg := &config.RouterConfig{}
 	cfg.Memory = loaded.Memory
-	cfg.Memory.Enabled = false
+	cfg.Memory.InUse = false
 	for _, decision := range loaded.AllRoutingDecisions() {
-		plugin := decision.GetMemoryConfig()
+		plugin := decision.GetContextConfig().Source(config.ContextSourceMemory)
 		if plugin == nil {
 			continue
 		}
-		payload := map[string]interface{}{"enabled": false, "hybrid_mode": plugin.HybridMode}
+		source := map[string]interface{}{"type": config.ContextSourceMemory, "hybrid_mode": plugin.HybridMode}
 		if plugin.Reflection != nil {
-			payload["reflection"] = map[string]interface{}{"algorithm": plugin.Reflection.Algorithm}
+			source["reflection"] = map[string]interface{}{"algorithm": plugin.Reflection.Algorithm}
 		}
+		payload := map[string]interface{}{"enabled": false, "sources": []interface{}{source}}
 		cfg.Decisions = append(cfg.Decisions, config.Decision{
 			Name:    decision.Name,
 			Rules:   config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{}},
-			Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginMemory, Configuration: config.MustStructuredPayload(payload)}},
+			Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(payload)}},
 		})
 	}
 	cfg.RouterLearning.StateStore = config.RouterLearningStateStoreConfig{
@@ -159,8 +160,9 @@ func (p servedViews) EmbeddingInfo() embedding.ModelInfo {
 func TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes(t *testing.T) {
 	loaded, err := loadRouterConfig(writeReferenceConfigCopy(t, "", ""))
 	require.NoError(t, err)
-	require.True(t, loaded.Memory.Enabled)
-	require.Equal(t, string(memory.EmbeddingModelMMBERT), detectMemoryEmbeddingModel(loaded))
+	require.True(t, loaded.Memory.InUse)
+	deployment, _ := loaded.MemoryEmbedding()
+	require.Equal(t, config.EmbeddingDefaultDeployment, deployment)
 	require.NotNil(t, loaded.Memory.Valkey)
 	require.NotNil(t, loaded.Memory.Qdrant)
 
@@ -168,7 +170,7 @@ func TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes(t *testing.T) {
 		return nil, assert.AnError
 	})
 	require.NoError(t, err)
-	prepared := memory.EmbeddingConfig{Model: memory.EmbeddingModelMMBERT, Provider: servedViews{base, velaEmbeddingViews}}
+	prepared := memory.EmbeddingConfig{Deployment: "vela-embedding", Provider: servedViews{base, velaEmbeddingViews}}
 	for backend, configured := range map[string]int{
 		"milvus": loaded.Memory.Milvus.Dimension,
 		"valkey": loaded.Memory.Valkey.Dimension,
@@ -180,10 +182,10 @@ func TestReferenceMemoryStoresUseAWidthVelaEmbeddingServes(t *testing.T) {
 	}
 
 	var found bool
-	for _, requirement := range config.EmbeddingRequirements(loaded, string(memory.EmbeddingModelMMBERT), true) {
-		if requirement.Consumer == "memory" {
+	for _, requirement := range config.EmbeddingRequirements(loaded, true) {
+		if requirement.Consumer == config.EmbeddingConsumerMemory {
 			found = true
-			assert.Equal(t, string(memory.EmbeddingModelMMBERT), requirement.Model)
+			assert.Equal(t, config.EmbeddingDefaultDeployment, requirement.Deployment)
 			assert.Contains(t, velaEmbeddingViews, requirement.Dimension)
 		}
 	}

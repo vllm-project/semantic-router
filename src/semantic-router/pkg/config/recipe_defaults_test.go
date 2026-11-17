@@ -10,30 +10,29 @@ import (
 )
 
 func TestRecipesInheritGlobalDefaultsIndependently(t *testing.T) {
-	for _, explicitDefault := range []bool{false, true} {
-		t.Run(fmt.Sprintf("explicit_default=%t", explicitDefault), func(t *testing.T) {
-			defaultProfile := `routing:
-  strategy: priority
-  fallback:
-    enabled: false
-    max_attempts: 2
-    total_timeout: 12s
-    per_attempt_timeout: 1s
-recipes:
+	for _, defaultLast := range []bool{false, true} {
+		t.Run(fmt.Sprintf("default_last=%t", defaultLast), func(t *testing.T) {
+			defaultRecipe := `  - name: default
+    strategy: priority
+    fallback:
+      enabled: false
+      max_attempts: 2
+      total_timeout: 12s
+      per_attempt_timeout: 1s
 `
-			if explicitDefault {
-				defaultProfile = `recipes:
-  - name: default
-    routing:
-      strategy: priority
-      fallback:
-        enabled: false
-        max_attempts: 2
-        total_timeout: 12s
-        per_attempt_timeout: 1s
+			named := `  - name: inherited
+  - name: partial
+    fallback:
+      max_attempts: 3
+  - name: disabled
+    fallback:
+      enabled: false
 `
+			recipes := defaultRecipe + named
+			if defaultLast {
+				recipes = named + defaultRecipe
 			}
-			input := `version: v0.3
+			input := `version: v0.5
 global:
   router:
     strategy: confidence
@@ -42,17 +41,11 @@ global:
       max_attempts: 5
       total_timeout: 50s
       per_attempt_timeout: 7s
-` + defaultProfile + `  - name: inherited
-    routing: {}
-  - name: partial
-    routing:
-      fallback:
-        max_attempts: 3
-  - name: disabled
-    routing:
-      fallback:
-        enabled: false
-entrypoints:
+recipes:
+` + recipes + `entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [public/inherited]
     recipe: inherited
 `
@@ -106,15 +99,18 @@ entrypoints:
 }
 
 func TestDefaultRecipeDoesNotSupplyMissingGlobalDefaults(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
-routing:
-  strategy: confidence
-  fallback:
-    enabled: true
-    max_attempts: 8
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.5
 recipes:
+  - name: default
+    strategy: confidence
+    fallback:
+      enabled: true
+      max_attempts: 8
   - name: independent
-    routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -132,21 +128,24 @@ recipes:
 func TestRecipeFallbackValidationUsesGlobalNotDefaultRecipe(t *testing.T) {
 	// This recipe is valid against the global 30-second limit, but invalid
 	// against the unrelated default recipe's 3-second limit.
-	cfg, err := ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := ParseYAMLBytes([]byte(`version: v0.5
 global:
   router:
     fallback:
       enabled: true
       total_timeout: 30s
       per_attempt_timeout: 2s
-routing:
-  fallback:
-    total_timeout: 3s
 recipes:
+  - name: default
+    fallback:
+      total_timeout: 3s
   - name: longer
-    routing:
-      fallback:
-        per_attempt_timeout: 8s
+    fallback:
+      per_attempt_timeout: 8s
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -155,12 +154,13 @@ recipes:
 	if recipe.Profile.Fallback.TotalTimeout != 30*time.Second || cfg.Fallback.TotalTimeout != 3*time.Second {
 		t.Fatal("fallback validation and normalization disagree about the policy scope")
 	}
-	_, err = ParseYAMLBytes([]byte(`version: v0.3
+	_, err = ParseYAMLBytes([]byte(`version: v0.5
 global:
   router:
     strategy: invalid-global
-routing:
-  strategy: priority
+recipes:
+  - name: default
+    strategy: priority
 `))
 	if err == nil || !strings.Contains(err.Error(), "global.router.strategy") {
 		t.Fatalf("local strategy must not hide an invalid global default: %v", err)

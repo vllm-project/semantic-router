@@ -18,8 +18,11 @@ func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutio
 	algorithmHasAnalysisModels := req.Algorithm != nil &&
 		req.Algorithm.Fusion != nil &&
 		len(req.Algorithm.Fusion.AnalysisModels) > 0
-	if algorithmHasAnalysisModels || req.Algorithm != nil && req.Algorithm.Fusion != nil {
+	if req.Algorithm != nil && req.Algorithm.Fusion != nil {
 		mergeFusionAlgorithmConfig(&cfg, req.Algorithm.Fusion)
+	}
+	if recipeOwnsExecution && req.Algorithm.OnError != "" {
+		cfg.OnError = req.Algorithm.OnError
 	}
 	if len(req.ModelRefs) > 0 && !algorithmHasAnalysisModels {
 		cfg.AnalysisModels = modelRefsToNames(req.ModelRefs)
@@ -89,7 +92,7 @@ func applyGroundingDefaults(cfg *fusionExecutionConfig) {
 		cfg.GroundingContradictionPenalty = 1.0
 	}
 	if strings.TrimSpace(cfg.GroundingOnError) == "" {
-		cfg.GroundingOnError = cfg.OnError
+		cfg.GroundingOnError = config.FusionOnErrorSkip
 	}
 }
 
@@ -130,7 +133,7 @@ func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAl
 	}
 	mergeFusionAnalysisOverrides(dst, src.AnalysisOverrides)
 	mergeFusionLimits(dst, src.MaxConcurrent, src.MaxCompletionTokens, src.RoundTimeoutSeconds, src.MinSuccessfulResponses)
-	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses, src.OnError)
+	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses)
 	mergeFusionPrompts(dst, src.AnalysisTemplate, src.SynthesisTemplate, src.JudgePromptVersion)
 	mergeFusionQuorumFailure(dst, src.QuorumFailurePolicy, src.QuorumFallbackTarget)
 	mergeFusionGroundingConfig(dst, src.Grounding)
@@ -187,15 +190,11 @@ func mergeFusionControls(
 	temperature *float64,
 	includeAnalysis *bool,
 	includeIntermediateResponses *bool,
-	onError string,
 ) {
 	if temperature != nil {
 		dst.Temperature = temperature
 	}
 	mergeFusionTraceVisibility(dst, includeAnalysis, includeIntermediateResponses)
-	if onError != "" {
-		dst.OnError = onError
-	}
 }
 
 func mergeFusionTraceVisibility(
@@ -245,7 +244,10 @@ func mergeFusionRequestConfig(dst *fusionExecutionConfig, src *config.FusionRequ
 	mergeFusionModels(dst, src.Model, src.AnalysisModels)
 	mergeFusionAnalysisOverrides(dst, src.AnalysisOverrides)
 	mergeFusionLimits(dst, src.MaxConcurrent, src.MaxCompletionTokens, src.RoundTimeoutSeconds, src.MinSuccessfulResponses)
-	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses, src.OnError)
+	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses)
+	if src.OnError != "" {
+		dst.OnError = src.OnError
+	}
 	mergeFusionPrompts(dst, src.AnalysisTemplate, src.SynthesisTemplate, src.JudgePromptVersion)
 	mergeFusionGroundingConfig(dst, src.Grounding)
 }

@@ -5,10 +5,13 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from starlette.testclient import TestClient
 from vllm_srun import dtypes
 from vllm_srun.accel import onednn
+from vllm_srun.api.app import create_app
 from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, EngineArgs, ModelConfig, ServeConfig
 from vllm_srun.engines.native.engine import NativeEngine
+from vllm_srun.errors import VerificationError
 from vllm_srun.families.task_heads import family as task_heads
 from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 from vllm_srun.runtime import Runtime
@@ -17,9 +20,7 @@ from vllm_srun.testing.fixtures import write_fixture
 from .conftest import QUESTIONS, STATE
 
 DECISION2_GPU = DtypePolicy(approximate_kernels=True)
-DECISION3 = DtypePolicy(
-    autocast=None, bf16_resident=False, gpu_weights="bfloat16", cpu_weights="bfloat16"
-)
+DECISION3 = DtypePolicy(autocast=None, bf16_resident=False, gpu_weights="bfloat16")
 TASK_HEADS = DtypePolicy(
     weights="float32", autocast=None, head="float32", bf16_resident=False
 )
@@ -41,7 +42,7 @@ def spec(policy, variants=None):
         (DECISION2_GPU, True, "bfloat16"),
         (DECISION2_GPU, False, "float32"),
         (DECISION3, True, "bfloat16"),
-        (DECISION3, False, "bfloat16"),
+        (DECISION3, False, "float32"),
         (TASK_HEADS, True, "float32"),
         (TASK_HEADS, False, "float32"),
     ],
@@ -76,6 +77,26 @@ def test_another_dtype_holds_every_weight_in_it_with_the_reference_kernels():
     assert dtypes.apply(spec(DECISION3), "float32", True).dtype == DtypePolicy(
         autocast=None, bf16_resident=False
     )
+
+
+def test_decision3_runs_bf16_on_a_gpu_and_fp32_on_a_cpu(d3_text_package, tmp_path):
+    from vllm_srun.families.decision3.family import Decision3Family
+    from vllm_srun.plugins.base import PackageRef
+    from vllm_srun.testing.decision3 import write_quantized_fixture
+
+    family = Decision3Family()
+
+    def policy(package):
+        return family.describe(family.verify(PackageRef(package))).dtype
+
+    released = policy(d3_text_package)
+    assert released == DECISION3
+    assert dtypes.resolve("bfloat16", released, True) == "auto"
+    assert dtypes.resolve("float32", released, False) == "auto"
+    assert dtypes.resolve("bfloat16", released, False) == "bfloat16"
+    # A quantized package's format holds BF16 activations on a CPU too.
+    int4 = policy(write_quantized_fixture(d3_text_package, tmp_path / "int4"))
+    assert dtypes.published(int4, True) == dtypes.published(int4, False) == "bfloat16"
 
 
 def serve(package, **args):
@@ -241,6 +262,7 @@ def test_a_models_own_engine_arguments_reach_its_batcher_and_scheduler(qwen3_pac
             "batch_window_ms": 0.0,
             "dtype": "auto",
             "enable_shared_context": True,
+            "max_model_len": None,
         }
     finally:
         runtime.stop()
@@ -311,5 +333,137 @@ def test_a_task_model_is_approximate_where_its_packed_linears_are_not_invariant(
         assert not served.model.engine_model.batch_invariant
         assert not served.model.batch_invariant
         assert served.numerics == "approximate"
+    finally:
+        runtime.stop()
+
+
+def test_max_model_len_lowers_a_decision_models_input_limit(qwen3_package):
+    runtime = serve(qwen3_package, max_model_len=1000)
+    try:
+        card = runtime.served[0].card([])
+        assert card["limits"]["max_input_tokens"] == 1000
+        assert card["engine_args"]["max_model_len"] == 1000
+    finally:
+        runtime.stop()
+
+
+def test_without_max_model_len_the_package_limit_stands(qwen3_package):
+    runtime = serve(qwen3_package)
+    try:
+        card = runtime.served[0].card([])
+        assert card["limits"]["max_input_tokens"] == 2048
+        assert card["engine_args"]["max_model_len"] is None
+    finally:
+        runtime.stop()
+
+
+def refused(package, max_model_len):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(package), device="cpu", max_model_len=max_model_len
+                ),
+            )
+        )
+    )
+    try:
+        with pytest.raises(RuntimeError) as error:
+            runtime.start(background=False)
+    finally:
+        runtime.stop()
+    return str(error.value)
+
+
+def test_max_model_len_may_equal_but_not_exceed_the_package_limit(qwen3_package):
+    runtime = serve(qwen3_package, max_model_len=2048)
+    try:
+        assert runtime.served[0].card([])["limits"]["max_input_tokens"] == 2048
+    finally:
+        runtime.stop()
+    assert refused(qwen3_package, 2049) == (
+        "max_model_len 2049 is above Decision-2.0-Tiny-Qwen3's limit of 2048 tokens"
+    )
+
+
+def test_a_failed_golden_check_names_a_max_model_len_below_its_questions(
+    qwen3_package,
+):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(model=str(qwen3_package), device="cpu", max_model_len=128),
+            )
+        )
+    )
+    try:
+        with pytest.raises(
+            VerificationError,
+            match="golden answers are malformed; max_model_len 128 may be below "
+            "the length of the model's golden questions",
+        ):
+            runtime.start(background=False)
+    finally:
+        runtime.stop()
+
+
+def test_max_model_len_is_refused_for_a_model_that_is_not_a_decision_model(tmp_path):
+    from vllm_srun.testing.vela2 import write_encoder_package
+
+    package = write_encoder_package(tmp_path / "vela2")
+    assert refused(package, 128) == (
+        "max_model_len applies to Decision models only, not vela2"
+    )
+
+
+# A question prompt of 482 tokens on the Decision 3 text fixture.
+LONG_STATE = "x " * 150
+
+
+def test_a_question_over_max_model_len_fails_with_max_length_exceeded(
+    d3_text_package,
+):
+    runtime = serve(d3_text_package, max_model_len=400)
+    try:
+        model = runtime.served[0].model
+        assert model.length_error(400) is None
+        assert model.length_error(401).code == "max_length_exceeded"
+        question = {"q": QUESTIONS["reasoning"]}
+        status, body = asyncio.run(
+            runtime.call("decisions", {"state": LONG_STATE, "questions": question})
+        )
+        assert status == 200
+        assert body["answers"]["q"]["error"] == "max_length_exceeded"
+        status, body = asyncio.run(
+            runtime.call("decisions", {"state": STATE, "questions": question})
+        )
+        assert status == 200 and "error" not in body["answers"]["q"]
+    finally:
+        runtime.stop()
+
+
+def test_system_one_refuses_a_question_over_the_process_max_model_len(
+    d3_text_package,
+):
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(d3_text_package), device="cpu"),),
+            engine_args=EngineArgs(max_model_len=400),
+            result_cache_entries=0,
+        )
+    )
+    runtime.start(background=False)
+    try:
+        client = TestClient(create_app(runtime, systemone_schema="vllm-sr/4.0"))
+        question = {"q": QUESTIONS["reasoning"]}
+        response = client.post(
+            "/v1/systemone", json={"state": LONG_STATE, "questions": question}
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["question_error"] == "max_length_exceeded"
+        response = client.post(
+            "/v1/systemone", json={"state": STATE, "questions": question}
+        )
+        assert response.status_code == 200
     finally:
         runtime.stop()

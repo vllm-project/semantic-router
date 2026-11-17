@@ -1,12 +1,78 @@
+import type { BuiltInRecipeCatalog } from './configPageBuiltInRecipes'
 import { cloneConfigData } from './configPageCanonicalization'
-import { DEFAULT_RECIPE_NAME } from './configPageEntrypointsRecipesSupport'
-import type { ConfigData, DecisionConfig } from './configPageSupport'
+import { DEFAULT_RECIPE_NAME, getRecipeByName } from './configPageEntrypointsRecipesSupport'
+import type { ConfigData, DecisionConfig, DecisionModelRef } from './configPageSupport'
 
 export type ModelAssignments = Record<string, string[]>
+
+export interface MixtureRecipeChoice {
+  name: string
+  /** Installed bundle of a built-in recipe; absent for a recipe in the config. */
+  bundle?: string
+}
+
+/** A decision to assign. A minimum of 0 means it responds without calling a model. */
+export interface MixtureDecision {
+  name: string
+  description?: string
+  minimumCandidates: number
+}
 
 export function minimumCandidatesForDecision(decision: DecisionConfig): number {
   const value = decision.algorithm?.minimum_candidates
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 1
+}
+
+export const mixtureRecipeKey = ({ bundle, name }: MixtureRecipeChoice): string =>
+  JSON.stringify(bundle === undefined ? [name] : [bundle, name])
+
+export function builtInRecipeChoices(catalog: BuiltInRecipeCatalog | null): MixtureRecipeChoice[] {
+  return (catalog?.bundles ?? []).flatMap((bundle) =>
+    bundle.recipes.map((recipe) => ({ bundle: bundle.name, name: recipe.name })),
+  )
+}
+
+export function resolveMixtureRecipe(
+  config: ConfigData,
+  catalog: BuiltInRecipeCatalog | null,
+  choice: MixtureRecipeChoice | null,
+): { description?: string; decisions: MixtureDecision[] } {
+  if (!choice) return { decisions: [] }
+  if (choice.bundle !== undefined) {
+    const recipe = catalog?.bundles
+      .find((bundle) => bundle.name === choice.bundle)
+      ?.recipes.find((candidate) => candidate.name === choice.name)
+    return {
+      description: recipe?.description,
+      decisions: (recipe?.decisions ?? []).map((decision) => ({
+        name: decision.name,
+        description: decision.description,
+        minimumCandidates: decision.minimum_candidates,
+      })),
+    }
+  }
+  const recipe = getRecipeByName(config, choice.name)
+  return {
+    description: recipe?.description,
+    decisions: (recipe?.routing.decisions ?? []).map((decision) => ({
+      name: decision.name,
+      description: decision.description,
+      minimumCandidates: minimumCandidatesForDecision(decision),
+    })),
+  }
+}
+
+const newModelRef = (model: string): DecisionModelRef => ({ model, use_reasoning: false })
+
+export function builtInRecipeBindings(
+  decisions: MixtureDecision[],
+  assignments: ModelAssignments,
+): Record<string, DecisionModelRef[]> {
+  return Object.fromEntries(
+    decisions
+      .filter((decision) => decision.minimumCandidates > 0)
+      .map((decision) => [decision.name, (assignments[decision.name] ?? []).map(newModelRef)]),
+  )
 }
 
 export function assignmentState(decisions: DecisionConfig[]): ModelAssignments {
@@ -18,6 +84,16 @@ export function assignmentState(decisions: DecisionConfig[]): ModelAssignments {
   )
 }
 
+/** Models a config recipe already assigns; a built-in recipe starts unassigned. */
+export function recipeAssignments(
+  config: ConfigData,
+  choice: MixtureRecipeChoice | null,
+): ModelAssignments {
+  return choice && choice.bundle === undefined
+    ? assignmentState(getRecipeByName(config, choice.name)?.routing.decisions ?? [])
+    : {}
+}
+
 export function assignDecisionModels(
   decisions: DecisionConfig[],
   assignments: ModelAssignments,
@@ -27,7 +103,7 @@ export function assignDecisionModels(
       (decision.modelRefs ?? []).map((reference) => [reference.model, reference]),
     )
     const modelRefs = (assignments[decision.name] ?? []).map((model) => ({
-      ...(existing.get(model) ?? { model, use_reasoning: false }),
+      ...(existing.get(model) ?? newModelRef(model)),
       model,
     }))
     return {

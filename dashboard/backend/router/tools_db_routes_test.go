@@ -21,13 +21,13 @@ func TestToolsDBRouteFollowsSavedConfig(t *testing.T) {
 	first := filepath.Join(root, "first.json")
 	second := filepath.Join(t.TempDir(), "second.json")
 	for path, name := range map[string]string{first: "first", second: "second"} {
-		if err := os.WriteFile(path, []byte(fmt.Sprintf(`[{"name":%q}]`, name)), 0o600); err != nil {
+		if err := os.WriteFile(path, []byte(fmt.Sprintf(`[{"tool":{"function":{"name":%q},"type":"function"}}]`, name)), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	saveConfig := func(path string) {
 		t.Helper()
-		body := fmt.Sprintf("version: v0.3\nglobal:\n  integrations:\n    tools:\n      tools_db_path: %q\n", path)
+		body := toolsCatalogConfig(path)
 		if err := os.WriteFile(configPath, []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -39,7 +39,7 @@ func TestToolsDBRouteFollowsSavedConfig(t *testing.T) {
 		t.Helper()
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/tools-db", nil))
-		want := fmt.Sprintf(`[{"name":%q}]`, name)
+		want := fmt.Sprintf(`[{"tool":{"function":{"name":%q},"type":"function"}}]`, name)
 		if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != want {
 			t.Fatalf("GET = %d %s; want %s", response.Code, response.Body.String(), want)
 		}
@@ -56,10 +56,10 @@ func TestToolsDBRouteResourcePathContract(t *testing.T) {
 		invalidConfig, missing, absolute bool
 		wantStatus                       int
 	}{
-		{name: "relative", configured: "catalogue/tools.json", contents: `[{"name":"fixture"}]`, wantStatus: http.StatusOK},
+		{name: "relative", configured: "catalogue/tools.json", contents: fixtureCatalog, wantStatus: http.StatusOK},
 		{name: "canonical-default", contents: `[]`, wantStatus: http.StatusOK},
 		{name: "unparsable-default", invalidConfig: true, contents: `[]`, wantStatus: http.StatusOK},
-		{name: "absolute", absolute: true, contents: `[]`, wantStatus: http.StatusOK},
+		{name: "absolute", absolute: true, contents: fixtureCatalog, wantStatus: http.StatusOK},
 		{name: "missing", missing: true, wantStatus: http.StatusNotFound},
 		{name: "invalid-json", contents: `[`, wantStatus: http.StatusInternalServerError},
 	} {
@@ -91,9 +91,9 @@ func TestToolsDBRouteResourcePathContract(t *testing.T) {
 				}
 			}
 			configPath := filepath.Join(t.TempDir(), "runtime.yaml")
-			body := "version: v0.3\nglobal:\n  integrations:\n    tools:\n      enabled: true\n"
+			body := "version: v0.5\nglobal: {}\n"
 			if configured != "" {
-				body += fmt.Sprintf("      tools_db_path: %q\n", configured)
+				body = toolsCatalogConfig(configured)
 			}
 			if tc.invalidConfig {
 				body = "global: ["
@@ -144,7 +144,7 @@ func TestToolsDBRouteKeepsExplicitContainerAssetRoot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(configPath, []byte("version: v0.3\nglobal:\n  integrations:\n    tools:\n      enabled: true\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\nglobal: {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := routercontract.ReadToolSelection(configPath); err != nil {
@@ -198,4 +198,31 @@ func TestToolsDBRouteReadsRepositoryConfigFromDevWorkingDirectory(t *testing.T) 
 	if string(actual) != string(want) {
 		t.Fatal("GET /api/tools-db did not serve the canonical configured database")
 	}
+}
+
+const fixtureCatalog = `[{"tool":{"function":{"name":"fixture"},"type":"function"}}]`
+
+// toolsCatalogConfig is a configuration whose one decision adds tools from the
+// catalog at path.
+func toolsCatalogConfig(path string) string {
+	return fmt.Sprintf(`version: v0.5
+providers:
+  defaults: {model: local}
+  models:
+    - name: local
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Local model
+recipes:
+  - name: default
+    decisions:
+      - name: agent
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              select: {mode: add, tools_db_path: %q}
+`, path)
 }

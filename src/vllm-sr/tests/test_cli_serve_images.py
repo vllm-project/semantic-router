@@ -17,11 +17,16 @@ def _capture_serve_deployment(monkeypatch, tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default", "priority": 1}]},
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [{"name": "default", "priority": 1}],
+                    }
+                ],
             },
             sort_keys=False,
         )
@@ -78,7 +83,9 @@ def test_serve_uses_algorithm_translated_config(monkeypatch, tmp_path: Path):
     )
     assert "VLLM_SR_STATE_ROOT_DIR" not in captured["env_vars"]
     assert captured["env_vars"]["VLLM_SR_ALGORITHM_OVERRIDE"] == "multi_factor"
-    assert translated["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
+    assert (
+        translated["recipes"][0]["decisions"][0]["algorithm"]["type"] == "multi_factor"
+    )
     assert captured["pull_policy"] == "never"
 
 

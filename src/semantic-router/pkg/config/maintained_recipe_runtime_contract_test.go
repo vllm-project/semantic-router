@@ -84,7 +84,7 @@ func assertAccuracyWorkflowContract(t *testing.T, workflow Decision) {
 		workflows.MaxParallel != 3 ||
 		workflows.MinSuccessfulResponses != 2 ||
 		workflows.MaxCompletionTokens != 8192 ||
-		workflows.OnError != WorkflowOnErrorSkip {
+		workflow.Algorithm.OnError != WorkflowOnErrorSkip {
 		t.Fatalf("accuracy_workflow bounds changed: %#v", workflows)
 	}
 }
@@ -102,7 +102,7 @@ func assertAccuracyFusionContract(t *testing.T, deliberation Decision) {
 			fusion.AnalysisModels,
 			[]string{"opus48-worker", "gemini31-worker", "gpt55-worker"},
 		) ||
-		fusion.OnError != FusionOnErrorSkip {
+		deliberation.Algorithm.OnError != FusionOnErrorSkip {
 		t.Fatalf("accuracy_deliberation degradation contract changed: %#v", fusion)
 	}
 	if !fusionJudgeReasoningDisabled(deliberation.ModelRefs) {

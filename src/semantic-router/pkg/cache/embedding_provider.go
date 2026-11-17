@@ -31,28 +31,6 @@ func invokeCacheEmbedding(ctx context.Context, provider embedding.Provider, text
 	return provider.Embed(ctx, text)
 }
 
-// cacheEmbeddingOptions retains each cache backend's established model output.
-// The cache selects these options; the injected provider only owns execution.
-func cacheEmbeddingOptions(model string, dimension, layer int) embedding.Options {
-	switch normalizeEmbeddingModel(model) {
-	case "mmbert":
-		return embedding.Options{Dimension: dimension, Layer: layer}
-	case "qwen3", "multimodal":
-		return embedding.Options{Dimension: dimension}
-	default:
-		return embedding.Options{}
-	}
-}
-
-func inMemoryEmbeddingOptions(model string) embedding.Options {
-	switch normalizeEmbeddingModel(model) {
-	case "mmbert":
-		return embedding.Options{Dimension: 256, Layer: 6}
-	default:
-		return embedding.Options{}
-	}
-}
-
 // No model aliases appear here: semantic storage follows its prepared provider.
 // A missing provider is permitted for exact-only stores with an explicit width.
 func semanticCacheEmbeddingDimension(configured int, provider embedding.Provider) int {

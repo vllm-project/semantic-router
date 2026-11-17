@@ -101,9 +101,10 @@ export default function InsightsEmptyState({
             override those defaults for its route.
           </p>
           <p>
-            Disable Replay to stop recording requests. When personal data capture is off,
-            content is omitted if personal data is detected or detection is unavailable or
-            incomplete. Routing metadata remains available.
+            Disable Replay to stop recording requests. By default a record keeps routing
+            metadata only. Raw prompt capture keeps request and response text as it came;
+            verified capture keeps the prompt alone once personal data detection reads it
+            whole and finds none.
           </p>
         </div>
       </details>

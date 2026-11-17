@@ -1,5 +1,15 @@
 # Release note: the built-in signals default to Vela 2.0 0.3B
 
+:::note
+This note records an earlier release and keeps its original examples. Their
+system lines, modules and `modality_detector.classifier.model_path` are
+removed forms: they fail at load with a one-line hint, and
+`vllm-sr config migrate` rewrites them.
+[Migrate to v0.5](../installation/migrate-to-v0-5) shows the current form of
+each, and [Migrate model resources](../installation/model-resource-migration)
+covers the model fields.
+:::
+
 Vela 2.0 is public on Hugging Face:
 [`vllm-sr/Vela-2.0-0.3B`, `-0.8B`, `-4B` and `-9B`](https://huggingface.co/collections/vllm-sr/vela-20),
 Apache-2.0, with no token needed. The model runtime keeps the revisions it
@@ -9,7 +19,7 @@ This note records the initial Vela 2.0 default rollout and its measured A/B.
 The measurements and original threshold decisions below are historical. Since
 then, [decision-model selection](./decision-model.md) and the
 [model runtime](./built-in-model-runtime.md) added shared task bindings, complete
-safety scans and stage-aware bundles. Follow [Choose a model](../model-runtime/choose-a-model)
+safety scans and stage-aware bundles. Follow [Choose a model](../model-runtime/get-started/choose-a-model)
 for current configuration. In particular, supplying a model does not imply
 Engine mode, one deployment does not imply one forward, and the operator now
 lets unbound tasks follow the selected default model.
@@ -111,4 +121,4 @@ One line brings back one signal, and the others stay on the 0.3B:
 
 A signal moved back takes its Vela 1.0 rule thresholds with it, for example
 `mom-v1`'s prompt guard 0.5, safety 0.5 and PII 0.7. See
-[Choose a model](../model-runtime/choose-a-model#vela-20).
+[Choose a model](../model-runtime/supported-models/vela-2/overview#vela-20).

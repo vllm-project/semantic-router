@@ -116,8 +116,8 @@ func runInputModalityCase(ctx context.Context, localPort string, tc inputModalit
 		return err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	// v0.4 demotes the matched-signal headers behind x-vsr-debug (#2205);
-	// opt in so the assertions can read x-vsr-matched-input-modality.
+	// The matched signals ride in the trace, behind x-vsr-debug;
+	// opt in so the assertions can read the trace's input_modality signals.
 	request.Header.Set("x-vsr-debug", "true")
 	response, err := (&http.Client{Timeout: 30 * time.Second}).Do(request)
 	if err != nil {
@@ -131,20 +131,20 @@ func runInputModalityCase(ctx context.Context, localPort string, tc inputModalit
 	if decision := response.Header.Get("x-vsr-selected-decision"); decision != tc.wantDecision {
 		return fmt.Errorf("selected decision = %q, want %q", decision, tc.wantDecision)
 	}
-	return assertInputModalityHeader(response.Header.Get("x-vsr-matched-input-modality"), tc.wantMatched, tc.wantNotMatched)
+	return assertInputModalityHeader(matchedSignals(response.Header, "input_modality"), tc.wantMatched, tc.wantNotMatched)
 }
 
-// assertInputModalityHeader checks the x-vsr-matched-input-modality response
+// assertInputModalityHeader checks the input_modality signals of the response
 // header against the expected matched and unmatched rule names.
 func assertInputModalityHeader(matched string, wantMatched, wantNotMatched []string) error {
 	for _, name := range wantMatched {
 		if !headerListContains(matched, name) {
-			return fmt.Errorf("x-vsr-matched-input-modality = %q, want it to contain %q", matched, name)
+			return fmt.Errorf("input_modality signals = %q, want them to contain %q", matched, name)
 		}
 	}
 	for _, name := range wantNotMatched {
 		if headerListContains(matched, name) {
-			return fmt.Errorf("x-vsr-matched-input-modality = %q, must not contain %q", matched, name)
+			return fmt.Errorf("input_modality signals = %q, must not contain %q", matched, name)
 		}
 	}
 	return nil

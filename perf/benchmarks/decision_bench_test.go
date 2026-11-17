@@ -3,6 +3,7 @@
 package benchmarks
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -37,15 +38,14 @@ func initDecisionEngine(b *testing.B) {
 			decisionEngineErr = err
 			return
 		}
+		recipe, ok := cfg.RecipeByName(config.DefaultRecipeName)
+		if !ok {
+			decisionEngineErr = fmt.Errorf("%s declares no %s recipe", configPath, config.DefaultRecipeName)
+			return
+		}
 
-		// Create decision engine from config
-		decisionEngine = decision.NewDecisionEngine(
-			cfg.KeywordRules,
-			cfg.EmbeddingRules,
-			cfg.Categories,
-			cfg.Decisions,
-			"priority", // Use priority strategy
-		)
+		// Create the default recipe's decision engine
+		decisionEngine = decision.NewDecisionEngine(recipe.Profile.Decisions, config.RoutingStrategyPriority)
 	})
 
 	if decisionEngineErr != nil {
@@ -58,13 +58,13 @@ func BenchmarkEvaluateDecisions_SingleDomain(b *testing.B) {
 	initDecisionEngine(b)
 
 	// Single domain match
-	matchedDomains := []string{"math"}
+	signals := &decision.SignalMatches{DomainRules: []string{"math"}}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := decisionEngine.EvaluateDecisions([]string{}, []string{}, matchedDomains)
+		_, err := decisionEngine.EvaluateDecisionsWithSignals(signals)
 		if err != nil {
 			// It's okay if no decision matches - some configs may not have all domains
 			continue
@@ -77,13 +77,13 @@ func BenchmarkEvaluateDecisions_MultipleDomains(b *testing.B) {
 	initDecisionEngine(b)
 
 	// Multiple domain matches
-	matchedDomains := []string{"math", "code", "business"}
+	signals := &decision.SignalMatches{DomainRules: []string{"math", "code", "business"}}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := decisionEngine.EvaluateDecisions([]string{}, []string{}, matchedDomains)
+		_, err := decisionEngine.EvaluateDecisionsWithSignals(signals)
 		if err != nil {
 			// It's okay if no decision matches
 			continue
@@ -95,14 +95,16 @@ func BenchmarkEvaluateDecisions_MultipleDomains(b *testing.B) {
 func BenchmarkEvaluateDecisions_WithKeywords(b *testing.B) {
 	initDecisionEngine(b)
 
-	matchedDomains := []string{"math"}
-	matchedKeywords := []string{"derivative", "calculus"}
+	signals := &decision.SignalMatches{
+		DomainRules:  []string{"math"},
+		KeywordRules: []string{"derivative", "calculus"},
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := decisionEngine.EvaluateDecisions(matchedKeywords, []string{}, matchedDomains)
+		_, err := decisionEngine.EvaluateDecisionsWithSignals(signals)
 		if err != nil {
 			// It's okay if no decision matches
 			continue
@@ -114,14 +116,16 @@ func BenchmarkEvaluateDecisions_WithKeywords(b *testing.B) {
 func BenchmarkEvaluateDecisions_ComplexScenario(b *testing.B) {
 	initDecisionEngine(b)
 
-	matchedDomains := []string{"math", "code", "business", "healthcare", "legal"}
-	matchedKeywords := []string{"api", "integration", "optimization"}
+	signals := &decision.SignalMatches{
+		DomainRules:  []string{"math", "code", "business", "healthcare", "legal"},
+		KeywordRules: []string{"api", "integration", "optimization"},
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := decisionEngine.EvaluateDecisions(matchedKeywords, []string{}, matchedDomains)
+		_, err := decisionEngine.EvaluateDecisionsWithSignals(signals)
 		if err != nil {
 			// It's okay if no decision matches
 			continue
@@ -133,14 +137,14 @@ func BenchmarkEvaluateDecisions_ComplexScenario(b *testing.B) {
 func BenchmarkEvaluateDecisions_Parallel(b *testing.B) {
 	initDecisionEngine(b)
 
-	matchedDomains := []string{"math"}
+	signals := &decision.SignalMatches{DomainRules: []string{"math"}}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_, err := decisionEngine.EvaluateDecisions([]string{}, []string{}, matchedDomains)
+			_, err := decisionEngine.EvaluateDecisionsWithSignals(signals)
 			if err != nil {
 				// It's okay if no decision matches
 				continue
@@ -154,13 +158,13 @@ func BenchmarkPrioritySelection(b *testing.B) {
 	initDecisionEngine(b)
 
 	// Scenario where multiple decisions could match
-	matchedDomains := []string{"math", "code", "business"}
+	signals := &decision.SignalMatches{DomainRules: []string{"math", "code", "business"}}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := decisionEngine.EvaluateDecisions([]string{}, []string{}, matchedDomains)
+		_, err := decisionEngine.EvaluateDecisionsWithSignals(signals)
 		if err != nil {
 			// It's okay if no decision matches
 			continue

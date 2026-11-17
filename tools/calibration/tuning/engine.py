@@ -110,9 +110,26 @@ class DSLConfig:
         return None, None
 
 
+def default_recipe(cfg: dict) -> dict:
+    """The recipe a config routes by default: the only recipe, or the one
+    the entrypoint marked default maps."""
+    recipes = [recipe for recipe in cfg.get("recipes", []) if isinstance(recipe, dict)]
+    if len(recipes) == 1:
+        return recipes[0]
+    name = next(
+        (
+            entrypoint.get("recipe")
+            for entrypoint in cfg.get("entrypoints", [])
+            if isinstance(entrypoint, dict) and entrypoint.get("default")
+        ),
+        "default",
+    )
+    return next((recipe for recipe in recipes if recipe.get("name") == name), {})
+
+
 def load_dsl_config(cfg: dict) -> DSLConfig:
     """Extract projection formulas and decisions from a parsed YAML config."""
-    routing = cfg.get("routing", {})
+    routing = default_recipe(cfg)
     proj_raw = routing.get("projections", {})
 
     scores = []
@@ -287,12 +304,8 @@ def decompose_projection(
 
     for inp in score_formula.inputs:
         sig_type = inp["type"]
-        if sig_type == "kb_metric":
-            sig_name = f"{inp.get('kb', '')}:{inp.get('metric', '')}"
-            conf_key = f"kb_metric:{sig_name}"
-        else:
-            sig_name = inp.get("name", "")
-            conf_key = _resolve_confidence_key(sig_type, sig_name)
+        sig_name = inp.get("name", "")
+        conf_key = _resolve_confidence_key(sig_type, sig_name)
         weight = inp.get("weight", 1.0)
         sig_value = _projection_input_value(inp, signal_confidences, matched_signals)
         term_contrib = weight * sig_value
@@ -337,12 +350,8 @@ def decompose_projection(
 
 _SIGNAL_TYPE_TO_MATCHED_KEY = {
     "keyword": "keywords",
-    "embedding": "embeddings",
-    "kb": "kb",
-    "category_kb": "category_kb",
     "jailbreak": "jailbreak",
     "pii": "pii",
-    "structure": "structure",
     "domain": "domains",
     "projection": "projection",
     "context": "context",
@@ -355,13 +364,8 @@ _SIGNAL_TYPE_TO_MATCHED_KEY = {
 def _resolve_confidence_key(sig_type: str, sig_name: str) -> str:
     type_prefixes = {
         "keyword": "keyword",
-        "embedding": "embedding",
-        "kb": "kb",
-        "category_kb": "category_kb",
-        "kb_metric": "kb_metric",
         "jailbreak": "jailbreak",
         "pii": "pii",
-        "structure": "structure",
         "projection": "projection",
     }
     prefix = type_prefixes.get(sig_type, sig_type)
@@ -374,9 +378,6 @@ def _signal_is_matched(
     signal_confidences: dict[str, float],
     matched_signals: dict[str, list[str]] | None,
 ) -> bool:
-    if sig_type in ("category_kb", "kb_metric") and sig_name == "__contrastive__":
-        conf_key = _resolve_confidence_key(sig_type, sig_name)
-        return signal_confidences.get(conf_key, 0.0) != 0.0
     if matched_signals is not None:
         key = _SIGNAL_TYPE_TO_MATCHED_KEY.get(sig_type, sig_type)
         return sig_name in matched_signals.get(key, [])
@@ -390,11 +391,6 @@ def _projection_input_value(
     matched_signals: dict[str, list[str]] | None,
 ) -> float:
     sig_type = inp["type"]
-    if sig_type == "kb_metric":
-        kb_name = inp.get("kb", "")
-        metric_name = inp.get("metric", "")
-        conf_key = f"kb_metric:{kb_name}:{metric_name}"
-        return signal_confidences.get(conf_key, 0.0)
     sig_name = inp.get("name", "")
     value_source = inp.get("value_source", "")
     is_matched = _signal_is_matched(

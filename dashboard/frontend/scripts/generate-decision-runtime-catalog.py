@@ -13,9 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 RUNTIME = ROOT / "src/model-runtime/vllm_srun"
 OUTPUT = ROOT / "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json"
-BACKEND_OUTPUT = (
-    ROOT / "src/semantic-router/pkg/modelservice/decision_catalog.generated.json"
-)
+BACKEND_OUTPUT = ROOT / "src/semantic-router/pkg/config/decision_catalog.generated.json"
 RELEASE_OUTPUT = RUNTIME / "registry/releases.generated.json"
 
 
@@ -85,6 +83,38 @@ def assignment(path, name):
     )
 
 
+def descriptor_field(family, field):
+    """The ``field`` node of a family's ``descriptor()``, or None."""
+    family_tree = ast.parse((RUNTIME / f"families/{family}/family.py").read_text())
+    descriptor = next(
+        node
+        for node in ast.walk(family_tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "descriptor"
+    )
+    return next(
+        (
+            value
+            for node in ast.walk(descriptor)
+            if isinstance(node, ast.Dict)
+            for key, value in zip(node.keys, node.values, strict=True)
+            if isinstance(key, ast.Constant) and key.value == field
+        ),
+        None,
+    )
+
+
+def descriptor_question_types(family):
+    """The ``question_types`` node of a family's ``descriptor()``."""
+    return descriptor_field(family, "question_types")
+
+
+def descriptor_modalities(family):
+    """The input modalities a family's decisions requests may carry: its
+    descriptor's ``modalities``, else text only."""
+    modalities = descriptor_field(family, "modalities")
+    return ["text"] if modalities is None else list(ast.literal_eval(modalities))
+
+
 def projection():
     """Read literal release entries and shared System One question kinds."""
     models = []
@@ -105,19 +135,7 @@ def projection():
         ("decision2", None),
         ("decision3", None),
     ):
-        family_tree = ast.parse((RUNTIME / f"families/{family}/family.py").read_text())
-        descriptor = next(
-            node
-            for node in ast.walk(family_tree)
-            if isinstance(node, ast.FunctionDef) and node.name == "descriptor"
-        )
-        capabilities = next(
-            value
-            for node in ast.walk(descriptor)
-            if isinstance(node, ast.Dict)
-            for key, value in zip(node.keys, node.values, strict=True)
-            if isinstance(key, ast.Constant) and key.value == "question_types"
-        )
+        capabilities = descriptor_question_types(family)
         if expected:
             if not (
                 isinstance(capabilities, ast.Call)
@@ -153,13 +171,29 @@ def projection():
     return {"questionTypes": kinds, "models": models}
 
 
+def vela_entries(table):
+    """The ``_vela(...)`` release entries of a Vela table's ``MODELS``."""
+    entries = assignment(RUNTIME / f"registry/tables/{table}.py", "MODELS").elts
+    for entry in entries:
+        if (
+            not isinstance(entry, ast.Call)
+            or not isinstance(entry.func, ast.Name)
+            or entry.func.id != "_vela"
+        ):
+            raise ValueError("Vela release entries require an updated task projection")
+    return entries
+
+
 def backend_projection(data):
-    """The shared semantic task resolver consumes the same native facts."""
+    """The shared semantic task resolver consumes the same native facts, and
+    the Router's load checks the input modalities each model reads and the
+    span heads a model with span answers has."""
     models = [
         {
             "id": item["id"],
             "family": item["family"],
             "question_types": data["questionTypes"],
+            "modalities": descriptor_modalities(item["family"]),
         }
         for item in data["models"]
     ]
@@ -187,39 +221,60 @@ def backend_projection(data):
     organization = ast.literal_eval(
         assignment(RUNTIME / "registry/tables/common.py", "ORG")
     )
-    entries = assignment(RUNTIME / "registry/tables/vela2.py", "MODELS")
-    for entry in entries.elts:
-        if (
-            not isinstance(entry, ast.Call)
-            or not isinstance(entry.func, ast.Name)
-            or entry.func.id != "_vela"
-        ):
-            raise ValueError("Vela release entries require an updated task projection")
+    # A Vela 2.0 release has the broad span head when its package ships the
+    # head's file, and the router head always.
+    broad_file = ast.literal_eval(
+        assignment(RUNTIME / "families/vela2/package.py", "BROAD_HEAD_FILE")
+    )
+    for entry in vela_entries("vela2"):
         size = ast.literal_eval(entry.args[0])
+        files = ast.literal_eval(entry.args[7])
         models.append(
             {
                 "id": f"{organization}/Vela-2.0-{size}",
                 "family": "vela2",
                 "question_types": kinds,
+                "modalities": descriptor_modalities("vela2"),
+                "span_heads": (
+                    ["router", "broad"] if broad_file in files else ["router"]
+                ),
             }
         )
+    vela3_heads = list(
+        ast.literal_eval(assignment(RUNTIME / "families/vela3_shared.py", "SPAN_HEADS"))
+    )
     vela3_kinds = list(
         ast.literal_eval(
             assignment(RUNTIME / "families/vela3/family.py", "QUESTION_TYPES")
         )
     )
-    for entry in assignment(RUNTIME / "registry/tables/vela3.py", "MODELS").elts:
-        if (
-            not isinstance(entry, ast.Call)
-            or not isinstance(entry.func, ast.Name)
-            or entry.func.id != "_vela"
-        ):
-            raise ValueError("Vela release entries require an updated task projection")
+    for entry in vela_entries("vela3"):
+        # The vela3v image package answers none of the shared System One
+        # question kinds - its image serving path is not implemented - so the
+        # projection lists the text-encoder entries only; it gains its own
+        # kinds once image serving declares them.
+        if ast.literal_eval(entry.args[4]) != "ultrabert":
+            continue
         models.append(
             {
                 "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
                 "family": "vela3",
                 "question_types": vela3_kinds,
+                "modalities": descriptor_modalities("vela3"),
+                "span_heads": vela3_heads,
+            }
+        )
+    # The Vela 3.0 d3 sizes answer their base's System One kinds and span
+    # questions, and read what their d3 base reads.
+    d3_kinds = list(ast.literal_eval(descriptor_question_types("vela3_d3")))
+    for entry in vela_entries("vela3_d3"):
+        models.append(
+            {
+                "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
+                "family": "vela3_d3",
+                "question_types": d3_kinds,
+                "modalities": descriptor_modalities("decision3"),
+                "span_heads": vela3_heads,
             }
         )
     return {"models": models}

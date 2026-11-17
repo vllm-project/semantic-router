@@ -17,16 +17,18 @@ const (
 	certainResponse   = `{"model":"strong-actual","answers":{"task":{"type":"choice","choice":"chat","confidence":0.99,"probabilities":{"code":0.001,"chat":0.999}}},"usage":{"input_tokens":11,"output_tokens":0}}`
 )
 
-func gate(threshold float64) *config.NativeAcceptance {
-	return &config.NativeAcceptance{Rules: []config.NativeAcceptanceRule{{QuestionType: "choice", Field: "top_probability", Predicate: config.NumericPredicate{GTE: &threshold}}}}
+func gate(threshold float64) *config.EscalateAccept {
+	return &config.EscalateAccept{Native: []config.NativeAcceptanceRule{{QuestionType: "choice", Field: "top_probability", NumericPredicate: config.NumericPredicate{GTE: &threshold}}}}
 }
 
 func cascadePlan() *config.AlgorithmConfig {
 	return &config.AlgorithmConfig{
-		Type:    config.DecisionAlgorithmCascade,
-		Budget:  &config.AlgorithmBudget{Deadline: "3s", MaxCalls: 3},
-		Quality: &config.NativeQualityConfig{Type: "uncalibrated", Acceptance: gate(0)},
-		Stages:  []config.CascadeStage{{Name: "fast", Kind: "native", Model: "kai", Accept: gate(0.9)}, {Name: "strong", Kind: "native", Model: "nox"}},
+		Type:   config.DecisionAlgorithmEscalate,
+		Budget: &config.AlgorithmBudget{Deadline: "3s", MaxCalls: 3},
+		Escalate: &config.EscalateAlgorithmConfig{
+			Quality: &config.EscalateQuality{Type: "uncalibrated", Accept: gate(0)},
+			Stages:  []config.EscalateStage{{Name: "fast", Kind: "native", Model: "kai", Accept: gate(0.9)}, {Name: "strong", Kind: "native", Model: "nox"}},
+		},
 	}
 }
 
@@ -36,11 +38,11 @@ func TestCascadeFastExitEscalationAndSharedBudget(t *testing.T) {
 		name, fast string
 		limit      int
 		want       []string
-		unresolved bool
+		wantErr    error
 	}{
-		{"fast", certainResponse, 2, []string{"kai"}, false},
-		{"escalate", uncertainResponse, 2, []string{"kai", "nox"}, false},
-		{"budget", uncertainResponse, 1, []string{"kai"}, true},
+		{"fast", certainResponse, 2, []string{"kai"}, nil},
+		{"escalate", uncertainResponse, 2, []string{"kai", "nox"}, nil},
+		{"budget", uncertainResponse, 1, []string{"kai"}, budget.ErrExhausted},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			executor, err := NewExecutor(cascadePlan(), nil)
@@ -63,7 +65,7 @@ func TestCascadeFastExitEscalationAndSharedBudget(t *testing.T) {
 				return 200, []byte(certainResponse), nil
 			}
 			result, err := executor.Execute(ctx, request, invoke)
-			if tc.unresolved != errors.Is(err, ErrUnresolved) || (!tc.unresolved && err != nil) {
+			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("result=%v error=%v", result, err)
 			}
 			if !reflect.DeepEqual(calls, tc.want) || ledger.Used() != len(tc.want) {
@@ -73,10 +75,59 @@ func TestCascadeFastExitEscalationAndSharedBudget(t *testing.T) {
 	}
 }
 
+// Without a quality policy, a stage accepts a complete answer that passes its
+// own rules; a stage without rules accepts any complete answer. A stage
+// without a name is named by its model.
+func TestEscalateStagesWithoutQualityAcceptCompleteAnswers(t *testing.T) {
+	plan := cascadePlan()
+	plan.Escalate.Quality = nil
+	plan.Escalate.Stages[1].Name = ""
+	executor, err := NewExecutor(plan, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, _ := ParseNativeRequest(json.RawMessage(singleRequest))
+	// Both stages answer with low confidence: the first stage's rules reject
+	// it, the second has none.
+	result, err := executor.Execute(context.Background(), request, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+		return 200, []byte(uncertainResponse), nil
+	})
+	if err != nil || result.Stage != "nox" || result.Model != "nox" {
+		t.Fatalf("result = %+v, %v, want the second stage's complete answer", result, err)
+	}
+}
+
+// Without a quality rule, a stage's rules cover every answer before it exits
+// early: a score answer that its choice-only rule does not cover moves on to
+// the next stage. Beside a quality rule that covers it, the stage's rule only
+// adds a condition.
+func TestEscalateStageGateRequiresRuleCoverage(t *testing.T) {
+	floor := gate(0)
+	floor.Native = append(floor.Native, config.NativeAcceptanceRule{QuestionType: "score", Field: "top_probability", NumericPredicate: floor.Native[0].NumericPredicate})
+	for quality, want := range map[*config.EscalateQuality]string{nil: "strong", {Type: "uncalibrated", Accept: floor}: "fast"} {
+		plan := cascadePlan()
+		plan.Escalate.Quality = quality
+		executor, err := NewExecutor(plan, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request, err := ParseNativeRequest(json.RawMessage(`{"model":"vllm-sr/auto","state":"hello","questions":{"difficulty":{"type":"score","instructions":"Difficulty?","criteria":["easy","hard"]}}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := executor.Execute(context.Background(), request, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+			return 200, []byte(`{"model":"actual","answers":{"difficulty":{"type":"score","score":0.5,"confidence":0.01,"probabilities":{"0":0.5,"1":0.5}}}}`), nil
+		})
+		if err != nil || result.Stage != want {
+			t.Fatalf("quality %t: stage = %q, error = %v, want %q", quality != nil, result.Stage, err, want)
+		}
+	}
+}
+
 func TestJudgeSelectsAnIntactBundleWithoutInventingConfidence(t *testing.T) {
 	plan := cascadePlan()
-	plan.Stages[1].Accept = gate(1)
-	plan.Stages = append(plan.Stages, config.CascadeStage{Name: "review", Kind: "judge", Model: "reviewer", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}})
+	plan.Escalate.Stages[1].Accept = gate(1)
+	plan.Escalate.Stages = append(plan.Escalate.Stages, config.EscalateStage{Name: "review", Kind: "judge", Model: "reviewer", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}})
 	executor, err := NewExecutor(plan, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -133,11 +184,11 @@ func TestCascadeRejectsSuccessfulResponseAfterCancellation(t *testing.T) {
 			wantCalls := 1
 			switch kind {
 			case "judge":
-				plan.Stages[1].Accept = gate(1)
-				plan.Stages = append(plan.Stages, config.CascadeStage{Name: "review", Kind: "judge", Model: "reviewer", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}})
+				plan.Escalate.Stages[1].Accept = gate(1)
+				plan.Escalate.Stages = append(plan.Escalate.Stages, config.EscalateStage{Name: "review", Kind: "judge", Model: "reviewer", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}})
 				wantCalls = 3
 			case "quality":
-				plan.Quality.Type = "calibrated"
+				plan.Escalate.Quality.Type = "calibrated"
 				quality = func(*NativeRequest, Candidate) (bool, error) {
 					cancel()
 					return true, nil
@@ -176,12 +227,12 @@ func TestCascadeStageTimeoutRejectsLateResponseAndAllowsUpgrade(t *testing.T) {
 			lateModel, wantModel := "kai", "nox"
 			wantCalls := 2
 			if kind == "native" {
-				plan.Stages[0].Timeout = "1ms"
+				plan.Escalate.Stages[0].Timeout = "1ms"
 			} else {
-				plan.Stages[0].Accept, plan.Stages[1].Accept = gate(1), gate(1)
-				plan.Stages = append(plan.Stages,
-					config.CascadeStage{Name: "review", Kind: "judge", Model: "reviewer", Timeout: "1ms", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}},
-					config.CascadeStage{Name: "final", Kind: "native", Model: "vega"})
+				plan.Escalate.Stages[0].Accept, plan.Escalate.Stages[1].Accept = gate(1), gate(1)
+				plan.Escalate.Stages = append(plan.Escalate.Stages,
+					config.EscalateStage{Name: "review", Kind: "judge", Model: "reviewer", Timeout: "1ms", Generation: &config.NativeGenerationConfig{MaxOutputTokens: 128}},
+					config.EscalateStage{Name: "final", Kind: "native", Model: "vega"})
 				lateModel, wantModel, wantCalls = "reviewer", "vega", 4
 			}
 			executor, err := NewExecutor(plan, nil)

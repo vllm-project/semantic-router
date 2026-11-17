@@ -25,7 +25,7 @@ func TestEvaluateCacheAssertionsReportsSetupFailures(t *testing.T) {
 func TestEvaluateCacheAssertionsPropagatesPerRequestErrors(t *testing.T) {
 	results := []CacheResult{
 		{SimilarQuestion: "good", CacheHit: true, Similarity: 0.9},
-		{SimilarQuestion: "bad", CacheHit: true, Error: "cache hit missing x-vsr-cache-similarity header"},
+		{SimilarQuestion: "bad", CacheHit: true, Error: "cache hit missing the trace's cache_similarity"},
 	}
 	err := evaluateCacheAssertions(results, 2, 2, nil)
 	if err == nil || !strings.Contains(err.Error(), "bad") {

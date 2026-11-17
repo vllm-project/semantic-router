@@ -7,10 +7,41 @@ import (
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
+// piiDetection is one span the pii preset found, with byte offsets into the
+// text it read.
+type piiDetection struct {
+	EntityType string
+	Start      int
+	End        int
+	Text       string
+	Confidence float32
+}
+
+// piiDetections are the spans of an answer whose probability meets
+// threshold, with their code-point offsets converted to bytes.
+func piiDetections(text string, spans []modelservice.Span, threshold float64) []piiDetection {
+	var detected []modelservice.Span
+	for _, span := range spans {
+		if span.Probability >= threshold {
+			detected = append(detected, span)
+		}
+	}
+	offsets := modelservice.ByteOffsets(text)
+	var detections []piiDetection
+	for _, span := range classification.CoverRepeatedSpans(text, detected) {
+		detections = append(detections, piiDetection{
+			EntityType: span.Label, Start: offsets(span.Start), End: offsets(span.End),
+			Text: span.Text, Confidence: float32(span.Probability),
+		})
+	}
+	return detections
+}
+
 // buildPIIResponse processes raw PII detections into a PIIResponse, applying all options.
-func (s *ClassificationService) buildPIIResponse(text string, detections []classification.PIIDetection, options *PIIOptions) *PIIResponse {
+func (s *ClassificationService) buildPIIResponse(text string, detections []piiDetection, options *PIIOptions) *PIIResponse {
 	detections = filterPIIDetectionsByType(detections, options)
 
 	returnPositions := options != nil && options.ReturnPositions
@@ -35,7 +66,7 @@ func (s *ClassificationService) buildPIIResponse(text string, detections []class
 	return response
 }
 
-func filterPIIDetectionsByType(detections []classification.PIIDetection, options *PIIOptions) []classification.PIIDetection {
+func filterPIIDetectionsByType(detections []piiDetection, options *PIIOptions) []piiDetection {
 	if options == nil || len(options.EntityTypes) == 0 {
 		return detections
 	}
@@ -51,7 +82,7 @@ func filterPIIDetectionsByType(detections []classification.PIIDetection, options
 	return filtered
 }
 
-func buildPIIMaskPlaceholders(detections []classification.PIIDetection) map[string]string {
+func buildPIIMaskPlaceholders(detections []piiDetection) map[string]string {
 	typeCounters := make(map[string]map[string]int)
 	placeholders := make(map[string]string)
 	for _, detection := range detections {
@@ -88,7 +119,7 @@ func byteOffsetToRuneOffset(text string, byteOffset int) int {
 
 func buildPIIEntities(
 	text string,
-	detections []classification.PIIDetection,
+	detections []piiDetection,
 	returnPositions bool,
 	maskEntities bool,
 	revealEntityText bool,
@@ -132,7 +163,7 @@ func buildPIIEntityValue(text string, revealEntityText bool) string {
 // overlapping span past the end or onto the wrong boundary, leaving PII in
 // the output. A merged range takes the placeholder of its longest span, so
 // single, non-overlapping detections mask exactly as before.
-func buildMaskedPIIText(text string, detections []classification.PIIDetection, placeholders map[string]string) string {
+func buildMaskedPIIText(text string, detections []piiDetection, placeholders map[string]string) string {
 	type span struct {
 		start, end  int
 		placeholder string
