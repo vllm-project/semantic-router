@@ -15,11 +15,10 @@ comparable.
 
 We have started publishing focused [agent skills](/docs/installation/agent-skills)
 for those jobs. They give a coding assistant a short workflow, point to the
-current commands and contracts, and say which evidence to preserve. The
-[llm-d team's skills article](https://llm-d.ai/blog/skills-for-accelerated-llm-d-development-evaluation-and-configuration)
-inspired this effort. Its examples show how reusable skills can connect
-configuration, deployment, and evaluation. Here, the unit of work follows the
-Semantic Router's entrypoint, recipe, decision model, and measured request.
+current commands and contracts, and say which evidence to preserve. The unit
+of work follows the Semantic Router's entrypoint, recipe, decision model, and
+measured request. That scope matters: starting a process, selecting a route,
+delivering an answer, and measuring a workload are four different results.
 
 <!-- truncate -->
 
@@ -44,6 +43,34 @@ question the user has. A diagnosis may end at an unavailable decision-model
 deployment; it should not invent a routing fix. A comparison may end with
 insufficient paired coverage; it should not convert two illustrative answers
 into a quality claim.
+
+## Two model jobs inside one request
+
+The decision model answers a question *for the Router*. For example, a
+model-backed `code` signal might judge whether a request is about programming.
+The answer-model backend handles the user's prompt after a route is selected.
+These models can be deployed separately, have different readiness states, and
+fail at different points. A direct System One answer shows that a decision
+model answered a question; it does not show that the Router selected the
+intended recipe or that an answer backend responded.
+
+The public entrypoint resolves to a recipe. That recipe determines which
+signals to evaluate and which decisions, algorithms, and plugins apply. A
+signal can also be a request fact, such as input modality, rather than a model
+question. The decision-model skill maps each model-backed question to its
+deployment and checks the answer and trace. The diagnosis skill then follows
+the evaluated signal through the decision and algorithm to the selected
+backend. This gives a contributor a concrete place to look when the final
+model name is surprising: the question may be unknown, a predicate may not
+match, a higher-priority decision may win, or execution may still be needed to
+select the final model.
+
+That separation also changes what a health check means. A Router process can
+be healthy while a used decision deployment is loading. A decision deployment
+can be ready while a particular question returns no usable answer. And a
+correct route can still lead to an upstream timeout, a guard response, or an
+answer cut short by its token budget. The skills ask for the observation at
+each boundary instead of inferring the entire path from a single HTTP status.
 
 ## From workload to a routed request
 
@@ -70,6 +97,15 @@ be checked, and what answer appeared in the trace? The serve skill uses the
 existing `vllm-sr serve` local-image flow for a local stack and records both
 process readiness and a routed or System One probe.
 
+There is a useful review boundary here. Validating a candidate configuration
+checks its structure; planning it against a running stack shows the proposed
+replacement and the active version it targets. Neither step activates it.
+Only after an approved change is applied can a preview describe the new active
+route. A public-listener probe is another step: it checks that the selected
+path actually returned a usable response. Keeping these receipts separate
+makes it possible to say precisely whether a problem is in the proposal,
+activation, selection, or delivery.
+
 ## From a run to a defensible comparison
 
 The benchmark skill prepares a workload manifest and freezes its case IDs,
@@ -88,6 +124,16 @@ is illustrative: with only two cases, even a valid paired calculation cannot
 support a broad quality or savings claim. The tune-recipe skill uses that
 evidence to propose a bounded recipe change and hands the candidate back for
 validation and a fresh before/after run.
+
+The run identity matters as much as the score. If two reports use different
+case sets or graders, their headline percentages are not a paired comparison.
+If a Router run lacks its active config hash, it is unclear which policy was
+measured. If a failed call disappears from the denominator, the apparent gain
+can be misleading. The benchmark and comparison skills therefore preserve
+the dataset and plan digests, target and configuration identities, completed
+and failed counts, and the assumptions behind any cost estimate. A comparison
+can be valid yet inconclusive; that is still a useful result because it tells
+the maintainer what evidence to collect next.
 
 ## What we have verified
 
