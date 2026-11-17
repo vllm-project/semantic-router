@@ -222,6 +222,11 @@ func checkAnswerer(path, deployment string, rule SystemOneRule, questionTypes, m
 		return CheckError(path, CodeQuestionTypeUnsupported, fmt.Sprintf("resolves to deployment %q, which answers %s questions and cannot answer %s questions; bind %s to a deployment that does (%s)", deployment, strings.Join(questionTypes, ", "), questionType, subject, bindings))
 	}
 	for _, medium := range rule.Input.Media() {
+		if medium == SystemOneModalityAudio {
+			// No System One decisions request carries an audio part, so no
+			// deployment reads one; the rule would decide on the text alone.
+			return CheckError(path, CodeInputModalityUnsupported, fmt.Sprintf("input.audio resolves to deployment %q, which does not read audio input; no System One decisions request carries an audio part (%s)", deployment, bindings))
+		}
 		if modalities != nil && !slices.Contains(modalities, medium) {
 			return CheckError(path, CodeInputModalityUnsupported, fmt.Sprintf("input.%s resolves to deployment %q, which does not read %s input; bind %s to a deployment that does (%s)", medium, deployment, medium, subject, bindings))
 		}
