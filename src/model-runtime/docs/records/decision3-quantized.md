@@ -311,25 +311,34 @@ as malformed (an empty option name) and are left out.
 
 No answer's top choice (or Noul side) changed in either package. Each of the
 20 NVFP4 requests over 0.05, answered twice more with the mask and twice
-without, gave the same probabilities every time within a setting, so the
-changes come from the kernel and not from run-to-run variation. NVFP4
-quantizes the activations of every projection to FP4, which carries the
-attention's rounding difference into the layers after it; the AWQ package
-keeps its activations in BF16.
+without, gave the same probabilities every time within a setting, so on one
+autotune cache the changes come from the kernel and not from run-to-run
+variation. NVFP4 quantizes the activations of every projection to FP4, which
+carries the attention's rounding difference into the layers after it; the AWQ
+package keeps its activations in BF16.
+
+The NVFP4 package has no recorded kernel choices (`kernel_choices.json`), so
+FLA's gated-delta kernels run the configurations its autotune cache holds, and
+two caches can round differently. The table above ran on one cache (A). A later
+cache (B) moved a probability by at most 0.201 over the same requests, and
+cache A again reproduced every NVFP4 number above. With the mask, as every row
+ran before, the two caches alone moved a probability by up to 0.227 (19
+answers over 0.05) and changed no top choice.
 
 Against the BF16 package the NVFP4 package was made from (`vllm-sr/d3` at
-`093cffba`, exact kernels, the mask), the same 123 requests answered in a later
-NVFP4 process, where the mask moved a probability by at most 0.201 (the FP4
-GEMM's tiles are chosen per process):
+`093cffba`, exact kernels, the mask), the same 123 requests on both caches:
 
-| NVFP4 against BF16 | Top choice changed | Largest probability change | Mean largest change |
-| --- | --- | --- | --- |
-| With the mask | 3 of 123 | 0.269 | 0.029 |
-| Without the mask | the same 3 of 123 | 0.301 | 0.033 |
+| NVFP4 against BF16 | Cache | Top choice changed | Largest probability change | Mean largest change |
+| --- | --- | --- | --- | --- |
+| With the mask | A | 3 of 123 | 0.267 | 0.032 |
+| Without the mask | A | the same 3 | 0.309 | 0.035 |
+| With the mask | B | the same 3 | 0.269 | 0.029 |
+| Without the mask | B | the same 3 | 0.301 | 0.033 |
 
-The mask's change is within the package's own distance from BF16 and changes
-no top choice; without the mask, 47 of the 123 answers moved closer to BF16,
-75 further away and one neither.
+Without the mask, 63 answers moved closer to BF16 and 59 further on cache A,
+and 47 closer and 75 further on cache B (one unchanged on each). The mask's
+change is of the size of the package's spread between autotune caches, and
+changes no top choice.
 
 Median of six answers of one request, three per setting in two alternating
 runs:
