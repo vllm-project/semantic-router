@@ -18,7 +18,7 @@ torch-sparse>=0.6.17
 torch-scatter>=2.1.2
 
 # Data Processing
-datasets>=2.14.0
+datasets>=5.2.0
 pandas>=2.0.0
 numpy>=1.24.0
 scipy>=1.11.0
