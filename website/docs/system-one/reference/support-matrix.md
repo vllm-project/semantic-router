@@ -14,13 +14,14 @@ model.
 
 ## Support matrix {#support-matrix}
 
-**TC** trained and calibrated, **T** trained, **Z** zero-shot, **—** cannot
-run.
+**TC** trained and calibrated, **T** trained, **B** the base model with every
+adapter off, **Z** zero-shot, **—** cannot run.
 
 | Preset | vela3-fast | vela3-lite | vela3-mini, -flash, -turbo | d3 (local or hosted) | Decision 2.0 | Vela 2.0 |
 | --- | --- | --- | --- | --- | --- | --- |
-| domain, fact_check, feedback, jailbreak | TC | T | T | Z | Z | TC |
-| harm | TC | T | T | Z | Z | TC |
+| domain, fact_check, feedback | TC | T | T | Z | Z | TC |
+| jailbreak | TC | B | B | Z | Z | TC |
+| harm | TC | B at the request stage; T at the response stage | B at the request stage; T at the response stage | Z | Z | TC |
 | harm categories | T | T at the request stage; Z at the response stage | Z | Z | Z | Z |
 | pii | TC | T | T | — | — | TC |
 | hallucination | T | T | T | — | — | T |
@@ -29,9 +30,15 @@ run.
 | turn_relation, complexity, relevance, same_request, tool_rank, tool_need, answer_check | Z | Z | Z | Z | Z | Z |
 
 - The Vela 3.0 d3 sizes turn trained adapters on by question ID: `domain`,
-  `factcheck`, `feedback`, `attack`, `p_harm` and `r_harm`, `r_refusal`,
-  `modality`, and, on vela3-lite only, the `hazard:` prefix of the harm
-  categories; vela3-fast and Vela 2.0 by wording.
+  `factcheck`, `feedback`, `r_harm`, `r_refusal`, `modality`, and, on
+  vela3-lite only, the `hazard:` prefix of the harm categories; vela3-fast and
+  Vela 2.0 by wording.
+- The Vela 3.0 d3 sizes answer the jailbreak preset and the request-stage harm
+  preset with their base, every adapter off. Their `attack` and `p_harm`
+  adapters lose an attack that other text surrounds (on vela3-turbo, 0.975
+  against the base's 0.9992 for an injection after 8K tokens of prose) and rate
+  benign text higher, and guard thresholds such as 0.995 were set on the base's
+  answers.
 - Image input is read by the d3 family and the Vela 3.0 d3 sizes. No current
   decision model reads audio or video for routing rules.
 

@@ -91,7 +91,7 @@ func TestExactCacheHitRecordsTheAnswerTheClientReceived(t *testing.T) {
 		ctx := exactCacheHitContext(nil)
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 		ctx.ExpectStreamingResponse = streaming
-		ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, CaptureRequestBody: true, CaptureResponseBody: true}
+		ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureRequestBody: true, CaptureResponseBody: true}
 		ctx.SemanticRequest = testNeutralRequest("gpt-4o", "Prove the theorem.")
 		ctx.SemanticRequest.Stream = streaming
 

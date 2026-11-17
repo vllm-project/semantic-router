@@ -123,6 +123,7 @@ metadata. They ask no model.
 
 | Signal | Condition type | Use it to |
 | ------ | -------------- | --------- |
+| [Agent](./heuristic/agent) | `agent` | route by the agent a request belongs to: main agent or subagent, harness and subagent type |
 | [Authz](./heuristic/authz) | `authz` | route from trusted identity, role or tenant policy |
 | [Context](./heuristic/context) | `context` | route by the request's estimated token count |
 | [Conversation](./heuristic/conversation) | `conversation` | detect multi-turn, tool-heavy or agentic request structure |
@@ -173,7 +174,11 @@ global:
   them.
 
 The routing text is the last user message that is not skipped and still has
-text after stripping. It takes the place of the last user message for:
+text after stripping. When no user message is left, every one skipped or
+stripped to nothing, the routing text is the last user message with text, as
+the Router reads it without `routing_input`, and the Router logs
+`routing_input_fallback`: such a request is routed, never refused. The routing
+text takes the place of the last user message for:
 
 - every routing signal, and the conversation facts they read;
 - the semantic-cache lookup query;

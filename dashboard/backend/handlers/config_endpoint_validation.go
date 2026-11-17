@@ -100,7 +100,7 @@ func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) erro
 				return fmt.Errorf("%s must be an http or https URL", field)
 			}
 			if parsed.User != nil {
-				return fmt.Errorf("%s must not carry credentials; the key comes from auth.api_key_env", field)
+				return fmt.Errorf("%s must not carry credentials; the key comes from auth.api_key_env or auth.api_key_file", field)
 			}
 		}
 	}
@@ -115,7 +115,7 @@ func currentGlobalDefaults(configPath string) (*routerconfig.CanonicalGlobal, er
 		return &defaults, nil
 	}
 
-	parsed, err := routerconfig.ParseYAMLBytes(configData)
+	parsed, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(configData)
 	if err != nil {
 		return &defaults, nil
 	}

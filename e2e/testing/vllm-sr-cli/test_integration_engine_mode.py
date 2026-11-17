@@ -137,8 +137,13 @@ def engine_config():
                 "address": "0.0.0.0",
                 "port": 8899,
                 "api_keys": [API_KEY],
-                "models": ["vllm-sr/auto"],
-                "systemone": {"models": [PUBLIC_MODEL]},
+                "apis": {
+                    "openai": {"models": ["vllm-sr/auto"]},
+                    "systemone": {
+                        "schema": "vllm-sr/4.0",
+                        "models": [PUBLIC_MODEL],
+                    },
+                },
             }
         ],
         "providers": {
@@ -477,11 +482,11 @@ class TestEngineModeEngineArgs(EngineStack):
 
 
 class TestEngineModeDeadlineLimit(EngineStack):
-    """The listener's systemone.max_deadline_ms bounds a request's deadline_ms."""
+    """The listener's apis.systemone.max_deadline_ms bounds a request's deadline_ms."""
 
     def serve(self, *, engine):
         config = engine_config()
-        config["listeners"][0]["systemone"]["max_deadline_ms"] = 1
+        config["listeners"][0]["apis"]["systemone"]["max_deadline_ms"] = 1
         self.config.write_text(yaml.safe_dump(config))
         super().serve(engine=engine)
 

@@ -74,10 +74,12 @@ type Choice struct {
 // part in windows (Vela 2.0), zero keeping the model's own: a part with more
 // tokens fails the questions that read it whole with scan_budget_exceeded. A
 // model without a scan budget ignores it and every question's Truncate.
-// Order places the state among the states a stage sends one deployment: a
-// lower order goes first in the batch or the calls that carry them, and
-// states of one order keep a fixed order of their own. It is not a wire
-// field, and leaves the answers as they are.
+// Window, when positive, makes the state a window of a guard's scan and is
+// its rank in reading order. In a stage's bundle a window travels in a call
+// of its own, with the other calls about the same window, so its answers
+// come back as soon as it is read; at most Parallel of the stage's windows
+// to one deployment are in flight (DefaultWindowParallel when 0), the lowest
+// rank first. Neither is a wire field, and the answers stay as they are.
 type Request struct {
 	Model     string
 	State     string
@@ -86,8 +88,13 @@ type Request struct {
 	Videos    []string
 	Questions []Question
 	MaxTokens int
-	Order     int
+	Window    int
+	Parallel  int
 }
+
+// DefaultWindowParallel is how many windows of a stage's guard scans one
+// deployment reads at a time unless the request says otherwise.
+const DefaultWindowParallel = 4
 
 // Answer is one runtime answer. Error is set instead of the values when the
 // runtime could not answer this question. A Set answer holds each label's
@@ -133,7 +140,27 @@ var (
 	ErrRejected = errors.New("model runtime rejected the request")
 	// ErrFailed covers transport failures and unexpected responses.
 	ErrFailed = errors.New("model runtime call failed")
+	// ErrSignalsAbandoned is the cause a caller cancels a request's signals
+	// with once it has answered the request without them, as when the
+	// request is refused for its length. The calls it cuts short are not
+	// failures of their deployments, and are neither counted nor logged.
+	ErrSignalsAbandoned = errors.New("the request no longer needs its signals")
 )
+
+// SignalsAbandoned reports a context its caller cancelled with
+// ErrSignalsAbandoned, or one in a bundle whose base was: the exchanges a
+// bundle carries end with its base, before the contexts of their calls say
+// why.
+func SignalsAbandoned(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	if errors.Is(context.Cause(ctx), ErrSignalsAbandoned) {
+		return true
+	}
+	bundle := bundleFrom(ctx)
+	return bundle != nil && errors.Is(context.Cause(bundle.base), ErrSignalsAbandoned)
+}
 
 // ErrorReason is a stable, low-cardinality label for an error.
 func ErrorReason(err error) string {

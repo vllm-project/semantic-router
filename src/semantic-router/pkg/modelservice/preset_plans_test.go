@@ -30,13 +30,16 @@ var presetFamilyCards = map[string]ModelCard{
 // trained on (the vela3_d3 sizes turn their adapter on by ID), in the trained
 // wording, which is the canonical wording; Vela 2.0 was trained on the
 // canonical question under the Router's own ID; every other family answers it
-// zero-shot under the Router's ID. The answer comes back under the Router's ID.
+// zero-shot under the Router's ID. The vela3_d3 sizes answer the guards with
+// their base: under the Router's ID, without the decision adapter. The answer
+// comes back under the Router's ID.
 func TestPresetTasksGoOutInTheTrainedFormPerFamily(t *testing.T) {
 	trainedIDs := map[string]string{
 		"domain": "domain", "fact_check": "factcheck", "user_feedback": "feedback",
 		"jailbreak": "attack", "safety": "p_harm",
 	}
 	vela2Trained := map[string]bool{"domain": true, "fact_check": true, "user_feedback": true, "jailbreak": true, "safety": true}
+	d3Base := map[string]bool{"jailbreak": true, "safety": true}
 	for family, card := range presetFamilyCards {
 		for task, trainedID := range trainedIDs {
 			definition, _ := BuiltinTask(task)
@@ -48,6 +51,7 @@ func TestPresetTasksGoOutInTheTrainedFormPerFamily(t *testing.T) {
 			}
 			want, implementation := question.ID, implementationNative
 			switch {
+			case family == "vela3_d3" && d3Base[task]:
 			case family == "vela3" || family == "vela3_d3":
 				want, implementation = trainedID, implementationTrained
 			case family == "vela2" && vela2Trained[task]:
@@ -305,7 +309,7 @@ func questionsFor(card ModelCard, questions ...Question) []Question {
 // read its answer; two different questions under one ID are refused.
 func TestPlansShareOneTrainedQuestion(t *testing.T) {
 	definition, _ := BuiltinTask("safety")
-	card := familyCard("vela3_d3", "choice", "noul")
+	card := familyCard("vela3", "choice", "noul")
 	var plans []TaskPlan
 	for _, consumer := range []string{"safety.a", "safety.b"} {
 		question := definition.Question

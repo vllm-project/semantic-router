@@ -48,6 +48,7 @@ type SignalResults struct {
 	MatchedConversationRules  []string
 	MatchedMetadataRules      []string // Matched untrusted request metadata rules
 	MatchedInputModalityRules []string // Matched structural input-modality presence rules
+	MatchedAgentRules         []string // Matched agent rules: the request's agent role, harness and type
 	MatchedSystemOneRules     []string
 	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
@@ -108,6 +109,7 @@ func (r *SignalResults) Matches() *decision.SignalMatches {
 		ConversationRules:  r.MatchedConversationRules,
 		MetadataRules:      r.MatchedMetadataRules,
 		InputModalityRules: r.MatchedInputModalityRules,
+		AgentRules:         r.MatchedAgentRules,
 		SystemOneRules:     r.MatchedSystemOneRules,
 		ProjectionRules:    r.MatchedProjectionRules,
 		SignalValues:       r.SignalValues,
@@ -134,6 +136,7 @@ type SignalMetricsCollection struct {
 	Conversation  SignalMetrics `json:"conversation"`
 	Metadata      SignalMetrics `json:"metadata"`
 	InputModality SignalMetrics `json:"input_modality"`
+	Agent         SignalMetrics `json:"agent"`
 	SystemOne     SignalMetrics `json:"systemone"`
 }
 

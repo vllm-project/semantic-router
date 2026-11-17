@@ -17,6 +17,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("dashboard-anonymous-access-denied", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify anonymous and forged sessions are rejected on /api/logs and on deploy, and a deployable fragment sent without a session leaves the served config, the version ledger, and the active projection untouched (issue #3233)",
 		Tags:        []string{"dashboard", "auth", "security", "logs", "deploy"},
 		Fn:          testDashboardAnonymousAccessDenied,

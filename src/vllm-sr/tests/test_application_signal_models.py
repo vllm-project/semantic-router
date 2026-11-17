@@ -61,6 +61,29 @@ def test_a_guard_rule_says_what_a_partly_scanned_input_reads_as(model):
         model.model_validate({"name": "guard", "on_unscanned": "allow"})
 
 
+@pytest.mark.parametrize("model", [JailbreakRule, PIIRule, SafetyRule])
+def test_a_guard_rule_takes_a_min_coverage_for_best_effort(model):
+    for fields in ({"min_coverage": 0.5}, {"min_coverage": 1}):
+        assert (
+            model.model_validate({"name": "guard", **fields}).min_coverage
+            == fields["min_coverage"]
+        )
+    for value in (-0.1, 1.5):
+        with pytest.raises(ValidationError):
+            model.model_validate({"name": "guard", "min_coverage": value})
+    if model is not SafetyRule:
+        assert (
+            model.model_validate(
+                {"name": "guard", "on_unscanned": "best_effort", "min_coverage": 0.5}
+            ).min_coverage
+            == 0.5
+        )
+        with pytest.raises(ValidationError, match="min_coverage applies to"):
+            model.model_validate(
+                {"name": "guard", "on_unscanned": "match", "min_coverage": 0.5}
+            )
+
+
 def test_a_turn_relation_rule_reads_previous_turns():
     rule = TurnRelationRule.model_validate(
         {"name": "reask", "labels": ["reask"], "input": {"previous_turns": 4}}

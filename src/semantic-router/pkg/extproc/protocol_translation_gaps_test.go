@@ -45,7 +45,7 @@ func TestResponsesClientUsageCarriesIntegerCachedTokens(t *testing.T) {
 				resource = responsesTerminalResource(t, clientResponseBody(t,
 					(&OpenAIRouter{}).handleSemanticStreamingResponseBody([]byte(test.body), true, ctx)))
 			} else {
-				resource = clientResponseBody(t, (&OpenAIRouter{}).handleNonStreamingResponseBody([]byte(test.body), ctx, 0))
+				resource = clientResponseBody(t, (&OpenAIRouter{}).handleNonStreamingResponseBody([]byte(test.body), ctx, 0, false))
 			}
 			var wire struct {
 				Usage struct {
@@ -251,7 +251,7 @@ func TestMessagesClientForcedToolCallStopsForToolUse(t *testing.T) {
 		if streaming {
 			body = clientResponseBody(t, (&OpenAIRouter{}).handleSemanticStreamingResponseBody([]byte(stream), true, ctx))
 		} else {
-			body = clientResponseBody(t, (&OpenAIRouter{}).handleNonStreamingResponseBody([]byte(buffered), ctx, 0))
+			body = clientResponseBody(t, (&OpenAIRouter{}).handleNonStreamingResponseBody([]byte(buffered), ctx, 0, false))
 		}
 		if !bytes.Contains(body, []byte(`"stop_reason":"tool_use"`)) {
 			t.Errorf("streaming=%t: a turn that ends in a tool call must stop with tool_use:\n%s", streaming, body)
@@ -279,7 +279,7 @@ func TestContextWindowStopReachesOpenAIClientsAsLengthStop(t *testing.T) {
 				if streaming {
 					body = clientResponseBody(t, (&OpenAIRouter{}).handleSemanticStreamingResponseBody([]byte(stream), true, ctx))
 				} else {
-					body = clientResponseBody(t, (&OpenAIRouter{}).handleNonStreamingResponseBody([]byte(buffered), ctx, 0))
+					body = clientResponseBody(t, (&OpenAIRouter{}).handleNonStreamingResponseBody([]byte(buffered), ctx, 0, false))
 				}
 				for _, fragment := range fragments {
 					if !bytes.Contains(body, []byte(fragment)) {

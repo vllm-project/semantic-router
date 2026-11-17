@@ -18,6 +18,9 @@ const (
 	// router the way a real request chooses one. A concrete backend model
 	// name would be a passthrough and would never reach a plugin at all.
 	responseJailbreakBlockProbe = "__response_block_probe__"
+	// responseJailbreakEntrypoint selects the response-guard recipe in the
+	// route-action profile.
+	responseJailbreakEntrypoint = "vllm-sr/response-guard"
 	responseJailbreakWarnProbe  = "__response_warn_probe__"
 
 	// provider-mocker echoes the prompt back as the assistant message, and the
@@ -37,6 +40,7 @@ const (
 
 func init() {
 	pkgtestcases.Register("response-jailbreak-window-block", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify a response_guard block rule blocks a buffered response carrying jailbreak content at the end of a long answer",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "response-jailbreak"},
 		Fn:          testResponseJailbreakWindowBlock,
@@ -60,7 +64,7 @@ func responseJailbreakPrompt(probe, trailing string) string {
 // output whose jailbreak content sits at the end of a long answer. Asking
 // about only its opening would let it through; the Router has to ask about the
 // whole response to reach the trailing content, and the decision's action:
-// block then turns that into a 403.
+// block then turns that into a 400.
 func testResponseJailbreakWindowBlock(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing the response_guard block on content at the end of a long answer")
@@ -73,7 +77,7 @@ func testResponseJailbreakWindowBlock(ctx context.Context, client *kubernetes.Cl
 	defer stopPortForward()
 
 	prompt := responseJailbreakPrompt(responseJailbreakBlockProbe, responseJailbreakPhrase)
-	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", prompt, 60*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, responseJailbreakEntrypoint, prompt, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("chat completion request failed: %w", err)
 	}
@@ -90,14 +94,14 @@ func testResponseJailbreakWindowBlock(ctx context.Context, client *kubernetes.Cl
 		fmt.Printf("[Test] status=%d decision=%q\n", response.StatusCode, response.Headers.Get(vsrSelectedDecisionHeader))
 	}
 
-	if response.StatusCode != 403 {
+	if response.StatusCode != 400 {
 		return fmt.Errorf(
-			"expected the response to be blocked with 403, got %d - the guardrail read only the opening of a %d-byte response.\n%s",
+			"expected the response to be blocked with 400, got %d - the guardrail read only the opening of a %d-byte response.\n%s",
 			response.StatusCode, len(body), formatUnexpectedChatCompletionStatus(response),
 		)
 	}
 	if !strings.Contains(body, "jailbreak content detected") {
-		return fmt.Errorf("403 body does not read as a response-jailbreak block: %s", truncateString(body, 400))
+		return fmt.Errorf("400 body does not read as a response-jailbreak block: %s", truncateString(body, 400))
 	}
 
 	return nil
@@ -120,7 +124,7 @@ func testResponseJailbreakWindowWarning(ctx context.Context, client *kubernetes.
 	defer stopPortForward()
 
 	unsafe := responseJailbreakPrompt(responseJailbreakWarnProbe, responseJailbreakPhrase)
-	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", unsafe, 60*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, responseJailbreakEntrypoint, unsafe, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("chat completion request failed: %w", err)
 	}
@@ -130,7 +134,7 @@ func testResponseJailbreakWindowWarning(ctx context.Context, client *kubernetes.
 	matched := matchedSignals(response.Headers, "jailbreak")
 
 	control := responseJailbreakPrompt(responseJailbreakWarnProbe, "That is the whole history of navigation.")
-	controlResponse, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", control, 60*time.Second)
+	controlResponse, err := sendLocalChatCompletion(ctx, localPort, responseJailbreakEntrypoint, control, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("control chat completion request failed: %w", err)
 	}
