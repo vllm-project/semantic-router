@@ -38,6 +38,8 @@ Every response of the routing pipeline carries the headers that apply to it: ans
 | `x-vsr-replay-id` | v0.2 | Router Replay record id, when the record was persisted. |
 | `x-vsr-cost` | v0.4 | Usage priced with the served model's configured pricing; buffered responses only. |
 | `x-vsr-cost-currency` | v0.4 | Currency of `x-vsr-cost`, from `pricing.currency`. |
+| `x-vsr-budget-remaining` | v0.5 | What the tightest spend budget of the request has left, in `global.services.budgets.currency`: after the call's actual cost on a buffered response, after its reservation on a stream and on a `budget_exceeded` refusal. |
+| `x-vsr-budget-scope` | v0.5 | The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`. |
 | `x-ratelimit-limit` | v0.2 | Limit of the rate-limit window that rejected the request. |
 | `x-ratelimit-remaining` | v0.2 | Requests left in that window. |
 | `x-ratelimit-reset` | v0.2 | Unix time the window resets at. |
@@ -169,9 +171,13 @@ Clients send these to steer or identify a request. See [Session identification](
 | `x-session-id` | yes | v0.3 | Client session id `session_id_headers` accepts by default; providers receive it. |
 | `x-claude-code-session-id` | yes | v0.3 | Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. |
 | `x-claude-code-agent-id` | yes | v0.5 | Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. |
+| `x-claude-code-agent-type` | yes | v0.5 | Subagent type Claude Code sends on a subagent's own turns when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: a built-in agent's name such as `Explore`, `Plan` or `general-purpose`, or `custom`, `teammate` or `fork`; `agent` signal rules match it as a type, and providers receive it. |
+| `x-claude-code-request-class` | yes | v0.5 | Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, Router Replay reads an `auxiliary` call asking for a JSON object of one `title` field as the session's title request and names its run with the answer, and providers receive it. |
 | `session-id` | yes | v0.5 | Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it. |
 | `thread-id` | yes | v0.5 | Thread id Codex sends on every call, which protection and Router Replay read as the agent when `identity.headers.agent` is unset, except on a root thread, where it equals `session-id`; providers receive it. |
+| `x-openai-subagent` | yes | v0.5 | Kind of child thread Codex sends a request for, `collab_spawn` for a `spawn_agent` child whatever its role and `review` for a review child, which `agent` signal rules match as a type and Router Replay records with the agent; providers receive it. |
 | `x-codex-turn-metadata` | yes | v0.5 | Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. |
+| `x-codex-parent-thread-id` | yes | v0.5 | Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it. |
 | `x-conversation-id` | yes | v0.4 | Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it. |
 | `x-vsr-memory` | no | v0.5 | `off` keeps Router-managed memory out of the request. |
 | `x-vsr-skip-processing` | no | v0.3 | `true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set. |

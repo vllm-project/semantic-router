@@ -120,6 +120,7 @@ type RouterConfig struct {
 
 	Authz         AuthzConfig         `yaml:"authz,omitempty"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
+	Budgets       BudgetsConfig       `yaml:"budgets,omitempty"`
 	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
 	ConfigBaseDir string `yaml:"-"`

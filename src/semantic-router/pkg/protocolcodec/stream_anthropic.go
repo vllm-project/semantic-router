@@ -153,14 +153,14 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
-	if err := validateAnthropicStreamEvent(wire, data); err != nil {
+	if err = validateAnthropicStreamEvent(wire, data); err != nil {
 		return nil, nil, err
 	}
 	if wire.Type == "content_block_start" && anthropicEventIndex(wire) != len(decoder.items) {
 		return nil, nil, invalidProviderResponse("stream_output_index_order", "Anthropic content block indexes must be contiguous from zero")
 	}
 	if wire.Message != nil {
-		if err := decoder.observeProviderIdentity(wire.Message.ID, wire.Message.Model); err != nil {
+		if err = decoder.observeProviderIdentity(wire.Message.ID, wire.Message.Model); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -738,9 +738,10 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(
 	kind llmprotocol.ContentKind,
 ) anthropicEventWire {
 	block := &anthropicContentWire{Type: "text", Text: ""}
-	if kind == llmprotocol.ContentToolCall {
+	switch kind {
+	case llmprotocol.ContentToolCall:
 		block.Type, block.ID, block.Name, block.Input = "tool_use", event.ToolCall.ID, event.ToolCall.Name, json.RawMessage(`{}`)
-	} else if kind == llmprotocol.ContentReasoning {
+	case llmprotocol.ContentReasoning:
 		signature := ""
 		if event.Content != nil {
 			signature = event.Content.Signature
@@ -782,6 +783,12 @@ func (encoder *anthropicStreamEncoder) completeAnthropicItem(
 			kind = llmprotocol.ContentToolCall
 		} else if event.Content != nil && event.Content.Kind != "" {
 			kind = event.Content.Kind
+		}
+		// Reasoning that streamed nothing, all of it omitted or dropped, has no
+		// block: an unsigned empty thinking block carries nothing, and the
+		// buffered reply leaves such an item out.
+		if kind == llmprotocol.ContentReasoning && event.Content.Signature == "" {
+			return frames, nil, nil
 		}
 		started, key, err := encoder.ensureAnthropicBlockStarted(event, kind)
 		if err != nil {

@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import type { InsightsRecord } from './insightsPageTypes'
 import type { ReplaySessionPolicy } from './insightsPageRoutingTypes'
+import { ModelName } from './insightsModelLabelSupport'
 import { getTurnPath } from './insightsReviewSupport'
 import InsightsSelectionTrace from './InsightsSelectionTrace'
 import styles from './InsightsPage.module.css'
@@ -72,7 +73,7 @@ function protectionCandidates(policy: ReplaySessionPolicy): ViewSection[] {
               return {
                 key: model,
                 cells: [
-                  model,
+                  <ModelName key="model" name={model} compact />,
                   metric(policy.base_scores?.[model] ?? trace?.base_score),
                   metric(policy.final_scores?.[model] ?? trace?.final_score),
                   metric(trace?.quality_gap),
@@ -137,12 +138,30 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
         ...codexFields,
         {
           label: 'Previous model',
-          value: diagnostics?.previous_model || policy?.current_model || 'Not recorded',
+          value: (
+            <ModelName
+              name={diagnostics?.previous_model || policy?.current_model}
+              fallback="Not recorded"
+            />
+          ),
         },
-        { label: 'Actual selected model', value: record.selected_model || 'No backend selected' },
+        {
+          label: 'Actual selected model',
+          value: <ModelName name={record.selected_model} fallback="No backend selected" />,
+        },
         { label: 'Protection mode', value: policy?.mode || 'Not applied' },
         { label: 'Protection scope', value: policy?.scope || 'Not recorded' },
-        { label: 'Eligible models', value: policy?.candidate_models?.join(', ') || 'Not recorded' },
+        {
+          label: 'Eligible models',
+          value: policy?.candidate_models?.length
+            ? policy.candidate_models.map((model, index) => (
+                <Fragment key={model}>
+                  {index > 0 ? ', ' : null}
+                  <ModelName name={model} compact />
+                </Fragment>
+              ))
+            : 'Not recorded',
+        },
         {
           label: 'Session identity header',
           value: policy?.identity?.headers?.session || 'Not recorded',
@@ -173,7 +192,7 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
           ? [
               {
                 label: policy.mode === 'observe' ? 'Observed model suggestion' : 'Protected model',
-                value: policy.selected_model || 'Not recorded',
+                value: <ModelName name={policy.selected_model} fallback="Not recorded" />,
               },
               {
                 label: policy.mode === 'observe' ? 'Observed hold reason' : 'Hold reason',
@@ -222,7 +241,7 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
               .map(([model, score]) => ({
                 key: model,
                 cells: [
-                  model,
+                  <ModelName key="model" name={model} compact />,
                   metric(score.score),
                   metric(score.predicted_quality),
                   metric(score.cost_penalty),
@@ -257,7 +276,7 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
               key: String(index),
               cells: [
                 demand.stage,
-                demand.model || 'Unselected',
+                demand.model ? <ModelName key="model" name={demand.model} compact /> : 'Unselected',
                 demand.prompt_tokens,
                 demand.reserved_output_tokens,
                 demand.total_demand_known ? demand.total_demand_tokens : 'Unknown',

@@ -24,6 +24,7 @@ var matchedSignalResolvers = map[string]func(*MatchedSignals) *[]string{
 	config.SignalTypeConversation:  func(target *MatchedSignals) *[]string { return &target.Conversation },
 	config.SignalTypeMetadata:      func(target *MatchedSignals) *[]string { return &target.Metadata },
 	config.SignalTypeInputModality: func(target *MatchedSignals) *[]string { return &target.InputModality },
+	config.SignalTypeAgent:         func(target *MatchedSignals) *[]string { return &target.Agent },
 	config.SignalTypeSystemOne:     func(target *MatchedSignals) *[]string { return &target.SystemOne },
 	config.SignalTypeProjection:    func(target *MatchedSignals) *[]string { return &target.Projection },
 }
@@ -50,6 +51,7 @@ func buildMatchedSignals(signals *classification.SignalResults) *MatchedSignals 
 		Conversation:  signals.MatchedConversationRules,
 		Metadata:      signals.MatchedMetadataRules,
 		InputModality: signals.MatchedInputModalityRules,
+		Agent:         signals.MatchedAgentRules,
 		SystemOne:     signals.MatchedSystemOneRules,
 		Projection:    signals.MatchedProjectionRules,
 	}
@@ -110,6 +112,7 @@ func getUnmatchedSignals(
 	collectUnmatchedProjectionOutputs(&unmatched.Projection, cfg.Projections.Mappings, signals.MatchedProjectionRules)
 	collectUnmatchedRuleNames(&unmatched.Metadata, cfg.MetadataRules, signals.MatchedMetadataRules, func(rule config.MetadataRule) string { return rule.Name })
 	collectUnmatchedRuleNames(&unmatched.InputModality, cfg.InputModalityRules, signals.MatchedInputModalityRules, func(rule config.InputModalityRule) string { return rule.Name })
+	collectUnmatchedRuleNames(&unmatched.Agent, cfg.AgentRules, signals.MatchedAgentRules, func(rule config.AgentRule) string { return rule.Name })
 	systemOne := make([]string, len(cfg.SystemOneRules))
 	for index, rule := range cfg.SystemOneRules {
 		systemOne[index] = rule.Name

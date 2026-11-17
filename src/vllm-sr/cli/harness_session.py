@@ -251,8 +251,14 @@ def state(session: dict) -> dict:
     """What is left now of the launch's worktree: its uncommitted changes, the
     paths git ignores there, which git worktree remove deletes, and the commits
     on its HEAD that no branch and no remote has; and when connect made it, its
-    branch and the commits on it that no other branch and no remote has."""
+    branch and the commits on it that no other branch and no remote has.
+    Without git only whether the worktree exists is known."""
     path = Path(session["worktree"])
+    if shutil.which("git") is None:
+        return {
+            "worktree": "present" if path.is_dir() else "removed",
+            "git": "not on PATH",
+        }
     if not path.is_dir():
         found = {"worktree": "removed"}
     elif hc._git(path, "rev-parse", "--is-inside-work-tree").stdout.strip() != "true":
@@ -291,6 +297,10 @@ def _count(n: int | None, thing: str) -> str:
 
 def describe(found: dict) -> str:
     worktree = found["worktree"]
+    if "git" in found:
+        shown = [] if worktree == "present" else ["worktree removed"]
+        unknown = f"git state unknown: git is {found['git']}, and the state needs it"
+        return ", ".join([*shown, unknown])
     if worktree == "present":
         shown = [_count(found["changes"], "uncommitted change")]
         for key, thing in (
@@ -317,6 +327,8 @@ def cleanup(session: dict, found: dict) -> list[str]:
     first."""
     if not session.get("made_by_connect"):
         return ["none: this launch did not make the worktree"]
+    if "git" in found:
+        return [f"unknown: git is {found['git']}, and the cleanup steps need it"]
     present = found["worktree"] == "present"
     if present and found["changes"] != 0:
         return ["commit or discard the changes in it first"]

@@ -351,7 +351,10 @@ figure before them kept as `gross_saved`. A request whose Router call has no
 price leaves the savings instead of being netted as free. Router spend is also
 added to total spend. Auxiliary model calls made by internal Looper hops count
 in the parent request's router spend and coverage; hop generation costs count
-there once. See the
+there once. A hop's own record says so with `cost_accounting.unpriced_reason:
+counted_in_parent`, and its `original_model` names the algorithm that made the
+call, such as `Ratings`, `Escalate` or `ReMoM`, since no client asked for it.
+See the
 [aggregate fields](../../api/router#configured-rate-cost-estimates).
 
 Set deployment rates under `global.model_catalog.deployments.<name>.pricing`,
@@ -770,12 +773,11 @@ the first call's start to the last one's end. Below it each call is one row, the
 request on the page marked and a model switch highlighted. Subagents are named
 `subagent 1`, `subagent 2` and so on in order of their first call, with the
 short hash of the agent id in the row's title, and the main conversation is
-`main`. The hash is recorded when protection runs and reads an agent id: the
-one Claude Code or Codex sends, or the header `identity.headers.agent` names
-(see [Session identification](../../api/session-identification#choose-the-identity-you-need)).
-A call without one shows `main`. A Codex root thread, whose agent and session
-ids are equal, is `main`. A viewer without `replay.detail` gets no hash, as with
-the rest of the redacted session policy, so a subagent's call shows `hidden` there.
+`main`. Every record keeps that hash in its `agent`, as described in
+[Agent runs](#agent-runs). A call without one shows `main`. A Codex root
+thread, whose agent and session ids are equal, is `main`. A viewer without
+`replay.detail` gets no hash, as with the rest of the redacted session policy,
+so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 
@@ -825,19 +827,21 @@ Top entrypoints
 shown apart when they cost anything. `Net savings` is `total_saved`, with
 `gross_saved` and `netted_router_call_spend` beside it, over the requests
 compared with a baseline; with none it reads `n/a`. Amounts stay per currency.
-`Requests` adds `in progress` and `unknown` when there are any. `Prompt cache`
-is the aggregate's provider prompt-cache saving, and `Reviews` appears when the
-window holds Codex approval reviews. These come from the aggregate. Sessions and
-the top three models and entrypoints come from the window's records: models by
+`Prompt cache` is the aggregate's provider prompt-cache saving, and `Reviews`
+appears when the window holds Codex approval reviews. These come from the
+aggregate. Requests, sessions and the top three models and entrypoints come
+from the window's records, each client request once: a Looper hop's record
+counts in the request that made it, not as a request of its own. `Requests`
+adds `in progress` and `unknown` when there are any. Models are ranked by
 `selected_model`, entrypoints by `original_model`, the model the client asked
 for. Above, one request asked for `qwen-chat` directly: it is the entrypoint of
 that one request and the selected model of three, the two review requests routed
 to it included. A row's spend adds its requests' own costs as `total_spend` adds
 them, `actual_cost` and the cost of the Router's calls for each request, per
-currency; a request with no price is counted as such, and a Looper hop's cost
-stays with the request that made it. `--json` prints the same, with the
-aggregate's `by_currency`, provider-cache and `reviews` objects as the Router
-returns them and an `unpriced` count on each row.
+currency; a request with no price is counted as such, so a row that reads
+`no price` has every one of its requests in `unpriced`. `--json` prints the
+same, with the aggregate's `by_currency`, provider-cache and `reviews` objects
+as the Router returns them and an `unpriced` count on each row.
 
 The command reads the management API at `--endpoint`, by default the local one
 on port 8080 plus `VLLM_SR_PORT_OFFSET`, and sends `VSR_MGMT_TOKEN` as the
@@ -937,5 +941,126 @@ Codex turn with a row that links there and counts its calls, so a turn's own
 calls and its subagents' calls read as one unit, and a review that names the
 turn it judged is marked on that turn's calls.
 
+### Agent runs
+
+An agent run is one session of an agent harness: its main agent, the
+subagents it spawned, and every call they made. Replay files each call under
+the session the harness names and records the agent that made it, from the
+headers the harness already sends, whichever headers `identity.headers`
+points protection at:
+
+| Harness | Run | Agent | Parent |
+| --- | --- | --- | --- |
+| Claude Code | `x-claude-code-session-id` | `x-claude-code-agent-id`, sent on subagent calls only | none: every subagent hangs off the main agent |
+| Codex | `session-id`, the root session on every thread | `thread-id`; the root thread, equal to `session-id`, is the main agent | `x-codex-parent-thread-id`, unless it is the root thread |
+| Others | the pinned session, `x-vsr-session-id` or a `session_id_headers` header, or the one `identity.headers.session` names | the header `identity.headers.agent` names | none |
+
+A call protection cannot key is filed under its run all the same, not under a
+session of its own per call: a Codex Responses call under `scope: conversation`
+without `x-conversation-id`, or under an `identity.headers.session` Codex does
+not send, is filed under its `session-id`. Each record keeps its agent in
+`agent`:
+
+| Field | Holds |
+| --- | --- |
+| `harness` | `claude_code` or `codex`, when the request carries their identity headers. |
+| `id` | The short SHA-256 hash of the agent id, empty for the main agent. |
+| `parent_id` | The hash of the agent that spawned it, empty when the main agent did. |
+| `kind` | The subagent kind Codex sends in `x-openai-subagent`, such as `collab_spawn` or `review`. |
+
+A Looper hop carries none of its client's headers. Its record is filed in the
+run of the request that made it, under that request's agent, with
+`parent_request_id` naming the request. A record also keeps the
+`reasoning_effort` the request was sent with. A record written before these
+fields name a subagent only where protection recorded one.
+
+Two [Replay API](../../api/router#router-replay) routes read runs. `GET /api/v1/observability/replays/runs`
+takes the list's filters, `limit` and `offset`, and returns one summary per
+session over the records the filters keep, latest activity first.
+`GET /api/v1/observability/replays/run?session_id=...` returns one run across
+recipes: the same summary in `run` and every call in time order in `calls`.
+
+| Field | Holds |
+| --- | --- |
+| `session_name` | The name the harness last gave the session, when Replay saw one: see [Session names](#session-names). |
+| `prompt` | The main agent's first prompt, when Replay kept it, without `<system-reminder>` blocks. A session-title request is not the task. |
+| `harness`, `models`, `duration_ms` | The harness, the calls each model answered with Looper hops included, and the time from the first call's start to the last one's end. |
+| `agents` | Each agent: its `label` (`main`, then `subagent 1`, `subagent 2` by first call), the `parent` agent's label, `kind`, `id`, `calls`, first and last call, `spawned_after_record_id` (the parent's last call before this agent's first), `models` and `cost`. |
+| `outcome` | `status` from the main agent's last call: `answered` when it gave a final answer, `failed`, `aborted`, `in_progress`, or `unknown` when it asked for a tool and no call followed. With it `final_answer_record_id`, the tool results the calls carried and how many failed, each counted once, and `reported`, the outcomes posted to `/api/v1/observability/outcomes` for the run's calls. |
+| `cost` | Spend per currency as the aggregate's `total_spend` adds it, the Router's own calls apart, with the calls missing a price counted, never as free, and the tokens. |
+| `events` | Calls per marker: `switch` (another model than the agent's previous call to the same entrypoint), `escalation` (an `escalate` Looper answered by a later model than its first), `guard` (jailbreak, PII or hallucination detected), `block`, `fallback` (a cross-model fallback tried another candidate), `failure`, `tool_failure`. |
+| `calls` | Each call's `agent` label, `decision`, matched `signals` as `type:name`, `entrypoint`, `model`, `previous_model` on a switch, `effort`, `selection_method`, `session_action`, `reason` (protection's reason, and the Looper algorithm with its final attempt's reason), lifecycle and status, tokens, `cost`, `router_calls`, `looper_attempts`, `tool_results`, `tool_failures`, `final_answer`, `outcomes`, `markers`, and the Looper `hops` it made. |
+
+Without `replay.detail` a run keeps its tree, labels, markers and counts, and
+loses what its records would: the session name, the prompt, the agent hashes,
+the reasons and the text of reported outcomes. The runs list reads the filtered
+records whole, so bound it with `since` on a large PostgreSQL store.
+
+In **Insights**, the **Runs** view lists one row per run: its session name or
+task, the harness, the agents, the models, the outcome, the cost and duration,
+and the events. Insights shows a model by its label wherever it names one: the
+runs, records and reviews lists, the model filters and charts, a run's lanes,
+legend and step panel, and a record's route, routing, candidate scores, cost
+text and session history, with the configured name beside it, in its tooltip,
+or in parentheses after it. A run opens as a timeline: a lane per agent in
+tree order, a dashed tick where a subagent started, and consecutive calls of
+one agent on one model drawn as one segment with its calls' markers, so a run
+of hundreds of calls reads as a few blocks. A segment lists its calls, and a call shows its decision
+and signals, model and effort, tokens and cost, status and reason, with a link
+to its record. The table of every call is one click further. A record page
+opens its run with **Open run**.
+
+With [tracing](../global/api-and-observability#observability) on, the
+Router's request span carries `session.id`, `vsr.harness`, `vsr.agent.id`,
+`vsr.agent.parent_id` and `vsr.agent.kind`, and a run is one trace:
+
+- **The harness sends `traceparent`.** The span stays in the harness's trace.
+  Claude Code sends one through a custom base URL only with its tracing on
+  and `CLAUDE_CODE_PROPAGATE_TRACEPARENT=1`, a trace per user prompt with the
+  subagents' calls in it.
+- **It sends none.** The span joins its run's trace: the Router creates a
+  root span `semantic_router.run` for the session and a `semantic_router.agent`
+  span for each subagent, under the agent that spawned it. Their ids derive
+  from the session and agent ids, so every call of the run lands in one trace
+  whichever Router process served it; each process emits those spans once.
+  Codex 0.166.0 sends no `traceparent` on its model calls.
+
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).
+
+#### Session names
+
+A run reads by the name its harness shows for the session, where the gateway
+can see that name. Each harness names a session with a side request of its own,
+which Replay recognises by what the harness marks, never by its prompt, and
+records with `request_kind: session_title`:
+
+| Harness | How it names the session | What Replay records |
+| --- | --- | --- |
+| Claude Code 2.1.273 and later | After the first prompt, an `x-claude-code-request-class: auxiliary` request asking for a JSON object of one `title` field. `/rename` sends nothing; the next request carries the command and its output in its history. | The title the answer gives on the title request's record, and the name a `/rename` gave on the record of each request whose history shows it. The latest names the run. |
+| Codex CLI 0.166.0 | Its terminal UI starts a thread of its own whose turn metadata says `thread_source: thread_title`, under a new `session-id`. No field of that request names the thread it titles, and `/rename` sends nothing. `codex exec` names no thread. | Neither name. A session holding only title requests is no run and is left out of the list. |
+
+Claude Code marks its request class only with `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1`,
+which `vllm-sr connect claude-code` sets. The title is response text and a rename
+request text, so `session_name` is kept only under `prompt_capture: raw` with
+that side's body capture on, never from a masking route's request, and cleared
+for a viewer without `replay.detail`. A run without a name reads by its first
+prompt, then by its session id.
+
+#### Model labels
+
+A record names the model as the configuration does, such as `qwen-msg`.
+`GET /api/v1/observability/replays/models` lists every configured model with
+the label a person reads it by, from the catalog the Router routes with: its
+card's display name when it is catalog-backed (`catalog:`) or its card gives
+one, else the display name of the catalog card its backend's provider maps its
+`provider_model_id` to, else that `provider_model_id`:
+
+```json
+{"object": "router_replay.models", "data": [
+  {"name": "qwen-msg", "label": "Qwen3.6 35B A3B"},
+  {"name": "premium-ref", "label": "qwen36"}
+]}
+```
+
+A record of a model the configuration no longer holds reads by its name.

@@ -46,7 +46,7 @@ func validateNativeRuleContext(node RuleNode) error {
 func validateNativeSignalReference(kind string) error {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case SignalTypeAuthz, SignalTypeMetadata, SignalTypeConversation, SignalTypeTurnRelation,
-		SignalTypeUserFeedback, SignalTypeInputModality:
+		SignalTypeUserFeedback, SignalTypeInputModality, SignalTypeAgent:
 		return fmt.Errorf("signal %q requires request context that native System One does not yet provide", kind)
 	}
 	return nil

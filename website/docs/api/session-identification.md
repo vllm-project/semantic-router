@@ -62,10 +62,17 @@ configured, because protection reads what they send:
   subagents on their parent's model.
 
 Replay records the session and conversation protection reads, from the
-configured headers or the defaults above, when that identity is available. A
-Codex call is filed under its `session-id` that way: under `scope: session`,
-or under `scope: conversation` with `x-conversation-id`, since a Responses
-request has no conversation start to name its conversation by. Recording a
+configured headers or the defaults above, when that identity is available.
+When protection cannot key a call, Replay still files it under the session
+the harness names: the configured session header, the pinned session, or
+Codex's `session-id`. A Codex Responses call under `scope: conversation`
+without `x-conversation-id`, which has no conversation start to name its
+conversation by, or under an `identity.headers.session` Codex does not send,
+is filed under its `session-id` that way, so a run is one session rather than
+one per call. Replay also records the agent of each call from the harness
+defaults above, whichever agent header protection reads, and the agent that
+spawned it, Codex's `x-codex-parent-thread-id`: see
+[Agent runs](../tutorials/plugin/router-replay#agent-runs). Recording a
 conversation ID does not change the protection scope or reset model ownership
 under session scope.
 

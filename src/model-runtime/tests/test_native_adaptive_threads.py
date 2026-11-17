@@ -8,6 +8,7 @@ path the host's numerics take: serving on a bit-identical host, retired on
 one that drifts.
 """
 
+import contextlib
 import logging
 import types
 
@@ -419,3 +420,37 @@ def test_opting_in_never_changes_an_answer(
     base = answers(env_on=False)
     adaptive_on = answers(env_on=True)
     assert adaptive_on == base
+
+
+def test_generate_runs_once_at_the_configured_count_untimed(monkeypatch):
+    """Decoding is one pass at the configured count; the resolver never times it."""
+    import threading
+
+    from vllm_srun.engines.native.models.gated_lora import Gate
+
+    from .test_qwen3_5_generate import backbone
+
+    applied: list[int] = []
+    monkeypatch.setattr(adaptive.CpuTeam, "apply", applied.append)
+
+    class Untimed:
+        def pick(self, tokens: int) -> int:
+            raise AssertionError("generate must not consult the thread resolver")
+
+    module = backbone()
+    engine = object.__new__(NativeEngineModel)
+    engine.__dict__.update(
+        lm_head=module.embed_tokens.weight,
+        backbone=module,
+        device=torch.device("cpu"),
+        gate=Gate(),
+        threads_resolver=Untimed(),
+        _cpu_threads=3,
+        _backbone_lock=threading.Lock(),
+    )
+    monkeypatch.setattr(engine, "autocast", contextlib.nullcontext, raising=False)
+    tokens = engine.generate(
+        [[5, 6, 7], [8, 9]], max_new_tokens=3, eos_token_id=None, pad_token_id=0
+    )
+    assert [len(row) for row in tokens] == [3, 3]
+    assert applied == [3]

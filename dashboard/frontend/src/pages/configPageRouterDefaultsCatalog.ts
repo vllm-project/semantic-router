@@ -8,6 +8,7 @@ import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import type {
   APIConfig,
   AuthzConfig,
+  BudgetsConfig,
   CanonicalEmbeddingCatalogConfig,
   CanonicalSystemModels,
   LooperConfig,
@@ -77,6 +78,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     fail_open: false,
     providers: [],
   } satisfies RateLimitConfig,
+  budgets: {} satisfies BudgetsConfig,
   management_api: {},
   startup_status: {},
   masking_identity: { namespaces: {} },
@@ -188,6 +190,12 @@ export const SECTION_META: Record<
     title: 'Rate Limiting',
     eyebrow: 'Services',
     description: 'Per-user, group, and model request throttling rules enforced by the router.',
+  },
+  budgets: {
+    title: 'Spend Budgets',
+    eyebrow: 'Services',
+    description:
+      'Spend limits per agent run and per user over a window. Each call reserves its estimated cost before it is sent and settles its actual cost after.',
   },
   management_api: {
     title: 'Management API',

@@ -386,6 +386,11 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 			ctx.FallbackRequest = snapshot
 		}
 	}
+	// Every dispatch, a Looper hop's included, reserves its estimated cost
+	// last, on the request the provider receives.
+	if refusal := r.reserveDispatchSpend(ctx, dispatch.logicalModel, ctx.SemanticRequest); refusal != nil {
+		return r.respondBudgetRefused(ctx, dispatch.logicalModel, refusal), nil
+	}
 	captureRequestDemand(
 		ctx,
 		requestDemandStageProviderBound,
