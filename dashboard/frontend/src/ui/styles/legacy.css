@@ -98,7 +98,8 @@
     box-shadow var(--transition-fast);
 }
 
-.vsr-legacy :where(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea):focus {
+.vsr-legacy
+  :where(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea):focus {
   outline: none;
   border-color: var(--ring);
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 35%, transparent);

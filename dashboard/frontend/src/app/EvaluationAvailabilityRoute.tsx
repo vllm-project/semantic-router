@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { FlaskConical } from 'lucide-react'
 import { Button, EmptyState, PageContainer } from '../ui'
 import RouteLoadingFallback from './RouteLoadingFallback'
-import { isCapabilityUsable, PROBE_PENDING, type DashboardCapability } from '../contexts/dashboardCapabilities'
+import {
+  isCapabilityUsable,
+  PROBE_PENDING,
+  type DashboardCapability,
+} from '../contexts/dashboardCapabilities'
 
 interface EvaluationAvailabilityRouteProps {
   capability: DashboardCapability | undefined
@@ -26,7 +30,7 @@ export default function EvaluationAvailabilityRoute({
   const navigate = useNavigate()
 
   if (isLoading || capability?.reason === PROBE_PENDING) {
-    return <RouteLoadingFallback />
+    return <RouteLoadingFallback label={`Checking ${featureName} availability`} />
   }
 
   if (error || !capability) {
@@ -50,7 +54,9 @@ export default function EvaluationAvailabilityRoute({
           icon={FlaskConical}
           tone="orange"
           title={`${featureName} is not available`}
-          description={capability.remediation || `${featureName} is not available for this deployment.`}
+          description={
+            capability.remediation || `${featureName} is not available for this deployment.`
+          }
           actions={
             <>
               <Button variant="outline" onClick={onRefreshAccess}>

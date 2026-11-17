@@ -18,8 +18,9 @@ function NestedDashboardNotice() {
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-6 text-center text-foreground">
       <h1 className="text-xl font-semibold tracking-[-0.02em]">Nested Dashboard detected</h1>
       <p className="max-w-xl text-[13.5px] leading-relaxed text-muted-foreground">
-        The Dashboard is running inside an iframe, which usually means a Grafana path or proxy points back at the
-        Dashboard itself. Check the Grafana dashboard path and the backend proxy configuration.
+        The Dashboard is running inside an iframe, which usually means a Grafana path or proxy
+        points back at the Dashboard itself. Check the Grafana dashboard path and the backend proxy
+        configuration.
       </p>
       <Button onClick={() => window.top?.location.reload()}>Open the Dashboard in a new tab</Button>
     </div>

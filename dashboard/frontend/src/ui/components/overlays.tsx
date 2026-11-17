@@ -19,7 +19,10 @@ const overlayClass =
 
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { size?: 'sm' | 'md' | 'lg' | 'xl'; hideClose?: boolean }
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    size?: 'sm' | 'md' | 'lg' | 'xl'
+    hideClose?: boolean
+  }
 >(({ className, children, size = 'md', hideClose, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className={overlayClass} />
@@ -60,21 +63,37 @@ export function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDiv
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex items-center justify-end gap-2 border-t border-border bg-surface-subtle px-6 py-3', className)}
+      className={cn(
+        'flex items-center justify-end gap-2 border-t border-border bg-surface-subtle px-6 py-3',
+        className,
+      )}
       {...props}
     />
   )
 }
 
-export function DialogTitle({ className, ...props }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>) {
-  return <DialogPrimitive.Title className={cn('text-base font-semibold tracking-[-0.01em]', className)} {...props} />
+export function DialogTitle({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>) {
+  return (
+    <DialogPrimitive.Title
+      className={cn('text-base font-semibold tracking-[-0.01em]', className)}
+      {...props}
+    />
+  )
 }
 
 export function DialogDescription({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>) {
-  return <DialogPrimitive.Description className={cn('text-[13px] text-muted-foreground', className)} {...props} />
+  return (
+    <DialogPrimitive.Description
+      className={cn('text-[13px] text-muted-foreground', className)}
+      {...props}
+    />
+  )
 }
 
 /* Sheet (side drawer) -------------------------------------------------------- */
@@ -133,7 +152,12 @@ export const DropdownMenuContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof MenuPrimitive.Content>
 >(({ className, sideOffset = 6, ...props }, ref) => (
   <MenuPrimitive.Portal>
-    <MenuPrimitive.Content ref={ref} sideOffset={sideOffset} className={cn(menuSurface, className)} {...props} />
+    <MenuPrimitive.Content
+      ref={ref}
+      sideOffset={sideOffset}
+      className={cn(menuSurface, className)}
+      {...props}
+    />
   </MenuPrimitive.Portal>
 ))
 DropdownMenuContent.displayName = 'DropdownMenuContent'
@@ -143,7 +167,9 @@ const menuItemClass =
 
 export const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof MenuPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof MenuPrimitive.Item> & { variant?: 'default' | 'destructive' }
+  React.ComponentPropsWithoutRef<typeof MenuPrimitive.Item> & {
+    variant?: 'default' | 'destructive'
+  }
 >(({ className, variant = 'default', ...props }, ref) => (
   <MenuPrimitive.Item
     ref={ref}
@@ -188,10 +214,16 @@ export const DropdownMenuRadioItem = React.forwardRef<
 ))
 DropdownMenuRadioItem.displayName = 'DropdownMenuRadioItem'
 
-export function DropdownMenuLabel({ className, ...props }: React.ComponentPropsWithoutRef<typeof MenuPrimitive.Label>) {
+export function DropdownMenuLabel({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof MenuPrimitive.Label>) {
   return (
     <MenuPrimitive.Label
-      className={cn('px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-subtle-foreground', className)}
+      className={cn(
+        'px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-subtle-foreground',
+        className,
+      )}
       {...props}
     />
   )
@@ -201,18 +233,35 @@ export function DropdownMenuSeparator({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<typeof MenuPrimitive.Separator>) {
-  return <MenuPrimitive.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
+  return (
+    <MenuPrimitive.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
+  )
 }
 
-export function DropdownMenuShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
-  return <span className={cn('ml-auto font-mono text-[11px] tracking-wide text-subtle-foreground', className)} {...props} />
+export function DropdownMenuShortcut({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span
+      className={cn(
+        'ml-auto font-mono text-[11px] tracking-wide text-subtle-foreground',
+        className,
+      )}
+      {...props}
+    />
+  )
 }
 
 export const DropdownMenuSubTrigger = React.forwardRef<
   React.ElementRef<typeof MenuPrimitive.SubTrigger>,
   React.ComponentPropsWithoutRef<typeof MenuPrimitive.SubTrigger>
 >(({ className, children, ...props }, ref) => (
-  <MenuPrimitive.SubTrigger ref={ref} className={cn(menuItemClass, 'data-[state=open]:bg-accent', className)} {...props}>
+  <MenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn(menuItemClass, 'data-[state=open]:bg-accent', className)}
+    {...props}
+  >
     {children}
     <ChevronRight className="ml-auto size-4" />
   </MenuPrimitive.SubTrigger>

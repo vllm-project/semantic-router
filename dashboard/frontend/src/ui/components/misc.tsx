@@ -32,7 +32,11 @@ export function Separator({
   return (
     <SeparatorPrimitive.Root
       orientation={orientation}
-      className={cn('shrink-0 bg-border', orientation === 'horizontal' ? 'h-px w-full' : 'h-full w-px', className)}
+      className={cn(
+        'shrink-0 bg-border',
+        orientation === 'horizontal' ? 'h-px w-full' : 'h-full w-px',
+        className,
+      )}
       {...props}
     />
   )
@@ -57,7 +61,10 @@ export function Avatar({
     .join('')
   return (
     <AvatarPrimitive.Root
-      className={cn('relative inline-flex shrink-0 overflow-hidden rounded-full ring-1 ring-border', className)}
+      className={cn(
+        'relative inline-flex shrink-0 overflow-hidden rounded-full ring-1 ring-border',
+        className,
+      )}
       style={{ width: size, height: size }}
     >
       {src ? <AvatarPrimitive.Image src={src} alt="" className="size-full object-cover" /> : null}
@@ -105,7 +112,10 @@ export function Progress({
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className={cn('h-full rounded-full transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]', fill)}
+        className={cn(
+          'h-full rounded-full transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          fill,
+        )}
         style={{ width: `${Math.max(0, Math.min(100, value ?? 0))}%` }}
       />
     </ProgressPrimitive.Root>
@@ -119,7 +129,9 @@ export function ScrollArea({
 }: React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>) {
   return (
     <ScrollAreaPrimitive.Root className={cn('relative overflow-hidden', className)} {...props}>
-      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit]">{children}</ScrollAreaPrimitive.Viewport>
+      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit]">
+        {children}
+      </ScrollAreaPrimitive.Viewport>
       <ScrollAreaPrimitive.Scrollbar
         orientation="vertical"
         className="flex w-2 touch-none select-none p-px transition-colors"
@@ -139,7 +151,10 @@ export function CollapsibleContent({
 }: React.ComponentPropsWithoutRef<typeof CollapsiblePrimitive.Content>) {
   return (
     <CollapsiblePrimitive.Content
-      className={cn('overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down', className)}
+      className={cn(
+        'overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down',
+        className,
+      )}
       {...props}
     />
   )
@@ -169,7 +184,10 @@ export function Segmented<T extends string>({
       onValueChange={(next) => {
         if (next) onValueChange(next as T)
       }}
-      className={cn('inline-flex items-center gap-0.5 rounded-lg border border-border bg-surface-subtle p-0.5', className)}
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded-lg border border-border bg-surface-subtle p-0.5',
+        className,
+      )}
     >
       {options.map((option) => (
         <ToggleGroupPrimitive.Item
@@ -190,18 +208,24 @@ export function Segmented<T extends string>({
   )
 }
 
-const alertVariants = cva('relative flex gap-3 rounded-lg border px-3.5 py-3 text-[13px] [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0', {
-  variants: {
-    tone: {
-      info: 'border-[oklch(0.645_0.18_251/0.25)] bg-info-soft text-foreground [&>svg]:text-info',
-      success: 'border-[oklch(0.62_0.145_155/0.25)] bg-success-soft text-foreground [&>svg]:text-success',
-      warning: 'border-[oklch(0.74_0.16_62/0.3)] bg-warning-soft text-foreground [&>svg]:text-warning',
-      danger: 'border-[oklch(0.59_0.215_25/0.25)] bg-destructive-soft text-foreground [&>svg]:text-destructive',
-      neutral: 'border-border bg-surface-subtle text-foreground [&>svg]:text-muted-foreground',
+const alertVariants = cva(
+  'relative flex gap-3 rounded-lg border px-3.5 py-3 text-[13px] [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0',
+  {
+    variants: {
+      tone: {
+        info: 'border-[oklch(0.645_0.18_251/0.25)] bg-info-soft text-foreground [&>svg]:text-info',
+        success:
+          'border-[oklch(0.62_0.145_155/0.25)] bg-success-soft text-foreground [&>svg]:text-success',
+        warning:
+          'border-[oklch(0.74_0.16_62/0.3)] bg-warning-soft text-foreground [&>svg]:text-warning',
+        danger:
+          'border-[oklch(0.59_0.215_25/0.25)] bg-destructive-soft text-foreground [&>svg]:text-destructive',
+        neutral: 'border-border bg-surface-subtle text-foreground [&>svg]:text-muted-foreground',
+      },
     },
+    defaultVariants: { tone: 'info' },
   },
-  defaultVariants: { tone: 'info' },
-})
+)
 
 const alertIcons = {
   info: Info,

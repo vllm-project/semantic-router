@@ -42,9 +42,16 @@ export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHead
   )
 }
 
-export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
+export function CardDescription({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
-    <p data-slot="card-description" className={cn('text-[13px] text-muted-foreground', className)} {...props} />
+    <p
+      data-slot="card-description"
+      className={cn('text-[13px] text-muted-foreground', className)}
+      {...props}
+    />
   )
 }
 
@@ -52,7 +59,10 @@ export function CardAction({ className, ...props }: React.HTMLAttributes<HTMLDiv
   return (
     <div
       data-slot="card-action"
-      className={cn('col-start-2 row-span-2 row-start-1 flex items-center gap-1.5 self-start justify-self-end', className)}
+      className={cn(
+        'col-start-2 row-span-2 row-start-1 flex items-center gap-1.5 self-start justify-self-end',
+        className,
+      )}
       {...props}
     />
   )

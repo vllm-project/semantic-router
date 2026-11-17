@@ -1,6 +1,12 @@
 import * as React from 'react'
 import { Sheet, SheetContent, SheetTitle, TooltipProvider } from '../ui'
-import { AppSidebar, SidebarContents, type NavBadges, type ShellAccount, type ShellInstance } from './AppSidebar'
+import {
+  AppSidebar,
+  SidebarContents,
+  type NavBadges,
+  type ShellAccount,
+  type ShellInstance,
+} from './AppSidebar'
 import { CommandMenu, type CommandSection } from './CommandMenu'
 import type { NavItem } from './navigation'
 import { Topbar, type ShellNotification, type TopbarStatus } from './Topbar'
@@ -39,11 +45,29 @@ export function AppShell({
   return (
     <TooltipProvider delayDuration={250} skipDelayDuration={150}>
       <div className="flex h-dvh overflow-hidden bg-sidebar">
-        <AppSidebar account={account} instance={instance} badges={badges} onSignOut={onSignOut} isItemVisible={isItemVisible} />
+        <AppSidebar
+          account={account}
+          instance={instance}
+          badges={badges}
+          onSignOut={onSignOut}
+          isItemVisible={isItemVisible}
+        />
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" size="sm" className="inset-y-0 left-0 w-[280px] rounded-none rounded-r-xl border-y-0 border-l-0 bg-sidebar p-0">
+          <SheetContent
+            side="left"
+            size="sm"
+            className="inset-y-0 left-0 w-[280px] rounded-none rounded-r-xl border-y-0 border-l-0 bg-sidebar p-0"
+          >
             <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <SidebarContents collapsed={false} account={account} instance={instance} badges={badges} onSignOut={onSignOut} showCollapse={false} isItemVisible={isItemVisible} />
+            <SidebarContents
+              collapsed={false}
+              account={account}
+              instance={instance}
+              badges={badges}
+              onSignOut={onSignOut}
+              showCollapse={false}
+              isItemVisible={isItemVisible}
+            />
           </SheetContent>
         </Sheet>
         <div className="flex min-w-0 flex-1 flex-col lg:py-2 lg:pr-2">

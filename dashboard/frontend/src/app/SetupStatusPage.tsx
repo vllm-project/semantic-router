@@ -20,7 +20,10 @@ const SetupStatusPage: React.FC<SetupStatusPageProps> = ({
   <div className={styles.viewport}>
     <div className={styles.card} role="status" aria-live="polite">
       <div className={styles.signalRow}>
-        <span className={`${styles.signal} ${variant === 'loading' ? styles.loadingSignal : ''}`} aria-hidden="true" />
+        <span
+          className={`${styles.signal} ${variant === 'loading' ? styles.loadingSignal : ''}`}
+          aria-hidden="true"
+        />
         <span>{variant === 'loading' ? 'Control plane startup' : 'Control plane attention'}</span>
       </div>
       <h1 className={styles.title}>{title}</h1>

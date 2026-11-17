@@ -11,7 +11,10 @@ export const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     data-slot="command"
-    className={cn('flex h-full w-full flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground', className)}
+    className={cn(
+      'flex h-full w-full flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground',
+      className,
+    )}
     {...props}
   />
 ))
@@ -70,20 +73,36 @@ export const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn('max-h-[min(420px,60vh)] scroll-py-2 overflow-y-auto overflow-x-hidden p-2', className)}
+    className={cn(
+      'max-h-[min(420px,60vh)] scroll-py-2 overflow-y-auto overflow-x-hidden p-2',
+      className,
+    )}
     {...props}
   />
 ))
 CommandList.displayName = 'CommandList'
 
 export function CommandEmpty(props: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Empty>) {
-  return <CommandPrimitive.Empty className="py-10 text-center text-[13px] text-muted-foreground" {...props} />
+  return (
+    <CommandPrimitive.Empty
+      className="py-10 text-center text-[13px] text-muted-foreground"
+      {...props}
+    />
+  )
 }
 
 export const CommandGroup = CommandPrimitive.Group
 
-export function CommandSeparator({ className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>) {
-  return <CommandPrimitive.Separator className={cn('-mx-2 my-1.5 h-px bg-border', className)} {...props} />
+export function CommandSeparator({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>) {
+  return (
+    <CommandPrimitive.Separator
+      className={cn('-mx-2 my-1.5 h-px bg-border', className)}
+      {...props}
+    />
+  )
 }
 
 export const CommandItem = React.forwardRef<
@@ -102,5 +121,13 @@ export const CommandItem = React.forwardRef<
 CommandItem.displayName = 'CommandItem'
 
 export function CommandShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
-  return <span className={cn('ml-auto flex items-center gap-1 text-[11px] text-subtle-foreground', className)} {...props} />
+  return (
+    <span
+      className={cn(
+        'ml-auto flex items-center gap-1 text-[11px] text-subtle-foreground',
+        className,
+      )}
+      {...props}
+    />
+  )
 }

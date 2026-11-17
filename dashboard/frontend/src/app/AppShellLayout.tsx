@@ -37,7 +37,10 @@ const AppShellLayout: React.FC<AppShellLayoutProps> = ({ children }) => {
   const instance: ShellInstance = useMemo(() => {
     const unhealthy = status?.services.filter((service) => !service.healthy) ?? []
     return {
-      name: status?.deployment_type && status.deployment_type !== 'none' ? `vllm-sr · ${status.deployment_type}` : 'vllm-sr',
+      name:
+        status?.deployment_type && status.deployment_type !== 'none'
+          ? `vllm-sr · ${status.deployment_type}`
+          : 'vllm-sr',
       version: status?.version ?? '—',
       mode: modeLabel[status?.serving_mode ?? ''] ?? 'Router',
       status: shellStatus.tone,
@@ -51,7 +54,9 @@ const AppShellLayout: React.FC<AppShellLayoutProps> = ({ children }) => {
         { label: 'Version', value: status?.version ?? 'unknown' },
         { label: 'Mode', value: modeLabel[status?.serving_mode ?? ''] ?? 'Router' },
         { label: 'Deployment', value: status?.deployment_type ?? 'unknown' },
-        ...(platform ? [{ label: 'Platform', value: platform === 'rocm' ? 'AMD ROCm' : platform }] : []),
+        ...(platform
+          ? [{ label: 'Platform', value: platform === 'rocm' ? 'AMD ROCm' : platform }]
+          : []),
         ...(isReadonly ? [{ label: 'Access', value: 'Read-only' }] : []),
       ],
     }
@@ -73,7 +78,10 @@ const AppShellLayout: React.FC<AppShellLayoutProps> = ({ children }) => {
   )
 
   const badges: NavBadges = useMemo(
-    () => (status && status.overall?.toLowerCase() !== 'healthy' ? { status: { tone: shellStatus.tone } } : {}),
+    () =>
+      status && status.overall?.toLowerCase() !== 'healthy'
+        ? { status: { tone: shellStatus.tone } }
+        : {},
     [status, shellStatus.tone],
   )
 

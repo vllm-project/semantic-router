@@ -11,7 +11,10 @@ export interface ShellStatus {
 
 const POLL_MS = 15_000
 
-function describe(status: SystemStatus | null, failed: boolean): Pick<ShellStatus, 'tone' | 'label'> {
+function describe(
+  status: SystemStatus | null,
+  failed: boolean,
+): Pick<ShellStatus, 'tone' | 'label'> {
   if (failed) return { tone: 'danger', label: 'Dashboard offline' }
   if (!status) return { tone: 'neutral', label: 'Checking…' }
   const overall = status.overall?.toLowerCase()
@@ -43,7 +46,8 @@ export function useShellStatus(): ShellStatus {
           setFailed(false)
         }
       } catch (error) {
-        if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError')) setFailed(true)
+        if (!cancelled && !(error instanceof DOMException && error.name === 'AbortError'))
+          setFailed(true)
       }
     }
     void load()

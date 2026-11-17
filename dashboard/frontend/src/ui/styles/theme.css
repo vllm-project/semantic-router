@@ -96,9 +96,12 @@
   --shadow-color: 222 30% 18%;
   --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.05);
   --shadow-sm: 0 1px 2px hsl(var(--shadow-color) / 0.05), 0 1px 3px hsl(var(--shadow-color) / 0.06);
-  --shadow-md: 0 1px 2px hsl(var(--shadow-color) / 0.04), 0 4px 12px -2px hsl(var(--shadow-color) / 0.08);
-  --shadow-lg: 0 2px 4px hsl(var(--shadow-color) / 0.04), 0 12px 32px -8px hsl(var(--shadow-color) / 0.16);
-  --shadow-xl: 0 4px 8px hsl(var(--shadow-color) / 0.04), 0 24px 56px -12px hsl(var(--shadow-color) / 0.22);
+  --shadow-md:
+    0 1px 2px hsl(var(--shadow-color) / 0.04), 0 4px 12px -2px hsl(var(--shadow-color) / 0.08);
+  --shadow-lg:
+    0 2px 4px hsl(var(--shadow-color) / 0.04), 0 12px 32px -8px hsl(var(--shadow-color) / 0.16);
+  --shadow-xl:
+    0 4px 8px hsl(var(--shadow-color) / 0.04), 0 24px 56px -12px hsl(var(--shadow-color) / 0.22);
 
   --grid-line: oklch(0.2 0.008 262 / 0.045);
   --glow-brand: oklch(0.72 0.155 247 / 0.16);
@@ -170,9 +173,12 @@
   --shadow-color: 230 30% 2%;
   --shadow-xs: 0 1px 2px hsl(var(--shadow-color) / 0.4);
   --shadow-sm: 0 1px 2px hsl(var(--shadow-color) / 0.4), 0 1px 3px hsl(var(--shadow-color) / 0.3);
-  --shadow-md: 0 1px 2px hsl(var(--shadow-color) / 0.35), 0 6px 16px -4px hsl(var(--shadow-color) / 0.5);
-  --shadow-lg: 0 2px 4px hsl(var(--shadow-color) / 0.3), 0 16px 40px -8px hsl(var(--shadow-color) / 0.65);
-  --shadow-xl: 0 4px 8px hsl(var(--shadow-color) / 0.3), 0 28px 64px -12px hsl(var(--shadow-color) / 0.75);
+  --shadow-md:
+    0 1px 2px hsl(var(--shadow-color) / 0.35), 0 6px 16px -4px hsl(var(--shadow-color) / 0.5);
+  --shadow-lg:
+    0 2px 4px hsl(var(--shadow-color) / 0.3), 0 16px 40px -8px hsl(var(--shadow-color) / 0.65);
+  --shadow-xl:
+    0 4px 8px hsl(var(--shadow-color) / 0.3), 0 28px 64px -12px hsl(var(--shadow-color) / 0.75);
 
   --grid-line: oklch(1 0 0 / 0.04);
   --glow-brand: oklch(0.72 0.155 247 / 0.2);
@@ -195,7 +201,8 @@
 }
 
 @theme inline {
-  --font-sans: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-sans:
+    'Geist Variable', 'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   --color-background: var(--background);

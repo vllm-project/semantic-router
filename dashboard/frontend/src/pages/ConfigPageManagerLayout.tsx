@@ -19,12 +19,25 @@ interface ConfigPageManagerLayoutProps {
  * Frame for configuration sections: one page header, then the content. Inside
  * the settings frame it renders a section header instead.
  */
-export default function ConfigPageManagerLayout({ title, description, icon, actions, meta, tabs, width, children }: ConfigPageManagerLayoutProps) {
+export default function ConfigPageManagerLayout({
+  title,
+  description,
+  icon,
+  actions,
+  meta,
+  tabs,
+  width,
+  children,
+}: ConfigPageManagerLayoutProps) {
   const inSettings = useInSettingsLayout()
   if (inSettings) {
     return (
       <SettingsSection title={title} description={description} actions={actions}>
-        {meta ? <div className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">{meta}</div> : null}
+        {meta ? (
+          <div className="-mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+            {meta}
+          </div>
+        ) : null}
         {tabs}
         {children}
       </SettingsSection>

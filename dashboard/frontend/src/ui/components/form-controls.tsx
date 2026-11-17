@@ -1,5 +1,10 @@
 import * as React from 'react'
-import { Checkbox as CheckboxPrimitive, Label as LabelPrimitive, RadioGroup as RadioPrimitive, Switch as SwitchPrimitive } from 'radix-ui'
+import {
+  Checkbox as CheckboxPrimitive,
+  Label as LabelPrimitive,
+  RadioGroup as RadioPrimitive,
+  Switch as SwitchPrimitive,
+} from 'radix-ui'
 import { Check, Minus } from 'lucide-react'
 import { cn } from '../lib/cn'
 
@@ -78,7 +83,12 @@ export const RadioGroup = React.forwardRef<
   React.ElementRef<typeof RadioPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof RadioPrimitive.Root>
 >(({ className, ...props }, ref) => (
-  <RadioPrimitive.Root ref={ref} data-slot="radio-group" className={cn('grid gap-2', className)} {...props} />
+  <RadioPrimitive.Root
+    ref={ref}
+    data-slot="radio-group"
+    className={cn('grid gap-2', className)}
+    {...props}
+  />
 ))
 RadioGroup.displayName = 'RadioGroup'
 

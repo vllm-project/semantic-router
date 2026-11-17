@@ -43,7 +43,8 @@ export const SelectContent = React.forwardRef<
       className={cn(
         'relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] origin-(--radix-select-content-transform-origin) overflow-y-auto overflow-x-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg',
         'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-1',
-        position === 'popper' && 'w-full min-w-(--radix-select-trigger-width) data-[side=bottom]:translate-y-1',
+        position === 'popper' &&
+          'w-full min-w-(--radix-select-trigger-width) data-[side=bottom]:translate-y-1',
         className,
       )}
       {...props}
@@ -54,10 +55,16 @@ export const SelectContent = React.forwardRef<
 ))
 SelectContent.displayName = 'SelectContent'
 
-export function SelectLabel({ className, ...props }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>) {
+export function SelectLabel({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>) {
   return (
     <SelectPrimitive.Label
-      className={cn('px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-subtle-foreground', className)}
+      className={cn(
+        'px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-subtle-foreground',
+        className,
+      )}
       {...props}
     />
   )
@@ -87,6 +94,11 @@ export const SelectItem = React.forwardRef<
 ))
 SelectItem.displayName = 'SelectItem'
 
-export function SelectSeparator({ className, ...props }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>) {
-  return <SelectPrimitive.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
+export function SelectSeparator({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>) {
+  return (
+    <SelectPrimitive.Separator className={cn('-mx-1 my-1 h-px bg-border', className)} {...props} />
+  )
 }

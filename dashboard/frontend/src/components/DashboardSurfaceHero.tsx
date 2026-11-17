@@ -15,7 +15,11 @@ interface DashboardSurfaceHeroProps {
 }
 
 /** Compatibility wrapper: renders the standard page header. */
-export default function DashboardSurfaceHero({ title, description, meta = [] }: DashboardSurfaceHeroProps) {
+export default function DashboardSurfaceHero({
+  title,
+  description,
+  meta = [],
+}: DashboardSurfaceHeroProps) {
   return (
     <PageHeader
       title={title}

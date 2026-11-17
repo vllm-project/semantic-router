@@ -10,7 +10,12 @@ export const Tabs = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root> & { variant?: TabsVariant }
 >(({ className, variant = 'line', ...props }, ref) => (
   <TabsVariantContext.Provider value={variant}>
-    <TabsPrimitive.Root ref={ref} data-slot="tabs" className={cn('flex flex-col gap-4', className)} {...props} />
+    <TabsPrimitive.Root
+      ref={ref}
+      data-slot="tabs"
+      className={cn('flex flex-col gap-4', className)}
+      {...props}
+    />
   </TabsVariantContext.Provider>
 ))
 Tabs.displayName = 'Tabs'

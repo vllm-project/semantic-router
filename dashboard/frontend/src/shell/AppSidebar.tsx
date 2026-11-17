@@ -106,14 +106,30 @@ function SidebarLink({
         />
       ) : null}
       <item.icon
-        className={cn('relative size-4 shrink-0 transition-colors', active ? 'text-primary' : 'text-subtle-foreground group-hover/link:text-sidebar-accent-foreground')}
+        className={cn(
+          'relative size-4 shrink-0 transition-colors',
+          active
+            ? 'text-primary'
+            : 'text-subtle-foreground group-hover/link:text-sidebar-accent-foreground',
+        )}
         strokeWidth={1.9}
       />
       {collapsed ? null : <span className="relative truncate">{item.label}</span>}
       {!collapsed && badge ? (
         <span className="relative ml-auto flex items-center">
           {badge.label ? (
-            <Badge size="sm" tone={badge.tone === 'warning' ? 'warning' : badge.tone === 'danger' ? 'danger' : badge.tone === 'success' ? 'success' : 'brand'}>
+            <Badge
+              size="sm"
+              tone={
+                badge.tone === 'warning'
+                  ? 'warning'
+                  : badge.tone === 'danger'
+                    ? 'danger'
+                    : badge.tone === 'success'
+                      ? 'success'
+                      : 'brand'
+              }
+            >
               {badge.label}
             </Badge>
           ) : (
@@ -121,7 +137,9 @@ function SidebarLink({
           )}
         </span>
       ) : null}
-      {collapsed && badge ? <StatusDot tone={badge.tone} className="absolute right-1 top-1" /> : null}
+      {collapsed && badge ? (
+        <StatusDot tone={badge.tone} className="absolute right-1 top-1" />
+      ) : null}
     </NavLink>
   )
   if (!collapsed) return link
@@ -158,12 +176,17 @@ function VersionBadge({ instance }: { instance: ShellInstance }) {
           {instance.details.map((detail) => (
             <div key={detail.label} className="flex items-center justify-between gap-3">
               <dt className="text-subtle-foreground">{detail.label}</dt>
-              <dd className="truncate font-mono text-[11.5px] text-foreground/85">{detail.value}</dd>
+              <dd className="truncate font-mono text-[11.5px] text-foreground/85">
+                {detail.value}
+              </dd>
             </div>
           ))}
         </dl>
         <div className="border-t border-border p-1.5">
-          <NavLink to="/observe/status" className="flex h-8 items-center rounded-md px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground">
+          <NavLink
+            to="/observe/status"
+            className="flex h-8 items-center rounded-md px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
             Open status page
           </NavLink>
         </div>
@@ -172,7 +195,15 @@ function VersionBadge({ instance }: { instance: ShellInstance }) {
   )
 }
 
-export function AccountMenu({ account, collapsed, onSignOut }: { account: ShellAccount; collapsed: boolean; onSignOut: () => void }) {
+export function AccountMenu({
+  account,
+  collapsed,
+  onSignOut,
+}: {
+  account: ShellAccount
+  collapsed: boolean
+  onSignOut: () => void
+}) {
   const { preference, setPreference, accent, setAccent } = useTheme()
   const { setCommandOpen } = useShell()
   return (
@@ -189,7 +220,9 @@ export function AccountMenu({ account, collapsed, onSignOut }: { account: ShellA
           {collapsed ? null : (
             <>
               <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className="truncate text-[13px] font-medium text-foreground">{account.name}</span>
+                <span className="truncate text-[13px] font-medium text-foreground">
+                  {account.name}
+                </span>
                 <span className="truncate text-[11px] text-subtle-foreground">{account.email}</span>
               </span>
               <ChevronsUpDown className="size-3.5 text-subtle-foreground" />
@@ -201,8 +234,12 @@ export function AccountMenu({ account, collapsed, onSignOut }: { account: ShellA
         <DropdownMenuLabel className="flex items-center gap-2.5 py-2 normal-case tracking-normal">
           <Avatar name={account.name} size={32} />
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-[13px] font-semibold text-foreground">{account.name}</span>
-            <span className="truncate text-xs font-normal text-muted-foreground">{account.email}</span>
+            <span className="truncate text-[13px] font-semibold text-foreground">
+              {account.name}
+            </span>
+            <span className="truncate text-xs font-normal text-muted-foreground">
+              {account.email}
+            </span>
           </span>
           <Badge size="sm" tone="brand" className="ml-auto capitalize">
             {account.role}
@@ -215,7 +252,10 @@ export function AccountMenu({ account, collapsed, onSignOut }: { account: ShellA
             Theme
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-40">
-            <DropdownMenuRadioGroup value={preference} onValueChange={(value) => setPreference(value as ThemePreference)}>
+            <DropdownMenuRadioGroup
+              value={preference}
+              onValueChange={(value) => setPreference(value as ThemePreference)}
+            >
               <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
@@ -230,7 +270,12 @@ export function AccountMenu({ account, collapsed, onSignOut }: { account: ShellA
           <DropdownMenuSubContent className="w-44">
             {(['blue', 'gold'] as AccentPreset[]).map((preset) => (
               <DropdownMenuItem key={preset} onSelect={() => setAccent(preset)}>
-                <span className={cn('size-3.5 rounded-full ring-1 ring-black/10', preset === 'blue' ? 'bg-[#30A2FF]' : 'bg-[#FDB515]')} />
+                <span
+                  className={cn(
+                    'size-3.5 rounded-full ring-1 ring-black/10',
+                    preset === 'blue' ? 'bg-[#30A2FF]' : 'bg-[#FDB515]',
+                  )}
+                />
                 {preset === 'blue' ? 'vLLM Blue' : 'vLLM Gold'}
                 {accent === preset ? <Check className="ml-auto !text-primary" /> : null}
               </DropdownMenuItem>
@@ -281,38 +326,70 @@ export function SidebarContents({
     .filter((group) => group.items.length > 0)
   return (
     <div className="flex h-full flex-col">
-      <div className={cn('flex h-14 shrink-0 items-center gap-2 px-3', collapsed && 'justify-center px-0')}>
-        <NavLink to="/" className="min-w-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring" aria-label="Home">
+      <div
+        className={cn(
+          'flex h-14 shrink-0 items-center gap-2 px-3',
+          collapsed && 'justify-center px-0',
+        )}
+      >
+        <NavLink
+          to="/"
+          className="min-w-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring"
+          aria-label="Home"
+        >
           <BrandLockup collapsed={collapsed} />
         </NavLink>
         {collapsed ? null : <VersionBadge instance={instance} />}
         {showCollapse && !collapsed ? (
           <Tooltip content="Collapse sidebar" shortcut="⌘B" side="right">
-            <Button variant="ghost" size="icon-xs" className="ml-auto text-subtle-foreground" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="ml-auto text-subtle-foreground"
+              onClick={() => setCollapsed(true)}
+              aria-label="Collapse sidebar"
+            >
               <PanelLeft />
             </Button>
           </Tooltip>
         ) : null}
       </div>
-      <nav aria-label="Primary" className={cn('flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3', collapsed && 'px-2')}>
-        {groups.filter((group) => group.placement !== 'footer').map((group) => (
-          <div key={group.id} className="mt-3 first:mt-1">
-            {group.label ? (
-              collapsed ? (
-                <div className="mx-auto mb-2 mt-1 h-px w-5 bg-sidebar-border" />
-              ) : (
-                <div className="mb-1 px-2 text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground/90">{group.label}</div>
-              )
-            ) : null}
-            <div className="flex flex-col gap-px">
-              {group.items.map((item) => (
-                <SidebarLink key={item.id} item={item} collapsed={collapsed} badge={badges?.[item.id]} />
-              ))}
+      <nav
+        aria-label="Primary"
+        className={cn('flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3', collapsed && 'px-2')}
+      >
+        {groups
+          .filter((group) => group.placement !== 'footer')
+          .map((group) => (
+            <div key={group.id} className="mt-3 first:mt-1">
+              {group.label ? (
+                collapsed ? (
+                  <div className="mx-auto mb-2 mt-1 h-px w-5 bg-sidebar-border" />
+                ) : (
+                  <div className="mb-1 px-2 text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground/90">
+                    {group.label}
+                  </div>
+                )
+              ) : null}
+              <div className="flex flex-col gap-px">
+                {group.items.map((item) => (
+                  <SidebarLink
+                    key={item.id}
+                    item={item}
+                    collapsed={collapsed}
+                    badge={badges?.[item.id]}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
       </nav>
-      <div className={cn('border-t border-sidebar-border p-2', collapsed && 'flex flex-col items-center gap-1')}>
+      <div
+        className={cn(
+          'border-t border-sidebar-border p-2',
+          collapsed && 'flex flex-col items-center gap-1',
+        )}
+      >
         {groups
           .filter((group) => group.placement === 'footer')
           .map((group) => (
@@ -332,7 +409,13 @@ export function SidebarContents({
           ))}
         {collapsed && showCollapse ? (
           <Tooltip content="Expand sidebar" shortcut="⌘B" side="right">
-            <Button variant="ghost" size="icon-sm" onClick={() => setCollapsed(false)} aria-label="Expand sidebar" className="text-subtle-foreground">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setCollapsed(false)}
+              aria-label="Expand sidebar"
+              className="text-subtle-foreground"
+            >
               <PanelLeft className="rotate-180" />
             </Button>
           </Tooltip>

@@ -14,7 +14,14 @@ interface DashboardManagerLayoutProps {
 }
 
 /** Page frame with a compact header; `meta` renders as a quiet facts row. */
-export default function DashboardManagerLayout({ title, description, meta, icon, actions, children }: DashboardManagerLayoutProps) {
+export default function DashboardManagerLayout({
+  title,
+  description,
+  meta,
+  icon,
+  actions,
+  children,
+}: DashboardManagerLayoutProps) {
   return (
     <PageContainer>
       <PageHeader

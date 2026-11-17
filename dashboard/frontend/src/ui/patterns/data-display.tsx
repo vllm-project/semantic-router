@@ -64,10 +64,25 @@ export function IconTile({
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   className?: string
 }) {
-  const box = { xs: 'size-6 rounded-md', sm: 'size-7 rounded-md', md: 'size-9 rounded-lg', lg: 'size-11 rounded-xl', xl: 'size-14 rounded-2xl' }[size]
-  const glyph = { xs: 'size-3.5', sm: 'size-4', md: 'size-[18px]', lg: 'size-5', xl: 'size-6' }[size]
+  const box = {
+    xs: 'size-6 rounded-md',
+    sm: 'size-7 rounded-md',
+    md: 'size-9 rounded-lg',
+    lg: 'size-11 rounded-xl',
+    xl: 'size-14 rounded-2xl',
+  }[size]
+  const glyph = { xs: 'size-3.5', sm: 'size-4', md: 'size-[18px]', lg: 'size-5', xl: 'size-6' }[
+    size
+  ]
   return (
-    <span className={cn('grid shrink-0 place-items-center ring-1 ring-inset', box, toneTile[tone], className)}>
+    <span
+      className={cn(
+        'grid shrink-0 place-items-center ring-1 ring-inset',
+        box,
+        toneTile[tone],
+        className,
+      )}
+    >
       <Icon className={glyph} strokeWidth={1.8} />
     </span>
   )
@@ -83,16 +98,34 @@ const statusDot: Record<StatusTone, string> = {
   neutral: 'bg-subtle-foreground text-subtle-foreground',
 }
 
-export function StatusDot({ tone = 'success', pulse = false, className }: { tone?: StatusTone; pulse?: boolean; className?: string }) {
+export function StatusDot({
+  tone = 'success',
+  pulse = false,
+  className,
+}: {
+  tone?: StatusTone
+  pulse?: boolean
+  className?: string
+}) {
   return (
     <span className={cn('relative inline-flex size-2 shrink-0', className)}>
-      {pulse ? <span className={cn('absolute inset-0 rounded-full animate-pulse-ring', statusDot[tone])} /> : null}
+      {pulse ? (
+        <span className={cn('absolute inset-0 rounded-full animate-pulse-ring', statusDot[tone])} />
+      ) : null}
       <span className={cn('relative inline-flex size-2 rounded-full', statusDot[tone])} />
     </span>
   )
 }
 
-export function StatusLabel({ tone, children, pulse }: { tone: StatusTone; children: React.ReactNode; pulse?: boolean }) {
+export function StatusLabel({
+  tone,
+  children,
+  pulse,
+}: {
+  tone: StatusTone
+  children: React.ReactNode
+  pulse?: boolean
+}) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[13px] text-foreground/85">
       <StatusDot tone={tone} pulse={pulse} />
@@ -151,10 +184,17 @@ export function Sparkline({
     const y = height - 3 - ((value - min) / span) * (height - 6)
     return [x, y] as const
   })
-  const line = points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const line = points
+    .map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
+    .join(' ')
   const area = `${line} L${width},${height} L0,${height} Z`
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className={cn('w-full overflow-visible', className)} style={{ height }}>
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className={cn('w-full overflow-visible', className)}
+      style={{ height }}
+    >
       <defs>
         <linearGradient id={`spark-${id}`} x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity={0.22} />
@@ -162,12 +202,30 @@ export function Sparkline({
         </linearGradient>
       </defs>
       <path d={area} fill={`url(#spark-${id})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   )
 }
 
-export function Delta({ value, suffix = '%', invert = false, className }: { value: number; suffix?: string; invert?: boolean; className?: string }) {
+export function Delta({
+  value,
+  suffix = '%',
+  invert = false,
+  className,
+}: {
+  value: number
+  suffix?: string
+  invert?: boolean
+  className?: string
+}) {
   const positive = value >= 0
   const good = invert ? !positive : positive
   const Icon = positive ? ArrowUpRight : ArrowDownRight
@@ -175,7 +233,9 @@ export function Delta({ value, suffix = '%', invert = false, className }: { valu
     <span
       className={cn(
         'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular',
-        good ? 'bg-success-soft text-success-foreground' : 'bg-destructive-soft text-destructive-foreground',
+        good
+          ? 'bg-success-soft text-success-foreground'
+          : 'bg-destructive-soft text-destructive-foreground',
         className,
       )}
     >
@@ -214,7 +274,11 @@ export function StatCard({
   onClick?: () => void
 }) {
   return (
-    <Card interactive={Boolean(onClick)} onClick={onClick} className={cn('overflow-hidden', className)}>
+    <Card
+      interactive={Boolean(onClick)}
+      onClick={onClick}
+      className={cn('overflow-hidden', className)}
+    >
       <div className="flex flex-col gap-3 px-4 pb-3 pt-4">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
@@ -224,8 +288,14 @@ export function StatCard({
           {delta !== undefined ? <Delta value={delta} invert={deltaInvert} /> : null}
         </div>
         <div className="flex items-baseline gap-1.5">
-          <NumberTicker value={value} format={format} className="text-[26px] font-semibold leading-none tracking-[-0.03em]" />
-          {unit ? <span className="text-[13px] font-medium text-subtle-foreground">{unit}</span> : null}
+          <NumberTicker
+            value={value}
+            format={format}
+            className="text-[26px] font-semibold leading-none tracking-[-0.03em]"
+          />
+          {unit ? (
+            <span className="text-[13px] font-medium text-subtle-foreground">{unit}</span>
+          ) : null}
         </div>
         {hint ? <div className="text-xs text-muted-foreground">{hint}</div> : null}
       </div>
@@ -254,9 +324,19 @@ export function KeyValueGrid({
       )}
     >
       {items.map((item, index) => (
-        <div key={index} className={cn('flex min-w-0 flex-col gap-1', item.span && 'sm:col-span-full')}>
+        <div
+          key={index}
+          className={cn('flex min-w-0 flex-col gap-1', item.span && 'sm:col-span-full')}
+        >
           <dt className="text-xs text-subtle-foreground">{item.label}</dt>
-          <dd className={cn('min-w-0 text-[13px] text-foreground', item.mono && 'font-mono text-[12.5px]')}>{item.value}</dd>
+          <dd
+            className={cn(
+              'min-w-0 text-[13px] text-foreground',
+              item.mono && 'font-mono text-[12.5px]',
+            )}
+          >
+            {item.value}
+          </dd>
         </div>
       ))}
     </dl>
@@ -285,9 +365,21 @@ export function UptimeBar({ samples, className }: { samples: UptimeSample[]; cla
   )
 }
 
-export function MiniBar({ value, max = 100, tone = 'blue', className }: { value: number; max?: number; tone?: Tone; className?: string }) {
+export function MiniBar({
+  value,
+  max = 100,
+  tone = 'blue',
+  className,
+}: {
+  value: number
+  max?: number
+  tone?: Tone
+  className?: string
+}) {
   return (
-    <span className={cn('relative block h-1.5 w-full overflow-hidden rounded-full bg-muted', className)}>
+    <span
+      className={cn('relative block h-1.5 w-full overflow-hidden rounded-full bg-muted', className)}
+    >
       <motion.span
         className="absolute inset-y-0 left-0 rounded-full"
         style={{ background: toneFill[tone] }}

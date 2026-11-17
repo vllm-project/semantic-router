@@ -1,13 +1,29 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowDown, ArrowUp, Check, ChevronsUpDown, MoreHorizontal, PlusCircle, Search, X } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronsUpDown,
+  MoreHorizontal,
+  PlusCircle,
+  Search,
+  X,
+} from 'lucide-react'
 import { cn } from '../lib/cn'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/table'
 import { Checkbox } from '../components/form-controls'
 import { Button } from '../components/button'
 import { Kbd, Separator } from '../components/misc'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, Popover, PopoverContent, PopoverTrigger } from '../components/overlays'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../components/overlays'
 import { TableSkeleton } from './feedback'
 
 export interface Column<T> {
@@ -22,7 +38,13 @@ export interface Column<T> {
   hideBelow?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
 }
 
-const hideClass = { sm: 'max-sm:hidden', md: 'max-md:hidden', lg: 'max-lg:hidden', xl: 'max-xl:hidden', '2xl': 'max-2xl:hidden' }
+const hideClass = {
+  sm: 'max-sm:hidden',
+  md: 'max-md:hidden',
+  lg: 'max-lg:hidden',
+  xl: 'max-xl:hidden',
+  '2xl': 'max-2xl:hidden',
+}
 
 export function DataTable<T>({
   data,
@@ -60,7 +82,10 @@ export function DataTable<T>({
     return [...data].sort((a, b) => {
       const av = value(a)
       const bv = value(b)
-      const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+      const cmp =
+        typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv))
       return sort.dir === 'asc' ? cmp : -cmp
     })
   }, [data, columns, sort])
@@ -79,7 +104,9 @@ export function DataTable<T>({
   }
 
   return (
-    <div className={cn('overflow-hidden rounded-xl border border-border bg-card shadow-xs', className)}>
+    <div
+      className={cn('overflow-hidden rounded-xl border border-border bg-card shadow-xs', className)}
+    >
       <Table>
         <TableHeader className="bg-surface-subtle/80">
           <TableRow>
@@ -110,7 +137,11 @@ export function DataTable<T>({
                       type="button"
                       onClick={() =>
                         setSort((current) =>
-                          current?.id !== column.id ? { id: column.id, dir: 'desc' } : current.dir === 'desc' ? { id: column.id, dir: 'asc' } : null,
+                          current?.id !== column.id
+                            ? { id: column.id, dir: 'desc' }
+                            : current.dir === 'desc'
+                              ? { id: column.id, dir: 'asc' }
+                              : null,
                         )
                       }
                       className={cn(
@@ -121,7 +152,11 @@ export function DataTable<T>({
                     >
                       {column.header}
                       {active ? (
-                        sort?.dir === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
+                        sort?.dir === 'asc' ? (
+                          <ArrowUp className="size-3" />
+                        ) : (
+                          <ArrowDown className="size-3" />
+                        )
                       ) : (
                         <ChevronsUpDown className="size-3 opacity-40" />
                       )}
@@ -145,7 +180,11 @@ export function DataTable<T>({
                   key={id}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(index, 12) * 0.018, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                  transition={{
+                    delay: Math.min(index, 12) * 0.018,
+                    duration: 0.3,
+                    ease: [0.16, 1, 0.3, 1],
+                  }}
                   data-state={isSelected || activeRowId === id ? 'selected' : undefined}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                   className={cn(
@@ -155,7 +194,11 @@ export function DataTable<T>({
                 >
                   {selectable ? (
                     <TableCell className="w-10" onClick={(event) => event.stopPropagation()}>
-                      <Checkbox aria-label="Select row" checked={isSelected} onCheckedChange={() => toggleOne(id)} />
+                      <Checkbox
+                        aria-label="Select row"
+                        checked={isSelected}
+                        onCheckedChange={() => toggleOne(id)}
+                      />
                     </TableCell>
                   ) : null}
                   {columns.map((column) => (
@@ -172,10 +215,18 @@ export function DataTable<T>({
                     </TableCell>
                   ))}
                   {rowActions ? (
-                    <TableCell className="w-12 pr-3 text-right" onClick={(event) => event.stopPropagation()}>
+                    <TableCell
+                      className="w-12 pr-3 text-right"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-xs" aria-label="Row actions" className="opacity-60 group-hover:opacity-100 data-[state=open]:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label="Row actions"
+                            className="opacity-60 group-hover:opacity-100 data-[state=open]:opacity-100"
+                          >
                             <MoreHorizontal />
                           </Button>
                         </DropdownMenuTrigger>
@@ -262,7 +313,9 @@ export function FilterPill({
   onChange: (next: string[]) => void
 }) {
   const [query, setQuery] = React.useState('')
-  const visible = options.filter((option) => option.label.toLowerCase().includes(query.toLowerCase()))
+  const visible = options.filter((option) =>
+    option.label.toLowerCase().includes(query.toLowerCase()),
+  )
   const selectedLabels = options.filter((option) => selected.includes(option.value))
   return (
     <Popover>
@@ -274,13 +327,17 @@ export function FilterPill({
             selected.length > 0 && 'border-solid bg-surface text-foreground shadow-xs',
           )}
         >
-          <PlusCircle className={cn('size-3.5', selected.length > 0 && 'rotate-45 transition-transform')} />
+          <PlusCircle
+            className={cn('size-3.5', selected.length > 0 && 'rotate-45 transition-transform')}
+          />
           {label}
           {selectedLabels.length > 0 ? (
             <>
               <Separator orientation="vertical" className="mx-0.5 h-4" />
               {selectedLabels.length > 2 ? (
-                <span className="rounded bg-secondary px-1.5 text-xs">{selectedLabels.length} selected</span>
+                <span className="rounded bg-secondary px-1.5 text-xs">
+                  {selectedLabels.length} selected
+                </span>
               ) : (
                 selectedLabels.map((option) => (
                   <span key={option.value} className="rounded bg-secondary px-1.5 text-xs">
@@ -310,28 +367,44 @@ export function FilterPill({
                 type="button"
                 role="menuitemcheckbox"
                 aria-checked={checked}
-                onClick={() => onChange(checked ? selected.filter((value) => value !== option.value) : [...selected, option.value])}
+                onClick={() =>
+                  onChange(
+                    checked
+                      ? selected.filter((value) => value !== option.value)
+                      : [...selected, option.value],
+                  )
+                }
                 className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-accent"
               >
                 <span
                   aria-hidden
                   className={cn(
                     'grid size-4 shrink-0 place-items-center rounded-[5px] border shadow-xs transition-colors',
-                    checked ? 'border-primary bg-primary text-primary-foreground' : 'border-border-strong bg-surface',
+                    checked
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border-strong bg-surface',
                   )}
                 >
                   {checked ? <Check className="size-3" strokeWidth={3} /> : null}
                 </span>
                 {option.icon}
                 <span className="flex-1 truncate">{option.label}</span>
-                {option.count !== undefined ? <span className="font-mono text-[11px] text-subtle-foreground">{option.count}</span> : null}
+                {option.count !== undefined ? (
+                  <span className="font-mono text-[11px] text-subtle-foreground">
+                    {option.count}
+                  </span>
+                ) : null}
               </button>
             )
           })}
         </div>
         {selected.length > 0 ? (
           <div className="border-t border-border p-1">
-            <button type="button" onClick={() => onChange([])} className="h-8 w-full rounded-md text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground">
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="h-8 w-full rounded-md text-[13px] text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
               Clear filter
             </button>
           </div>
@@ -341,7 +414,15 @@ export function FilterPill({
   )
 }
 
-export function BulkBar({ count, onClear, children }: { count: number; onClear: () => void; children: React.ReactNode }) {
+export function BulkBar({
+  count,
+  onClear,
+  children,
+}: {
+  count: number
+  onClear: () => void
+  children: React.ReactNode
+}) {
   if (typeof document === 'undefined') return null
   return createPortal(
     <AnimatePresence>

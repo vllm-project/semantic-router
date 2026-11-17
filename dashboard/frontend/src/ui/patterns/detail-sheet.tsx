@@ -52,7 +52,9 @@ export function DetailSheetHeader({
       {icon}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <DialogPrimitive.Title className="truncate text-base font-semibold tracking-[-0.01em]">{title}</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="truncate text-base font-semibold tracking-[-0.01em]">
+            {title}
+          </DialogPrimitive.Title>
           {badges}
         </div>
         {description ? (
@@ -101,12 +103,32 @@ export function DetailSheetFooter({
 }
 
 export function SectionLabel({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn('text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground', className)} {...props} />
+  return (
+    <h3
+      className={cn(
+        'text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground',
+        className,
+      )}
+      {...props}
+    />
+  )
 }
 
-export function MiniStat({ label, value, hint, className }: { label: React.ReactNode; value: React.ReactNode; hint?: React.ReactNode; className?: string }) {
+export function MiniStat({
+  label,
+  value,
+  hint,
+  className,
+}: {
+  label: React.ReactNode
+  value: React.ReactNode
+  hint?: React.ReactNode
+  className?: string
+}) {
   return (
-    <div className={cn('rounded-lg border border-border bg-surface-subtle/60 px-3 py-2.5', className)}>
+    <div
+      className={cn('rounded-lg border border-border bg-surface-subtle/60 px-3 py-2.5', className)}
+    >
       <div className="text-xs text-subtle-foreground">{label}</div>
       <div className="mt-1 text-lg font-semibold tabular tracking-[-0.02em]">{value}</div>
       {hint ? <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div> : null}

@@ -32,7 +32,13 @@ export interface CommandSection {
   entries: CommandEntry[]
 }
 
-export function CommandMenu({ sections = [], isItemVisible = () => true }: { sections?: CommandSection[]; isItemVisible?: (item: NavItem) => boolean }) {
+export function CommandMenu({
+  sections = [],
+  isItemVisible = () => true,
+}: {
+  sections?: CommandSection[]
+  isItemVisible?: (item: NavItem) => boolean
+}) {
   const { commandOpen, setCommandOpen } = useShell()
   const { resolved, toggle } = useTheme()
   const navigate = useNavigate()
@@ -52,20 +58,22 @@ export function CommandMenu({ sections = [], isItemVisible = () => true }: { sec
           const items = group.items.filter(isItemVisible)
           if (items.length === 0) return null
           return (
-          <CommandGroup key={group.id} heading={group.label ?? 'Start'}>
-            {items.map((item) => (
-              <CommandItem
-                key={item.id}
-                value={`${item.label} ${item.description} ${(item.keywords ?? []).join(' ')}`}
-                onSelect={() => run({ id: item.id, label: item.label, to: item.to })}
-              >
-                <item.icon />
-                <span>{item.label}</span>
-                <span className="truncate text-xs text-subtle-foreground">{item.description}</span>
-                <ArrowRight className="ml-auto size-3.5 opacity-0 transition-opacity [[data-selected=true]_&]:opacity-100" />
-              </CommandItem>
-            ))}
-          </CommandGroup>
+            <CommandGroup key={group.id} heading={group.label ?? 'Start'}>
+              {items.map((item) => (
+                <CommandItem
+                  key={item.id}
+                  value={`${item.label} ${item.description} ${(item.keywords ?? []).join(' ')}`}
+                  onSelect={() => run({ id: item.id, label: item.label, to: item.to })}
+                >
+                  <item.icon />
+                  <span>{item.label}</span>
+                  <span className="truncate text-xs text-subtle-foreground">
+                    {item.description}
+                  </span>
+                  <ArrowRight className="ml-auto size-3.5 opacity-0 transition-opacity [[data-selected=true]_&]:opacity-100" />
+                </CommandItem>
+              ))}
+            </CommandGroup>
           )
         })}
         {sections.map((section) => (
@@ -73,10 +81,16 @@ export function CommandMenu({ sections = [], isItemVisible = () => true }: { sec
             <CommandSeparator />
             <CommandGroup heading={section.heading}>
               {section.entries.map((entry) => (
-                <CommandItem key={entry.id} value={`${entry.label} ${entry.hint ?? ''} ${(entry.keywords ?? []).join(' ')}`} onSelect={() => run(entry)}>
+                <CommandItem
+                  key={entry.id}
+                  value={`${entry.label} ${entry.hint ?? ''} ${(entry.keywords ?? []).join(' ')}`}
+                  onSelect={() => run(entry)}
+                >
                   {entry.icon}
                   <span className="truncate">{entry.label}</span>
-                  {entry.hint ? <span className="truncate text-xs text-subtle-foreground">{entry.hint}</span> : null}
+                  {entry.hint ? (
+                    <span className="truncate text-xs text-subtle-foreground">{entry.hint}</span>
+                  ) : null}
                   {entry.shortcut ? <CommandShortcut>{entry.shortcut}</CommandShortcut> : null}
                 </CommandItem>
               ))}
@@ -85,7 +99,13 @@ export function CommandMenu({ sections = [], isItemVisible = () => true }: { sec
         ))}
         <CommandSeparator />
         <CommandGroup heading="Preferences">
-          <CommandItem value="toggle theme dark light mode appearance" onSelect={() => { setCommandOpen(false); toggle() }}>
+          <CommandItem
+            value="toggle theme dark light mode appearance"
+            onSelect={() => {
+              setCommandOpen(false)
+              toggle()
+            }}
+          >
             {resolved === 'dark' ? <Sun /> : <Moon />}
             Switch to {resolved === 'dark' ? 'light' : 'dark'} mode
             <CommandShortcut>

@@ -48,7 +48,17 @@ describe('design token contract', () => {
     for (const role of roles) {
       expect(light, `light --${role}`).toMatch(new RegExp(`--${role}:`))
     }
-    for (const role of ['background', 'foreground', 'surface', 'primary', 'border', 'success', 'warning', 'destructive', 'sidebar']) {
+    for (const role of [
+      'background',
+      'foreground',
+      'surface',
+      'primary',
+      'border',
+      'success',
+      'warning',
+      'destructive',
+      'sidebar',
+    ]) {
       expect(dark, `dark --${role}`).toMatch(new RegExp(`--${role}:`))
     }
   })
@@ -80,7 +90,9 @@ describe('design token contract', () => {
   it('does not reintroduce the retired palettes', () => {
     const retired = ['#76b900', '#5a8f00', '#8fd400', '#00d4ff', '--nv-', '#e31b23']
     const violations = sources(new URL('../', import.meta.url)).flatMap(({ path, source }) =>
-      retired.filter((token) => source.toLowerCase().includes(token)).map((token) => `${path}: ${token}`),
+      retired
+        .filter((token) => source.toLowerCase().includes(token))
+        .map((token) => `${path}: ${token}`),
     )
     expect(violations).toEqual([])
   })

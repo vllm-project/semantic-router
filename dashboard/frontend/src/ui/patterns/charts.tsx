@@ -8,7 +8,11 @@ export const chartAxis = {
   axisLine: false,
 } as const
 
-export const chartGrid = { stroke: 'var(--border)', strokeDasharray: '3 4', vertical: false } as const
+export const chartGrid = {
+  stroke: 'var(--border)',
+  strokeDasharray: '3 4',
+  vertical: false,
+} as const
 
 interface TooltipPayloadItem {
   name?: string
@@ -34,14 +38,20 @@ export function ChartTooltip({
   if (!active || !payload?.length) return null
   return (
     <div className="min-w-40 rounded-lg border border-border bg-popover/95 px-3 py-2 text-xs shadow-lg backdrop-blur">
-      {label !== undefined ? <div className="mb-1.5 font-medium text-foreground">{labelFormat(label)}</div> : null}
+      {label !== undefined ? (
+        <div className="mb-1.5 font-medium text-foreground">{labelFormat(label)}</div>
+      ) : null}
       <div className="flex flex-col gap-1">
         {payload.map((item) => (
           <div key={String(item.dataKey ?? item.name)} className="flex items-center gap-2">
             <span className="size-2 rounded-[3px]" style={{ background: item.color }} />
             <span className="flex-1 text-muted-foreground">{item.name}</span>
             <span className="font-mono font-medium tabular text-foreground">
-              {item.value === null || item.value === undefined ? <span className="text-subtle-foreground">unknown</span> : format(item.value, item.name)}
+              {item.value === null || item.value === undefined ? (
+                <span className="text-subtle-foreground">unknown</span>
+              ) : (
+                format(item.value, item.name)
+              )}
             </span>
           </div>
         ))}
@@ -50,9 +60,20 @@ export function ChartTooltip({
   )
 }
 
-export function ChartLegend({ items, className }: { items: { label: string; color: string; value?: string }[]; className?: string }) {
+export function ChartLegend({
+  items,
+  className,
+}: {
+  items: { label: string; color: string; value?: string }[]
+  className?: string
+}) {
   return (
-    <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground', className)}>
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground',
+        className,
+      )}
+    >
       {items.map((item) => (
         <span key={item.label} className="inline-flex items-center gap-1.5">
           <span className="size-2 rounded-[3px]" style={{ background: item.color }} />

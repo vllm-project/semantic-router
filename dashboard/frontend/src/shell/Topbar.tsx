@@ -1,6 +1,16 @@
 import * as React from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Bell, BookOpen, ChevronRight, CircleHelp, ExternalLink, Keyboard, Menu, Search, Sparkles } from 'lucide-react'
+import {
+  Bell,
+  BookOpen,
+  ChevronRight,
+  CircleHelp,
+  ExternalLink,
+  Keyboard,
+  Menu,
+  Search,
+  Sparkles,
+} from 'lucide-react'
 import {
   Badge,
   Button,
@@ -63,7 +73,13 @@ export function Topbar({
 
   return (
     <header className="sticky top-0 z-30 flex h-[52px] shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur-md md:px-4">
-      <Button variant="ghost" size="icon-sm" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="lg:hidden"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open navigation"
+      >
         <Menu />
       </Button>
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px]">
@@ -74,7 +90,10 @@ export function Topbar({
           </>
         ) : null}
         {current ? (
-          <Link to={current.item.to} className="flex min-w-0 items-center gap-1.5 font-medium text-foreground">
+          <Link
+            to={current.item.to}
+            className="flex min-w-0 items-center gap-1.5 font-medium text-foreground"
+          >
             <current.item.icon className="size-4 text-subtle-foreground" strokeWidth={1.9} />
             <span className="truncate">{current.item.label}</span>
           </Link>
@@ -94,7 +113,13 @@ export function Topbar({
             <Kbd>K</Kbd>
           </span>
         </button>
-        <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={() => setCommandOpen(true)} aria-label="Search">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="md:hidden"
+          onClick={() => setCommandOpen(true)}
+          aria-label="Search"
+        >
           <Search />
         </Button>
 
@@ -104,7 +129,9 @@ export function Topbar({
         >
           <StatusDot tone={status.tone} pulse={status.tone !== 'neutral'} />
           {status.label}
-          {status.detail ? <span className="font-mono text-[11px] text-subtle-foreground">{status.detail}</span> : null}
+          {status.detail ? (
+            <span className="font-mono text-[11px] text-subtle-foreground">{status.detail}</span>
+          ) : null}
         </Link>
 
         {trailing}
@@ -112,7 +139,12 @@ export function Topbar({
         <Popover>
           <Tooltip content="Notifications">
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Notifications" className="relative">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Notifications"
+                className="relative"
+              >
                 <Bell />
                 {unread > 0 ? (
                   <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary ring-2 ring-background" />
@@ -123,17 +155,31 @@ export function Topbar({
           <PopoverContent align="end" className="w-[360px] p-0">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <span className="text-[13px] font-semibold">Activity</span>
-              {unread > 0 ? <Badge tone="brand" size="sm">{unread} new</Badge> : null}
+              {unread > 0 ? (
+                <Badge tone="brand" size="sm">
+                  {unread} new
+                </Badge>
+              ) : null}
             </div>
             <div className="max-h-[360px] overflow-y-auto p-1.5">
               {notifications.map((notification) => (
-                <div key={notification.id} className={cn('flex gap-3 rounded-lg px-2.5 py-2.5 transition-colors hover:bg-accent', notification.unread && 'bg-primary-soft/40')}>
+                <div
+                  key={notification.id}
+                  className={cn(
+                    'flex gap-3 rounded-lg px-2.5 py-2.5 transition-colors hover:bg-accent',
+                    notification.unread && 'bg-primary-soft/40',
+                  )}
+                >
                   <StatusDot tone={notification.tone} className="mt-1.5" />
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="text-[13px] font-medium">{notification.title}</span>
-                    <span className="text-xs leading-relaxed text-muted-foreground">{notification.body}</span>
+                    <span className="text-xs leading-relaxed text-muted-foreground">
+                      {notification.body}
+                    </span>
                   </div>
-                  <span className="shrink-0 text-[11px] text-subtle-foreground">{notification.time}</span>
+                  <span className="shrink-0 text-[11px] text-subtle-foreground">
+                    {notification.time}
+                  </span>
                 </div>
               ))}
             </div>
@@ -160,14 +206,22 @@ export function Topbar({
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <a href="https://github.com/vllm-project/semantic-router" target="_blank" rel="noreferrer">
+              <a
+                href="https://github.com/vllm-project/semantic-router"
+                target="_blank"
+                rel="noreferrer"
+              >
                 <GitHubIcon />
                 GitHub
                 <ExternalLink className="ml-auto size-3.5" />
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <a href="https://github.com/vllm-project/semantic-router/releases" target="_blank" rel="noreferrer">
+              <a
+                href="https://github.com/vllm-project/semantic-router/releases"
+                target="_blank"
+                rel="noreferrer"
+              >
                 <Sparkles />
                 What&apos;s new
                 <ExternalLink className="ml-auto size-3.5" />

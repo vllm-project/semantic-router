@@ -16,7 +16,8 @@ export default function NotFoundPage() {
         title="This page doesn't exist"
         description={
           <>
-            Nothing lives at <InlineCode>{location.pathname}</InlineCode>. Search for the page you want or go back to Home.
+            Nothing lives at <InlineCode>{location.pathname}</InlineCode>. Search for the page you
+            want or go back to Home.
           </>
         }
         actions={

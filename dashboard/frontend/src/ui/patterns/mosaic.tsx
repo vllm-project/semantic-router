@@ -29,7 +29,15 @@ const smoothstep = (edge0: number, edge1: number, x: number) => {
  * wave passes through them, a few brand-colored tiles glint and the pointer
  * lights its neighbourhood. The center stays calm so content above it reads.
  */
-export function MosaicBackground({ className, cell = 22, gap = 3 }: { className?: string; cell?: number; gap?: number }) {
+export function MosaicBackground({
+  className,
+  cell = 22,
+  gap = 3,
+}: {
+  className?: string
+  cell?: number
+  gap?: number
+}) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null)
 
   React.useEffect(() => {
@@ -79,14 +87,20 @@ export function MosaicBackground({ className, cell = 22, gap = 3 }: { className?
           const seed = seeds[row * cols + col]
           const x = col * cell
           const y = row * cell
-          const reveal = reduceMotion ? 1 : smoothstep(0, 1, (t * 1.25 - seed * 0.9 - (col + row) * 0.004) * 2.6)
+          const reveal = reduceMotion
+            ? 1
+            : smoothstep(0, 1, (t * 1.25 - seed * 0.9 - (col + row) * 0.004) * 2.6)
           if (reveal <= 0) continue
           const distance = Math.hypot(x + size / 2 - cx, y + size / 2 - cy) / radius
-          const calm = smoothstep(0.16, 0.58, distance) * (1 - smoothstep(0.92, 1.25, distance) * 0.45)
+          const calm =
+            smoothstep(0.16, 0.58, distance) * (1 - smoothstep(0.92, 1.25, distance) * 0.45)
           if (calm <= 0.01) continue
           const wave = (Math.sin(col * 0.21 + row * 0.13 - t * 0.85 + seed * 1.7) + 1) / 2
           const glint = Math.pow(Math.max(0, Math.sin(t * (0.35 + seed * 0.9) + seed * 61)), 18)
-          const near = pointer.strength > 0.01 ? Math.max(0, 1 - Math.hypot(x - pointer.x, y - pointer.y) / 170) * pointer.strength : 0
+          const near =
+            pointer.strength > 0.01
+              ? Math.max(0, 1 - Math.hypot(x - pointer.x, y - pointer.y) / 170) * pointer.strength
+              : 0
           let alpha = palette.base * (0.45 + 0.85 * wave) + near * 0.16
           let color = palette.ink
           if (seed > 0.955) {
@@ -130,7 +144,10 @@ export function MosaicBackground({ className, cell = 22, gap = 3 }: { className?
 
     resize()
     resizeObserver.observe(canvas)
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-accent'] })
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'data-accent'],
+    })
     if (reduceMotion) {
       draw(performance.now())
     } else {
@@ -147,5 +164,11 @@ export function MosaicBackground({ className, cell = 22, gap = 3 }: { className?
     }
   }, [cell, gap])
 
-  return <canvas ref={canvasRef} aria-hidden className={cn('pointer-events-none absolute inset-0 size-full', className)} />
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden
+      className={cn('pointer-events-none absolute inset-0 size-full', className)}
+    />
+  )
 }

@@ -15,7 +15,8 @@ export const badgeVariants = cva(
         warning: 'border-transparent bg-warning-soft text-warning-foreground',
         danger: 'border-transparent bg-destructive-soft text-destructive-foreground',
         info: 'border-transparent bg-info-soft text-info-foreground',
-        violet: 'border-transparent bg-[oklch(0.6_0.2_295/0.12)] text-[oklch(0.5_0.19_295)] dark:text-[oklch(0.8_0.12_295)]',
+        violet:
+          'border-transparent bg-[oklch(0.6_0.2_295/0.12)] text-[oklch(0.5_0.19_295)] dark:text-[oklch(0.8_0.12_295)]',
         teal: 'border-transparent bg-[oklch(0.68_0.12_190/0.14)] text-[oklch(0.45_0.09_195)] dark:text-[oklch(0.82_0.09_190)]',
         rose: 'border-transparent bg-[oklch(0.64_0.2_12/0.12)] text-[oklch(0.52_0.19_12)] dark:text-[oklch(0.8_0.12_12)]',
       },
@@ -49,10 +50,17 @@ export interface BadgeProps
   dot?: boolean
 }
 
-export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(({ className, tone, size, dot, children, ...props }, ref) => (
-  <span ref={ref} data-slot="badge" className={cn(badgeVariants({ tone, size }), className)} {...props}>
-    {dot ? <span className={cn('size-1.5 rounded-full', dotTone[tone ?? 'neutral'])} /> : null}
-    {children}
-  </span>
-))
+export const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
+  ({ className, tone, size, dot, children, ...props }, ref) => (
+    <span
+      ref={ref}
+      data-slot="badge"
+      className={cn(badgeVariants({ tone, size }), className)}
+      {...props}
+    >
+      {dot ? <span className={cn('size-1.5 rounded-full', dotTone[tone ?? 'neutral'])} /> : null}
+      {children}
+    </span>
+  ),
+)
 Badge.displayName = 'Badge'

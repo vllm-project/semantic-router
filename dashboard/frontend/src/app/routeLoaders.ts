@@ -24,7 +24,15 @@ export const loadTracingPage = () => import('../pages/TracingPage')
 export const loadUsersPage = () => import('../pages/UsersPage')
 export const loadConfigSchemaReferencePage = () => import('../pages/ConfigSchemaReferencePage')
 
-const configPaths = ['/routing/recipes', '/routing/decisions', '/routing/signals', '/routing/projections', '/models/backends', '/settings/router', '/settings/integrations']
+const configPaths = [
+  '/routing/recipes',
+  '/routing/decisions',
+  '/routing/signals',
+  '/routing/projections',
+  '/models/backends',
+  '/settings/router',
+  '/settings/integrations',
+]
 
 const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteLoader }> = [
   { matches: (pathname) => pathname === '/', load: loadDashboardPage },
@@ -33,12 +41,21 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/setup'), load: loadSetupWizardPage },
   { matches: (pathname) => pathname.startsWith('/get-started'), load: loadGetStartedPage },
   { matches: (pathname) => pathname.startsWith('/playground'), load: loadPlaygroundPage },
-  { matches: (pathname) => configPaths.some((path) => pathname.startsWith(path)), load: loadConfigPage },
+  {
+    matches: (pathname) => configPaths.some((path) => pathname.startsWith(path)),
+    load: loadConfigPage,
+  },
   { matches: (pathname) => pathname.startsWith('/routing/topology'), load: loadTopologyPage },
   { matches: (pathname) => pathname.startsWith('/routing/editor'), load: loadEditorPage },
-  { matches: (pathname) => pathname.startsWith('/models/decision'), load: loadDecisionModelsWorkspace },
+  {
+    matches: (pathname) => pathname.startsWith('/models/decision'),
+    load: loadDecisionModelsWorkspace,
+  },
   { matches: (pathname) => pathname.startsWith('/models/hub'), load: loadModelHubPage },
-  { matches: (pathname) => /^\/observe\/requests\/[^/]+/.test(pathname), load: loadInsightsRecordPage },
+  {
+    matches: (pathname) => /^\/observe\/requests\/[^/]+/.test(pathname),
+    load: loadInsightsRecordPage,
+  },
   { matches: (pathname) => pathname.startsWith('/observe/requests'), load: loadInsightsPage },
   { matches: (pathname) => pathname.startsWith('/observe/runs'), load: loadAgentRunPage },
   { matches: (pathname) => pathname.startsWith('/observe/evaluations'), load: loadEvaluationPage },
@@ -47,7 +64,10 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/observe/metrics'), load: loadMonitoringPage },
   { matches: (pathname) => pathname.startsWith('/observe/traces'), load: loadTracingPage },
   { matches: (pathname) => pathname.startsWith('/settings/access'), load: loadUsersPage },
-  { matches: (pathname) => pathname.startsWith('/settings/schema'), load: loadConfigSchemaReferencePage },
+  {
+    matches: (pathname) => pathname.startsWith('/settings/schema'),
+    load: loadConfigSchemaReferencePage,
+  },
 ]
 
 const routePreloads = new Map<RouteLoader, Promise<unknown>>()
