@@ -366,3 +366,19 @@ func TestBuildTrajectoryRoutesNamesTheSubagent(t *testing.T) {
 		t.Fatalf("agents = %q, %q, %q, %q", routes[0].Agent, routes[1].Agent, routes[2].Agent, routes[3].Agent)
 	}
 }
+
+// A route keeps its record's Codex turn ids, so the Dashboard can show a
+// turn's calls, its reviews and its subagents' calls as one unit.
+func TestBuildTrajectoryRoutesKeepsTheAgentTurn(t *testing.T) {
+	routes := buildTrajectoryRoutes([]routerreplay.RoutingRecord{
+		{ID: "main", TurnID: "turn-1"},
+		{ID: "sub", TurnID: "child-turn", ParentTurnID: "turn-1"},
+		{ID: "plain"},
+	})
+	want := [][2]string{{"turn-1", ""}, {"child-turn", "turn-1"}, {"", ""}}
+	for index, route := range routes {
+		if got := [2]string{route.TurnID, route.ParentTurnID}; got != want[index] {
+			t.Fatalf("route %d turns = %v, want %v", index, got, want[index])
+		}
+	}
+}

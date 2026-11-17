@@ -129,6 +129,38 @@ func TestReplayBodyCaptureOffStoresNoConversationText(t *testing.T) {
 	}
 }
 
+// A configuration with no router_replay plugin records each request with its
+// routing data and usage, and none of the conversation's text; enabled: false
+// in global.plugins records nothing.
+func TestReplayRecordsRoutingDataWithoutAPlugin(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		cfg := withGlobalPlugins(t, &config.RouterConfig{})
+		router := replayRuntimeRouter(t, cfg)
+		ctx := replayConversationRequest(streaming)
+		router.startRouterReplay(ctx, "public-model", "public-model", "")
+		replayConversationReply(t, router, ctx, streaming)
+		require.NotNil(t, router.ReplayRecorder, "streaming=%t", streaming)
+		record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+		require.True(t, ok, "streaming=%t", streaming)
+		require.Equal(t, routerreplay.LifecycleCompleted, record.LifecycleState)
+		require.Equal(t, "public-model", record.SelectedModel)
+		require.NotNil(t, record.TotalTokens)
+		require.Equal(t, 3, *record.TotalTokens)
+		require.Empty(t, record.RequestBody)
+		require.Empty(t, record.ResponseBody)
+		require.Empty(t, record.Prompt)
+		stored, err := json.Marshal(record)
+		require.NoError(t, err)
+		for _, text := range append(append([]string{}, replayRequestTexts...), replayResponseTexts...) {
+			require.NotContains(t, string(stored), text, "streaming=%t", streaming)
+		}
+	}
+	off := withGlobalPlugins(t, &config.RouterConfig{}, replayTestPlugin(map[string]interface{}{"enabled": false}))
+	router := replayRuntimeRouter(t, off)
+	require.Nil(t, router.ReplayRecorder)
+	require.Empty(t, router.ReplayRecorders)
+}
+
 // max_tool_trace_bytes bounds every stored trace text, user turns and the
 // answer included, and marks each step and trajectory message it cuts.
 func TestReplayToolTraceByteLimitBoundsStepText(t *testing.T) {

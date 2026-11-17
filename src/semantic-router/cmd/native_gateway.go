@@ -172,7 +172,7 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 		}
 		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), handler: handler, listener: ln})
 		logging.ComponentEvent("router", "standalone_listener_started", map[string]interface{}{
-			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.APIKeys) > 0,
+			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.ClientKeys()) > 0,
 			"apis": spec.ServedAPIs(), "tls": serverOpts.TLS != nil,
 		})
 	}
@@ -288,7 +288,7 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 	for _, listener := range cfg.Listeners {
 		if listener.Name == name {
-			return listener.APIKeys
+			return listener.ClientKeys()
 		}
 	}
 	return nil

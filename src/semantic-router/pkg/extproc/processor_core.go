@@ -99,6 +99,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		// Requests that ended through a normal path already zeroed the token,
 		// making this a no-op.
 		releaseInflightAdmission(ctx)
+		r.finishRequestSpend(ctx)
 		releaseStreamedBody(ctx)
 		// The lookup's singleflight lease ends with the request: a store
 		// completes its key first, and an answer that will not store, a

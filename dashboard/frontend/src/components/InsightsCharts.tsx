@@ -18,7 +18,9 @@ import type {
   InsightsAggregateCurrencySummary,
   InsightsAggregateTokenEntry,
 } from '../pages/insightsPageTypes'
+import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
 import styles from './InsightsCharts.module.css'
+import InsightsCostCoverage from './InsightsCostCoverage'
 import InsightsProviderCacheSummary from './InsightsProviderCacheSummary'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 
@@ -150,11 +152,66 @@ function TokenBreakdownChart({ title, data }: TokenBreakdownChartProps) {
   )
 }
 
+// Router calls (a Looper's model calls and the questions the Router asks to
+// route) are a separate cost, and the total adds them and the priced requests
+// without a baseline, failed ones included; each card shows only where it
+// differs from the model cost.
+const spendCards = (summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary) => [
+  ...((summary.router_call_spend ?? 0) !== 0
+    ? [
+        {
+          label: 'Estimated Router Calls',
+          value: formatCurrency(summary.router_call_spend, summary.currency),
+          accentClassName: styles.summaryValueNeutral,
+          cardClassName: '',
+        },
+      ]
+    : []),
+  ...(summary.total_spend !== undefined && summary.total_spend !== summary.actual_spend
+    ? [
+        {
+          label: 'Estimated Total Cost',
+          value: formatCurrency(summary.total_spend, summary.currency),
+          accentClassName: styles.summaryValueNeutral,
+          cardClassName: '',
+        },
+      ]
+    : []),
+]
+
+// A currency can have priced costs but no request compared with a baseline;
+// its savings are then unknown, not zero.
+const comparedCost = (
+  summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary,
+  value: number,
+) => (summary.cost_record_count > 0 ? formatCurrency(value, summary.currency) : 'N/A')
+
+// Savings are net of the compared requests' Router calls; where those cost
+// anything, the gross figure and what was netted show beside it.
+const netCards = (summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary) =>
+  summary.cost_record_count > 0 && (summary.netted_router_call_spend ?? 0) !== 0
+    ? [
+        {
+          label: 'Estimated Gross Savings',
+          value: formatCurrency(summary.gross_saved, summary.currency),
+          accentClassName: styles.summaryValueNeutral,
+          cardClassName: '',
+        },
+        {
+          label: 'Router Calls Netted',
+          value: formatCurrency(summary.netted_router_call_spend, summary.currency),
+          accentClassName: styles.summaryValueNeutral,
+          cardClassName: '',
+        },
+      ]
+    : []
+
 const summaryCards = (summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary) => [
   {
     label: 'Estimated Savings',
-    value: formatCurrency(summary.total_saved, summary.currency),
-    accentClassName: styles.summaryValuePositive,
+    value: comparedCost(summary, summary.total_saved),
+    accentClassName:
+      summary.total_saved < 0 ? styles.summaryValueNegative : styles.summaryValuePositive,
     cardClassName: '',
   },
   {
@@ -168,22 +225,68 @@ const summaryCards = (summary: InsightsAggregateSummary | InsightsAggregateCurre
   },
   {
     label: 'Estimated Baseline',
-    value: formatCurrency(summary.baseline_spend, summary.currency),
+    value: comparedCost(summary, summary.baseline_spend),
     accentClassName: '',
     cardClassName: '',
   },
   {
     label: 'Estimated Model Cost',
-    value: formatCurrency(summary.actual_spend, summary.currency),
+    value: comparedCost(summary, summary.actual_spend),
     accentClassName: styles.summaryValueNeutral,
     cardClassName: '',
   },
+  ...netCards(summary),
+  ...spendCards(summary),
 ]
+
+// The estimate caveat and, closed by default, how the amounts are reached.
+function InsightsEstimateNotes() {
+  return (
+    <div className={styles.estimateContext}>
+      <p className={styles.summaryHint}>
+        Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.
+      </p>
+      <details className={styles.estimateDetails}>
+        <summary>How estimates work</summary>
+        <p>
+          New records use the highest estimate in the recipe’s complete model pool across all
+          decisions, in the same currency, as baseline using the same recorded tokens, unless the
+          route’s router_replay plugin sets cost_baseline_model: that model is then the baseline,
+          and a request sent to a dearer model shows a negative saving. Direct requests use the
+          selected model as baseline when no baseline model is set. Older records retain their
+          captured baseline.
+        </p>
+        <p>
+          Decision-model, System One, embedding and Looper calls are costed apart from the selected
+          model and added to the total; a call without a price is counted as unpriced, never as
+          free. Savings are net of the calls the Router made for the compared requests; the gross
+          figure is before them. Recorded router spend includes failed requests. A generation model
+          without configured pricing uses the built-in catalog’s list price when its provider lists
+          one, marked as an estimate. On a client’s own login a cost is the API-price equivalent,
+          not what the plan charges.
+        </p>
+        <p>
+          Infrastructure charges and invoice adjustments are excluded. Currencies are shown
+          separately; no exchange-rate conversion is applied. Savings leave out requests that are
+          not completed or lack token usage, model pricing, or baseline data, and requests whose
+          Router calls lack a price rather than netting them at zero. The total still counts the
+          priced calls of a request that failed. Missing data is shown as an explicit reason in each
+          record. Historical requests without captured prices remain “Price not recorded”; current
+          model rates do not backfill them.
+        </p>
+      </details>
+    </div>
+  )
+}
 
 export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   const summary = aggregate.summary
   const costGroups = summary.by_currency?.length ? summary.by_currency : [summary]
-  const modelData = aggregate.model_selection
+  const labels = useModelLabels()
+  const modelData = aggregate.model_selection.map((entry) => ({
+    ...entry,
+    name: modelText(labels, entry.name),
+  }))
   const decisionData = aggregate.decision_distribution
   const signalData = aggregate.signal_distribution
   const tokenVolume = aggregate.token_volume
@@ -201,27 +304,7 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
 
   return (
     <section className={styles.container}>
-      <div className={styles.estimateContext}>
-        <p className={styles.summaryHint}>
-          Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.
-        </p>
-        <details className={styles.estimateDetails}>
-          <summary>How estimates work</summary>
-          <p>
-            New records use the highest estimate in the recipe’s complete model pool across all
-            decisions, in the same currency, as baseline using the same recorded tokens. Direct
-            requests use the selected model as baseline. Older records retain their captured
-            baseline.
-          </p>
-          <p>
-            Infrastructure charges and invoice adjustments are excluded. Currencies are shown
-            separately; no exchange-rate conversion is applied. Requests that are not completed or
-            lack token usage, model pricing, or baseline data are excluded. Missing data is shown as
-            an explicit reason in each record. Historical requests without captured prices remain
-            “Price not recorded”; current model rates do not backfill them.
-          </p>
-        </details>
-      </div>
+      <InsightsEstimateNotes />
       {costGroups.map((group) => (
         <div key={group.currency || 'unavailable'}>
           {costGroups.length > 1 ? (
@@ -245,10 +328,11 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
       {summary.excluded_record_count > 0 ? (
         <p className={styles.summaryHint}>
           {summary.excluded_record_count} filtered record
-          {summary.excluded_record_count === 1 ? '' : 's'} excluded from estimates. Each row
+          {summary.excluded_record_count === 1 ? '' : 's'} excluded from savings estimates. Each row
           explains what was not recorded. Historical rows without captured prices are not repriced.
         </p>
       ) : null}
+      <InsightsCostCoverage summary={summary} />
 
       <InsightsProviderCacheSummary summary={aggregate.provider_cache} />
 
@@ -444,7 +528,10 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
         <TokenBreakdownChart title="Tokens by Decision" data={tokenBreakdown.by_decision} />
         <TokenBreakdownChart
           title="Tokens by Selected Model"
-          data={tokenBreakdown.by_selected_model}
+          data={tokenBreakdown.by_selected_model.map((entry) => ({
+            ...entry,
+            name: modelText(labels, entry.name),
+          }))}
         />
       </div>
     </section>

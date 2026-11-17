@@ -84,6 +84,20 @@ type ModelPricing struct {
 	CacheWrite1hPer1M *float64 `yaml:"cache_write_1h_per_1m,omitempty"`
 }
 
+// UnmarshalYAML reads a written pricing block without a currency as USD, as a
+// deployment's is, so a block of zero rates prices a model free instead of
+// leaving it for the catalog's list price.
+func (p *ModelPricing) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain ModelPricing
+	if err := unmarshal((*plain)(p)); err != nil {
+		return err
+	}
+	if p.Currency == "" {
+		p.Currency = "USD"
+	}
+	return nil
+}
+
 type ModelParams struct {
 	Deployment string `yaml:"deployment,omitempty"`
 	// Schema is the version of its API the model's backends speak, as the

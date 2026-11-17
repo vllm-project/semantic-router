@@ -52,9 +52,15 @@ See the [release note](../release-notes/standalone-mode).
   it does not bound a response the backend is still streaming. A request body
   is limited to 500 MiB and a listener to 50,000 connections, the limits of the
   Envoy template.
-- **API keys:** with `api_keys` set, a client sends one of them as
-  `Authorization: Bearer <key>` or `api-key: <key>`; other requests get an
-  OpenAI-style 401. The key is removed before the request reaches a provider.
+- **API keys:** with `api_keys` or `api_key_files` set, a client sends one of
+  them as `Authorization: Bearer <key>` or `api-key: <key>`; other requests get
+  an OpenAI-style 401. The key is removed before the request reaches a
+  provider. An `api_keys` entry written as `"${NAME}"` reads the key from the
+  environment, and each `api_key_files` file holds one key, read at every load
+  (see
+  [Keep credentials out of configuration](security-hardening#keep-credentials-out-of-configuration)).
+  `--gateway extproc` refuses `api_key_files`: the CLI writes the keys into the
+  Envoy configuration, reading each `"${NAME}"` key from its environment.
 - **Model allow-list:** with `models` set, the listener accepts only those
   request models (see [Model allow-list](#model-allow-list)).
 - **TLS:** `tls` serves the listener over TLS 1.2 or later, with HTTP/2 or
@@ -179,7 +185,9 @@ listeners:
 
 Memory and router replay record the user of each request. Without a trusting
 listener they still load and treat every request as anonymous, and the Router
-logs one warning at startup that names them.
+logs one warning at startup that names them. Replay is named only where a
+`router_replay` plugin turns it on, not for the routing record a configuration
+without one keeps by default.
 
 ### Draining on shutdown
 

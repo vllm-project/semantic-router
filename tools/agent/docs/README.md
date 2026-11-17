@@ -28,6 +28,8 @@ registry, or agent instructions.
 
 ## Durable references
 
+- [../skills/README.md](../skills/README.md): shipped skill catalog, task
+  discovery, source/publication map, and proposed additions
 - [change-surfaces.md](change-surfaces.md): cross-layer product contracts
 - [environments.md](environments.md): supported local and CI environments
 - [architecture-guardrails.md](architecture-guardrails.md): enforced architecture checks and module design
