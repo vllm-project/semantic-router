@@ -81,6 +81,30 @@ request in 23.2 ms against BF16's 62.6 ms on an RTX PRO 6000. NVFP4 needs FP4
 tensor cores, which only NVIDIA Blackwell GPUs (compute capability 10.x or
 12.x) have; any other device refuses the package before its weights load.
 
+### Language evaluation
+
+The project’s D3 parity tests check that the router reproduces the package
+runtime; they are not language-quality benchmarks. The language-evaluation
+evidence reported here covers English and Thai for the 27B `vllm-sr/d3`
+package at revision `20f37b9a` (2026-10-22), in an independent,
+community-reported comparison on paired items:
+
+| Evaluation | Items | English (%) | Thai (%) | Reported comparison |
+| --- | ---: | ---: | ---: | --- |
+| OpenDecisions 1.0.1, capability from raw probabilities | 1,680 | 87.0 | 83.6 | Thai −3.4 points; paired bootstrap 95% CI [−5.6, −1.7] |
+| Decision Index kit sample, author’s accuracy scorer | 1,200 | 84.8 | 79.3 | Thai −5.5 points; 98 English-only vs. 33 Thai-only correct, exact McNemar p = 1e-8 |
+
+These are unofficial results reported by a community contributor
+([issue #6446](https://github.com/vllm-project/semantic-router/issues/6446)),
+not scores produced or independently verified by the project. The Thai items
+were machine-translated from English and have not had native-speaker review.
+The Decision Index sample was rebuilt and scored by the contributor; it is not
+an official Decision Index score. This evidence covers only the 27B `d3`
+package; it does not establish language coverage for other D3 sizes or for
+languages not listed here. It is a useful data point, not a guarantee of
+quality in Thai or any other language. Validate the model on representative
+inputs for your language and use case.
+
 `vllm-sr/d3-turbo` (27B) is the Decision 3.0 model that reads a request's
 input once and answers every question from that reading, so asking many
 questions about one input costs little more than asking one
