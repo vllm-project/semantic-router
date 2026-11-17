@@ -95,6 +95,10 @@ export {
 export { Toaster, toast } from './components/toaster'
 export { BrandLockup, LogoMark, ProviderLogo, ProviderStack } from './brand/brand'
 export { MosaicBackground } from './patterns/mosaic'
+export { AnimatedNumber, HighlightedText, ScoreMeter } from './patterns/meters'
+export { Slider } from './components/slider'
+export { ChipInput } from './components/chip-input'
+export { mergeChips } from './components/chip-input-support'
 export { MetaItem, PageContainer, PageHeader, Section } from './patterns/page'
 export {
   Delta,
