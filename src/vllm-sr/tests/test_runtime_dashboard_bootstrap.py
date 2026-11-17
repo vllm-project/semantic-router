@@ -206,3 +206,28 @@ def test_public_dashboard_rejects_disabled_bootstrap_without_admin(monkeypatch):
             listener_port=8899,
             stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
         )
+
+
+def test_dashboard_allowed_origins_reaches_dashboard(monkeypatch):
+    origins = "http://192.168.1.10:8701,https://192.168.1.10:8701"
+    monkeypatch.setenv("DASHBOARD_ALLOWED_ORIGINS", origins)
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env={},
+        listener_port=8899,
+        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+    )
+
+    assert dashboard_env["DASHBOARD_ALLOWED_ORIGINS"] == origins
+
+
+def test_dashboard_allowed_origins_omitted_when_unset(monkeypatch):
+    monkeypatch.delenv("DASHBOARD_ALLOWED_ORIGINS", raising=False)
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env={},
+        listener_port=8899,
+        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+    )
+
+    assert "DASHBOARD_ALLOWED_ORIGINS" not in dashboard_env
