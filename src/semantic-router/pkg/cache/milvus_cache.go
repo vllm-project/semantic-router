@@ -35,6 +35,7 @@ type MilvusCache struct {
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
 	embeddingDeployment string
+	expiredRowSweeper   *expiredRowSweeper
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -134,7 +135,28 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	}
 	logging.Debugf("MilvusCache: initialization complete")
 
+	cache.expiredRowSweeper = startExpiredRowSweeper(
+		expiredRowSweepInterval(cache.ttlSeconds),
+		cache.deleteExpiredRows,
+	)
 	return cache, nil
+}
+
+// deleteExpiredRows removes semantic and exact rows whose expires_at has
+// passed; reads already skip them, so this only reclaims storage.
+func (c *MilvusCache) deleteExpiredRows(ctx context.Context) error {
+	start := time.Now()
+	expr := fmt.Sprintf("expires_at > 0 && expires_at <= %d", start.Unix())
+	if err := c.client.Delete(ctx, c.collectionName, "", expr); err != nil {
+		metrics.RecordCacheOperation("milvus", "cleanup_expired", "error", time.Since(start).Seconds())
+		logging.Warnf("MilvusCache: failed to delete expired rows from %s: %v", c.collectionName, err)
+		return err
+	}
+	metrics.RecordCacheOperation("milvus", "cleanup_expired", "success", time.Since(start).Seconds())
+	c.mu.Lock()
+	c.lastCleanupTime = &start
+	c.mu.Unlock()
+	return nil
 }
 
 // loadMilvusConfig reads and parses the Milvus configuration from file (Deprecated)
