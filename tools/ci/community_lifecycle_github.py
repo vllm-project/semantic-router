@@ -29,7 +29,11 @@ from community_lifecycle_policy import (
     plan_issue_kind,
     title_format_error,
 )
-from community_reviewers import desired_workgroup_reviewer
+from community_reviewers import (
+    DEFAULT_REVIEWERS,
+    desired_workgroup_reviewer,
+    workgroup_reviewers,
+)
 
 # gh prints "message (HTTP 502)" for a JSON error and a bare "HTTP 502" otherwise.
 SERVER_ERROR = re.compile(
@@ -790,11 +794,12 @@ def request_workgroup_review(
     owner_label: str | None,
     previous_workgroups: set[str],
 ) -> None:
-    """Request one stable Workgroup reviewer without repeating notifications."""
+    """Request one Lead of the owning group unless one is already engaged."""
 
     number = int(pull_request["number"])
     author = (pull_request.get("user") or {}).get("login") or ""
-    reviewer = desired_workgroup_reviewer(owner_label, number, author)
+    leads = {login.casefold() for login in workgroup_reviewers(owner_label, author)}
+    keep = leads | {login.casefold() for login in DEFAULT_REVIEWERS}
     requested_logins = {
         requested_user["login"].casefold()
         for node in (graph.get("reviewRequests") or {}).get("nodes") or []
@@ -805,8 +810,8 @@ def request_workgroup_review(
         previous_reviewer = desired_workgroup_reviewer(previous_owner, number, author)
         if (
             previous_reviewer
-            and previous_reviewer != reviewer
             and previous_reviewer.casefold() in requested_logins
+            and previous_reviewer.casefold() not in keep
         ):
             client.request(
                 f"repos/{repo}/pulls/{number}/requested_reviewers",
@@ -814,16 +819,15 @@ def request_workgroup_review(
                 payload={"reviewers": [previous_reviewer]},
             )
 
-    if not reviewer:
-        return
-    if reviewer.casefold() in requested_logins:
-        return
     reviewed_logins = {
-        author["login"].casefold()
+        review_author["login"].casefold()
         for node in (graph.get("latestReviews") or {}).get("nodes") or []
-        if (author := node.get("author")) and author.get("login")
+        if (review_author := node.get("author")) and review_author.get("login")
     }
-    if reviewer.casefold() in reviewed_logins:
+    if leads & (requested_logins | reviewed_logins):
+        return
+    reviewer = desired_workgroup_reviewer(owner_label, number, author)
+    if not reviewer:
         return
 
     client.request(
