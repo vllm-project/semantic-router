@@ -91,9 +91,9 @@ listener that publishes a System One model.
 ## What you see
 
 Above the prompt, one line counts the session's decisions:
-`vSR · 12 decisions · 0 partial · 0 withheld · leader v`. A held command is OpenCode's
+`vSR · 12 decisions · 0 partial · 0 withheld · /vsr`. A held command is OpenCode's
 own permission prompt, with the reason vSR held it. Everything else is in the
-decisions panel, `/vsr` or leader `v`:
+decisions panel, `/vsr`:
 
 - At the top: whether the runtime answers, which apps are on, each app's wait,
   the router's goal, when you last calibrated, and the tokens and estimated cost
@@ -122,22 +122,22 @@ decisions panel, `/vsr` or leader `v`:
   - `skipped`: an app got no answer in time; the model went on without it.
   - `allowed`: a command guard let run.
 
-Each command has a key: press OpenCode's leader key (`ctrl+x` unless you
-changed `keybinds.leader`), then the letter. F5 to F10 work too, where the
-terminal passes them on; some take them for themselves, such as F10 and F11 in
-GNOME Terminal, and macOS sends media keys unless you hold Fn.
+Every control is a command; type `/vsr` to list them. The panel takes the
+keyboard when it opens, and `Esc` closes it. To keep the panel open and type,
+press `ctrl+x` then `←` to return to the prompt; there `Esc` interrupts the
+model as usual, and `/vsr` closes the panel.
 
-| Command          | Key        | Also | What it does                                                           |
-| ---------------- | ---------- | ---- | ---------------------------------------------------------------------- |
-| `/vsr`           | leader `v` | F5   | Open the decisions panel                                               |
-| `/vsr-apps`      | leader `o` | F6   | Turn an app on or off, or hand the apps back to a Router listener      |
-| `/vsr-waits`     | leader `d` | F7   | Choose how long redact, shield and guard wait: 1 to 3 s, or until done |
-| `/vsr-feedback`  | leader `f` | F8   | Say whether a decision was right; for router, whether the model fit    |
-| `/vsr-check`     | leader `h` | F9   | Check the decision runtime: one case per enabled app                   |
-| `/vsr-sessions`  | leader `p` | F10  | Show another session's decisions                                       |
-| `/vsr-goal`      |            |      | Choose the router's goal: balanced, quality or save                    |
-| `/vsr-refresh`   |            |      | Refresh the panel                                                      |
-| `/vsr-calibrate` |            |      | Fit an app's thresholds to your answers                                |
+| Command          | What it does                                                           |
+| ---------------- | ---------------------------------------------------------------------- |
+| `/vsr`           | Open the decisions panel, or close it                                  |
+| `/vsr-apps`      | Turn an app on or off, or hand the apps back to a Router listener      |
+| `/vsr-waits`     | Choose how long redact, shield and guard wait: 1 to 3 s, or until done |
+| `/vsr-feedback`  | Say whether a decision was right; for router, whether the model fit    |
+| `/vsr-check`     | Check the decision runtime: one case per enabled app                   |
+| `/vsr-sessions`  | Show another session's decisions                                       |
+| `/vsr-goal`      | Choose the router's goal: balanced, quality or save                    |
+| `/vsr-refresh`   | Refresh the panel                                                      |
+| `/vsr-calibrate` | Fit an app's thresholds to your answers                                |
 
 What you change in `/vsr-apps`, `/vsr-waits` and `/vsr-goal` is saved and applies to every session,
 also after a restart. Changing the same setting in the options later wins over

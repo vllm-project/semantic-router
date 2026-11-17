@@ -26,23 +26,32 @@ test(
     const screen = await native.terminal(
       first.sessionID,
       [
-        { at: 2500, keys: "\u0018v" }, // Leader (ctrl+x), v: the panel
-        { at: 4000, keys: "\u001b[17~" }, // F6: apps
-        { at: 4500, keys: "\u001b[B".repeat(5) + "\r" }, // Check is the final option.
-        { at: 6000, keys: "\u001b[18~" }, // F7: waits
+        { at: 2500, keys: "/vsr" },
+        { at: 3000, keys: "\r" }, // The panel.
+        { at: 3500, keys: "\u0018" }, // ctrl+x ←: back from the panel to the prompt.
+        { at: 3700, keys: "\u001b[D" },
+        { at: 4000, keys: "/vsr-apps" },
+        { at: 4500, keys: "\r" },
+        { at: 5000, keys: "\u001b[B".repeat(5) + "\r" }, // Check is the final option.
+        { at: 6000, keys: "/vsr-waits" },
         { at: 6500, keys: "\r" },
-        { at: 7000, keys: "\u001b[B\r" }, // Strict is the final option.
-        { at: 8500, keys: "\u001b[19~" }, // F8: feedback
+        { at: 7000, keys: "\r" },
+        { at: 7500, keys: "\u001b[B\r" }, // Strict is the final option.
+        { at: 8500, keys: "/vsr-feedback" },
         { at: 9000, keys: "\r" },
-        { at: 9500, keys: "\u001b[B\r" }, // Wrong decision.
-        { at: 11000, keys: "\u0018h" }, // Leader, h: check the runtime
-        { at: 12500, keys: "\r" }, // Close its report.
-        { at: 13500, keys: "\u001b[21~" }, // F10: sessions
-        { at: 14000, keys: "\u001b[B\r" },
-        { at: 15500, keys: "\u001b[15~" },
-        { at: 16500, resize: [46, 161] },
+        { at: 9500, keys: "\r" },
+        { at: 10000, keys: "\u001b[B\r" }, // Wrong decision.
+        { at: 11000, keys: "/vsr-check" },
+        { at: 11500, keys: "\r" },
+        { at: 13000, keys: "\r" }, // Close its report.
+        { at: 14000, keys: "/vsr-sessions" },
+        { at: 14500, keys: "\r" },
+        { at: 15000, keys: "\u001b[B\r" },
+        { at: 16000, keys: "/vsr" },
+        { at: 16500, keys: "\r" },
+        { at: 17500, resize: [46, 161] },
       ],
-      17.5,
+      18.5,
     );
     assert.ok(
       screen.text.includes("vSR decision runtime") &&
@@ -115,10 +124,15 @@ test(
     const terminal = native.terminal(
       run.sessionID,
       [
-        { at: 2500, keys: "\u001b[15~" },
-        { at: 12000, keys: "\u001b[17~" },
+        { at: 2500, keys: "/vsr" },
+        { at: 3000, keys: "\r" },
+        { at: 3500, keys: "\u0018" },
+        { at: 3700, keys: "\u001b[D" },
+        { at: 12000, keys: "/vsr-apps" },
+        { at: 12500, keys: "\r" },
         { at: 13000, keys: "\u001b[B".repeat(5) + "\r" },
-        { at: 14500, keys: "\u001b[15~" },
+        { at: 14500, keys: "/vsr" },
+        { at: 15000, keys: "\r" },
         { at: 15500, resize: [46, 161] },
       ],
       16.5,
@@ -139,7 +153,7 @@ test(
     assert.equal(
       after.controls.revision,
       1,
-      "one keyboard action commits exactly once",
+      "one command commits exactly once",
     );
     assert.deepEqual(after.decisions, []);
     assert.ok(
@@ -148,5 +162,61 @@ test(
     );
     assert.equal(native.requests.length, generations);
     assert.equal(native.states.length, classifications);
+  },
+);
+
+test(
+  "/vsr toggles the decisions panel and Esc closes it only from the panel",
+  { timeout: 90000 },
+  async (t) => {
+    const native = await fixture(t);
+    const run = await native.run("OUTPUT_CASE READ");
+    const open = await native.terminal(
+      run.sessionID,
+      [
+        { at: 2500, keys: "/vsr" },
+        { at: 3000, keys: "\r" },
+      ],
+      5,
+    );
+    assert.ok(open.last.includes("vSR decisions ·"), open.last);
+    const toggled = await native.terminal(
+      run.sessionID,
+      [
+        { at: 2500, keys: "/vsr" },
+        { at: 3000, keys: "\r" },
+        { at: 3500, keys: "\u0018" }, // ctrl+x ←: back to the prompt.
+        { at: 3700, keys: "\u001b[D" },
+        { at: 4500, keys: "/vsr" },
+        { at: 5000, keys: "\r" },
+      ],
+      7,
+    );
+    assert.ok(!toggled.last.includes("vSR decisions ·"), toggled.last);
+    const escaped = await native.terminal(
+      run.sessionID,
+      [
+        { at: 2500, keys: "/vsr" },
+        { at: 3000, keys: "\r" },
+        { at: 4000, keys: "\u001b" },
+      ],
+      6,
+    );
+    assert.ok(!escaped.last.includes("vSR decisions ·"), escaped.last);
+    const prompt = await native.terminal(
+      run.sessionID,
+      [
+        { at: 2500, keys: "/vsr" },
+        { at: 3000, keys: "\r" },
+        { at: 3500, keys: "\u0018" },
+        { at: 3700, keys: "\u001b[D" },
+        { at: 4500, keys: "\u001b" },
+      ],
+      6.5,
+    );
+    assert.ok(
+      prompt.last.includes("vSR decisions ·"),
+      "Esc at the prompt is OpenCode's, not the panel's: " + prompt.last,
+    );
   },
 );

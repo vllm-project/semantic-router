@@ -62,8 +62,9 @@ def main():
             child.kill()
             child.wait()
         os.close(master)
-    frames = Screen(45, 160, config["steps"]).replay(data.decode(errors="replace"))
-    print(json.dumps({"text": "\n".join(frames), "exit": child.returncode, "readyAfter": None if ready is None else ready - started}))
+    screen = Screen(45, 160, config["steps"])
+    frames = screen.replay(data.decode(errors="replace"))
+    print(json.dumps({"text": "\n".join(frames), "last": "\n".join(screen.lines()), "exit": child.returncode, "readyAfter": None if ready is None else ready - started}))
 
 
 TOKEN = re.compile(r"\x1b[\]P_^X].*?(?:\x07|\x1b\\)|\x1b\[([0-?]*)[ -/]*([@-~])|\x1b[^\[\]]|.", re.S)

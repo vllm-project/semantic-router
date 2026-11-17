@@ -1,5 +1,5 @@
 import { Plugin } from "@opencode/plugin/tui";
-import { createEffect, createSignal, For, Show } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { Vsr } from "./rpc.ts";
 import { APPS } from "./settings.ts";
 import type { App, Wait } from "./settings.ts";
@@ -275,7 +275,12 @@ export default Plugin.define({
         });
       }
     }
+    // `/vsr` toggles the panel: with no key bound, the command is how it closes too.
     const open = () => {
+      if (ctx.ui.panel.current()?.name === "vsr.decisions") {
+        ctx.ui.panel.close();
+        return;
+      }
       const result = ctx.ui.panel.open("vsr.decisions");
       if (!result)
         ctx.ui.toast.show({
@@ -288,7 +293,6 @@ export default Plugin.define({
         {
           id: "vsr.panel",
           title: "vSR decisions",
-          bind: "<leader>v,f5",
           slash: { name: "vsr" },
           palette: true,
           run: open,
@@ -296,7 +300,6 @@ export default Plugin.define({
         {
           id: "vsr.apps",
           title: "vSR app controls",
-          bind: "<leader>o,f6",
           slash: { name: "vsr-apps" },
           palette: true,
           run: apps,
@@ -304,7 +307,6 @@ export default Plugin.define({
         {
           id: "vsr.waits",
           title: "vSR wait controls",
-          bind: "<leader>d,f7",
           slash: { name: "vsr-waits" },
           palette: true,
           run: waits,
@@ -312,7 +314,6 @@ export default Plugin.define({
         {
           id: "vsr.feedback",
           title: "vSR decision feedback",
-          bind: "<leader>f,f8",
           slash: { name: "vsr-feedback" },
           palette: true,
           run: feedback,
@@ -320,7 +321,6 @@ export default Plugin.define({
         {
           id: "vsr.diagnose",
           title: "vSR check the decision runtime",
-          bind: "<leader>h,f9",
           slash: { name: "vsr-check" },
           palette: true,
           run: async () => {
@@ -342,7 +342,6 @@ export default Plugin.define({
         {
           id: "vsr.sessions",
           title: "vSR select session",
-          bind: "<leader>p,f10",
           slash: { name: "vsr-sessions" },
           palette: true,
           run: async () => {
@@ -418,13 +417,26 @@ export default Plugin.define({
         "vsr.sessions",
       ],
     }));
+    // Esc closes the panel only while it has focus; at the prompt Esc stays OpenCode's interrupt.
+    const [focused, setFocused] = createSignal(false);
+    ctx.keymap.layer(() => ({
+      mode: "global",
+      enabled: focused,
+      commands: [
+        {
+          title: "Close vSR decisions",
+          bind: "escape",
+          run: () => ctx.ui.panel.close(),
+        },
+      ],
+    }));
     const offComposer = ctx.ui.slot({
       append: "session.composer.top",
       render: () => (
         <text fg={ctx.theme.textMuted}>
           vSR · {view.loading ? "syncing · " : ""}
           {total().total} decisions · {total().outcomes.partial ?? 0} partial ·{" "}
-          {total().outcomes.withheld ?? 0} withheld · leader v
+          {total().outcomes.withheld ?? 0} withheld · /vsr
         </text>
       ),
     });
@@ -436,8 +448,10 @@ export default Plugin.define({
       if (selected?.name !== "vsr.decisions") return;
       offPanel = ctx.ui.slot({
         replace: "session.panel",
-        render: (panel) =>
-          panel.name !== "vsr.decisions" ? null : (
+        render: (panel) => {
+          createEffect(() => setFocused(panel.focused));
+          onCleanup(() => setFocused(false));
+          return panel.name !== "vsr.decisions" ? null : (
             <box
               flexDirection="column"
               padding={1}
@@ -447,7 +461,8 @@ export default Plugin.define({
               {/* The list scrolls; the summary lines keep their height instead of drawing over each other. */}
               <text flexShrink={0}>vSR decisions · {panel.sessionID}</text>
               <text flexShrink={0} fg={ctx.theme.textMuted}>
-                leader o apps · d waits · f feedback · h check · p session
+                /vsr-apps · /vsr-waits · /vsr-feedback · /vsr-check ·
+                /vsr-sessions
               </text>
               <Show when={view.error}>
                 <text flexShrink={0} fg={ctx.theme.warning}>
@@ -569,7 +584,8 @@ export default Plugin.define({
                 )}
               </Show>
             </box>
-          ),
+          );
+        },
       });
     });
     return () => {
