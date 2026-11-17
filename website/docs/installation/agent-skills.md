@@ -90,6 +90,17 @@ failure. Preserve the request digest, active config version, `signal_errors`,
 assertion. An HTTP 200 or `/health` response alone does not settle which
 boundary worked.
 
+The local smoke exposed that distinction. A fixed debugging request (SHA-256
+`984c04a07b63ac4d6f311fc8117d6d501749447e331e9a703feaed6dbe5fddc9`)
+selected `code-route` and `qwen3:8b` and returned HTTP 200 with an `upstream`
+response path, but its first 128-token probe ended with `finish_reason:
+length` and no final text. The route worked; answer delivery failed at the
+output cap. A reviewed 512-token retry of the same request ended with
+`finish_reason: stop`, final text, and a passing delivery assertion. The
+[receipt](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/vllm-sr-benchmark/fixtures/local-ollama-smoke-receipt.json)
+records both outcomes without publishing the model's reasoning text. The
+unknown/fallback and upstream-error cases in the skill remain illustrative.
+
 ## What is verified here
 
 The authored/public mirror, catalog and command checks protect these links and
@@ -156,4 +167,5 @@ a broad quality, latency or savings claim. The
 [sanitized receipt](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/vllm-sr-benchmark/fixtures/local-ollama-smoke-receipt.json)
 records source, dataset, image, config and plan digests, local run IDs and
 the failed first attempt. Run IDs refer to a disposable local store, not a
-public benchmark service.
+public benchmark service. The smoke used a source checkout rather than a
+fresh public skill installation.

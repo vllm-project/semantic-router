@@ -63,6 +63,15 @@
     "decision_model_revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
     "platform": "macOS arm64 with Colima CPU VM"
   },
+  "failed_attempts": [
+    {
+      "cause": "debug trace disabled, so the config-hash acknowledgement was unavailable",
+      "excluded_from_comparison": true,
+      "failed_cells": 1,
+      "mode": "live",
+      "run_id": "run-92abf93e2e694066976c"
+    }
+  ],
   "limits": {
     "concurrency": 1,
     "cost_policy": "capability_only",
@@ -75,6 +84,32 @@
     "The initial live attempt failed because debug trace was disabled and the config-hash acknowledgement was missing; it is excluded from the compatible comparisons."
   ],
   "router_image_digest": "sha256:e6786409758befb7cf72b0d305ff9a86f126a527c384f73640af5a0e4015fc15",
+  "routing_failure_diagnosis": {
+    "first_failing_boundary": "upstream answer delivery exhausted the output cap; route selection succeeded",
+    "first_probe": {
+      "delivery_assertion": false,
+      "final_text_present": false,
+      "finish_reason": "length",
+      "http_status": 200,
+      "max_completion_tokens": 128,
+      "response_path": "upstream",
+      "selected_decision": "code-route",
+      "selected_model": "qwen3:8b"
+    },
+    "initial_active_config_hash": "4e02170d3ae47f29415dbb93a66e892ac5cc8480e84201563e1702adac1d8b5d",
+    "recovery": "Freeze the same request, inspect the reasoning-only truncated response, then retry with a reviewed 512-token cap.",
+    "request_sha256": "984c04a07b63ac4d6f311fc8117d6d501749447e331e9a703feaed6dbe5fddc9",
+    "retry": {
+      "delivery_assertion": true,
+      "final_text_present": true,
+      "finish_reason": "stop",
+      "http_status": 200,
+      "max_completion_tokens": 512,
+      "response_path": "upstream",
+      "selected_decision": "code-route",
+      "selected_model": "qwen3:8b"
+    }
+  },
   "runs": {
     "router_base": {
       "completed": 2,
