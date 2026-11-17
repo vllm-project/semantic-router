@@ -1,6 +1,6 @@
 import { hide, isTagName, secretsIn } from "./masking.ts";
 import type { Counts } from "./masking.ts";
-import { APPS } from "./settings.ts";
+import { APPS, isRecord } from "./settings.ts";
 import type { App } from "./settings.ts";
 
 export const OUTCOMES = [
@@ -139,6 +139,8 @@ export class DecisionStore {
   sink: DecisionSink | undefined;
   // The thresholds in force for an app; each decision keeps a copy.
   thresholds: ((app: App) => readonly number[]) | undefined;
+  // Told which session changed, or was dropped, so an archive can keep it across restarts.
+  onChange: ((sessionID: string, removed: boolean) => void) | undefined;
   constructor(maxSessions: number, maxDecisions: number) {
     if (
       !Number.isInteger(maxSessions) ||
@@ -155,11 +157,30 @@ export class DecisionStore {
     if (!session) session = { decisions: [], feedback: {} };
     this.sessions.delete(id);
     this.sessions.set(id, session);
-    if (this.sessions.size > this.maxSessions)
-      this.sessions.delete(this.sessions.keys().next().value!);
+    if (this.sessions.size > this.maxSessions) {
+      const oldest = this.sessions.keys().next().value!;
+      this.sessions.delete(oldest);
+      this.onChange?.(oldest, true);
+    }
     return session;
   }
   record(input: Omit<Decision, "id" | "at">): Decision {
+    const decision = this.project(input, crypto.randomUUID(), Date.now());
+    const session = this.touch(input.sessionID);
+    session.decisions.push(decision);
+    while (session.decisions.length > this.maxDecisions)
+      delete session.feedback[session.decisions.shift()!.id];
+    this.revision++;
+    this.onChange?.(input.sessionID, false);
+    this.sink?.recorded(structuredClone(decision));
+    return structuredClone(decision);
+  }
+  // Validates a decision and copies only its known fields.
+  private project(
+    input: Omit<Decision, "id" | "at">,
+    id: string,
+    at: number,
+  ): Decision {
     if (
       !input.sessionID ||
       !APPS.includes(input.app) ||
@@ -220,11 +241,11 @@ export class DecisionStore {
         : {}),
       ...(input.counts ? { counts: { ...input.counts } } : {}),
       ...(input.messageID ? { messageID: input.messageID } : {}),
-      id: crypto.randomUUID(),
+      id,
       sessionID: input.sessionID,
       app: input.app,
       outcome: input.outcome,
-      at: Date.now(),
+      at,
       ...(input.reason ? { reason: input.reason } : {}),
       ...(input.turnID === undefined ? {} : { turnID: input.turnID }),
       ...(input.toolCallID === undefined
@@ -241,15 +262,83 @@ export class DecisionStore {
       ...(input.features === undefined
         ? {}
         : { features: [...input.features] }),
-      ...thresholdsOf(this.thresholds?.(input.app)),
+      ...thresholdsOf(input.thresholds ?? this.thresholds?.(input.app)),
     };
-    const session = this.touch(input.sessionID);
-    session.decisions.push(decision);
-    while (session.decisions.length > this.maxDecisions)
-      delete session.feedback[session.decisions.shift()!.id];
+    return decision;
+  }
+  // A session saved by an earlier server: each decision passes the same checks as a new one, and what fails is
+  // dropped. Nothing is logged again.
+  restore(sessionID: string, saved: unknown): void {
+    if (!isRecord(saved) || !Array.isArray(saved.decisions)) return;
+    const restored: Decision[] = [];
+    for (const raw of saved.decisions.slice(-this.maxDecisions)) {
+      if (
+        !isRecord(raw) ||
+        raw.sessionID !== sessionID ||
+        typeof raw.id !== "string" ||
+        !raw.id ||
+        typeof raw.at !== "number" ||
+        !Number.isFinite(raw.at)
+      )
+        continue;
+      try {
+        const decision = this.project(
+          raw as unknown as Omit<Decision, "id" | "at">,
+          raw.id,
+          raw.at,
+        );
+        restored.push(decision);
+        for (const key of ["observedModel", "childSessionID"] as const)
+          if (typeof raw[key] === "string") decision[key] = raw[key];
+        if (typeof raw.costKnown === "boolean")
+          decision.costKnown = raw.costKnown;
+        if (
+          raw.childOutcome === "succeeded" ||
+          raw.childOutcome === "failed" ||
+          raw.childOutcome === "interrupted"
+        )
+          decision.childOutcome = raw.childOutcome;
+        const usage = raw.usage;
+        if (
+          isRecord(usage) &&
+          ["input", "output", "cachedInput", "reasoning", "cost"].every(
+            (key) =>
+              typeof usage[key] === "number" &&
+              Number.isFinite(usage[key]) &&
+              (usage[key] as number) >= 0,
+          )
+        )
+          decision.usage = {
+            input: usage.input as number,
+            output: usage.output as number,
+            cachedInput: usage.cachedInput as number,
+            reasoning: usage.reasoning as number,
+            cost: usage.cost as number,
+          };
+      } catch {
+        /* A decision this version cannot read is left out. */
+      }
+    }
+    if (!restored.length) return;
+    const feedback: Record<string, Feedback> = {};
+    if (isRecord(saved.feedback))
+      for (const [id, value] of Object.entries(saved.feedback))
+        if (
+          FEEDBACK.includes(value as Feedback) &&
+          restored.some((decision) => decision.id === id)
+        )
+          feedback[id] = value as Feedback;
+    const session = this.touch(sessionID);
+    session.decisions = restored;
+    session.feedback = feedback;
     this.revision++;
-    this.sink?.recorded(structuredClone(decision));
-    return structuredClone(decision);
+  }
+  // A session's decisions and feedback as an archive keeps them.
+  saved(
+    sessionID: string,
+  ): { decisions: Decision[]; feedback: Record<string, Feedback> } | undefined {
+    const session = this.sessions.get(sessionID);
+    return session && structuredClone(session);
   }
   observe(
     sessionID: string,
@@ -294,6 +383,7 @@ export class DecisionStore {
     if (typeof observation.costKnown === "boolean")
       decision.costKnown = observation.costKnown;
     this.revision++;
+    this.onChange?.(sessionID, false);
   }
   settleGuard(
     sessionID: string,
@@ -307,6 +397,7 @@ export class DecisionStore {
       return;
     decision.outcome = outcome;
     this.revision++;
+    this.onChange?.(sessionID, false);
     this.sink?.settled(structuredClone(decision));
   }
   label(sessionID: string, decisionID: string, feedback: Feedback): void {
@@ -324,6 +415,7 @@ export class DecisionStore {
     session!.feedback[decisionID] = feedback;
     this.touch(sessionID);
     this.revision++;
+    this.onChange?.(sessionID, false);
     this.sink?.labeled(structuredClone(decision), feedback);
   }
   changed(): void {
@@ -343,5 +435,6 @@ export class DecisionStore {
   }
   remove(sessionID: string): void {
     if (this.sessions.delete(sessionID)) this.revision++;
+    this.onChange?.(sessionID, true);
   }
 }

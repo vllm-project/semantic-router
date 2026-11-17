@@ -291,6 +291,9 @@ test(
     const native = await fixture(t);
     const run = await native.run("OUTPUT_CASE READ");
     const asked = native.states.length;
+    const kept = (
+      (await native.rpc("snapshot", { sessionID: run.sessionID })) as Snapshot
+    ).decisions;
     await native.restart();
     const start = native.requests.length;
     await native.run("OUTPUT_CASE ISOLATED_WRITE", run.sessionID);
@@ -306,7 +309,12 @@ test(
       sessionID: run.sessionID,
     })) as Snapshot;
     assert.deepEqual(
-      snapshot.decisions.map((decision) => decision.reason),
+      snapshot.decisions.slice(0, kept.length),
+      kept,
+      "the read's decisions are kept across the restart",
+    );
+    assert.deepEqual(
+      snapshot.decisions.slice(kept.length).map((decision) => decision.reason),
       ["placeholder-write"],
       "a restart records no new decisions for old outputs",
     );

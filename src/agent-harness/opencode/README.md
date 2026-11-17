@@ -304,8 +304,10 @@ subagent task, shell command and answer.
 vSR keeps no output. Of a decision it keeps a subject: the command, subagent
 task, prompt, or for an output its source (file, address or command), on one
 line, at most 200 characters, with secrets in known formats hidden. The
-session's decisions are kept in memory (500 per session, 64 sessions); the
-calibration log keeps its 5,000 in plugin storage. A token is never shown in the
+session's decisions are kept in OpenCode's plugin storage (500 per session, 64
+sessions), so the panel and sidebar still show them after `/reload` or a
+restart; deleting a session deletes them. The calibration log keeps its 5,000
+there too. A token is never shown in the
 panel or returned by the plugin.
 
 ## How it differs from Claude Code

@@ -1,4 +1,5 @@
 import { registerRouting } from "./routing-hooks.ts";
+import { SessionArchive } from "./archive.ts";
 import { registerGuard } from "./guard-hooks.ts";
 import { registerCheck } from "./check-hooks.ts";
 import { Controls } from "./controls.ts";
@@ -136,6 +137,16 @@ export default Plugin.define({
     );
     await log.load();
     decisions.sink = log;
+    const archive = new SessionArchive(
+      {
+        get: (key) => ctx.storage.get(key),
+        set: (key, value) => ctx.storage.set(key, value as never),
+        remove: (key) => ctx.storage.remove(key),
+        scan: (options) => ctx.storage.scan(options),
+      },
+      decisions,
+    );
+    await archive.load();
     const calibrationState = () => {
       const { at } = calibrated.state();
       const since = log.countSince(at ?? 0);
@@ -341,6 +352,7 @@ export default Plugin.define({
       notify,
     );
     return async () => {
+      await archive.close();
       await controls.close();
       closeRouting();
       closeGuard();

@@ -152,10 +152,14 @@ test(
       1,
       "one command commits exactly once",
     );
-    assert.deepEqual(after.decisions, []);
+    assert.deepEqual(
+      after.decisions,
+      before.decisions,
+      "the panel shows the decisions made before the reload and restart",
+    );
     assert.ok(
-      screen.text.includes("No decisions in this session yet."),
-      screen.text.slice(-8000),
+      /REDACTED .*Redact/.test(screen.last),
+      "the reopened panel draws them: " + screen.last,
     );
     assert.equal(native.requests.length, generations);
     assert.equal(native.states.length, classifications);

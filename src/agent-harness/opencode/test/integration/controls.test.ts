@@ -37,10 +37,11 @@ test(
     assert.equal(after.controls.goal, "quality");
     assert.equal(after.controls.revision, 1);
     assert.equal(after.controls.persistence, "durable");
+    assert.ok(before.decisions.length);
     assert.deepEqual(
       after.decisions,
-      [],
-      "ephemeral decisions must not pretend to survive a restart",
+      before.decisions,
+      "decisions are kept in plugin storage across a restart",
     );
     assert.deepEqual(
       await native.rpc("controls", { ...input, expectedRevision: 1 }),

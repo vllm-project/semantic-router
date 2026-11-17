@@ -340,6 +340,11 @@ itself), on one line, at most 200 characters, with fixed secret patterns hidden.
 Each decision also keeps a copy of its app's thresholds when it was made
 (`thresholds`, in the calibration log's order), so a later calibration does not
 redraw the bars of decisions already made.
-The session view is memory-only and bounded by retention settings; the
-calibration log below is kept in plugin storage. A new server has a
-new snapshot instance ID, allowing clients to discard obsolete revisions.
+The session view is bounded by retention settings and kept in plugin storage,
+one `sessions/<id>` key per session written shortly after it changes, as the
+Claude Code plugin keeps its decisions in session state. A restored decision
+passes the same checks as a new one, keeps its outcome, observed model, usage
+and feedback, and is not logged again; the newest sessions within
+`maxSessions` are restored and older keys removed. The calibration log below is
+kept in plugin storage too. A new server has a new snapshot instance ID,
+allowing clients to discard obsolete revisions.
