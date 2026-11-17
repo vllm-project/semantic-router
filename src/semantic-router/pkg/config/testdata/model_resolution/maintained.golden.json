@@ -820,11 +820,13 @@
       "default/systemone.names": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
       "default/systemone.offline": "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline",
       "default/systemone.request_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
-      "default/systemone.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a"
+      "default/systemone.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
+      "default/systemone.vela31_described": "model_runtime /tmp/vsr-fixtures/vela31@ cpu replicas=0"
     },
     "started": [
       "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
       "model_runtime /tmp/vsr-fixtures/embedding@ auto replicas=0",
+      "model_runtime /tmp/vsr-fixtures/vela31@ cpu replicas=0",
       "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
       "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
       "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline"

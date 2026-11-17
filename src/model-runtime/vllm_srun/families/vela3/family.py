@@ -320,7 +320,7 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         self.package = package
         self.networks = networks
         self.router = router
-        self.reader = Reader(router)
+        self.reader = Reader(router, render31=package.render31)
         self.answerer = Answerer(router)
         self.tokens = _tokens(package)
         self.scan_tokens = scan_tokens
