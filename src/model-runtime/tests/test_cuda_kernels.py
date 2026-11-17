@@ -135,8 +135,12 @@ def test_optional_kernels_require_consent_for_cuda_conv_and_fused_prep(
         assert kernels.select("gdn_prep").source == "triton-gfx942"
 
 
-@pytest.mark.parametrize("consents", [False, True])
-def test_approximate_kernels_need_the_familys_consent(tmp_path, consents):
+@pytest.mark.parametrize(
+    ("gpu", "cpu", "consents"),
+    [(False, False, False), (True, False, False), (False, True, True)],
+)
+def test_approximate_kernels_need_the_familys_consent(tmp_path, gpu, cpu, consents):
+    """On the CPU accelerator only the CPU consent counts; a GPU record's does not."""
     from vllm_srun.accel.cpu import CPUAccelerator
     from vllm_srun.engines.native.engine import NativeEngine
     from vllm_srun.plugins.base import (
@@ -155,7 +159,12 @@ def test_approximate_kernels_need_the_familys_consent(tmp_path, consents):
     spec = ModelSpec(
         "tiny",
         BackboneSpec("modernbert", config, (tmp_path / "model.safetensors",), "model."),
-        DtypePolicy(autocast=None, bf16_resident=False, approximate_kernels=consents),
+        DtypePolicy(
+            autocast=None,
+            bf16_resident=False,
+            approximate_kernels=gpu,
+            approximate_cpu_kernels=cpu,
+        ),
         max_input_tokens=4096,
         encoder=True,
     )

@@ -4,12 +4,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
 import ProductIcon from '../components/ProductIcon'
-import ProductLoadingState from '../components/ProductLoadingState'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
 import InsightsEmptyState from './InsightsEmptyState'
+import InsightsSkeleton from './InsightsSkeleton'
 import InsightsReviewsView from './InsightsReviewsView'
 import InsightsRunsView from './InsightsRunsView'
 import { ModelLabelsProvider, modelText, useModelLabels } from './insightsModelLabelSupport'
@@ -305,7 +305,12 @@ function InsightsViews() {
   }
 
   if (loading && !hasReplayData && records.length === 0) {
-    return <ProductLoadingState label="Loading insights" />
+    return (
+      <ConfigPageManagerLayout {...layout}>
+        <InsightsViewSwitch view="requests" />
+        <InsightsSkeleton />
+      </ConfigPageManagerLayout>
+    )
   }
 
   return (
@@ -318,7 +323,7 @@ function InsightsViews() {
       ) : null}
 
       {aggregate ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<InsightsSkeleton />}>
           <InsightsCharts aggregate={aggregate} />
         </Suspense>
       ) : null}

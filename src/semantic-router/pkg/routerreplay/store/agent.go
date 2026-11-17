@@ -4,6 +4,7 @@ package store
 const (
 	HarnessClaudeCode = "claude_code"
 	HarnessCodex      = "codex"
+	HarnessOpenCode   = "opencode"
 )
 
 // AgentIdentity places a record in its agent run, the session it is filed
