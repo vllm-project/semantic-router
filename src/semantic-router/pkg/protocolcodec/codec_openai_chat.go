@@ -217,7 +217,7 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	request := decodeChatBaseRequest(wire)
-	request.AudioOutput, err = decodeChatAudioOutputOptions(wire.Modalities, wire.Audio)
+	request.AudioOutput, err = decodeChatAudioOutputOptions(wire.Modalities, wire.Audio, wire.Stream)
 	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
