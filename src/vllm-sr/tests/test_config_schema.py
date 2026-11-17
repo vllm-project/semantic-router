@@ -174,6 +174,24 @@ def test_reference_config_matches_generated_structure() -> None:
     assert validate_config_structure(config) == []
 
 
+def test_protection_cache_economics_matches_generated_structure() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    with (repository_root / "config" / "config.yaml").open(encoding="utf-8") as stream:
+        config = safe_load_router_config(stream)
+    tuning = config["global"]["router"]["learning"]["protection"]["tuning"]
+
+    assert tuning["cache_economics"] == {
+        "enabled": True,
+        "cache_ttl_seconds": 300,
+        "default_remaining_turns": 3,
+    }
+    assert validate_config_structure(config) == []
+    tuning["cache_economics"]["cache_ttl_seconds"] = 0
+    assert validate_config_structure(config)
+    tuning["cache_economics"] = {"remaining_turns": 3}
+    assert validate_config_structure(config)
+
+
 @pytest.mark.parametrize(
     "config_path",
     sorted(
@@ -308,3 +326,34 @@ def test_environment_reference_is_accepted_in_a_number_or_auto_field(
     )
 
     assert validate_user_config(config, log_summary=False) == []
+
+
+def test_budgets_validate_and_refuse_what_cannot_be_enforced() -> None:
+    budgets = {
+        "currency": "USD",
+        "unpriced": "refuse",
+        "output_reserve_tokens": 4096,
+        "run": {"limit": 2.5, "idle_timeout_seconds": 3600},
+        "users": [
+            {"name": "daily", "match": {"group": "eng"}, "limit": 10, "window": "day"}
+        ],
+    }
+    config = {"version": "v0.5", "global": {"services": {"budgets": budgets}}}
+    assert validate_config_structure(config) == []
+
+    for bad, field in [
+        ({"run": {"limit": 0}}, "global.services.budgets.run.limit"),
+        (
+            {"users": [{"name": "a", "limit": 1, "window": "fortnight"}]},
+            "global.services.budgets.users.0.window",
+        ),
+        (
+            {"users": [{"name": "a", "window": "day"}]},
+            "global.services.budgets.users.0",
+        ),
+        ({"unpriced": "ignore"}, "global.services.budgets.unpriced"),
+    ]:
+        errors = validate_config_structure(
+            {"version": "v0.5", "global": {"services": {"budgets": bad}}}
+        )
+        assert any(error.startswith(field) for error in errors), (bad, errors)

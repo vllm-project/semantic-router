@@ -24,6 +24,9 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
+    # The Router alone defaults to memory unless the config names a Redis
+    # server. This stack runs Redis, so it keeps Responses history across
+    # restarts when the config names no store.
     "response_api": {
         "enabled": True,
         "store_backend": "redis",

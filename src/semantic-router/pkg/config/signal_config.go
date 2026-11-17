@@ -27,6 +27,7 @@ type Signals struct {
 	ConversationRules  []ConversationRule  `yaml:"conversation,omitempty"`
 	MetadataRules      []MetadataRule      `yaml:"metadata,omitempty"`
 	InputModalityRules []InputModalityRule `yaml:"input_modality,omitempty"`
+	AgentRules         []AgentRule         `yaml:"agent,omitempty"`
 	SystemOneRules     []SystemOneRule     `yaml:"systemone,omitempty"`
 }
 

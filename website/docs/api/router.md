@@ -467,6 +467,8 @@ names no model, decision, or request content:
 | `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
 | `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |
 | `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
+| `budget_exceeded` | 429 | `rate_limit_error` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) does not cover the call's estimated cost, or has nothing left. The message names the budget, its limit, what it has left and the estimate, as `x-vsr-budget-scope` and `x-vsr-budget-remaining` do. A user budget's refusal carries `Retry-After` until its window starts again. |
+| `budget_unpriced` | 403 | `permission_error` | The selected model has no price in the spend budgets' currency, and `budgets.unpriced` is `refuse`. |
 
 The Router logs each of these failures at `WARN`, under the request's
 `x-request-id`, with the code and its own reason: the model the request named,
@@ -556,6 +558,15 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays/{id}` | Read one record |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
+| `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session |
+| `GET` | `/api/v1/observability/replays/run?session_id=...` | Read one agent run as a tree of its agents and calls |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models with the label Insights shows for each |
+
+The runs list takes the list's filters, `limit` and `offset`; a run reads every
+recipe of its session. See
+[Agent runs](../tutorials/plugin/router-replay#agent-runs) for both responses
+and [Model labels](../tutorials/plugin/router-replay#model-labels) for the
+labels.
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
 `model`, `session_id`, `turn_id`, `cache_status`, and `search`, and, for agent
@@ -662,6 +673,7 @@ costs; infrastructure charges and billing adjustments are excluded.
 | `baseline_source` | `configured_model`, `recipe_most_expensive` (the default), or `selected_model` for a direct request. |
 | `baseline_unavailable` | Why a priced record has no baseline: `pricing_not_configured` or `currency_mismatch`. A configured baseline that cannot be used never falls back to the default. |
 | `router_calls` | Model calls the Router made itself to answer the request, entries by task `kind` and `model`. |
+| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls, and the `settlement`: `usage`, `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
 
 A Looper request's cost is its calls, so its record has no `actual_cost` and one
 `router_calls` entry of kind `looper`: `calls`, the request's `prompt_tokens`
@@ -669,8 +681,9 @@ and `completion_tokens`, `cost` and `currency` for the calls that have a price,
 and `unpriced_calls` with `unpriced_reasons` for the others. A call is unpriced
 when its model has no price, it reported no usage or incomplete usage, it is in
 another currency than the first priced call, or no attempt trace kept it
-(`attempt_not_traced`: of the Looper algorithms only `escalate` traces its
-attempts). An unpriced call is never counted as free.
+(`attempt_not_traced`: a call past the trace's bound of 100 calls or 64 KiB).
+Every Looper algorithm traces its calls, so each one is priced at its own
+model's rates. An unpriced call is never counted as free.
 
 Request-scoped runtime calls also appear here: `decision_model` for native
 questions and selections, `systemone` for remote System One exchanges, and
@@ -834,21 +847,26 @@ Replay lifecycle values describe what the recorder observed:
 
 - `in_progress`: no terminal response frame has been recorded yet.
 - `completed`: the response finished normally.
-- `failed`: the Router refused the request, or routing or the upstream
-  response failed. The record keeps the status the client received. A refusal
-  after routing uses `terminal_reason: request_rejected`. In standalone mode, a
-  request no backend answered keeps the gateway's `503` or `504` local reply
-  with `terminal_reason: upstream_<failure>`, such as
-  `upstream_connect_failure` or `upstream_reset`. A fallback chain that ends
-  without a success keeps the answer of its last attempt, in both modes:
-  `upstream_error_response` when that backend answered with an error,
-  `upstream_<failure>` when it did not answer, and `request_rejected` when a
-  candidate needs a delegated credential the request does not carry.
+- `failed`: the Router refused the request, the Router failed, or the
+  upstream response failed. The record keeps the status the client received,
+  and `terminal_reason` says why, as in the table below.
 - `aborted`: the stream ended without a valid terminal frame, for example
   after a disconnect or timeout.
 
 An HTTP `200` response header alone does not make a streaming record
-`completed`.
+`completed`. A stream that reached its terminal frame does, even when the
+record cannot keep its answer, such as one that was all thinking the client
+asked to omit.
+
+| `terminal_reason` of a `failed` record | When |
+| --- | --- |
+| `request_rejected` | The Router refused the request after routing it, with a `4xx`: before it sent the request to a backend, such as for a capability the selected model's wire format lacks or a `fast_response` that sets `block: true`, or in place of the answer, such as a `response_guard` block. A held stream's refusal arrives as its error event and keeps the `200`. A guard overload is a refusal its client retries, whether as `429` or as `529`, and so is a fallback candidate that needs a delegated credential the request does not carry. |
+| `request_budget_exceeded` | The request does not fit the [request budget](#request-budget-errors) of any candidate. |
+| `budget_exceeded`, `budget_unpriced` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) refused the call before it was sent. |
+| `request_processing_failed` | The Router failed after routing. It answered with its own `5xx`, such as for a failed RAG retrieval, context compression that fails closed, a cached answer it cannot serve, a fast response it cannot encode, or a failed context recovery follow-up, or the request failed with an internal error. In standalone mode the record of such an error keeps the gateway's `500`. Behind Envoy, the ext_proc filter's `failure_mode_allow` decides what the client gets, so the record has no status. |
+| `upstream_invalid_response` | The Router cannot read or pass on the upstream answer, such as a cut body or one with no output, and answers `502` in place of the upstream's `200`. A held stream it read to its end but could not rebuild an answer from ends this way too, under its `200`. |
+| `upstream_error_response` | The upstream answered with an error status, or its stream carried an error event, which keeps the `200` the stream began with. A fallback chain that ends without a success keeps the answer of its last attempt, in both modes. |
+| `upstream_<failure>` | No backend answered: in standalone mode, the gateway's `503` or `504` local reply, such as `upstream_connect_failure` or `upstream_reset`, and, in both modes, a fallback chain whose last attempt did not answer. |
 
 ## Which port should I use?
 

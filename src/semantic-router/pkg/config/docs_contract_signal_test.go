@@ -28,6 +28,7 @@ var signalTutorialBuckets = map[string]string{
 	"user-feedback":  "application",
 	"metadata":       "heuristic",
 	"input-modality": "heuristic",
+	"agent":          "heuristic",
 	"systemone":      "",
 	"refusal":        "application",
 	"turn-relation":  "application",

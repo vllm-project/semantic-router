@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -282,6 +283,15 @@ func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName stri
 	logging.Infof("[FastResponse] Decision '%s' has fast_response plugin, returning immediate response", decisionName)
 	metrics.RecordPluginExecution("fast_response", requestDecisionStateKey(ctx), "executed", 0)
 	ctx.VSRSelectedDecisionName = decisionName
+	if fastCfg.Block {
+		// A 400, as a provider's content filter answers: Claude Code reads a
+		// 401 or 403 as a failed login and retries it. The record ends with
+		// the refusal when requestBodyReply sends it.
+		ctx.ResponsePath = headers.ResponsePathBlocked
+		ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "request_blocked", fastCfg.Message, nil)
+		return r.encodeImmediateResponseForClient(
+			r.createErrorResponseOnPath(http.StatusBadRequest, fastCfg.Message, headers.ResponsePathBlocked), ctx)
+	}
 
 	body, contentType, _, err := r.encodeSyntheticTextResponse(
 		ctx,

@@ -64,6 +64,7 @@ export const SIGNAL_COLORS: Record<string, string> = {
   conversation: '#6A9955',
   metadata: '#808080',
   input_modality: '#4FC1FF',
+  agent: '#C586C0',
   systemone: '#B180D7',
 }
 

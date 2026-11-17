@@ -11,6 +11,8 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
 import InsightsEmptyState from './InsightsEmptyState'
 import InsightsReviewsView from './InsightsReviewsView'
+import InsightsRunsView from './InsightsRunsView'
+import { ModelLabelsProvider, modelText, useModelLabels } from './insightsModelLabelSupport'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
 import { buildReplayQueryString } from './insightsPageFilters'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
@@ -31,13 +33,16 @@ const insightsPageSize = 25
 const insightsSearchDebounceMs = 300
 const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
 
-// All requests, or the approval reviews among them, kept in the URL so a
-// reviewed session's link opens its reviews.
-function InsightsViewSwitch({ reviews }: { reviews: boolean }) {
+type InsightsView = 'requests' | 'runs' | 'reviews'
+
+// All requests, the agent runs they make up, or the approval reviews among
+// them, kept in the URL so a reviewed session's link opens its reviews.
+function InsightsViewSwitch({ view }: { view: InsightsView }) {
   const [, setSearchParams] = useSearchParams()
   const views: { label: string; active: boolean; params: Record<string, string> }[] = [
-    { label: 'All requests', active: !reviews, params: {} },
-    { label: 'Reviews', active: reviews, params: { view: 'reviews' } },
+    { label: 'All requests', active: view === 'requests', params: {} },
+    { label: 'Runs', active: view === 'runs', params: { view: 'runs' } },
+    { label: 'Reviews', active: view === 'reviews', params: { view: 'reviews' } },
   ]
   return (
     <div className={styles.viewSwitch} role="group" aria-label="Insights view">
@@ -76,10 +81,21 @@ export function InsightsTurnFilter() {
   )
 }
 
+// Insights, its models read by their labels.
 export default function InsightsPage() {
+  return (
+    <ModelLabelsProvider>
+      <InsightsViews />
+    </ModelLabelsProvider>
+  )
+}
+
+function InsightsViews() {
   const navigate = useNavigate()
+  const modelLabels = useModelLabels()
   const [searchParams] = useSearchParams()
   const reviewsView = searchParams.get('view') === 'reviews'
+  const runsView = searchParams.get('view') === 'runs'
   const turn = searchParams.get('turn') ?? ''
   const [records, setRecords] = useState<InsightsRecord[]>([])
   const [aggregate, setAggregate] = useState<InsightsAggregateResponse | null>(null)
@@ -97,7 +113,7 @@ export default function InsightsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const requestSequenceRef = useRef(0)
   const requestAbortControllerRef = useRef<AbortController | null>(null)
-  const tableColumns = useMemo(() => createInsightsTableColumns(), [])
+  const tableColumns = useMemo(() => createInsightsTableColumns(modelLabels), [modelLabels])
 
   const activeFilters = useMemo(
     () => ({
@@ -200,7 +216,7 @@ export default function InsightsPage() {
   )
 
   useEffect(() => {
-    if (reviewsView) {
+    if (reviewsView || runsView) {
       return undefined
     }
     void fetchRecords()
@@ -214,7 +230,7 @@ export default function InsightsPage() {
     }, 5000)
 
     return () => window.clearInterval(interval)
-  }, [autoRefresh, fetchRecords, reviewsView])
+  }, [autoRefresh, fetchRecords, reviewsView, runsView])
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -268,10 +284,18 @@ export default function InsightsPage() {
     title: 'Insights',
     description: 'See what the router picked, what signals fired, and how much it saved.',
   }
+  if (runsView) {
+    return (
+      <ConfigPageManagerLayout {...layout}>
+        <InsightsViewSwitch view="runs" />
+        <InsightsRunsView />
+      </ConfigPageManagerLayout>
+    )
+  }
   if (reviewsView) {
     return (
       <ConfigPageManagerLayout {...layout}>
-        <InsightsViewSwitch reviews />
+        <InsightsViewSwitch view="reviews" />
         <InsightsReviewsView
           key={searchParams.get('session') ?? ''}
           initialSession={searchParams.get('session') ?? ''}
@@ -286,7 +310,7 @@ export default function InsightsPage() {
 
   return (
     <ConfigPageManagerLayout {...layout}>
-      <InsightsViewSwitch reviews={false} />
+      <InsightsViewSwitch view="requests" />
       {error ? (
         <div className={styles.error}>
           <span>{error}</span>
@@ -375,7 +399,7 @@ export default function InsightsPage() {
               <option value="all">All Models</option>
               {availableModels.map((model) => (
                 <option key={model} value={model}>
-                  {model}
+                  {modelText(modelLabels, model)}
                 </option>
               ))}
             </select>

@@ -8,6 +8,7 @@ export type ShellRoutePage =
   | 'evaluation'
   | 'insights'
   | 'insights-record'
+  | 'insights-run'
   | 'logs'
   | 'models'
   | 'monitoring'
@@ -41,6 +42,7 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/status', page: 'status' },
   { path: '/logs', page: 'logs' },
   { path: '/insights', page: 'insights' },
+  { path: '/insights/run', page: 'insights-run' },
   { path: '/insights/:recordId', page: 'insights-record' },
   { path: '/evaluation', page: 'evaluation' },
   { path: '/models', page: 'models' },
