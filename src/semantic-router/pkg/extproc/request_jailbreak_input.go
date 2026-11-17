@@ -24,17 +24,23 @@ func extractJailbreakInput(request *llmprotocol.Request) *classification.Jailbre
 }
 
 // currentTurnStart is where the request's current turn starts: the user and
-// tool messages after the last assistant message. A codec may split one wire
-// message into user text and several tool-result messages, so the trailing
+// tool messages after the last completed assistant turn. A codec may split one
+// wire message into user text and several tool-result messages, so the trailing
 // untrusted group stays together and a sibling tool result cannot disappear
 // merely because include_history is disabled. A system or developer message
 // inside the conversation, which Claude Code inserts where it applies, after
-// the user's message or a tool result, does not end the turn.
+// the user's message or a tool result, does not end the turn. An assistant
+// message carrying a tool call is not a completed assistant turn either: it
+// continues the user's tool cycle, so the user message that initiated the
+// cycle stays in the current turn instead of falling into history.
 func currentTurnStart(messages []llmprotocol.Message) int {
 	start := len(messages)
 	for index := len(messages) - 1; index >= 0; index-- {
 		role := messages[index].Role
 		if isInstructionRole(role) {
+			continue
+		}
+		if role == llmprotocol.RoleAssistant && isToolCallContinuation(messages[index]) {
 			continue
 		}
 		if role != llmprotocol.RoleUser && role != llmprotocol.RoleTool {
@@ -43,6 +49,19 @@ func currentTurnStart(messages []llmprotocol.Message) int {
 		start = index
 	}
 	return start
+}
+
+// isToolCallContinuation reports whether an assistant message carries at least
+// one tool call. Text next to a tool call is the model's narration of the
+// call, not a completed answer, so it does not end the turn; an assistant
+// message without a tool call remains the delimiter between turns.
+func isToolCallContinuation(message llmprotocol.Message) bool {
+	for _, content := range message.Content {
+		if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func isInstructionRole(role llmprotocol.Role) bool {
