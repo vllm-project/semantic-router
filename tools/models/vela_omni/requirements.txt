@@ -1,5 +1,5 @@
 # Install the matching CPU or ROCm PyTorch/torchaudio wheels for the export host.
-torch==2.8.0
+torch==2.13.0
 torchaudio==2.8.0
 transformers==4.57.6
 onnx==1.19.0
