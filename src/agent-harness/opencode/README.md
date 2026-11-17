@@ -1,21 +1,32 @@
-# vSR for OpenCode
+# vSR: vLLM Semantic Router in OpenCode
 
-This package is under development for OpenCode 2.2.0. Router, Escalate, Guard,
-Redact, Shield and Check are implemented, with a native terminal decision panel
-and durable app/wait controls, and set up through OpenCode's `/connect` and a
-`vsr-setup` skill, and calibrated from your own answers with `/vsr-calibrate`.
-Full combined qualification remains a later implementation stage.
+vSR gives OpenCode's subagents a lighter model when their task is easy, holds
+risky shell commands for you to confirm, and hides personal data and secrets
+before the model reads them. A small decision model from the vLLM Semantic
+Router project (vela3-lite, about 2.3 GB of RAM) makes these calls on your
+machine or on a runtime you host; your requests still go to your own provider.
+It does six things, the same six as the Claude Code and Codex plugins:
 
-From this directory, install dependencies and check the package:
+| App      | What it does                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------- |
+| router   | Gives each new `general` subagent the model and effort, from your three tiers, that fit its task. |
+| escalate | When you push back on an answer, the agent re-checks it and the next subagent goes one step up.   |
+| redact   | Hides personal data and secrets in `read` and shell output before the model reads them.           |
+| shield   | Warns the model when a file or web page tries to give it instructions.                            |
+| guard    | Holds a risky shell command for you to confirm in OpenCode's own permission prompt.               |
+| check    | Marks a final answer that is not backed by what the model read that turn. Off by default.         |
+
+## Install
+
+You need OpenCode 2.2.0 or later and Node 22. vSR is not on npm yet, so point
+OpenCode at this folder of a checkout. From this folder:
 
 ```bash
 npm ci
-npm run check
-npm test
-npm pack
 ```
 
-For development, configure a local package directory in `opencode.jsonc`:
+Then add it to your global configuration, `~/.config/opencode/opencode.jsonc`
+(or a project's `opencode.json`):
 
 ```json
 {
@@ -23,14 +34,11 @@ For development, configure a local package directory in `opencode.jsonc`:
     {
       "package": "/absolute/path/to/semantic-router/src/agent-harness/opencode",
       "options": {
-        "runtimeUrl": "http://127.0.0.1:8790/v1/decisions",
-        "runtimeModel": "",
-        "runtimeTokenEnv": "VSR_RUNTIME_TOKEN",
         "routing": {
           "tiers": [
-            { "model": "your-provider/light", "efforts": ["low", "high"] },
-            { "model": "your-provider/middle", "efforts": ["low", "high"] },
-            { "model": "your-provider/strong", "efforts": ["low", "high"] }
+            { "model": "your-provider/light" },
+            { "model": "your-provider/middle" },
+            { "model": "your-provider/strong" }
           ]
         }
       }
@@ -38,6 +46,19 @@ For development, configure a local package directory in `opencode.jsonc`:
   ]
 }
 ```
+
+The tiers are three models of one provider in your OpenCode configuration,
+lightest first, and your session runs on one of them: the router moves a
+subagent between them only when it starts from one of the three. Without
+`routing`, router and escalate stay off. OpenCode's background service reads
+the configuration when it starts, so restart it after a change:
+
+```bash
+opencode service restart
+```
+
+`opencode plugin list` lists only plugins installed from npm or Git, so it does
+not show a plugin loaded from a folder.
 
 ## Set up the decision runtime
 
@@ -49,254 +70,170 @@ listener that publishes a System One model.
    in `~/.local/share/vsr/venv`, and starts vela3-lite on port 8790 on the GPU
    or CPU, for this login or as a user service. OpenCode asks before each
    command it runs. It is the same runtime the Claude Code plugin installs, so
-   one runtime serves every agent on the machine.
+   one runtime serves every agent on the machine. It runs on Linux and macOS;
+   a Mac runs it on the CPU, since an Apple GPU cannot run vela3 yet. On Windows,
+   connect to a runtime on another machine instead.
 2. **Connect it.** Run `/connect` and pick **vSR decision runtime**: **Runtime
    without a token** for `http://127.0.0.1:8790/v1/decisions`, or **Runtime with
    a token** for one that needs a key. The form asks the `/v1/decisions` URL and,
    when the runtime serves several, the model. OpenCode keeps the token in its
    own credential store, and vSR switches to the connected runtime at once,
-   without a restart. A connected runtime takes the place of `runtimeUrl`,
-   `runtimeModel` and the token variable below; disconnect it to return to them.
+   without a restart. Without a connection, vSR uses the runtime in the
+   [options](#options), by default `http://127.0.0.1:8790/v1/decisions`.
 3. **Check it.** Press **F9** in a session. vSR lists the runtime's models and
-   asks one case per enabled app through the path that app's hook takes (a
-   force push for guard, a support ticket for redact, a page with hidden
-   instructions for shield, an easy task for router, pushback for escalate, an
-   invented summary for check). Each line says whether the app decides it as it
-   does on vela3-lite and how long it took, with the median. An app with no
-   answer means the runtime is offline, refuses the token, or is slower than the
-   app's wait (F7).
+   asks one case per enabled app through the path that app takes (a force push
+   for guard, a support ticket for redact, a page with hidden instructions for
+   shield, an easy task for router, pushback for escalate, an invented summary
+   for check). Each line says whether the app decides it as it does on
+   vela3-lite and how long it took, with the median. An app with no answer means
+   the runtime is offline, refuses the token, or is slower than the app's wait.
 
-A remote runtime receives everything the enabled apps check: each read and shell
-output, fetched page, prompt, child task, shell command and answer.
+## What you see
 
-To remove vSR: take the plugin out of `opencode.json`, remove the credential in
-`/connect`, and, if `vsr-setup` installed a runtime, stop it
-(`systemctl --user disable --now vsr-runtime` for the user service) and delete
-`~/.local/share/vsr`, unless the Claude Code plugin still uses it.
+Above the prompt, one line counts the session's decisions:
+`vSR · 12 decisions · 0 partial · 0 withheld · F5`. A held command is OpenCode's
+own permission prompt, with the reason vSR held it. Everything else is in the
+decisions panel, **F5**:
 
-Without `/connect`, the options name the runtime. `runtimeModel` selects one model
-when an endpoint serves several. Remote URLs use the same `/v1/decisions` API.
-Set the named environment variable in the OpenCode server's environment if the
-endpoint needs a token. Credentials, URL query tokens and embedded URL passwords
-are not accepted as options. No token is returned in diagnostics or decision
-snapshots. Redirects are refused so authorization cannot move to another host.
-A remote decision runtime receives the text supplied for classification.
+- At the top: whether the runtime answers, which apps are on, each app's wait,
+  the router's goal, when you last calibrated, and the tokens and estimated cost
+  of the session's subagents (from OpenCode's prices; a model with no known
+  price is counted apart).
+- Then each decision, newest first, with how long it took, its score and why:
+  - `routed`: vSR picked the subagent's model and effort from your tiers.
+    `Planned` is what vSR chose and `Observed` what the subagent actually ran on.
+  - `kept`: the subagent stays on its model: the router was not sure enough, the
+    goal is `quality`, or the model is not one of your tiers.
+  - `escalated`: you pushed back; the agent re-checks and the next subagent
+    goes one step up.
+  - `held`, then `approved` or `declined`: a shell command waited for your
+    answer, and what you answered.
+  - `redacted`: personal data or secrets were hidden from an output.
+  - `shielded`: a file or page tried to instruct the model, which was told to
+    treat it as data.
+  - `unverified`: the answer claims things that what the model read does not
+    back. Look twice. `verified` when it does.
+  - `partial`: an output was checked only in part, and the rest went to the
+    model unchecked.
+  - `withheld`: an app set to wait until done could not finish, so the model
+    got nothing from that output.
+  - `skipped`: an app got no answer in time; the model went on without it.
+  - `allowed`: a command guard let run.
 
-The server registers RPC `vsr.opencode.v1` with `snapshot`, `diagnose`, `verify`,
-`controls`, `feedback` and the `calibration*` methods. `diagnose` queries runtime capabilities and
-`verify` asks F9's cases; loading the package alone sends no content to a model. Import the exported `./rpc`
-definition to call these through an OpenCode client. Snapshots are scoped to the
-requested session. Of a decision's text only its subject is kept: the command,
-child task, prompt or output source (file, address or command, never the output
-itself), on one line, at most 200 characters, with fixed secret patterns hidden.
-The session view is memory-only and bounded by retention settings; the
-calibration log below is kept in plugin storage. A new server has a
-new snapshot instance ID, allowing clients to discard obsolete revisions.
+The keys work in any session, and each has a command:
 
-Options also include `apps`, `waits`, `maxDecisions` and `maxSessions`. Apps default
-to enabled except Check; waits are milliseconds (`1000`, `2000`, `3000`) or
-`"done"`. Unknown options are rejected rather than silently ignored. Retention defaults to 500 decisions per
-session and 64 sessions, with least recently used session eviction.
+| Key     | Command          | What it does                                                           |
+| ------- | ---------------- | ---------------------------------------------------------------------- |
+| F5      | `/vsr`           | Open the decisions panel                                               |
+| F6      | `/vsr-apps`      | Turn an app on or off, or hand the apps back to a Router listener      |
+| F7      | `/vsr-waits`     | Choose how long redact, shield and guard wait: 1 to 3 s, or until done |
+| F8      | `/vsr-feedback`  | Say whether a decision was right; for router, whether the model fit    |
+| F9      | `/vsr-check`     | Check the decision runtime: one case per enabled app                   |
+| F10     | `/vsr-sessions`  | Show another session's decisions                                       |
+| Palette | `/vsr-goal`      | Choose the router's goal: balanced, quality or save                    |
+| Palette | `/vsr-refresh`   | Refresh the panel                                                      |
+| Palette | `/vsr-calibrate` | Fit an app's thresholds to your answers                                |
 
-Router applies to new `general` subagent calls. Configure three distinct models
-in ascending capability order from one provider, and use that ladder for the
-main session's model too. Replace the example IDs with models enabled in your
-OpenCode provider configuration. Optional `efforts` lists name supported native
-variants in ascending order; omit them to use each model's default. Variants
-must appear in OpenCode's model catalog. Explicit child models, resumed children,
-agents with their own model and models outside this ladder retain their choices.
-The main session is never changed. A child receives its selection at creation;
-provider retries retain that selection.
+What you change with F6, F7 and the goal is saved and applies to every session,
+also after a restart. Changing the same setting in the options later wins over
+it.
 
-Difficulty and reasoning-step scores use a 0–2 scale. Defaults are
-`easyBelow: 0.65`, `hardFrom: 1.5`, `minConfidence: 0.5` and
-`downgradeConfidence: 0.6`. `routing.goal` is `"balanced"`, `"save"` (uses the
-ordinary confidence threshold for downsizing) or `"quality"` (no downsizing).
-Low confidence, invalid/disabled models or unavailable classification preserve
-the host's original choice. `routing.deadlineMs` defaults to 1500 and includes
-queue time. Tasks over 32,000 UTF-16 code units skip classification.
+When the runtime cannot be reached, the panel says `offline`, and vSR steps
+aside: OpenCode works as it would without vSR, except that guard's fixed rules
+still hold, and vSR tries again a minute later. An app that waits until done
+does not step aside: redact and shield withhold what they cannot check, and
+guard holds every command.
 
-Escalate classifies admitted human prompts when their turn actually executes.
-Wrong-answer/different-answer probability at least `feedbackThreshold: 0.7`, or
-repeat probability at least `repeatThreshold: 0.8`, adds a re-check reminder.
-The next eligible child consumes the escalation once, including simultaneous
-launches. Its tier is one above the ordinary pick, capped at the strongest tier
-and never below the parent's tier. Its effort rises one step and, on the same
-tier, never below one step above the parent's declared effort. At the ceiling it
-stays at the highest supported effort. If task classification is unavailable
-after pushback was detected, the parent's tier supplies the baseline. Queued
-prompts and synthetic background messages do not inherit another turn's
-escalation. Interrupting/deleting a session cancels pending local requests.
+## How the router decides
 
-Snapshots distinguish the planned model from `observedModel`, child session and
-observed token usage and host cost estimates read after completion. Missing observations remain
-absent; a failed spawn is recorded separately. No estimated savings are claimed.
-Prior human text is held transiently in bounded memory for repeat detection;
-it is never included in decision records or diagnostics. Classification sends
-that text and child tasks to the configured runtime.
+For each new `general` subagent, vSR asks how difficult the task is and how
+many reasoning steps it needs.
 
-Guard covers OpenCode's built-in `shell` tool. It decomposes shell chains while
-preserving quoted text, substitutions, heredocs and pipeline boundaries. Fixed
-rules flag catastrophic deletion, disk/device writes, recursive system-wide
-permission changes, fork bombs and downloads fed to interpreters, including
-common wrappers and nested shell strings. These rules stay active without a
-runtime. They are a bounded shell analysis, not a complete shell sandbox.
+- Easy tasks go to your light tier, hard ones to your strong tier, the rest to
+  the middle. With `efforts` on a tier, the effort follows the steps answer.
+- A tier lighter than your session's is used only when the decision model is
+  sure (confidence 0.6 or more); below 0.5 the subagent keeps your session's
+  model. `routing.goal` changes this: `quality` never uses a lighter tier,
+  `balanced` is the default, `save` uses one whenever the answer is clear enough
+  to route at all.
+- When you push back on an answer (escalate), the next subagent goes one tier
+  up, never below your session's, and one effort higher.
 
-Commands exceeding 32,000 UTF-16 code units or 12 parts require native approval.
-Other parts are classified sequentially within one shared budget. A review score
-at least `guard.reviewThreshold` (default 0.9) requires native approval before
-execution. Existing native deny/ask rules remain in force. Rejection or
-interruption prevents execution, and snapshots distinguish held, approved and
-declined commands. A command that was approved and exits nonzero remains
-approved. Checks and outcomes are scoped to session, assistant message and call.
+vSR never changes your session's own model, and picks a subagent's model only
+when the subagent starts. A subagent that names a model, a resumed one, an
+agent with its own model, and a session on a model outside your tiers keep
+their choice.
 
-`waits.guard` defaults to 3000 ms. With bounded waits, unavailable classification
-records a skipped check and leaves native permissions in control; fixed rules
-and coverage limits still require approval. `"done"` uses a 60-second maximum
-and requires native approval for any part it could not check, including offline,
-malformed, unsupported and timed-out responses. Cancellation aborts the local
-decision request and prevents the pending command from running. Saturating the
-bounded pending-check capacity rejects new shell attempts until calls finish.
-Manual shell sessions and commands executed through other custom tools are
-outside this adapter's coverage. Classifier framing and pure shell rules are
-ported locally from the Claude plugin, with source revisions in the code.
+## Guard
 
-Redact covers text returned by native `read` and `shell`, including nonzero shell
-exits and background shell notifications. Fixed rules mask known credential
-formats, private keys, authorization headers, password-bearing URLs and config
-assignments before text reaches either the decision runtime or generation model.
-Numbered `read` lines retain their prefixes while their credential values are
-masked. Other PII uses the runtime's `pii` preset and `redact.piiThreshold`
-(default 0.7). Dates and domain names stay visible, and IP-like version numbers
-are preserved. Runtime codepoint spans are validated against the exact input,
-converted to UTF-16 offsets, expanded to complete ASCII words where needed and
-merged over overlaps. Invalid spans make coverage unavailable.
+Before a shell command runs, vSR splits it into the commands it runs and asks
+about each in turn whether it needs a person's review. When a part scores 0.9
+or more, OpenCode's permission prompt asks you, with the reason. All parts share
+one wait (3 s by default); a part it could not check in that time lets the
+command run, recorded as `skipped`. Waiting until done (up to 60 s) holds a
+command it could not check instead. A command of more than 12 parts is always
+held. Guard only tightens: your own deny and ask rules in OpenCode still apply.
 
-Shield covers text returned by `read` and `webfetch`. It frames classifier input
-as file/page contents and uses `shield.injectionThreshold` (default 0.9). Flagged
-content is delivered as a quoted JSON string with untrusted-data guidance.
-Shell output is not shielded, and web output is not redacted, matching the
-baseline tool coverage. Other custom tools and ordinary human prompts are
-outside these output adapters. Checks rewrite model-visible content; they do
-not erase original files or the host's output artifacts.
+Some commands are always held, whatever the score and even while the runtime is
+offline: recursive deletes of `/`, your home directory or a top-level system
+directory, `mkfs`, `dd` to a device, fork bombs, recursive permission changes
+on `/`, and scripts from `curl` or `wget` fed to a shell or an interpreter.
+These rules see through pipes, subshells, `sudo`, `env`, `nohup` and similar
+wrappers, and `bash -c` strings. They are the Claude Code plugin's rules.
 
-Both apps inspect after tool completion and at the outgoing context boundary.
-The second boundary also covers native error results and synthetic background
-notifications. Classification runs in overlapping windows (initially 2000 UTF-16
-units, at most 8000, with a 256-unit overlap), without splitting surrogate pairs.
-Each app gets its own total wait budget, including HTTP queue time. Defaults are
-3000 ms for Redact and 2000 ms for Shield; `"done"` has a 60-second maximum per
-app. The model scan stops at 128,000 units. Fixed secret rules still scan the
-entire text up to the separate 1,000,000-unit ceiling.
+Guard covers OpenCode's `shell` tool; commands run by other tools, or typed in
+your own terminal, are outside it.
 
-| Condition                                        | Bounded wait                                                                                  | `"done"`                                      |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| Timeout, offline, unsupported or malformed reply | Keep fixed masking and completed checks; deliver remaining text with an incomplete-check note | Withhold the content                          |
-| Model scan reaches 128,000 units                 | Mark partial and retain fixed masking over the full text                                      | Withhold the content                          |
-| Text exceeds 1,000,000 units                     | Withhold the content                                                                          | Withhold the content                          |
-| Non-text attachments                             | Retain attachments with an unchecked note                                                     | Withhold attachments and text                 |
-| Cancellation                                     | Abort local HTTP and withhold pending content                                                 | Abort local HTTP and withhold pending content |
+## Redact and shield
 
-Decision metadata includes masking counts and checked/total UTF-16 coverage of
-the classifier input, with explicit partial/withheld outcomes. No raw findings
-are included. Already-inspected output is cached in bounded memory (128 entries,
-8 MiB text budget); changes to controls select a new cache key. This is transient processing
-memory, not a persistent log. Coverage stays incomplete when the host appends an
-image-omission explanation or separates attachments from their tool text.
+Redact hides names, emails, phone numbers, card numbers, addresses, ID numbers
+and secrets (API keys, tokens, private keys, passwords in config files and
+connection URLs) in `read` and shell output, including a failed command's
+output. Secrets in known formats are hidden by fixed rules before anything else
+sees the text, the decision model included; the rest is the decision model's
+call. Dates, domain names and version numbers stay. Each hidden value becomes a
+tag such as `[vsr:email]`, and the model is told the tags are vSR's and the
+values hidden on purpose. If the agent then tries to write a tag into a file as
+if it were the real value, vSR refuses the write and asks it to change only the
+lines it needs.
 
-After Redact emits a `[vsr:…]` tag, native `write` and `edit` calls cannot add it
-as real data. Recognized `apply_patch`/`patch` additions are checked per file/hunk
-as well. Edits may preserve existing tags without adding copies. Full-file
-writes containing an active tag are rejected; use focused edits to preserve
-masked values. This protection is session-scoped, with active tags inherited by
-children. It covers these file-writing tools, not arbitrary writes through shell
-programs or custom tools. Disabling Redact disables this write-back protection.
+Shield reads what `read` and `webfetch` return. When a file or page tries to
+give the agent instructions, the model gets it quoted as data with a warning.
 
-## A Router listener's switches and rules
+Both wait for the decision model, redact 3 s and shield 2 s by default; the
+part of a long output they could not read in that time goes on with a note
+(`partial`). What happens when a check cannot finish:
 
-Pointed at a Router listener that publishes a System One model, vSR reads the
-listener's listing (`GET /v1/systemone/models`) at the first prompt, which the
-first check waits for, and again at a prompt a minute or more later; loading the
-plugin calls no runtime. Its `vsr` profile (`apis.systemone.vsr` in the Router's
-config, or Default, On or Off in the Dashboard under Config › Global Config › vSR
-agent plugins) turns `router`, `escalate`, `redact`, `shield`, `guard` and
-`check` on or off for every plugin pointed at it. An app you name under `apps` in
-this plugin's options, or turn on or off in the decision view, stays yours; the listener sets the others.
-"Follow the Router listener" in the app dialog (F6) hands the apps you changed
-there back to the listener; the ones in the options stay yours. A plain decision
-runtime, whose listing answers HTTP 404, sets nothing.
+| When                                          | Waiting 1 to 3 s                                                     | Waiting until done     |
+| --------------------------------------------- | -------------------------------------------------------------------- | ---------------------- |
+| The runtime is slow, offline or errs          | The fixed rules still apply; the rest goes on, marked unchecked      | The output is withheld |
+| An output is longer than 128,000 characters   | The decision model reads the first 128,000; the fixed rules read all | The output is withheld |
+| An output is longer than 1,000,000 characters | The output is withheld                                               | The output is withheld |
+| An output carries images                      | They go on, marked unchecked                                         | The output is withheld |
 
-Rules the listener binds to guard and redact (`vsr.rules`) come with the same
-listing, by name and description only, and the listener evaluates them at
-`POST /v1/systemone/rules`, beside the decision model's questions and within the
-same wait. Guard sends the whole command: a rule that matches holds it for
-native approval with the rule's description. Redact sends the output with its
-secrets hidden, the same text the PII question reads, and hides what either
-finds at once, a rule's find as `[vsr:<rule name>]`. Where a rule and a PII span
-cover the same text, the rule's name is the tag. A `required` rule the listener
-could not check holds the command or withholds the output, whatever the wait; an
-advisory one is recorded as skipped. An output over 256 KiB of UTF-8 is past what
-one rules call reads, so its rules count as not checked. An answer for another
-revision of the rules reads the listing again and asks once more. An outage keeps
-the rules read before, so it never drops a required rule; they are kept in
-OpenCode's plugin storage, so a restart during an outage keeps them too. Rule-name tags get the same write-back
-protection as vSR's own.
+## Check
 
-When Redact rewrites an output it tells the model that the tags are vSR's, not
-part of the source, and that the values are hidden on purpose and not to be read
-another way.
+Check is off by default because it is slow without a GPU: it reads the answer
+and what the model read that turn, each up to 8,000 characters, and a CPU
+runtime takes several seconds for a long answer, past check's 1.5 s limit. Past
+the limit it steps aside (`skipped`); it never holds the agent up and never
+changes the answer. Turn it on with F6 or `apps.check` when the runtime has a
+GPU.
 
-The listing may use the `vllm-sr/4.0` form (`data`) or the `vllm-sr/5.0` form
-(`models`, each with its `name`, `features` and `card`).
-
-The HTTP client serializes decision requests and includes queue time in
-deadlines; the listing and rules calls do not wait in that queue. A
-network failure opens a 60-second breaker; HTTP errors, malformed replies and
-caller cancellation are reported separately. Discovery tries
-`/v1/systemone/models`, falling back to `/v1/models` only on HTTP 404. The selected
-model and its advertised question types are checked before use. Responses over
-2 MiB or missing requested answers are rejected. Cancelling a request stops the
-local wait; it cannot guarantee a remote model stops computing.
-
-Check is off by default; enable it through the app dialog or `apps.check`.
-It checks a root session's final answer against successful native read/shell text
-actually delivered during that human turn, after Redact/Shield processing. Queued
-prompts, other sessions, earlier turns, failed/withheld results and synthetic
-background turns cannot provide evidence. Answers shorter than 40 UTF-16 units
-or turns without delivered evidence are not checked. Check does not request
-another generation or silently modify the answer.
-
-`check.deadlineMs` defaults to 1500 ms, including queue time (maximum 10000).
-`check.unsupportedThreshold` defaults to 0.5. Scores at or above it mark the
-answer unverified; lower scores mark it verified against supplied evidence,
-not against outside knowledge. Prompt, combined evidence and answer each have
-an 8000-unit ceiling; at most 64 read/shell sources per turn are tracked.
-Truncated inputs or missing evidence make a low-score result partial, never
-fully verified. Offline, timed-out or malformed replies produce skipped checks.
-Evidence is transient bounded memory and is absent from RPC/decision records.
-
-The native terminal loads the exported `./tui` entry automatically with the
-server plugin. Open a session, then use these keys or slash/palette commands:
-
-| Key     | Command          | Action                                                     |
-| ------- | ---------------- | ---------------------------------------------------------- |
-| F5      | `/vsr`           | Open decisions for the selected session                    |
-| F6      | `/vsr-apps`      | Enable or disable an app, or follow the Router listener    |
-| F7      | `/vsr-waits`     | Choose Redact, Shield or Guard bounded/strict waits        |
-| F8      | `/vsr-feedback`  | Label a retained decision; Router also offers model labels |
-| F9      | `/vsr-check`     | Check the decision runtime: one case per enabled app       |
-| F10     | `/vsr-sessions`  | Select from the latest 100 accessible sessions             |
-| Palette | `/vsr-goal`      | Choose balanced, quality or save                           |
-| Palette | `/vsr-refresh`   | Refresh the authoritative snapshot                         |
-| Palette | `/vsr-calibrate` | Calibrate an app's thresholds from your answers            |
+It checks the main session's final answer against the `read` and shell output
+the model received during that turn, after redact and shield. A score of 0.5 or
+more marks the answer `unverified`. `verified` means backed by what the model
+read, not that it is true. Short answers (under 40 characters) and turns that
+read nothing are not checked.
 
 ## Calibrate from your own answers
 
+The thresholds above are measured on vela3-lite. To fit them to your own work,
 vSR keeps the newest 5,000 decisions it can learn from, across sessions and
-restarts, in OpenCode's plugin storage: each with its subject, the scores it held
-against its thresholds and the thresholds in use then. A rule's decision, a
-skipped or withheld one, and a route outside the configured tiers are not kept.
-Run `/vsr-calibrate` and pick an app:
+restarts, in OpenCode's plugin storage: each with its subject, the scores it
+held against its thresholds and the thresholds in use then. A rule's
+decision, a skipped or withheld one, and a route outside your tiers are not
+kept. Run `/vsr-calibrate` and pick an app:
 
 1. It asks about the unanswered decisions nearest the app's line, on both sides:
    "Should vSR have asked you before this command ran?" with what vSR did and
@@ -309,37 +246,124 @@ Run `/vsr-calibrate` and pick an app:
 
 Some answers come without asking: F8 feedback on a decision, a held command you
 declined (it should have asked), and pushback within 15 minutes of a route to
-the lighter two models (it needed a stronger one). An app needs 8 answers before
+the lighter two tiers (it needed a stronger one). An app needs 8 answers before
 its lines move, and each line moves at most 0.15 per calibration, the same fit
 as the Claude Code plugin's `/vsr:calibrate`. Escalate only logs when it
 escalates, so its lines only rise.
 
-Calibrated thresholds are kept in plugin storage and apply over the plugin
-options at once and after a restart. Changing a threshold in `opencode.json`
-drops the calibration in favor of what you set. The panel's Calibration line
-says when you last calibrated and how many decisions came since, and suggests
-`/vsr-calibrate` after 300.
+Calibrated thresholds apply at once and after a restart. Changing a threshold
+in the options drops the calibration in favor of what you set. The panel's
+Calibration line says when you last calibrated and how many decisions came
+since, and suggests `/vsr-calibrate` after 300.
 
-Use arrows and Enter in native dialogs, Escape to dismiss. Composer counts and
-the panel show metadata, reasons, coverage, partial/withheld/unverified states,
-planned/observed models and confirmed feedback. The 2.2.0 SDK has no per-tool
-activity annotation slot: the panel associates decisions by tool-call, turn or
-message identity instead. Rendering never classifies or generates; only explicit
-Diagnose queries capabilities. The panel replaces host fallback content only
-while this plugin's own panel is selected, releasing its slot for other panels.
+## A Router listener's switches and rules
 
-App flags, waits and goal apply to all sessions served by the same plugin
-instance/location. Controls persist in native plugin storage before taking
-effect and survive reload/restart. Concurrent or obsolete clients must refresh
-and retry; a failed save does not optimistically change the display. Changing
-configured app/wait/goal defaults supersedes previously saved preferences.
-Decision records and feedback remain bounded memory until Stage 6. Snapshots
-refresh on events and every three seconds, discard late responses from another
-session and reconcile with a new server instance after reconnect.
+Pointed at a Router listener that publishes a System One model, vSR reads the
+listener's listing (`GET /v1/systemone/models`) at the first prompt, and again
+at a prompt a minute or more later. Its `vsr` profile (`apis.systemone.vsr` in
+the Router's config, or Default, On or Off in the Dashboard under Config ›
+Global Config › vSR agent plugins) turns each app on or off for every plugin
+pointed at it. An app you name under `apps` in the options, or turn on or off
+with F6, stays yours; the listener sets the others. "Follow the Router
+listener" in F6 hands the apps you changed there back to the listener. A plain
+decision runtime sets nothing.
 
-Child usage appears after actual completion, including background children.
-Totals deduplicate child sessions; failed spawns and pending/missing observations
-are not zero-cost completed work. Cost figures use the host's estimate only
-when the observed model has an explicit finite price table. Unknown prices are
-shown separately, including when the host reports zero. Explicit zero prices
-are valid. These estimates are not billing receipts or savings measurements.
+Rules the listener binds to guard and redact (`vsr.rules`) come with the same
+listing, and the listener checks them beside the decision model's questions,
+within the same wait. A rule that matches a command holds it, with the rule's
+description; a rule's find in an output is hidden as `[vsr:<rule name>]`. A
+`required` rule the listener could not check holds the command or withholds the
+output, whatever the wait; an advisory one is recorded as skipped. vSR keeps the
+last rules it read in plugin storage, so an outage, or a restart during one,
+never drops a required rule.
+
+## Privacy
+
+With a local runtime nothing leaves your machine for vSR's decisions. A remote
+runtime receives everything the enabled apps check: each `read` and shell
+output (after the fixed secret rules, when redact is on), fetched page, prompt,
+subagent task, shell command and answer.
+
+vSR keeps no output. Of a decision it keeps a subject: the command, subagent
+task, prompt, or for an output its source (file, address or command), on one
+line, at most 200 characters, with secrets in known formats hidden. The
+session's decisions are kept in memory (500 per session, 64 sessions); the
+calibration log keeps its 5,000 in plugin storage. A token is never shown in the
+panel or returned by the plugin.
+
+## How it differs from Claude Code
+
+- **Your session's model never changes.** The Claude Code plugin can also route
+  your own turns; here the router picks subagents' models only.
+- **Your tiers, your provider.** Instead of Haiku, Sonnet and Opus, the router
+  uses the three models you list, and only when your session runs on one of
+  them.
+- **One panel instead of cards.** Decisions are in the F5 panel and the line
+  above the prompt, not under each row of the conversation.
+- **OpenCode's own setup.** The runtime is connected through `/connect`, its
+  token stays in OpenCode's credential store, and options live in
+  `opencode.jsonc` instead of `/config`.
+- **No savings estimate.** The panel shows what subagents actually used, and
+  OpenCode's own cost estimate for it.
+
+## Options
+
+Every option is optional. An unknown option is an error, not ignored.
+
+| Option                                                 | Default                              | What it sets                                                                   |
+| ------------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------ |
+| `runtimeUrl`                                           | `http://127.0.0.1:8790/v1/decisions` | The runtime, when none is connected through `/connect`                         |
+| `runtimeModel`                                         | the runtime's only model             | One model of a runtime that serves several                                     |
+| `runtimeTokenEnv`                                      | `VSR_RUNTIME_TOKEN`                  | The environment variable of the OpenCode server that holds the runtime's token |
+| `apps`                                                 | all on except `check`                | Each app on or off, for example `{ "check": true }`                            |
+| `waits.redact`, `waits.shield`, `waits.guard`          | `3000`, `2000`, `3000`               | How long each waits: `1000`, `2000`, `3000` milliseconds, or `"done"`          |
+| `routing.tiers`                                        | none                                 | Three `{ "model": "provider/model" }`, lightest first, with optional `efforts` |
+| `routing.goal`                                         | `"balanced"`                         | `"quality"` never routes lighter, `"save"` routes lighter whenever it can      |
+| `routing.easyBelow`, `routing.hardFrom`                | `0.65`, `1.5`                        | The difficulty (0 to 2) under which a task is easy, and from which it is hard  |
+| `routing.minConfidence`, `routing.downgradeConfidence` | `0.5`, `0.6`                         | The confidence to route at all, and to route lighter than your session         |
+| `routing.feedbackThreshold`, `routing.repeatThreshold` | `0.7`, `0.8`                         | Escalate's lines for "that's wrong" and "again"                                |
+| `routing.deadlineMs`                                   | `1500`                               | The router's wait                                                              |
+| `guard.reviewThreshold`                                | `0.9`                                | The score that holds a command                                                 |
+| `redact.piiThreshold`                                  | `0.7`                                | The score that hides a span of personal data                                   |
+| `shield.injectionThreshold`                            | `0.9`                                | The score that marks an output as instructions                                 |
+| `check.unsupportedThreshold`, `check.deadlineMs`       | `0.5`, `1500`                        | The score that marks an answer unverified, and check's wait (at most 10000)    |
+| `maxDecisions`, `maxSessions`                          | `500`, `64`                          | How many decisions per session, and sessions, the panel keeps                  |
+
+Tokens, URL query tokens and passwords in a URL are refused as options; use
+`/connect` or `runtimeTokenEnv`. vSR does not follow a runtime's redirects, so a
+token cannot be sent to another host.
+
+## Troubleshooting
+
+- **F9 says an app has no answer.** The runtime is not answering at the
+  connected URL, refuses the token, or is slower than the app's wait. Check
+  that `vllm-srun serve` is running, or ask for `vsr-setup` again.
+- **A configuration change has no effect.** Run `opencode service restart`.
+- **Reads feel slower.** On a CPU runtime, redact and shield add up to their
+  waits to a long output, and guard a fraction of a second per command part. A
+  GPU runtime is several times faster; you can also shorten a wait (F7) or turn
+  off apps you do not need (F6).
+- **A subagent stayed on its model.** The panel's `kept` row says why: the
+  router was not sure enough, `routing.goal` is `quality`, or your session's
+  model is not one of your tiers.
+
+## Uninstall
+
+1. Take the plugin out of your OpenCode configuration and run
+   `opencode service restart`.
+2. Remove the credential in `/connect`, if you connected a runtime.
+3. If `vsr-setup` installed a runtime and the Claude Code plugin does not use
+   it, stop it and delete `~/.local/share/vsr`:
+
+   ```bash
+   # Started for one login:
+   kill "$(lsof -ti tcp:8790)"
+   # Started as a Linux user service:
+   systemctl --user disable --now vsr-runtime
+   rm -rf ~/.local/share/vsr
+   ```
+
+## Development
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the checks, the tests and how each app
+works in detail.
