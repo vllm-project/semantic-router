@@ -15,10 +15,12 @@ comparable.
 
 We have started publishing focused [agent skills](/docs/installation/agent-skills)
 for those jobs. They give a coding assistant a short workflow, point to the
-current commands and contracts, and say which evidence to preserve. The unit
-of work follows the Semantic Router's entrypoint, recipe, decision model, and
-measured request. That scope matters: starting a process, selecting a route,
-delivering an answer, and measuring a workload are four different results.
+current commands and contracts, and say which evidence to preserve. This work
+was inspired by [llm-d's skills article](https://llm-d.ai/blog/skills-for-accelerated-llm-d-development-evaluation-and-configuration).
+Here, the unit of work follows the Semantic Router's entrypoint, recipe,
+decision model, and measured request. That scope matters: starting a process,
+selecting a route, delivering an answer, and measuring a workload are four
+different results.
 
 <!-- truncate -->
 
