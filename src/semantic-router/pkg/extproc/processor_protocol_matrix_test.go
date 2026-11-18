@@ -752,7 +752,8 @@ func extProcStreamFixture(format llmprotocol.WireFormat) []byte {
 // Cerebras reports time_info on the final stream chunk, and a same-format
 // stream that nothing mutated is byte-replay eligible: the client receives
 // the original caller bytes, including the field the neutral decode omits.
-// Pins the pass-through side of the #5633 diagnostic.
+// The chunk before the usage chunk gains only the "usage": null a client that
+// asks for usage receives. Pins the pass-through side of the #5633 diagnostic.
 func TestSameFormatChatStreamForwardsTimeInfoOnTheFinalChunk(t *testing.T) {
 	includeUsage := true
 	router := &OpenAIRouter{}
@@ -766,11 +767,10 @@ func TestSameFormatChatStreamForwardsTimeInfoOnTheFinalChunk(t *testing.T) {
 			StreamOptions: llmprotocol.StreamOptions{IncludeUsage: &includeUsage},
 		},
 	}
-	body := []byte(strings.Join([]string{
-		"data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"},\"finish_reason\":\"stop\"}]}\n\n",
-		"data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1,\"total_tokens\":3},\"time_info\":{\"queue_time\":0.254,\"prompt_time\":0.05,\"completion_time\":0.6,\"total_time\":0.907,\"created\":1725397005}}\n\n",
-		"data: [DONE]\n\n",
-	}, ""))
+	content := "data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"},\"finish_reason\":\"stop\"}]"
+	final := "data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1,\"total_tokens\":3},\"time_info\":{\"queue_time\":0.254,\"prompt_time\":0.05,\"completion_time\":0.6,\"total_time\":0.907,\"created\":1725397005}}\n\n"
+	body := []byte(content + "}\n\n" + final + "data: [DONE]\n\n")
+	want := []byte(content + ",\"usage\":null}\n\n" + final + "data: [DONE]\n\n")
 	response := router.handleSemanticStreamingResponseBody(body, true, ctx)
 	if ctx.StreamingAborted || !ctx.StreamingComplete {
 		t.Fatalf("stream did not complete: aborted=%v complete=%v", ctx.StreamingAborted, ctx.StreamingComplete)
@@ -779,10 +779,10 @@ func TestSameFormatChatStreamForwardsTimeInfoOnTheFinalChunk(t *testing.T) {
 	// stream still arrives as a body mutation; the contract is that its bytes
 	// are the caller's, time_info included, not that the mutation is absent.
 	if mutation := response.GetResponseBody().GetResponse().GetBodyMutation(); mutation != nil {
-		if got := mutation.GetBody(); !bytes.Equal(got, body) {
+		if got := mutation.GetBody(); !bytes.Equal(got, want) {
 			t.Fatalf(
 				"same-format stream should preserve the original caller bytes, time_info included:\n got: %s\nwant: %s",
-				got, body,
+				got, want,
 			)
 		}
 	}

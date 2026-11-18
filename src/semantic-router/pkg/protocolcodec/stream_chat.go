@@ -120,6 +120,13 @@ type chatUsageChunkWire struct {
 	Choices []chatChunkChoiceWire `json:"choices"`
 }
 
+// chatNullUsageChunkWire is any other chunk of a stream whose client asked for
+// usage, which OpenAI sends with "usage": null.
+type chatNullUsageChunkWire struct {
+	chatChunkWire
+	Usage *chatUsageWire `json:"usage"`
+}
+
 // vllmServingMetadata is chatResponseWire.vllmServingMetadata for a chunk.
 func (wire chatChunkWire) vllmServingMetadata() map[string]bool {
 	fields := map[string]bool{
@@ -1153,6 +1160,9 @@ func encodeChatStreamFrame(context llmprotocol.StreamContext, chunk chatChunkWir
 		return nil, err
 	}
 	chunk.Obfuscation = obfuscation
+	if streamUsageRequested(context) {
+		return encodeSSE("", chatNullUsageChunkWire{chatChunkWire: chunk})
+	}
 	return encodeSSE("", chunk)
 }
 
