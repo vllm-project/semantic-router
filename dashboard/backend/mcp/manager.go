@@ -14,6 +14,14 @@ import (
 
 var errManagerClosed = errors.New("MCP manager is closed")
 
+// ErrServerNotFound marks a server ID that is not in the server list. The
+// errors that wrap it read "server with ID <id> not found".
+var ErrServerNotFound = errors.New("not found")
+
+func serverNotFound(id string) error {
+	return fmt.Errorf("server with ID %s %w", id, ErrServerNotFound)
+}
+
 // Manager is the MCP client manager. Server configs are persisted in workflowstore;
 // active client connections remain in memory only.
 type Manager struct {
@@ -136,7 +144,7 @@ func (m *Manager) UpdateServer(config *ServerConfig) error {
 
 	existing, exists := m.configs[config.ID]
 	if !exists {
-		return fmt.Errorf("server with ID %s not found", config.ID)
+		return serverNotFound(config.ID)
 	}
 	merged, err := mergeRedactedServerConfig(existing, config)
 	if err != nil {
@@ -159,7 +167,7 @@ func (m *Manager) DeleteServer(id string) error {
 
 	_, exists := m.configs[id]
 	if !exists {
-		return fmt.Errorf("server with ID %s not found", id)
+		return serverNotFound(id)
 	}
 
 	if m.store != nil {
@@ -179,7 +187,7 @@ func (m *Manager) GetServerStatus(id string) (*ServerState, error) {
 
 	config, ok := m.configs[id]
 	if !ok {
-		return nil, fmt.Errorf("server with ID %s not found", id)
+		return nil, serverNotFound(id)
 	}
 
 	client, ok := m.clients[id]

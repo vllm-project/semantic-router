@@ -27,6 +27,20 @@ func writeMCPInternalError(w http.ResponseWriter, operation string, err error) {
 	http.Error(w, operation+" failed", http.StatusInternalServerError)
 }
 
+func writeMCPServerNotFound(w http.ResponseWriter) {
+	http.Error(w, "Server not found", http.StatusNotFound)
+}
+
+// writeMCPManagerError answers a missing server with 404 and every other
+// manager failure with a generic 500.
+func writeMCPManagerError(w http.ResponseWriter, operation string, err error) {
+	if errors.Is(err, mcp.ErrServerNotFound) {
+		writeMCPServerNotFound(w)
+		return
+	}
+	writeMCPInternalError(w, operation, err)
+}
+
 // NewMCPHandler creates an MCP Handler
 func NewMCPHandler(manager *mcp.Manager, readonlyMode bool) *MCPHandler {
 	return &MCPHandler{
@@ -174,13 +188,13 @@ func (h *MCPHandler) UpdateServerHandler() http.HandlerFunc {
 			return
 		}
 		if err := h.manager.UpdateServer(&config); err != nil {
-			writeMCPInternalError(w, "Update server", err)
+			writeMCPManagerError(w, "Update server", err)
 			return
 		}
 
 		stored, ok := h.manager.GetServer(id)
 		if !ok {
-			http.Error(w, "Server not found", http.StatusNotFound)
+			writeMCPServerNotFound(w)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -216,7 +230,7 @@ func (h *MCPHandler) DeleteServerHandler() http.HandlerFunc {
 			return
 		}
 		if err := h.manager.DeleteServer(id); err != nil {
-			writeMCPInternalError(w, "Delete server", err)
+			writeMCPManagerError(w, "Delete server", err)
 			return
 		}
 
@@ -225,6 +239,16 @@ func (h *MCPHandler) DeleteServerHandler() http.HandlerFunc {
 }
 
 // ========== Connection Handlers ==========
+
+func (h *MCPHandler) writeServerState(w http.ResponseWriter, operation, id string) {
+	state, err := h.manager.GetServerStatus(id)
+	if err != nil {
+		writeMCPManagerError(w, operation, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
+}
 
 // ConnectServerHandler POST /api/mcp/servers/:id/connect - Connect to server
 func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
@@ -263,13 +287,11 @@ func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusConflict)
 				return
 			}
-			writeMCPInternalError(w, "Connect server", err)
+			writeMCPManagerError(w, "Connect server", err)
 			return
 		}
 
-		state, _ := h.manager.GetServerStatus(id)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
+		h.writeServerState(w, "Connect server", id)
 	}
 }
 
@@ -301,13 +323,11 @@ func (h *MCPHandler) DisconnectServerHandler() http.HandlerFunc {
 			return
 		}
 		if err := h.manager.Disconnect(id); err != nil {
-			writeMCPInternalError(w, "Disconnect server", err)
+			writeMCPManagerError(w, "Disconnect server", err)
 			return
 		}
 
-		state, _ := h.manager.GetServerStatus(id)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
+		h.writeServerState(w, "Disconnect server", id)
 	}
 }
 
@@ -333,7 +353,7 @@ func (h *MCPHandler) GetServerStatusHandler() http.HandlerFunc {
 
 		state, err := h.manager.GetServerStatus(id)
 		if err != nil {
-			http.Error(w, "Server not found", http.StatusNotFound)
+			writeMCPServerNotFound(w)
 			return
 		}
 
