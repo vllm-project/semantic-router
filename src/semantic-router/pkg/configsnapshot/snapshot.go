@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/clientauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -46,8 +47,11 @@ type Snapshot struct {
 	document  []byte
 	config    *config.RouterConfig
 	resources *Resources
-	createdAt time.Time
-	parts     parts
+	// clientAuth holds the keys the snapshot's entrypoints accept, read from
+	// the environment when the snapshot was compiled.
+	clientAuth *clientauth.Policy
+	createdAt  time.Time
+	parts      parts
 }
 
 // Version orders the snapshots a Router has activated: each activation takes
@@ -69,6 +73,11 @@ func (s *Snapshot) Config() *config.RouterConfig { return s.config }
 
 // Resources are the snapshot's typed resources.
 func (s *Snapshot) Resources() *Resources { return s.resources }
+
+// ClientAuth is the client policy of the snapshot's entrypoints. It is
+// compiled with them, so a request that leases the snapshot reads the policy
+// of the routing it is served with.
+func (s *Snapshot) ClientAuth() *clientauth.Policy { return s.clientAuth }
 
 // CreatedAt is when the snapshot was compiled.
 func (s *Snapshot) CreatedAt() time.Time { return s.createdAt }

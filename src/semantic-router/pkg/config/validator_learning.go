@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"golang.org/x/net/http/httpguts"
@@ -143,7 +144,21 @@ func validateProtectionTuning(prefix string, tuning RouterLearningProtectionTuni
 	}); err != nil {
 		return err
 	}
+	if err := validateCacheEconomicsTuning(prefix+".cache_economics", tuning.CacheEconomics); err != nil {
+		return err
+	}
 	return validateProgressGateTuning(prefix+".progress_gate", tuning.ProgressGate)
+}
+
+func validateCacheEconomicsTuning(prefix string, tuning *CacheEconomicsTuning) error {
+	cfg := tuning.EffectiveConfig()
+	if cfg.CacheTTLSeconds < 1 || cfg.CacheTTLSeconds > 86400 {
+		return fmt.Errorf("%s.cache_ttl_seconds must be between 1 and 86400", prefix)
+	}
+	if cfg.DefaultRemainingTurns < 1 {
+		return fmt.Errorf("%s.default_remaining_turns must be at least 1", prefix)
+	}
+	return nil
 }
 
 // validateProgressGateTuning checks the switch-gate knobs, including the two
@@ -347,9 +362,9 @@ func validateProtectionRelease(cfg RouterLearningProtectionConfig, sessionHeader
 		return fmt.Errorf("%s.header %q is reserved; use an x- header the router can remove before the backend", field, header)
 	}
 	for _, identity := range []string{"session", "conversation", "agent"} {
-		names := []string{cfg.HeaderName(identity)}
-		if identity == "session" && names[0] == "" {
-			names = sessionHeaders
+		names := cfg.IdentityHeaderNames(identity)
+		if identity == "session" && cfg.HeaderName(identity) == "" {
+			names = append(slices.Clone(sessionHeaders), names...)
 		}
 		for _, name := range names {
 			if strings.EqualFold(header, name) {

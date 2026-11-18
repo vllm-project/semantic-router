@@ -39,6 +39,9 @@ type Classifier struct {
 	// say whether a scan that fell behind its deadline reads the rest of its
 	// windows in time at a larger size.
 	windowPaces windowPaces
+	// overloadGates pace the requests that wait for an overloaded decision
+	// runtime to have capacity (on_signal_overload).
+	overloadGates overloadGates
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 

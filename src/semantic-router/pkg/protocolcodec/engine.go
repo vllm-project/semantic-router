@@ -227,6 +227,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 		projectReasoningContinuity(source, target, targetPair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
 	diagnostics = appendDiagnostics(diagnostics,
 		projectReasoningSignature(engine.policy, source, target, targetPair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(diagnostics, projectToolCallNamespaces(source, target, &response), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredResponseCapabilities(response)); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -710,7 +711,7 @@ func (engine *StreamEngine) prepareEvent(event *llmprotocol.Event) (llmprotocol.
 	if !engine.targetCapabilities.Supports(llmprotocol.CapabilityMatchedStopSequence) {
 		diagnostics = projectMatchedStopSequenceEvent(engine.sourceFormat, engine.targetFormat, event)
 	}
-	if err := projectReasoningContinuityEvent(engine.targetCapabilities, *event); err != nil {
+	if err := projectReasoningContinuityEvent(engine.targetFormat, engine.targetCapabilities, *event); err != nil {
 		if !engine.continuityDropped {
 			engine.continuityDropped = true
 			diagnostics = append(diagnostics, reasoningContinuityDropped(engine.sourceFormat, engine.targetFormat)...)

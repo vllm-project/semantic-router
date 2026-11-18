@@ -13,28 +13,30 @@ import (
 // Codex CLI sends flat session-id and thread-id headers on every request. A
 // root thread sends its own id as both; an inline review child keeps the root's
 // session-id and sends its own thread-id. Only turn ids in the turn metadata
-// change between turns. Without an agent header, session scope holds the child
-// on the root's model; with thread-id as the agent header, the root and the
-// child are each held on their own.
+// change between turns. With thread-id as the agent header, which it is by
+// default, the root and the child are each held on their own; an agent header
+// Codex does not send holds the child on the root's model.
 func TestProtectionCodexThreadIdentityHoldsRootAndReviewChildSeparately(t *testing.T) {
 	const (
 		sessionID   = "root-thread"
 		childThread = "review-thread"
 	)
 	for _, tc := range []struct {
-		name        string
-		agentHeader string
-		wantChild   string
+		name          string
+		sessionHeader *string
+		agentHeader   string
+		wantChild     string
 	}{
-		{name: "without_agent_header", wantChild: "frontier"},
-		{name: "with_thread_id_agent_header", agentHeader: "thread-id", wantChild: "cheap"},
+		{name: "default_identity_headers", wantChild: "cheap"},
+		{name: "with_thread_id_agent_header", sessionHeader: stringPtr("session-id"), agentHeader: "thread-id", wantChild: "cheap"},
+		{name: "with_another_agent_header", sessionHeader: stringPtr("session-id"), agentHeader: "x-agent-id", wantChild: "frontier"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sessiontelemetry.ResetRouterSessionMemoryForTesting()
 			t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
 			registry := selection.NewRegistry()
 			cfg := routerLearningProtectionOnlyTestConfig(config.RouterLearningScopeSession)
-			cfg.RouterLearning.Protection.Identity.Headers.Session = stringPtr("session-id")
+			cfg.RouterLearning.Protection.Identity.Headers.Session = tc.sessionHeader
 			if tc.agentHeader != "" {
 				cfg.RouterLearning.Protection.Identity.Headers.Agent = stringPtr(tc.agentHeader)
 			}
@@ -59,10 +61,8 @@ func TestProtectionCodexThreadIdentityHoldsRootAndReviewChildSeparately(t *testi
 					t.Fatal(err)
 				}
 				identity, _ := ctx.VSRLearningPolicy.ToMap()["identity"].(map[string]interface{})
-				_, hasAgent := identity["agent"]
-				if hasAgent != (tc.agentHeader != "") {
-					t.Fatalf("thread=%q agent identity diagnostics present=%v with agent header %q: %#v",
-						thread, hasAgent, tc.agentHeader, identity)
+				if _, hasAgent := identity["agent"]; !hasAgent {
+					t.Fatalf("thread=%q has no agent identity diagnostics: %#v", thread, identity)
 				}
 				keyHash, _ := identity["memory_key_hash"].(string)
 				return outcome{model: selected.Model, keyHash: keyHash}
@@ -93,7 +93,7 @@ func TestProtectionCodexThreadIdentityHoldsRootAndReviewChildSeparately(t *testi
 					t.Errorf("root request %d got %+v, want it held on frontier under key %q", i+2, got, root.keyHash)
 				}
 			}
-			if separate := child.keyHash != root.keyHash; separate != (tc.agentHeader != "") {
+			if separate := child.keyHash != root.keyHash; separate != (tc.wantChild == "cheap") {
 				t.Errorf("root and review child keys separate=%v with agent header %q", separate, tc.agentHeader)
 			}
 		})

@@ -214,6 +214,17 @@
       "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
     ]
   },
+  "config/fragments/signal/systemone/vela31-pico-labels-spans.yaml": {
+    "signals": {
+      "default/pii.personal_data": "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0",
+      "default/systemone.instruction_attack": "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0",
+      "default/systemone.needs_account_access": "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0",
+      "default/systemone.order_numbers": "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3.1-pico-380m@ cpu replicas=0"
+    ]
+  },
   "config/fragments/signal/turn-relation/reask.yaml": {
     "signals": {
       "default/turn_relation.likely_dissatisfied": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
@@ -784,6 +795,7 @@
   "e2e/profiles/looper/values.yaml": {},
   "e2e/profiles/masking/values.yaml": {
     "signals": {
+      "masking-rules/systemone.customer_account": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "masking/pii.personal_data": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
@@ -819,11 +831,13 @@
       "default/systemone.names": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
       "default/systemone.offline": "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline",
       "default/systemone.request_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
-      "default/systemone.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a"
+      "default/systemone.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
+      "default/systemone.vela31_described": "model_runtime /tmp/vsr-fixtures/vela31@ cpu replicas=0"
     },
     "started": [
       "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
       "model_runtime /tmp/vsr-fixtures/embedding@ auto replicas=0",
+      "model_runtime /tmp/vsr-fixtures/vela31@ cpu replicas=0",
       "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
       "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
       "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline"

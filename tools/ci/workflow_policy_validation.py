@@ -268,6 +268,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         for word in ("docker/login-action", "push: true")
     ):
         errors.append("shared image producer must not authenticate or publish")
+    if builder and any(
+        {"cache-from", "cache-to"} & set(step.get("with") or {})
+        for job in builder.jobs.values()
+        for step in job.get("steps", [])
+        if "docker/build-push-action" in str(step.get("uses", ""))
+    ):
+        errors.append("shared image producer must not import or export a layer cache")
     community = workflows.get("community.yml")
     trigger = community.events.get("pull_request", {}) if community else {}
     if "synchronize" in (trigger or {}).get("types", []):

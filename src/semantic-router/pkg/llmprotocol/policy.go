@@ -30,6 +30,11 @@ const LossyFieldSystemMessageRole = "messages[].role"
 // short note, which ProjectUnreadableFiles writes.
 const LossyFieldUnreadableFile = "content.file"
 
+// LossyFieldToolDeferLoading names a tool's request to be loaded on demand
+// through the provider's tool search. Accepting the loss sends the tool with its
+// full definition, as a backend without tool search would see it.
+const LossyFieldToolDeferLoading = "tools.defer_loading"
+
 // LossyFieldToolResultContent names images and files inside a tool result,
 // which Chat Completions tool messages cannot carry. Accepting the loss sends
 // them as a user message right after the tool results.
@@ -48,7 +53,7 @@ const LossyFieldStore = "store"
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolResultContent, LossyFieldReasoningSignature, LossyFieldStore}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolDeferLoading, LossyFieldToolResultContent, LossyFieldReasoningSignature, LossyFieldStore}
 }
 
 // OptInHint is what a refusal of field adds when an operator may accept that
@@ -173,7 +178,7 @@ func DefaultPolicy() Policy {
 			Alternatives: 32, OutputItems: 4096, ContentBlocks: 16_384,
 			Citations: 256, CitationURLBytes: 16 << 10, CitationTitleBytes: 16 << 10,
 			JSONDepth: 128, ToolResultDepth: 8,
-			Tools: 256, ToolNameBytes: 256, ToolDescriptionBytes: 16 << 10,
+			Tools: 256, ToolNameBytes: 256, ToolDescriptionBytes: 256 << 10,
 			IdentifierBytes: 1024, SchemaBytes: 4 << 20, MetadataBytes: 64 << 10,
 			MetadataEntries: 256, MetadataKeyBytes: 256, MetadataValueBytes: 8 << 10,
 			ToolArgumentsBytes: 4 << 20, ReasoningEffortBytes: 32,

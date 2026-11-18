@@ -226,9 +226,11 @@ Preview can report `execution_required` when protection participates in selectio
 It evaluates request signals without advancing conversation state; verify an
 actual hold or switch through a routed request and its Replay record.
 
-Inspect Replay and the Dashboard before activating the next candidate. The
-default in-memory Replay store is cleared by configuration reloads and restarts;
-save the traces needed for comparison first.
+Inspect Replay and the Dashboard before activating the next candidate.
+Records that keep prompt text stay in memory unless a store is configured
+([where Replay keeps records](../tutorials/plugin/router-replay#keep-records-across-restarts)), and memory is cleared by
+configuration reloads and restarts; save the traces needed for comparison
+first.
 
 ## Keep changes that improve the objective
 

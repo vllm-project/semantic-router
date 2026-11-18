@@ -245,6 +245,7 @@ the locked chart dependencies.
 | ingress.hosts | list | `[{"host":"semantic-router.local","paths":[{"path":"/","pathType":"Prefix"}]}]` | Ingress hosts configuration. A path without `servicePort` goes to the first listener without TLS in standalone mode, and to `service.api.port` in extproc mode. |
 | ingress.tls | list | `[]` | Ingress TLS configuration |
 | jaeger.allInOne.image.tag | string | `"latest"` |  |
+| lifecycle | object | `{}` | The Router container's lifecycle hooks, such as a preStop sleep that gives load balancers time to take the pod out of rotation before its listeners close. |
 | livenessProbe.enabled | bool | `true` | Enable liveness probe |
 | livenessProbe.failureThreshold | int | `5` | Failure threshold |
 | livenessProbe.initialDelaySeconds | int | `30` | Initial delay seconds |
@@ -305,6 +306,7 @@ the locked chart dependencies.
 | startupProbe.failureThreshold | int | `360` | Failure threshold (360 * 10s = 60 minutes total timeout for model downloads) |
 | startupProbe.periodSeconds | int | `10` | Period seconds |
 | startupProbe.timeoutSeconds | int | `5` | Timeout seconds |
+| terminationGracePeriodSeconds | int | `nil` | Seconds Kubernetes waits, once it signals the Router to stop, before it kills it. Unset, Kubernetes waits 30 s, which fits the standalone gateway's default drain (config global.router.drain_timeout_seconds, 25 s) and the 5 s after it. A longer drain or a preStop delay needs at least preStop delay + drain + 5 s, with some margin. |
 | tolerations | list | `[]` |  |
 | toolsDb[0].category | string | `"weather"` |  |
 | toolsDb[0].description | string | `"Get current weather information, temperature, conditions, forecast for any location, city, or place. Check weather today, now, current conditions, temperature, rain, sun, cloudy, hot, cold, storm, snow"` |  |

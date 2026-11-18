@@ -93,6 +93,8 @@ jobs:
 
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
+        with:
+          min-free-gb: "40"
 
       - uses: actions/setup-python@v5
         with:

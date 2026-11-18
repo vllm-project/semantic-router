@@ -4,7 +4,8 @@
 # system messages inside the conversation as user text, which the main Router
 # forwards in place for protocol-codec-anthropic-per-message-effort. Its chat
 # model declares no file input, and files reach it as a note. It also sends
-# images from tool results to Chat backends as a user message.
+# tools marked for deferred loading in full, and images from tool results to
+# Chat backends as a user message.
 configOverride:
   version: v0.5
   listeners:
@@ -46,6 +47,7 @@ configOverride:
         - tool_result.is_error
         - messages[].role
         - content.file
+        - tools.defer_loading
         - tool_result.content
 resources:
   limits:

@@ -47,7 +47,29 @@ func (r *OpenAIRouter) adaptProviderRequest(
 		}
 	}
 	reportDroppedReasoningSummary(ctx, dispatch, encoded, body)
+	r.reportApproximatedReasoningDisplay(ctx, dispatch)
 	return body, nil
+}
+
+// reportApproximatedReasoningDisplay records an Anthropic summarized or updates
+// display sent to a Chat or Responses backend whose reasoning is on: a model
+// with a reasoning family the decision does not turn reasoning off for. The
+// Router knows nothing of the reasoning of a model without a family.
+func (r *OpenAIRouter) reportApproximatedReasoningDisplay(ctx *RequestContext, dispatch *providerDispatch) {
+	if ctx == nil || ctx.SemanticRequest == nil || dispatch == nil ||
+		ctx.SourceFormat != llmprotocol.AnthropicMessagesV1 || dispatch.targetFormat == llmprotocol.AnthropicMessagesV1 ||
+		(ctx.SemanticRequest.ReasoningDisplay != "summarized" && ctx.SemanticRequest.ReasoningDisplay != "updates") ||
+		r.getModelReasoningFamily(dispatch.effectiveBackendModel()) == nil ||
+		(dispatch.decisionName != "" && !dispatch.useReasoning) {
+		return
+	}
+	diagnostic := llmprotocol.Diagnostic{
+		Source: llmprotocol.AnthropicMessagesV1, Target: dispatch.targetFormat, Field: "thinking.display",
+		Action: llmprotocol.DiagnosticApproximated, Reason: "the backend's reasoning is returned as it is, not summarized",
+	}
+	if !slices.Contains(ctx.ProtocolDiagnostics, diagnostic) {
+		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
+	}
 }
 
 // reportDroppedReasoningSummary records a Responses summary request removed by

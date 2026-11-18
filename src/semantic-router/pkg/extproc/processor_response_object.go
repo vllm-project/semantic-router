@@ -105,7 +105,8 @@ func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
 	stored := &responseapi.StoredResponse{
 		ID: response.ID, Object: "response",
 		CreatedAt: response.CreatedAt, Model: response.Model, Status: response.Status,
-		Input: cloneResponseInputItems(state.Input), Output: response.Output,
+		IncompleteDetails: response.IncompleteDetails,
+		Input:             cloneResponseInputItems(state.Input), Output: response.Output,
 		OutputText: response.OutputText, PreviousResponseID: response.PreviousResponseID,
 		ConversationID: response.ConversationID, Usage: response.Usage,
 		Instructions: response.Instructions, Metadata: response.Metadata, Error: response.Error,
@@ -129,6 +130,7 @@ func cloneResponseInputItems(items []responseapi.InputItem) []responseapi.InputI
 		cloned[index].Content = append(json.RawMessage(nil), cloned[index].Content...)
 		cloned[index].Output = append(json.RawMessage(nil), cloned[index].Output...)
 		cloned[index].Summary = append(json.RawMessage(nil), cloned[index].Summary...)
+		cloned[index].Result = append(json.RawMessage(nil), cloned[index].Result...)
 	}
 	return cloned
 }

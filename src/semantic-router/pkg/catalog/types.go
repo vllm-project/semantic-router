@@ -178,14 +178,24 @@ type ProviderDefinition struct {
 	Presentation        ProviderDefinitionPresentation `json:"presentation"`
 	Conformance         Conformance                    `json:"conformance"`
 	Models              []CatalogModelBinding          `json:"models,omitempty"`
+	PriceList           []PriceListEntry               `json:"price_list,omitempty"`
+}
+
+// PriceListEntry is the list price of a provider model ID that has no Model
+// Card. It prices the model ID a backend calls and is never a model.
+type PriceListEntry struct {
+	ID           string                     `json:"id"`
+	Pricing      Pricing                    `json:"pricing"`
+	Verification CatalogBindingVerification `json:"verification"`
 }
 
 // CredentialsRef keeps secrets out of the catalog and lets configuration name
-// either an environment variable or an already-expanded value. APIKey is
-// runtime-only and is omitted from JSON projections.
+// an environment variable, an owner-only key file, or an already-expanded
+// value. APIKey is runtime-only and is omitted from JSON projections.
 type CredentialsRef struct {
-	APIKey    string `json:"-" yaml:"api_key,omitempty"`
-	APIKeyEnv string `json:"api_key_env,omitempty" yaml:"api_key_env,omitempty"`
+	APIKey     string `json:"-" yaml:"api_key,omitempty"`
+	APIKeyEnv  string `json:"api_key_env,omitempty" yaml:"api_key_env,omitempty"`
+	APIKeyFile string `json:"api_key_file,omitempty" yaml:"api_key_file,omitempty"`
 }
 
 // Endpoint describes one interchangeable network target in a provider
@@ -407,7 +417,7 @@ type Pricing struct {
 
 type Reliability struct {
 	LBPolicy            string `json:"lb_policy,omitempty" yaml:"lb_policy,omitempty"`
-	RetryCount          int    `json:"retry_count,omitempty" yaml:"retry_count,omitempty"`
+	RetryCount          *int   `json:"retry_count,omitempty" yaml:"retry_count,omitempty"`
 	RetryOn             string `json:"retry_on,omitempty" yaml:"retry_on,omitempty"`
 	Consecutive5xx      int    `json:"consecutive_5xx,omitempty" yaml:"consecutive_5xx,omitempty"`
 	BaseEjectionTime    string `json:"base_ejection_time,omitempty" yaml:"base_ejection_time,omitempty"`
