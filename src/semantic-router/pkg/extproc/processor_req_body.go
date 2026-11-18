@@ -34,7 +34,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	// nothing to route.
 	if ctx.videosRoute != "" {
 		ctx.SemanticRequest = &llmprotocol.Request{Generation: 1, Model: ctx.videosRoute}
-		return r.videosObjectDispatchResponse(ctx)
+		return continueRequestBodyResponse(), nil
 	}
 	requestBody := v.RequestBody.GetBody()
 	if isCountTokensRequest(ctx) {

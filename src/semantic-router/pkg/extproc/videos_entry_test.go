@@ -40,9 +40,19 @@ func videosHeaderTestRouter() *OpenAIRouter {
 	}}}
 }
 
+func videosDispatchTestRouter() *OpenAIRouter {
+	router := videosHeaderTestRouter()
+	router.Config.VLLMEndpoints = []config.VLLMEndpoint{{Name: "video-backend", Address: "10.0.0.7", Port: 8000}}
+	videos := router.Config.ModelConfig["video-route"]
+	videos.PreferredEndpoints = []string{"video-backend"}
+	router.Config.ModelConfig["video-route"] = videos
+	router.CredentialResolver = newTestCredentialResolver(router.Config)
+	return router
+}
+
 func TestVideosObjectHeadersSetRouteModelAndProviderPath(t *testing.T) {
 	ctx := &RequestContext{Headers: map[string]string{}}
-	response, err := videosHeaderTestRouter().handleRequestHeaders(newRequestHeaders("GET", "/v1/videos/video-route:provider:part"), ctx)
+	response, err := videosDispatchTestRouter().handleRequestHeaders(newRequestHeaders("GET", "/v1/videos/video-route:provider:part"), ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,24 +184,34 @@ func TestVideosRoutesUseBoundedTraceTemplates(t *testing.T) {
 	}
 }
 
-func videosDispatchTestRouter() *OpenAIRouter {
-	router := videosHeaderTestRouter()
-	router.Config.VLLMEndpoints = []config.VLLMEndpoint{{Name: "video-backend", Address: "10.0.0.7", Port: 8000}}
-	videos := router.Config.ModelConfig["video-route"]
-	videos.PreferredEndpoints = []string{"video-backend"}
-	router.Config.ModelConfig["video-route"] = videos
-	router.CredentialResolver = newTestCredentialResolver(router.Config)
-	return router
-}
-
 func TestVideosObjectRequestBodyIsNotDecoded(t *testing.T) {
 	router := videosDispatchTestRouter()
+	videos := router.Config.ModelConfig["video-route"]
+	videos.AccessKey = "sk-video"
+	videos.AccessKeys = map[string]string{"openai": "sk-video", "vllm": "sk-video"}
+	router.Config.ModelConfig["video-route"] = videos
+	router.CredentialResolver = newTestCredentialResolver(router.Config)
 	ctx := &RequestContext{Headers: map[string]string{}}
-	if _, err := router.handleRequestHeaders(newRequestHeaders("GET", "/v1/videos/video-route:provider_1"), ctx); err != nil {
+	headersRequest := newRequestHeaders("GET", "/v1/videos/video-route:provider_1")
+	// A bodyless GET ends the stream at the headers, so the header mutation is
+	// the last chance to dispatch the call to its provider.
+	headersRequest.RequestHeaders.EndOfStream = true
+	headerResponse, err := router.handleRequestHeaders(headersRequest, ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if ctx.videosContent {
 		t.Fatal("a status call was parsed as a content call")
+	}
+	mutation := headerResponse.GetRequestHeaders().GetResponse().GetHeaderMutation()
+	if got, _ := accountingHeaderValue(mutation, ":path"); got != "/v1/videos/provider_1" {
+		t.Fatalf("provider path = %q, want the object path", got)
+	}
+	if got, _ := accountingHeaderValue(mutation, headers.VSRRouteModel); got != "video-route" {
+		t.Fatalf("route model header = %q", got)
+	}
+	if got, _ := accountingHeaderValue(mutation, "Authorization"); got != "Bearer sk-video" {
+		t.Fatalf("provider credential = %q, want the model's key", got)
 	}
 	response, err := router.handleRequestBody(&ext_proc.ProcessingRequest_RequestBody{
 		RequestBody: &ext_proc.HttpBody{EndOfStream: true},
@@ -203,16 +223,9 @@ func TestVideosObjectRequestBodyIsNotDecoded(t *testing.T) {
 		ctx.SourceFormat != llmprotocol.OpenAIVideosV1 || ctx.TargetFormat != llmprotocol.OpenAIVideosV1 {
 		t.Fatalf("response = %+v, request = %+v", response.GetImmediateResponse(), ctx.SemanticRequest)
 	}
-	mutation := response.GetRequestBody().GetResponse().GetHeaderMutation()
-	if got, _ := accountingHeaderValue(mutation, ":path"); got != "/v1/videos/provider_1" {
-		t.Fatalf("provider path = %q, want the object path", got)
-	}
-	if got, _ := accountingHeaderValue(mutation, headers.VSRRouteModel); got != "video-route" {
-		t.Fatalf("route model header = %q", got)
-	}
 
 	contentCtx := &RequestContext{Headers: map[string]string{}}
-	if _, err := videosHeaderTestRouter().handleRequestHeaders(newRequestHeaders("GET", "/v1/videos/video-route:provider_1/content"), contentCtx); err != nil {
+	if _, err := videosDispatchTestRouter().handleRequestHeaders(newRequestHeaders("GET", "/v1/videos/video-route:provider_1/content"), contentCtx); err != nil {
 		t.Fatal(err)
 	}
 	if !contentCtx.videosContent || contentCtx.SourceFormat != llmprotocol.OpenAIVideosV1 {

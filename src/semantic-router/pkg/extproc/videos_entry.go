@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -81,72 +82,53 @@ func (r *OpenAIRouter) handleVideosRequestHeaders(
 	if !known || !capabilities.Supports(llmprotocol.CapabilityVideoGeneration) {
 		return r.videoNotFound(ctx), nil
 	}
+	dispatch, err := r.resolveProviderDispatch(route, "", false)
+	if err != nil {
+		return r.createErrorResponse(500, "Internal routing error. Contact your administrator."), nil
+	}
 
-	// The object path never reaches the inference entrypoints, so the header
-	// stage is the only place that can declare the format both sides speak.
+	// The object path never reaches the inference entrypoints, and a bodyless
+	// GET or DELETE ends the stream at the headers, so this stage is the only
+	// one that can declare the format and dispatch the call to its provider.
 	ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIVideosV1, llmprotocol.OpenAIVideosV1
 	ctx.RequestModel, ctx.videosRoute, ctx.videosContent = route, route, content
 	ctx.videosProviderID = providerID
-	mutation := r.buildRequestHeadersMutation(ctx, path)
-	appendRoutingHeaders(&mutation.SetHeaders, route)
-	if content {
-		mutation.SetHeaders = append(mutation.SetHeaders, overwriteRequestHeader(":path", videosCollectionPath+"/"+url.PathEscape(providerID)+"/content"))
-	} else {
-		mutation.SetHeaders = append(mutation.SetHeaders, overwriteRequestHeader(":path", videosCollectionPath+"/"+url.PathEscape(providerID)))
+	ctx.SemanticRequest = &llmprotocol.Request{Generation: 1, Model: route}
+	state, refusal := r.providerDispatchHeaderState(dispatch, ctx)
+	if refusal != nil {
+		return refusal, nil
 	}
+	mutation := r.buildRequestHeadersMutation(ctx, path)
+	mutation.SetHeaders = append(mutation.SetHeaders, state.setHeaders...)
+	mutation.RemoveHeaders = append(mutation.RemoveHeaders, state.removeHeaders...)
+	mutation.SetHeaders = restampVideoObjectPath(mutation.SetHeaders, providerID, content)
 	response := newContinueRequestHeadersResponse(mutation)
 	response.GetRequestHeaders().GetResponse().ClearRouteCache = true
 	return response, nil
 }
 
-// videosObjectDispatchResponse sends a status, content or delete call through
-// the same provider boundary as a create: backend resolution, provider
-// credential and profile headers, with the object path restored after the
-// profile's create path.
-func (r *OpenAIRouter) videosObjectDispatchResponse(ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, ctx.videosRoute, "", false, ctx)
-	if err != nil {
-		return nil, err
-	}
-	response := r.buildProviderDispatchResponse(dispatch, ctx)
-	if response.GetImmediateResponse() != nil {
-		return response, nil
-	}
-	common := response.GetRequestBody().GetResponse()
-	if common == nil {
-		return r.createErrorResponse(500, "Failed to build provider dispatch"), nil
-	}
-	if common.HeaderMutation == nil {
-		common.HeaderMutation = &ext_proc.HeaderMutation{}
-	}
-	// Append the object to the path the profile resolved, so a provider base
-	// path prefix survives; replace the option in place, leaving one :path.
-	collection := videosCollectionPath
-	restamped := false
-	for _, option := range common.HeaderMutation.GetSetHeaders() {
-		if option.GetHeader().GetKey() != ":path" {
-			continue
+// restampVideoObjectPath appends the object to the collection path a provider
+// profile resolved, replacing that option in place so one :path remains and a
+// provider base path prefix survives.
+func restampVideoObjectPath(headers []*core.HeaderValueOption, providerID string, content bool) []*core.HeaderValueOption {
+	objectPath := func(collection string) string {
+		path := strings.TrimSuffix(collection, "/")
+		if path == "" {
+			path = videosCollectionPath
 		}
-		collection = strings.TrimSuffix(string(option.GetHeader().GetRawValue()), "/")
-		if collection == "" {
-			collection = videosCollectionPath
+		path += "/" + url.PathEscape(providerID)
+		if content {
+			path += "/content"
 		}
-		objectPath := collection + "/" + url.PathEscape(ctx.videosProviderID)
-		if ctx.videosContent {
-			objectPath += "/content"
-		}
-		option.Header.RawValue = []byte(objectPath)
-		restamped = true
-		break
+		return path
 	}
-	if !restamped {
-		objectPath := collection + "/" + url.PathEscape(ctx.videosProviderID)
-		if ctx.videosContent {
-			objectPath += "/content"
+	for _, option := range headers {
+		if option.GetHeader().GetKey() == ":path" {
+			option.Header.RawValue = []byte(objectPath(string(option.GetHeader().GetRawValue())))
+			return headers
 		}
-		common.HeaderMutation.SetHeaders = append(common.HeaderMutation.SetHeaders, overwriteRequestHeader(":path", objectPath))
 	}
-	return response, nil
+	return append(headers, overwriteRequestHeader(":path", objectPath(videosCollectionPath)))
 }
 
 func (r *OpenAIRouter) videoNotFound(ctx *RequestContext) *ext_proc.ProcessingResponse {
