@@ -1970,6 +1970,210 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/models/health": {
+      "get": {
+        "operationId": "getModelHealth",
+        "summary": "Health of the configured backend models",
+        "description": "Checks each backend with a cheap read, never inference: its reliability.health_check_path when set, else the provider's model list with the backend's credentials, else its base URL. Repeat ?model= to check only those models. Checks younger than 20 s answer every viewer; ?refresh=1 checks again unless the last check of a model is under 5 s old. Backends are named as the configuration names them, without URLs or credentials.",
+        "tags": [
+          "models"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest health of each requested model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkedAt": {
+                      "type": "string"
+                    },
+                    "intervalSeconds": {
+                      "type": "integer"
+                    },
+                    "models": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "checkedAt": {
+                            "type": "string"
+                          },
+                          "endpoints": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "httpStatus": {
+                                  "type": "integer"
+                                },
+                                "latencyMs": {
+                                  "nullable": true,
+                                  "type": "integer"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "status"
+                              ]
+                            }
+                          },
+                          "latencyMs": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "p95Ms": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "recentMs": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "model",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "checkedAt",
+                    "intervalSeconds",
+                    "models"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "error invalid_request for an empty or oversized model name, or more than 64 models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "error model_not_found for a model the active configuration does not declare",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "error config_unavailable when the active configuration cannot be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/models/verify": {
       "post": {
         "operationId": "postApiModelsVerify",
@@ -1998,6 +2202,222 @@
         "x-vllm-sr-csrf": true,
         "x-vllm-sr-max-body-bytes": 2097152,
         "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/observability/traces/summaries": {
+      "get": {
+        "operationId": "listTraceSummaries",
+        "summary": "Summaries of the traces a Jaeger search finds",
+        "description": "Runs the search against Jaeger at TARGET_JAEGER_URL on the server and answers one summary per trace, newest first, instead of the traces themselves; fetch a full trace from /embedded/jaeger/api/traces/{traceID}. Query: service (required), operation, lookback (a Go duration, default 1h, at most 720h), limit (1 to 100, default 20), minDuration and maxDuration (Go durations). traceID is Jaeger's full ID; startTimeMicros is microseconds since the Unix epoch, and durationMicros runs from the first span's start to the last span's end. The root is the earliest span without a CHILD_OF or FOLLOWS_FROM parent in the trace; services lists the root's service first, then the busiest. errorCount counts spans tagged error=true or otel.status_code=ERROR. Jaeger's answer is read for at most 20 s and 64 MiB.",
+        "tags": [
+          "observability"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One summary per trace, newest first; total counts data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "durationMicros": {
+                            "type": "integer"
+                          },
+                          "errorCount": {
+                            "type": "integer"
+                          },
+                          "rootOperation": {
+                            "type": "string"
+                          },
+                          "rootService": {
+                            "type": "string"
+                          },
+                          "services": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "spanCount": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "spanCount"
+                              ]
+                            }
+                          },
+                          "spanCount": {
+                            "type": "integer"
+                          },
+                          "startTimeMicros": {
+                            "type": "integer"
+                          },
+                          "traceID": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "traceID",
+                          "rootOperation",
+                          "rootService",
+                          "services",
+                          "spanCount",
+                          "errorCount",
+                          "startTimeMicros",
+                          "durationMicros"
+                        ]
+                      }
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "limit",
+                    "total"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "error invalid_request for a missing service, a malformed parameter, or a search Jaeger rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "error jaeger_unreachable, jaeger_bad_response when the answer is not a JSON search result, jaeger_response_too_large over 64 MiB, or jaeger_error when Jaeger failed the search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "error jaeger_not_configured when TARGET_JAEGER_URL is empty or not an absolute URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "error jaeger_timeout when Jaeger does not finish the search within 20 s",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "logs.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "observability",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
       }
     },
     "/api/operations": {
@@ -6065,6 +6485,12 @@
                     },
                     "models": {
                       "type": "integer"
+                    },
+                    "publicBaseUrl": {
+                      "type": "string"
+                    },
+                    "publicRequiresKey": {
+                      "type": "boolean"
                     },
                     "reason": {
                       "type": "string"

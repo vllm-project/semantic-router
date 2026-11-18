@@ -37,10 +37,10 @@ providers:
           protocol: http
 ```
 
-In the Dashboard, open **Build → Routing → Models → Add Model**, select the Provider, and
-choose **Advanced settings → Reasoning family**. The **Built-in Reasoning
-Families** table on the Models page shows the available IDs and their native
-parameters.
+In the Dashboard, open **Models → Backend models**, choose **Connect model**,
+select the Provider, and choose **Advanced settings → Reasoning family**. The
+**Reasoning families** tab on the Backend models page shows the available IDs
+and their native parameters.
 
 ## Define a custom family inline
 
@@ -73,7 +73,7 @@ combination migrates to `providers.models[].reasoning`: built-in IDs become a
 `family` reference, while custom definitions are copied inline onto each custom
 Model that uses them.
 
-Use **Manual setup** in the Dashboard to author an inline family. Leave
+Use **Add manually** in the Dashboard to author an inline family. Leave
 **Built-in Catalog Model** and **Reasoning Family** empty, then fill the
 **Inline Reasoning** fields.
 

@@ -1,13 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, Check, Mail, Ticket, Unlink, UserRound } from 'lucide-react'
 
-import ProductIcon from '../components/ProductIcon'
-import ProductLoadingState from '../components/ProductLoadingState'
+import AuthBackdrop, { AuthCard, AuthCardHeader, AuthError } from '../components/AuthBackdrop'
+import PasswordInput from '../components/PasswordInput'
 import { useAuth } from '../contexts/AuthContext'
 import type { AuthUser } from '../contexts/authSession'
-import AuthExperienceShell from './AuthExperienceShell'
-import authStyles from './AuthExperienceShell.module.css'
-import styles from './InviteAcceptPage.module.css'
+import { Badge, Button, Field, IconTile, InputGroup, Label, Skeleton, cn } from '../ui'
+import { MIN_PASSWORD_LENGTH, formatServerMessage } from './loginSupport'
 
 interface InvitationInfo {
   email?: string
@@ -19,14 +19,57 @@ interface InvitationInfo {
   expiresAt: number
 }
 
+const ROLE_LABELS: Record<InvitationInfo['role'], string> = {
+  admin: 'Admin',
+  write: 'Builder',
+  read: 'Read',
+}
+
 const responseError = async (response: Response) =>
-  (await response.text()) || `Request failed (${response.status})`
+  formatServerMessage(await response.text(), `Request failed (${response.status})`)
 
 const invitationValidity = (expiresAt: number) => {
   const remainingHours = Math.max(0, Math.ceil((expiresAt * 1000 - Date.now()) / 3_600_000))
   if (remainingHours >= 48) return `${Math.ceil(remainingHours / 24)} days left`
   if (remainingHours >= 1) return `${remainingHours} hours left`
   return 'Expires soon'
+}
+
+const formatExpiry = (expiresAt: number) =>
+  new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(expiresAt * 1000))
+
+function InvitationSummary({ invitation }: { invitation: InvitationInfo }) {
+  const isShared = invitation.kind === 'shared'
+  return (
+    <div className="mb-5 flex items-center gap-3 rounded-lg border border-border bg-surface-subtle px-3.5 py-3">
+      <IconTile icon={Ticket} tone="blue" size="sm" />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center gap-2 text-[13px] font-medium text-foreground">
+          {isShared
+            ? `${invitation.remainingUses} of ${invitation.maxUses} seats left`
+            : 'Personal invitation'}
+          <Badge tone="brand" size="sm">
+            {ROLE_LABELS[invitation.role] ?? invitation.role}
+          </Badge>
+        </span>
+        <span className="text-xs text-muted-foreground">
+          Valid until{' '}
+          <time dateTime={new Date(invitation.expiresAt * 1000).toISOString()}>
+            {formatExpiry(invitation.expiresAt)}
+          </time>
+        </span>
+      </div>
+      <span className="shrink-0 text-xs font-medium tabular text-subtle-foreground">
+        {invitationValidity(invitation.expiresAt)}
+      </span>
+    </div>
+  )
 }
 
 export default function InviteAcceptPage() {
@@ -37,7 +80,6 @@ export default function InviteAcceptPage() {
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -62,13 +104,17 @@ export default function InviteAcceptPage() {
 
   const isShared = invitation?.kind === 'shared'
   const firstName = useMemo(() => invitation?.name?.trim().split(/\s+/)[0] || '', [invitation])
-  const passwordReady = password.length >= 9
+  const passwordReady = password.length >= MIN_PASSWORD_LENGTH
 
   const accept = async (event: FormEvent) => {
     event.preventDefault()
     if (!invitation) return
+    if (isShared && (!name.trim() || !email.trim().includes('@'))) {
+      setError('Add your name and email so your administrator knows who joined.')
+      return
+    }
     if (!passwordReady) {
-      setError('Use at least 9 characters for your password.')
+      setError(`Use at least ${MIN_PASSWORD_LENGTH} characters for your password.`)
       return
     }
     setSubmitting(true)
@@ -82,7 +128,7 @@ export default function InviteAcceptPage() {
       if (!response.ok) throw new Error(await responseError(response))
       const payload = (await response.json()) as { token: string; user: AuthUser }
       setSession(payload.token, payload.user)
-      navigate('/dashboard', { replace: true })
+      navigate('/', { replace: true })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create your account.')
     } finally {
@@ -90,179 +136,139 @@ export default function InviteAcceptPage() {
     }
   }
 
-  if (loading) return <ProductLoadingState label="Opening invitation" />
+  if (loading) {
+    return (
+      <AuthBackdrop>
+        <AuthCard busy>
+          <div className="mb-6 flex flex-col items-center">
+            <Skeleton className="mb-5 size-12 rounded-2xl" />
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="mt-2.5 h-3.5 w-60" />
+          </div>
+          <Skeleton className="mb-5 h-[62px] rounded-lg" />
+          <div className="flex flex-col gap-4">
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+          </div>
+          <span className="sr-only" role="status">
+            Opening invitation
+          </span>
+        </AuthCard>
+      </AuthBackdrop>
+    )
+  }
 
-  const story = invitation ? (
-    <>
-      <div className={authStyles.brandBadge}>
-        <img src="/vllm.png" alt="vLLM" />
-        <span>Semantic Router</span>
-      </div>
-      <div className={authStyles.storyCopy}>
-        <p className={authStyles.storyEyebrow}>Your invitation is here</p>
-        <h1 className={`${authStyles.storyTitle} ${styles.inviteStoryTitle}`}>
-          {isShared ? 'Your invitation is ready.' : `You’re in, ${firstName}.`}
-        </h1>
-        <p className={styles.storySlogan}>Build what one model can’t.</p>
-        <p className={authStyles.storyDescription}>Your Mixture-of-Models workspace is ready.</p>
-      </div>
-      <div className={styles.invitationTicket}>
-        <div className={styles.ticketTopline}>
-          <span>Invitation</span>
-          <strong>{invitationValidity(invitation.expiresAt)}</strong>
-        </div>
-        <div className={styles.ticketIdentity}>
-          <small>{isShared ? 'Available tickets' : 'Reserved for'}</small>
-          <strong>{isShared ? `${invitation.remainingUses} tickets` : invitation.name}</strong>
-          <span>Dashboard · {invitation.role}</span>
-        </div>
-        <div className={styles.ticketExpiry}>
-          <span>Valid until</span>
-          <time dateTime={new Date(invitation.expiresAt * 1000).toISOString()}>
-            {new Intl.DateTimeFormat('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            }).format(new Date(invitation.expiresAt * 1000))}
-          </time>
-        </div>
-      </div>
-    </>
-  ) : (
-    <>
-      <div className={authStyles.brandBadge}>
-        <img src="/vllm.png" alt="vLLM" />
-        <span>Semantic Router</span>
-      </div>
-      <div className={authStyles.storyCopy}>
-        <p className={authStyles.storyEyebrow}>Invitation</p>
-        <h1 className={authStyles.storyTitle}>This link is unavailable.</h1>
-        <p className={authStyles.storyDescription}>
-          Ask your administrator for a fresh invitation.
-        </p>
-      </div>
-      <div className={authStyles.storyIdentity}>
-        <span>One-time access</span>
-        <small>Dashboard invitation</small>
-      </div>
-    </>
-  )
+  if (!invitation) {
+    return (
+      <AuthBackdrop>
+        <AuthCard note="Invitation links work once and expire. Ask your administrator for a fresh one.">
+          <div className="flex flex-col items-center text-center">
+            <IconTile icon={Unlink} tone="slate" size="lg" className="mb-5" />
+            <h1 className="text-xl font-semibold tracking-[-0.02em]">
+              This invitation can’t be used
+            </h1>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+              {error || 'This invitation is unavailable.'}
+            </p>
+            <Button asChild variant="outline" size="lg" className="mt-6 w-full">
+              <Link to="/login">
+                <ArrowLeft />
+                Back to sign in
+              </Link>
+            </Button>
+          </div>
+        </AuthCard>
+      </AuthBackdrop>
+    )
+  }
 
   return (
-    <AuthExperienceShell story={story}>
-      {!invitation ? (
-        <section className={authStyles.card}>
-          <div className={authStyles.stageHeader}>
-            <p className={authStyles.stageEyebrow}>Invitation unavailable</p>
-            <h2 className={authStyles.stageTitle}>This link can’t be used.</h2>
-            <p className={authStyles.stageDescription}>{error}</p>
-          </div>
-          <Link className={styles.backLink} to="/login">
-            <ProductIcon name="arrow-left" aria-hidden="true" />
-            Back to sign in
-          </Link>
-        </section>
-      ) : (
-        <form
-          className={`${authStyles.card} ${styles.invitationForm}`}
-          onSubmit={accept}
-          aria-busy={submitting}
-        >
-          <div className={authStyles.stageHeader}>
-            <p className={authStyles.stageEyebrow}>Your account</p>
-            <h2 className={authStyles.stageTitle}>
-              {isShared ? 'Create your account' : 'Choose your password'}
-            </h2>
-            <p className={authStyles.stageDescription}>
-              {isShared ? 'Tell us who is joining.' : 'Your name and email are already reserved.'}
-            </p>
-          </div>
+    <AuthBackdrop>
+      <AuthCard note="This link works once. After joining, sign in with your email and this password.">
+        <AuthCardHeader
+          title={isShared ? 'Join Semantic Router' : `You’re in, ${firstName || 'welcome'}.`}
+          description={
+            isShared
+              ? 'Tell us who is joining, then choose a password.'
+              : 'Your name and email are reserved. Choose a password to finish.'
+          }
+        />
+
+        <InvitationSummary invitation={invitation} />
+
+        <form className="flex flex-col gap-4" onSubmit={accept} aria-busy={submitting} noValidate>
           {isShared ? (
-            <div className={styles.identityInputs}>
-              <div className={authStyles.inputBlock}>
-                <label className={authStyles.label} htmlFor="invite-name">
-                  Name
-                </label>
-                <input
+            <>
+              <Field label="Name" htmlFor="invite-name">
+                <InputGroup
                   id="invite-name"
-                  className={authStyles.input}
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   autoComplete="name"
-                  required
-                  autoFocus
                   placeholder="Your name"
+                  leading={<UserRound />}
+                  className="h-10"
+                  autoFocus
+                  required
                 />
-              </div>
-              <div className={authStyles.inputBlock}>
-                <label className={authStyles.label} htmlFor="invite-email">
-                  Email
-                </label>
-                <input
+              </Field>
+              <Field label="Email" htmlFor="invite-email">
+                <InputGroup
                   id="invite-email"
-                  className={authStyles.input}
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   autoComplete="email"
-                  required
                   placeholder="you@example.com"
+                  leading={<Mail />}
+                  className="h-10"
+                  required
                 />
-              </div>
-            </div>
+              </Field>
+            </>
           ) : (
-            <div className={styles.prefilled}>
-              <label>
-                <span>Name</span>
-                <strong>{invitation.name}</strong>
-              </label>
-              <label>
-                <span>Email</span>
-                <strong>{invitation.email}</strong>
-              </label>
-            </div>
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-lg border border-border px-3.5 py-3 text-[13px]">
+              <dt className="text-subtle-foreground">Name</dt>
+              <dd className="truncate font-medium text-foreground">{invitation.name}</dd>
+              <dt className="text-subtle-foreground">Email</dt>
+              <dd className="truncate text-foreground">{invitation.email}</dd>
+            </dl>
           )}
-          {error ? (
-            <div className={authStyles.error} role="alert">
-              {error}
+
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="invite-password">Password</Label>
+              <span
+                className={cn(
+                  'flex items-center gap-1 text-xs transition-colors',
+                  passwordReady ? 'text-success-foreground' : 'text-subtle-foreground',
+                )}
+                aria-live="polite"
+              >
+                {passwordReady ? <Check className="size-3.5" aria-hidden="true" /> : null}
+                {passwordReady ? 'Looks good' : `${MIN_PASSWORD_LENGTH} characters minimum`}
+              </span>
             </div>
-          ) : null}
-          <div className={authStyles.inputBlock}>
-            <label className={authStyles.label} htmlFor="invite-password">
-              Password
-            </label>
-            <div className={styles.passwordInput}>
-              <input
-                id="invite-password"
-                className={authStyles.input}
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                minLength={9}
-                required
-                autoComplete="new-password"
-                autoFocus={!isShared}
-                placeholder="9 characters or more"
-              />
-              <button type="button" onClick={() => setShowPassword((value) => !value)}>
-                <ProductIcon name={showPassword ? 'eye-off' : 'eye'} aria-hidden="true" />
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
-            </div>
-            <small
-              className={`${styles.passwordHint} ${passwordReady ? styles.passwordReady : ''}`}
-            >
-              {passwordReady ? 'Looks good' : '9 characters minimum'}
-            </small>
+            <PasswordInput
+              id="invite-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              minLength={MIN_PASSWORD_LENGTH}
+              autoComplete="new-password"
+              autoFocus={!isShared}
+              placeholder={`${MIN_PASSWORD_LENGTH} characters or more`}
+              required
+            />
           </div>
-          <button className={authStyles.primaryButton} type="submit" disabled={submitting}>
+
+          {error ? <AuthError>{error}</AuthError> : null}
+
+          <Button type="submit" size="lg" className="mt-1 w-full" loading={submitting}>
             {submitting ? 'Joining the workspace…' : 'Join the workspace'}
-            <ProductIcon name="arrow-right" aria-hidden="true" />
-          </button>
+            {submitting ? null : <ArrowRight />}
+          </Button>
         </form>
-      )}
-    </AuthExperienceShell>
+      </AuthCard>
+    </AuthBackdrop>
   )
 }

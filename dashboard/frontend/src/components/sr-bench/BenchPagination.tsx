@@ -1,6 +1,6 @@
-import ProductIcon from '../ProductIcon'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Button } from '../../ui'
 import { number } from './model'
-import styles from './SrBench.module.css'
 
 export default function BenchPagination({
   label,
@@ -19,18 +19,31 @@ export default function BenchPagination({
   const pages = Math.ceil(total / pageSize)
   const current = Math.min(page, pages - 1)
   return (
-    <nav className={styles.pagination} aria-label={`${label} pages`}>
-      <span role="status">
+    <nav
+      className="my-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"
+      aria-label={`${label} pages`}
+    >
+      <span role="status" className="tabular-nums">
         {number(current * pageSize + 1)}–{number(Math.min((current + 1) * pageSize, total))} of{' '}
         {number(total)} · Page {current + 1} of {pages}
       </span>
-      <div className={styles.actions}>
-        <button disabled={current === 0} onClick={() => onChange(current - 1)}>
-          <ProductIcon name="chevron-left" /> Previous {label.toLowerCase()}
-        </button>
-        <button disabled={current + 1 >= pages} onClick={() => onChange(current + 1)}>
-          Next {label.toLowerCase()} <ProductIcon name="chevron-right" />
-        </button>
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={current === 0}
+          onClick={() => onChange(current - 1)}
+        >
+          <ChevronLeft aria-hidden="true" /> Previous {label.toLowerCase()}
+        </Button>
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={current + 1 >= pages}
+          onClick={() => onChange(current + 1)}
+        >
+          Next {label.toLowerCase()} <ChevronRight aria-hidden="true" />
+        </Button>
       </div>
     </nav>
   )

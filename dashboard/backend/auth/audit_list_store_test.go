@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 )
@@ -82,6 +83,46 @@ func TestQueryAuditLogsSupportsEnterpriseFiltersPagingAndSafeSort(t *testing.T) 
 		logs, total, err = store.QueryAuditLogs(ctx, AuditLogListOptions{Status: "401", Limit: 20})
 		if err != nil || total != 1 || len(logs) != 1 || logs[0].StatusCode != 401 {
 			t.Fatalf("401 query = %#v, total %d, err %v", logs, total, err)
+		}
+	})
+
+	t.Run("matches any of several comma-separated users, actions, and statuses", func(t *testing.T) {
+		_, total, err := store.QueryAuditLogs(ctx, AuditLogListOptions{UserID: "user-a, user-b", Limit: 20})
+		if err != nil || total != 3 {
+			t.Fatalf("two users: total %d, err %v; want 3", total, err)
+		}
+		_, total, err = store.QueryAuditLogs(ctx, AuditLogListOptions{Action: "user.create,router.deploy", Limit: 20})
+		if err != nil || total != 2 {
+			t.Fatalf("two actions: total %d, err %v; want 2", total, err)
+		}
+		logs, total, err := store.QueryAuditLogs(ctx, AuditLogListOptions{Status: "success,server_error", Limit: 20})
+		if err != nil || total != 4 {
+			t.Fatalf("two statuses: total %d, err %v; want 4", total, err)
+		}
+		for _, logRow := range logs {
+			if logRow.StatusCode == 401 {
+				t.Fatalf("two statuses returned the 401 entry: %#v", logRow)
+			}
+		}
+		if _, total, err = store.QueryAuditLogs(ctx, AuditLogListOptions{Status: "client_error,all", Limit: 20}); err != nil || total != len(fixtures) {
+			t.Fatalf("status list with all: total %d, err %v; want every entry", total, err)
+		}
+		if _, _, err = store.QueryAuditLogs(ctx, AuditLogListOptions{Status: "success,sideways"}); !errors.Is(err, ErrInvalidAuditLogFilter) {
+			t.Fatalf("invalid status in a list error = %v, want ErrInvalidAuditLogFilter", err)
+		}
+	})
+
+	t.Run("summarizes the most frequent actors and actions", func(t *testing.T) {
+		facets, err := store.AuditLogFacets(ctx)
+		if err != nil {
+			t.Fatalf("AuditLogFacets() error = %v", err)
+		}
+		wantUsers := []AuditLogFacet{{Value: "user-a", Count: 2}, {Value: "user-b", Count: 1}, {Value: "user-c", Count: 1}}
+		if fmt.Sprint(facets.Users) != fmt.Sprint(wantUsers) {
+			t.Fatalf("users = %v, want %v", facets.Users, wantUsers)
+		}
+		if len(facets.Actions) != len(fixtures) || facets.Actions[0].Value != "auth.login" {
+			t.Fatalf("actions = %v, want every action, alphabetical on ties", facets.Actions)
 		}
 	})
 

@@ -6,10 +6,14 @@ import {
   filterSetupModels,
   getModelDraftFieldErrors,
   getStepOneErrors,
+  isCpuOnlyPlatform,
+  maskedSetupYaml,
   paginateSetupModels,
+  recommendedDecisionModels,
   removeSetupModel,
   restoreSetupModel,
   summarizeSetupConfig,
+  upcomingCpuDecisionModels,
   switchSetupModelProvider,
   type ModelDraft,
 } from './setupWizardSupport'
@@ -223,5 +227,57 @@ describe('setup wizard provider projection', () => {
         endpoint: 'https://api.anthropic.com',
       }),
     ])
+  })
+})
+
+describe('setup decision model recommendation', () => {
+  const option = (name: string, label = name) => ({ name, label, artifact: `vllm-sr/${name}` })
+  const catalog = [option('vela3-fast', 'Vela 3.0 fast'), option('Vela-2.0-0.3B', 'Vela 2.0 0.3B')]
+
+  it('treats a dashboard without a GPU platform as CPU-only', () => {
+    expect(isCpuOnlyPlatform('')).toBe(true)
+    expect(isCpuOnlyPlatform('cpu')).toBe(true)
+    expect(isCpuOnlyPlatform('rocm')).toBe(false)
+    expect(isCpuOnlyPlatform('CUDA')).toBe(false)
+  })
+
+  it('recommends the small Vela 3.1 models on CPU when the catalog has them', () => {
+    const withVela31 = [
+      ...catalog,
+      option('vela3.1-pico-380m', 'Vela 3.1 pico 380M'),
+      option('vela3.1-fast', 'Vela 3.1 fast'),
+      option('vela3.1-pico-150m', 'Vela 3.1 pico 150M'),
+    ]
+    expect(
+      recommendedDecisionModels(withVela31, true, 'vela3-fast').map((entry) => entry.name),
+    ).toEqual(['vela3.1-fast', 'vela3.1-pico-150m', 'vela3.1-pico-380m'])
+    expect(
+      recommendedDecisionModels(withVela31, false, 'vela3-fast').map((entry) => entry.name),
+    ).toEqual(['vela3-fast'])
+  })
+
+  it('falls back to the default when the catalog has no Vela 3.1 model', () => {
+    expect(
+      recommendedDecisionModels(catalog, true, 'vela3-fast').map((entry) => entry.name),
+    ).toEqual(['vela3-fast'])
+  })
+
+  it('lists the Vela 3.1 models the catalog announces before the runtime serves them', () => {
+    const announced = [
+      { ...option('vela3-fast', 'Vela 3.0 fast'), servable: true },
+      { ...option('vela3.1-fast', 'Vela 3.1 fast'), servable: false },
+      { ...option('vela3.1-pico-150m', 'Vela 3.1 pico 150M'), servable: true },
+    ]
+    expect(upcomingCpuDecisionModels(announced).map((entry) => entry.name)).toEqual([
+      'vela3.1-fast',
+    ])
+  })
+
+  it('previews the draft as YAML with access keys masked', () => {
+    const yaml = maskedSetupYaml({
+      providers: { models: [{ name: 'm', backend_refs: [{ api_key: 'sk-secret' }] }] },
+    })
+    expect(yaml).toContain('api_key: ••••••••')
+    expect(yaml).not.toContain('sk-secret')
   })
 })

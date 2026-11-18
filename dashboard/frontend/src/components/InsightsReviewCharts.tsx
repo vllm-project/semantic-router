@@ -1,13 +1,5 @@
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import type { ReactNode } from 'react'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 import type {
   InsightsReviewAggregate,
@@ -15,30 +7,22 @@ import type {
   InsightsReviewTimeBucket,
 } from '../pages/insightsReviewTypes'
 import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
+import { ChartLegend, ChartTooltip, chartAxis, chartGrid, useChartReady } from '../ui'
 import { formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost } from '../utils/insightsCost'
-import styles from './InsightsCharts.module.css'
 
 interface InsightsReviewChartsProps {
   reviews: InsightsReviewAggregate
 }
 
-// Verdicts in the dashboard's red and grays; failures stay apart from denials.
+// Verdicts in the status colors; failures stay apart from denials.
 const RESULT_SERIES = [
-  { key: 'allowed', name: 'Allowed', fill: '#d4d4d8' },
-  { key: 'denied', name: 'Denied', fill: '#e31b23' },
-  { key: 'failed', name: 'Failed', fill: '#8f949c' },
-  { key: 'invalid', name: 'Invalid answer', fill: '#6f7379' },
-  { key: 'cancelled', name: 'Cancelled', fill: '#393b40' },
+  { key: 'allowed', name: 'Allowed', fill: 'var(--success)' },
+  { key: 'denied', name: 'Denied', fill: 'var(--destructive)' },
+  { key: 'failed', name: 'Failed', fill: 'var(--warning)' },
+  { key: 'invalid', name: 'Invalid answer', fill: 'var(--chart-8)' },
+  { key: 'cancelled', name: 'Cancelled', fill: 'var(--border-strong)' },
 ] as const
-
-const TOOLTIP_STYLE = {
-  background: 'var(--color-bg-secondary)',
-  border: '1px solid var(--color-border)',
-  borderRadius: '4px',
-  color: 'var(--color-text)',
-}
-const AXIS_TICK = { fill: 'var(--color-text-secondary)', fontSize: 11 }
 
 function formatReviewCost(cost: InsightsReviewCost[] | null | undefined) {
   if (!cost?.length) return 'Not priced'
@@ -92,6 +76,15 @@ function summaryTiles(reviews: InsightsReviewAggregate) {
   ]
 }
 
+function ChartCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3.5 shadow-xs">
+      <h3 className="text-[13px] font-semibold">{title}</h3>
+      {children}
+    </div>
+  )
+}
+
 function ReviewsOverTimeChart({
   data,
   bucket,
@@ -99,37 +92,40 @@ function ReviewsOverTimeChart({
   data: InsightsReviewTimeBucket[]
   bucket?: string
 }) {
+  const ready = useChartReady()
   const rows = data.map((entry) => ({ ...entry, label: bucketLabel(entry.start, bucket) }))
   return (
-    <div className={styles.chartSection}>
-      <h3 className={styles.chartTitle}>Reviews over time{bucket ? ` (per ${bucket})` : ''}</h3>
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={rows} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-          <XAxis dataKey="label" tick={AXIS_TICK} minTickGap={16} />
-          <YAxis tick={AXIS_TICK} allowDecimals={false} />
-          <Tooltip
-            cursor={false}
-            contentStyle={TOOLTIP_STYLE}
-            itemStyle={{ color: 'var(--color-text)' }}
-          />
-          <Legend verticalAlign="top" height={30} />
-          {RESULT_SERIES.map((series) => (
-            <Bar
-              key={series.key}
-              dataKey={series.key}
-              name={series.name}
-              stackId="result"
-              fill={series.fill}
-            />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <ChartCard title={`Reviews over time${bucket ? ` (per ${bucket})` : ''}`}>
+      <ChartLegend
+        items={RESULT_SERIES.map((series) => ({ label: series.name, color: series.fill }))}
+      />
+      <div className="h-[220px]">
+        {ready ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="label" {...chartAxis} minTickGap={16} />
+              <YAxis {...chartAxis} allowDecimals={false} />
+              <Tooltip cursor={{ fill: 'var(--accent)' }} content={<ChartTooltip />} />
+              {RESULT_SERIES.map((series) => (
+                <Bar
+                  key={series.key}
+                  dataKey={series.key}
+                  name={series.name}
+                  stackId="result"
+                  fill={series.fill}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        ) : null}
+      </div>
+    </ChartCard>
   )
 }
 
 function ReviewModelChart({ reviews }: { reviews: InsightsReviewAggregate }) {
+  const ready = useChartReady()
   const labels = useModelLabels()
   const rows = reviews.by_model.map((entry) => ({
     name: modelText(labels, entry.model),
@@ -137,46 +133,54 @@ function ReviewModelChart({ reviews }: { reviews: InsightsReviewAggregate }) {
     cost: formatReviewCost(entry.cost),
   }))
   return (
-    <div className={styles.chartSection}>
-      <h3 className={styles.chartTitle}>Requests by review model</h3>
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={rows} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-          <XAxis dataKey="name" tick={AXIS_TICK} interval={0} />
-          <YAxis tick={AXIS_TICK} allowDecimals={false} />
-          <Tooltip
-            cursor={false}
-            contentStyle={TOOLTIP_STYLE}
-            itemStyle={{ color: 'var(--color-text)' }}
-            formatter={(value: number | string, _name, item) => [
-              `${value} (${(item?.payload as { cost?: string } | undefined)?.cost ?? 'Not priced'})`,
-              'Requests',
-            ]}
-          />
-          <Bar dataKey="requests" name="Requests" fill="#a6abb3" radius={[6, 6, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <ChartCard title="Requests by review model">
+      <div className="h-[244px]">
+        {ready ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={rows} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="name" {...chartAxis} interval={0} />
+              <YAxis {...chartAxis} allowDecimals={false} />
+              <Tooltip
+                cursor={{ fill: 'var(--accent)' }}
+                content={
+                  <ChartTooltip
+                    labelFormat={(label) =>
+                      `${label} · ${rows.find((row) => row.name === label)?.cost ?? 'Not priced'}`
+                    }
+                  />
+                }
+              />
+              <Bar dataKey="requests" name="Requests" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : null}
+      </div>
+    </ChartCard>
   )
 }
 
 export default function InsightsReviewCharts({ reviews }: InsightsReviewChartsProps) {
   return (
-    <section className={styles.container} aria-label="Review summary">
-      <div className={`${styles.summaryGrid} ${styles.reviewSummaryGrid}`}>
+    <section className="mb-4 flex flex-col gap-3" aria-label="Review summary">
+      <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-card shadow-xs sm:grid-cols-3 xl:grid-cols-6 [&>article]:border-border xl:[&>article:not(:first-child)]:border-l">
         {summaryTiles(reviews).map((tile) => (
-          <article key={tile.label} className={styles.summaryCard}>
-            <span className={styles.summaryLabel}>{tile.label}</span>
-            <strong className={styles.summaryValue}>{tile.value}</strong>
-            <span className={styles.summaryHint}>{tile.hint}</span>
+          <article key={tile.label} className="flex min-w-0 flex-col gap-1.5 px-4 py-3">
+            <span className="text-xs text-muted-foreground">{tile.label}</span>
+            <strong className="truncate text-lg font-semibold leading-none tracking-[-0.02em] tabular">
+              {tile.value}
+            </strong>
+            <span className="truncate text-[11.5px] text-subtle-foreground" title={tile.hint}>
+              {tile.hint}
+            </span>
           </article>
         ))}
       </div>
-      <p className={styles.summaryHint}>
+      <p className="text-xs text-subtle-foreground">
         Approval rate counts allow and deny verdicts only. A failed, invalid or cancelled review is
         not a deny. Costs are the recorded estimates; requests without a price stay unpriced.
       </p>
-      <div className={styles.tokenBreakdownRow}>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <ReviewsOverTimeChart data={reviews.over_time} bucket={reviews.bucket} />
         <ReviewModelChart reviews={reviews} />
       </div>
