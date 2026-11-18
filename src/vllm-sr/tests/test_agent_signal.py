@@ -92,10 +92,6 @@ def test_a_decision_routes_and_blocks_by_agent_rule():
         ),
         ({"name": "x", "request_classes": ["title"]}, "request_classes"),
         (
-            {"name": "x", "harness": "codex", "request_classes": ["compaction"]},
-            "request_classes cannot go with harness codex",
-        ),
-        (
             {
                 "name": "x",
                 "harness": "deepseek_harness",
@@ -107,10 +103,6 @@ def test_a_decision_routes_and_blocks_by_agent_rule():
         (
             {"name": "x", "harness": "cursor", "request_classes": ["main"]},
             "request_classes cannot go with harness cursor",
-        ),
-        (
-            {"name": "x", "harness": "openclaw", "request_classes": ["compaction"]},
-            "request_classes cannot go with harness openclaw",
         ),
         ({"name": "x", "harness": "gemini_cli"}, "harness"),
         (
@@ -166,3 +158,11 @@ def test_agent_rule_names_are_unique_ignoring_case():
 def test_fast_response_block_defaults_to_answering():
     assert FastResponsePluginConfig(message="busy").block is False
     assert FastResponsePluginConfig(message="no", block=True).block is True
+
+
+@pytest.mark.parametrize("harness", ["codex", "openclaw", "opencode", "claude_code"])
+def test_agent_rule_takes_request_classes_for_harnesses_that_have_them(harness):
+    rule = AgentRule.model_validate(
+        {"name": "x", "harness": harness, "request_classes": ["compaction"]}
+    )
+    assert rule.request_classes == ["compaction"]

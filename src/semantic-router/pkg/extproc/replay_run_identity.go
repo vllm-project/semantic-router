@@ -88,7 +88,10 @@ func harnessRunSession(ctx *RequestContext, cfg config.RouterLearningProtectionC
 func harnessRunAgent(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) *store.AgentIdentity {
 	agentID, _ := protectionAgentID(ctx, cfg)
 	if agentID == "" {
-		agentID, _ = protectionAgentID(ctx, config.RouterLearningProtectionConfig{})
+		// The facts follow the identity the record keeps, so a subagent's
+		// call reads as one whichever headers protection is set to read.
+		cfg = config.RouterLearningProtectionConfig{}
+		agentID, _ = protectionAgentID(ctx, cfg)
 	}
 	facts := agentFacts(ctx, cfg)
 	identity := store.AgentIdentity{

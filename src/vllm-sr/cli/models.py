@@ -671,14 +671,9 @@ class AgentRule(BaseModel):
                 f"harness must be one of {', '.join(AGENT_HARNESSES)},"
                 f" got {self.harness!r}"
             )
-        if self.request_classes and self.harness in (
-            "codex",
-            "deepseek_harness",
-            "cursor",
-            "openclaw",
-        ):
+        if self.request_classes and self.harness in ("deepseek_harness", "cursor"):
             raise ValueError(
-                "only Claude Code and OpenCode calls carry a request class, so"
+                f"{self.harness} calls carry no request class, so"
                 f" request_classes cannot go with harness {self.harness}"
             )
         if self.role == "main" and self.types:

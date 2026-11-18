@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount"
 )
 
 // projectRequestForBackend applies portable request projections before model
@@ -45,6 +46,7 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
+	projected = r.projectControlTokens(projected, model)
 	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, budgetDiagnostics, verbosityDiagnostics,
 		toolChoiceDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
 }
@@ -121,6 +123,23 @@ func appendRequestProjectionDiagnostics(ctx *RequestContext, diagnostics llmprot
 			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
 		}
 	}
+}
+
+// projectControlTokens escapes the model's control tokens in the request's
+// user and tool text (llmprotocol.ProjectControlTokens), so that its model
+// server reads them as text. Only the model's own Hugging Face tokenizer
+// lists the added tokens that server matches: a model counted with the proxy
+// tokenizer gets the request as it is.
+func (r *OpenAIRouter) projectControlTokens(request llmprotocol.Request, model string) llmprotocol.Request {
+	if r == nil || r.Config == nil {
+		return request
+	}
+	tokenizer := r.promptTokenizer(model)
+	if tokenizer.kind != contextCountExact || !tokenizer.encoding.AddedTokens() {
+		return request
+	}
+	projected, _ := llmprotocol.ProjectControlTokens(request, tokenizer.encoding, tokencount.WordJoiner)
+	return projected
 }
 
 // projectReasoningSignatures sends signed thinking in the history to a backend

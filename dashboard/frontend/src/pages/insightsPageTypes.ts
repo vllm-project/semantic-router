@@ -111,6 +111,10 @@ export interface InsightsAgentIdentity {
   id?: string
   parent_id?: string
   kind?: string
+  /** The subagent type the harness names, such as Claude Code's Explore. */
+  type?: string
+  /** The request class the agent signal reads: main, subagent, workflow, compaction or auxiliary. */
+  request_class?: string
 }
 
 export interface InsightsRecord {
@@ -151,6 +155,12 @@ export interface InsightsRecord {
   decision_priority: number
   category?: string
   original_model?: string
+  /** A client's own model name that its listener routed to original_model. */
+  requested_model?: string
+  /** Image parts in the request's newest turn, after its last assistant message. */
+  image_count?: number
+  /** Image parts in the earlier messages of the request. */
+  history_image_count?: number
   selected_model?: string
   reasoning_mode?: string
   confidence_score?: number | null

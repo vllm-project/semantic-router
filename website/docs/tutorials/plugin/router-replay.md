@@ -787,6 +787,19 @@ so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 
+The page's **Sessions** view groups the records by harness session. Each session
+opens into its agents, the main agent first and every subagent under the agent
+that started it, with its type, and into each agent's turns with their decision,
+model, duration and tokens. The calls a run marks share one set of event chips
+across the request list, the sessions and the run page: a subagent's first call,
+a compaction, a session title or another housekeeping call, a tool loop, an image
+in the newest turn, a guard refusal and a failure. **Signals by harness** shows
+which of these each harness gave in the loaded sessions, which ones its requests
+never carry, and which sessions the Router keyed itself because the client sent
+no session id. Cost figures compare each request with its reference model at list
+prices: they are cost-only estimates, not a quality comparison, and a figure the
+recorded data cannot support shows a dash with the reason.
+
 Each record's `route_diagnostics` explains the route:
 
 | Field | Holds |
