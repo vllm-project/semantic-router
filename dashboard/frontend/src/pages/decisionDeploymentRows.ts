@@ -114,7 +114,9 @@ export function decisionDeploymentRows({
       const own = consumers.filter((consumer) => consumer.deployment === name)
       const inherited = isDefault ? consumers.filter((consumer) => !consumer.deployment) : []
       const selectors = new Set(
-        own.filter((consumer) => consumer.kind === 'selector').map((consumer) => `selector.${consumer.name}`),
+        own
+          .filter((consumer) => consumer.kind === 'selector')
+          .map((consumer) => `selector.${consumer.name}`),
       )
       const taskBindings =
         tasks?.bindings.filter(

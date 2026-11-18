@@ -11,6 +11,7 @@ import {
   type StatusTone,
   type Tone,
 } from '../ui'
+import { embedRedirectTarget } from './embeddedServiceSupport'
 import ProductLoadingState from './ProductLoadingState'
 import ServiceNotConfigured, { type ServiceConfig } from './ServiceNotConfigured'
 
@@ -79,7 +80,14 @@ export default function EmbeddedServicePage({
           response = await fetch(availabilityUrl, { signal: controller.signal })
         }
         if (!active) return
-        if (response.status === 503) {
+        const redirectedTo = embedRedirectTarget(response, availabilityUrl, window.location.origin)
+        if (redirectedTo) {
+          setAvailability('failed')
+          setFrameLoading(false)
+          setError(
+            `${service.name} redirected to ${redirectedTo} instead of loading, so it cannot be shown here. Check the ${service.name} address the Dashboard proxies to, or open the full view.`,
+          )
+        } else if (response.status === 503) {
           setAvailability('missing')
         } else if (response.ok) {
           setAvailability('available')

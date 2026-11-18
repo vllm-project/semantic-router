@@ -219,7 +219,11 @@ describe('inline task binding mutations', () => {
     expect(() =>
       withDecisionTaskBinding(
         {},
-        { ...binding, consumer: '__proto__', path: ['recipes', '0', 'model_bindings', '__proto__'] },
+        {
+          ...binding,
+          consumer: '__proto__',
+          path: ['recipes', '0', 'model_bindings', '__proto__'],
+        },
         'new',
       ),
     ).toThrow('editable')

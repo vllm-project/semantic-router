@@ -150,6 +150,15 @@ describe('projection drafts', () => {
     expect(
       removeProjection(config(), 'partition', 'practice_areas').projections?.partitions,
     ).toEqual([])
+    expect(removeProjection(config(), 'score', 'request_difficulty').projections?.scores).toEqual(
+      [],
+    )
+    const mapping = config().projections!.mappings![0].name
+    expect(
+      removeProjection(config(), 'mapping', mapping).projections?.mappings?.map(
+        (entry) => entry.name,
+      ),
+    ).not.toContain(mapping)
   })
 
   it('finds the decisions a projection feeds', () => {

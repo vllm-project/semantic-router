@@ -92,8 +92,7 @@ export function MosaicBackground({
             : smoothstep(0, 1, (t * 1.25 - seed * 0.9 - (col + row) * 0.004) * 2.6)
           if (reveal <= 0) continue
           const distance = Math.hypot(x + size / 2 - cx, y + size / 2 - cy) / radius
-          const calm =
-            smoothstep(0.2, 0.7, distance) * (1 - smoothstep(0.85, 1.2, distance) * 0.6)
+          const calm = smoothstep(0.2, 0.7, distance) * (1 - smoothstep(0.85, 1.2, distance) * 0.6)
           if (calm <= 0.01) continue
           const wave = (Math.sin(col * 0.21 + row * 0.13 - t * 0.85 + seed * 1.7) + 1) / 2
           const glint = Math.pow(Math.max(0, Math.sin(t * (0.35 + seed * 0.9) + seed * 61)), 18)
