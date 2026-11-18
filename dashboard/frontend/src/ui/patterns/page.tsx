@@ -13,7 +13,8 @@ export function PageContainer({
   return (
     <div
       className={cn(
-        'animate-fade-up',
+        // A full-height page only fades: rising, it would overflow its frame for a moment and flash a scrollbar.
+        width === 'full' ? 'animate-page-fade' : 'animate-fade-up',
         width === 'full'
           ? 'flex min-h-0 flex-1 flex-col'
           : 'mx-auto w-full px-5 pb-16 pt-6 md:px-8',

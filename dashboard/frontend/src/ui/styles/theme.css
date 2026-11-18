@@ -283,6 +283,7 @@
   --animate-float-slow: float-slow 18s ease-in-out infinite alternate;
   /* `backwards` drops the transform once the entrance ends, so fixed descendants stay viewport-anchored. */
   --animate-fade-up: fade-up 0.42s var(--ease-out-expo) backwards;
+  --animate-page-fade: page-fade 0.32s var(--ease-standard) backwards;
 
   @keyframes pulse-ring {
     0% {
@@ -327,6 +328,11 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+  @keyframes page-fade {
+    from {
+      opacity: 0;
     }
   }
 }
