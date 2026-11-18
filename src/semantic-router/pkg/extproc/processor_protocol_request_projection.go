@@ -25,13 +25,37 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	target llmprotocol.WireFormat,
 	shadows ...*shadowTarget,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
-	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(request, model, target, shadows...)
+	// An OpenAI-hosted Responses target leaves out unsigned thinking, so the
+	// signatures go before that projection runs.
+	projected, signatureDiagnostics, err := r.projectReasoningSignatures(request, target)
+	if err != nil {
+		return request, nil, err
+	}
+	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(projected, model, target, shadows...)
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+}
+
+// projectReasoningSignatures sends signed thinking in the history to a backend
+// whose wire format cannot carry the signature: without the signature once the
+// operator accepts that loss, and otherwise not at all, with a refusal that
+// names the client's own field. An Anthropic backend keeps every signature.
+func (r *OpenAIRouter) projectReasoningSignatures(
+	request llmprotocol.Request,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
+	if available, ok := r.codecCapabilitiesForFormat(target); !ok || available.Supports(llmprotocol.CapabilityReasoningSignature) {
+		return request, nil, nil
+	}
+	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldReasoningSignature) {
+		return request, nil, llmprotocol.RefuseReasoningSignatures(request)
+	}
+	projected, diagnostics := llmprotocol.ProjectReasoningSignatures(request, target)
+	return projected, diagnostics, nil
 }
 
 // projectUnsupportedCapabilities sends a model the request its
