@@ -56,6 +56,36 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
           description: 'Also match earlier user messages, not just the latest one',
         },
         {
+          key: 'input',
+          label: 'Input',
+          type: 'object',
+          description: 'What the rule reads besides the current user message.',
+          fields: [
+            {
+              key: 'tool_results',
+              label: 'Tool Results',
+              type: 'boolean',
+              description:
+                'Also match each textual tool result in the request on its own. Literal or regex keywords only.',
+            },
+            {
+              key: 'request',
+              label: 'Request',
+              type: 'boolean',
+              description:
+                'Off leaves the current user message out, so the rule reads only the tool results or the earlier user messages it names.',
+            },
+          ],
+        },
+        {
+          key: 'on_unscanned',
+          label: 'On Unscanned',
+          type: 'select',
+          options: ['best_effort', 'match', 'no_match'],
+          description:
+            'What a rule that reads tool results reports when one of them is not text and no keyword was found: decide on the text read (best_effort), match, or no match.',
+        },
+        {
           key: 'count',
           label: 'Count',
           type: 'object',

@@ -149,6 +149,14 @@ runtime dependency; they do not define routing behavior by themselves.
   tool results, and `input.request: false` leaves the current turn out.
   A tool result the Router cannot read as text, such as an image or an
   unsupported block, counts as unread input, which `on_unscanned` decides.
+- A keyword rule reads the same parts: `include_history: true` adds the
+  earlier user turns, `input.tool_results: true` the request's textual tool
+  results, each matched on its own with literal or regex keywords, and
+  `input.request: false` leaves the current turn out. A keyword found in a
+  tool result the Router read counts whatever `on_unscanned` says; when none
+  was found and a tool result could not be read as text, `on_unscanned`
+  decides: `best_effort` (the default) decides on the text read, `match`
+  matches, `no_match` does not.
 - The decision model answers the application signals (domain, PII, jailbreak,
   complexity and the others) as System One questions. A rule's `deployment`, a
   recipe's `model_bindings` or `global.model_catalog.bindings` names another

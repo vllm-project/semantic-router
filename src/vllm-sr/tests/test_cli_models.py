@@ -55,6 +55,49 @@ def test_keyword_signal_include_history_parses_and_defaults_off():
     assert default.include_history is False
 
 
+def _keyword_config(**rule):
+    rule = {"name": "credentials", "operator": "OR", "keywords": ["AKIA"], **rule}
+    return UserConfig(
+        version="v0.5",
+        recipes=[
+            {
+                "name": "default",
+                "signals": {"keywords": [rule]},
+                "decisions": [_decision()],
+            }
+        ],
+    )
+
+
+def test_keyword_signal_input_reads_tool_results_without_the_turn():
+    config = _keyword_config(
+        input={"tool_results": True, "request": False}, on_unscanned="match"
+    )
+    (rule,) = config.default_recipe.signals.keywords
+    assert rule.input.tool_results is True
+    assert rule.input.request is False
+    assert rule.on_unscanned == "match"
+    assert _keyword_config().default_recipe.signals.keywords[0].input is None
+
+
+@pytest.mark.parametrize(
+    ("rule", "message"),
+    [
+        ({"input": {"request": False}}, "input.request: false"),
+        ({"on_unscanned": "match"}, "reads input.tool_results"),
+        ({"input": {"tool_results": True}, "on_unscanned": "unknown"}, "on_unscanned"),
+        ({"input": {"history": True}}, "history"),
+        (
+            {"input": {"tool_results": True}, "count": {"gte": 2}},
+            "count and density count one text",
+        ),
+    ],
+)
+def test_keyword_signal_input_contract(rule, message):
+    with pytest.raises(ValueError, match=message):
+        _keyword_config(**rule)
+
+
 def test_decision_without_description_parses():
     config = UserConfig(
         version="v0.5", recipes=[{"name": "default", "decisions": [_decision()]}]

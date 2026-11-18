@@ -135,7 +135,7 @@ func TestKeywordCountSignalPublishesValueWithHistory(t *testing.T) {
 		Name: "repeated_urgency", Operator: "OR", Keywords: []string{"urgent"}, IncludeHistory: true, Count: &config.NumericPredicate{GTE: bound(2)},
 	})}
 	results := &SignalResults{SignalValues: map[string]float64{}, Metrics: &SignalMetricsCollection{}}
-	classifier.evaluateKeywordSignalWithHistory(results, &sync.Mutex{}, "still urgent", []string{"this is urgent", "hello"})
+	classifier.evaluateKeywordSignalWithSources(results, &sync.Mutex{}, KeywordMatchInput{CurrentText: "still urgent"}, []string{"this is urgent", "hello"})
 	if got := results.SignalValues["keyword:repeated_urgency"]; got != 2 {
 		t.Fatalf("keyword:repeated_urgency = %v, want 2", got)
 	}
