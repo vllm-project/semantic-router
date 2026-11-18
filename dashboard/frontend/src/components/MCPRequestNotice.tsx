@@ -1,4 +1,4 @@
-import styles from './MCPConfigPanel.module.css'
+import { Alert, Button } from '../ui'
 
 interface MCPRequestNoticeProps {
   message: string
@@ -16,21 +16,25 @@ export function MCPRequestNotice({
   onRetry,
 }: MCPRequestNoticeProps) {
   return (
-    <div className={styles.requestNotice} role="alert">
-      <div>
-        <strong>{title}</strong>
-        <p>{message}</p>
-      </div>
-      <div className={styles.noticeActions}>
-        <button type="button" className={styles.retryBtn} onClick={onRetry}>
-          {retryLabel}
-        </button>
-        {onDismiss ? (
-          <button type="button" className={styles.dismissBtn} onClick={onDismiss}>
-            Dismiss
-          </button>
-        ) : null}
-      </div>
+    <div role="alert">
+      <Alert
+        tone="danger"
+        title={title}
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={onRetry}>
+              {retryLabel}
+            </Button>
+            {onDismiss ? (
+              <Button size="sm" variant="ghost" onClick={onDismiss}>
+                Dismiss
+              </Button>
+            ) : null}
+          </>
+        }
+      >
+        {message}
+      </Alert>
     </div>
   )
 }

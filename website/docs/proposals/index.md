@@ -71,6 +71,14 @@ serving, replica selection, and execution.
 | [vLLM Production Stack Integration](./production-stack-integration) | 2025-10-13 | Proposal | Layered semantic and infrastructure routing. |
 | [NVIDIA Dynamo Integration](./nvidia-dynamo-integration) | 2025-10-09 | Proposal | Semantic routing above Dynamo's worker-level routing. |
 
+## Dashboard & Operator Experience
+
+How operators set up, change, and observe the router through the Dashboard.
+
+| Proposal | Created | Status | Scope |
+| --- | --- | --- | --- |
+| [Dashboard UX and Design System](./dashboard-ux-redesign) | 2026-11-17 | Proposal | One-click sidebar navigation, a token-based light and dark design system, and shared page patterns for every Dashboard page; old routes redirect and backend contracts stay unchanged. |
+
 Statuses describe the document's current role:
 
 - **Proposal**: a design that is not presented as fully shipped.

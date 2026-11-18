@@ -7,7 +7,7 @@ import type { ReplaySessionPolicy } from './insightsPageRoutingTypes'
 import { ModelName } from './insightsModelLabelSupport'
 import { getTurnPath } from './insightsReviewSupport'
 import InsightsSelectionTrace from './InsightsSelectionTrace'
-import styles from './InsightsPage.module.css'
+import { TABLE, TABLE_WRAP } from './insightsEvidenceStyles'
 
 function metric(value: number | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(4) : '—'
@@ -15,8 +15,8 @@ function metric(value: number | undefined) {
 
 function diagnosticTable(headers: string[], rows: Array<{ key: string; cells: ReactNode[] }>) {
   return (
-    <div className={styles.projectionTraceWrap}>
-      <table className={styles.projectionTraceTable}>
+    <div className={TABLE_WRAP}>
+      <table className={TABLE}>
         <thead>
           <tr>
             {headers.map((header) => (
@@ -95,7 +95,14 @@ function protectionCandidates(policy: ReplaySessionPolicy): ViewSection[] {
 // The Codex ids a request carries, when it has them; each turn opens the list of that
 // turn's calls, reviews and subagents' calls.
 function codexTurnFields(record: InsightsRecord): ViewField[] {
-  const turnLink = (turn: string) => <Link to={getTurnPath(turn)}>{turn}</Link>
+  const turnLink = (turn: string) => (
+    <Link
+      className="break-all font-mono text-[12.5px] text-primary hover:underline"
+      to={getTurnPath(turn)}
+    >
+      {turn}
+    </Link>
+  )
   const fields: ViewField[] = []
   if (record.thread_id) fields.push({ label: 'Codex thread', value: record.thread_id })
   if (record.turn_id) fields.push({ label: 'Codex turn', value: turnLink(record.turn_id) })

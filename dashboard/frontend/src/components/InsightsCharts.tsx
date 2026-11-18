@@ -1,14 +1,20 @@
+import type { ReactNode } from 'react'
+
 import type {
   InsightsAggregateResponse,
   InsightsAggregateSummary,
   InsightsAggregateCurrencySummary,
 } from '../pages/insightsPageTypes'
 import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
-import styles from './InsightsCharts.module.css'
 import InsightsCostCoverage from './InsightsCostCoverage'
 import InsightsProviderCacheSummary from './InsightsProviderCacheSummary'
 import InsightsRankedBars, { InsightsTokenRows } from './InsightsRankedBars'
-import { InsightsStatGrid, InsightsUnitsBadge, type InsightsStat } from './InsightsStats'
+import {
+  INSIGHTS_DETAILS,
+  InsightsStatGrid,
+  InsightsUnitsBadge,
+  type InsightsStat,
+} from './InsightsStats'
 import {
   formatInsightsCompactCount,
   formatInsightsCost,
@@ -100,11 +106,11 @@ const plural = (count: number, word: string) =>
 // The estimate caveat and, closed by default, how the amounts are reached.
 function InsightsEstimateNotes() {
   return (
-    <div className={styles.estimateContext}>
-      <p className={styles.summaryHint}>
+    <div className="flex flex-col gap-1.5 text-xs leading-relaxed text-muted-foreground">
+      <p>
         Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.
       </p>
-      <details className={styles.estimateDetails}>
+      <details className={INSIGHTS_DETAILS}>
         <summary>How estimates work</summary>
         <p>
           New records use the highest estimate in the recipe’s complete model pool across all
@@ -137,6 +143,31 @@ function InsightsEstimateNotes() {
   )
 }
 
+function Block({
+  title,
+  label,
+  action,
+  children,
+}: {
+  title: string
+  label: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section
+      className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-4 shadow-xs"
+      aria-label={label}
+    >
+      <header className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold tracking-[-0.01em]">{title}</h3>
+        {action}
+      </header>
+      {children}
+    </section>
+  )
+}
+
 export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   const labels = useModelLabels()
   if (aggregate.record_count === 0) {
@@ -154,17 +185,17 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
   })
 
   return (
-    <section className={styles.container} aria-label="Insights summary">
-      <section className={styles.block} aria-label="Cost estimates">
-        <header className={styles.blockHeader}>
-          <h3 className={styles.blockTitle}>Cost and Savings</h3>
-          <InsightsUnitsBadge currencies={costGroups.map((group) => group.currency)} />
-        </header>
+    <section className="flex flex-col gap-4" aria-label="Insights summary">
+      <Block
+        title="Cost and savings"
+        label="Cost estimates"
+        action={<InsightsUnitsBadge currencies={costGroups.map((group) => group.currency)} />}
+      >
         <InsightsEstimateNotes />
         {costGroups.map((group) => (
-          <div key={group.currency || 'unavailable'} className={styles.group}>
+          <div key={group.currency || 'unavailable'} className="flex flex-col gap-2">
             {costGroups.length > 1 ? (
-              <h4 className={styles.chartTitle}>
+              <h4 className="text-xs font-medium text-muted-foreground">
                 {insightsCurrencyLabel(group.currency) || 'Price unit'} estimates
               </h4>
             ) : null}
@@ -172,45 +203,49 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
           </div>
         ))}
         {summary.excluded_record_count > 0 ? (
-          <p className={styles.summaryHint}>
+          <p className="text-xs text-muted-foreground">
             {plural(summary.excluded_record_count, 'filtered record')} excluded from savings
             estimates. Each row explains what was not recorded. Historical rows without captured
             prices are not repriced.
           </p>
         ) : null}
         <InsightsCostCoverage summary={summary} />
-      </section>
+      </Block>
 
       <InsightsProviderCacheSummary summary={aggregate.provider_cache} />
 
-      <section className={styles.block} aria-label="Routing">
-        <header className={styles.blockHeader}>
-          <h3 className={styles.blockTitle}>Routing</h3>
-          <span className={styles.panelMeta}>{plural(aggregate.record_count, 'record')}</span>
-        </header>
-        <div className={styles.panelGrid}>
+      <Block
+        title="Routing"
+        label="Routing"
+        action={
+          <span className="text-xs text-subtle-foreground">
+            {plural(aggregate.record_count, 'record')}
+          </span>
+        }
+      >
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           <InsightsRankedBars
-            title="Model Selection"
+            title="Model selection"
             entries={named(aggregate.model_selection)}
             total={aggregate.record_count}
+            color="var(--chart-6)"
           />
           <InsightsRankedBars
-            title="Decision Distribution"
+            title="Decision distribution"
             entries={aggregate.decision_distribution}
             total={aggregate.record_count}
+            color="var(--chart-3)"
           />
           <InsightsRankedBars
-            title="Signal Distribution"
+            title="Signal distribution"
             entries={aggregate.signal_distribution}
             meta="share of matches"
+            color="var(--chart-2)"
           />
         </div>
-      </section>
+      </Block>
 
-      <section className={styles.block} aria-label="Token volume">
-        <header className={styles.blockHeader}>
-          <h3 className={styles.blockTitle}>Token Volume</h3>
-        </header>
+      <Block title="Token volume" label="Token volume">
         <InsightsStatGrid
           stats={[
             tokenStat('Input Tokens', tokenVolume.input_tokens),
@@ -219,22 +254,22 @@ export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
           ]}
         />
         {tokenVolume.excluded_record_count > 0 ? (
-          <p className={styles.summaryHint}>
+          <p className="text-xs text-muted-foreground">
             {plural(tokenVolume.excluded_record_count, 'filtered record')} excluded from token
             totals because usage data is incomplete.
           </p>
         ) : null}
-        <div className={styles.panelGrid}>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <InsightsTokenRows
-            title="Tokens by Decision"
+            title="Tokens by decision"
             entries={aggregate.token_breakdown.by_decision}
           />
           <InsightsTokenRows
-            title="Tokens by Selected Model"
+            title="Tokens by selected model"
             entries={named(aggregate.token_breakdown.by_selected_model)}
           />
         </div>
-      </section>
+      </Block>
     </section>
   )
 }
