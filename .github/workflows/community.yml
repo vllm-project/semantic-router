@@ -136,6 +136,12 @@ jobs:
       && github.event.comment.body != '/netlify'
       && !startsWith(github.event.comment.body, '/ci ')
       && github.event.comment.body != '/ci'
+    # Prow reads commands from every comment line. Serialize the command and its
+    # reconciliation per issue so an older assignee snapshot cannot land after a
+    # newer command has already been applied.
+    concurrency:
+      group: community-issue-commands-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -164,15 +170,15 @@ jobs:
       - name: Check out the repository
         if: >-
           !cancelled()
-          && (startsWith(github.event.comment.body, '/assign')
-          || startsWith(github.event.comment.body, '/unassign'))
+          && (contains(github.event.comment.body, '/assign')
+          || contains(github.event.comment.body, '/unassign'))
         uses: actions/checkout@v4
 
       - name: Reconcile issue delivery state after the command
         if: >-
           !cancelled()
-          && (startsWith(github.event.comment.body, '/assign')
-          || startsWith(github.event.comment.body, '/unassign'))
+          && (contains(github.event.comment.body, '/assign')
+          || contains(github.event.comment.body, '/unassign'))
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/ci/community_lifecycle.py sync-issue-assignment --event "$GITHUB_EVENT_PATH"

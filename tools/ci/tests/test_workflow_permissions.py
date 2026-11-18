@@ -179,7 +179,7 @@ class CommunityValidationTests(unittest.TestCase):
         jobs = self.data["jobs"]
         self.assertEqual(
             {name for name, job in jobs.items() if "concurrency" in job},
-            {"title-format", "linked-issue"},
+            {"title-format", "linked-issue", "issue-manager"},
         )
         for name in ("title-format", "linked-issue"):
             with self.subTest(job=name):
@@ -194,6 +194,7 @@ class CommunityValidationTests(unittest.TestCase):
                 self.assertTrue(
                     all(value == "read" for value in job["permissions"].values())
                 )
+        self.assertFalse(jobs["issue-manager"]["concurrency"]["cancel-in-progress"])
         self.assertIn(
             "github.event.issue.number", jobs["title-format"]["concurrency"]["group"]
         )
@@ -224,13 +225,22 @@ class CommunityValidationTests(unittest.TestCase):
         condition = " ".join(sync["if"].split())
 
         self.assertIn("!cancelled()", condition)
-        self.assertIn("startsWith(github.event.comment.body, '/assign')", condition)
-        self.assertIn("startsWith(github.event.comment.body, '/unassign')", condition)
+        self.assertIn("contains(github.event.comment.body, '/assign')", condition)
+        self.assertIn("contains(github.event.comment.body, '/unassign')", condition)
         self.assertIn("GH_TOKEN", sync["env"])
         self.assertTrue(
             any(
                 str(step.get("uses", "")) == "actions/checkout@v4" for step in following
             )
+        )
+
+    def test_assignment_command_runs_serialize_per_issue(self) -> None:
+        self.assertEqual(
+            self.data["jobs"]["issue-manager"]["concurrency"],
+            {
+                "group": "community-issue-commands-${{ github.event.issue.number }}",
+                "cancel-in-progress": False,
+            },
         )
 
     def test_manual_assignment_events_keep_their_lifecycle_sync(self) -> None:

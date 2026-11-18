@@ -119,10 +119,13 @@ def label_names(item: dict[str, Any]) -> set[str]:
 
 
 def assignment_command(body: str | None) -> str | None:
-    """Return the assignment command that starts a comment, if any."""
+    """Return the first assignment command that starts a comment line, if any."""
 
-    tokens = (body or "").split()
-    return tokens[0] if tokens and tokens[0] in ASSIGN_COMMANDS else None
+    for line in (body or "").splitlines():
+        tokens = line.split()
+        if tokens and tokens[0] in ASSIGN_COMMANDS:
+            return tokens[0]
+    return None
 
 
 def parse_form_field(body: str | None, heading: str) -> str | None:

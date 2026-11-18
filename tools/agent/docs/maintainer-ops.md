@@ -272,7 +272,8 @@ contract without making roadmap, priority, or close decisions:
   itself, because writes made with the workflow token do not start the `issues`
   lifecycle job: an accepted issue with an assignee enters `in-progress` and
   drops contributor-ready labels, and removing the last assignee clears
-  `in-progress`;
+  `in-progress`; command runs for one issue are serialized, and a command on any
+  comment line is recognized;
 - title-only issue edits validate naming without changing acceptance,
   assignment, priority, milestone, or delivery state;
 - non-trivial PRs must link accepted work with exactly one recognized owner.

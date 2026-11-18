@@ -127,8 +127,12 @@ class AssignmentCommandParsingTests(unittest.TestCase):
             "/assign @contributor": "/assign",
             " /unassign me\n": "/unassign",
             "/unassign": "/unassign",
+            "/cc\n/assign": "/assign",
+            "/cc\n/unassign @contributor": "/unassign",
+            "  /assign\n/cc": "/assign",
             "/assignment": None,
             "please /assign me": None,
+            "/cc\nplease /assign": None,
             "": None,
         }
         for body, expected in cases.items():
@@ -184,6 +188,31 @@ class AssignmentCommandReconciliationTests(unittest.TestCase):
         )
         self.assertEqual(client.assignee_set(), {"contributor"})
         self.assertEqual(client.fetched, [7])
+
+    def test_assign_on_a_later_comment_line_is_reconciled(self) -> None:
+        client = FakeAssignmentApi(
+            [
+                issue(
+                    labels=labels("accepted", "ready-for-dev", "wg/mom-routing"),
+                    assignees=assignees("contributor"),
+                )
+            ]
+        )
+
+        self.sync(client, "/cc\n/assign")
+
+        self.assertEqual(
+            client.label_set(), {"accepted", "wg/mom-routing", "in-progress"}
+        )
+
+    def test_unassign_on_a_later_comment_line_is_reconciled(self) -> None:
+        client = FakeAssignmentApi(
+            [issue(labels=labels("accepted", "in-progress", "wg/mom-routing"))]
+        )
+
+        self.sync(client, "/cc\n/unassign")
+
+        self.assertEqual(client.label_set(), {"accepted", "wg/mom-routing"})
 
     def test_stale_event_payload_does_not_decide_the_delivery_state(self) -> None:
         client = FakeAssignmentApi(
@@ -272,6 +301,47 @@ class AssignmentCommandReconciliationTests(unittest.TestCase):
         self.assertEqual(client.label_set(), {"accepted", "wg/mom-routing"})
         self.assertEqual(client.added, {})
         self.assertEqual(client.removed, {})
+
+    def test_serialized_assign_then_unassign_leaves_no_stale_in_progress(self) -> None:
+        client = FakeAssignmentApi(
+            [issue(labels=labels("accepted", "ready-for-dev", "wg/mom-routing"))]
+        )
+
+        # The /assign run reads the assignee Prow just wrote.
+        client.issues[7]["assignees"] = assignees("contributor")
+        self.sync(client, "/assign")
+        self.assertIn("in-progress", client.label_set())
+
+        # The queued /unassign run reads the issue after the removal.
+        client.issues[7]["assignees"] = assignees()
+        self.sync(client, "/unassign")
+
+        self.assertEqual(client.label_set(), {"accepted", "wg/mom-routing"})
+        self.assertEqual(client.assignee_set(), set())
+
+    def test_serialized_unassign_then_assign_keeps_the_new_assignee_in_progress(
+        self,
+    ) -> None:
+        client = FakeAssignmentApi(
+            [
+                issue(
+                    labels=labels("accepted", "in-progress", "wg/mom-routing"),
+                    assignees=assignees("contributor"),
+                )
+            ]
+        )
+
+        client.issues[7]["assignees"] = assignees()
+        self.sync(client, "/unassign")
+        self.assertNotIn("in-progress", client.label_set())
+
+        client.issues[7]["assignees"] = assignees("other")
+        self.sync(client, "/assign")
+
+        self.assertEqual(
+            client.label_set(), {"accepted", "wg/mom-routing", "in-progress"}
+        )
+        self.assertEqual(client.assignee_set(), {"other"})
 
     def test_assignment_before_acceptance_is_removed_without_re_seeding_the_form(
         self,
