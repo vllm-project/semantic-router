@@ -26,7 +26,7 @@ func (encoder *responsesStreamEncoder) Push(event llmprotocol.Event) ([][]byte, 
 		encoder.createdAt = responsesCreatedAt(event.CreatedAt)
 	}
 	var released [][]byte
-	if event.Type != llmprotocol.EventUsageUpdated {
+	if releasesHeldResponsesMessage(event.Type) {
 		cut := event.Type == llmprotocol.EventResponseCompleted && responsesOutputLimitStop(event.StopReason)
 		if released, err = encoder.releaseHeldMessage(cut); err != nil {
 			return nil, nil, err
@@ -34,6 +34,13 @@ func (encoder *responsesStreamEncoder) Push(event llmprotocol.Event) ([][]byte, 
 	}
 	frames, diagnostics, err := encoder.encodeResponsesEvent(event)
 	return append(released, frames...), diagnostics, err
+}
+
+// releasesHeldResponsesMessage reports the events whose frames follow a held
+// message's done event. The next output releases it when it starts.
+func releasesHeldResponsesMessage(eventType llmprotocol.EventType) bool {
+	return eventType == llmprotocol.EventResponseCompleted || eventType == llmprotocol.EventResponseFailed ||
+		eventType == llmprotocol.EventProviderOpaque
 }
 
 // releaseHeldMessage sends the held message's done event, marking the message
@@ -62,7 +69,8 @@ func (encoder *responsesStreamEncoder) releaseHeldMessage(cut bool) ([][]byte, e
 func (encoder *responsesStreamEncoder) encodeResponsesEvent(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
 	if event.Content != nil && event.Content.ReasoningDetail != nil {
 		// Ciphertext is recorded by streamState but never rendered as a text part.
-		frames, _, startErr := encoder.ensureResponsesOutputStarted(event, responsesOutputReasoning)
+		frames, key, startErr := encoder.openResponsesOutput(event, responsesOutputReasoning)
+		encoder.bindResponsesContent(contentKey(event), key)
 		return frames, nil, startErr
 	}
 	if frames, diagnostics, handled, directErr := encoder.encodeDirectResponsesEvent(event); handled {
@@ -146,11 +154,11 @@ func (encoder *responsesStreamEncoder) encodeResponsesItemStart(event llmprotoco
 		if !encoder.responsesToolIdentityReady(event.ToolCall) {
 			return nil, nil
 		}
-		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputTool)
+		frames, _, err := encoder.openResponsesOutput(event, responsesOutputTool)
 		return frames, err
 	}
 	if event.Content != nil && event.Content.Kind == llmprotocol.ContentGeneratedImage {
-		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputImage)
+		frames, _, err := encoder.openResponsesOutput(event, responsesOutputImage)
 		return frames, err
 	}
 	if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
@@ -163,33 +171,30 @@ func (encoder *responsesStreamEncoder) encodeResponsesItemStart(event llmprotoco
 		if event.Content.Reasoning != "" {
 			encoder.reasoningScopes[key] = normalizedReasoningScope(event.Content.Reasoning)
 		}
-		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputReasoning)
+		frames, _, err := encoder.openResponsesOutput(event, responsesOutputReasoning)
 		return frames, err
 	}
 	if event.Content != nil {
 		encoder.encodedKinds[contentKey(event)] = event.Content.Kind
-		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputMessage)
+		frames, _, err := encoder.openResponsesOutput(event, responsesOutputMessage)
 		return frames, err
 	}
 	return nil, nil
 }
 
-func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
-	event llmprotocol.Event,
-	kind responsesOutputKind,
-) ([][]byte, responsesOutputKey, error) {
-	key := responsesOutputKey{item: event.ItemIndex, kind: kind}
+func (encoder *responsesStreamEncoder) startResponsesOutput(event llmprotocol.Event, key responsesOutputKey) ([][]byte, error) {
 	if encoder.outputStarted[key] {
-		return nil, key, nil
+		return nil, nil
 	}
 	encoder.outputStarted[key] = true
 	encoder.outputIndexes[key] = encoder.nextOutputIndex
 	encoder.nextOutputIndex++
+	encoder.openOutputs = append(encoder.openOutputs, key)
 	encoder.itemOutputKeys[event.ItemIndex] = append(encoder.itemOutputKeys[event.ItemIndex], key)
 	id := encoder.responsesOutputID(event, key)
 	encoder.outputIDs[key] = id
-	item := responsesItemWire{Type: string(kind), ID: id, Status: "in_progress"}
-	switch kind {
+	item := responsesItemWire{Type: string(key.kind), ID: id, Status: "in_progress"}
+	switch key.kind {
 	case responsesOutputMessage:
 		item.Role = "assistant"
 	case responsesOutputTool:
@@ -214,9 +219,9 @@ func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
 	}
 	frame, err := encoder.encodeResponsesStreamFrame(wire)
 	if err != nil {
-		return nil, key, err
+		return nil, err
 	}
-	return [][]byte{frame}, key, nil
+	return [][]byte{frame}, nil
 }
 
 func (encoder *responsesStreamEncoder) responsesOutputID(event llmprotocol.Event, key responsesOutputKey) string {
@@ -229,6 +234,9 @@ func (encoder *responsesStreamEncoder) responsesOutputID(event llmprotocol.Event
 	}
 	if len(encoder.itemOutputKeys[event.ItemIndex]) == 1 {
 		return base
+	}
+	if key.segment > 0 {
+		return llmprotocol.StableID("responses-output-split", base, string(key.kind), strconv.Itoa(key.segment))
 	}
 	return llmprotocol.StableID("responses-output-split", base, string(key.kind))
 }
@@ -278,14 +286,22 @@ func (encoder *responsesStreamEncoder) encodeResponsesToolProgress(
 	if !encoder.responsesToolIdentityReady(event.ToolCall) {
 		return nil, nil
 	}
-	frames, key, err := encoder.ensureResponsesOutputStarted(event, responsesOutputTool)
-	if err != nil {
-		return nil, err
-	}
 	emitted := encoder.toolArgumentsEmitted[event.ItemIndex]
 	if emitted > len(allArguments) {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable,
 			"stream_tool_arguments_mismatch", "upstream tool input changed after it was streamed", nil)
+	}
+	if encoder.outputDone[encoder.currentResponsesOutput(event.ItemIndex, responsesOutputTool)] {
+		// A call closed before its item once its arguments formed a JSON
+		// object, which only whitespace can follow.
+		if strings.TrimSpace(allArguments[emitted:]) == "" {
+			return nil, nil
+		}
+		return nil, nonObjectToolArgumentsError()
+	}
+	frames, key, err := encoder.openResponsesOutput(event, responsesOutputTool)
+	if err != nil {
+		return nil, err
 	}
 	if emitted == len(allArguments) {
 		return frames, nil
@@ -378,7 +394,6 @@ func (encoder *responsesStreamEncoder) encodeResponsesReasoningDelta(
 		}
 	}
 	key := contentKey(event)
-	encoder.encodedKinds[key] = llmprotocol.ContentReasoning
 	reasoningScope := eventReasoningScope(event)
 	if existing := encoder.reasoningScopes[key]; existing != "" && existing != reasoningScope {
 		return nil, diagnostics, llmprotocol.NewError(
@@ -388,17 +403,17 @@ func (encoder *responsesStreamEncoder) encodeResponsesReasoningDelta(
 			nil,
 		)
 	}
-	encoder.reasoningScopes[key] = reasoningScope
-	builder := encoder.contentText[key]
-	if builder == nil {
-		builder = &strings.Builder{}
-		encoder.contentText[key] = builder
+	if event.Delta == "" && encoder.chatSource() {
+		return nil, diagnostics, nil
 	}
-	builder.WriteString(event.Delta)
-	frames, outputKey, err := encoder.ensureResponsesOutputStarted(event, responsesOutputReasoning)
+	frames, outputKey, err := encoder.openResponsesOutput(event, responsesOutputReasoning)
 	if err != nil {
 		return nil, diagnostics, err
 	}
+	encoder.bindResponsesContent(key, outputKey)
+	encoder.encodedKinds[key] = llmprotocol.ContentReasoning
+	encoder.reasoningScopes[key] = reasoningScope
+	encoder.responsesContentBuilder(key).WriteString(event.Delta)
 	started, err := encoder.startResponsesContent(event, outputKey, llmprotocol.ContentReasoning)
 	if err != nil {
 		return nil, diagnostics, err
@@ -432,14 +447,19 @@ func (encoder *responsesStreamEncoder) encodeResponsesOpaque(event llmprotocol.E
 func (encoder *responsesStreamEncoder) encodeResponsesTextDelta(
 	event llmprotocol.Event,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
-	content, err := encoder.recordResponsesTextDelta(event)
+	kind, err := encoder.responsesTextKind(event)
 	if err != nil {
 		return nil, nil, err
 	}
-	frames, outputKey, err := encoder.ensureResponsesOutputStarted(event, responsesOutputMessage)
+	if event.Delta == "" && (event.Content == nil || len(event.Content.Citations) == 0) && encoder.chatSource() {
+		return nil, nil, nil
+	}
+	frames, outputKey, err := encoder.openResponsesOutput(event, responsesOutputMessage)
 	if err != nil {
 		return nil, nil, err
 	}
+	encoder.bindResponsesContent(contentKey(event), outputKey)
+	content := encoder.recordResponsesTextDelta(event, kind)
 	contentIndex := encoder.responsesContentWireIndex(event, outputKey, responsesContentMessage)
 	started, err := encoder.startResponsesContent(event, outputKey, content.kind)
 	if err != nil {
@@ -463,32 +483,41 @@ type responsesRecordedTextDelta struct {
 	annotationBase int
 }
 
-func (encoder *responsesStreamEncoder) recordResponsesTextDelta(
-	event llmprotocol.Event,
-) (responsesRecordedTextDelta, error) {
+func (encoder *responsesStreamEncoder) responsesTextKind(event llmprotocol.Event) (llmprotocol.ContentKind, error) {
 	kind := llmprotocol.ContentText
 	if event.Content != nil && event.Content.Kind == llmprotocol.ContentRefusal {
 		kind = llmprotocol.ContentRefusal
 	}
-	key := contentKey(event)
-	if existing := encoder.encodedKinds[key]; existing != "" && existing != kind {
-		return responsesRecordedTextDelta{}, llmprotocol.NewError(
+	if existing := encoder.encodedKinds[contentKey(event)]; existing != "" && existing != kind {
+		return "", llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable, "stream_content_kind_mismatch", "upstream stream changed a content block kind", nil,
 		)
 	}
+	return kind, nil
+}
+
+func (encoder *responsesStreamEncoder) recordResponsesTextDelta(
+	event llmprotocol.Event,
+	kind llmprotocol.ContentKind,
+) responsesRecordedTextDelta {
+	key := contentKey(event)
 	encoder.encodedKinds[key] = kind
-	builder := encoder.contentText[key]
-	if builder == nil {
-		builder = &strings.Builder{}
-		encoder.contentText[key] = builder
-	}
-	builder.WriteString(event.Delta)
+	encoder.responsesContentBuilder(key).WriteString(event.Delta)
 	recorded := responsesRecordedTextDelta{kind: kind, annotationBase: len(encoder.contentCitations[key])}
 	if event.Content != nil && len(event.Content.Citations) > 0 {
 		recorded.newCitations = event.Content.Citations
 		encoder.contentCitations[key] = append(encoder.contentCitations[key], recorded.newCitations...)
 	}
-	return recorded, nil
+	return recorded
+}
+
+func (encoder *responsesStreamEncoder) responsesContentBuilder(key streamContentKey) *strings.Builder {
+	builder := encoder.contentText[key]
+	if builder == nil {
+		builder = &strings.Builder{}
+		encoder.contentText[key] = builder
+	}
+	return builder
 }
 
 func (encoder *responsesStreamEncoder) appendResponsesTextFrame(
@@ -565,7 +594,7 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesItem(
 	keys := append([]responsesOutputKey(nil), encoder.itemOutputKeys[event.ItemIndex]...)
 	if len(keys) == 0 {
 		kind := responsesCompletionOutputKind(event)
-		started, key, err := encoder.ensureResponsesOutputStarted(event, kind)
+		started, key, err := encoder.openResponsesOutput(event, kind)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -573,13 +602,16 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesItem(
 		keys = append(keys, key)
 	}
 	for _, key := range keys {
+		if encoder.outputDone[key] {
+			continue
+		}
 		// A later output of the same item follows a held message.
 		released, err := encoder.releaseHeldMessage(false)
 		if err != nil {
 			return nil, nil, err
 		}
 		frames = append(frames, released...)
-		completed, diagnostics, err := encoder.encodeCompletedResponsesOutput(event, key)
+		completed, diagnostics, err := encoder.encodeCompletedResponsesOutput(event, key, true)
 		if err != nil {
 			return nil, diagnostics, err
 		}
@@ -605,12 +637,16 @@ func responsesCompletionOutputKind(event llmprotocol.Event) responsesOutputKind 
 	}
 }
 
+// encodeCompletedResponsesOutput sends an output's done events. A message
+// its item completes is held, since it may be the one the output limit cut.
 func (encoder *responsesStreamEncoder) encodeCompletedResponsesOutput(
 	event llmprotocol.Event,
 	key responsesOutputKey,
+	hold bool,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
+	defer encoder.finishResponsesOutput(key)
 	if key.kind == responsesOutputMessage || key.kind == responsesOutputReasoning {
-		return encoder.encodeCompletedResponsesContent(event, key)
+		return encoder.encodeCompletedResponsesContent(event, key, hold)
 	}
 	if key.kind == responsesOutputImage {
 		return encoder.encodeCompletedResponsesImage(event, key)
@@ -655,6 +691,7 @@ func marshalResponsesEventItem(item responsesItemWire) json.RawMessage {
 func (encoder *responsesStreamEncoder) encodeCompletedResponsesContent(
 	event llmprotocol.Event,
 	outputKey responsesOutputKey,
+	hold bool,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
 	parts, frames, err := encoder.collectCompletedResponsesContent(event, outputKey)
 	if err != nil {
@@ -669,12 +706,13 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesContent(
 	// index so multiple details cannot make the replay snapshot depend on map order.
 	lowest := -1
 	for key, detail := range encoder.reasoningDetails {
-		if outputKey.kind == responsesOutputReasoning && key.item == event.ItemIndex && llmprotocol.IsResponsesReasoning(&detail) && (lowest < 0 || key.content < lowest) {
+		if outputKey.kind == responsesOutputReasoning && key.item == event.ItemIndex && encoder.contentSegments[key] == outputKey.segment &&
+			llmprotocol.IsResponsesReasoning(&detail) && (lowest < 0 || key.content < lowest) {
 			lowest = key.content
 			item.EncryptedContent, _ = json.Marshal(detail.Data.Value)
 		}
 	}
-	if outputKey.kind == responsesOutputMessage {
+	if outputKey.kind == responsesOutputMessage && hold {
 		encoder.heldMessage = &responsesHeldItem{outputIndex: index, item: item}
 		return frames, nil, nil
 	}

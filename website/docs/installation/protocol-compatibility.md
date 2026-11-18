@@ -614,6 +614,26 @@ request without `store` and reports a `dropped` diagnostic for `store` in
   the backend reports none, as Messages backends don't. When the output limit
   ends the answer, its message item is `incomplete`, in
   `response.output_item.done` and in the terminal response.
+- **Streamed items.** A stream closes each output item before the next one
+  starts, as OpenAI's streams do: the item's `response.output_text.done` or
+  `response.reasoning_text.done`, its `response.content_part.done` and its
+  `response.output_item.done` come before the next
+  `response.output_item.added`, and `response.completed` or
+  `response.incomplete` holds every item. A Chat Completions backend ends its
+  outputs only when its stream ends, so the Router closes an item when the
+  backend moves on to another one: from reasoning to the answer, from the
+  answer to a function call, from one call to the next. A function call whose
+  arguments don't form a JSON object yet stays open until they do, so a
+  backend that interleaves calls still streams them, and content that comes
+  back to an item already closed, such as answer text after reasoning that
+  followed it, goes into a new item of its kind. Responses and Messages
+  backends end each item themselves, and their order is kept.
+- **Reasoning text.** Reasoning text is a content part of its reasoning item:
+  `response.content_part.added` and `response.content_part.done` with a
+  `reasoning_text` part bracket its `response.reasoning_text.delta` and
+  `response.reasoning_text.done` events, whatever the backend format. A
+  reasoning summary keeps its own `response.reasoning_summary_part.added` and
+  `response.reasoning_summary_part.done` events.
 
 ## Configure a backend format
 

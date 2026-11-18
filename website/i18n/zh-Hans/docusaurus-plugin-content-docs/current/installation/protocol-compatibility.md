@@ -202,6 +202,20 @@ Responses 的响应对象（缓冲响应以及流式的每个 `response.*` 事�
 是后端的创建时间；后端未报告时（例如 Messages 后端）使用 Router 的时间。输出上限截断回答时，
 其 message 项在 `response.output_item.done` 和终止响应中均为 `incomplete`。
 
+流式响应在下一个输出项开始之前关闭当前项，与 OpenAI 的流一致：该项的 `response.output_text.done`
+或 `response.reasoning_text.done`、`response.content_part.done` 和 `response.output_item.done`
+都先于下一个 `response.output_item.added` 发出，`response.completed` 或 `response.incomplete`
+包含所有项。Chat Completions 后端只在流结束时才结束其输出，因此 Router 在后端转向另一个输出时
+关闭当前项：从推理到回答、从回答到函数调用、从一个调用到下一个调用。参数尚未构成 JSON 对象的
+函数调用会保持打开，直到参数完整，因此交错发送调用的后端仍可流式输出；回到已关闭项的内容
+（例如推理之后再次出现的回答文本）会进入同类的新项。Responses 和 Messages 后端自行结束每个项，
+其顺序保持不变。
+
+推理文本是推理项的内容部分：无论后端格式如何，带 `reasoning_text` 部分的
+`response.content_part.added` 和 `response.content_part.done` 都包围其
+`response.reasoning_text.delta` 和 `response.reasoning_text.done` 事件。推理摘要保留其自身的
+`response.reasoning_summary_part.added` 和 `response.reasoning_summary_part.done` 事件。
+
 ### 后端拒绝的采样控制 {#sampling-controls-a-backend-rejects}
 
 有些后端会拒绝其线路格式定义的采样控制。例如，运行推测解码（speculative
