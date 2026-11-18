@@ -120,8 +120,8 @@ var registry = []API{
 	},
 	{
 		Name: SystemOne, Summary: "System One decisions", Kind: KindDecision,
-		Paths:   []string{"/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models"},
-		Pattern: `^/v1/(systemone(/batch|/models)?|decisions)$`,
+		Paths:   []string{"/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models", "/v1/systemone/rules"},
+		Pattern: `^/v1/(systemone(/batch|/models|/rules)?|decisions)$`,
 		Schemas: []Schema{
 			{ID: SchemaVLLMSR50, SystemOne: systemonecodec.SchemaVLLMSR50},
 			{ID: SchemaVLLMSR40, SystemOne: systemonecodec.SchemaID(SchemaVLLMSR40)},

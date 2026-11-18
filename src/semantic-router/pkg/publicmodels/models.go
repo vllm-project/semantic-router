@@ -4,6 +4,7 @@
 package publicmodels
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -28,12 +29,16 @@ const (
 // discovery. Display metadata and internal execution modes are not control
 // signals.
 type RoutingMetadata struct {
-	API          config.InferenceAPI     `json:"api"`
-	Source       config.EntrypointSource `json:"source,omitempty"`
-	Resolution   ResolutionKind          `json:"resolution"`
-	Selectable   bool                    `json:"selectable"`
-	DefaultRoute bool                    `json:"default_route,omitempty"`
-	Recipe       config.RecipeName       `json:"recipe,omitempty"`
+	API        config.InferenceAPI     `json:"api"`
+	Source     config.EntrypointSource `json:"source,omitempty"`
+	Resolution ResolutionKind          `json:"resolution"`
+	Selectable bool                    `json:"selectable"`
+	// Delegates holds memory, review or both for an entrypoint other ones send
+	// their memory calls or approval reviews to. Such an entrypoint is not
+	// offered for chat, unless it is the default entrypoint.
+	Delegates    []string          `json:"delegates,omitempty"`
+	DefaultRoute bool              `json:"default_route,omitempty"`
+	Recipe       config.RecipeName `json:"recipe,omitempty"`
 }
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response.
@@ -76,6 +81,7 @@ type modelListBuilder struct {
 }
 
 func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
+	defaultNames := cfg.DefaultEntrypointNames()
 	for _, entrypoint := range cfg.EffectiveEntrypoints(config.ChatAPI) {
 		description := "Entrypoint for the default routing recipe"
 		if cfg != nil {
@@ -83,6 +89,12 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 		}
 		metadata := selectableVirtualRoute(entrypoint.Recipe, cfg.IsDefaultRecipe(entrypoint.Recipe))
 		metadata.API, metadata.Source = entrypoint.API, entrypoint.Source
+		if len(entrypoint.ModelNames) > 0 {
+			metadata.Delegates = cfg.DelegateRoles(config.ChatAPI, entrypoint.ModelNames[0])
+			// people chat on the default entrypoint whatever else it serves
+			isDefault := len(defaultNames) > 0 && slices.Contains(entrypoint.ModelNames, defaultNames[0])
+			metadata.Selectable = len(metadata.Delegates) == 0 || isDefault
+		}
 		b.appendAll(entrypoint.ModelNames, routerOwner, description, metadata)
 	}
 }

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import os
 import shutil
 import threading
+import time
 import unittest
+import urllib.parse
 from contextlib import redirect_stdout
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -27,6 +30,13 @@ class Runtime:
         # The listener's vsr profile its listing answers, and how often the listing was asked for.
         self.vsr: dict | None = None
         self.listings = 0
+        # The Authorization header of every request, the listing's included.
+        self.auth: list[str | None] = []
+        # What the listener's rules endpoint answers a request with (None: HTTP 503), every
+        # request it got, and whether the listing answers at all.
+        self.rules = lambda request: None
+        self.asked_rules: list[dict] = []
+        self.listing_status = 200
         runtime = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -35,20 +45,32 @@ class Runtime:
 
             def do_GET(self):
                 runtime.listings += 1
+                runtime.auth.append(self.headers.get("Authorization"))
                 listing = (
                     {"models": []}
                     if runtime.vsr is None
                     else {"models": [], "vsr": runtime.vsr}
                 )
                 data = json.dumps(listing).encode()
-                self.send_response(200 if self.path == "/v1/systemone/models" else 404)
+                ok = self.path == "/v1/systemone/models"
+                self.send_response(runtime.listing_status if ok else 404)
                 self.send_header("content-length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
 
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers["content-length"])))
+                if self.path == "/v1/systemone/rules":
+                    runtime.asked_rules.append(body)
+                    answer = runtime.rules(body)
+                    data = json.dumps(answer or {}).encode()
+                    self.send_response(503 if answer is None else 200)
+                    self.send_header("content-length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
                 runtime.seen.append(body)
+                runtime.auth.append(self.headers.get("Authorization"))
                 questions = body["questions"]
                 if "review" in questions:
                     reply = {
@@ -158,6 +180,7 @@ class HooksTest(unittest.TestCase):
             reply["reason"],
         )
         self.assertIn("The tags are vSR's, not part of the source", reply["reason"])
+        self.assertIn("do not try to read them another way", reply["reason"])
         self.assertEqual(
             reply["systemMessage"],
             "▚▞ vSR redacted · 2 items hidden: email, name · the output of head -2 customers.csv",
@@ -241,6 +264,28 @@ class HooksTest(unittest.TestCase):
         self.assertNotIn("decision", reply)
         self.assertIn("redact skipped", reply["systemMessage"])
 
+    def test_an_output_longer_than_is_read_says_the_rest_went_unchecked_with_nothing_found(
+        self,
+    ):
+        reply = run("post", bash("cat big.log", "x" * (vsr.MAX_CHARS + 500)), self.env)
+        self.assertNotIn("decision", reply)
+        self.assertEqual(
+            reply["systemMessage"],
+            f"▚▞ vSR read the first {vsr.MAX_CHARS:,} of {vsr.MAX_CHARS + 500:,} characters;"
+            " the rest went unchecked",
+        )
+
+    def test_the_key_vsr_json_names_goes_to_the_listener_and_the_decision_model(self):
+        home = Path(self.id().replace(".", "_"))
+        home.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, home, True)
+        (home / "vsr.json").write_text(
+            json.dumps({"runtimeUrl": self.runtime.url, "runtimeTokenEnv": "LAB_KEY"})
+        )
+        env = {"CODEX_HOME": str(home), "VSR_RUNTIME_URL": "", "LAB_KEY": "secret"}
+        run("pre", bash("git status"), env)
+        self.assertEqual(self.runtime.auth, ["Bearer secret", "Bearer secret"])
+
     def test_other_tools_and_empty_outputs_are_left_alone(self):
         self.assertEqual(
             run(
@@ -301,6 +346,458 @@ class HooksTest(unittest.TestCase):
             "[vsr:", json.dumps(run("post", bash("cat customers.csv", CSV), env))
         )
         self.assertEqual(self.runtime.listings, 2)
+
+
+PROD = {
+    "name": "prod_database",
+    "description": "touches the production database.",
+    "required": True,
+}
+EMPLOYEE = {"name": "employee_id", "description": "an employee ID", "required": False}
+
+
+def listing(guard: list, redact: list, revision: str = "r1") -> dict:
+    return {"rules": {"revision": revision, "guard": guard, "redact": redact}}
+
+
+def answer(matches=(), spans=lambda text: [], unchecked=(), revision="r1"):
+    """A rules answer: for each part, the guard rules matched, the spans found, and the rules
+    left unchecked."""
+
+    def reply(request: dict) -> dict:
+        return {
+            "revision": revision,
+            "parts": [
+                {
+                    "id": part["id"],
+                    "coverage": "partial" if unchecked else "complete",
+                    "matches": list(matches),
+                    "spans": spans(part["text"]),
+                    "unchecked": [
+                        {"rule": r, "reason": "the decision model is unavailable"}
+                        for r in unchecked
+                    ],
+                }
+                for part in request["parts"]
+            ],
+        }
+
+    return reply
+
+
+class ListenerRulesTest(unittest.TestCase):
+    def setUp(self):
+        self.runtime = Runtime()
+        self.addCleanup(self.runtime.server.shutdown)
+        self.home = Path(self.id().replace(".", "_"))
+        self.home.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, self.home, True)
+        self.env = {
+            "VSR_RUNTIME_URL": self.runtime.url,
+            "VSR_RUNTIME_MODEL": "vela3-lite",
+            "CODEX_HOME": str(self.home),
+        }
+
+    def fresh(self):
+        """Ask the listing again on the next call, as a minute later."""
+        kept = self.home / "vsr-listener.json"
+        held = json.loads(kept.read_text())
+        kept.write_text(json.dumps({**held, "at": 0}))
+
+    def test_a_command_a_listener_rule_matches_is_held_with_its_description(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer(matches=["prod_database"])
+        reply = run("pre", bash("psql --host=prod-db.internal"), self.env)
+        reason = reply["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn(
+            "touches the production database, a rule of the Router listener", reason
+        )
+        self.assertEqual(
+            self.runtime.asked_rules,
+            [
+                {
+                    "app": "guard",
+                    "parts": [{"id": "p0", "text": "psql --host=prod-db.internal"}],
+                }
+            ],
+        )
+
+    def test_a_required_rule_not_checked_holds_and_an_advisory_one_says_so(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = lambda request: None
+        reply = run("pre", bash("ls"), self.env)
+        reason = reply["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("required rule prod_database could not be checked", reason)
+        # The rules are the listener's: a failed call names it, not the decision model.
+        self.assertIn("the listener answered HTTP 503", reason)
+
+        self.runtime.vsr = listing([{**PROD, "required": False}], [])
+        self.fresh()
+        reply = run("pre", bash("ls"), self.env)
+        self.assertNotIn("hookSpecificOutput", reply)
+        self.assertIn("rule prod_database not checked", reply["systemMessage"])
+
+    def test_the_rules_read_before_hold_when_the_listing_does_not_answer(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer(matches=["prod_database"])
+        run("pre", bash("ls"), self.env)
+        self.runtime.listing_status = 500
+        self.fresh()
+        self.assertIn(
+            "permissionDecision",
+            json.dumps(run("pre", bash("psql --host=prod-db.internal"), self.env)),
+        )
+
+    def test_what_a_redact_rule_finds_is_hidden_past_an_astral_character_and_overlaps_join(
+        self,
+    ):
+        text = "Paid 😀 by E-104233 today"
+        self.runtime.vsr = listing([], [EMPLOYEE, {**EMPLOYEE, "name": "digits"}])
+        self.runtime.rules = answer(
+            spans=lambda t: [
+                {"start": 10, "end": 18, "rule": "employee_id"},
+                {"start": 12, "end": 19, "rule": "digits"},
+            ]
+        )
+        reply = run("post", bash("cat pay.txt", text), self.env)
+        self.assertEqual(reply["decision"], "block")
+        self.assertTrue(reply["reason"].startswith("Paid 😀 by [vsr:employee_id]today"))
+        self.assertIn("[vsr:employee_id]", reply["reason"].split("\n\n")[1])
+
+    def test_an_output_a_required_redact_rule_could_not_check_is_withheld(self):
+        self.runtime.vsr = listing([], [{**EMPLOYEE, "required": True}])
+        self.runtime.rules = lambda request: None
+        reply = run("post", bash("cat pay.txt", "Paid by E-104233"), self.env)
+        self.assertEqual(reply["decision"], "block")
+        self.assertIn("required rule employee_id could not check it", reply["reason"])
+        self.assertNotIn("E-104233", reply["reason"])
+
+    def test_an_answer_for_another_revision_holds_for_a_required_rule(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer(revision="r2")
+        reply = run("pre", bash("ls"), self.env)
+        self.assertIn(
+            "the listener's rules changed",
+            reply["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+    def test_an_answer_that_leaves_out_its_parts_or_coverage_is_no_check(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = lambda request: {
+            "revision": "r1",
+            "parts": [{"id": "p0", "coverage": "failed"}],
+        }
+        reply = run("pre", bash("ls"), self.env)
+        self.assertIn(
+            "required rule prod_database could not be checked",
+            reply["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+    def test_rules_are_kept_per_key_and_another_revision_reads_the_listing_again(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer(matches=["prod_database"])
+        run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"})
+        self.runtime.vsr = None
+        run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "b"})
+        self.runtime.listing_status = 500
+        self.fresh()
+        reply = run(
+            "pre",
+            bash("psql --host=prod-db.internal"),
+            {**self.env, "VSR_RUNTIME_TOKEN": "a"},
+        )
+        self.assertIn("permissionDecision", json.dumps(reply))
+
+        # The listener's rules change under a cached listing: the call that gets an answer
+        # for the new revision reads the listing again and acts on it.
+        self.runtime.listing_status = 200
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer()
+        self.fresh()
+        run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"})
+        asked = self.runtime.listings
+        self.runtime.vsr = listing([PROD], [], revision="r2")
+        self.runtime.rules = answer(revision="r2")
+        self.assertEqual(
+            run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"}), {}
+        )
+        self.assertEqual(self.runtime.listings, asked + 1)
+        # A listing that still names the old revision leaves the call unchecked.
+        self.runtime.rules = answer(revision="r3")
+        reply = run("pre", bash("ls"), {**self.env, "VSR_RUNTIME_TOKEN": "a"})
+        self.assertIn("the listener's rules changed", json.dumps(reply))
+
+    def test_the_decision_model_reads_what_the_rules_read_and_crossing_finds_join(self):
+        text = "Mail E-104233@corp.example now"
+        self.runtime.vsr = listing([], [EMPLOYEE])
+        self.runtime.rules = answer(
+            spans=lambda t: [{"start": 5, "end": 13, "rule": "employee_id"}]
+        )
+        self.runtime.spans = [
+            span("EMAIL_ADDRESS", text, "E-104233@corp.example", 0.99)
+        ]
+        reply = run("post", bash("cat mail.txt", text), self.env)
+        self.assertTrue(reply["reason"].startswith("Mail [vsr:email] now"))
+        self.assertTrue(
+            any(
+                "E-104233@corp.example" in json.dumps(body)
+                for body in self.runtime.seen
+            )
+        )
+
+    def test_where_a_rule_and_a_pii_span_cover_the_same_text_the_rule_names_the_tag(
+        self,
+    ):
+        text = "Pay ACCT-48392017 now"
+        self.runtime.vsr = listing([], [{**EMPLOYEE, "name": "customer_account"}])
+        self.runtime.rules = answer(
+            spans=lambda t: [{"start": 4, "end": 17, "rule": "customer_account"}]
+        )
+        self.runtime.spans = [span("IBAN_CODE", text, "ACCT-48392017", 0.99)]
+        reply = run("post", bash("cat pay.txt", text), self.env)
+        self.assertTrue(reply["reason"].startswith("Pay [vsr:customer_account] now"))
+
+    def test_a_rule_changed_in_the_dashboard_applies_to_the_next_call(self):
+        self.runtime.vsr = listing([PROD], [{**EMPLOYEE, "required": True}])
+        self.runtime.rules = answer()
+        run("pre", bash("ls"), self.env)
+        # The person turns both rules off; the session still holds revision r1.
+        self.runtime.vsr = listing([], [], "r2")
+        self.runtime.rules = answer(revision="r2")
+        self.assertNotIn("hookSpecificOutput", run("pre", bash("ls"), self.env))
+        reply = run("post", bash("cat pay.txt", "Paid by E-104233"), self.env)
+        self.assertNotEqual(reply.get("decision"), "block")
+
+    def test_a_guard_rule_added_in_the_dashboard_holds_its_first_match(self):
+        self.runtime.vsr = listing([PROD], [])
+        self.runtime.rules = answer()
+        run("pre", bash("ls"), self.env)
+        deploy = {**PROD, "name": "deploy", "description": "deploys to production."}
+        self.runtime.vsr = listing([PROD, deploy], [], "r2")
+        self.runtime.rules = answer(revision="r2", matches=["deploy"])
+        reply = run("pre", bash("make deploy"), self.env)
+        self.assertIn(
+            "deploys to production",
+            reply["hookSpecificOutput"]["permissionDecisionReason"],
+        )
+
+    def test_a_listing_that_is_not_one_keeps_the_rules_read_before(self):
+        self.assertIsNone(vsr.rules_of(None))
+        self.assertIsNone(vsr.rules_of({"vsr": "broken"}))
+        self.assertEqual(vsr.rules_of({"models": []}), vsr.NO_RULES)
+
+
+class Management:
+    """A stub Router management API: the Router Replay list, paged as the Router pages it."""
+
+    def __init__(self):
+        self.records: list[dict] = []
+        self.status, self.delay, self.body = 200, 0.0, None
+        # The query and the Authorization header of every request.
+        self.asked: list[dict] = []
+        self.auth: list[str | None] = []
+        # Where every request is redirected to, when set.
+        self.redirect: str | None = None
+        management = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                url = urllib.parse.urlsplit(self.path)
+                query = dict(urllib.parse.parse_qsl(url.query))
+                management.asked.append(query)
+                management.auth.append(self.headers.get("Authorization"))
+                if management.redirect:
+                    self.send_response(302)
+                    self.send_header("location", management.redirect + self.path)
+                    self.send_header("content-length", "0")
+                    self.end_headers()
+                    return
+                time.sleep(management.delay)
+                offset, limit = int(query["offset"]), int(query["limit"])
+                found = [
+                    r
+                    for r in management.records
+                    if query["turn_id"] in (r.get("turn_id"), r.get("parent_turn_id"))
+                ]
+                page = found[offset : offset + limit]
+                data = (
+                    management.body
+                    or json.dumps(
+                        {
+                            "object": "router_replay.list",
+                            "total": len(found),
+                            "has_more": offset + len(page) < len(found),
+                            "data": page,
+                        }
+                    ).encode()
+                )
+                ok = url.path == "/api/v1/observability/replays"
+                # a hook that stopped waiting has gone away
+                with contextlib.suppress(OSError):
+                    self.send_response(management.status if ok else 404)
+                    self.send_header("content-length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+
+TURN = "019a7c2e-0000-7000-8000-000000000010"
+
+
+def call(model: str, decision: str, turn: str = TURN) -> dict:
+    return {"turn_id": turn, "selected_model": model, "decision": decision}
+
+
+def review(status: str, outcome: str | None = None) -> dict:
+    verdict = {"status": status}
+    if outcome:
+        verdict["assessment"] = {"outcome": outcome}
+    return {
+        "turn_id": "review-turn",
+        "parent_turn_id": TURN,
+        "request_kind": "codex_approval_review",
+        "selected_model": "codex-auto-review",
+        "decision": "review",
+        "review": verdict,
+    }
+
+
+def stop(turn_id: str = TURN) -> dict:
+    """The Stop event Codex 0.166 sends (hooks crate, stop.command.input)."""
+    return {
+        "session_id": "019a7c2e-0000-7000-8000-000000000005",
+        "turn_id": turn_id,
+        "transcript_path": None,
+        "cwd": "/work",
+        "hook_event_name": "Stop",
+        "model": "vllm-sr/auto",
+        "permission_mode": "default",
+        "stop_hook_active": False,
+        "last_assistant_message": "Done.",
+    }
+
+
+class TurnLineTest(unittest.TestCase):
+    def setUp(self):
+        self.management = Management()
+        self.addCleanup(self.management.server.shutdown)
+        self.env = {
+            "VSR_MANAGEMENT_URL": self.management.url,
+            "CODEX_HOME": "/nonexistent",
+        }
+
+    def test_the_line_names_the_models_decisions_and_reviews_the_router_recorded(self):
+        self.management.records = [
+            call("gpt-6-luna", "coding"),
+            call("qwen3-coder", "simple"),
+            call("gpt-6-luna", "coding"),
+            review("completed", "allow"),
+            # a tool check is the same review going on, not a verdict
+            review("tool_call"),
+            review("completed", "deny"),
+            call("gpt-6-luna", "coding"),
+            call("other-model", "coding", turn="another-turn"),
+        ]
+        self.assertEqual(
+            run("stop", stop(), self.env),
+            {
+                "systemMessage": "▚▞ vSR turn · 4 calls: gpt-6-luna (3), qwen3-coder (1)"
+                " · decisions: coding, simple · 2 reviews: 1 allowed, 1 denied by codex-auto-review"
+            },
+        )
+        self.assertEqual(
+            self.management.asked, [{"turn_id": TURN, "limit": "100", "offset": "0"}]
+        )
+
+    def test_a_turn_the_router_has_no_record_of_or_that_cannot_be_read_ends_without_a_line(
+        self,
+    ):
+        self.assertEqual(run("stop", stop(), self.env), {})
+        self.management.records = [call("gpt-6-luna", "coding")]
+        for status, body in ((500, None), (200, b"not json"), (200, b'{"data": 1}')):
+            self.management.status, self.management.body = status, body
+            self.assertEqual(run("stop", stop(), self.env), {})
+        self.assertEqual(run("stop", {**stop(), "turn_id": None}, self.env), {})
+        port = self.management.server.server_address[1]
+        self.management.server.shutdown()
+        self.management.server.server_close()
+        self.assertEqual(
+            run(
+                "stop",
+                stop(),
+                {**self.env, "VSR_MANAGEMENT_URL": f"http://127.0.0.1:{port}"},
+            ),
+            {},
+        )
+
+    def test_a_redirect_is_refused_so_the_token_never_reaches_another_host(self):
+        elsewhere = Management()
+        self.addCleanup(elsewhere.server.shutdown)
+        elsewhere.records = [call("gpt-6-luna", "coding")]
+        self.management.redirect = elsewhere.url
+        env = {**self.env, "VSR_MANAGEMENT_TOKEN": "management-secret"}
+        line = run("stop", stop(), env)
+        self.assertEqual(elsewhere.auth, [])
+        self.assertEqual(self.management.auth, ["Bearer management-secret"])
+        self.assertEqual(line, {})
+
+    def test_every_request_that_carries_a_token_refuses_redirects(self):
+        # The runtime token goes to the listener the same way the management
+        # token goes to the management API, so neither follows a redirect.
+        source = Path(vsr.__file__).read_text()
+        self.assertNotIn("urllib.request.urlopen(", source)
+        self.assertEqual(source.count("NO_REDIRECTS.open("), 4)
+
+    def test_a_slow_router_costs_the_turn_no_more_than_the_wait(self):
+        self.management.records, self.management.delay = [call("m", "d")], 1.0
+        with mock.patch.object(vsr, "TURN_SECONDS", 0.2):
+            started = time.monotonic()
+            self.assertEqual(run("stop", stop(), self.env), {})
+            self.assertLess(time.monotonic() - started, 0.8)
+
+    def test_every_page_of_a_long_turn_is_read_and_a_cut_short_read_says_so(self):
+        self.management.records = [call("gpt-6-luna", "coding")] * 150
+        self.assertIn(
+            "150 calls: gpt-6-luna (150)",
+            run("stop", stop(), self.env)["systemMessage"],
+        )
+        self.assertEqual([q["offset"] for q in self.management.asked], ["0", "100"])
+        with mock.patch.object(vsr, "TURN_PAGES", 1):
+            line = run("stop", stop(), self.env)["systemMessage"]
+        self.assertTrue(line.endswith(" · read 100 of 150 calls"), line)
+
+    def test_the_url_comes_from_vsr_json_or_a_variable_and_the_token_from_a_variable(
+        self,
+    ):
+        home = Path(self.id().replace(".", "_"))
+        home.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, home, True)
+        self.management.records = [call("gpt-6-luna", "coding")]
+        (home / "vsr.json").write_text(
+            json.dumps({"managementUrl": self.management.url})
+        )
+        runtime = Runtime()
+        self.addCleanup(runtime.server.shutdown)
+        env = {
+            "CODEX_HOME": str(home),
+            "VSR_MANAGEMENT_URL": "",
+            "VSR_MANAGEMENT_TOKEN": "m",
+            "VSR_RUNTIME_URL": runtime.url,
+        }
+        self.assertIn("systemMessage", run("stop", stop(), env))
+        self.assertEqual(self.management.auth, ["Bearer m"])
+        # The line never waits on the listener's listing.
+        self.assertEqual(runtime.listings, 0)
+        # An empty URL leaves the line out without a request.
+        (home / "vsr.json").write_text(json.dumps({"managementUrl": ""}))
+        self.assertEqual(run("stop", stop(), env), {})
+        self.assertEqual(len(self.management.asked), 1)
 
 
 if __name__ == "__main__":

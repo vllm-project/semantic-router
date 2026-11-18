@@ -1,7 +1,7 @@
 ---
 title: "vela3-mini"
 sidebar_label: "vela3-mini"
-sidebar_position: 4
+sidebar_position: 5
 description: "Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions still on trained adapters and spans."
 custom_edit_url: null
 ---
@@ -57,9 +57,13 @@ This model has no calibrated thresholds: a built-in question without a
 Each time it loads, the model compares its answers with the reference
 answers recorded for its revision. They are recorded for:
 
+- NVIDIA Ada (sm_89) (`cuda:sm_89`)
 - AMD GPU (ROCm) (`rocm`)
 
-On a CPU or an NVIDIA GPU no reference is recorded, so the model serves
+Where a hardware reference and its device class's are both recorded, the
+hardware one is checked.
+
+On a CPU no reference is recorded, so the model serves
 there with its self-check reported as `unverified`.
 
 [Choose a model](model-runtime/get-started/choose-a-model.md#hardware) lists the

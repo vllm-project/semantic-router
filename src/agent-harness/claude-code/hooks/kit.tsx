@@ -85,6 +85,9 @@ export type Reply = {
   listing?: object
   // How many times the listing was asked for.
   listings?: number
+  // What the listener's rules endpoint (POST /v1/systemone/rules) answers for a request, or 'fails' when it cannot be
+  // reached; every request it got is kept in `asked`.
+  rules?: { answer: ((request: { app: string; parts: { id: string; text: string }[] }) => object) | 'fails'; asked?: { app: string; parts: { id: string; text: string }[] }[] }
   env?: Record<string, string>
 }
 
@@ -182,6 +185,11 @@ export function engine(on: On, reply: Reply) {
     if (e.url.endsWith('/v1/systemone/models') && reply.listing !== undefined) {
       reply.listings = (reply.listings ?? 0) + 1
       return answered(reply.listing)
+    }
+    if (e.url.endsWith('/v1/systemone/rules') && reply.rules !== undefined) {
+      const request = JSON.parse(e.init?.body ?? '{}')
+      reply.rules.asked?.push(request)
+      return reply.rules.answer === 'fails' ? REFUSED : answered(reply.rules.answer(request))
     }
     reply.headers?.push(e.init?.headers)
     if (e.url.endsWith('/health')) return reply.offline || reply.fails ? REFUSED : answered({ status: 'ok' })

@@ -490,7 +490,7 @@
         "top_k",
         "top_p"
       ],
-      "extension_request_fields": [],
+      "extension_request_fields": ["safeguards"],
       "required_request_fields": [
         "max_tokens",
         "messages",

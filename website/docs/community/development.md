@@ -9,7 +9,8 @@ local validation.
 - Git
 - GNU Make
 - Docker or Podman
-- Python 3.10 or newer for the CLI, tests, training, and simulator tools
+- Python 3.10 or newer for the CLI, tests, and simulator tools, and Python 3.11
+  or newer for the training projects under `src/training/`
 
 The repository bootstrap target creates its Python environment and installs the
 tooling used by the validation harness:

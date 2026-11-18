@@ -17,6 +17,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/gateway"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -199,6 +200,10 @@ func postChatWithHeaders(t *testing.T, frontend *httptest.Server, extra map[stri
 		if name == "content-type" || strings.HasPrefix(name, "x-vsr-") {
 			header[name] = strings.Join(values, ",")
 		}
+	}
+	// Every request gets a replay id of its own, so both modes must send one.
+	if header[headers.RouterReplayID] != "" {
+		header[headers.RouterReplayID] = "present"
 	}
 	return answer{status: resp.StatusCode, header: header, body: string(body)}
 }

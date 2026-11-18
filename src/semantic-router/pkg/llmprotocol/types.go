@@ -291,6 +291,8 @@ type Request struct {
 	// ReasoningSummary asks a Responses provider for a reasoning summary: auto,
 	// concise or detailed. Chat Completions and Messages cannot carry it.
 	ReasoningSummary string
+	// IncludeEncryptedReasoning requests Responses encrypted continuation state.
+	IncludeEncryptedReasoning bool
 	// ReasoningDisplay controls whether a provider returns summarized reasoning
 	// content or only its signed continuation token. It is distinct from whether
 	// reasoning itself is enabled.
@@ -312,6 +314,10 @@ type Request struct {
 	// ContextManagement carries Anthropic context edits through routing and
 	// same-format re-encoding. Other wire formats must reject or report its loss.
 	ContextManagement json.RawMessage
+	// Safeguards carries the context Claude Code's auto mode sends for
+	// Anthropic's server-side classifier review, as sent. Only Anthropic
+	// Messages re-encodes it; other wire formats report its omission.
+	Safeguards json.RawMessage
 	// CacheSalt isolates backend prefix-cache entries; it is never prompt text.
 	CacheSalt *string
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model

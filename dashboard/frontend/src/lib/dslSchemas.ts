@@ -184,6 +184,7 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
                     'assistant_tool_cycle',
                     'active_tool_loop',
                     'flow_tool_state',
+                    'failed_tool_result',
                   ],
                   required: true,
                 },

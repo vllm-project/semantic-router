@@ -214,7 +214,10 @@ default) on a `Read` or a fetched page; when redact ran out of time the model is
 steps aside with it and one `SKIPPED` row says both (unless shield waits `until done`). On CPU redact reads about the first 8,000 characters of an output in 3 s, and says so
 when an output was longer. With `until done` it reads the whole output (up to 128,000 characters
 and 60 s), and an output it cannot finish is withheld from Claude instead of passed on unchecked. The output of a
-command that failed is hidden in too: Claude reads the error with the values replaced. If Claude then
+command that failed is hidden in too: Claude reads the error with the values replaced. Each rewritten output
+comes with a note that the tags are vSR's and the source still holds the real values, so Claude does not
+report them as the file's content, and that they are hidden on purpose, so Claude does not set out to read
+them another way, such as by encoding the output. If Claude then
 tries to write a file with a redact tag such as `[vsr:email]` in place of a real value, vSR refuses the
 write and tells Claude to change only the lines it needs.
 
@@ -259,8 +262,8 @@ and iTerm2 3.5 or later, and drawn in characters elsewhere (smooth wedge charact
 
 ### Set from the Router
 
-A Router listener can set the apps for every plugin pointed at it, in its config or as checkboxes in the
-Dashboard (Config › Global Config › vSR agent plugins):
+A Router listener can set the apps for every plugin pointed at it, in its config or as Default, On or Off
+in the Dashboard (Config › Global Config › vSR agent plugins):
 
 ```yaml
 listeners:
@@ -278,6 +281,24 @@ a change in the Dashboard reaches a running session. Each field the profile sets
 option of the same name here, and a toast says what it changed. What you change yourself in Claude
 Code, with `/vsr`, the pane or the `/config` menu, stays yours; `/vsr follow` hands those options
 back to the listener.
+
+The listener can also bind rules of its own to guard and redact (`vsr.rules`, see
+[Rules of your own for guard and redact](https://vllm-sr.ai/docs/installation/agent-harness#rules-of-your-own-for-guard-and-redact)).
+vSR learns each rule's name and description from the same listing and asks the listener to evaluate
+it; the rule's pattern or question stays on the Router. Guard sends the whole command, read-only ones
+included, in one call beside its own questions: a rule that matches holds the command, its card says
+`always held: <description>`. Redact sends Read and Bash output with its secrets hidden, the same
+text the personal data check reads, and what a rule finds and the check finds are hidden together,
+a rule's find as `[vsr:<rule name>]`. A rule marked `required` that the listener could not check
+holds the command, or withholds the output, whatever the wait you chose; an advisory one is skipped
+with a `SKIPPED` row, as vSR's own checks are. The rules last read from a listener are kept (per
+listener and token), so an outage or a reload after that never drops a required rule. An answer for
+rules of another revision, such as after a change in the Dashboard, makes vSR read the listing again
+and ask once more in the same call; it counts as unchecked only when the listing does not answer or
+still names the old revision. Before vSR has
+read a listener's listing once with this token, it knows no rules, and when the listing does not
+answer its checks step aside as they do for any outage. Turning guard or redact off turns their
+rules off too.
 
 ## Troubleshooting
 

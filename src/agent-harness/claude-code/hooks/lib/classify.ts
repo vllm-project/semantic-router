@@ -147,6 +147,8 @@ export const healthUrlOf = (url: string) => `${baseOf(url)}/health`
 export const modelsUrlOf = (url: string) => `${baseOf(url)}/v1/models`
 // A System One API's listing: its models, and the listener's vsr profile beside them.
 export const listingUrlOf = (url: string) => `${baseOf(url)}/v1/systemone/models`
+// Where the listener evaluates the rules its listing names for guard and redact.
+export const rulesUrlOf = (url: string) => `${baseOf(url)}/v1/systemone/rules`
 // The models a listing names, each as `{ id, question_types }`: the System One API's vllm-sr/4.0 schema and vllm-srun
 // list them under `data`; the vllm-sr/5.0 schema, a Router listener's default, lists them under `models`, each with
 // its name, its question types as `features` and the 4.0 entry as its `card`.

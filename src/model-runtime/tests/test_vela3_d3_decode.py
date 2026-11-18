@@ -168,3 +168,29 @@ def test_evidence_fills_a_paragraph_when_half_its_sentences_pass() -> None:
 def test_evidence_word_decoding_drops_short_spans() -> None:
     assert evidence("plain", scores({0, 1})) == ["Adults take"]
     assert evidence("plain", scores({0, 1}), min_chars=20) == []
+
+
+def test_an_answer_leaves_out_the_comma_the_decoder_keeps_before_a_value() -> None:
+    from vllm_srun.families.vela3_d3.span_read import SpanItem, answer
+
+    # The tokenizer joins the comma to the letters after it, so the comma's
+    # word reads the e-mail's label and the released decoder opens the span on it.
+    text = "Park,mina@example.com"
+    offsets = np.array([[0, 4], [4, 5], [5, 21]])
+    logits = np.array([[-6.0], [6.0], [6.0]])
+    assert decode(1 / (1 + np.exp(-logits)), offsets, ["EMAIL"], text, 0.5) == [
+        {"start": 4, "end": 21, "label": "EMAIL"}
+    ]
+    item = SpanItem(
+        question_id="q",
+        task_type="span",
+        ids=[],
+        keys=[],
+        descriptions=[],
+        names=("EMAIL",),
+        text=text,
+    )
+    spans = answer(item, offsets, logits)["spans"]
+    assert [(s["start"], s["end"], s["text"]) for s in spans] == [
+        (5, 21, "mina@example.com")
+    ]

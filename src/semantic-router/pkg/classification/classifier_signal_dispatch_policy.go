@@ -39,6 +39,10 @@ func (c *Classifier) buildPolicySignalDispatchers(
 			func(context.Context) { c.evaluateInputModalitySignal(results, mu, requestFacts, usedSignals) },
 		},
 		{
+			config.SignalTypeAgent, "Agent",
+			func(context.Context) { c.evaluateAgentSignal(results, mu, requestFacts, usedSignals) },
+		},
+		{
 			config.SignalTypeSystemOne, "SystemOne",
 			func(ctx context.Context) {
 				c.evaluateSystemOneSignals(ctx, results, mu, systemOneReading{

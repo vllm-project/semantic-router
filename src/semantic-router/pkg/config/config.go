@@ -95,6 +95,7 @@ type RouterConfig struct {
 	ToolSessions     *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
 	ResponseAPI      ResponseAPIConfig       `yaml:"response_api"`
 	RouterReplay     RouterReplayConfig      `yaml:"router_replay"`
+	MaskingIdentity  MaskingIdentityConfig   `yaml:"-" json:"-"`
 	StartupStatus    StartupStatusConfig     `yaml:"startup_status"`
 	Looper           LooperConfig            `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
@@ -119,6 +120,7 @@ type RouterConfig struct {
 
 	Authz         AuthzConfig         `yaml:"authz,omitempty"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
+	Budgets       BudgetsConfig       `yaml:"budgets,omitempty"`
 	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
 	ConfigBaseDir string `yaml:"-"`
@@ -232,6 +234,11 @@ type Listener struct {
 	// APIKeys are client bearer credentials the listener enforces, in
 	// standalone mode and in the CLI-managed Envoy listener.
 	APIKeys []string `yaml:"api_keys,omitempty"`
+	// APIKeyFiles name owner-only files that each hold one more client key.
+	// The Router reads them at every load, as a backend's auth.api_key_file.
+	APIKeyFiles []string `yaml:"api_key_files,omitempty"`
+	// FileKeys are the keys APIKeyFiles held when the configuration loaded.
+	FileKeys []string `yaml:"-" json:"-"`
 	// APIs, when set, are the only APIs the listener serves, by API name (an
 	// alias reads as its API), each with its schema, models and settings;
 	// other paths answer 404. Omitted, the listener serves chat_completions,

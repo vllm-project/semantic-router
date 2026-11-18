@@ -659,6 +659,13 @@ def _wrap_varlen(fn: Any) -> Any:
     return attend
 
 
+def _flash_varlen(query, key, value, cu_seq_q, cu_seq_k, max_q, max_k, *, scale):
+    """The flash attention op ``torch.nn.attention.varlen`` calls, for PyTorch releases without that module."""
+    return torch.ops.aten._flash_attention_forward(
+        query, key, value, cu_seq_q, cu_seq_k, max_q, max_k, 0.0, False, False, scale=scale
+    )[0]  # fmt: skip
+
+
 def _wrap_delta(fn: Any) -> Any:
     """FLA's chunked gated delta rule, called as Transformers' fallback wrapper calls it.
 
