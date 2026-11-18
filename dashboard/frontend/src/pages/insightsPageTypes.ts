@@ -461,4 +461,25 @@ export interface InsightsAggregateResponse {
   available_models: string[]
   reviews?: InsightsReviewAggregate
   available_review_models?: string[]
+  /** Present when the aggregate was asked for an interval along with since. */
+  traffic?: InsightsTrafficSeries
+}
+
+/** The aggregate's records in contiguous intervals from since to the query, oldest first. */
+export interface InsightsTrafficSeries {
+  since: string
+  interval_seconds: number
+  latency_p50_ms?: number
+  latency_p95_ms?: number
+  buckets: InsightsTrafficBucket[]
+}
+
+export interface InsightsTrafficBucket {
+  start: string
+  requests: number
+  cached: number
+  failed: number
+  latency_p50_ms?: number
+  latency_p95_ms?: number
+  cost: InsightsAggregateCurrencySummary[]
 }

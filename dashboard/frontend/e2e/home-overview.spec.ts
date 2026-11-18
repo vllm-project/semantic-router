@@ -103,7 +103,44 @@ const aggregate = {
   available_models: ['qwen3-8b', 'deepseek/deepseek-v4.1-flash'],
 }
 
-async function mockHome(page: Page, { replay = true }: { replay?: boolean } = {}) {
+// The traffic series a router with interval support returns for the asked window.
+function trafficSeries(since: string, intervalSeconds: number) {
+  const start = Date.parse(since)
+  const count = Math.ceil((Date.now() - start) / (intervalSeconds * 1000))
+  return {
+    since,
+    interval_seconds: intervalSeconds,
+    latency_p50_ms: 170,
+    latency_p95_ms: 1500,
+    buckets: Array.from({ length: count }, (_, index) => {
+      const last = index === count - 1
+      return {
+        start: new Date(start + index * intervalSeconds * 1000).toISOString(),
+        requests: last ? 3 : 0,
+        cached: 0,
+        failed: 0,
+        ...(last ? { latency_p50_ms: 170, latency_p95_ms: 1500 } : {}),
+        cost: last
+          ? [
+              {
+                currency: 'USD',
+                total_spend: 0.003,
+                actual_spend: 0.003,
+                total_saved: 0.004,
+                baseline_spend: 0.007,
+                cost_record_count: 2,
+              },
+            ]
+          : [],
+      }
+    }),
+  }
+}
+
+async function mockHome(
+  page: Page,
+  { replay = true, series = true }: { replay?: boolean; series?: boolean } = {},
+) {
   await mockAuthenticatedAppShell(page)
   await page.route('**/api/router/config/all', (route) => route.fulfill({ json: config }))
   await page.route('**/api/status', (route) =>
@@ -137,13 +174,25 @@ async function mockHome(page: Page, { replay = true }: { replay?: boolean } = {}
     if (!replay) return route.fulfill({ status: 404, json: { error: 'not found' } })
     if (url.pathname.endsWith('/aggregate')) {
       aggregateQueries.push(url.search)
-      return route.fulfill({ json: aggregate })
+      const since = url.searchParams.get('since')
+      const interval = url.searchParams.get('interval')
+      const seconds = interval
+        ? Number.parseInt(interval, 10) * (interval.endsWith('m') ? 60 : 3600)
+        : 0
+      return route.fulfill({
+        json:
+          series && since && seconds
+            ? { ...aggregate, traffic: trafficSeries(since, seconds) }
+            : aggregate,
+      })
     }
     if (url.pathname.endsWith('/runs')) return route.fulfill({ json: { object: 'list', data: [] } })
     if (url.pathname.endsWith('/models'))
       return route.fulfill({ json: { object: 'list', data: [] } })
+    // Without a series, a range holding more records than the newest page charts only those.
+    const total = series ? records.length : 500
     return route.fulfill({
-      json: { object: 'list', data: records, count: records.length, total: records.length },
+      json: { object: 'list', data: records, count: records.length, total },
     })
   })
   return { aggregateQueries }
@@ -153,10 +202,24 @@ test('summarizes traffic, recent requests and the routing configuration', async 
   const { aggregateQueries } = await mockHome(page)
   await page.goto('/')
 
-  await expect(page.getByText('Router healthy').first()).toBeVisible()
-  await expect(page.getByText('v0.5.0').first()).toBeVisible()
+  await expect(page.getByTestId('dashboard-serving-mode')).toContainText('Router mode')
+  await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0)
+  await expect(page.getByText(/^Updated /)).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Requests: open Requests' })).toContainText('3')
+  await expect(page.getByRole('link', { name: 'p95 latency: open Requests' })).toContainText(
+    '1.50s',
+  )
   await expect(page.getByTestId('home-saved')).toContainText('$0.00')
+
+  const traffic = page.getByTestId('home-traffic')
+  await expect(traffic).toContainText('Last 24 hours across every public model')
+  await expect(traffic.locator('.recharts-surface')).toBeVisible()
+  await traffic.getByRole('radio', { name: 'Latency' }).click()
+  await expect(traffic).toContainText('p95')
+  await expect(traffic).toContainText('1.50s')
+  await traffic.getByRole('radio', { name: 'Cost' }).click()
+  await expect(traffic).toContainText('Without routing')
+  expect(aggregateQueries.some((query) => query.includes('interval=1h'))).toBe(true)
 
   await expect(page.getByTestId('home-count-decisions')).toContainText('2')
   await expect(page.getByTestId('home-count-signals')).toContainText('2')
@@ -174,7 +237,10 @@ test('summarizes traffic, recent requests and the routing configuration', async 
 
   await page.getByRole('radio', { name: '7d' }).click()
   await expect(page).toHaveURL(/range=7d/)
-  await expect.poll(() => aggregateQueries.some((query) => query.includes('since='))).toBe(true)
+  await expect
+    .poll(() => aggregateQueries.some((query) => /since=.*interval=6h/.test(query)))
+    .toBe(true)
+  await expect(traffic).toContainText('Last 7 days across every public model')
 
   await recent.getByRole('link', { name: /01a1ea71/ }).click()
   await expect(page).toHaveURL(/\/observe\/requests\/codex-call$/)
@@ -186,8 +252,10 @@ test('explains missing traffic when Router Replay is off and keeps the configura
   await mockHome(page, { replay: false })
   await page.goto('/')
 
-  await expect(page.getByText('Traffic metrics need Router Replay')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Open recipes' })).toBeVisible()
+  const traffic = page.getByTestId('home-traffic')
+  await expect(traffic.getByText('Traffic metrics need Router Replay')).toBeVisible()
+  await expect(traffic.getByRole('button', { name: 'Open recipes' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Requests: open Requests' })).toHaveCount(0)
   await expect(page.getByTestId('home-recent-requests')).toContainText(
     'No recorded requests to show',
   )
@@ -196,4 +264,14 @@ test('explains missing traffic when Router Replay is off and keeps the configura
   await expect(
     page.getByTestId('start-checklist').locator('[data-step="first-request"]'),
   ).toHaveAttribute('data-state', 'todo')
+})
+
+test('charts the newest requests when the router returns no traffic series', async ({ page }) => {
+  await mockHome(page, { series: false })
+  await page.goto('/')
+
+  const traffic = page.getByTestId('home-traffic')
+  await expect(traffic).toContainText('Last 3 requests')
+  await expect(traffic.locator('.recharts-surface')).toBeVisible()
+  await expect(traffic).toContainText('Served from cache')
 })

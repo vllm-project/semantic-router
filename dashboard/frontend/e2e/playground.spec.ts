@@ -1853,6 +1853,25 @@ test.describe('Playground Chat Component', () => {
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
+    await page.route('**/api/router/api/v1/observability/replays/replay-123', (route) =>
+      route.fulfill({
+        json: {
+          id: 'replay-123',
+          timestamp: new Date().toISOString(),
+          turn_index: 0,
+          decision_tier: 0,
+          decision_priority: 0,
+          signals: { domain: ['computer science'], keyword: ['code_keywords'] },
+          signal_confidences: { 'domain:computer science': 0.91, 'domain:law': 0.12 },
+          learning: {
+            adaptation: {
+              scores: { 'qwen/qwen3-32b': { score: 0.82 }, 'qwen/qwen3-8b': { score: 0.64 } },
+            },
+          },
+          pii_enabled: true,
+        },
+      }),
+    )
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({
         status: 200,
@@ -1877,14 +1896,30 @@ test.describe('Playground Chat Component', () => {
     await page.getByRole('button', { name: 'Send message' }).click()
     await expect(page.getByText('Routed answer.')).toBeVisible({ timeout: 10000 })
 
+    const answer = page.locator('[data-message-role="assistant"]').last()
+    const routeLine = answer.getByRole('button', { name: /^Inspect route/ })
+    await expect(routeLine).toContainText('Computer Science')
+    await expect(routeLine).toContainText('qwen/qwen3-32b')
+    await expect(answer.getByText('Response details')).toHaveCount(0)
+
     await expect(inspector).toContainText('Computer Science')
     await expect(inspector).toContainText('computer_science_route')
     await expect(inspector).toContainText('qwen/qwen3-32b')
     await expect(inspector).toContainText('computer science')
     await expect(inspector).toContainText('code_keywords')
     await expect(inspector).toContainText('confidence 0.86')
+    await expect(inspector).toContainText('Model selection · Confidence')
     await expect(inspector).toContainText('Input tokens')
     await expect(inspector).toContainText('412')
+    await expect(inspector.locator('[data-signal="domain:computer science"]')).toContainText('0.91')
+    await expect(inspector.locator('[data-signal="domain:law"]')).toHaveAttribute(
+      'data-matched',
+      'false',
+    )
+    await expect(inspector.locator('[data-candidate="qwen/qwen3-8b"]')).toContainText('0.64')
+    await expect(inspector).toContainText('PII guard')
+    await inspector.getByText('Response details', { exact: true }).click()
+    await expect(inspector.getByTitle('Routing Latency: 38 ms')).toBeVisible()
     await expect(inspector.getByRole('link', { name: 'Open in Requests' })).toHaveAttribute(
       'href',
       '/observe/requests/replay-123',
@@ -1894,11 +1929,7 @@ test.describe('Playground Chat Component', () => {
 
     await page.getByRole('button', { name: 'Close routing trace' }).click()
     await expect(page.getByTestId('playground-inspector')).toHaveCount(0)
-    await page
-      .locator('[data-message-role="assistant"]')
-      .last()
-      .getByRole('button', { name: 'Inspect route' })
-      .click()
+    await routeLine.click()
     await expect(page.getByTestId('playground-inspector')).toContainText('computer_science_route')
   })
 })

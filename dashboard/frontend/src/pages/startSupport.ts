@@ -5,10 +5,13 @@ import {
   listRoutingScopes,
   type RoutingScopedConfigLike,
 } from '../utils/routingScopes'
+import { getNormalizedModels } from './configPageModelNormalization'
+import { providerLogoKey } from './configPageModelPresentation'
+import type { ConfigData, NormalizedModel } from './configPageSupport'
 import { countModels } from './dashboardPageStats'
 import type { RouterConfig } from './dashboardPageTypes'
 import { getDecisionRuntimeSummary } from './dashboardRouterIntelligenceSupport'
-import { buildModelProviders, modelProviderId, type ConfigDocument } from './insightsConfigFacts'
+import { modelProviderId } from './insightsConfigFacts'
 import { timeAgo } from './insightsDisplayFormat'
 import type { InsightsUnavailableReason } from './insightsPageApi'
 
@@ -148,6 +151,23 @@ function decisionModels(decisions: unknown): string[] {
 }
 
 /**
+ * The logo a backend model shows: its card's publisher logo, else the
+ * organisation its id is published under, as in Qwen/Qwen3-8B, else the logo
+ * of the provider serving it, else vLLM's.
+ */
+export function backendModelLogo(name: string, model?: NormalizedModel): string {
+  const logo = model?.card_override?.presentation?.logo
+  if (logo?.startsWith('package:')) return logo.slice('package:'.length)
+  const vendor = modelProviderId(model?.provider_model_id, {}) ?? modelProviderId(name, {})
+  if (vendor) return vendor
+  const provider = model?.backend_refs
+    ?.find((ref) => ref.provider?.trim())
+    ?.provider?.trim()
+    .toLowerCase()
+  return provider ? providerLogoKey(provider) : 'vllm'
+}
+
+/**
  * The model names apps send, each with the recipe behind it: every chat
  * entrypoint (with the implicit `vllm-sr/auto` when no entrypoint serves the
  * default recipe) and then the System One entrypoints.
@@ -156,7 +176,13 @@ export function listPublicModels(config: RouterConfig | null): PublicModel[] {
   if (!config) return []
   const scoped = config as RouterConfig & RoutingScopedConfigLike
   const scopes = new Map(listRoutingScopes(scoped).map((scope) => [scope.id, scope]))
-  const providers = buildModelProviders(config as ConfigDocument)
+  const backends = new Map(
+    getNormalizedModels(config as unknown as ConfigData).map((model) => [model.name, model]),
+  )
+  const providerDefaults = (config.providers as { defaults?: { model?: unknown } } | undefined)
+    ?.defaults
+  const defaultModel =
+    typeof providerDefaults?.model === 'string' ? providerDefaults.model : undefined
   const authored = (Array.isArray(config.entrypoints) ? config.entrypoints : []) as EntrypointLike[]
   const defaults = new Set(
     authored
@@ -166,9 +192,10 @@ export function listPublicModels(config: RouterConfig | null): PublicModel[] {
   const systemOne = authored.filter((entry) => entry.api === 'systemone')
   const describe = (name: string, recipe: string, api: PublicModel['api']): PublicModel => {
     const scope = scopes.get(recipe)
-    const logos = decisionModels(scope?.routing.decisions)
-      .map((model) => modelProviderId(model, providers))
-      .filter((provider): provider is string => Boolean(provider))
+    const routed = decisionModels(scope?.routing.decisions)
+    const logos = (routed.length > 0 ? routed : defaultModel ? [defaultModel] : []).map((model) =>
+      backendModelLogo(model, backends.get(model)),
+    )
     return {
       name,
       recipe,

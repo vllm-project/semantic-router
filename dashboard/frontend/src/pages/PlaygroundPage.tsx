@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { PageContainer } from '../ui'
 import ChatComponent from '../components/ChatComponent'
 import { isPlaygroundInvocation } from '../types/playgroundInvocation'
-import { InsightsConfigProvider } from './insightsModelLabelSupport'
+import { InsightsDataProviders } from './insightsModelLabelSupport'
 
 const PlaygroundPage = () => {
   const location = useLocation()
@@ -25,14 +25,14 @@ const PlaygroundPage = () => {
 
   return (
     <PageContainer width="full">
-      <InsightsConfigProvider>
+      <InsightsDataProviders>
         <ChatComponent
           endpoint="/api/router/v1/chat/completions"
           feedbackInsightsBasePath="/observe/requests"
           invocation={invocation}
           onInvocationConsumed={handleInvocationConsumed}
         />
-      </InsightsConfigProvider>
+      </InsightsDataProviders>
     </PageContainer>
   )
 }

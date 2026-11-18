@@ -1,7 +1,15 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, Boxes, ListTree, PanelRightClose, Split, TriangleAlert } from 'lucide-react'
+import {
+  ArrowUpRight,
+  Boxes,
+  Check,
+  ListTree,
+  PanelRightClose,
+  Split,
+  TriangleAlert,
+} from 'lucide-react'
 
 import {
   Badge,
@@ -9,6 +17,7 @@ import {
   CopyButton,
   EmptyState,
   IconTile,
+  MiniBar,
   ProviderLogo,
   SectionLabel,
   Skeleton,
@@ -18,10 +27,15 @@ import {
   TabsTrigger,
   cn,
 } from '../ui'
+import { X_VSR_REPLAY_ID } from '../generated/vsrHeaders'
 import { signalTypeIcon } from '../pages/configPageSignalCatalog'
 import { modelProviderId, useInsightsConfig } from '../pages/insightsConfigFacts'
+import { modelLabel, useModelLabels } from '../pages/insightsModelLabelSupport'
+import { fetchInsightsRecord, insightsUnavailableReason } from '../pages/insightsPageApi'
+import type { InsightsRecord } from '../pages/insightsPageTypes'
 import type { Message } from './ChatComponentTypes'
 import { buildFeedbackInsightsHref } from './chatComponentSupport'
+import HeaderDisplay from './HeaderDisplay'
 import {
   readInspectedRoute,
   sortedHeaderEntries,
@@ -40,30 +54,239 @@ interface PlaygroundInspectorProps {
 }
 
 const EASE = [0.16, 1, 0.3, 1] as const
+// The Router writes the record as the answer ends, so a fresh one can lag a moment.
+const RECORD_RETRY_MS = [0, 1_500, 4_000]
+const records = new Map<string, InsightsRecord>()
 
-function ModelName({ name }: { name: string }) {
+/** The answer's Router Replay record, when the viewer may read it; null until then. */
+function useReplayRecord(replayId: string | undefined, enabled: boolean) {
+  const [record, setRecord] = useState<InsightsRecord | null>(
+    replayId ? (records.get(replayId) ?? null) : null,
+  )
+  useEffect(() => {
+    if (!replayId || !enabled) {
+      setRecord(null)
+      return undefined
+    }
+    const cached = records.get(replayId)
+    setRecord(cached ?? null)
+    if (cached) return undefined
+    let cancelled = false
+    let timer: number | undefined
+    const attempt = (index: number) => {
+      timer = window.setTimeout(() => {
+        fetchInsightsRecord(replayId)
+          .then((loaded) => {
+            records.set(replayId, loaded)
+            if (!cancelled) setRecord(loaded)
+          })
+          .catch((error: unknown) => {
+            const reason = insightsUnavailableReason(error)
+            const retry = reason !== 'forbidden' && reason !== 'router_unreachable'
+            if (!cancelled && retry && index + 1 < RECORD_RETRY_MS.length) attempt(index + 1)
+          })
+      }, RECORD_RETRY_MS[index])
+    }
+    attempt(0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [enabled, replayId])
+  return record
+}
+
+function ModelName({ name, className }: { name: string; className?: string }) {
   const { modelProviders } = useInsightsConfig()
+  const label = modelLabel(useModelLabels(), name)
   const provider = modelProviderId(name, modelProviders)
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <span className={cn('flex min-w-0 items-center gap-2', className)}>
       {provider ? (
         <ProviderLogo provider={provider} size={16} />
       ) : (
         <Boxes className="size-4 shrink-0 text-chart-6" />
       )}
-      <span className="truncate font-mono text-[12.5px] font-medium" title={name}>
-        {name}
-      </span>
+      {label === name ? (
+        <span className="truncate font-mono text-[12.5px] font-medium" title={name}>
+          {name}
+        </span>
+      ) : (
+        <span className="truncate text-xs font-medium" title={`Configured as ${name}`}>
+          {label}
+        </span>
+      )}
     </span>
+  )
+}
+
+function SignalsSection({ route }: { route: InspectedRoute }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionLabel>Signals</SectionLabel>
+      {route.signals.length ? (
+        route.signals.map((signal, index) => {
+          const Icon = signalTypeIcon(signal.type)
+          return (
+            <motion.div
+              key={signal.key}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.04 * index, duration: 0.24, ease: EASE }}
+              className={cn(
+                'flex flex-col gap-1.5 rounded-lg border px-2.5 py-2',
+                signal.matched
+                  ? 'border-chart-2/35 bg-chart-2/[0.07]'
+                  : 'border-border bg-surface opacity-70',
+              )}
+              data-signal={signal.key}
+              data-matched={signal.matched}
+            >
+              <span className="flex min-w-0 items-center gap-2 text-xs">
+                <Icon
+                  className={cn(
+                    'size-3.5 shrink-0',
+                    signal.matched ? 'text-chart-2' : 'text-subtle-foreground',
+                  )}
+                  aria-hidden
+                />
+                <span className="truncate font-mono" title={`${signal.typeLabel}: ${signal.name}`}>
+                  {signal.name}
+                </span>
+                <span className="shrink-0 text-[11px] text-subtle-foreground">
+                  {signal.typeLabel}
+                </span>
+                {signal.confidence !== undefined ? (
+                  <span className="ml-auto shrink-0 font-mono tabular text-muted-foreground">
+                    {signal.confidence.toFixed(2)}
+                  </span>
+                ) : null}
+              </span>
+              {signal.confidence !== undefined ? (
+                <MiniBar
+                  value={signal.confidence * 100}
+                  tone={signal.matched ? 'gold' : 'slate'}
+                  className="h-1"
+                />
+              ) : null}
+            </motion.div>
+          )
+        })
+      ) : (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          No matched signal was reported. The router lists them when it allows this dashboard its
+          debug trace.
+        </p>
+      )}
+    </section>
+  )
+}
+
+function DecisionSection({ route }: { route: InspectedRoute }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionLabel>Decision</SectionLabel>
+      {route.decision ? (
+        <div className="rounded-lg border border-chart-3/30 bg-chart-3/[0.06] p-3">
+          <div className="flex items-start gap-2.5">
+            <IconTile icon={Split} tone="violet" size="sm" />
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-[13px] font-semibold">{route.decision.label}</span>
+              <span className="truncate font-mono text-[11px] text-subtle-foreground">
+                {route.decision.id}
+              </span>
+            </div>
+          </div>
+          {route.runnerUp ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Beat <span className="font-mono text-foreground/85">{route.runnerUp}</span>
+            </p>
+          ) : null}
+          {route.recipe || route.confidence ? (
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {route.recipe ? (
+                <Badge tone="outline" size="sm">
+                  recipe {route.recipe}
+                </Badge>
+              ) : null}
+              {route.confidence ? (
+                <Badge tone="outline" size="sm" className="tabular">
+                  confidence {route.confidence}
+                </Badge>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-[13px] text-muted-foreground">The router reported no decision.</p>
+      )}
+    </section>
+  )
+}
+
+function ModelSection({ route }: { route: InspectedRoute }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionLabel>
+        {route.algorithm ? `Model selection · ${route.algorithm}` : 'Model selection'}
+      </SectionLabel>
+      {route.candidates.length ? (
+        route.candidates.map((candidate) => (
+          <div
+            key={candidate.model}
+            className={cn(
+              'flex items-center gap-2.5 rounded-lg border px-2.5 py-2',
+              candidate.chosen
+                ? 'border-primary/40 bg-primary-soft/60'
+                : 'border-border bg-surface',
+            )}
+            data-candidate={candidate.model}
+          >
+            <ModelName name={candidate.model} className="flex-1" />
+            {candidate.score !== undefined ? (
+              <span className="font-mono text-xs tabular text-muted-foreground">
+                {candidate.score.toFixed(2)}
+              </span>
+            ) : null}
+            {candidate.chosen ? (
+              <Check
+                className="size-3.5 shrink-0 text-primary"
+                strokeWidth={2.6}
+                aria-label="Chosen"
+              />
+            ) : null}
+          </div>
+        ))
+      ) : route.model ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary-soft/50 px-3 py-2.5">
+          <ModelName name={route.model} />
+          {route.looper ? (
+            <div className="flex flex-col gap-1 border-t border-border pt-2">
+              <span className="text-[11px] text-subtle-foreground">
+                Looper
+                {route.looper.iterations ? ` · ${route.looper.iterations} iterations` : ''}
+              </span>
+              {route.looper.models.map((model) => (
+                <ModelName key={model} name={model} />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="text-[13px] text-muted-foreground">The router reported no model.</p>
+      )}
+    </section>
   )
 }
 
 function RouteView({
   route,
+  headers,
   prompt,
   recordHref,
 }: {
   route: InspectedRoute
+  headers: Record<string, string>
   prompt?: string
   recordHref?: string
 }) {
@@ -75,103 +298,23 @@ function RouteView({
         </p>
       ) : null}
 
-      <section className="flex flex-col gap-2">
-        <SectionLabel>Decision</SectionLabel>
-        {route.decision ? (
-          <div className="rounded-lg border border-chart-3/30 bg-chart-3/[0.06] p-3">
-            <div className="flex items-start gap-2.5">
-              <IconTile icon={Split} tone="violet" size="sm" />
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-[13px] font-semibold">{route.decision.label}</span>
-                <span className="truncate font-mono text-[11px] text-subtle-foreground">
-                  {route.decision.id}
-                </span>
-              </div>
-            </div>
-            {route.recipe || route.algorithm || route.confidence ? (
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {route.recipe ? (
-                  <Badge tone="outline" size="sm">
-                    recipe {route.recipe}
-                  </Badge>
-                ) : null}
-                {route.algorithm ? (
-                  <Badge tone="violet" size="sm">
-                    {route.algorithm}
-                  </Badge>
-                ) : null}
-                {route.confidence ? (
-                  <Badge tone="outline" size="sm" className="tabular">
-                    confidence {route.confidence}
-                  </Badge>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-[13px] text-muted-foreground">The router reported no decision.</p>
-        )}
-      </section>
+      <SignalsSection route={route} />
+      <DecisionSection route={route} />
+      <ModelSection route={route} />
 
-      <section className="flex flex-col gap-2">
-        <SectionLabel>Model</SectionLabel>
-        {route.model ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary-soft/50 px-3 py-2.5">
-            <ModelName name={route.model} />
-            {route.looper ? (
-              <div className="flex flex-col gap-1 border-t border-border pt-2">
-                <span className="text-[11px] text-subtle-foreground">
-                  Looper
-                  {route.looper.iterations ? ` · ${route.looper.iterations} iterations` : ''}
-                </span>
-                {route.looper.models.map((model) => (
-                  <ModelName key={model} name={model} />
-                ))}
-              </div>
-            ) : null}
+      {route.plugins.length ? (
+        <section className="flex flex-col gap-2">
+          <SectionLabel>Plugins</SectionLabel>
+          <div className="flex flex-wrap gap-1.5">
+            {route.plugins.map((plugin) => (
+              <Badge key={plugin.id} tone={plugin.tone}>
+                {plugin.label}
+                {plugin.detail ? <span className="opacity-75">· {plugin.detail}</span> : null}
+              </Badge>
+            ))}
           </div>
-        ) : (
-          <p className="text-[13px] text-muted-foreground">The router reported no model.</p>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <SectionLabel>Signals</SectionLabel>
-        {route.signals.length ? (
-          route.signals.map((signal, index) => {
-            const Icon = signalTypeIcon(signal.type)
-            return (
-              <motion.div
-                key={signal.type}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.04 * index, duration: 0.24, ease: EASE }}
-                className="flex flex-col gap-1.5 rounded-lg border border-chart-2/35 bg-chart-2/[0.07] px-2.5 py-2"
-              >
-                <span className="flex items-center gap-2 text-xs font-medium">
-                  <Icon className="size-3.5 text-chart-2" />
-                  {signal.label}
-                </span>
-                <span className="flex flex-wrap gap-1">
-                  {signal.names.map((name) => (
-                    <span
-                      key={name}
-                      className="rounded-[5px] border border-border bg-surface px-1.5 py-0.5 font-mono text-[11px] text-foreground/85"
-                    >
-                      {name}
-                    </span>
-                  ))}
-                </span>
-              </motion.div>
-            )
-          })
-        ) : (
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            No matched signal was reported. The router lists them when it allows this dashboard its
-            debug trace.
-          </p>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       {route.metrics.length ? (
         <section className="grid grid-cols-2 gap-2">
@@ -189,40 +332,23 @@ function RouteView({
         </section>
       ) : null}
 
-      {route.details.length || route.warnings.length || route.truncated || route.responsePath ? (
-        <section className="flex flex-col gap-2">
-          <SectionLabel>Details</SectionLabel>
-          <dl className="flex flex-col gap-1.5 text-xs">
-            {route.responsePath ? (
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-subtle-foreground">Response path</dt>
-                <dd className="font-mono">{route.responsePath}</dd>
-              </div>
-            ) : null}
-            {route.details.map((detail) => (
-              <div key={detail.id} className="flex items-center justify-between gap-3">
-                <dt className="text-subtle-foreground">{detail.label}</dt>
-                <dd className="truncate font-mono">{detail.value}</dd>
-              </div>
-            ))}
-          </dl>
-          {route.warnings.length || route.truncated ? (
-            <div className="flex flex-wrap gap-1.5">
-              {route.warnings.map((warning) => (
-                <Badge key={warning} tone="warning" size="sm">
-                  <TriangleAlert />
-                  {warning}
-                </Badge>
-              ))}
-              {route.truncated ? (
-                <Badge tone="warning" size="sm">
-                  Trace truncated
-                </Badge>
-              ) : null}
-            </div>
+      {route.warnings.length || route.truncated ? (
+        <div className="flex flex-wrap gap-1.5">
+          {route.warnings.map((warning) => (
+            <Badge key={warning} tone="warning" size="sm">
+              <TriangleAlert />
+              {warning}
+            </Badge>
+          ))}
+          {route.truncated ? (
+            <Badge tone="warning" size="sm">
+              Trace truncated
+            </Badge>
           ) : null}
-        </section>
+        </div>
       ) : null}
+
+      <HeaderDisplay headers={headers} />
 
       {recordHref ? (
         <Button variant="outline" size="sm" asChild>
@@ -276,7 +402,9 @@ export default function PlaygroundInspector({
   }, [onClose, open, overlay])
 
   const headers = message?.headers
-  const route = headers ? readInspectedRoute(headers) : null
+  const replayId = headers?.[X_VSR_REPLAY_ID]?.trim() || undefined
+  const record = useReplayRecord(replayId, open && Boolean(message) && !message?.isStreaming)
+  const route = headers ? readInspectedRoute(headers, record) : null
   const recordHref = route?.replayId
     ? buildFeedbackInsightsHref(insightsBasePath, route.replayId)
     : undefined
@@ -365,7 +493,12 @@ export default function PlaygroundInspector({
               </TabsList>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <TabsContent value="route" className="p-4">
-                  <RouteView route={route} prompt={prompt} recordHref={recordHref} />
+                  <RouteView
+                    route={route}
+                    headers={headers}
+                    prompt={prompt}
+                    recordHref={recordHref}
+                  />
                 </TabsContent>
                 <TabsContent value="headers" className="p-4">
                   <HeadersView headers={headers} />

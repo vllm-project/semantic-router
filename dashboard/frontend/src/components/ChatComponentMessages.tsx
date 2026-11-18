@@ -1,9 +1,9 @@
 import { memo, useId, useState } from 'react'
 import { ThinkingOrb } from 'thinking-orbs'
-import { Bot, Code2, ListTree, Plane, Scale, Sparkles, TriangleAlert } from 'lucide-react'
+import { Bot, Code2, Plane, Scale, Sparkles, TriangleAlert } from 'lucide-react'
 
 import { IconTile, LogoMark, ProviderLogo, cn } from '../ui'
-import HeaderDisplay from './HeaderDisplay'
+import PlaygroundRouteLine from './PlaygroundRouteLine'
 import ThinkingAnimation from './ThinkingAnimation'
 import ThinkingBlock from './ThinkingBlock'
 import ErrorBoundary from './ErrorBoundary'
@@ -357,7 +357,7 @@ const MessageCard = memo(
         (message.attachments?.length ?? 0) > 0 ||
         (message.images?.length ?? 0) > 0) &&
       !message.isStreaming
-    const canInspect = isAssistant && Boolean(message.headers) && Boolean(onInspectMessage)
+    const hasRoute = isAssistant && Boolean(message.headers)
 
     return (
       <div
@@ -404,60 +404,43 @@ const MessageCard = memo(
               </span>
             </div>
           ) : null}
-          {isAssistant && message.headers ? (
-            <div
-              className={cn(
-                '-mx-2.5 w-[calc(100%+1.25rem)] rounded-lg border border-transparent px-2.5 py-2 transition-[border-color,background-color] duration-200',
-                inspected && 'border-chart-3/25 bg-chart-3/[0.04]',
-              )}
-            >
-              <HeaderDisplay headers={message.headers} />
-            </div>
-          ) : null}
           {isAssistant && message.reasoning_mom_responses ? (
             <ReMoMResponsesDisplay rounds={message.reasoning_mom_responses} />
           ) : null}
-          {showCopyAction || canInspect ? (
+          {showCopyAction || hasRoute ? (
             <div
               className={cn(
-                'flex items-center gap-1',
-                isAssistant
-                  ? '-mt-1'
-                  : 'opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100',
+                'flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1.5',
+                !isAssistant &&
+                  'opacity-0 transition-opacity focus-within:opacity-100 group-hover/message:opacity-100',
               )}
             >
-              {showCopyAction ? <MessageActionBar content={message.content} /> : null}
-              {canInspect ? (
-                <button
-                  type="button"
-                  aria-label="Inspect route"
-                  title="Show this answer in the routing trace"
-                  aria-pressed={inspected}
-                  onClick={() => onInspectMessage?.(message.id)}
-                  className={cn(
-                    'grid size-7 place-items-center rounded-md text-subtle-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40',
-                    inspected && 'bg-accent text-foreground',
-                  )}
-                >
-                  <ListTree className="size-4" />
-                </button>
-              ) : null}
-              {canSubmitFeedback &&
-              isAssistant &&
-              !message.incomplete &&
-              message.headers?.[X_VSR_SELECTED_MODEL] &&
-              message.headers?.[X_VSR_REPLAY_ID] ? (
-                <FeedbackButtons
-                  modelId={message.headers[X_VSR_SELECTED_MODEL]}
-                  replayId={message.headers[X_VSR_REPLAY_ID]}
-                  insightsHref={buildFeedbackInsightsHref(
-                    feedbackInsightsBasePath,
-                    message.headers[X_VSR_REPLAY_ID],
-                  )}
-                  category={message.headers[X_VSR_SELECTED_DECISION]}
-                  query={prevUserQuery}
+              {hasRoute && message.headers ? (
+                <PlaygroundRouteLine
+                  headers={message.headers}
+                  inspected={inspected}
+                  onInspect={onInspectMessage ? () => onInspectMessage(message.id) : undefined}
                 />
               ) : null}
+              <div className="flex items-center gap-0.5">
+                {showCopyAction ? <MessageActionBar content={message.content} /> : null}
+                {canSubmitFeedback &&
+                isAssistant &&
+                !message.incomplete &&
+                message.headers?.[X_VSR_SELECTED_MODEL] &&
+                message.headers?.[X_VSR_REPLAY_ID] ? (
+                  <FeedbackButtons
+                    modelId={message.headers[X_VSR_SELECTED_MODEL]}
+                    replayId={message.headers[X_VSR_REPLAY_ID]}
+                    insightsHref={buildFeedbackInsightsHref(
+                      feedbackInsightsBasePath,
+                      message.headers[X_VSR_REPLAY_ID],
+                    )}
+                    category={message.headers[X_VSR_SELECTED_DECISION]}
+                    query={prevUserQuery}
+                  />
+                ) : null}
+              </div>
             </div>
           ) : null}
         </div>

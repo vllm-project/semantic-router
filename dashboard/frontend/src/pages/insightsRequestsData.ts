@@ -169,6 +169,13 @@ function rangeSince(range: RequestRange, minute: number): string | undefined {
   return range === 'all' ? undefined : new Date(minute * MINUTE - RANGE_MS[range]).toISOString()
 }
 
+function withInterval(query: string, interval: string | undefined): string {
+  if (!interval) return query
+  const params = new URLSearchParams(query)
+  params.set('interval', interval)
+  return `?${params.toString()}`
+}
+
 function withPage(query: string, limit: number, offset: number): string {
   const params = new URLSearchParams(query)
   params.set('limit', String(limit))
@@ -225,17 +232,21 @@ export function useRequestsData({
   live,
   held,
   rules,
+  interval,
 }: {
   filters: RequestFilters
   page: number
   live: boolean
   held: boolean
   rules?: AgentRuleIndex
+  /** With a range, asks the aggregate for its traffic in intervals of this length, such as 1h. */
+  interval?: string
 }): RequestsData {
   const [minute, setMinute] = useState(() => Math.floor(Date.now() / MINUTE))
   const baseQuery = serverQuery(filters, rangeSince(filters.range, minute))
   const clientMode = hasClientFilters(filters)
   const pageQuery = withPage(baseQuery, REQUESTS_PAGE_SIZE, (page - 1) * REQUESTS_PAGE_SIZE)
+  const aggregateQuery = withInterval(baseQuery, filters.range === 'all' ? undefined : interval)
 
   const [state, setState] = useState<PageState>({
     rows: [],
@@ -268,7 +279,7 @@ export function useRequestsData({
               abort.signal,
             ),
         fetchAbortableInsightsJSON<InsightsAggregateResponse>(
-          `${REPLAYS}/aggregate${baseQuery}`,
+          `${REPLAYS}/aggregate${aggregateQuery}`,
           'insight aggregates',
           abort.signal,
         ),
@@ -297,7 +308,7 @@ export function useRequestsData({
         unavailable,
       })
     }
-  }, [baseQuery, clientMode, pageQuery])
+  }, [aggregateQuery, clientMode, pageQuery])
 
   const loadWindow = useCallback(async () => {
     windowAbort.current?.abort()

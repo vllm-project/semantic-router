@@ -4,13 +4,9 @@ import {
   ArrowRight,
   Boxes,
   ChevronRight,
-  FileCode2,
-  FlaskConical,
   Layers,
-  MessagesSquare,
   Radar,
   RefreshCw,
-  Rocket,
   ServerOff,
   Split,
   Waypoints,
@@ -70,9 +66,11 @@ interface CountTile {
 export function HomeConfigTiles({
   config,
   loading,
+  className,
 }: {
   config: RouterConfig | null
   loading: boolean
+  className?: string
 }) {
   const scoped = config as (RouterConfig & RoutingScopedConfigLike) | null
   const recipes = config ? listRoutingScopes(scoped).length : undefined
@@ -125,7 +123,10 @@ export function HomeConfigTiles({
     },
   ]
   return (
-    <nav aria-label="Routing configuration" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <nav
+      aria-label="Routing configuration"
+      className={cn('grid grid-cols-2 content-start gap-3', className)}
+    >
       {tiles.map((tile) => (
         <Link
           key={tile.id}
@@ -505,84 +506,6 @@ export function HomePublicModels({ config }: { config: RouterConfig | null }) {
             +{rows.length - shown.length} more recipes
           </Link>
         ) : null}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ---------------------------------------------------------------- shortcuts
-
-const SHORTCUTS: Array<{
-  to: string
-  label: string
-  description: string
-  icon: LucideIcon
-  tone: Tone
-}> = [
-  {
-    to: '/get-started',
-    label: 'Connect an app or agent',
-    description: 'The endpoint, client snippets and agent setup',
-    icon: Rocket,
-    tone: 'blue',
-  },
-  {
-    to: '/playground',
-    label: 'Try a prompt',
-    description: 'See which decision and model answer it',
-    icon: MessagesSquare,
-    tone: 'blue',
-  },
-  {
-    to: '/routing/editor',
-    label: 'Edit routing as code',
-    description: 'Signals, decisions and plugins in one document',
-    icon: FileCode2,
-    tone: 'violet',
-  },
-  {
-    to: '/routing/topology',
-    label: 'Explore the topology',
-    description: 'How signals lead to decisions and models',
-    icon: Waypoints,
-    tone: 'teal',
-  },
-  {
-    to: '/observe/evaluations',
-    label: 'Run an evaluation',
-    description: 'Score recipes against a benchmark',
-    icon: FlaskConical,
-    tone: 'orange',
-  },
-]
-
-/** The main tasks, as links the viewer's role can open. */
-export function HomeShortcuts({ canOpen }: { canOpen: (path: string) => boolean }) {
-  const shortcuts = SHORTCUTS.filter((shortcut) => canOpen(shortcut.to))
-  if (shortcuts.length === 0) return null
-  return (
-    <Card data-testid="home-shortcuts">
-      <CardHeader>
-        <CardTitle>Jump to</CardTitle>
-        <CardDescription>The main tasks</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-0.5 pt-2">
-        {shortcuts.map((shortcut) => (
-          <Link
-            key={shortcut.to}
-            to={shortcut.to}
-            className="group -mx-2 flex items-center gap-3 rounded-lg px-2 py-2 outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/40"
-          >
-            <IconTile icon={shortcut.icon} tone={shortcut.tone} size="sm" />
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[13px] font-medium">{shortcut.label}</span>
-              <span className="truncate text-xs text-subtle-foreground">
-                {shortcut.description}
-              </span>
-            </span>
-            <ArrowRight className="size-3.5 shrink-0 text-subtle-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
-          </Link>
-        ))}
       </CardContent>
     </Card>
   )

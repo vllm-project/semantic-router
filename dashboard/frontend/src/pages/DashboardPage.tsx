@@ -1,25 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { MessagesSquare, RefreshCw, Rocket } from 'lucide-react'
+import { MessagesSquare, Rocket } from 'lucide-react'
 
-import {
-  Alert,
-  Badge,
-  Button,
-  MetaItem,
-  PageContainer,
-  PageHeader,
-  Segmented,
-  StatusLabel,
-  Tooltip,
-  cn,
-  type StatusTone,
-} from '../ui'
+import { Alert, Badge, Button, PageContainer, PageHeader, Segmented, Tooltip } from '../ui'
 import RouterModelInventory from '../components/RouterModelInventory'
 import ViewModal from '../components/ViewModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessDashboardPath } from '../utils/accessControl'
 import {
   getRouterModelConsumers,
   type RouterModelInfo,
@@ -36,10 +23,18 @@ import {
   HomePublicModels,
   HomeRoutingMix,
   HomeServices,
-  HomeShortcuts,
 } from './HomeCards'
 import { HomeKpis, HomeRecentRequests } from './HomeTraffic'
-import { greeting, HOME_RANGES, readHomeRange, type HomeRange } from './homeSupport'
+import { HomeTrafficChart } from './HomeTrafficChart'
+import {
+  formatUpdatedAgo,
+  greeting,
+  HOME_RANGES,
+  readHomeRange,
+  readTraffic,
+  TRAFFIC_INTERVAL,
+  type HomeRange,
+} from './homeSupport'
 import {
   buildAgentRuleIndex,
   buildModelProviders,
@@ -59,28 +54,6 @@ import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 
 const STATUS_POLL_MS = 10_000
 const REFRESH_MS = 30_000
-
-function routerState(
-  status: SystemStatus | null,
-  failed: boolean,
-): { tone: StatusTone; label: string } {
-  if (!status)
-    return failed
-      ? { tone: 'danger', label: 'Status unavailable' }
-      : { tone: 'neutral', label: 'Checking…' }
-  switch (status.overall?.toLowerCase()) {
-    case 'healthy':
-      return { tone: 'success', label: 'Router healthy' }
-    case 'degraded':
-      return { tone: 'warning', label: 'Degraded' }
-    case 'starting':
-      return { tone: 'info', label: 'Starting' }
-    case 'standby':
-      return { tone: 'neutral', label: 'Standby' }
-    default:
-      return { tone: 'danger', label: 'Router not running' }
-  }
-}
 
 /** Whether any request was ever recorded, for the checklist; independent of the range. */
 function useLatestReplay(refreshKey: number): ReplayFacts {
@@ -110,6 +83,17 @@ function useLatestReplay(refreshKey: number): ReplayFacts {
   return facts
 }
 
+/** The range control's tooltip, ticking only while it is open. */
+function RefreshNote({ updatedAt }: { updatedAt: number | null }) {
+  const now = useNow(1_000)
+  return (
+    <span className="flex flex-col">
+      {updatedAt ? <span>{formatUpdatedAgo(updatedAt, now)}</span> : null}
+      <span className="font-normal opacity-70">Refreshes every 30 seconds</span>
+    </span>
+  )
+}
+
 const DashboardPage = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -123,11 +107,9 @@ const DashboardPage = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [statusFailed, setStatusFailed] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null)
   const [selectedRuntimeModel, setSelectedRuntimeModel] = useState<RouterModelInfo | null>(null)
-  const runtimeReturnFocus = useRef<HTMLElement | null>(null)
   const [replayKey, setReplayKey] = useState(0)
 
   const fetchStatus = useCallback(async () => {
@@ -152,24 +134,19 @@ const DashboardPage = () => {
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
   const configRequest = useMemo(() => createVisibilityAwareRequest(fetchConfig), [fetchConfig])
 
-  const fetchAll = useCallback(
-    async (manual = false) => {
-      if (manual) setRefreshing(true)
-      const failure = await settleDashboardRequests([
-        configRequest.run({ allowHidden: true }),
-        statusRequest.run({ allowHidden: true }),
-      ])
-      if (failure) {
-        setError(failure)
-      } else {
-        setLastUpdated(new Date())
-        setError(null)
-      }
-      setLoading(false)
-      setRefreshing(false)
-    },
-    [configRequest, statusRequest],
-  )
+  const fetchAll = useCallback(async () => {
+    const failure = await settleDashboardRequests([
+      configRequest.run({ allowHidden: true }),
+      statusRequest.run({ allowHidden: true }),
+    ])
+    if (failure) {
+      setError(failure)
+    } else {
+      setUpdatedAt(Date.now())
+      setError(null)
+    }
+    setLoading(false)
+  }, [configRequest, statusRequest])
 
   const facts = useMemo(
     () =>
@@ -188,6 +165,7 @@ const DashboardPage = () => {
     live: false,
     held: false,
     rules: facts.agentRules,
+    interval: TRAFFIC_INTERVAL[range],
   })
   const runs = useRecentRuns(
     requests.rows.some((record) => record.session_id),
@@ -195,6 +173,10 @@ const DashboardPage = () => {
   )
   const latestReplay = useLatestReplay(replayKey)
   const now = useNow(REFRESH_MS)
+  const traffic = useMemo(
+    () => readTraffic(requests.aggregate, requests.window, requests.windowTotal, range, now),
+    [now, range, requests.aggregate, requests.window, requests.windowTotal],
+  )
 
   const refreshTraffic = useRef(requests.refresh)
   refreshTraffic.current = requests.refresh
@@ -205,7 +187,7 @@ const DashboardPage = () => {
         // Ignore transient status polling errors.
       })
     }
-    // Full refreshes settle config and status together before touching "Updated".
+    // Full refreshes settle config and status together before touching the update time.
     const refreshWhenVisible = () => {
       if (document.hidden) return
       void fetchAll()
@@ -229,25 +211,6 @@ const DashboardPage = () => {
     }
   }, [fetchAll, statusRequest])
 
-  const openRuntimeModel = (model: RouterModelInfo) => {
-    runtimeReturnFocus.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null
-    setSelectedRuntimeModel(model)
-  }
-
-  // The sheet opens without a dialog trigger, so closing it returns focus to nothing.
-  const closeRuntimeModel = () => {
-    setSelectedRuntimeModel(null)
-    const target = runtimeReturnFocus.current
-    window.requestAnimationFrame(() => target?.focus())
-  }
-
-  const refreshAll = () => {
-    void fetchAll(true)
-    requests.refresh()
-    setReplayKey((key) => key + 1)
-  }
-
   const setRange = (next: HomeRange) =>
     setParams(
       (current) => {
@@ -264,7 +227,7 @@ const DashboardPage = () => {
       ? status?.serving_mode
       : (instance.status?.observed_mode ?? status?.serving_mode),
   )
-  const router = routerState(status, statusFailed)
+  const modeKnown = Boolean(status || statusFailed || instance.status)
   const publicModels = useMemo(
     () => listPublicModels(config).filter((model) => model.api === 'chat'),
     [config],
@@ -275,67 +238,62 @@ const DashboardPage = () => {
   const overall = status?.overall?.toLowerCase()
   const firstName = user?.name?.trim().split(/\s+/)[0]
   const title = `${greeting(new Date(now).getHours())}${firstName ? `, ${firstName}` : ''}`
-  const description = config
-    ? `vLLM Semantic Router routes ${publicModels.length} public model${publicModels.length === 1 ? '' : 's'} across ${backendCount} backend model${backendCount === 1 ? '' : 's'}.`
-    : 'Your router’s traffic, routing and health at a glance.'
+  const instanceName =
+    status?.deployment_type && status.deployment_type !== 'none'
+      ? `vllm-sr · ${status.deployment_type}`
+      : 'vLLM Semantic Router'
+  // The mode and access qualify the instance, so they sit beside its name.
+  const chips = (
+    <>
+      {modeKnown ? (
+        <Tooltip content={servingMode.description}>
+          <span className="mx-1.5 inline-flex align-[1px]" data-testid="dashboard-serving-mode">
+            <Badge tone="outline" size="sm">
+              {servingMode.label}
+            </Badge>
+            <span className="sr-only">: {servingMode.description}</span>
+          </span>
+        </Tooltip>
+      ) : null}
+      {isReadonly ? (
+        <Badge tone="neutral" size="sm" className="mr-1.5 align-[1px]">
+          Read-only
+        </Badge>
+      ) : null}
+    </>
+  )
+  const summary = config ? (
+    <>
+      <span className="font-medium text-foreground">{instanceName}</span>
+      {modeKnown || isReadonly ? chips : ' '}
+      is routing {publicModels.length} public model{publicModels.length === 1 ? '' : 's'} across{' '}
+      {backendCount} backend model{backendCount === 1 ? '' : 's'}.
+    </>
+  ) : (
+    <>
+      Your router’s traffic, routing and health at a glance.
+      {chips}
+    </>
+  )
 
   return (
     <PageContainer>
       <PageHeader
         title={title}
-        description={description}
-        meta={
-          <>
-            <StatusLabel tone={router.tone} pulse={router.tone === 'success'}>
-              {router.label}
-            </StatusLabel>
-            {status?.version ? <MetaItem label="Version">{status.version}</MetaItem> : null}
-            <span
-              className="inline-flex items-center gap-1.5"
-              data-testid="dashboard-serving-mode"
-              title={servingMode.description}
-            >
-              <Badge tone="outline" size="sm">
-                {servingMode.label}
-              </Badge>
-              <span className="max-xl:hidden">{servingMode.description}</span>
-            </span>
-            {isReadonly ? (
-              <Badge tone="neutral" size="sm">
-                Read-only
-              </Badge>
-            ) : null}
-            {lastUpdated ? (
-              <span className="tabular text-subtle-foreground">
-                Updated {lastUpdated.toLocaleTimeString()}
-              </span>
-            ) : null}
-          </>
-        }
+        description={summary}
         actions={
           <>
-            <Segmented
-              aria-label="Time range"
-              value={range}
-              onValueChange={setRange}
-              options={HOME_RANGES}
-            />
-            <Tooltip content="Refresh">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Refresh"
-                onClick={refreshAll}
-                disabled={refreshing}
-              >
-                <RefreshCw className={cn(refreshing && 'animate-spin')} />
-              </Button>
+            <Tooltip content={<RefreshNote updatedAt={updatedAt} />} side="bottom">
+              <span className="inline-flex" data-testid="home-range">
+                <Segmented
+                  aria-label="Time range"
+                  value={range}
+                  onValueChange={setRange}
+                  options={HOME_RANGES}
+                />
+              </span>
             </Tooltip>
-            <Button
-              variant="outline"
-              className="max-xl:hidden"
-              onClick={() => navigate('/playground')}
-            >
+            <Button variant="outline" onClick={() => navigate('/playground')}>
               <MessagesSquare />
               Open playground
             </Button>
@@ -353,7 +311,7 @@ const DashboardPage = () => {
             tone="danger"
             title="Some dashboard data could not load"
             actions={
-              <Button size="sm" variant="outline" onClick={() => void fetchAll(true)}>
+              <Button size="sm" variant="outline" onClick={() => void fetchAll()}>
                 Retry
               </Button>
             }
@@ -391,17 +349,10 @@ const DashboardPage = () => {
       <InsightsConfigContext.Provider value={facts}>
         <ModelLabelsProvider>
           <div className="flex flex-col gap-4">
-            <HomeKpis data={requests} range={range} now={now} />
-            <HomeConfigTiles config={config} loading={loading} />
+            <HomeKpis data={requests} view={traffic} range={range} />
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-              <HomeRecentRequests
-                data={requests}
-                runs={runs}
-                rules={facts.agentRules}
-                range={range}
-                now={now}
-              />
+              <HomeTrafficChart data={requests} view={traffic} range={range} />
               <StartChecklistCard steps={steps} />
             </div>
 
@@ -417,23 +368,33 @@ const DashboardPage = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <HomeRecentRequests
+                data={requests}
+                runs={runs}
+                rules={facts.agentRules}
+                range={range}
+                now={now}
+              />
+              <HomeServices
+                status={status}
+                failed={statusFailed}
+                onRetry={() => void statusRequest.run({ allowHidden: true }).catch(() => undefined)}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
               <DashboardRouterIntelligence
                 config={config}
                 modelsInfo={status?.models}
                 onConfigure={() => navigate('/models/decision')}
                 onOpenStatus={() => navigate('/observe/status')}
-                onSelectModel={openRuntimeModel}
+                onSelectModel={setSelectedRuntimeModel}
               />
-              <div className="flex flex-col gap-4">
-                <HomeServices
-                  status={status}
-                  failed={statusFailed}
-                  onRetry={() =>
-                    void statusRequest.run({ allowHidden: true }).catch(() => undefined)
-                  }
-                />
-                <HomeShortcuts canOpen={(path) => canAccessDashboardPath(user, path)} />
-              </div>
+              <HomeConfigTiles
+                config={config}
+                loading={loading}
+                className="sm:grid-cols-4 xl:grid-cols-1"
+              />
             </div>
           </div>
         </ModelLabelsProvider>
@@ -443,7 +404,7 @@ const DashboardPage = () => {
         <ViewModal
           isOpen
           title="Runtime model details"
-          onClose={closeRuntimeModel}
+          onClose={() => setSelectedRuntimeModel(null)}
           sections={[
             {
               fields: [

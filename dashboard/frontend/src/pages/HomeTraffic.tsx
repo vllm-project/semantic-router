@@ -5,11 +5,8 @@ import {
   CircleDollarSign,
   Gauge,
   GitBranch,
-  ListTree,
-  Lock,
   MessagesSquare,
   PiggyBank,
-  RefreshCw,
   Rocket,
   ServerOff,
   Zap,
@@ -24,7 +21,6 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
-  IconTile,
   Progress,
   Skeleton,
   StatCard,
@@ -38,7 +34,6 @@ import {
   TableSkeleton,
   Tooltip,
   cn,
-  type Tone,
 } from '../ui'
 import {
   formatInsightsCompactCount,
@@ -58,7 +53,6 @@ import { RelativeTime } from './InsightsDisplay'
 import { HarnessLogo, RequestClassBadge } from './InsightsHarness'
 import { API_CLIENT_LABEL, harnessInfo } from './insightsHarness'
 import { ModelChip } from './insightsModelLabelSupport'
-import type { InsightsUnavailableReason } from './insightsPageApi'
 import {
   formatInsightsDecisionName,
   getInsightsLifecyclePresentation,
@@ -68,37 +62,13 @@ import type { InsightsRecord } from './insightsPageTypes'
 import type { RequestsData } from './insightsRequestsData'
 import type { RunSummary } from './insightsRunTypes'
 import {
-  bucketTraffic,
+  carriedP95,
   HOME_RANGE_LABEL,
-  latencyStats,
   spendSummary,
+  TRAFFIC_UNAVAILABLE,
   type HomeRange,
+  type TrafficView,
 } from './homeSupport'
-
-const UNAVAILABLE: Record<
-  InsightsUnavailableReason,
-  { title: string; description: string; tone: Tone; icon: typeof ListTree }
-> = {
-  replay_off: {
-    title: 'Traffic metrics need Router Replay',
-    description:
-      'Turn on the router_replay plugin for a recipe, then send a request through the gateway.',
-    tone: 'blue',
-    icon: ListTree,
-  },
-  router_unreachable: {
-    title: 'Traffic is unavailable while the router is unreachable',
-    description: 'Requests, latency and spend appear here once the router API answers again.',
-    tone: 'slate',
-    icon: ServerOff,
-  },
-  forbidden: {
-    title: 'Your role cannot read Router Replay',
-    description: 'Traffic metrics need the replay.read permission. Ask an admin for access.',
-    tone: 'slate',
-    icon: Lock,
-  },
-}
 
 function KpiLink({ to, label, children }: { to: string; label: string; children: ReactNode }) {
   return (
@@ -112,71 +82,25 @@ function KpiLink({ to, label, children }: { to: string; label: string; children:
   )
 }
 
-function TrafficNotice({
-  reason,
-  error,
-  onRetry,
-}: {
-  reason?: InsightsUnavailableReason
-  error?: string | null
-  onRetry: () => void
-}) {
-  const navigate = useNavigate()
-  const copy = reason
-    ? UNAVAILABLE[reason]
-    : {
-        title: 'Traffic could not load',
-        description: error ?? 'The replay API did not answer.',
-        tone: 'slate' as Tone,
-        icon: ServerOff,
-      }
-  return (
-    <Card className="flex flex-col gap-4 px-5 py-5 sm:col-span-2 sm:flex-row sm:items-center xl:col-span-4">
-      <IconTile icon={copy.icon} tone={copy.tone} size="lg" />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-[15px] font-semibold tracking-[-0.01em]">{copy.title}</span>
-        <span className="text-[13px] text-muted-foreground">{copy.description}</span>
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {reason === 'replay_off' ? (
-          <Button size="sm" onClick={() => navigate('/routing/recipes')}>
-            Open recipes
-          </Button>
-        ) : null}
-        <Button size="sm" variant="outline" onClick={onRetry}>
-          <RefreshCw />
-          Try again
-        </Button>
-      </div>
-    </Card>
-  )
-}
-
-/** Requests, latency, spend and savings over the range, from Router Replay. */
+/**
+ * Requests, latency, spend and savings over the range, from Router Replay.
+ * Without replay data the traffic chart explains why, so the row stays out.
+ */
 export function HomeKpis({
   data,
+  view,
   range,
-  now,
 }: {
   data: RequestsData
+  view: TrafficView | null
   range: HomeRange
-  now: number
 }) {
-  if (data.unavailable || (data.error && !data.aggregate)) {
-    return (
-      <section
-        aria-label="Traffic"
-        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
-      >
-        <TrafficNotice reason={data.unavailable} error={data.error} onRetry={data.refresh} />
-      </section>
-    )
-  }
+  if (data.unavailable || (data.error && !data.aggregate)) return null
   const aggregate = data.aggregate
   if (!aggregate) {
     return (
       <section
-        aria-label="Traffic"
+        aria-label="Key metrics"
         className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
       >
         {[0, 1, 2, 3].map((index) => (
@@ -190,11 +114,12 @@ export function HomeKpis({
     )
   }
 
-  const series = bucketTraffic(data.window, range, data.windowTotal, now)
-  const latency = latencyStats(data.window)
+  // A sparkline covering only the newest records would draw a false start.
+  const series = view?.coversRange ? view.points : undefined
+  const latency = view?.latency ?? {}
   const sampledNote =
-    data.windowTotal > data.window.length
-      ? `newest ${formatInsightsCount(data.window.length)}`
+    view && !view.coversRange
+      ? `newest ${formatInsightsCount(view.sampled ?? 0)}`
       : HOME_RANGE_LABEL[range]
   const money = spendSummary(aggregate)
   const failed = aggregate.lifecycle.failed + aggregate.lifecycle.aborted
@@ -207,7 +132,10 @@ export function HomeKpis({
   const rangeQuery = `?range=${range}`
 
   return (
-    <section aria-label="Traffic" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section
+      aria-label="Key metrics"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+    >
       <KpiLink to={`/observe/requests${rangeQuery}`} label="Requests: open Requests">
         <StatCard
           label="Requests"
@@ -219,7 +147,7 @@ export function HomeKpis({
               ? `${formatInsightsCount(failed)} failed · ${HOME_RANGE_LABEL[range]}`
               : `All public models · ${HOME_RANGE_LABEL[range]}`
           }
-          spark={series?.requests}
+          spark={series?.map((point) => point.requests)}
           sparkColor="var(--chart-1)"
         />
       </KpiLink>
@@ -234,7 +162,7 @@ export function HomeKpis({
               ? 'No completed request yet'
               : `p50 ${formatLatency(latency.p50)} · ${sampledNote}`
           }
-          spark={series?.p95}
+          spark={series ? carriedP95(series) : undefined}
           sparkColor="var(--chart-3)"
         />
       </KpiLink>
@@ -249,7 +177,7 @@ export function HomeKpis({
               ? `+${money.otherCurrencies} more currenc${money.otherCurrencies > 1 ? 'ies' : 'y'}`
               : perThousand
           }
-          spark={series?.cost}
+          spark={series?.map((point) => point.cost)}
           sparkColor="var(--chart-6)"
         />
       </KpiLink>
@@ -389,7 +317,7 @@ export function HomeRecentRequests({
   const rows = data.rows.slice(0, 7)
   let body: ReactNode
   if (data.unavailable || (data.error && rows.length === 0)) {
-    const copy = data.unavailable ? UNAVAILABLE[data.unavailable] : undefined
+    const copy = data.unavailable ? TRAFFIC_UNAVAILABLE[data.unavailable] : undefined
     body = (
       <EmptyState
         compact
@@ -408,7 +336,7 @@ export function HomeRecentRequests({
       />
     )
   } else if (data.loading && rows.length === 0) {
-    body = <TableSkeleton rows={6} columns={4} />
+    body = <TableSkeleton rows={6} columns={5} />
   } else if (rows.length === 0) {
     body = (
       <EmptyState
@@ -439,6 +367,7 @@ export function HomeRecentRequests({
             <TableHead className="hidden @2xl:table-cell">Decision</TableHead>
             <TableHead>Model</TableHead>
             <TableHead className="hidden text-right @3xl:table-cell">Latency</TableHead>
+            <TableHead className="hidden text-right @xl:table-cell">Cost</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -476,6 +405,11 @@ export function HomeRecentRequests({
               </TableCell>
               <TableCell className="hidden text-right font-mono text-xs tabular @3xl:table-cell">
                 {formatLatency(record.duration_ms)}
+              </TableCell>
+              <TableCell className="hidden text-right font-mono text-xs tabular @xl:table-cell">
+                {typeof record.actual_cost === 'number' && record.currency
+                  ? formatInsightsCost(record.actual_cost, record.currency)
+                  : '—'}
               </TableCell>
             </TableRow>
           ))}

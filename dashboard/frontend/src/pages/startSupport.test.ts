@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { RouterConfig } from './dashboardPageTypes'
 import {
+  backendModelLogo,
   buildAgentSnippets,
   buildRequestSnippets,
   buildStartChecklist,
@@ -111,6 +112,46 @@ describe('listPublicModels', () => {
     const models = listPublicModels({ recipes: [{ name: 'default', routing: {} }] })
     expect(models).toHaveLength(1)
     expect(models[0]).toMatchObject({ name: 'vllm-sr/auto', recipe: 'default', isDefault: true })
+  })
+
+  it('shows the default model’s logo for a recipe whose decisions name no model', () => {
+    const models = listPublicModels({
+      providers: {
+        defaults: { model: 'qwen3-8b' },
+        models: [{ name: 'qwen3-8b', provider_model_id: 'Qwen/Qwen3-8B' }],
+      },
+      recipes: [{ name: 'default', routing: { decisions: [{ name: 'any' }] } }],
+    } as unknown as RouterConfig)
+    expect(models[0].providers).toEqual(['qwen'])
+  })
+})
+
+describe('backendModelLogo', () => {
+  it('prefers the card’s logo, then the publishing organisation, then the serving provider', () => {
+    const card = {
+      name: 'm',
+      presentation: { logo: 'package:qwen', monogram: 'Q', monochrome: false },
+    }
+    expect(
+      backendModelLogo('m', {
+        name: 'm',
+        endpoints: [],
+        card_override: card,
+        backend_refs: [{ name: 'b', provider: 'vllm' }],
+      }),
+    ).toBe('qwen')
+    expect(
+      backendModelLogo('m', { name: 'm', endpoints: [], provider_model_id: 'meta-llama/Llama-3' }),
+    ).toBe('meta')
+    expect(backendModelLogo('deepseek/deepseek-v4', undefined)).toBe('deepseek')
+    expect(
+      backendModelLogo('m', {
+        name: 'm',
+        endpoints: [],
+        backend_refs: [{ name: 'b', provider: 'OpenAI' }],
+      }),
+    ).toBe('openai')
+    expect(backendModelLogo('local-model', undefined)).toBe('vllm')
   })
 })
 
