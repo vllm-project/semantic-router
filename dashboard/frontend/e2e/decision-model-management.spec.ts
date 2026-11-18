@@ -585,7 +585,7 @@ test.describe('System One model management and monitoring', () => {
     await page.clock.fastForward(10_100)
     await expect(dialog.getByRole('radio', { name: /Default decision model/ })).toBeChecked()
     await expect(dialog.getByLabel('Deployment', { exact: true })).toHaveValue('vela-2-0-0-3b')
-    expect([globalReads, configReads]).toEqual([3, 3])
+    await expect.poll(() => [globalReads, configReads]).toEqual([3, 3])
     await page.clock.fastForward(30_100)
     expect([globalReads, configReads]).toEqual([3, 3])
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
@@ -1178,8 +1178,8 @@ test.describe('Decision model catalog and deployment bindings', () => {
     await page.getByRole('row').filter({ hasText: 'Task difficulty' }).click()
     const consumer = page.getByRole('combobox', { name: 'Model for Task difficulty' })
     await consumer.click()
-    // Escape closes the open list, not the dialog; it is only open once the list shows.
-    await expect(page.getByRole('listbox')).toBeVisible()
+    // Escape closes the open list, not the dialog; the list owns Escape once it holds focus.
+    await expect(page.locator('[role="listbox"]:focus-within')).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(page.getByRole('listbox')).toHaveCount(0)
     await expect(consumer).toBeFocused()
