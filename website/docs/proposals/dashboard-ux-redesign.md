@@ -1,6 +1,6 @@
 ---
 title: Dashboard UX and Design System
-description: Rebuilds the Dashboard around a one-click sidebar information architecture, a token-based light and dark design system on Tailwind CSS and Radix, consistent page patterns, an operational home page and a new Get started page, without changing any backend contract.
+description: Rebuilds the Dashboard around a one-click sidebar information architecture, a token-based light and dark design system on Tailwind CSS and Radix, consistent page patterns, an operational home page and a new Get started page, with the few additive Dashboard and Router API changes the new pages need.
 created: 2026-11-17
 status: Proposal
 ---
@@ -26,11 +26,14 @@ This proposal replaces the presentation layer in one change:
   explicit empty and error states, and consistent charts;
 - an operational **Home** page and a new **Get started** page that shows the
   endpoint, public model names and copyable client code;
+- one schema source for every configuration form, the config editor and their
+  validators, so every field of the canonical contract can be viewed and edited;
 - redesigned complex editors (configuration editor, topology, rule builder,
   evaluation) on the same system.
 
-The Dashboard backend, its APIs and the Router contracts do not change. Every
-old route redirects to its new location.
+Backend and Router changes are additive and limited to what the pages need
+(see [API additions](#api-additions)). Every old route redirects to its new
+location.
 
 ## Problem
 
@@ -64,14 +67,15 @@ not fix navigation, naming, duplicated headers or missing workflows.
 
 ## Non-goals
 
-- No backend, API, Router or configuration contract changes in this change.
-  Pages use the existing endpoints, including the replay `aggregate` endpoint
-  for traffic. The Router and model runtime changes the new pages surface landed
-  separately: the Router names DeepSeek Harness requests (#6836), and the model
-  runtime serves Vela 3.1-fast semantics (#6391), the Vela 3.1 picos (#6840) and
-  a pinned vela3.1-fast (#6844).
+- No breaking backend, API, Router or configuration contract changes. The few
+  API additions the pages need are additive and listed under
+  [API additions](#api-additions). The Router and model runtime changes the new
+  pages surface landed separately: the Router names DeepSeek Harness requests
+  (#6836), and the model runtime serves Vela 3.1-fast semantics (#6391), the
+  Vela 3.1 picos (#6840) and a pinned vela3.1-fast (#6844).
 - No new product capabilities beyond presentation, except the Get started page,
-  which only presents existing information.
+  which only presents existing information, and model health checks, which
+  replace per-row refresh buttons.
 - No internationalization in this change. Copy stays in English but is written
   so that strings can be extracted later.
 - No React major-version upgrade. Primitives are written for React 18.
@@ -250,10 +254,15 @@ logo, plugin rose, evaluation orange, system slate.
   it won, candidate models, plugins, headers and the request.
 - **Recipes** groups public model names, recipe packages and route probes, and
   previews activation changes, including whether a restart is required.
-- **Decisions, Signals, Projections** use the list pattern. The rule builder
-  replaces the free-form graph with nested All/Any groups that read like the
-  DSL, with the graph available as a view. Signals and projections can be tried
-  against a sample prompt.
+- **Decisions, Signals, Projections** use the list pattern, and every field of
+  the canonical contract is viewable and editable: all 20 signal types, every
+  decision field, all nine algorithms with their parameters, all eleven plugins
+  in order, and partitions, scores and mappings. The rule builder replaces the
+  free-form graph with nested All/Any/NOT groups that read like the DSL, with
+  the graph available as a view. Signals can be tried against the router with
+  a sample prompt, and projections show weights, bands and calibration with
+  live meters. An edited rule keeps its position, and unset fields are not
+  written with defaults.
 - **Topology** draws entrypoint, signals, projections, decisions and models as
   lanes, groups signals by type so the default view is readable, and highlights
   the path a test prompt takes.
@@ -262,7 +271,8 @@ logo, plugin rose, evaluation orange, system slate.
   history and a review step with a diff, checks and the reload or restart
   outcome before deploying.
 - **Backend models** show health, latency, price, traffic share and the
-  decisions that use each model; the drawer covers endpoints, evaluation
+  decisions that use each model, with health kept current by one cached batch
+  check rather than per-row refresh buttons; the drawer covers endpoints, evaluation
   evidence and YAML. Connecting a model starts from a provider grid.
 - **Decision models** separate saved configuration, activation and observed
   readiness, and keep deployment, playground and monitoring as tabs. The
@@ -284,12 +294,30 @@ logo, plugin rose, evaluation orange, system slate.
   title, whether the main agent or a subagent made the call, the turn, the tools
   used and the session routing action. Housekeeping calls such as session titles
   can be hidden, a session opens its run, and a run shows one timeline lane per
-  agent with the agent tree. One harness registry serves every page.
-- **Evaluations, Status, Logs, Metrics, Traces** follow the same patterns;
-  Metrics renders Prometheus data natively and links to Grafana, which stays
-  optional.
+  agent with the agent tree. One harness registry serves every page. Lists stay
+  live and pause while hidden or under the pointer, a request that failed after
+  its status line went out reads as failed, and spend leads with the currency
+  that carries it.
+- **Evaluations** is redesigned around sr-bench's own objects rather than
+  restyled. The header keeps one action, New evaluation; Runs and Datasets are
+  the only tabs, experiments become a filter and grouping of runs, and
+  comparing is a selection action. A run row shows its benchmarks, targets,
+  live progress, the best score with its target and the cost; the run sheet
+  holds results per target and benchmark, call evidence, activity and the
+  frozen protocol. New evaluation is a stepped sheet (what to measure, what to
+  compare, limits, then a review with estimated questions, cost and time) with
+  dataset preparation inline and routing preview as a dry run.
+- **Status, Logs, Metrics, Traces** follow the same patterns. Metrics and
+  Traces embed Grafana and Jaeger through the same-origin proxy, say when
+  either is not configured or cannot be embedded, and open the full view.
 - **Settings** groups router settings, integrations, users and access, and the
-  schema reference behind one sub-navigation.
+  schema reference behind one sub-navigation. Router settings render every
+  global field from the generated contract in cards with an on-this-page index:
+  inherited values show as placeholders, edits carry a marker with undo, and a
+  sticky Review & save shows the YAML diff and whether the change hot-reloads
+  or needs a restart. A Form and YAML toggle replaces the old editor, and a save
+  sends only the edited keys. Users & access sorts and filters through the
+  backend list stores and keeps an audit timeline.
 - **Sign-in and setup** use a calm full-screen layout without three.js; the
   first-run wizard connects models, chooses a recipe and a decision model,
   reviews the configuration and activates it with visible progress.
@@ -298,8 +326,14 @@ logo, plugin rose, evaluation orange, system slate.
 
 - **Structure.** `src/ui` holds tokens and primitives, `src/shell` the
   application frame and navigation model, and pages keep owning their data
-  fetching and state as `dashboard/frontend/src/AGENTS.md` requires. Shared
-  config inventories are still the only schema source for forms.
+  fetching and state as `dashboard/frontend/src/AGENTS.md` requires.
+- **One schema source.** The configuration pages and the config editor share
+  one set of modules in `src/lib`: the decision and projection schemas, one
+  required-field validator and the YAML renderer in schema order. Parity tests
+  hold both callers to the generated contract and fail when the Router's
+  inventories add a signal type, algorithm or plugin the Dashboard does not
+  edit. The duplicate schemas, page-level field lists and their validator are
+  removed.
 - **Coexistence during the change.** Tailwind is loaded with its reset and
   explicit `@source` paths. Legacy CSS variables map to the new tokens first,
   so every remaining page adopts the palette immediately; page-level CSS
@@ -316,10 +350,23 @@ logo, plugin rose, evaluation orange, system slate.
   removed. Route-level code splitting stays, and the pull request reports the
   production bundle size before and after.
 
+## API additions
+
+Each addition is additive: existing requests keep their responses.
+
+| Surface | Addition | Used by |
+| --- | --- | --- |
+| Dashboard `GET /api/models/health` | Health of the configured backend models in one call. Each backend gets a cheap read, never inference: its `reliability.health_check_path`, else the provider's model list, else its base URL. Results are shared between viewers for 20 seconds; `?model=` narrows the check and `?refresh=1` checks again. | Backend models, Home |
+| Dashboard sr-bench run list | Finished runs carry a compact summary (best score and recorded cost), read once per report and cached, with bounded reads per list. | Evaluations |
+| Dashboard users and audit lists | Comma-separated multi-value filters, sorting by column, and the most frequent actors and actions as filter facets. | Users & access |
+| Dashboard global configuration YAML view | Shows the written `global` block when another part of `config.yaml` does not parse, instead of failing. | Router settings |
+| Router Replay `aggregate` | An optional `interval` with `since` returns `traffic`: the records in contiguous intervals from `since` to now. | Home |
+
 ## Compatibility
 
-- Backend, API, authentication, CSRF, permissions and read-only behavior are
-  unchanged; pages hide or disable actions with the same permission checks.
+- Authentication, CSRF, permissions and read-only behavior are unchanged;
+  pages hide or disable actions with the same permission checks, and existing
+  endpoints keep their responses.
 - All old routes redirect. Deep links that carry state, such as
   `/topology?scope=…`, map to the new parameters.
 - Documentation that names menu paths (installation, tutorials, benchmarking,
@@ -338,9 +385,11 @@ logo, plugin rose, evaluation orange, system slate.
   every role.
 - Playwright specs that assert navigation and layout move to the new routes
   and roles; `make dashboard-test-e2e-evaluation` stays green.
-- Each page is reviewed in light and dark mode at desktop and mobile widths,
-  with keyboard-only navigation and axe checks on the shell and list pattern.
-- Before and after screenshots of every page accompany the pull request.
+- Each page is reviewed in light and dark mode at desktop and mobile widths.
+- A live deployment is signed in to and every page opened in both themes, and
+  requests from Claude Code, Codex, OpenCode and DeepSeek Harness are checked
+  on the Requests page with their harness, session and agent.
+- Screenshots of the redesigned pages accompany the pull request.
 
 ## Rollout
 
@@ -358,3 +407,15 @@ implementation began; it is not part of this change.
 | Regressions in rarely used workflows | Pages keep their data hooks and controllers; only presentation changes, and existing unit tests stay. |
 | Documentation drift | Menu-path references are updated in the same change and checked by search. |
 | Styling conflicts during migration | Legacy variables aliased to tokens, and CSS modules deleted only after their page moves. |
+
+## Follow-ups
+
+These are Router-side gaps the Requests page works around today:
+
+- Claude Code names a subagent only when it sends the agent hint headers, so
+  without them a subagent's calls cannot be told apart from the main agent's.
+- Router Replay records neither a request class (an agent turn or a
+  housekeeping call such as a session title) nor Claude Code's agent type, so
+  the page infers housekeeping calls from their shape.
+- A run summary carries no turn count; the page counts turns from the records
+  it loaded.
