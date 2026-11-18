@@ -2355,7 +2355,8 @@ global:
     # tools.defer_loading sends tools that a coding agent marks for tool search
     # in full, for every backend format.
     # reasoning.signature drops the signature an Anthropic backend puts on its
-    # thinking, which Chat and Responses clients cannot carry. store sends a
+    # thinking, which Chat and Responses clients cannot carry, and the one a
+    # Messages client sends back to a Chat or Responses backend. store sends a
     # request's store: true without it to a backend that keeps no completions,
     # such as a Messages backend; store: false needs no entry. Empty keeps every
     # lossy translation failing closed.

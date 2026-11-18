@@ -374,7 +374,7 @@ func decodeAnthropicMessages(
 	diagnostics *llmprotocol.Diagnostics,
 ) ([]llmprotocol.Tool, error) {
 	var added []llmprotocol.Tool
-	for _, messageWire := range messages {
+	for position, messageWire := range messages {
 		rest, tools, err := takeAnthropicToolAdditions(messageWire, policy, diagnostics)
 		if err != nil {
 			return nil, err
@@ -386,6 +386,9 @@ func decodeAnthropicMessages(
 		message, err := decodeAnthropicMessage(*rest, policy)
 		if err != nil {
 			return nil, err
+		}
+		for part := range message {
+			message[part].SourcePosition = position + 1
 		}
 		request.Messages = append(request.Messages, message...)
 	}

@@ -503,7 +503,13 @@ func decodeResponsesFunctionTool(
 		return err
 	}
 	schema := tool.Parameters
-	if len(schema) == 0 {
+	if !jsonFieldPresent(schema) {
+		// Typed clients send null for a function without arguments. Replacing
+		// it advances request.Generation, which retires the replay claim on
+		// source bytes that still carry the null.
+		if len(schema) != 0 {
+			request.Generation++
+		}
 		schema = json.RawMessage(`{"type":"object"}`)
 	}
 	request.Tools = append(request.Tools, llmprotocol.Tool{

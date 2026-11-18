@@ -353,13 +353,13 @@ func TestResponsesQualificationRefusesOtherContinuityAndSignedThinking(t *testin
 		{Kind: llmprotocol.ContentReasoning, ReasoningDetail: &llmprotocol.ReasoningDetail{Type: llmprotocol.ReasoningDetailEncrypted, Data: llmprotocol.OptionalString{Present: true, Value: "other"}}},
 	} {
 		request := llmprotocol.Request{Generation: 1, Model: "worker", Messages: []llmprotocol.Message{{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{content}}}}
-		capability := "reasoning_signature"
+		refusal := "cannot accept signed thinking"
 		if content.ReasoningDetail != nil {
-			capability = "reasoning_continuity"
+			refusal = "reasoning_continuity"
 		}
-		require.ErrorContains(t, router.candidateCapabilityMismatch(config.ModelRef{Model: "worker"}, &request, nil, nil, nil, true), capability)
+		require.ErrorContains(t, router.candidateCapabilityMismatch(config.ModelRef{Model: "worker"}, &request, nil, nil, nil, true), refusal)
 		_, err := router.prepareProviderDispatch(&request, "worker", "", false, routingTestContext(llmprotocol.OpenAIChatV1, &request))
-		require.ErrorContains(t, err, capability)
+		require.ErrorContains(t, err, refusal)
 	}
 }
 
