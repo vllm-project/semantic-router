@@ -19,6 +19,9 @@ SERVE_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-serve/"
 DECISION_SOURCE = ROOT / "tools/agent/skills/vllm-sr-decision-model"
 DECISION_DESTINATION = ROOT / "website/static/install/agent/vllm-sr-decision-model"
 DECISION_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-decision-model/"
+CONFIGURE_SOURCE = ROOT / "tools/agent/skills/vllm-sr-configure-recipe"
+CONFIGURE_DESTINATION = ROOT / "website/static/install/agent/vllm-sr-configure-recipe"
+CONFIGURE_PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/"
 PUBLICATIONS = (
     (SOURCE, DESTINATION, PUBLIC_ORIGIN, "vllm-sr-agent-operations", "vllm-sr"),
     (
@@ -34,6 +37,13 @@ PUBLICATIONS = (
         DECISION_PUBLIC_ORIGIN,
         "vllm-sr-decision-model",
         "vllm-sr-decision-model",
+    ),
+    (
+        CONFIGURE_SOURCE,
+        CONFIGURE_DESTINATION,
+        CONFIGURE_PUBLIC_ORIGIN,
+        "vllm-sr-configure-recipe",
+        "vllm-sr-configure-recipe",
     ),
 )
 MARKDOWN_LINK = re.compile(

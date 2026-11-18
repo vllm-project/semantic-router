@@ -135,6 +135,17 @@ class PublicSkillTests(unittest.TestCase):
             ),
             [],
         )
+        self.assertEqual(
+            skill.sync(
+                skill.CONFIGURE_SOURCE,
+                skill.CONFIGURE_DESTINATION,
+                check=True,
+                public_origin=skill.CONFIGURE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-configure-recipe",
+                public_name="vllm-sr-configure-recipe",
+            ),
+            [],
+        )
         source_refs = list((skill.SOURCE / "references").glob("*.md"))
         self.assertEqual(
             {path.name for path in source_refs},
