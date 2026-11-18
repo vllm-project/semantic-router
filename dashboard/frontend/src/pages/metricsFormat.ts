@@ -1,3 +1,5 @@
+import { isInsightsNoCurrency } from '../utils/insightsCost'
+
 const NONE = '—'
 
 const compactCount = new Intl.NumberFormat('en-US', {
@@ -63,6 +65,7 @@ export function formatMoney(amount: number | null | undefined, currency: string)
     amount === 0 || Math.abs(amount) >= 1
       ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
       : { maximumSignificantDigits: 3 }
+  if (isInsightsNoCurrency(currency)) return new Intl.NumberFormat('en-US', digits).format(amount)
   try {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency, ...digits }).format(amount)
   } catch {

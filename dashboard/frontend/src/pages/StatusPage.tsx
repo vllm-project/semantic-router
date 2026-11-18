@@ -123,18 +123,12 @@ const StatusPage: React.FC = () => {
                   </span>
                 ) : null}
               </span>
-              <Button
-                variant="outline"
-                onClick={checkNow}
-                aria-label="Refresh system status"
-                title={
-                  lastUpdated ? `Last checked ${lastUpdated.toLocaleTimeString()}` : 'Check now'
-                }
-                disabled={checking && !status}
-              >
-                <RefreshCw aria-hidden="true" className={cn(checking && 'animate-spin')} />
-                Refresh
-              </Button>
+              {error ? (
+                <Button variant="outline" onClick={checkNow} disabled={checking && !status}>
+                  <RefreshCw aria-hidden="true" className={cn(checking && 'animate-spin')} />
+                  Try again
+                </Button>
+              ) : null}
             </>
           }
         />

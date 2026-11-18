@@ -471,7 +471,7 @@ test.describe('Router model inventory surfaces', () => {
     await expect(overview).toBeVisible()
     await expect(overview).toContainText('No running services detected')
     await expect(overview).toContainText('Availability will appear when the Router starts.')
-    await expect(page.getByLabel('Refresh system status')).toBeVisible()
+    await expect(page.getByText('Live · checks every 10 s', { exact: true })).toBeVisible()
 
     const pageMetrics = await page.getByTestId('status-page').evaluate((node) => ({
       clientWidth: node.clientWidth,

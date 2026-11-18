@@ -46,5 +46,6 @@ describe('metrics formatting', () => {
     expect(formatMoney(0.00423, 'USD')).toBe('$0.00423')
     expect(formatMoney(0, 'EUR')).toBe('€0.00')
     expect(formatMoney(2, 'credits')).toBe('2.00 credits')
+    expect(formatMoney(115.34, 'XXX')).toBe('115.34')
   })
 })
