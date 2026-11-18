@@ -122,7 +122,7 @@ Highest priority first:
 | `scan_coverage` | signals | Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. |
 | `context_tokens` | signals | Token count the `context` signal measured. |
 | `category` | classification | Domain category the classifier chose, such as `math`. |
-| `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`. |
+| `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off. |
 | `modality` | routing | Output kinds of the selected decision's output contract, such as `(image)` or `(text image)`; omitted for a decision that declares none. |
 | `system_prompt` | system_prompt | Present when a `system_prompt` plugin injected text into the request. |
 | `cache_similarity` | response_cache | Similarity score of the response-cache lookup. |

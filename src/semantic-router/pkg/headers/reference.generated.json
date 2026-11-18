@@ -1111,7 +1111,7 @@
     {
       "key": "reasoning",
       "owner": "classification",
-      "doc": "Reasoning mode chosen for the request: `on` or `off`."
+      "doc": "Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off."
     },
     {
       "key": "modality",

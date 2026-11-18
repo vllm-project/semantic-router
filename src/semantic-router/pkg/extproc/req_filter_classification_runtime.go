@@ -486,12 +486,12 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	if orch := r.fallbackOrchestratorForContext(ctx); orch != nil && orch.Policy().Enabled {
 		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, decisionName, selectedModel)
 	}
-	return selectedModel, applyReasoningModeFromSelectedModel(
-		selectedModelRef,
-		decisionName,
-		evaluationConfidence,
-		ctx,
-	), nil
+	reasoning = applyReasoningModeFromSelectedModel(selectedModelRef, decisionName, evaluationConfidence, ctx)
+	if reasoning.UseReasoning && r.outputBudgetTurnsReasoningOff(ctx, selectedModelRef.Model) {
+		reasoning.UseReasoning = false
+		ctx.VSRReasoningMode, ctx.VSRReasoningReason = "off", reasoningOffForOutputBudget
+	}
+	return selectedModel, reasoning, nil
 }
 
 func applyReasoningModeFromSelectedModel(
