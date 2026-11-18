@@ -37,12 +37,14 @@ const (
 )
 
 // responseStageDecider is the decision model of the response-stage tests: it
-// answers the jailbreak preset with the attack probability and the
-// hallucination preset with the unsupported spans it finds in the answer, or
-// fails every call when fail is set. A delegated one refuses a call made for
-// a request without a delegated credential. It counts its calls.
+// answers the jailbreak preset with the attack probability or, when unsafe is
+// set, only for an answer that contains it, and the hallucination preset with
+// the unsupported spans it finds in the answer, or fails every call when fail
+// is set. A delegated one refuses a call made for a request without a
+// delegated credential. It counts its calls.
 type responseStageDecider struct {
 	jailbreak float32
+	unsafe    string
 	spans     []string
 	fail      bool
 	delegated bool
@@ -64,6 +66,9 @@ func (d *responseStageDecider) Decide(ctx context.Context, _ string, request mod
 		switch question.ID {
 		case "preset:jailbreak":
 			attack := float64(d.jailbreak)
+			if d.unsafe != "" && !strings.Contains(request.Parts["answer"], d.unsafe) {
+				attack = 0.01
+			}
 			answer := modelservice.Answer{Type: "choice", Choice: "benign", Probabilities: map[string]float64{"jailbreak": attack, "benign": 1 - attack}, InputCoverage: "complete"}
 			if attack >= 0.5 {
 				answer.Choice = "jailbreak"
@@ -96,6 +101,13 @@ func newCountingJailbreakDecider(jailbreak float32) (*responseStageDecider, *ato
 	return decider, &decider.calls
 }
 
+// newAnswerJailbreakDecider is a decision model that finds a jailbreak only
+// in an answer that holds unsafe, with its call count.
+func newAnswerJailbreakDecider(unsafe string) (*responseStageDecider, *atomic.Int32) {
+	decider := &responseStageDecider{jailbreak: 0.95, unsafe: unsafe}
+	return decider, &decider.calls
+}
+
 // newFailingDecider is a decision model whose every call fails.
 func newFailingDecider() *responseStageDecider {
 	return &responseStageDecider{fail: true}
@@ -125,6 +137,16 @@ func responseStageClassifier(t *testing.T, cfg *config.RouterConfig, decider *re
 	}
 	classifier.SetDecisionDecider(decider)
 	return classifier
+}
+
+// choicesResponse is a response whose choices are answers: the first is its
+// output and each other one an alternative, as Chat n > 1 decodes.
+func choicesResponse(answers ...string) *llmprotocol.Response {
+	response := hallucinationAssistantResponse(answers[0])
+	for _, answer := range answers[1:] {
+		response.Alternatives = append(response.Alternatives, hallucinationAssistantResponse(answer).Output)
+	}
+	return response
 }
 
 func responseStageKeyword() config.KeywordRule {

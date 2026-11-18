@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -107,6 +108,61 @@ func TestResponseGuardReadsTheLooperAnswerBeforeTheClient(t *testing.T) {
 			}
 			if receipt := outcomeFor(t, outcomes, "router", "memory_persistence"); receipt.Verdict != "policy_blocked" || receipt.Reason != "response_jailbreak" {
 				t.Fatalf("memory receipt = %+v, want the flagged answer kept out of memory", receipt)
+			}
+		})
+	}
+}
+
+// Ratings answers with one Chat choice per model, so the guard reads every
+// model's answer: an unsafe second model refuses the reply, streamed or not.
+func TestResponseGuardReadsEveryRatingsChoice(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Model  string `json:"model"`
+			Stream bool   `json:"stream"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		answer := benignAnswer
+		if body.Model == "model-b" {
+			answer = unsafeAnswer
+		}
+		if body.Stream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = w.Write([]byte(strings.ReplaceAll(string(extProcStreamFixture(llmprotocol.OpenAIChatV1)), "hello", answer)))
+			return
+		}
+		writeFusionReplayCompletion(w, body.Model, []map[string]interface{}{{"index": 0, "message": map[string]interface{}{"role": "assistant", "content": answer}, "finish_reason": "stop"}}, map[string]int64{"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3})
+	}))
+	t.Cleanup(server.Close)
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stream_%t", stream), func(t *testing.T) {
+			decider, _ := newAnswerJailbreakDecider(unsafeAnswer)
+			cfg := &config.RouterConfig{Looper: config.LooperConfig{Endpoint: server.URL}}
+			cfg.KeywordRules = []config.KeywordRule{responseStageKeyword()}
+			cfg.JailbreakRules = []config.JailbreakRule{responseStageRule()}
+			decision := keywordDecision(responseStageRouteName, guardPlugin(jailbreakGuard(config.ResponseGuardBlock, "")))
+			decision.ModelRefs = []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}}
+			decision.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmRatings}
+			cfg.Decisions = []config.Decision{decision}
+			router, ctx := routerWithSelectedDecision(cfg, responseStageClassifier(t, cfg, decider), responseStageRouteName)
+			request := testNeutralRequest("router-entrypoint", "hello")
+			request.Stream = stream
+			ctx.SourceFormat, ctx.SemanticRequest, ctx.ExpectStreamingResponse = llmprotocol.OpenAIChatV1, request, stream
+
+			response, err := router.handleLooperExecution(ctx.TraceContext, request, ctx.VSRSelectedDecision, ctx)
+			if err == nil {
+				response, err = router.requestBodyReply(response, nil, ctx)
+			}
+			if err != nil {
+				t.Fatalf("Looper request: %v", err)
+			}
+
+			immediate := response.GetImmediateResponse()
+			client, status := string(immediate.GetBody()), int(immediate.GetStatus().GetCode())
+			if stream {
+				assertRefusedStream(t, llmprotocol.OpenAIChatV1, client, "jailbreak content detected", unsafeAnswer)
+			} else if status != 400 || !strings.Contains(client, "jailbreak content detected") || strings.Contains(client, unsafeAnswer) {
+				t.Fatalf("reply = %d %s, want the 400 refusal and none of the unsafe answer", status, client)
 			}
 		})
 	}
