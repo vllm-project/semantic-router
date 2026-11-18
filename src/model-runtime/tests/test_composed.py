@@ -404,6 +404,35 @@ def test_typed_template_tokens_are_text_beside_an_image_and_a_box(model, located
         assert item.ids.count(model.image_token) == state.ids.count(model.image_token)
 
 
+def test_an_image_box_beside_a_video_reads_the_images_alone(model, located, mp4_url):
+    """A Box without ``at`` locates its target in the state's only image: beside a video it branches from a state of
+    the images alone and answers as the same request without the video; the other questions still read the video.
+    """
+    clip = mp4_url(96, 64, frames=8, fps=4.0, seed=3)
+    state = "A photo and a clip."
+    questions = {"box": QUESTIONS["box"], "plain": QUESTIONS["plain"]}
+    planned = model.plan_composed(state, questions, [PHOTO], [clip], {})
+    alone = model.plan_composed(state, {"box": QUESTIONS["box"]}, [PHOTO], [], {})
+    items = {item.question_id: item for item in planned.items}
+    assert items["box"].ids == alone.items[0].ids
+    assert model.video_token not in items["box"].ids
+    assert model.video_token in items["plain"].ids
+    # Each state counts once: the plain question carries the whole state, the Box the images-only one.
+    assert planned.input_tokens == len(items["plain"].ids) + len(items["box"].ids)
+    answers = decide(
+        model,
+        {"state": state, "images": [PHOTO], "videos": [clip], "questions": questions},
+    )
+    expected = decide(
+        model,
+        {"state": state, "images": [PHOTO], "questions": {"box": QUESTIONS["box"]}},
+    )
+    assert "error" not in answers["plain"], answers
+    for edge in composed.EDGES:
+        gap = abs(answers["box"]["box"][edge] - expected["box"]["box"][edge])
+        assert gap <= FP32_TOLERANCE, (edge, gap)
+
+
 @pytest.mark.parametrize("rate", [0, 3, -1, 1.5, "2", True, [2]])
 def test_a_track_rate_other_than_one_or_two_fails_alone(model, located, rate):
     answers = decide(
