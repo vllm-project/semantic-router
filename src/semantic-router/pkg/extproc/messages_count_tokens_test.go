@@ -239,8 +239,8 @@ recipes:
   - name: default
 `))
 	require.NoError(t, err)
-	for path, countTokens := range map[string]bool{"/anthropic/v1/messages": false, "/anthropic/v1/messages/count_tokens?x=1": true} {
-		path := cfg.APIPath(path)
+	for sent, countTokens := range map[string]bool{"/anthropic/v1/messages": false, "/anthropic/v1/messages/count_tokens?x=1": true} {
+		path := cfg.APIPath(sent)
 		router := &OpenAIRouter{Config: cfg}
 		response, wantsBody := router.classifyRequestHeaders("POST", path)
 		require.Nil(t, response, path)
