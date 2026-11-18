@@ -312,6 +312,55 @@ def test_d3_is_checked_against_the_references_recorded_at_its_dtype(
         runtime.stop()
 
 
+def test_auto_serves_fp32_where_the_bf16_answers_differ_from_the_class_reference(
+    d3_package, monkeypatch
+):
+    """A CPU that shares a class's key but rounds BF16 otherwise falls back to FP32 at ``auto``; ``--dtype bfloat16`` still fails."""
+    key = "cpu:fixture"
+    monkeypatch.setattr(CPUAccelerator, "golden_reference", lambda self, device: key)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: False)
+    fp32 = recorder.answers(recording_args(), str(d3_package), None)
+    bf16 = recorder.answers(recording_args("bfloat16"), str(d3_package), None)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: True)
+    expected = {
+        "cpu": fp32["golden_answers"]["cpu"],
+        f"{key}@bfloat16": shifted(bf16["golden_answers"][f"{key}@bfloat16"]),
+    }
+    golden = Decision3Family.golden
+    monkeypatch.setattr(
+        Decision3Family,
+        "golden",
+        lambda self, package: [
+            {**request, "expected": expected} for request in golden(self, package)
+        ],
+    )
+    runtime = Runtime(
+        ServeConfig(models=(ModelConfig(model=str(d3_package), device="cpu"),))
+    )
+    try:
+        runtime.load()
+        served = runtime.lookup(None)
+        assert served.health.golden.status == "matched"
+        assert served.health.golden.reference == "cpu"
+        card = served.card([])
+        assert card["dtype"] == "fp32"
+        assert card["reason"] == (
+            f"BF16 golden answers differ from {key}@bfloat16; computes in FP32"
+        )
+    finally:
+        runtime.stop()
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(d3_package), device="cpu", dtype="bfloat16"),)
+        )
+    )
+    try:
+        with pytest.raises(VerificationError, match="differ from the reference"):
+            runtime.load()
+    finally:
+        runtime.stop()
+
+
 def test_family_sweep_skips_the_unserved_image_package(monkeypatch):
     served = argparse.Namespace(repo_id="vllm-sr/vela3-fast", revision="r1")
     unserved = argparse.Namespace(repo_id="vllm-sr/vela3-fast-vision", revision="r2")

@@ -132,8 +132,12 @@ def place(
     memory_budget_gib: float | None = None,
     bf16_parameters: int = 0,
     dtype: str = "auto",
+    cpu_bf16: bool = True,
 ) -> Placement:
-    """A device for ``spec`` at ``dtype`` (``--dtype``), which decides the dtypes its weights are held in."""
+    """A device for ``spec`` at ``dtype`` (``--dtype``), which decides the dtypes its weights are held in.
+
+    ``cpu_bf16`` lets ``auto`` hold BF16 on a CPU class with its own BF16 references (``dtypes.on_host``).
+    """
     kind, index = parse_device(device)
     budget = int(memory_budget_gib * GIB) if memory_budget_gib else None
     candidates = auto_order() if kind == "auto" else [kind]
@@ -159,9 +163,8 @@ def place(
             # The dtypes a device holds the weights in follow its torch device, as
             # the runtime resolves --dtype and the engines read the policy.
             gpu = accelerator.torch_device(info).type != "cpu"
-            running = dtypes.apply(
-                dtypes.on_host(spec, dtype, accelerator, info), dtype, gpu
-            )
+            held = dtypes.on_host(spec, dtype, accelerator, info) if cpu_bf16 else spec
+            running = dtypes.apply(held, dtype, gpu)
             needed = estimate_bytes(
                 running, parameters, name, bf16_parameters if gpu else 0
             )

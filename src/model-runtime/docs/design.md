@@ -374,7 +374,10 @@ On a class that computes BF16 natively and has a BF16 reference for every
 golden request (`DtypePolicy.cpu_bf16_references`), `--dtype auto` computes
 BF16 and checks that reference (`dtypes.on_host`,
 `docs/records/d3-cpu-bf16-native.md`); a class without one keeps FP32, so no
-CPU is checked against another class's BF16 answers.
+CPU is checked against another class's BF16 answers. A CPU that shares a
+class's key but fails its BF16 golden check at `auto` loads again in FP32
+(`ServedModel.load`), placed at the FP32 size, and its card's `reason` says
+why; `--dtype bfloat16` still fails there.
 A new PyTorch can move either, so both are recorded with the PyTorch the CPU
 images pin, and a test fails when they are not.
 

@@ -51,6 +51,10 @@ recorded before this change still check the hosts they checked.
 | Any CPU, `--dtype float32` | | FP32 | `cpu` |
 | Any CPU, `--dtype bfloat16` | | BF16 | its class's BF16 reference |
 
+A CPU that shares a class's key but rounds BF16 otherwise fails that class's
+BF16 golden check; at `auto` it then loads again in FP32, which every CPU
+class answers alike, and its card's `reason` names the reference it missed.
+
 The AVX2 references at `@bfloat16` stay recorded, but an AVX2 CPU emulates BF16,
 where FP32 is 3.0 to 5.8 times faster, so `auto` keeps FP32 there.
 

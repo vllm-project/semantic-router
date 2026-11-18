@@ -358,6 +358,9 @@ def test_d3_is_placed_at_its_bf16_size_where_auto_holds_bf16(monkeypatch):
     cpu_host(monkeypatch, AMD_BF16)
     placement = place(D3_RECORDED, "cpu", D3_PARAMETERS, 64)
     assert placement.estimated_bytes / GIB == pytest.approx(55.45, abs=0.01)
+    # Loading again in FP32 after a BF16 golden mismatch needs the FP32 size.
+    with pytest.raises(PlacementError, match=r"needs about 99\.2 GiB"):
+        place(D3_RECORDED, "cpu", D3_PARAMETERS, 64, cpu_bf16=False)
     cpu_host(monkeypatch, "cpu:x86_64:avx512:bf16_native:intel")
     with pytest.raises(PlacementError, match=r"needs about 99\.2 GiB"):
         place(D3_RECORDED, "cpu", D3_PARAMETERS, 64)
