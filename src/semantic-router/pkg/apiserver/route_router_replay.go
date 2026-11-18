@@ -196,7 +196,7 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 	if r.URL.RawQuery != "" {
 		requestTarget += "?" + r.URL.RawQuery
 	}
-	response, handled := runtime.HandleReplayRequest(r.Method, requestTarget)
+	response, handled := runtime.HandleReplayRequest(r.Context(), r.Method, requestTarget)
 	if !handled {
 		s.writeErrorResponse(w, http.StatusNotFound, "REPLAY_UNAVAILABLE", "router replay is disabled or unavailable")
 		return

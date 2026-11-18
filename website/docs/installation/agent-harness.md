@@ -1587,6 +1587,50 @@ The command writes this provider into `models.json`; these settings follow the
 }
 ```
 
+## OpenCode
+
+[OpenCode](https://opencode.ai) reads custom providers from `opencode.json` in
+the project or in `~/.config/opencode/`. Add the gateway as an
+OpenAI-compatible provider:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "vllm-sr": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "vLLM Semantic Router",
+      "options": {
+        "baseURL": "http://localhost:8899/v1",
+        "apiKey": "{env:VLLM_SR_API_KEY}"
+      },
+      "models": {
+        "auto": { "id": "vllm-sr/auto", "limit": { "context": 131072, "output": 32000 } }
+      }
+    }
+  },
+  "model": "vllm-sr/auto"
+}
+```
+
+- `id` is the model name OpenCode sends, so the gateway sees `vllm-sr/auto`
+  rather than the provider-prefixed `vllm-sr/vllm-sr/auto`. `limit.context` is
+  the window OpenCode compacts the session at: give it the entrypoint's context
+  window. `limit.output` is the output limit it asks for.
+- OpenCode sends its session in `x-session-id` on every call, so session
+  protection holds the model for the session. A subagent runs in a child
+  session and also sends the session that spawned it in `x-parent-session-id`:
+  protection holds each subagent on its own model under that session, and
+  Replay shows it in the same run.
+- The [`agent`](../tutorials/signal/heuristic/agent) signal matches OpenCode as
+  `harness: opencode`, its subagents as `role: subagent`, its session titles as
+  the `auxiliary` request class and its session summaries as `compaction`, so
+  a `housekeeping` route sends those to a small model. Where Replay keeps
+  response text, it names the run with the title OpenCode asked for.
+
+The Router settings are those of [Pi](#router-settings-for-pi). These settings
+were checked with OpenCode 1.18.10.
+
 ## VS Code
 
 The [VS Code extension](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/vscode)

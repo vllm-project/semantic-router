@@ -3,7 +3,7 @@
 #
 # - managed: the Router starts runtime processes itself, through
 #   VLLM_SRUN_COMMAND: an embedder on device auto, which joins the cpu device
-#   group, and a Decision 2.0 model, each in its own worker;
+#   group, a Decision 2.0 model and a Vela 3.1 encoder, each in its own worker;
 # - attached: model-runtime-attached serves a decision model and a Vela 2.0
 #   model in one process, each selected by its model;
 # - fail-open: decision-offline points at a Service with no pods.
@@ -39,8 +39,27 @@ config:
         # Replaces the chart's default general domain, which would ask the
         # system decision model this offline profile does not serve.
         domains: []
+        keywords:
+          - name: vela31_marker
+            operator: OR
+            method: regex
+            keywords: ['\[vela31-described-noul\]']
         # testcases/decision_runtime_routing.go asks the runtimes these questions.
         systemone:
+          - name: vela31_described
+            description: Described false/true outcomes on the managed Vela 3.1 encoder.
+            deployment: vela31-fixture
+            question:
+              type: noul
+              instructions: Does this request need urgent action?
+              choices:
+                - key: "false"
+                  description: can wait
+                - key: "true"
+                  description: needs immediate action
+            predicate:
+              gte: 0.0001
+            timeout_ms: 10000
           - name: answered
             description: Matches whenever the managed decision model answers.
             deployment: decision-fixture
@@ -111,6 +130,19 @@ config:
               threshold: 0
             timeout_ms: 10000
       decisions:
+        # The marker keeps the existing selector and signal cases on their old routes.
+        - name: vela31_described_route
+          description: Route only when the described Noul question returns a nonzero probability.
+          priority: 600
+          rules:
+            operator: AND
+            on_unknown: no_match
+            conditions:
+              - {type: keyword, name: vela31_marker}
+              - {type: systemone, name: vela31_described}
+          modelRefs:
+            - model: math-expert
+              use_reasoning: false
         # An unknown answer never matches: the offline deployment never answers.
         - name: offline_route
           description: Fails open; never selected
@@ -188,6 +220,11 @@ config:
         decision-fixture:
           provider: model_runtime
           artifact: /tmp/vsr-fixtures/decision
+          device: cpu
+        # Managed: the released renderer fingerprint on a random-weight encoder.
+        vela31-fixture:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/vela31
           device: cpu
         # Managed: the cpu device group.
         vela-embedding:

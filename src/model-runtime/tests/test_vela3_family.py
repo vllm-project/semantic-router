@@ -24,7 +24,7 @@ from vllm_srun.families.vela3.family import (
     GOLDEN_STATE,
     Vela3Family,
 )
-from vllm_srun.families.vela3.network import Call, Vela3Item, batches
+from vllm_srun.families.vela3_calls import Call, Vela3Item, batches
 from vllm_srun.plugins.base import DEADLINE, EngineOptions, PackageRef, SurfacePlan
 from vllm_srun.runtime import Runtime
 from vllm_srun.testing.vela3 import write_encoder_package

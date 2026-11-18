@@ -125,23 +125,26 @@ func postgresSummarySelectColumns() string {
 }
 
 // ScanMetadata streams only the columns used by Insights, with each record's
-// id, its place in its agent run and how it ended. Large request, response, tool, safety,
-// and learning payloads never cross the database wire.
-func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) error) (err error) {
+// id, its place in its agent run and how it ended, for the records the
+// filters select. Large request, response, tool, safety, and learning payloads
+// never cross the database wire. Its readers aggregate, so it asks for no order
+// and the database need not sort the history.
+func (p *PostgresStore) ScanMetadata(ctx context.Context, filters QueryFilters, visit func(Record) error) (err error) {
 	release, err := p.lifecycle.beginMutation()
 	if err != nil {
 		return err
 	}
 	defer release()
-	//nolint:gosec // tableName is validated during store creation
+	where, args := postgresReplayWhere(filters)
+	//nolint:gosec // tableName is validated during store creation; filters are parameters
 	query := fmt.Sprintf(`SELECT id, COALESCE(request_id,''), COALESCE(recipe,''), COALESCE(decision,''),
 		COALESCE(original_model,''), COALESCE(selected_model,''), COALESCE(session_id,''),
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
 		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 		provider_cache, timestamp, COALESCE(duration_ms, 0), request_kind, %s, COALESCE(turn_id, ''), COALESCE(parent_turn_id, ''), cost_accounting,
 		routing_metadata, COALESCE(response_status, 0), COALESCE(terminal_reason, '')
-		FROM %s ORDER BY timestamp DESC, id DESC`, postgresReviewMetadataColumn, p.tableName)
-	rows, err := p.db.QueryContext(ctx, query)
+		FROM %s%s`, postgresReviewMetadataColumn, p.tableName, where)
+	rows, err := p.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -176,6 +179,34 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 		assignUsageCostFields(&row.record, row.promptTokens, sql.NullInt64{}, sql.NullInt64{}, row.completionTokens,
 			row.totalTokens, row.actualCost, row.baselineCost, row.costSavings, row.currency, row.baselineModel)
 		if err = visit(row.record); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+// ScanFilterOptions reads the distinct filter values in one grouped query, so
+// a filtered scan does not have to read every record for them.
+func (p *PostgresStore) ScanFilterOptions(ctx context.Context, visit func(Record) error) (err error) {
+	release, err := p.lifecycle.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`SELECT DISTINCT COALESCE(recipe,''), COALESCE(decision,''), COALESCE(selected_model,''),
+		COALESCE(original_model,''), COALESCE(request_kind,'') FROM %s`, p.tableName)
+	rows, err := p.db.QueryContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	for rows.Next() {
+		var record Record
+		if err = rows.Scan(&record.Recipe, &record.Decision, &record.SelectedModel, &record.OriginalModel, &record.RequestKind); err != nil {
+			return err
+		}
+		if err = visit(record); err != nil {
 			return err
 		}
 	}

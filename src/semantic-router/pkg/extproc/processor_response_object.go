@@ -105,7 +105,8 @@ func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
 	stored := &responseapi.StoredResponse{
 		ID: response.ID, Object: "response",
 		CreatedAt: response.CreatedAt, Model: response.Model, Status: response.Status,
-		Input: cloneResponseInputItems(state.Input), Output: response.Output,
+		IncompleteDetails: response.IncompleteDetails,
+		Input:             cloneResponseInputItems(state.Input), Output: response.Output,
 		OutputText: response.OutputText, PreviousResponseID: response.PreviousResponseID,
 		ConversationID: response.ConversationID, Usage: response.Usage,
 		Instructions: response.Instructions, Metadata: response.Metadata, Error: response.Error,

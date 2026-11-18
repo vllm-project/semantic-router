@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
@@ -152,6 +153,11 @@ type RequestContext struct {
 	// reply's Content-Encoding. The response-body phase decodes a gzip reply
 	// before any phase reads it.
 	UpstreamResponseGzip bool
+
+	// ToolResultFailed is a request-scoped fact: the live semantic request
+	// carries a structured tool-result failure (ToolResult.IsError=true).
+	// Free-form tool text never sets this.
+	ToolResultFailed bool
 
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string
@@ -557,6 +563,9 @@ type RequestContext struct {
 	// mutation does not poison the read-only config tree. nil means the
 	// matched decision declares no retention.
 	Retention *config.DecisionRetention
+	// RetentionOutcome is the provider-neutral backend acknowledgement receipt.
+	// It is explicit when no adapter is available and never claims enforcement.
+	RetentionOutcome *retention.Outcome
 }
 
 // embeddingContext returns the request-scoped context for outbound embedding

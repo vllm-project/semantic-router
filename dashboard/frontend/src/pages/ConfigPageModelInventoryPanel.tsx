@@ -13,6 +13,7 @@ import {
   type ModelLiveVerificationState,
 } from './useModelLiveVerification'
 import { findModelProviderPreset } from './modelProviderCatalog'
+import { formatInsightsCost, insightsCurrencyLabel } from '../utils/insightsCost'
 
 function ModelProviderMark({ model }: { model: NormalizedModel }) {
   const backend = model.backend_refs?.[0]
@@ -195,18 +196,17 @@ export default function ConfigPageModelInventoryPanel({
         const pricing = row.pricing ?? catalogPrice
         if (!pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
         const currency = pricing.currency || 'USD'
-        const prompt = pricing.prompt_per_1m?.toFixed(2) || '0.00'
+        const prompt = pricing.prompt_per_1m ?? 0
         return (
           <span
-            title={`${prompt} ${currency} per 1M input tokens${catalogPrice ? ', the catalog list price' : ''}`}
+            title={`${formatInsightsCost(prompt, currency, { total: true, bare: true })} ${insightsCurrencyLabel(currency) || 'price units'} per 1M input tokens${catalogPrice ? ', the catalog list price' : ''}`}
             style={{
               fontSize: '0.8125rem',
               fontFamily: 'var(--font-mono)',
               whiteSpace: 'nowrap',
             }}
           >
-            {currency === 'USD' ? '$' : `${currency} `}
-            {prompt} / 1M
+            {formatInsightsCost(prompt, currency, { total: true })} / 1M
             {catalogPrice ? (
               <span style={{ display: 'block', color: 'var(--color-text-secondary)' }}>
                 catalog list price

@@ -69,9 +69,12 @@ func (b *replayRunBuilder) add(record routerreplay.RoutingRecord) {
 		b.agentCost[entry.agent.ID] = newReplayCostAccumulator()
 	}
 	b.agentCost[entry.agent.ID].add(record)
+	// Scans come in no set order: between main calls of one instant, the
+	// higher id is the first, as when scans came newest first.
 	first := &b.firstMain
 	if entry.agent.ID == "" && entry.parentRequestID == "" && record.RequestKind == "" &&
-		(first.recordID == "" || record.Timestamp.Before(first.at)) {
+		(first.recordID == "" || record.Timestamp.Before(first.at) ||
+			(record.Timestamp.Equal(first.at) && record.ID > first.recordID)) {
 		first.at, first.recordID, first.prompt = record.Timestamp, record.ID, looper.WithoutSystemReminders(record.Prompt)
 	}
 	if record.RequestKind != "" {

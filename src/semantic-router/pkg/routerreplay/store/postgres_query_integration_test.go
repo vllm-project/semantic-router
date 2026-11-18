@@ -82,7 +82,7 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 		t.Fatalf("detail page failed: %v", err)
 	}
 	count, matching := 0, 0
-	err = postgres.ScanMetadata(ctx, func(record Record) error {
+	err = postgres.ScanMetadata(ctx, QueryFilters{}, func(record Record) error {
 		count++
 		if record.Recipe == "evaluation" {
 			matching++
@@ -98,6 +98,26 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	})
 	if err != nil || count != 12250 || matching != 12230 {
 		t.Fatalf("scan count=%d matching=%d err=%v", count, matching, err)
+	}
+	// A filtered scan reads only the selected rows; the filter options still
+	// come from every row.
+	filtered := 0
+	err = postgres.ScanMetadata(ctx, QueryFilters{Recipe: "other", SessionID: "unrelated-session"}, func(record Record) error {
+		if record.Recipe != "other" || record.SessionID != "unrelated-session" {
+			return errors.New("filtered scan returned an unselected record")
+		}
+		filtered++
+		return nil
+	})
+	if err != nil || filtered != 19 {
+		t.Fatalf("filtered scan count=%d err=%v", filtered, err)
+	}
+	recipes := map[string]bool{}
+	if err = postgres.ScanFilterOptions(ctx, func(record Record) error {
+		recipes[record.Recipe] = true
+		return nil
+	}); err != nil || len(recipes) != 2 || !recipes["evaluation"] || !recipes["other"] {
+		t.Fatalf("filter options recipes=%v err=%v", recipes, err)
 	}
 	scoped, err := postgres.QueryPage(ctx, QueryFilters{SessionID: "old-session", Recipe: "evaluation", RecipeSet: true}, 100, 0, true)
 	if err != nil || scoped.Total != 2 || len(scoped.Records) != 2 {
@@ -132,7 +152,7 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 		t.Fatalf("legacy recipe session=%+v err=%v", legacy, err)
 	}
 	stopped := errors.New("stop scan")
-	if err = postgres.ScanMetadata(ctx, func(Record) error { return stopped }); !errors.Is(err, stopped) {
+	if err = postgres.ScanMetadata(ctx, QueryFilters{}, func(Record) error { return stopped }); !errors.Is(err, stopped) {
 		t.Fatalf("callback failure was hidden: %v", err)
 	}
 }
