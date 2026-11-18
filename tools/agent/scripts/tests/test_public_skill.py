@@ -113,6 +113,17 @@ class PublicSkillTests(unittest.TestCase):
 
     def test_repository_publication_is_complete_and_current(self):
         self.assertEqual(skill.sync(skill.SOURCE, skill.DESTINATION, check=True), [])
+        self.assertEqual(
+            skill.sync(
+                skill.SERVE_SOURCE,
+                skill.SERVE_DESTINATION,
+                check=True,
+                public_origin=skill.SERVE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-serve",
+                public_name="vllm-sr-serve",
+            ),
+            [],
+        )
         source_refs = list((skill.SOURCE / "references").glob("*.md"))
         self.assertEqual(
             {path.name for path in source_refs},
