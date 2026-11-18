@@ -738,14 +738,13 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         # its length counts their visual tokens.
         room = self.question_cap()[0] - visual + images + videos
         prompts = self._prompt_ids([entry[-1] for entry in rendered], room)
-        for (question_id, kind, keys, descriptions, _), ids in zip(
+        for (question_id, kind, keys, descriptions, _), prompt_ids in zip(
             rendered, prompts, strict=True
         ):
-            if ids is None:
+            if prompt_ids is None:
                 errors[question_id] = question_error(kind, self.over_cap())
                 continue
-            if media:
-                ids = self._expand(ids, media)
+            ids = self._expand(prompt_ids, media) if media else prompt_ids
             tokens += len(ids)
             items.append(
                 Item(
