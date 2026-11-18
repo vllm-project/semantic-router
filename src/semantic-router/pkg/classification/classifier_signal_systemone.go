@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 const systemOneSignalErrorPrefix = "systemone_"
@@ -21,6 +22,10 @@ const unreadToolResult = "unreadable_tool_result"
 // unreadImage is why a rule that reads the images read only part of them: an
 // image no decision model decodes, such as a remote URL or a GIF.
 const unreadImage = "unreadable_image"
+
+// unreadVideo is why a rule that reads the videos read only part of them: a
+// video no decision model decodes, such as a remote URL or an AVI.
+const unreadVideo = "unreadable_video"
 
 // SystemOneQuestionID is the ID a rule's question carries on the wire: the
 // Router's own, with a ':', so it is never an ID a model family was trained
@@ -91,6 +96,7 @@ type systemOneReading struct {
 	context               string
 	images                []string
 	videos                []string
+	videosIncomplete      bool
 }
 
 // previousAnswer is the last assistant turn before the current user turn,
@@ -228,6 +234,8 @@ func (r systemOneReading) unread(rule config.SystemOneRule) string {
 		return unreadToolResult
 	case r.imagesIncomplete && rule.Input.Image:
 		return unreadImage
+	case r.videosIncomplete && rule.Input.Video:
+		return unreadVideo
 	}
 	return ""
 }
@@ -417,6 +425,7 @@ func newResponseSignalResults() *SignalResults {
 // content it cannot read, is not asked and resolves as its on_unscanned says.
 func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []askedRule, reading systemOneReading) {
 	reading.images, reading.imagesIncomplete = decodedImages(reading.images)
+	reading.videos, reading.videosIncomplete = decodedVideos(reading.videos)
 	for _, asked := range rules {
 		if reason := reading.unread(asked.rule); reason != "" && !reading.hasInput(asked.rule) {
 			mu.Lock()
@@ -444,13 +453,17 @@ func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResul
 	}
 }
 
-// decodedImageTypes are the image data URLs the decision models decode.
-var decodedImageTypes = []string{"data:image/png;", "data:image/jpeg;", "data:image/jpg;", "data:image/webp;"}
-
 // undecodedImage reports an image no decision model decodes: one that was
-// not inline, an empty entry, or another format such as GIF.
+// not inline, an empty entry, or another format such as GIF. The codec is the
+// one that reads the medium downstream, so it answers what decodes.
 func undecodedImage(image string) bool {
-	return !slices.ContainsFunc(decodedImageTypes, func(prefix string) bool { return strings.HasPrefix(image, prefix) })
+	return !systemonecodec.DecodesImage(image)
+}
+
+// undecodedVideo reports a video no decision model decodes: one that was
+// not inline, an empty entry, or another format.
+func undecodedVideo(video string) bool {
+	return !systemonecodec.DecodesVideo(video)
 }
 
 // decodedImages keeps the images a decision model decodes and reports
@@ -458,6 +471,13 @@ func undecodedImage(image string) bool {
 func decodedImages(images []string) ([]string, bool) {
 	kept := slices.DeleteFunc(slices.Clone(images), undecodedImage)
 	return kept, len(kept) < len(images)
+}
+
+// decodedVideos keeps the videos a decision model decodes and reports
+// whether an input video is one no decision model decodes.
+func decodedVideos(videos []string) ([]string, bool) {
+	kept := slices.DeleteFunc(slices.Clone(videos), undecodedVideo)
+	return kept, len(kept) < len(videos)
 }
 
 func (c *Classifier) evaluateSystemOneDeployment(
