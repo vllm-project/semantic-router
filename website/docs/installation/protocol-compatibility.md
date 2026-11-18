@@ -503,6 +503,11 @@ tools or error translation.
   results. One that carries a value is reported as `dropped`. Like the other
   Responses input items, a reasoning item may carry `status`, which the openai
   SDK's stream helper sets.
+- A function tool whose `parameters` is `null`, which typed OpenAI clients
+  send for a tool that takes no arguments, is read like a tool without
+  `parameters`, in Responses `tools[]` and Chat `tools[].function` alike:
+  every backend receives the schema `{"type":"object"}` in place of the
+  `null`.
 - Backend replies are decoded into the same contract. A reply field that its
   `api_format` does not define is dropped and reported instead of failing the
   reply; see
