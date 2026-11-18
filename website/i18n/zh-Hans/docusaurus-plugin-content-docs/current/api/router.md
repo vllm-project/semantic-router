@@ -288,6 +288,8 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 
 列表和聚合请求接受 `recipe`、`decision`、`model`、`session_id`、`cache_status` 和 `search` 等过滤器。分页使用 `limit` 和 `offset`；`limit` 上限为 100。`showDetails=true` 会请求大体量字段，仅在需要这些字段时使用。
 
+`harness` 只保留它列出的 Harness 发送的记录，多个值用逗号分隔：`claude_code`、`codex`、`opencode`、`deepseek_harness`，以及表示没有 Harness 的请求（例如直接调用 API 的脚本）的 `api_client`；记录的 Harness 即其 `agent.harness`。列表响应带有 `harness_counts`：按 Harness 统计其他过滤器选出的记录，例如 `{"api_client": 51234, "claude_code": 1820, "codex": 977}`，因此只看一个 Harness 的记录时，仍能看到每个 Harness 发送了多少请求。
+
 带 `since` 时，聚合请求还接受 `interval`：不小于 `1m` 的时长，例如 `5m` 或 `1h`，它把时间窗口切分为最多 1,000 个区间。此时响应带有 `traffic`：`since`、`interval_seconds`、窗口内已完成请求的 `latency_p50_ms` 和 `latency_p95_ms`（窗口较繁忙时根据 1,024 个样本估算），以及从 `since` 到当前时刻的 `buckets`，按从旧到新排列，空区间也包含在内。每个桶包含起始时间 `start`，`requests`、`cached` 和 `failed`（失败或中止）三项计数，该区间已完成请求的 `latency_p50_ms` 和 `latency_p95_ms`（没有已完成请求时省略，区间较繁忙时根据 256 个样本估算），以及 `cost`，即该区间按货币统计的花费，结构与 `by_currency` 相同。不带 `interval` 时，响应保持不变。
 
 轨迹查询使用精确配方名。仅当会话记录属于一个配方时，才允许省略 `recipe`；同一会话跨配方时返回 `400`。显式空值 `recipe=` 选择旧的未分配配方记录。响应保留每次请求的路由、延迟和生命周期，包括同一轮次中的多次请求。
