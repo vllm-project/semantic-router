@@ -2,9 +2,10 @@ package store
 
 // Harnesses an AgentIdentity names.
 const (
-	HarnessClaudeCode = "claude_code"
-	HarnessCodex      = "codex"
-	HarnessOpenCode   = "opencode"
+	HarnessClaudeCode      = "claude_code"
+	HarnessCodex           = "codex"
+	HarnessOpenCode        = "opencode"
+	HarnessDeepSeekHarness = "deepseek_harness"
 )
 
 // AgentIdentity places a record in its agent run, the session it is filed
