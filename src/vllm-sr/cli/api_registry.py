@@ -8,6 +8,8 @@ The generated config schema lists the same names (tests check the two agree).
 
 from __future__ import annotations
 
+import re
+
 API_NAMES = ("chat_completions", "responses", "messages", "images", "systemone")
 ALIASES = {"openai": "chat_completions", "anthropic": "messages"}
 # The APIs a listener without apis serves.
@@ -39,9 +41,17 @@ PATTERNS = {
 MODELS_PATH = "/v1/models"
 
 
-def served_path_regex(apis: tuple[str, ...]) -> str:
-    """One RE2 expression a whole request path matches when one of the APIs, or the model listing, serves it."""
-    alternatives = [PATTERNS[name].removeprefix("^").removesuffix("$") for name in apis]
+def served_path_regex(
+    apis: tuple[str, ...], prefixes: dict[str, str] | None = None
+) -> str:
+    """One RE2 expression a whole request path matches when one of the APIs, or the model listing, serves it;
+    an API with a prefix is also served under it."""
+    alternatives = []
+    for name in apis:
+        inner = PATTERNS[name].removeprefix("^").removesuffix("$")
+        alternatives.append(inner)
+        if prefix := (prefixes or {}).get(name):
+            alternatives.append(re.escape(prefix) + "(?:" + inner + ")")
     return "(" + "|".join([*alternatives, MODELS_PATH]) + ")"
 
 

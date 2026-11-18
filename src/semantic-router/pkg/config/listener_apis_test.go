@@ -1,10 +1,13 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 )
 
 const listenerAPIsDocument = `version: v0.5
@@ -199,5 +202,118 @@ recipes:
 	}
 	if strings.Contains(string(migrated), "api_format: chat_completions") {
 		t.Fatal("migrate rewrote an api_format alias")
+	}
+}
+
+func TestAnAPIPrefixMountsOnlyThatAPI(t *testing.T) {
+	cfg, err := loadListenerAPIs(t, "      anthropic: {prefix: /anthropic}\n      openai: {}", "openai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Listeners[0].APIs["messages"].Prefix; got != "/anthropic" {
+		t.Fatalf("messages prefix %q", got)
+	}
+	for path, want := range map[string]string{
+		"/anthropic/v1/messages":                  "/v1/messages",
+		"/anthropic/v1/messages/count_tokens":     "/v1/messages/count_tokens",
+		"/anthropic/v1/messages?beta=true":        "/v1/messages",
+		"/anthropic/v1/messages/":                 "/v1/messages",
+		"/v1/messages":                            "/v1/messages",
+		"/anthropic/v1/messagesx":                 "/anthropic/v1/messagesx",
+		"/anthropicx/v1/messages":                 "/anthropicx/v1/messages",
+		"/anthropic/anthropic/v1/messages":        "/anthropic/anthropic/v1/messages",
+		"/anthropic/v1/chat/completions":          "/anthropic/v1/chat/completions",
+		"/anthropic/v1/messages/count_tokens/foo": "/anthropic/v1/messages/count_tokens/foo",
+	} {
+		if got := cfg.APIPath(path); got != want {
+			t.Errorf("APIPath(%q) = %q, want %q", path, got, want)
+		}
+	}
+	var none *RouterConfig
+	if none.APIPath("/anthropic/v1/messages") != "/anthropic/v1/messages" {
+		t.Error("a nil config rewrote a path")
+	}
+}
+
+func TestWithoutAPrefixNothingIsMounted(t *testing.T) {
+	cfg, err := loadListenerAPIs(t, "      anthropic: {}", "openai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.APIPath("/anthropic/v1/messages"); got != "/anthropic/v1/messages" {
+		t.Fatalf("an unconfigured prefix was read: %q", got)
+	}
+}
+
+func TestABadAPIPrefixIsRefused(t *testing.T) {
+	for _, prefix := range []string{`"/"`, `"anthropic"`, `"/anthropic/"`, `"/a b"`, `"/a?x"`, `"//a"`} {
+		if _, err := loadListenerAPIs(t, "      anthropic: {prefix: "+prefix+"}", "openai"); err == nil ||
+			!strings.Contains(err.Error(), "prefix") {
+			t.Errorf("prefix %s: %v", prefix, err)
+		}
+	}
+}
+
+// Every API of the registry mounts under its own prefix, in each of its path
+// forms, and nowhere else.
+func TestEveryAPIMountsUnderItsPrefix(t *testing.T) {
+	mounts := map[string]string{
+		"chat_completions": "/mc",
+		"responses":        "/mr",
+		"messages":         "/mm",
+		"images":           "/mi",
+		"systemone":        "/ms",
+	}
+	var apis []string
+	for name, prefix := range mounts {
+		apis = append(apis, "      "+name+": {prefix: "+prefix+"}")
+	}
+	cfg, err := loadListenerAPIs(t, strings.Join(apis, "\n"), "openai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	covered := map[string]bool{}
+	for _, api := range apiregistry.All() {
+		prefix, ok := mounts[string(api.Name)]
+		if !ok {
+			t.Fatalf("api %s is not covered by this test; add it to mounts", api.Name)
+		}
+		covered[string(api.Name)] = true
+		paths := append([]string{}, api.Paths...)
+		switch api.Name {
+		case apiregistry.ChatCompletions:
+			paths = append(paths, "/openai/v1/chat/completions", "/openai/deployments/vllm-sr/auto/chat/completions")
+		case apiregistry.Responses:
+			paths = append(paths, "/v1/responses/resp_1", "/v1/responses/resp_1/input_items", "/openai/responses", "/openai/v1/responses")
+		}
+		for _, path := range paths {
+			if got := cfg.APIPath(prefix + path + "?q=1"); got != path {
+				t.Errorf("%s: APIPath(%q) = %q, want %q", api.Name, prefix+path, got, path)
+			}
+			if got := cfg.APIPath(path); got != path {
+				t.Errorf("%s: an unprefixed %q became %q", api.Name, path, got)
+			}
+			// Another API's prefix does not mount this one.
+			for other, otherPrefix := range mounts {
+				if other == string(api.Name) {
+					continue
+				}
+				if got := cfg.APIPath(otherPrefix + path); got != otherPrefix+path {
+					t.Errorf("%s's path %q was read under %s's prefix: %q", api.Name, path, other, got)
+				}
+			}
+			misses := []string{prefix + "x" + path, prefix + path + "x", prefix + prefix + path}
+			if strings.HasSuffix(path, "/resp_1") {
+				misses = slices.Delete(misses, 1, 2) // resp_1x is another response id
+			}
+			for _, miss := range misses {
+				if got := cfg.APIPath(miss); got != miss {
+					t.Errorf("%s: near miss %q became %q", api.Name, miss, got)
+				}
+			}
+		}
+	}
+	if len(covered) != len(mounts) {
+		t.Fatalf("covered %v of %v", covered, mounts)
 	}
 }

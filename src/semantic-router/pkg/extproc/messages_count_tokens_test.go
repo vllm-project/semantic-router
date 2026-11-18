@@ -217,3 +217,37 @@ func TestCountTokensScannerMatchesThePattern(t *testing.T) {
 		require.Equal(t, byPattern(text), textPieceTokens(text), "%q", text)
 	}
 }
+
+func TestConfiguredAPIPrefixIsReadAsTheAPIPath(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+listeners:
+  - name: public
+    port: 8899
+    apis:
+      anthropic: {prefix: /anthropic}
+providers:
+  defaults:
+    model: m
+  models:
+    - name: m
+      api_format: anthropic
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+recipes:
+  - name: default
+`))
+	require.NoError(t, err)
+	for path, countTokens := range map[string]bool{"/anthropic/v1/messages": false, "/anthropic/v1/messages/count_tokens?x=1": true} {
+		path := cfg.APIPath(path)
+		router := &OpenAIRouter{Config: cfg}
+		response, wantsBody := router.classifyRequestHeaders("POST", path)
+		require.Nil(t, response, path)
+		require.True(t, wantsBody, path)
+		ctx := &RequestContext{Headers: map[string]string{":path": path}}
+		detectSourceFormat(path, ctx)
+		require.Equal(t, llmprotocol.AnthropicMessagesV1, ctx.SourceFormat, path)
+		require.Equal(t, countTokens, isCountTokensRequest(ctx), path)
+	}
+}
