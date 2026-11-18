@@ -67,7 +67,7 @@ x-vsr-replay-id: replay_01J...
 
 - Read `x-vsr-schema-version` before parsing the other headers; the current value is `3`. Responses of the Router's own handlers never carry it, so its absence there is expected.
 - A request keeps the configuration version it started on, even when a hot reload activates another one while it runs. `x-vsr-config-version` counts the activations of one Router, which keeps its own configuration history; to check that replicas serve the same configuration, compare the `active_runtime_hash` that `GET /api/v1/config/hash` reports.
-- Recipe names scope local signal, projection, decision, cache, replay, metric, and learning or session identities. Use `x-vsr-selected-recipe` together with the local decision and signal names when correlating a response with Insights or metrics.
+- Recipe names scope local signal, projection, decision, cache, replay, metric, and learning or session identities. Use `x-vsr-selected-recipe` together with the local decision and signal names when correlating a response with the Dashboard's Requests page or metrics.
 
 ## The trace {#the-trace}
 

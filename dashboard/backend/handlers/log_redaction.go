@@ -72,31 +72,43 @@ func redactURLsForLog(text string) string {
 // producer output reaches a logs.read caller. Source loggers must still avoid
 // content, but this catches common credential shapes and encoded key blocks.
 func redactRuntimeLogLines(lines []string) []string {
+	var redactor runtimeLogRedactor
 	redacted := make([]string, 0, len(lines))
-	insidePrivateKey := false
 	for _, line := range lines {
-		upper := strings.ToUpper(line)
-		if strings.Contains(upper, "-----BEGIN") && strings.Contains(upper, "PRIVATE KEY-----") {
-			insidePrivateKey = true
-			redacted = append(redacted, "[REDACTED PRIVATE KEY]")
-			continue
+		if safe, ok := redactor.redact(line); ok {
+			redacted = append(redacted, safe)
 		}
-		if insidePrivateKey {
-			if strings.Contains(upper, "-----END") && strings.Contains(upper, "PRIVATE KEY-----") {
-				insidePrivateKey = false
-			}
-			continue
-		}
-		trimmed := strings.TrimSpace(line)
-		if encodedSecretLinePattern.MatchString(trimmed) {
-			redacted = append(redacted, "[REDACTED ENCODED VALUE]")
-			continue
-		}
-		line = redactURLsForLog(line)
-		for _, rule := range runtimeLogCredentialPatterns {
-			line = rule.pattern.ReplaceAllString(line, rule.replacement)
-		}
-		redacted = append(redacted, line)
 	}
 	return redacted
+}
+
+// runtimeLogRedactor applies redactRuntimeLogLines one line at a time. A
+// private key block spans lines, so each producer stream needs its own
+// redactor, fed in order.
+type runtimeLogRedactor struct {
+	insidePrivateKey bool
+}
+
+// redact returns the safe view of line, or false for a line inside a private
+// key block.
+func (redactor *runtimeLogRedactor) redact(line string) (string, bool) {
+	upper := strings.ToUpper(line)
+	if strings.Contains(upper, "-----BEGIN") && strings.Contains(upper, "PRIVATE KEY-----") {
+		redactor.insidePrivateKey = true
+		return "[REDACTED PRIVATE KEY]", true
+	}
+	if redactor.insidePrivateKey {
+		if strings.Contains(upper, "-----END") && strings.Contains(upper, "PRIVATE KEY-----") {
+			redactor.insidePrivateKey = false
+		}
+		return "", false
+	}
+	if encodedSecretLinePattern.MatchString(strings.TrimSpace(line)) {
+		return "[REDACTED ENCODED VALUE]", true
+	}
+	line = redactURLsForLog(line)
+	for _, rule := range runtimeLogCredentialPatterns {
+		line = rule.pattern.ReplaceAllString(line, rule.replacement)
+	}
+	return line, true
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Button } from '../../ui'
 import { benchApi, SrBenchRequestError } from './api'
 import BenchSelect from './BenchSelect'
 import RunOptionsStatus from './RunOptionsStatus'
@@ -6,7 +7,8 @@ import useRunOptions from './useRunOptions'
 import { profileTitle } from './datasetPresentation'
 import { clearReplay, readReplay, saveReplay, type PendingReplay } from './replaySubmission'
 import type { Run } from './types'
-import styles from './SrBench.module.css'
+import { ActionRow, EmptyNote, Notice } from './benchUi'
+import { benchText } from './benchStyles'
 
 type Props = { actorID: string; canRun: boolean; onCreated: (run: Run) => void }
 
@@ -110,31 +112,33 @@ function ScopedReplayComposer({ actorID, canRun, onCreated }: Props) {
   }
 
   return (
-    <section className={styles.replayComposer} aria-label="Estimate a routing change">
+    <section className="grid min-w-0 gap-3" aria-label="Estimate a routing change">
       {saved.error ? (
-        <p role="alert" className={styles.error}>
+        <Notice tone="danger" as="p" role="alert" className="my-0">
           {saved.error}
-        </p>
+        </Notice>
       ) : submission ? (
-        <div className={styles.notice}>
+        <Notice tone="warning" className="my-0">
           <h3>Estimate submission needs reconciliation</h3>
           <p>
             The exact pair and submission ID are saved for this account in this tab. Checking again
             retrieves or completes the same estimate.
           </p>
-          <button disabled={!canRun || pending} onClick={() => void replay()}>
-            {pending ? 'Reconciling…' : 'Check or submit same estimate'}
-          </button>
-        </div>
+          <div>
+            <Button size="sm" disabled={!canRun || pending} onClick={() => void replay()}>
+              {pending ? 'Reconciling…' : 'Check or submit same estimate'}
+            </Button>
+          </div>
+        </Notice>
       ) : empty ? (
-        <p className={styles.optionEmpty} role="status">
+        <EmptyNote role="status" className="my-0">
           {baselines.scanLimited
             ? 'No verified replay pairs available. Some saved evidence exceeded the verification limit.'
             : 'No compatible saved pairs. Replay needs a stateless routing preview and complete single-model answers on the same frozen protocol.'}
-        </p>
+        </EmptyNote>
       ) : (
         <>
-          <p className={styles.muted}>
+          <p className={`${benchText.muted} max-w-3xl`}>
             Reuse saved answers without new model calls. Live evaluation is still needed to validate
             a routing change.
           </p>
@@ -145,7 +149,7 @@ function ScopedReplayComposer({ actorID, canRun, onCreated }: Props) {
             onMore={baselines.loadMore}
           />
           {!!baselines.items.length && (
-            <div className={styles.optionSelectRow}>
+            <div className="grid min-w-0 grid-cols-1 items-end gap-3 sm:grid-cols-2">
               <BenchSelect
                 label="Saved single-model baseline"
                 value={baseline}
@@ -194,29 +198,29 @@ function ScopedReplayComposer({ actorID, canRun, onCreated }: Props) {
             !previews.error &&
             !previews.items.length &&
             !previews.next && (
-              <p className={styles.optionEmpty} role="status">
+              <EmptyNote role="status" className="my-0">
                 {previews.scanLimited
                   ? 'No verified previews for this baseline. Some evidence exceeded the verification limit.'
                   : 'This saved baseline no longer has a compatible preview. Choose another baseline.'}
-              </p>
+              </EmptyNote>
             )}
           {selected && (
-            <div className={styles.actions}>
-              <button
-                className={styles.primary}
+            <ActionRow>
+              <Button
+                size="sm"
                 disabled={!canRun || pending || !ready}
                 onClick={() => void replay()}
               >
                 {pending ? 'Creating estimate…' : 'Create offline estimate'}
-              </button>
-            </div>
+              </Button>
+            </ActionRow>
           )}
         </>
       )}
       {error && (
-        <p role="alert" className={styles.error}>
+        <Notice tone="danger" as="p" role="alert" className="my-0">
           {error}
-        </p>
+        </Notice>
       )}
     </section>
   )

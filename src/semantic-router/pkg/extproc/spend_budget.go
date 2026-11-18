@@ -80,8 +80,8 @@ type budgetRefusal struct {
 // Looper hops it makes in process spend the same budgets and count to it.
 type clientSpendKey struct{}
 
-// requestSpend returns the request's spend state, nil when no budget is
-// configured.
+// requestSpend returns the request's spend state, nil when no budget
+// applies.
 func (r *OpenAIRouter) requestSpend(ctx *RequestContext) *requestSpend {
 	if ctx == nil || r == nil || r.Config == nil || !r.Config.Budgets.Enabled() {
 		return nil
@@ -94,11 +94,20 @@ func (r *OpenAIRouter) requestSpend(ctx *RequestContext) *requestSpend {
 		parent = context.Background()
 	}
 	if client, ok := parent.Value(clientSpendKey{}).(*requestSpend); ok && ctx.LooperRequest {
+		if len(client.limits) == 0 {
+			return nil
+		}
 		ctx.spend = &requestSpend{limits: client.limits, currency: client.currency, client: client}
 		return ctx.spend
 	}
-	ctx.spend = &requestSpend{limits: r.spendLimits(ctx), currency: r.Config.Budgets.EffectiveCurrency(), model: ctx.RequestModel}
-	ctx.TraceContext = context.WithValue(parent, clientSpendKey{}, ctx.spend)
+	spend := &requestSpend{limits: r.spendLimits(ctx), currency: r.Config.Budgets.EffectiveCurrency(), model: ctx.RequestModel}
+	// Keep even an empty scope on the context: Looper hops must inherit it
+	// instead of resolving a new scope from their own identity.
+	ctx.TraceContext = context.WithValue(parent, clientSpendKey{}, spend)
+	if len(spend.limits) == 0 {
+		return nil
+	}
+	ctx.spend = spend
 	return ctx.spend
 }
 

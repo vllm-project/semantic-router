@@ -162,7 +162,8 @@ effort, then applies route-level coverage and score gates. See
 [Multi Factor](../tutorials/algorithm/selection/multi-factor) for balanced,
 quality-first, and cost-first objectives.
 
-In the Dashboard, open **Build → Models → Evaluation Records** to add or edit
+In the Dashboard, open **Models → Backend models** and choose
+**Manage evaluation records** from the page's **⋯** menu to add or edit
 records. Benchmark and index definitions remain explicit YAML because changing
 their semantics creates a versioned scoring contract, not ordinary Model Card
 metadata.

@@ -277,11 +277,13 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 
 列表和聚合请求接受 `recipe`、`decision`、`model`、`session_id`、`cache_status` 和 `search` 等过滤器。分页使用 `limit` 和 `offset`；`limit` 上限为 100。`showDetails=true` 会请求大体量字段，仅在需要这些字段时使用。
 
+带 `since` 时，聚合请求还接受 `interval`：不小于 `1m` 的时长，例如 `5m` 或 `1h`，它把时间窗口切分为最多 1,000 个区间。此时响应带有 `traffic`：`since`、`interval_seconds`、窗口内已完成请求的 `latency_p50_ms` 和 `latency_p95_ms`（窗口较繁忙时根据 1,024 个样本估算），以及从 `since` 到当前时刻的 `buckets`，按从旧到新排列，空区间也包含在内。每个桶包含起始时间 `start`，`requests`、`cached` 和 `failed`（失败或中止）三项计数，该区间已完成请求的 `latency_p50_ms` 和 `latency_p95_ms`（没有已完成请求时省略，区间较繁忙时根据 256 个样本估算），以及 `cost`，即该区间按货币统计的花费，结构与 `by_currency` 相同。不带 `interval` 时，响应保持不变。
+
 轨迹查询使用精确配方名。仅当会话记录属于一个配方时，才允许省略 `recipe`；同一会话跨配方时返回 `400`。显式空值 `recipe=` 选择旧的未分配配方记录。响应保留每次请求的路由、延迟和生命周期，包括同一轮次中的多次请求。
 
-记录、轨迹中的路由和消息在具有显式对话身份时包含 `conversation_id`。消息按对话和轮次分组，因此同一会话内的不同对话都可以从第零轮开始。Insights 会显示对话边界和完整 ID。
+记录、轨迹中的路由和消息在具有显式对话身份时包含 `conversation_id`。消息按对话和轮次分组，因此同一会话内的不同对话都可以从第零轮开始。Dashboard 的 **Requests** 页面会显示对话边界和完整 ID。
 
-Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值，并叠加其所属配方自身的插件。`prompt_capture` 决定记录在路由证据之外保留什么：默认的 `none` 不保留任何请求或响应文本；`raw` 保留采集开关允许的文本；`verified` 只在配方的 PII 规则确认提示词不含个人数据时保留提示词，检测到 PII 或无法确认 PII 状态时省略它。`capture_personal_data` 是它已弃用的写法：`false` 加载为 `verified`，`true` 加载为 `raw`。
+Dashboard 的 **Requests** 页面将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值，并叠加其所属配方自身的插件。`prompt_capture` 决定记录在路由证据之外保留什么：默认的 `none` 不保留任何请求或响应文本；`raw` 保留采集开关允许的文本；`verified` 只在配方的 PII 规则确认提示词不含个人数据时保留提示词，检测到 PII 或无法确认 PII 状态时省略它。`capture_personal_data` 是它已弃用的写法：`false` 加载为 `verified`，`true` 加载为 `raw`。
 
 `capture_request_body: false` 会让整条记录都不含请求文本：请求体、`prompt`、`tool_definitions`，以及 `tool_trace` 中每个请求步骤的文本、参数和结果。`capture_response_body: false` 对响应体、响应步骤、`hallucination_spans`，以及回退结果 `execution_record` 中提供方返回的内容同样处理；每个失败的尝试只保留状态码和固定的原因。这些步骤保留类型、工具名、调用 ID 和状态。被省略的文本直接缺失，不标记为 `content_redacted`；该标记仍只表示对读者角色隐藏的内容，以及 `capture_tool_results` 未保留的工具结果。`max_tool_trace_bytes` 也会截断步骤文本，此时轨迹中的用户和助手消息带有 `content_truncated`。没有任何一层设置它时，每个字段保留 65,536 字节（64 KiB），步骤的 `raw_arguments` 和 `raw_output` 也包括在内，被截断时带有 `raw_truncated: true`；此时 `max_tool_trace_total_bytes` 为 262,144 字节（256 KiB），限制所有步骤的总和：最旧的步骤被丢弃，`tool_trace` 带有 `steps_truncated: true` 和 `dropped_step_count`，与 `max_tool_trace_steps` 相同。
 

@@ -8,6 +8,8 @@ import (
 
 type UserListOptions struct {
 	Status string
+	// Role is one role or a comma-separated list that matches any of them.
+	Role   string
 	Query  string
 	Sort   string
 	Order  string
@@ -47,6 +49,7 @@ func normalizeUserListOptions(options UserListOptions) UserListOptions {
 		options.Order = "DESC"
 	}
 	options.Status = strings.TrimSpace(options.Status)
+	options.Role = strings.ToLower(strings.TrimSpace(options.Role))
 	options.Query = strings.ToLower(strings.TrimSpace(options.Query))
 	return options
 }
@@ -57,6 +60,11 @@ func userListPredicate(options UserListOptions) (string, []interface{}) {
 	if options.Status != "" && options.Status != "all" {
 		predicates = append(predicates, "status = ?")
 		args = append(args, options.Status)
+	}
+	if roles := listFilterValues(options.Role); len(roles) > 0 {
+		predicate, roleArgs := sqlMatchAny("role", roles)
+		predicates = append(predicates, predicate)
+		args = append(args, roleArgs...)
 	}
 	if options.Query != "" {
 		pattern := "%" + options.Query + "%"
