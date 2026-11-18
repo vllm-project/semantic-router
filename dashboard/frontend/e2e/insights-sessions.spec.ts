@@ -284,6 +284,7 @@ test('shows sessions as a tree of agents and turns with the shared agent events'
   ).toBeVisible()
   await expect(signals.locator('tr[data-harness="cursor"]')).toContainText('router-keyed')
   await expect(signals.locator('tr[data-harness="cursor"]')).toContainText('not sent')
+  await expect(signals.getByRole('columnheader', { name: 'Tool loops' })).toHaveCount(0)
 
   await page.screenshot({ path: info.outputPath('sessions-tree.png'), fullPage: true })
 })
