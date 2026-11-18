@@ -34,11 +34,13 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	}
 	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(projected, model, target, shadows...)
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
+	projected, toolChoiceDiagnostics := llmprotocol.ProjectToolChoiceNone(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, toolChoiceDiagnostics,
+		fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
 }
 
 // projectReasoningSignatures sends signed thinking in the history to a backend
