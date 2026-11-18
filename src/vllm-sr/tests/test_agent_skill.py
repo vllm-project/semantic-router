@@ -33,6 +33,7 @@ BENCHMARK_SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-benchmark"
 COMPARE_SKILL = (
     REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-compare-configurations"
 )
+TUNE_SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-tune-recipe"
 PAGES = [
     SKILL / "SKILL.md",
     *sorted((SKILL / "references").glob("*.md")),
@@ -44,6 +45,8 @@ PAGES = [
     *sorted((BENCHMARK_SKILL / "references").glob("*.md")),
     COMPARE_SKILL / "SKILL.md",
     *sorted((COMPARE_SKILL / "references").glob("*.md")),
+    TUNE_SKILL / "SKILL.md",
+    *sorted((TUNE_SKILL / "references").glob("*.md")),
 ]
 INSTALLER = REPO_ROOT / "install.sh"
 FENCE = re.compile(r"^[ \t]*```(\w*)[^\n]*\n(.*?)^[ \t]*```", re.M | re.S)

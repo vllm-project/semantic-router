@@ -39,6 +39,8 @@ For a bounded, reproducible sr-bench run, use the
 [Benchmark skill](https://vllm-sr.ai/install/agent/vllm-sr-benchmark/SKILL.md).
 For a paired A/B verdict from compatible runs, use the
 [Comparison skill](https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/SKILL.md).
+For a measured recipe improvement and calibration handoff, use the
+[Tune-recipe skill](https://vllm-sr.ai/install/agent/vllm-sr-tune-recipe/SKILL.md).
 
 :::note Release channel
 The Skill follows `main`, as these pages do. It installs the stable release
