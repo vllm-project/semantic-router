@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/url"
 	"strings"
 	"testing"
@@ -51,6 +52,33 @@ func TestParseRouterReplayTrafficQueryBoundsTheSeries(t *testing.T) {
 				t.Fatalf("query = %+v", query)
 			}
 		})
+	}
+}
+
+func TestRouterReplayTrafficBucketCountStaysPositiveAtTheBounds(t *testing.T) {
+	now := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
+	distant := time.Time{}.Add(time.Nanosecond)
+	for _, tc := range []struct {
+		name     string
+		since    time.Time
+		interval time.Duration
+		want     int
+	}{
+		{name: "exact multiple", since: now.Add(-1000 * time.Minute), interval: time.Minute, want: 1000},
+		{name: "one nanosecond over", since: now.Add(-1000*time.Minute - time.Nanosecond), interval: time.Minute, want: 1001},
+		{name: "since in the future", since: now.Add(time.Hour), interval: time.Minute, want: 1},
+		{name: "saturated span", since: distant, interval: time.Minute, want: int(time.Duration(math.MaxInt64)/time.Minute) + 1},
+		{name: "clamped count", since: distant, interval: time.Nanosecond, want: math.MaxInt32},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := routerReplayTrafficBucketCount(tc.since, now, tc.interval); got != tc.want {
+				t.Fatalf("count = %d, want %d", got, tc.want)
+			}
+		})
+	}
+	// A distant since is refused before any scan allocates its buckets.
+	if _, err := parseRouterReplayTrafficQuery(url.Values{"interval": {"1m"}}, distant, now); err == nil || !strings.Contains(err.Error(), "at most 1000") {
+		t.Fatalf("err = %v, want the series bound", err)
 	}
 }
 

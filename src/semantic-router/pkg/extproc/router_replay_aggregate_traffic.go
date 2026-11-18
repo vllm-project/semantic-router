@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"net/url"
 	"strings"
@@ -51,12 +52,19 @@ func parseRouterReplayTrafficQuery(values url.Values, since, now time.Time) (*ro
 }
 
 // routerReplayTrafficBucketCount is the number of intervals from since to
-// until, at least one.
+// until, at least one. Time.Sub saturates at the largest Duration for a
+// distant since, so the ceiling divides before it adds, and the count is
+// clamped to what an int holds on every platform.
 func routerReplayTrafficBucketCount(since, until time.Time, interval time.Duration) int {
-	if !until.After(since) {
+	if !until.After(since) || interval <= 0 {
 		return 1
 	}
-	return int((until.Sub(since) + interval - 1) / interval)
+	span := until.Sub(since)
+	count := int64(span / interval)
+	if span%interval != 0 {
+		count++
+	}
+	return int(min(count, math.MaxInt32))
 }
 
 // cacheKey extends the filters' key, so a series and a plain aggregate of the
