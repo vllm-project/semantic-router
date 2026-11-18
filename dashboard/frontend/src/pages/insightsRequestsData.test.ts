@@ -63,10 +63,11 @@ describe('request list filters', () => {
 describe('the harness filter', () => {
   it('reads the harnesses the replay API filters by, and API clients as api_client', () => {
     // "api" names API clients in links from before the server filtered harnesses
-    expect(read('harness=codex,claudecode,api,cursor,codex').harness).toEqual([
+    expect(read('harness=codex,claudecode,api,cursor,gemini,codex').harness).toEqual([
       'codex',
       'claude_code',
       'api_client',
+      'cursor',
     ])
     expect(read('harness=api_client').harness).toEqual(['api_client'])
   })
@@ -99,6 +100,8 @@ describe('the harness filter', () => {
       'claude_code',
       'codex',
       'opencode',
+      'cursor',
+      'openclaw',
       'deepseek_harness',
       'api_client',
     ])

@@ -47,16 +47,18 @@ describe('Insights cost charts', () => {
 
   it('keeps missing pricing unknown and states the estimate and lifecycle scope', () => {
     const html = renderToStaticMarkup(<InsightsCharts aggregate={aggregate} />)
-    expect(html).toContain('Estimated Model Cost')
-    expect(html).toContain(
-      'Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.',
-    )
+    expect(html).toContain('Model cost')
+    expect(html).toContain('Reference cost')
+    expect(html).toContain('not a quality comparison, not GPU bills or provider invoices.')
     expect(html).toContain('<summary>How estimates work</summary>')
     expect(html).not.toMatch(/<details[^>]*\sopen(?:[\s=>]|$)/)
-    expect(html.indexOf('<details')).toBeLessThan(html.indexOf('New records use'))
+    expect(html.indexOf('<details')).toBeLessThan(html.indexOf('Each request is priced twice'))
     expect(html.indexOf('</details>')).toBeGreaterThan(html.indexOf('Older records retain'))
-    expect(html).toContain('N/A')
-    expect(html).toContain('not completed or lack token usage, model pricing, or baseline data')
+    expect(html).not.toContain('N/A')
+    expect(html).toContain(
+      'title="No request in range has both a priced model cost and a priced reference model',
+    )
+    expect(html).toContain('not completed or lack token usage, model pricing, or reference data')
     expect(html).toContain('The total still counts the priced calls of a request that failed.')
     expect(html).toContain('recipe’s complete model pool across all decisions')
     expect(html).toContain('Historical requests without captured prices remain')
@@ -89,8 +91,8 @@ describe('Insights cost charts', () => {
       ],
     }
     const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('EUR estimates')
-    expect(html).toContain('USD estimates')
+    expect(html).toContain('>EUR<')
+    expect(html).toContain('>USD<')
     expect(html).toContain('no exchange-rate conversion is applied')
     expect(html).toContain('$10.00')
     expect(html).not.toContain('$11.00')
@@ -106,12 +108,12 @@ describe('Insights cost charts', () => {
       excluded_record_count: 57906,
     }
     const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('>579.00<')
+    expect(html).toContain('>-579.00<')
     expect(html).toContain('>1,740.22<')
     expect(html).toContain('>1,161.22<')
     expect(html).toContain('Price units')
     expect(html).not.toMatch(/XXX(\s|&nbsp;|\u00a0)?[0-9]/)
-    expect(html).toContain('57,906 filtered records excluded')
+    expect(html).toContain('57,906 filtered records left out of the comparison')
   })
 
   it('ranks each distribution with its share of the filtered records', () => {

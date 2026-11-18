@@ -433,7 +433,7 @@ function renderUnavailableCost(record: InsightsRecord, labels: ModelLabels) {
   const unavailable = getUnavailableCost(record, labels)
   return (
     <span className="text-xs text-subtle-foreground" title={unavailable?.reason}>
-      {unavailable?.label || 'N/A'}
+      {unavailable?.label || '—'}
     </span>
   )
 }
