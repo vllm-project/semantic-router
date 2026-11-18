@@ -51,6 +51,11 @@ config:
             operator: OR
             method: regex
             keywords: ['(?m)^\s*\d+\.\s+']
+          # A literal keyword in Thai, which has no spaces between words.
+          - name: thai_price
+            description: Thai prompts that ask for a price.
+            operator: OR
+            keywords: ['ราคา']
       decisions:
         - name: many_questions_routing
           description: Route requests with four or more explicit questions.
@@ -71,6 +76,17 @@ config:
             conditions:
               - type: keyword
                 name: numbered_steps
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: thai_price_routing
+          description: Route Thai prompts that ask for a price.
+          priority: 80
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: thai_price
           modelRefs:
             - model: general-expert
               use_reasoning: false

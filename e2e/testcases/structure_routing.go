@@ -9,10 +9,11 @@ import (
 )
 
 // targetStructureDecision is one of the decisions configured to route on the
-// request shape: keyword rules that count questions or find numbered steps
-// (see the structure recipe in e2e/profiles/signal-routing/values.yaml). It is used only to
+// request shape: keyword rules that count questions, find numbered steps or
+// find a Thai literal keyword in running text (see the structure recipe in
+// e2e/profiles/signal-routing/values.yaml). It is used only to
 // confirm the negative case doesn't accidentally land on it; no keyword
-// signal in the trace is what actually proves neither rule matched.
+// signal in the trace is what actually proves no rule matched.
 const targetStructureDecision = "many_questions_routing"
 
 func init() {

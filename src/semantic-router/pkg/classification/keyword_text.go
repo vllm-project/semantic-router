@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -34,23 +35,45 @@ const (
 	myanmarVirama = '\u1039'
 )
 
-// keywordSyllableMatch reports whether a match in an unspaced syllabic script
-// stands as a whole syllable rather than splitting one: it must not end before
-// a combining mark of the same cluster, nor start after a preposed vowel or a
-// stacking sign that belongs to the next consonant.
+// Thai and Lao vowels written after their consonant that are letters, not
+// combining marks: Thai SARA A, SARA AA, SARA AM and LAKKHANGYAO, and Lao A,
+// AA, AM and SEMIVOWEL SIGN NYO. A keyword ending right before one would leave
+// that vowel behind.
+const followingVowels = "\u0E30\u0E32\u0E33\u0E45\u0EB0\u0EB2\u0EB3\u0EBD"
+
+// keywordSyllableMatch reports whether a match of a keyword in an unspaced
+// syllabic script counts. Each edge follows the rune of the keyword at that
+// edge: a Thai, Lao, Khmer or Myanmar edge must not end before a combining
+// mark or a Thai or Lao following vowel, nor start after a preposed vowel or a
+// stacking sign that belongs to the next consonant; a CJK edge is not checked,
+// as for a CJK keyword; any other edge, such as a Latin letter or a digit,
+// must be a word edge, as for a spaced-script keyword.
 func keywordSyllableMatch(text string, start, end int) bool {
-	if end < len(text) {
-		if next, _ := utf8.DecodeRuneInString(text[end:]); unicode.In(next, unicode.Mn, unicode.Mc) {
-			return false
-		}
+	first, _ := utf8.DecodeRuneInString(text[start:end])
+	last, _ := utf8.DecodeLastRuneInString(text[start:end])
+	return keywordStartMatch(text, start, first) && keywordEndMatch(text, end, last)
+}
+
+func keywordStartMatch(text string, start int, first rune) bool {
+	if start == 0 || isCJK(first) {
+		return true
 	}
-	if start > 0 {
-		prev, _ := utf8.DecodeLastRuneInString(text[:start])
-		if unicode.Is(unicode.Logical_Order_Exception, prev) || prev == khmerCoeng || prev == myanmarVirama {
-			return false
-		}
+	prev, _ := utf8.DecodeLastRuneInString(text[:start])
+	if isSyllabicScript(first) {
+		return !unicode.Is(unicode.Logical_Order_Exception, prev) && prev != khmerCoeng && prev != myanmarVirama
 	}
-	return true
+	return prev != '_' && !isBoundaryBlockingRune(prev)
+}
+
+func keywordEndMatch(text string, end int, last rune) bool {
+	if end == len(text) || isCJK(last) {
+		return true
+	}
+	next, _ := utf8.DecodeRuneInString(text[end:])
+	if isSyllabicScript(last) {
+		return !unicode.In(next, unicode.Mn, unicode.Mc) && !strings.ContainsRune(followingVowels, next)
+	}
+	return next != '_' && !isBoundaryBlockingRune(next)
 }
 
 func containsUnspacedScript(text string) bool {
@@ -84,8 +107,10 @@ func isUnspacedScript(r rune) bool {
 	return isCJK(r) || isSyllabicScript(r)
 }
 
-// isSyllabicScript reports letters of the unspaced syllabic scripts. Their
-// digits are excluded so a digit or identifier keyword keeps word boundaries.
+// isSyllabicScript reports letters and marks of the unspaced syllabic scripts.
+// Their digits are excluded so a digit or identifier keyword keeps word
+// boundaries.
 func isSyllabicScript(r rune) bool {
-	return unicode.IsLetter(r) && unicode.In(r, unicode.Thai, unicode.Lao, unicode.Khmer, unicode.Myanmar)
+	return (unicode.IsLetter(r) || unicode.IsMark(r)) &&
+		unicode.In(r, unicode.Thai, unicode.Lao, unicode.Khmer, unicode.Myanmar)
 }
