@@ -53,6 +53,8 @@ func TestAdmitRefusesANameAReloadProtectsDifferently(t *testing.T) {
 	public := mustCompile(t, keys, fast(nil))
 	protected := mustCompile(t, keys, fast(bearer("FAST_KEY")))
 	rotated := mustCompile(t, keys, fast(bearer("FAST_KEY_NEXT")))
+	both := mustCompile(t, keys, fast(bearer("FAST_KEY", "FAST_KEY_NEXT")))
+	reordered := mustCompile(t, keys, fast(bearer("FAST_KEY_NEXT", "FAST_KEY")))
 	recompiled := mustCompile(t, keys, fast(bearer("FAST_KEY")),
 		config.EntrypointMapping{ModelNames: []string{"company/other"}, Recipe: "shared", ClientAuth: bearer("FAST_KEY_NEXT")})
 	var none *Policy
@@ -67,6 +69,8 @@ func TestAdmitRefusesANameAReloadProtectsDifferently(t *testing.T) {
 		{"protected by a reload, with its key", public, protected, "Bearer fast-1", Superseded},
 		{"made public by a reload", protected, public, "Bearer fast-1", Superseded},
 		{"keys rotated by a reload", protected, rotated, "Bearer fast-1", Superseded},
+		{"keys reordered by a reload", both, reordered, "Bearer fast-2", Admitted},
+		{"a key added by a reload", protected, both, "Bearer fast-1", Superseded},
 		{"another name changed", protected, recompiled, "Bearer fast-1", Admitted},
 		{"another name changed, without a key", protected, recompiled, "", Unauthorized},
 		{"no policy on either side", none, public, "", Admitted},

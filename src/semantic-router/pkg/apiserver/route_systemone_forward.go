@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/clientauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -69,10 +70,20 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 	}
 	// The router of the retained generation evaluates the listener's rules.
 	rules, _ := router.(systemone.ListenerRules)
-	// The generation was retained after the whole forwarded request arrived,
-	// so its client policy is the active one.
-	clients := systemone.ClientAuth{Served: snapshot.ClientAuth()}
-	systemone.HandlerWithRules(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name), rules, clients)(w, request)
+	systemone.HandlerWithRules(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name), rules, s.forwardClientAuth(snapshot))(w, request)
+}
+
+// forwardClientAuth admits forwarded requests with the client policy of the
+// retained generation, checked against that of the generation the registry
+// publishes once the handler knows a request's model: a reload may activate
+// another in between.
+func (s *ClassificationAPIServer) forwardClientAuth(retained *configsnapshot.Snapshot) systemone.ClientAuth {
+	return systemone.ClientAuth{Served: retained.ClientAuth(), Active: func() *clientauth.Policy {
+		if active := s.runtimeRegistry.ConfigSnapshot(); active != nil {
+			return active.ClientAuth()
+		}
+		return retained.ClientAuth()
+	}}
 }
 
 // retainedSystemOneInvoker uses only services from the caller's acquired

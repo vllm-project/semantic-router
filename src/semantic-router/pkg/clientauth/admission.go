@@ -52,12 +52,23 @@ func BearerToken(authorization string) string {
 }
 
 // protectsAlike reports whether p and q accept the same keys for model in
-// the api namespace, protecting it or not alike.
+// the api namespace, protecting it or not alike. The order the keys were
+// declared in does not matter.
 func (p *Policy) protectsAlike(q *Policy, api config.InferenceAPI, model string) bool {
 	if p == q {
 		return true
 	}
 	pKeys, pProtected := p.keys(api, model)
 	qKeys, qProtected := q.keys(api, model)
-	return pProtected == qProtected && slices.Equal(pKeys, qKeys)
+	if pProtected != qProtected || len(pKeys) != len(qKeys) {
+		return false
+	}
+	// Compile keeps each digest once, so equal lengths and containment make
+	// equal sets.
+	for _, key := range pKeys {
+		if !slices.Contains(qKeys, key) {
+			return false
+		}
+	}
+	return true
 }
