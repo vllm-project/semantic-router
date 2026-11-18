@@ -267,13 +267,8 @@ def normalize_proposed_workgroup(
     # Maintainer removes that owner while reclassifying the issue, do not race
     # the following label addition by restoring the stale form choice. Assignment
     # commands reconcile delivery state and must not re-seed ownership either.
-    if (
-        event_action == ASSIGNMENT_COMMAND_EVENT
-        or (
-            actor_can_manage
-            and event_action == "unlabeled"
-            and event_label in OWNER_LABELS
-        )
+    if event_action == ASSIGNMENT_COMMAND_EVENT or (
+        actor_can_manage and event_action == "unlabeled" and event_label in OWNER_LABELS
     ):
         return workgroups
 

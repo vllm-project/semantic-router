@@ -219,9 +219,7 @@ class CommunityValidationTests(unittest.TestCase):
         )
         following = steps[action + 1 :]
         sync = next(
-            step
-            for step in following
-            if "sync-issue-assignment" in step.get("run", "")
+            step for step in following if "sync-issue-assignment" in step.get("run", "")
         )
         condition = " ".join(sync["if"].split())
 
@@ -231,8 +229,7 @@ class CommunityValidationTests(unittest.TestCase):
         self.assertIn("GH_TOKEN", sync["env"])
         self.assertTrue(
             any(
-                str(step.get("uses", "")) == "actions/checkout@v4"
-                for step in following
+                str(step.get("uses", "")) == "actions/checkout@v4" for step in following
             )
         )
 

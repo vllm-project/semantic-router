@@ -233,11 +233,7 @@ class AssignmentCommandReconciliationTests(unittest.TestCase):
 
     def test_rejected_assign_leaves_ready_for_dev_unchanged(self) -> None:
         client = FakeAssignmentApi(
-            [
-                issue(
-                    labels=labels("accepted", "ready-for-dev", "wg/mom-routing")
-                )
-            ]
+            [issue(labels=labels("accepted", "ready-for-dev", "wg/mom-routing"))]
         )
 
         self.sync(client)
@@ -301,9 +297,7 @@ class AssignmentCommandReconciliationTests(unittest.TestCase):
         client = FakeAssignmentApi(
             [
                 issue(
-                    labels=labels(
-                        "accepted", "ready-for-dev", "wg/mom-routing"
-                    ),
+                    labels=labels("accepted", "ready-for-dev", "wg/mom-routing"),
                     assignees=assignees("contributor"),
                 )
             ],
@@ -326,9 +320,7 @@ class AssignmentCommandReconciliationTests(unittest.TestCase):
         self.assertEqual(client.fetched, [7])
 
     def test_pull_request_comments_are_not_issue_claims(self) -> None:
-        client = FakeAssignmentApi(
-            [issue(labels=labels("accepted", "wg/mom-routing"))]
-        )
+        client = FakeAssignmentApi([issue(labels=labels("accepted", "wg/mom-routing"))])
 
         self.sync(client, pull_request={})
 
