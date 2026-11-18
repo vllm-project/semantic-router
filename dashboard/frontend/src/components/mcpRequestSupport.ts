@@ -9,15 +9,19 @@ export {
 } from '../tools/mcp/requestSupport'
 
 async function toolsDbErrorMessage(response: Response): Promise<string> {
-  const fallback = `Failed to load the tools database (${response.status} ${response.statusText})`
+  const statusText = response.statusText.trim()
+  const fallback = statusText
+    ? `Failed to load the tools database (${response.status} ${statusText})`
+    : `Failed to load the tools database (${response.status})`
   try {
     const reason = await responseErrorMessage(response)
     if (typeof reason !== 'string') return fallback
     const trimmed = reason.trim()
     // responseErrorMessage reports an empty body with its own status line.
-    if (!trimmed || trimmed === `HTTP ${response.status}: ${response.statusText}`) return fallback
-    // http.Error bodies are plain text; refuse markup such as proxy error pages.
-    if (trimmed.startsWith('<')) return fallback
+    if (!trimmed || trimmed === `HTTP ${response.status}: ${statusText}`.trim()) return fallback
+    // Plain text only: refuse markup from proxies and raw JSON that had no
+    // displayable message or error fields.
+    if (/^[<[{]/.test(trimmed)) return fallback
     return trimmed
   } catch {
     return fallback

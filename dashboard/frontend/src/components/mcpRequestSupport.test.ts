@@ -129,6 +129,8 @@ describe('MCP request support', () => {
     const cases = [
       failing(500, 'Internal Server Error', ''),
       failing(500, 'Internal Server Error', '  \n\t'),
+      jsonError(500, 'Internal Server Error', { error: 0 }),
+      jsonError(500, 'Internal Server Error', { message: null }),
       jsonError(500, 'Internal Server Error', { error: { code: 500 } }),
       failing(500, 'Internal Server Error', '<html><body>Bad gateway</body></html>'),
     ]
@@ -140,6 +142,18 @@ describe('MCP request support', () => {
       )
       await expect(fetchMCPToolsDatabase(signal)).rejects.toThrow(new Error(fallback))
     }
+  })
+
+  it('keeps the status fallback when an empty body has no status text', async () => {
+    const signal = new AbortController().signal
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 500 })),
+    )
+
+    await expect(fetchMCPToolsDatabase(signal)).rejects.toThrow(
+      new Error('Failed to load the tools database (500)'),
+    )
   })
 
   it('falls back to the status-based message when the failure body cannot be read', async () => {
