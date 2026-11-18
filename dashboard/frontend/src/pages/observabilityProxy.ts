@@ -35,6 +35,15 @@ export function observabilityErrorMessage(body: unknown): string | null {
   return null
 }
 
+/** The message of the Dashboard's own `{error, message}` error body. */
+function dashboardErrorMessage(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null
+  const { error, message } = body as { error?: unknown; message?: unknown }
+  return typeof error === 'string' && typeof message === 'string' && message.trim()
+    ? message.trim()
+    : null
+}
+
 export function classifyObservabilityFailure(
   service: ObservabilityService,
   status: number,
@@ -50,6 +59,20 @@ export function classifyObservabilityFailure(
   }
   const detail = observabilityErrorMessage(body)
   if (detail) return new ObservabilityError('query', detail, status)
+  // The Dashboard's own endpoints answer 503 when the service is not
+  // configured, 502 when it cannot be reached or read, 504 when it is too slow.
+  const explained = dashboardErrorMessage(body)
+  if (explained) {
+    const failure: ObservabilityFailure =
+      status === 503
+        ? 'unconfigured'
+        : status === 502
+          ? 'unreachable'
+          : status === 504
+            ? 'timeout'
+            : 'query'
+    return new ObservabilityError(failure, explained, status)
+  }
   // The Dashboard answers an unconfigured service with its own HTML page.
   if (status === 503 && contentType.includes('text/html')) {
     return new ObservabilityError(
@@ -68,9 +91,20 @@ export function classifyObservabilityFailure(
   return new ObservabilityError('query', `${service} answered HTTP ${status}.`, status)
 }
 
+const NOT_JSON = Symbol('not JSON')
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return NOT_JSON
+  }
+}
+
 /**
  * GETs JSON from a proxied observability API. Failures are classified as
  * {@link ObservabilityError}; a caller abort rethrows the browser's AbortError.
+ * `timeoutMs` bounds the whole read, the body's download included.
  */
 export async function fetchObservabilityJson(
   service: ObservabilityService,
@@ -96,11 +130,18 @@ export async function fetchObservabilityJson(
       signal: controller.signal,
     })
     const contentType = response.headers.get('Content-Type') ?? ''
-    const isJson = contentType.includes('json')
-    const body = isJson ? await response.json().catch(() => null) : null
-    if (!response.ok)
-      throw classifyObservabilityFailure(service, response.status, contentType, body)
-    if (!isJson || body === null) {
+    // A body that stops arriving rejects here, so the catch below reports a
+    // timeout or a dropped connection rather than an answer that is not data.
+    const body = contentType.includes('json') ? parseJson(await response.text()) : NOT_JSON
+    if (!response.ok) {
+      throw classifyObservabilityFailure(
+        service,
+        response.status,
+        contentType,
+        body === NOT_JSON ? null : body,
+      )
+    }
+    if (body === NOT_JSON) {
       throw new ObservabilityError(
         'query',
         `${service} answered with a page instead of data. Check the ${service} address the Dashboard proxies to.`,

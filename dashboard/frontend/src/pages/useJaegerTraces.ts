@@ -10,13 +10,15 @@ export interface JaegerRead<T> {
 }
 
 /**
- * Reads a Jaeger API URL and parses it with `read`, again whenever the URL or
- * `refreshKey` changes. A refresh of the same URL keeps its data on screen.
+ * Reads a Jaeger answer, through the Dashboard's Jaeger proxy or its trace
+ * search, and parses it with `read`, again whenever the URL or `refreshKey`
+ * changes. A refresh of the same URL keeps its data on screen.
  */
 export function useJaegerRead<T>(
   url: string | null,
   read: (body: unknown) => T,
   refreshKey = 0,
+  timeoutMs?: number,
 ): JaegerRead<T> {
   const [state, setState] = useState<JaegerRead<T> & { url: string | null }>({
     url: null,
@@ -37,7 +39,7 @@ export function useJaegerRead<T>(
       error: null,
       loading: true,
     }))
-    fetchObservabilityJson('Jaeger', url, { signal: controller.signal })
+    fetchObservabilityJson('Jaeger', url, { signal: controller.signal, timeoutMs })
       .then((body) => setState({ url, data: read(body), error: null, loading: false }))
       .catch((error: unknown) => {
         if (isAbortError(error)) return
@@ -55,7 +57,7 @@ export function useJaegerRead<T>(
         })
       })
     return () => controller.abort()
-  }, [url, read, refreshKey])
+  }, [url, read, refreshKey, timeoutMs])
 
   return state.url === url ? state : { data: null, error: null, loading: Boolean(url) }
 }

@@ -1,6 +1,7 @@
 const JAEGER_API = '/embedded/jaeger/api'
+const TRACE_SUMMARIES_API = '/api/observability/traces/summaries'
 
-/** Jaeger reads `lookback` as a Go duration, which has no day unit. */
+/** The trace search reads `lookback` as a Go duration, which has no day unit. */
 export const TRACE_LOOKBACKS = [
   { value: '15m', label: 'Last 15 minutes' },
   { value: '1h', label: 'Last hour' },
@@ -47,13 +48,14 @@ export const jaegerServicesUrl = () => `${JAEGER_API}/services`
 export const jaegerOperationsUrl = (service: string) =>
   `${JAEGER_API}/services/${encodeURIComponent(service)}/operations`
 
-export function jaegerTracesUrl(search: TraceSearch): string {
+/** The Dashboard's trace search, which asks Jaeger and answers a summary per trace. */
+export function traceSummariesUrl(search: TraceSearch): string {
   const params = new URLSearchParams({ service: search.service })
   if (search.operation) params.set('operation', search.operation)
   params.set('lookback', search.lookback)
   params.set('limit', String(search.limit))
   if (search.minDuration) params.set('minDuration', search.minDuration)
-  return `${JAEGER_API}/traces?${params}`
+  return `${TRACE_SUMMARIES_API}?${params}`
 }
 
 export const jaegerTraceUrl = (traceID: string) =>
@@ -245,8 +247,12 @@ export function parentSpanID(span: TraceSpan, spanIDs: ReadonlySet<string>): str
 
 export interface TraceSummary {
   traceID: string
-  /** The earliest span without a parent in the trace. */
-  root: TraceSpan | null
+  /**
+   * The operation and service of the earliest span without a parent in the
+   * trace, or of the earliest span when references form a cycle.
+   */
+  rootOperation: string
+  rootService: string
   /** Each service with its span count, the root's first, then the busiest. */
   services: { name: string; spans: number }[]
   spanCount: number
@@ -257,21 +263,25 @@ export interface TraceSummary {
   duration: number
 }
 
+/** The summary of a full trace, computed as the Dashboard's trace search computes it. */
 export function summarizeTrace(trace: Trace): TraceSummary {
   const spanIDs = new Set(trace.spans.map((span) => span.spanID))
   let start = Infinity
   let end = -Infinity
+  let first: TraceSpan | null = null
   let root: TraceSpan | null = null
   const counts = new Map<string, number>()
   for (const span of trace.spans) {
     start = Math.min(start, span.startTime)
     end = Math.max(end, span.startTime + span.duration)
     counts.set(span.serviceName, (counts.get(span.serviceName) ?? 0) + 1)
+    if (!first || span.startTime < first.startTime) first = span
     if (parentSpanID(span, spanIDs) === null && (!root || span.startTime < root.startTime)) {
       root = span
     }
   }
-  const rootService = root?.serviceName
+  root ??= first
+  const rootService = root?.serviceName ?? ''
   const services = [...counts]
     .map(([name, spans]) => ({ name, spans }))
     .sort(
@@ -282,13 +292,68 @@ export function summarizeTrace(trace: Trace): TraceSummary {
     )
   return {
     traceID: trace.traceID,
-    root,
+    rootOperation: root?.operationName ?? '',
+    rootService,
     services,
     spanCount: trace.spans.length,
     errorCount: trace.spans.filter((span) => span.error).length,
     start,
     duration: Math.max(0, end - start),
   }
+}
+
+const count = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+
+/**
+ * Summaries from the Dashboard's trace search, in the newest-first order it
+ * sends. An entry without a trace ID or readable numbers is left out, and
+ * blank names read as they do in a full trace.
+ */
+export function readTraceSummaries(body: unknown): TraceSummary[] {
+  const data = (body as { data?: unknown } | null)?.data
+  if (!Array.isArray(data)) throw new Error('The trace search did not return a list of traces.')
+  return data.flatMap((entry): TraceSummary[] => {
+    const raw = (entry ?? {}) as Record<string, unknown>
+    const spanCount = count(raw.spanCount)
+    const errorCount = count(raw.errorCount)
+    const start = count(raw.startTimeMicros)
+    const duration = count(raw.durationMicros)
+    if (
+      typeof raw.traceID !== 'string' ||
+      !raw.traceID ||
+      spanCount === null ||
+      errorCount === null ||
+      start === null ||
+      duration === null
+    ) {
+      return []
+    }
+    const services = Array.isArray(raw.services)
+      ? raw.services.flatMap((service) => {
+          const { name, spanCount: spans } = (service ?? {}) as {
+            name?: unknown
+            spanCount?: unknown
+          }
+          const known = count(spans)
+          return typeof name === 'string' && known !== null
+            ? [{ name: name || 'unknown', spans: known }]
+            : []
+        })
+      : []
+    return [
+      {
+        traceID: raw.traceID,
+        rootOperation: (typeof raw.rootOperation === 'string' && raw.rootOperation) || '(unnamed)',
+        rootService: (typeof raw.rootService === 'string' && raw.rootService) || 'unknown',
+        services,
+        spanCount,
+        errorCount,
+        start,
+        duration,
+      },
+    ]
+  })
 }
 
 /** A span or trace duration in microseconds, as people read it. */

@@ -40,40 +40,37 @@ export function TraceList({
       {
         id: 'trace',
         header: 'Trace',
-        sortValue: (row) => row.root?.operationName ?? '',
-        cell: (row) => {
-          const name = row.root?.operationName ?? 'No root span'
-          return (
-            <span className="flex min-w-0 max-w-[24rem] flex-col gap-0.5">
-              <span className="flex min-w-0 items-center gap-1.5">
-                {row.errorCount ? (
-                  <CircleAlert
-                    className="size-3.5 shrink-0 text-destructive"
-                    aria-label="Has errors"
-                  />
-                ) : null}
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onOpen(row.traceID)
-                  }}
-                  title={name}
-                  className="truncate rounded-sm text-left font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/40"
-                >
-                  {name}
-                </button>
-              </span>
-              <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="truncate">{row.root?.serviceName ?? row.services[0]?.name}</span>
-                <span aria-hidden="true">·</span>
-                <span className="font-mono" title={row.traceID}>
-                  {row.traceID.slice(0, 8)}
-                </span>
+        sortValue: (row) => row.rootOperation,
+        cell: (row) => (
+          <span className="flex min-w-0 max-w-[24rem] flex-col gap-0.5">
+            <span className="flex min-w-0 items-center gap-1.5">
+              {row.errorCount ? (
+                <CircleAlert
+                  className="size-3.5 shrink-0 text-destructive"
+                  aria-label="Has errors"
+                />
+              ) : null}
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onOpen(row.traceID)
+                }}
+                title={row.rootOperation}
+                className="truncate rounded-sm text-left font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/40"
+              >
+                {row.rootOperation}
+              </button>
+            </span>
+            <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="truncate">{row.rootService}</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono" title={row.traceID}>
+                {row.traceID.slice(0, 8)}
               </span>
             </span>
-          )
-        },
+          </span>
+        ),
       },
       {
         id: 'services',
@@ -126,7 +123,7 @@ export function TraceList({
                   width: `${Math.max(2, (row.duration / longest) * 100)}%`,
                   background: row.errorCount
                     ? 'var(--destructive)'
-                    : serviceColor(palette, row.root?.serviceName ?? ''),
+                    : serviceColor(palette, row.rootService),
                 }}
               />
             </span>

@@ -188,6 +188,7 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodGet, path: "/api/admin/audit-logs", expected: PermUsersManage},
 		{method: http.MethodGet, path: "/api/status", expected: PermTopologyRead},
 		{method: http.MethodGet, path: "/embedded/grafana/", expected: PermLogsRead},
+		{method: http.MethodGet, path: "/api/observability/traces/summaries", expected: PermLogsRead},
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/models/catalog", expected: PermConfigRead},

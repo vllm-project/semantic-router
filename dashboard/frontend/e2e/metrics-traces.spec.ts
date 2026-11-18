@@ -225,41 +225,72 @@ function jaegerTrace() {
   }
 }
 
+/** The Dashboard's summary of {@link jaegerTrace}, as its trace search answers. */
+function traceSummary() {
+  return {
+    traceID: TRACE_ID,
+    rootOperation: 'semantic_router.request',
+    rootService: 'vllm-sr',
+    services: [
+      { name: 'vllm-sr', spanCount: 2 },
+      { name: 'qwen3-backend', spanCount: 1 },
+    ],
+    spanCount: 3,
+    errorCount: 1,
+    startTimeMicros: jaegerTrace().spans[0].startTime,
+    durationMicros: 1_250_000,
+  }
+}
+
+const TRACE_SUMMARIES = '**/api/observability/traces/summaries**'
+
+async function mockRouterTracing(page: Page) {
+  await page.route('**/api/router/config/all', (route) =>
+    route.fulfill({
+      json: {
+        global: {
+          services: {
+            observability: { tracing: { enabled: true, resource: { service_name: 'vllm-sr' } } },
+          },
+        },
+      },
+    }),
+  )
+}
+
+/** Jaeger's query API through the Dashboard proxy; returns the paths it was asked for. */
+async function mockJaegerProxy(page: Page) {
+  const reads: string[] = []
+  await page.route('**/embedded/jaeger/api/**', async (route) => {
+    const url = new URL(route.request().url())
+    reads.push(url.pathname)
+    if (url.pathname === '/embedded/jaeger/api/services') {
+      return route.fulfill({ json: { data: ['jaeger-all-in-one', 'vllm-sr'], total: 2 } })
+    }
+    if (url.pathname === '/embedded/jaeger/api/services/vllm-sr/operations') {
+      return route.fulfill({ json: { data: ['semantic_router.request'], total: 1 } })
+    }
+    if (url.pathname === `/embedded/jaeger/api/traces/${TRACE_ID}`) {
+      return route.fulfill({ json: { data: [jaegerTrace()], total: 1 } })
+    }
+    return route.fulfill({
+      status: 404,
+      json: { data: null, errors: [{ code: 404, msg: 'not found' }] },
+    })
+  })
+  return reads
+}
+
 test.describe('Traces', () => {
   test('searches Jaeger for the Router service and opens a span waterfall', async ({ page }) => {
     await mockAuthenticatedAppShell(page)
-    await page.route('**/api/router/config/all', (route) =>
-      route.fulfill({
-        json: {
-          global: {
-            services: {
-              observability: { tracing: { enabled: true, resource: { service_name: 'vllm-sr' } } },
-            },
-          },
-        },
-      }),
-    )
+    await mockRouterTracing(page)
     const searches: URL[] = []
-    await page.route('**/embedded/jaeger/api/**', async (route) => {
-      const url = new URL(route.request().url())
-      if (url.pathname === '/embedded/jaeger/api/services') {
-        return route.fulfill({ json: { data: ['jaeger-all-in-one', 'vllm-sr'], total: 2 } })
-      }
-      if (url.pathname === '/embedded/jaeger/api/services/vllm-sr/operations') {
-        return route.fulfill({ json: { data: ['semantic_router.request'], total: 1 } })
-      }
-      if (url.pathname === '/embedded/jaeger/api/traces') {
-        searches.push(url)
-        return route.fulfill({ json: { data: [jaegerTrace()], total: 1 } })
-      }
-      if (url.pathname === `/embedded/jaeger/api/traces/${TRACE_ID}`) {
-        return route.fulfill({ json: { data: [jaegerTrace()], total: 1 } })
-      }
-      return route.fulfill({
-        status: 404,
-        json: { data: null, errors: [{ code: 404, msg: 'not found' }] },
-      })
+    await page.route(TRACE_SUMMARIES, async (route) => {
+      searches.push(new URL(route.request().url()))
+      await route.fulfill({ json: { data: [traceSummary()], limit: 20, total: 1 } })
     })
+    const jaegerReads = await mockJaegerProxy(page)
 
     await page.goto('/observe/traces')
     const row = page.getByRole('row').filter({ hasText: 'semantic_router.request' })
@@ -273,9 +304,15 @@ test.describe('Traces', () => {
       lookback: '1h',
       limit: '20',
     })
+    // The list reads summaries; only an opened trace is downloaded, by its full ID.
+    const traceReads = () =>
+      jaegerReads.filter((path) => path.startsWith('/embedded/jaeger/api/traces'))
+    expect(traceReads()).toEqual([])
 
     await row.getByRole('button', { name: 'semantic_router.request' }).click()
     await expect(page).toHaveURL(new RegExp(`trace=${TRACE_ID}`))
+    await expect.poll(traceReads).toContain(`/embedded/jaeger/api/traces/${TRACE_ID}`)
+    expect(new Set(traceReads())).toEqual(new Set([`/embedded/jaeger/api/traces/${TRACE_ID}`]))
     const sheet = page.getByRole('dialog')
     await expect(
       sheet.getByRole('heading', { level: 2, name: 'semantic_router.request' }),
@@ -310,19 +347,72 @@ test.describe('Traces', () => {
   test('a denied Jaeger read stays unavailable until a successful retry', async ({ page }) => {
     await mockAuthenticatedAppShell(page)
     let denied = true
+    const forbidden = { status: 403, contentType: 'text/plain', body: 'Forbidden' }
     await page.route('**/embedded/jaeger/api/**', (route) => {
-      if (denied)
-        return route.fulfill({ status: 403, contentType: 'text/plain', body: 'Forbidden' })
+      if (denied) return route.fulfill(forbidden)
       const url = new URL(route.request().url())
       return route.fulfill({
         json: { data: url.pathname.endsWith('/services') ? ['vllm-sr'] : [] },
       })
     })
+    await page.route(TRACE_SUMMARIES, (route) =>
+      denied
+        ? route.fulfill(forbidden)
+        : route.fulfill({ json: { data: [], limit: 20, total: 0 } }),
+    )
     await page.goto('/observe/traces')
     await expect(page.getByRole('alert')).toContainText('Access to Jaeger was denied')
     denied = false
     await page.getByRole('button', { name: 'Try again', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'No traces match' })).toBeVisible()
     await expect(page.getByRole('alert')).toHaveCount(0)
+  })
+
+  test('a search Jaeger is too slow for says so and can be retried', async ({ page }) => {
+    await mockAuthenticatedAppShell(page)
+    await mockRouterTracing(page)
+    await mockJaegerProxy(page)
+    const slow =
+      'Jaeger did not finish the trace search within 20s. Show fewer traces, pick a shorter time range, or set a minimum duration.'
+    let timedOut = true
+    await page.route(TRACE_SUMMARIES, (route) =>
+      timedOut
+        ? route.fulfill({ status: 504, json: { error: 'jaeger_timeout', message: slow } })
+        : route.fulfill({ json: { data: [traceSummary()], limit: 20, total: 1 } }),
+    )
+    await page.goto('/observe/traces')
+    const alert = page.getByRole('alert')
+    await expect(alert).toContainText('The trace search failed')
+    await expect(alert).toContainText(slow)
+    await expect(alert).not.toContainText('instead of data')
+    timedOut = false
+    await alert.getByRole('button', { name: 'Try again', exact: true }).click()
+    await expect(page.getByRole('row').filter({ hasText: 'semantic_router.request' })).toBeVisible()
+    await expect(page.getByRole('alert')).toHaveCount(0)
+  })
+
+  test('an opened trace that fails to load can be retried from its sheet', async ({ page }) => {
+    await mockAuthenticatedAppShell(page)
+    await mockRouterTracing(page)
+    await page.route(TRACE_SUMMARIES, (route) =>
+      route.fulfill({ json: { data: [traceSummary()], limit: 20, total: 1 } }),
+    )
+    await mockJaegerProxy(page)
+    let failing = true
+    await page.route(`**/embedded/jaeger/api/traces/${TRACE_ID}`, (route) =>
+      failing
+        ? route.fulfill({ status: 502, contentType: 'text/plain', body: 'Bad Gateway' })
+        : route.fallback(),
+    )
+    await page.goto(`/observe/traces?trace=${TRACE_ID}`)
+    const sheet = page.getByRole('dialog')
+    await expect(sheet).toContainText('Jaeger did not return this trace')
+    await expect(sheet).toContainText('Jaeger is unavailable (HTTP 502)')
+    failing = false
+    await sheet.getByRole('button', { name: 'Try again', exact: true }).click()
+    await expect(
+      sheet.getByRole('heading', { level: 2, name: 'semantic_router.request' }),
+    ).toBeVisible()
+    await expect(sheet.getByRole('tree', { name: 'Spans' }).getByRole('treeitem')).toHaveCount(3)
   })
 })

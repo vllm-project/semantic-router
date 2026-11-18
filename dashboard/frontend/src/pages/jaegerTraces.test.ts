@@ -8,15 +8,16 @@ import {
   jaegerOperationsUrl,
   jaegerServicesUrl,
   jaegerTraceUrl,
-  jaegerTracesUrl,
   normalizeTraceDuration,
   parentSpanID,
   readJaegerNames,
   readJaegerTraces,
   readTraceLimit,
   readTraceLookback,
+  readTraceSummaries,
   serviceColor,
   summarizeTrace,
+  traceSummariesUrl,
   type TraceSpan,
 } from './jaegerTraces'
 
@@ -83,9 +84,11 @@ describe('Jaeger search', () => {
     expect(jaegerOperationsUrl('vllm sr/1')).toBe(
       '/embedded/jaeger/api/services/vllm%20sr%2F1/operations',
     )
-    expect(jaegerTraceUrl('f00d')).toBe('/embedded/jaeger/api/traces/f00d')
+    expect(jaegerTraceUrl('4bf92f3577b34da6a3ce929d0e0e4736')).toBe(
+      '/embedded/jaeger/api/traces/4bf92f3577b34da6a3ce929d0e0e4736',
+    )
     const all = new URL(
-      jaegerTracesUrl({
+      traceSummariesUrl({
         service: 'vllm-sr',
         operation: '',
         lookback: '1h',
@@ -94,14 +97,14 @@ describe('Jaeger search', () => {
       }),
       'http://x',
     )
-    expect(all.pathname).toBe('/embedded/jaeger/api/traces')
+    expect(all.pathname).toBe('/api/observability/traces/summaries')
     expect([...all.searchParams]).toEqual([
       ['service', 'vllm-sr'],
       ['lookback', '1h'],
       ['limit', '20'],
     ])
     const filtered = new URL(
-      jaegerTracesUrl({
+      traceSummariesUrl({
         service: 'vllm-sr',
         operation: 'semantic_router.request',
         lookback: '168h',
@@ -188,9 +191,10 @@ describe('Jaeger traces', () => {
 
   it('summarizes a trace from its root span', () => {
     const [trace] = readJaegerTraces({ data: [jaegerTrace] })
-    expect(summarizeTrace(trace)).toMatchObject({
+    expect(summarizeTrace(trace)).toEqual({
       traceID: 'f00dfeed',
-      root: { spanID: 'root', operationName: 'semantic_router.request' },
+      rootOperation: 'semantic_router.request',
+      rootService: 'vllm-sr',
       services: [
         { name: 'vllm-sr', spans: 2 },
         { name: 'qwen3-backend', spans: 1 },
@@ -199,6 +203,38 @@ describe('Jaeger traces', () => {
       errorCount: 2,
       start: 1_000_000,
       duration: 900_000,
+    })
+  })
+
+  it('takes the earliest span as the root when references form a cycle', () => {
+    const [trace] = readJaegerTraces({
+      data: [
+        {
+          traceID: 'cycle',
+          spans: [
+            {
+              spanID: 'b',
+              operationName: 'second',
+              startTime: 20,
+              duration: 5,
+              references: [{ refType: 'CHILD_OF', spanID: 'a' }],
+            },
+            {
+              spanID: 'a',
+              operationName: 'first',
+              startTime: 10,
+              duration: 5,
+              references: [{ refType: 'CHILD_OF', spanID: 'b' }],
+            },
+          ],
+        },
+      ],
+    })
+    expect(summarizeTrace(trace)).toMatchObject({
+      rootOperation: 'first',
+      rootService: 'unknown',
+      start: 10,
+      duration: 15,
     })
   })
 
@@ -236,6 +272,73 @@ describe('Jaeger traces', () => {
         new Set(['a', 'b', 'c']),
       ),
     ).toBe('a')
+  })
+})
+
+describe('Dashboard trace summaries', () => {
+  const summary = {
+    traceID: '4bf92f3577b34da6a3ce929d0e0e4736',
+    rootOperation: 'semantic_router.request',
+    rootService: 'vllm-sr',
+    services: [
+      { name: 'vllm-sr', spanCount: 2 },
+      { name: 'qwen3-backend', spanCount: 1 },
+    ],
+    spanCount: 3,
+    errorCount: 1,
+    startTimeMicros: 1_000_000,
+    durationMicros: 1_250_000,
+  }
+
+  it('reads each summary in the order the search sends, with the full trace ID', () => {
+    const newer = {
+      ...summary,
+      traceID: '5c3d0a0f7e2b4c19a8d6e1f203948576',
+      startTimeMicros: 2_000_000,
+    }
+    expect(readTraceSummaries({ data: [newer, summary], limit: 20, total: 2 })).toEqual([
+      expect.objectContaining({ traceID: '5c3d0a0f7e2b4c19a8d6e1f203948576', start: 2_000_000 }),
+      {
+        traceID: '4bf92f3577b34da6a3ce929d0e0e4736',
+        rootOperation: 'semantic_router.request',
+        rootService: 'vllm-sr',
+        services: [
+          { name: 'vllm-sr', spans: 2 },
+          { name: 'qwen3-backend', spans: 1 },
+        ],
+        spanCount: 3,
+        errorCount: 1,
+        start: 1_000_000,
+        duration: 1_250_000,
+      },
+    ])
+  })
+
+  it('names blank operations and services as a full trace does, and leaves out unreadable entries', () => {
+    const read = readTraceSummaries({
+      data: [
+        {
+          ...summary,
+          rootOperation: '',
+          rootService: '',
+          services: [{ name: '', spanCount: 3 }, { name: 'x' }],
+        },
+        { ...summary, traceID: '' },
+        { ...summary, spanCount: -1 },
+        { ...summary, durationMicros: '1250000' },
+        null,
+      ],
+    })
+    expect(read).toHaveLength(1)
+    expect(read[0]).toMatchObject({
+      rootOperation: '(unnamed)',
+      rootService: 'unknown',
+      services: [{ name: 'unknown', spans: 3 }],
+    })
+    expect(readTraceSummaries({ data: [null, { traceID: 'x' }] })).toEqual([])
+    expect(readTraceSummaries({ data: [] })).toEqual([])
+    expect(() => readTraceSummaries({ data: null })).toThrow('did not return a list of traces')
+    expect(() => readTraceSummaries(null)).toThrow('did not return a list of traces')
   })
 })
 

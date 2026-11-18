@@ -5,6 +5,7 @@ import ProductLoadingState from '../components/ProductLoadingState'
 import {
   Alert,
   Badge,
+  Button,
   CopyButton,
   DetailSheet,
   DetailSheetBody,
@@ -148,7 +149,7 @@ function TraceDetail({ trace, palette }: { trace: Trace; palette: readonly strin
     <>
       <DetailSheetHeader
         icon={<IconTile icon={ChartGantt} tone="violet" />}
-        title={summary.root?.operationName ?? 'Trace'}
+        title={summary.rootOperation || 'Trace'}
         badges={
           summary.errorCount ? (
             <Badge tone="danger" size="sm">
@@ -213,12 +214,14 @@ export function TraceDetailSheet({
   error,
   palette,
   onClose,
+  onRetry,
 }: {
   traceID: string | null
   trace: Trace | null
   error: ObservabilityError | null
   palette: readonly string[]
   onClose: () => void
+  onRetry: () => void
 }) {
   // A closing sheet keeps showing its trace while it animates out.
   const retained = useRetainedValue(trace)
@@ -242,7 +245,17 @@ export function TraceDetailSheet({
           />
           <DetailSheetBody className="p-5">
             {error ? (
-              <Alert tone="danger" title="Jaeger did not return this trace">
+              <Alert
+                tone="danger"
+                title="Jaeger did not return this trace"
+                actions={
+                  error.status === 404 ? null : (
+                    <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+                      Try again
+                    </Button>
+                  )
+                }
+              >
                 {error.status === 404
                   ? 'Jaeger has no trace with this ID. It may have expired from its storage.'
                   : error.message}

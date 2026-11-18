@@ -48,6 +48,24 @@ describe('observability proxy failures', () => {
       'Access to Jaeger was denied',
     )
   })
+
+  it("keeps the message the Dashboard's own error body gives, and its kind by status", () => {
+    const classify = (status: number) =>
+      classifyObservabilityFailure('Jaeger', status, 'application/json', {
+        error: 'jaeger_timeout',
+        message: `Explained ${status}`,
+      })
+    const timeout = classify(504)
+    expect([timeout.failure, timeout.message, timeout.status]).toEqual([
+      'timeout',
+      'Explained 504',
+      504,
+    ])
+    expect(classify(503).failure).toBe('unconfigured')
+    expect(classify(502).failure).toBe('unreachable')
+    expect(classify(400).failure).toBe('query')
+    expect(classify(400).message).toBe('Explained 400')
+  })
 })
 
 describe('fetchObservabilityJson', () => {
@@ -77,6 +95,22 @@ describe('fetchObservabilityJson', () => {
     }).catch((caught: unknown) => caught)
     expect((error as ObservabilityError).failure).toBe('query')
     expect((error as ObservabilityError).message).toContain('instead of data')
+  })
+
+  it('rejects a successful JSON answer that does not parse as a page rather than data', async () => {
+    const error = await fetchObservabilityJson('Jaeger', '/embedded/jaeger/api/services', {
+      fetcher: respond(200, '{"data": [', 'application/json'),
+    }).catch((caught: unknown) => caught)
+    expect((error as ObservabilityError).failure).toBe('query')
+    expect((error as ObservabilityError).message).toContain('instead of data')
+  })
+
+  it('classifies a failed answer by its status when its JSON does not parse', async () => {
+    const error = await fetchObservabilityJson('Jaeger', '/embedded/jaeger/api/services', {
+      fetcher: respond(502, '<html>Bad Gateway</html>', 'application/json'),
+    }).catch((caught: unknown) => caught)
+    expect((error as ObservabilityError).failure).toBe('unreachable')
+    expect((error as ObservabilityError).status).toBe(502)
   })
 
   it('reports a network failure as unreachable', async () => {
@@ -110,5 +144,53 @@ describe('fetchObservabilityJson', () => {
     }).catch((caught: unknown) => caught)
     controller.abort()
     expect(isAbortError(await pending)).toBe(true)
+  })
+
+  describe('a body that does not finish arriving', () => {
+    // Headers and the start of a large answer arrive, then the stream either
+    // stalls until the read is aborted, as fetch does, or drops.
+    const partial = (ending: 'stall' | 'drop') =>
+      vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const body = new ReadableStream<Uint8Array>({
+          start(stream) {
+            stream.enqueue(new TextEncoder().encode('{"data":[{"traceID":"4bf92f35","spans":['))
+            if (ending === 'drop') stream.error(new TypeError('network error'))
+            init?.signal?.addEventListener('abort', () =>
+              stream.error(new DOMException('The operation was aborted.', 'AbortError')),
+            )
+          },
+        })
+        return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } })
+      })
+
+    it('times out instead of calling the answer a page', async () => {
+      const error = await fetchObservabilityJson('Jaeger', '/api/observability/traces/summaries', {
+        fetcher: partial('stall'),
+        timeoutMs: 5,
+      }).catch((caught: unknown) => caught)
+      expect((error as ObservabilityError).failure).toBe('timeout')
+      expect((error as ObservabilityError).message).toBe(
+        'Jaeger took too long to respond. Try again.',
+      )
+    })
+
+    it('reports a dropped connection as unreachable', async () => {
+      const error = await fetchObservabilityJson('Jaeger', '/api/observability/traces/summaries', {
+        fetcher: partial('drop'),
+      }).catch((caught: unknown) => caught)
+      expect((error as ObservabilityError).failure).toBe('unreachable')
+      expect((error as ObservabilityError).message).not.toContain('instead of data')
+    })
+
+    it('lets a caller abort it without an error of its own', async () => {
+      const controller = new AbortController()
+      const pending = fetchObservabilityJson('Jaeger', '/embedded/jaeger/api/traces/4bf92f35', {
+        fetcher: partial('stall'),
+        signal: controller.signal,
+      }).catch((caught: unknown) => caught)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      controller.abort()
+      expect(isAbortError(await pending)).toBe(true)
+    })
   })
 })

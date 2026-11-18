@@ -33,15 +33,20 @@ import {
   jaegerOperationsUrl,
   jaegerServicesUrl,
   jaegerTraceUrl,
-  jaegerTracesUrl,
   normalizeTraceDuration,
   readJaegerNames,
   readJaegerTraces,
   readTraceLimit,
   readTraceLookback,
-  summarizeTrace,
+  readTraceSummaries,
+  traceSummariesUrl,
 } from './jaegerTraces'
 import { useJaegerRead, useRouterTracingConfig } from './useJaegerTraces'
+
+/** Longer than the 20 s the Dashboard gives Jaeger, so its own answer arrives first. */
+const TRACE_SEARCH_TIMEOUT_MS = 25_000
+/** One trace can carry thousands of spans with their tags and logs. */
+const TRACE_TIMEOUT_MS = 45_000
 
 const JAEGER_SERVICE: ServiceConfig = {
   name: 'Jaeger',
@@ -91,23 +96,21 @@ export default function TracingPage() {
     refreshKey,
   )
   const traces = useJaegerRead(
-    service ? jaegerTracesUrl({ service, operation, lookback, limit, minDuration }) : null,
-    readJaegerTraces,
+    service ? traceSummariesUrl({ service, operation, lookback, limit, minDuration }) : null,
+    readTraceSummaries,
     refreshKey,
+    TRACE_SEARCH_TIMEOUT_MS,
   )
-  const summaries = useMemo(
-    () => (traces.data ?? []).map(summarizeTrace).sort((left, right) => right.start - left.start),
-    [traces.data],
-  )
+  const summaries = useMemo(() => traces.data ?? [], [traces.data])
 
   const traceID = params.get('trace')
   const lookup = useJaegerRead(
     traceID ? jaegerTraceUrl(traceID) : null,
     readJaegerTraces,
     refreshKey,
+    TRACE_TIMEOUT_MS,
   )
-  const listed = traces.data?.find((trace) => trace.traceID === traceID) ?? null
-  const openTrace = lookup.data?.find((trace) => trace.traceID === traceID) ?? listed
+  const openTrace = lookup.data?.find((trace) => trace.traceID === traceID) ?? null
 
   const update = useCallback(
     (changes: Record<string, string | null>) =>
@@ -354,6 +357,7 @@ export default function TracingPage() {
         error={openTrace ? null : lookup.error}
         palette={serviceNames}
         onClose={() => update({ trace: null })}
+        onRetry={refresh}
       />
     </PageContainer>
   )
