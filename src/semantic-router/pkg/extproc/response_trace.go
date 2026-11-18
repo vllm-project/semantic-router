@@ -110,6 +110,9 @@ func addRoutingTrace(trace *headers.Trace, ctx *RequestContext) {
 	}
 	trace.Set(headers.TraceClientProtocol, headers.Token(normalizeProtocol(string(ctx.SourceFormat))))
 	trace.Set(headers.TraceUpstreamProtocol, headers.Token(normalizeProtocol(string(ctx.TargetFormat))))
+	if ctx.RequestedModel != "" {
+		trace.Set(headers.TraceRequestedModel, headers.String(ctx.RequestedModel))
+	}
 	if ctx.SkipProcessing || ctx.LooperRequest || ctx.VSRCacheHit || ctx.SemanticRequest == nil {
 		return
 	}

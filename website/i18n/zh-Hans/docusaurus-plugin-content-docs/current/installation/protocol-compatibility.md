@@ -106,12 +106,19 @@ Chat 的 tool 消息只能携带文本。发往 Chat 后端时，工具结果中
 对于使用 Chat Completions 或 Responses 后端的 Anthropic Messages 客户端，
 `thinking.type: adaptive` 使用后端模型的默认推理行为，`output_config.effort` 会保留。
 `thinking.display: omitted` 会从转换后的响应中移除推理内容，包括流式输出。显式设置
-`thinking.type: disabled` 需要已配置的推理家族和有效的后端关闭推理控制。不支持的
+`thinking.type: disabled` 需要已配置的推理家族和有效的后端关闭推理控制；无论决策
+如何选择，后端都以关闭推理的方式运行，`x-vsr-trace` 的 `reasoning` 成员为 `off`。不支持的
 控制会返回类型化请求错误。`context_management` 中 `clear_thinking_20251015` 的
 `keep: all` 编辑没有实际作用，会在这些后端上省略；会改变历史的编辑则被拒绝。
 当所选后端使用 Responses 时，会省略它无法表示的 Anthropic `cache_control` 边界。
 提示词和工具结果仍会派发，`x-vsr-warnings` 会为 `cache_control` 报告
-`dropped` 诊断。
+`dropped` 诊断。这些客户端收到的回复与 `anthropic` 后端给出的形状一致：每个
+thinking 块都带有 `signature`，后端没有给出时为空；流式响应在 `content_block_start`
+上发送它，并以空的 `signature_delta` 结束该块；之后的轮次发回这样的块时，无论后端
+是哪种格式，Router 都接受它。消息 ID 以 `msg_` 开头，每个工具调用 ID 以 `toolu_`
+开头，二者都由后端的 ID 派生，因此缓冲和流式回复带有相同的 ID，客户端发回的
+`tool_result` 块也能与对应的调用配对。这些后端只在回答结束时报告用量，因此流式响应的
+`message_start` 报告 Router 对输入 token 的估算，最后的 `message_delta` 报告后端的计数。
 
 在所有后端上，`max_tokens` 都同时覆盖思考和回答。没有 `thinking` 且决策开启推理的
 请求，可能把较小的 `max_tokens` 用于思考而返回不了文本。设置
@@ -183,6 +190,13 @@ Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它�
 Responses 请求的 `service_tier` 和 `safety_identifier` 遵循同样的规则。它的其他 Router 无法承载的顶层字段，即
 `background`、`context_management`、`max_tool_calls`、`moderation`、`prompt`、`prompt_cache_options`、
 `prompt_cache_retention` 和 `top_logprobs`，会以 `unsupported_<field>` 失败。
+
+Responses 的响应对象（缓冲响应以及流式的每个 `response.*` 事件）按客户端发送的原样重复请求的
+`instructions`、`tools`、`tool_choice`、`parallel_tool_calls`、`max_output_tokens`、`temperature`、
+`top_p`、`text`、`reasoning`、`metadata`、`truncation`、`user` 和 `prompt_cache_key`，
+不受路由为后端所做改动的影响。请求未提供或设为 `null` 的成员保留默认值。`created_at`
+是后端的创建时间；后端未报告时（例如 Messages 后端）使用 Router 的时间。输出上限截断回答时，
+其 message 项在 `response.output_item.done` 和终止响应中均为 `incomplete`。
 
 ### 后端拒绝的采样控制 {#sampling-controls-a-backend-rejects}
 
@@ -301,7 +315,8 @@ providers:
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。
-- vLLM 的服务元数据无论取值如何都不会导致回复失败：回复或流式块顶层的 `prompt_logprobs`、`prompt_text`、`prompt_routed_experts`、`kv_transfer_params`、`ec_transfer_params` 和 `metrics`，以及 choices 中的 `routed_experts` 和 `weight_versions`。Chat 客户端原样收到这些字段；取值不为 null 或空时报告为 `dropped`。在 vLLM-Omni 的流中，`modality` 不是 `text` 的块会以 `unsupported_upstream_audio`（或 `unsupported_upstream_modality`）失败，因为其 `delta.content` 承载的是编码后的媒体，而不是回答文本。
+- vLLM 的服务元数据无论取值如何都不会导致回复失败：回复或流式块顶层的 `prompt_logprobs`、`prompt_token_ids`、`prompt_text`、`prompt_routed_experts`、`kv_transfer_params`、`ec_transfer_params` 和 `metrics`，以及 choices 中的 `token_ids`、`routed_experts` 和 `weight_versions`。任何客户端都不会收到这些字段，也不会收到服务器的 `system_fingerprint`（其中含有 vLLM 的版本、提交和并行布局）；Router 没有可以替代它的稳定指纹，提供服务的配置由 `x-vsr-config-version` 标明。Chat 后端的 Chat 客户端收到的其余回复内容与后端发送的一致，缓冲与流式均如此。元数据取值不为 null 或空时报告为 `dropped`。在 vLLM-Omni 的流中，`modality` 不是 `text` 的块会以 `unsupported_upstream_audio`（或 `unsupported_upstream_modality`）失败，因为其 `delta.content` 承载的是编码后的媒体，而不是回答文本。
+- `tool_choice` 为 `none` 的请求到达 Chat Completions 后端时不带 `tools`、`tool_choice` 和 `parallel_tool_calls`，`x-vsr-warnings` 将 `tools` 报告为 `dropped`。vLLM 等模型服务器无论 `tool_choice` 取值如何都会把声明的工具渲染进提示词，模型因此可能开始一个随后被服务器丢弃的调用，只留下调用前的那句话。Messages 后端会收到这些工具，因为历史中含有 `tool_use` 块时它们必须存在；Responses 后端会收到这些工具以及 `tool_choice: "none"`，由 Responses API 负责执行这一选择。
 - Chat 提供方以 `finish_reason: "stop"` 结束强制指定的工具调用。对于以这种方式结束且包含 `tool_use` 块的轮次，Anthropic Messages 客户端会收到 `stop_reason: "tool_use"`。因达到输出上限、命中停止序列或拒绝而结束的轮次保留原停止原因。
 - 当输出上限在工具调用中途截断一个非流式回复时，客户端收到带有上限停止原因的回复：Chat 为 `finish_reason: "length"`，Responses 为原因为 `max_output_tokens` 的 incomplete 响应，Anthropic Messages 为 `stop_reason: "max_tokens"`。Chat 和 Responses 客户端收到的调用参数与后端发送的一致。由于 `tool_use.input` 必须是对象，Messages 客户端收到的是模型在截断前已完成的成员，Router 会为 `content.tool_use.input` 报告 `approximated` 诊断。只有回复中的最后一个调用可以被截断。不是 JSON 对象开头的参数，或者被截断的调用之后还有其他输出，仍会使回复失败。
 - Chat 流的一个 chunk 可以包含多个 `index` 相同的 `tool_calls` 条目，vLLM 的工具解析器在最后一个 chunk 中补发调用的剩余部分时就是这样。这些条目按顺序续写同一个调用，与 OpenAI SDK 的拼接方式一致。`index` 相同但指向不同调用的条目会以 `duplicate_stream_tool_index` 失败。

@@ -244,7 +244,7 @@ class Vela3PicoModel(DecisionModel[Vela3Item, Output]):
         self.answerer = Answerer(routes)
         config = package.config
         markers = {k: int(v) for k, v in config["decision"]["marker_ids"].items()}
-        self.tokens = tokens(package.root, markers)
+        self.tokens = tokens(package.root)
         self.scan_tokens = scan_tokens
         bos, eos = int(config["bos_token_id"]), int(config["eos_token_id"])
         self.pass_layout = sequence.Layout(markers, bos, eos, routes.window)

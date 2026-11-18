@@ -10,12 +10,36 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemoneprotocol"
 )
 
-// mediaProblem refuses an image or video a codec cannot carry as a runtime
-// refuses it: invalid_request with reason image_format or video_format.
+// mediaCodes are the public codes of the image and video refusals that the
+// public API names apart from invalid_request: media that is not a data URL of
+// a format the model reads is unsupported_media_type, and media whose data does
+// not decode is invalid_media. Every other media reason (a size, pixel,
+// aspect-ratio, duration or video-token limit, or a model that reads no images)
+// stays invalid_request.
+var mediaCodes = map[string]string{
+	"image_format":    "unsupported_media_type",
+	"video_format":    "unsupported_media_type",
+	"image_malformed": "invalid_media",
+	"video_malformed": "invalid_media",
+}
+
+// PublicCode is the public code of a request-level refusal with code and
+// reason: the mediaCodes code of an invalid_request refusal for one of those
+// reasons, else code. The refusal keeps its status (400) and its reason.
+func PublicCode(code, reason string) string {
+	if media, ok := mediaCodes[reason]; ok && code == "invalid_request" {
+		return media
+	}
+	return code
+}
+
+// mediaProblem refuses an image or video a codec cannot carry as a runtime's
+// refusal reads: unsupported_media_type with reason image_format or
+// video_format.
 func mediaProblem(kind, detail string) *systemoneprotocol.Problem {
 	return &systemoneprotocol.Problem{
 		Status: http.StatusBadRequest, Kind: systemoneprotocol.ProblemRejected,
-		Code: "invalid_request", Reason: kind + "_format", Detail: detail,
+		Code: PublicCode("invalid_request", kind+"_format"), Reason: kind + "_format", Detail: detail,
 	}
 }
 

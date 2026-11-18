@@ -78,7 +78,6 @@ from ...systemone import (
     score_confidence,
     valid_state,
 )
-from ...text import bounds
 from . import cache as mc
 from . import images as img
 from . import package as pkg
@@ -541,6 +540,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         self.info = info
         self.engine_model = engine_model
         self.tokenizer = tokenizer
+        self.prompts = prompt.PromptEncoder(tokenizer)
         self.pad_id = pad_id
         self.readout = readout
         self.codes: list[str] = decision["codes"]
@@ -713,38 +713,34 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         tokens = 0
         read, errors = self._read(questions)
         header = self._header(read, media)
-        rendered: list[tuple[str, str, list[str], list[Any], str]] = []
-        for question_id, kind, instructions, keys, texts, descriptions in read:
-            text = prompt.render(
-                prompt.user_prompt(state, instructions, texts, self.codes, header),
-                images,
-                videos,
+        rendered = [
+            (
+                question_id,
+                kind,
+                keys,
+                descriptions,
+                prompt.render(
+                    prompt.user_prompt(state, instructions, texts, self.codes, header),
+                    images,
+                    videos,
+                ),
             )
-            if media and (
-                text.count(prompt.IMAGE_TOKEN) != images
-                or text.count(prompt.VIDEO_TOKEN) != videos
-            ):
-                errors[question_id] = question_error(
-                    kind,
-                    QuestionError(
-                        INVALID_QUESTION,
-                        "the state or question contains a literal image or video placeholder token",
-                    ),
-                )
-                continue
-            rendered.append((question_id, kind, keys, descriptions, text))
+            for question_id, kind, instructions, keys, texts, descriptions in read
+        ]
         temperature = self.request_temperature(len(rendered))
         # A prompt holds one placeholder token for each image and video, where
         # its length counts their visual tokens.
         room = self.question_cap()[0] - visual + images + videos
-        prompts = self._prompt_ids([entry[-1] for entry in rendered], room)
-        for (question_id, kind, keys, descriptions, _), prompt_ids in zip(
-            rendered, prompts, strict=True
+        encodings = self.prompts.read_batch([entry[-1] for entry in rendered], room)
+        for (question_id, kind, keys, descriptions, _), encoding in zip(
+            rendered, encodings, strict=True
         ):
-            if prompt_ids is None:
+            if encoding is None:
                 errors[question_id] = question_error(kind, self.over_cap())
                 continue
-            ids = self._expand(prompt_ids, media) if media else prompt_ids
+            ids = encoding.ids
+            if media:
+                ids = self._expand(ids, media)
             tokens += len(ids)
             items.append(
                 Item(
@@ -779,29 +775,6 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             return self.validated, True
         return self.limit, False
 
-    def _prompt_ids(self, texts: list[str], room: int) -> list[list[int] | None]:
-        """Each prompt's token IDs, or None for a prompt of more than ``room`` tokens.
-
-        Decision 3.0 never truncates, so ``room + 1`` tokens decide a prompt:
-        it is read only that far, and not at all when it is certainly longer
-        (``bounds``). A prompt within ``room`` is read whole.
-        """
-        undecided = [
-            index
-            for index, text in enumerate(texts)
-            if not bounds.surely_over(self.tokenizer, text, room)
-        ]
-        # One call for the prompts short enough to read whole: the tokenizer
-        # releases the GIL for a batch, not for a single text.
-        reads = bounds.read_batch(
-            self.tokenizer, [texts[index] for index in undecided], room + 1
-        )
-        out: list[list[int] | None] = [None] * len(texts)
-        for index, read in zip(undecided, reads, strict=True):
-            if read.tokens <= room:
-                out[index] = read.encoding.ids
-        return out
-
     def over_cap(self, length: int | None = None) -> QuestionError:
         """Why a question prompt over ``question_cap`` is refused.
 
@@ -835,7 +808,17 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
 
     def _expand(self, ids: list[int], media: RequestMedia) -> list[int]:
         """Each image placeholder repeated once per input token of its image, and each video placeholder as its
-        expansion (timestamped frame pairs), images and videos in order."""
+        expansion (timestamped frame pairs), images and videos in order. Placeholders that do not match the
+        media one for one refuse the request before any is expanded."""
+        held = (
+            ids.count(self.image_token) if self.image_token is not None else 0,
+            ids.count(self.video_token) if self.video_token is not None else 0,
+        )
+        if held != (len(media.images), len(media.videos)):
+            raise ValueError(
+                f"the prompt holds {held[0]} image and {held[1]} video placeholders for "
+                f"{len(media.images)} images and {len(media.videos)} videos"
+            )
         out: list[int] = []
         images = iter(media.images)
         videos = iter(media.video_ids)

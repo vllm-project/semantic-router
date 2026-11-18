@@ -435,7 +435,7 @@ func TestResponsesTextEncoderEmitsCompleteContentLifecycleOnce(t *testing.T) {
 	encoder := OpenAIResponsesCodec{}.NewEncoder(
 		llmprotocol.StreamContext{
 			Context: context.Background(), PublicModel: "model", ResponseID: "response_1",
-			PreviousResponseID: "response_previous",
+			ResponseRender: llmprotocol.ResponseRenderContext{PreviousResponseID: "response_previous"},
 		},
 		llmprotocol.DefaultPolicy(),
 	)

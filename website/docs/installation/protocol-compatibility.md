@@ -300,7 +300,7 @@ backend:
 | `thinking.type: adaptive` | The backend model's default reasoning behavior applies; `output_config.effort` is kept. |
 | `thinking.display: omitted` | Reasoning is removed from the translated response, including streaming output. An answer whose output limit went to reasoning comes back with no content blocks and the `max_tokens` stop reason, buffered or streamed. |
 | `thinking.display: summarized` or `updates` (Claude Code sends these) | The backend's reasoning comes back as thinking, as it does with no display, since the Router can't summarize it. `x-vsr-warnings` reports an `approximated` diagnostic for `thinking.display` when the model has a reasoning family and the decision doesn't turn reasoning off. |
-| `thinking.type: disabled` | Needs a configured reasoning family and an effective backend reasoning-off control. |
+| `thinking.type: disabled` | Needs a configured reasoning family and an effective backend reasoning-off control. The backend runs with reasoning off whatever the decision chose, and the `reasoning` member of `x-vsr-trace` reads `off`. |
 | A `context_management` edit `clear_thinking_20251015` with `keep: all` | Omitted, since it has no effect. Edits that would change history are rejected. |
 | `cache_control` boundaries, toward a Responses backend | Omitted, since Responses can't represent them. The prompt and tool result still dispatch, and `x-vsr-warnings` reports a `dropped` diagnostic for `cache_control`. |
 
@@ -320,6 +320,20 @@ sends it as user text in that place instead, for chat templates that accept a
 system message only first; see
 [System messages a chat template refuses](#system-messages-a-chat-template-refuses).
 Messages backends receive the message in place either way.
+
+Replies reach these clients in the shape an `anthropic` backend gives them:
+
+- **Thinking signatures.** Every thinking block carries a `signature`, empty
+  when the backend gave none. A stream sends it on `content_block_start` and
+  ends the block with an empty `signature_delta`. When a later turn sends such
+  a block back, the Router accepts it whatever the backend's format.
+- **Identifiers.** The message id starts with `msg_` and each tool call id
+  with `toolu_`. Both are derived from the backend's ids, so a buffered and a
+  streamed reply carry the same ones, and the `tool_result` blocks the client
+  sends back pair with their calls.
+- **Input usage on `message_start`.** These backends report usage only when
+  the answer ends, so a stream's `message_start` reports the Router's estimate
+  of the input tokens. The final `message_delta` reports the backend's count.
 
 ### Files a model can't read
 
@@ -483,6 +497,35 @@ messages in its one system message
 ([above](#system-messages-a-chat-template-refuses)), and the request reports
 that diagnostic alone.
 
+### Control tokens in user and tool text
+
+A model server such as vLLM renders the chat template to one string and
+tokenizes it with the tokenizer's added tokens recognized, so text that
+spells one of those tokens becomes the token. `<think>` and `</think>` typed
+by a user, or returned inside a tool result, become a Qwen3.5 model's
+reasoning delimiters (its tokenizer does not even mark them special), and a
+typed `<|im_end|>` ends the user's turn.
+
+The Router keeps such text text. For a model whose own tokenizer it has
+(`providers.models[].tokenizer`, or the Hugging Face repo it counts with: see
+[Check prompts against the context window](model-configuration#check-prompts-against-the-context-window)),
+it puts U+2060 WORD JOINER, a character with no width, after the first
+character of every added token's text in user and tool text before the
+request leaves:
+
+- **Every added token, every protocol.** Special or not, as the model
+  server's tokenizer matches them, in Chat, Responses and Messages requests,
+  for the decision's model and for each fallback candidate.
+- **Only user and tool text.** The text of user messages and of tool results
+  is escaped. System and developer instructions, the assistant's turns and
+  tool calls go as the client sent them. A token split across two text parts
+  of one message is broken where the parts meet.
+- **Nothing else changes.** Text without an added token's text reaches the
+  backend byte for byte. A model that repeats escaped text may repeat the
+  word joiner too.
+- **Models without their own tokenizer** (none named, or one that has not
+  loaded) receive the text unchanged.
+
 ### Signed reasoning from Anthropic backends
 
 Reasoning content translated out of an Anthropic backend fails when the
@@ -555,6 +598,16 @@ request without `store` and reports a `dropped` diagnostic for `store` in
 - **Verbosity.** Responses `text.verbosity` maps to the Chat `verbosity`
   field. Messages has no equivalent, so the Router drops this hint and reports
   `text.verbosity` in `x-vsr-warnings`.
+- **Response objects.** The response object, buffered and in every streamed
+  `response.*` event, repeats the request's `instructions`, `tools`,
+  `tool_choice`, `parallel_tool_calls`, `max_output_tokens`, `temperature`,
+  `top_p`, `text`, `reasoning`, `metadata`, `truncation`, `user` and
+  `prompt_cache_key` as the client sent them, whatever routing changed for the
+  backend. A member the request leaves out or sets to `null` keeps its
+  default. `created_at` is the backend's creation time, or the Router's when
+  the backend reports none, as Messages backends don't. When the output limit
+  ends the answer, its message item is `incomplete`, in
+  `response.output_item.done` and in the terminal response.
 
 ## Configure a backend format
 
@@ -676,14 +729,27 @@ tools or error translation.
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
 - vLLM's serving metadata never fails a reply, whatever its value:
-  `prompt_logprobs`, `prompt_text`, `prompt_routed_experts`,
-  `kv_transfer_params`, `ec_transfer_params` and `metrics` at the top level of
-  a reply or stream chunk, and `routed_experts` and `weight_versions` in its
-  choices. Chat clients receive them unchanged; a value other than null or
-  empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
+  `prompt_logprobs`, `prompt_token_ids`, `prompt_text`,
+  `prompt_routed_experts`, `kv_transfer_params`, `ec_transfer_params` and
+  `metrics` at the top level of a reply or stream chunk, and `token_ids`,
+  `routed_experts` and `weight_versions` in its choices. No client receives
+  them, nor the server's `system_fingerprint`, which names vLLM's version,
+  commit and parallel layout; the Router has no stable fingerprint of its own
+  to send instead, and `x-vsr-config-version` names the configuration that
+  served. A Chat client of a Chat backend receives the rest of the reply as
+  the backend sent it, buffered and streamed. A metadata value other than null
+  or empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
   `modality` is not `text` fails with `unsupported_upstream_audio` (or
   `unsupported_upstream_modality`), because its `delta.content` carries
   encoded media, not answer text.
+- A request whose `tool_choice` is `none` reaches a Chat Completions backend
+  without its `tools`, `tool_choice` and `parallel_tool_calls`, and
+  `x-vsr-warnings` reports `tools` as `dropped`. Model servers such as vLLM
+  render declared tools into the prompt whatever the choice, so a model could
+  start a call the server then drops, leaving only the sentence before it.
+  Messages backends receive the tools, which they require while the history
+  holds `tool_use` blocks, and Responses backends receive them with
+  `tool_choice: "none"`, which the Responses API enforces.
 - A Chat provider ends a forced named tool call with `finish_reason: "stop"`.
   Anthropic Messages clients receive `stop_reason: "tool_use"` for a turn that
   ends that way and carries `tool_use` blocks. A turn that ends at the output

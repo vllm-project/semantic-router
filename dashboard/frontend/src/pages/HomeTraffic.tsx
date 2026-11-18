@@ -6,7 +6,7 @@ import {
   Gauge,
   GitBranch,
   MessagesSquare,
-  PiggyBank,
+  Scale,
   Rocket,
   ServerOff,
   Zap,
@@ -206,28 +206,32 @@ export function HomeKpis({
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-[radial-gradient(closest-side,var(--glow-gold),transparent)]" />
         <div className="relative flex h-full flex-col gap-3 px-4 pb-4 pt-4">
           <span className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
-            <PiggyBank className="size-4 text-chart-2" />
-            Saved by routing
+            <Scale className="size-4 text-chart-2" />
+            Cost vs reference
           </span>
           <div className="flex items-baseline gap-2">
             <span
-              className={cn(
-                'text-[26px] font-semibold leading-none tracking-[-0.03em] tabular',
-                money.saved !== undefined && money.saved < 0 && 'text-destructive-foreground',
-              )}
+              className={cn('text-[26px] font-semibold leading-none tracking-[-0.03em] tabular')}
             >
-              {money.saved === undefined
-                ? 'N/A'
-                : formatInsightsCost(money.saved, money.currency, { total: true })}
+              {money.saved === undefined ? (
+                <span
+                  className="cursor-help text-subtle-foreground"
+                  title="No request was priced against a reference model yet."
+                >
+                  —
+                </span>
+              ) : (
+                `${money.saved > 0 ? '−' : money.saved < 0 ? '+' : ''}${formatInsightsCost(Math.abs(money.saved), money.currency, { total: true })}`
+              )}
             </span>
             {savedShare !== undefined && savedShare > 0 ? (
-              <Badge tone="gold">{savedShare.toFixed(0)}% less</Badge>
+              <Badge tone="outline">{savedShare.toFixed(0)}% below reference</Badge>
             ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
             {money.saved === undefined
-              ? 'No request was priced against a baseline yet.'
-              : 'Compared with sending each request to its baseline model.'}
+              ? 'No request was priced against a reference model yet.'
+              : 'Cost only: each request at its reference model’s list price, not a quality comparison.'}
           </p>
           {money.saved !== undefined && money.baseline ? (
             <div className="mt-auto">
@@ -236,13 +240,13 @@ export function HomeKpis({
                   Actual {formatInsightsCost(money.spend, money.currency, { total: true })}
                 </span>
                 <span>
-                  Baseline {formatInsightsCost(money.baseline, money.currency, { total: true })}
+                  Reference {formatInsightsCost(money.baseline, money.currency, { total: true })}
                 </span>
               </div>
               <Progress
                 value={Math.min(100, (money.spend / money.baseline) * 100)}
                 tone="neutral"
-                aria-label={`${formatInsightsShare(money.spend, money.baseline)} of the baseline`}
+                aria-label={`${formatInsightsShare(money.spend, money.baseline)} of the reference cost`}
                 className="[&>div]:bg-chart-2"
               />
             </div>

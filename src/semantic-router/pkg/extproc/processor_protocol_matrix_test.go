@@ -44,7 +44,11 @@ func TestExtProcBufferedResponseProtocolMatrix(t *testing.T) {
 				if err != nil {
 					t.Fatalf("client response is not valid %s: %v\n%s", clientFormat, err, body)
 				}
-				assertExtProcMatrixResponse(t, translated.Response, "source-model")
+				id := "response_1"
+				if clientFormat == llmprotocol.AnthropicMessagesV1 && backendFormat != clientFormat {
+					id = translatedAnthropicID("msg_", id)
+				}
+				assertExtProcMatrixResponse(t, translated.Response, id, "source-model")
 			})
 		}
 	}
@@ -519,7 +523,7 @@ func assertExtProcStreamingPair(
 		t.Fatalf("reconstruct response: %v", err)
 	}
 	// The model the upstream named, as the buffered matrix sees it.
-	assertExtProcMatrixResponse(t, *semantic, "source-model")
+	assertExtProcMatrixResponse(t, *semantic, "response_1", "source-model")
 	assertClientStreamDecodes(t, engine, clientFormat, clientWire.Bytes())
 }
 
@@ -617,9 +621,9 @@ func decodeExtProcClientStreamResponseID(
 	return ""
 }
 
-func assertExtProcMatrixResponse(t *testing.T, response llmprotocol.Response, expectedModel string) {
+func assertExtProcMatrixResponse(t *testing.T, response llmprotocol.Response, expectedID, expectedModel string) {
 	t.Helper()
-	if response.ID != "response_1" || response.Model != expectedModel ||
+	if response.ID != expectedID || response.Model != expectedModel ||
 		len(response.Output) != 1 || len(response.Output[0].Content) != 1 ||
 		response.Output[0].Content[0].Kind != llmprotocol.ContentText ||
 		response.Output[0].Content[0].Text != "hello" {

@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 // responseGuardHoldLimit bounds the upstream bytes of a streamed answer the
@@ -247,9 +248,13 @@ func (r *OpenAIRouter) encodeClientStream(ctx *RequestContext, response llmproto
 	if format == "" {
 		format = llmprotocol.OpenAIChatV1
 	}
+	if format == llmprotocol.AnthropicMessagesV1 {
+		source, _ := responseWireFormats(ctx)
+		response = protocolcodec.AnthropicReplyIdentifiers(source, response)
+	}
 	body, diagnostics, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Source: format, Target: format,
-		Options: clientStreamOptions(ctx), PreviousResponseID: responseObjectPreviousID(ctx),
+		Options: clientStreamOptions(ctx), ResponseRender: responseObjectRender(ctx),
 	})
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 	return body, err

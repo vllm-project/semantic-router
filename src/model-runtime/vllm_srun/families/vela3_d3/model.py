@@ -55,7 +55,9 @@ SPAN_IMAGES = "span questions read text only on this model"
 
 
 def refuse_blank(state: Any) -> None:
-    """Refuse a blank text state, as the other Vela families do (``vela2.request.read_state``)."""
+    """Refuse a blank text state, as the other Vela families do (``vela2.request.read_state``); a request with
+    images, videos or assets does not call it, since its base reads an image-only state as the d3 models do.
+    """
     if isinstance(state, str) and not state.strip():
         raise ValueError("state must not be empty or whitespace")
 
@@ -168,7 +170,8 @@ class Vela3D3Model(Decision3Model):
 
     The base model is whatever follows this class in a size's MRO, so every
     ``super()`` call here reaches the base. Each planning entry point
-    (``plan``, ``plan_images``, ``plan_resolved``) refuses a blank state, plans
+    (``plan``, ``plan_images``, ``plan_resolved``) refuses a blank state unless
+    the request has media, plans
     the span questions itself and hands the others to the base without the
     package's ``decision_adapter`` key; ``_decisions`` says how a size marks its
     gated rows. Span questions with images, videos or assets fail alone
@@ -229,7 +232,8 @@ class Vela3D3Model(Decision3Model):
         images: list[Any],
         videos: list[Any] | None = None,
     ) -> RequestPlan[Item]:
-        refuse_blank(state)
+        if not images and not videos:
+            refuse_blank(state)
         if not isinstance(questions, dict):
             return super().plan_images(state, questions, images, videos)
         asked, rest = split_spans(questions)
@@ -244,7 +248,9 @@ class Vela3D3Model(Decision3Model):
         """A request with assets or Box / track questions: the base's resolved planning for the
         decisions (every adapter off, as the package answers it), the span questions here.
         """
-        refuse_blank(request.state)
+        media = request.images or request.videos or request.uses
+        if not media:
+            refuse_blank(request.state)
         asked, rest = split_spans(request.questions)
         plan = (
             super().plan_resolved(
@@ -258,7 +264,6 @@ class Vela3D3Model(Decision3Model):
             if rest
             else None
         )
-        media = request.images or request.videos or request.uses
         return with_spans(
             plan,
             asked,
@@ -397,7 +402,8 @@ class GatedDecisions(Vela3D3Model):
 
 
 # Question types d3-turbo answers alone (``system_one`` of the released runtime): a request with one runs adapters off.
-BASE_ONLY_TYPES = frozenset({"box", "track"})
+# A tuple, so a question whose type is a list or an object is looked up by equality and fails alone as invalid.
+BASE_ONLY_TYPES = ("box", "track")
 
 
 class TurboDecisions(Vela3D3Model, StateOnceModel):

@@ -622,20 +622,22 @@ SENTENCE = "Please summarise the attached release notes. "
 def decision3_states(model) -> dict[str, str]:
     """States of a Decision 3.0 request on each side of its cap.
 
-    The fixture's tokenizer reads prose at about a token a character and an
-    added token as one, so only a state of added tokens is long for its
-    tokens. A prompt longer than the first prefix (``bounds.reach``) is read in
-    part, and one of more characters than any token covers times the cap is
-    certainly over it.
+    The fixture's tokenizer reads prose at about a token a character. A typed
+    added token is text (``prompt.PromptEncoder``), so a state of them is as
+    long in tokens as its characters spell, not one token each. A prompt
+    longer than the first prefix (``bounds.reach``) is read in part, and one
+    of more characters than any token covers times the cap is certainly over
+    it.
     """
     limit = model.limit
-    known = bounds.facts(model.tokenizer)
-    per_sentence = len(model.tokenizer.encode(SENTENCE * 8).ids) // 8
+    text = model.prompts.text
+    known = bounds.facts(text)
+    per_sentence = len(text.encode(SENTENCE * 8).ids) // 8
     prefix = bounds.reach(limit + 1)
     return {
         "short": SENTENCE,
         "fits": SENTENCE * (limit // per_sentence // 2),
-        "long and fits": "<|vision_start|>" * (limit // 2),
+        "typed added tokens": "<|vision_start|>" * (limit // 2),
         "just over": SENTENCE * (limit // per_sentence + 2),
         "over": SENTENCE * (3 * prefix // len(SENTENCE)),
         "certainly over": SENTENCE
@@ -650,7 +652,7 @@ def test_decision3_fails_a_long_state_as_it_fails_it_read_whole(
     limit = model.limit
     states = decision3_states(model)
     assert len(states["just over"]) < bounds.reach(limit + 1)
-    assert len(states["long and fits"]) > bounds.reach(limit + 1)
+    assert len(states["typed added tokens"]) > bounds.reach(limit + 1)
     client = TestClient(create_app(decision3_runtime))
     outcomes = {}
     for name, state in states.items():
@@ -668,7 +670,7 @@ def test_decision3_fails_a_long_state_as_it_fails_it_read_whole(
     assert outcomes == {
         "short": answered,
         "fits": answered,
-        "long and fits": answered,
+        "typed added tokens": over,
         "just over": over,
         "over": over,
         "certainly over": over,
@@ -724,8 +726,8 @@ def test_decision3_reads_no_more_of_a_long_state_than_a_question_may_hold(
 ):
     model = decision3_runtime.lookup(None).model
     states = decision3_states(model)
-    recorder = PromptRecorder(model.tokenizer)
-    monkeypatch.setattr(model, "tokenizer", recorder)
+    recorder = PromptRecorder(model.prompts.text)
+    monkeypatch.setattr(model.prompts, "text", recorder)
     # The probe that tells which cuts this tokenizer keeps exact is not a read
     # of a prompt.
     bounds.facts(recorder)
@@ -733,21 +735,26 @@ def test_decision3_reads_no_more_of_a_long_state_than_a_question_may_hold(
     questions = questions_for("decision3")
 
     def read_of(state):
-        """Characters of the longest text the tokenizer encoded for the refused ``state``, and its calls."""
+        """Characters of the longest text the tokenizer encoded for the refused ``state``, and the reads of it.
+
+        A prompt is read as its runs of text between the template's tokens;
+        one run of each holds the state.
+        """
         recorder.texts.clear()
         plan = model.plan(state, questions)
         assert not plan.items and set(plan.errors) == set(questions)
         assert {error["error"] for error in plan.errors.values()} == {
             "max_length_exceeded"
         }
-        return max(map(len, recorder.texts), default=0), len(recorder.texts)
+        reads = sum(SENTENCE in text for text in recorder.texts)
+        return max(map(len, recorder.texts), default=0), reads
 
     # A prompt certainly over the cap is refused unread.
     assert read_of(certain) == (0, 0)
     # Any other is read one token past the cap and no further: one prefix of
     # each question's prompt.
-    longest, calls = read_of(over)
-    assert 0 < longest < len(over) // 2 and calls == len(questions)
+    longest, reads = read_of(over)
+    assert 0 < longest < len(over) // 2 and reads == len(questions)
 
 
 @pytest.mark.parametrize("name", ["decision2", "decision1-qwen", "decision1-vela"])

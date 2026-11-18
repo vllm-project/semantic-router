@@ -62,9 +62,9 @@ recipes:
 | Field | Meaning |
 | --- | --- |
 | `role` | `main` or `subagent`. |
-| `harness` | `claude_code`, `codex`, `opencode` or `deepseek_harness`. |
+| `harness` | `claude_code`, `codex`, `opencode`, `deepseek_harness`, `cursor` or `openclaw`. |
 | `types` | Subagent types, any of which matches. The comparison ignores case. A rule with `types` matches subagents only, so `role: main` is refused with it. |
-| `request_classes` | Request classes, any of which matches: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`. Claude Code sends the class and OpenCode calls get one as the table below shows; Codex calls carry none, so `harness: codex` is refused with it. |
+| `request_classes` | Request classes, any of which matches: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`. Claude Code sends the class, and OpenCode, Codex and OpenClaw calls get one as the table below shows; DeepSeek Harness and Cursor calls carry none, so `harness: deepseek_harness` and `harness: cursor` are refused with it. |
 
 A rule matches when every field it sets matches, and must set at least one.
 Rule names are unique within a recipe.
@@ -79,7 +79,7 @@ decides the role.
 | Harness | Main agent | Subagent | Type | Request class |
 | --- | --- | --- | --- | --- |
 | Claude Code | `x-claude-code-session-id` and no agent id | `x-claude-code-agent-id` | `x-claude-code-agent-type`: a built-in agent's name, such as `Explore`, `Plan` or `general-purpose`, or `custom` for every custom agent, `teammate` for an agent team member and `fork` for a fork | `x-claude-code-request-class`: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`, on every request |
-| Codex CLI | `thread-id` equal to `session-id` | `thread-id` not equal to `session-id` | `x-openai-subagent`: `collab_spawn` for a `spawn_agent` child, whatever its role, and `review` for a review child | none |
+| Codex CLI | `thread-id` equal to `session-id` | `thread-id` not equal to `session-id` | `x-openai-subagent`: `collab_spawn` for a `spawn_agent` child, whatever its role, and `review` for a review child | none sent: its title thread (turn metadata `thread_title`) is `auxiliary`, a call without tools whose last user message opens with its checkpoint prompt, `You are performing a CONTEXT CHECKPOINT COMPACTION.`, is `compaction`, and every other call is `main` or `subagent` |
 | OpenCode | `x-session-id` and no `x-parent-session-id` | `x-parent-session-id`: the session that spawned the subagent, whose own session is in `x-session-id` | none | none sent: a call without tools that opens with OpenCode's built-in title instructions is `auxiliary`, one that opens with its summary instructions is `compaction`, and every other call is `main` or `subagent` |
 
 Claude Code sends the type and the class only when
@@ -99,13 +99,28 @@ spawned it, with the child as the agent, unless the request pins a session in
 default, so a run has one level. OpenCode marks no request class, so its two
 side requests are known by the instructions they open with: `You are a title
 generator.` for a session title and `You are an anchored context summarization
-assistant` for a summary of the session. A project that replaces those prompts
+assistant` (OpenCode 1.19: `You are a context summarization agent.`) for a
+summary of the session. A project that replaces those prompts
 sends calls that read as `main`. This was checked with OpenCode 1.18.10.
 
 DeepSeek Harness is known by its User-Agent, `deepseek-harness/<version>`. It
 names no session, subagent or request class, so `request_classes` cannot go
 with `harness: deepseek_harness`, and its calls take the `main` role only when
 the request pins a session in `x-vsr-session-id`.
+
+OpenClaw marks no request class either: a call without tools whose system
+prompt opens with its summary instructions, `You are a context summarization
+assistant.`, is `compaction`, and every other call is `main` or `subagent`.
+
+Cursor, with a custom OpenAI base URL, sends its calls from Cursor's servers
+with `User-Agent: Cursor/<version>`; an agent that only contains `Cursor/`,
+such as the browser built into the Cursor desktop app, is not Cursor. OpenClaw
+sends the generic agent of the OpenAI SDK it calls through, so it is known by
+the comment its system prompt opens with, `<!-- openclaw:`. Neither names a
+session or subagent, Cursor names no request class, so `request_classes`
+cannot go with `harness: cursor`, and their calls take the `main` role only
+when the request pins a session in `x-vsr-session-id`. This was checked
+with OpenClaw 2026.11.5 and with Cursor's recorded calls.
 
 ## Decision Usage
 
