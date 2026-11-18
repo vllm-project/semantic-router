@@ -116,6 +116,7 @@ Highest priority first:
 | `on_unknown` | routing | Decisions whose unknown result `rules.on_unknown` resolved, each with its `policy`. |
 | `client_protocol` | protocol | Client wire protocol, such as `anthropic`. |
 | `upstream_protocol` | protocol | Provider wire protocol, such as `openai`. |
+| `requested_model` | listener | The model the client named when the listener's `unserved_models` routed the request to one of its own models. |
 | `effective_input_tokens` | automatic_output | Rendered input tokens of the final automatic-output dispatch, chat template included. |
 | `effective_max_output_tokens` | automatic_output | Output token limit of the final automatic-output dispatch, reasoning included. |
 | `signals` | signals | Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. |

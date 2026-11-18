@@ -469,6 +469,11 @@ type RequestContext struct {
 	// ListenerModels, when set, are the only request models the listener the
 	// client request arrived on accepts.
 	ListenerModels routing.ListenerModels
+	// UnservedModelRoute, when set, is the model a request naming a model
+	// the listener does not accept or the Router does not serve is routed
+	// as, and RequestedModel the name such a request gave.
+	UnservedModelRoute string
+	RequestedModel     string
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.

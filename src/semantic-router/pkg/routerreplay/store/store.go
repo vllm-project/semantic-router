@@ -329,6 +329,10 @@ type Record struct {
 	ImageCount        int `json:"image_count,omitempty"`
 	HistoryImageCount int `json:"history_image_count,omitempty"`
 
+	// RequestedModel is the model the client named when its listener's
+	// unserved_models routed the request as OriginalModel.
+	RequestedModel string `json:"requested_model,omitempty"`
+
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
 	JailbreakEnabled  bool `json:"jailbreak_enabled,omitempty"`
