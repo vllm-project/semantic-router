@@ -140,7 +140,8 @@ precision its readiness check was recorded at, except Decision 3.0 on a CPU:
 
 | Models | `auto` on a GPU | `auto` on a CPU |
 | --- | --- | --- |
-| Decision 3.0 and the Vela 3.0 sizes on it (vela3-lite and up) | BF16 | FP32 |
+| Decision 3.0 | BF16 | BF16 on an AMD CPU with AVX-512 BF16, FP32 on other CPUs |
+| The Vela 3.0 sizes on Decision 3.0 (vela3-lite and up) | BF16 | FP32 |
 | Decision 2.0; Decision 1.0 and Vela 2.0 on Qwen3.5 | BF16 | FP32 |
 | Vela 1.0 task models, embedders and rerankers, Vela 1.0 Omni, Vela 2.0 0.3B, Decision 1.0 Kai, Lex and Route | FP32 | FP32 |
 
@@ -156,6 +157,14 @@ times faster than BF16
 ([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/d3-cpu-fp32.md)).
 `--dtype bfloat16` runs the published BF16 on a CPU instead; its readiness
 check then compares the BF16 references recorded for that CPU class.
+
+Where a CPU class computes BF16 natively and has its own BF16 reference for a
+model, `--dtype auto` runs BF16 there and checks that reference: today an AMD
+CPU with AVX-512 BF16, for the Decision 3.0 sizes. BF16 and FP32 answer the same
+decisions there
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/d3-cpu-bf16-native.md)).
+A CPU without its own reference, such as an Intel Xeon with AMX until one is
+recorded, keeps FP32. `--dtype float32` keeps FP32 on every CPU.
 
 Another value holds every weight of the backbone in that dtype and computes in
 it, with the reference kernels. A value that names the `auto` precision is the

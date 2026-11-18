@@ -159,7 +159,11 @@ class DtypePolicy:
     approximate kernels on GPUs and NPUs, ``approximate_cpu_kernels`` to the
     CPU accelerator's (``EngineOptions.exact_kernels_only`` off), each on the
     strength of a record on that device class: a GPU record says nothing about
-    a CPU kernel, and the reverse. Consented
+    a CPU kernel, and the reverse. ``cpu_bf16_references`` names the CPU
+    hardware keys (``CPUAccelerator.golden_reference``) on which every golden
+    request has a BF16 reference: on such a host ``--dtype auto`` holds BF16
+    instead of ``cpu_weights`` (``dtypes.on_host``), checked against that
+    reference. Consented
     copies and kernels run by default at the published precision, so a family
     consents only where its records show no decision changed and at least 99%
     agreement per answer type against the model's own batches (embeddings:
@@ -176,6 +180,7 @@ class DtypePolicy:
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
     approximate_cpu_kernels: bool = False
+    cpu_bf16_references: frozenset[str] = frozenset()
 
     @property
     def needs_gpu_bf16(self) -> bool:
@@ -757,6 +762,11 @@ class Accelerator(ABC):
     def golden_reference(self, device: DeviceInfo) -> str | None:
         """Optional hardware reference key; callers own device-class fallback."""
         return f"{self.name}:{device.arch}" if device.arch else None
+
+    def golden_references(self, device: DeviceInfo) -> tuple[str, ...]:
+        """The hardware reference keys to try, most specific first; callers own device-class fallback."""
+        key = self.golden_reference(device)
+        return (key,) if key else ()
 
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""

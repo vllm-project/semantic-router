@@ -159,7 +159,9 @@ def place(
             # The dtypes a device holds the weights in follow its torch device, as
             # the runtime resolves --dtype and the engines read the policy.
             gpu = accelerator.torch_device(info).type != "cpu"
-            running = dtypes.apply(spec, dtype, gpu)
+            running = dtypes.apply(
+                dtypes.on_host(spec, dtype, accelerator, info), dtype, gpu
+            )
             needed = estimate_bytes(
                 running, parameters, name, bf16_parameters if gpu else 0
             )

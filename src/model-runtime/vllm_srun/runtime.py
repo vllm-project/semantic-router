@@ -338,6 +338,8 @@ class ServedModel:
         # The dtype the model runs: "auto" (its published precision) or an explicit one.
         self.dtype = "auto"
         self.precision = "float32"
+        # The dtype the golden references checking an ``auto`` model are recorded at, when not ``auto``.
+        self.golden_dtype: str | None = None
         self.shared = False
         self.numerics = "exact"
         self.scheduler: Scheduler | None = None
@@ -425,6 +427,10 @@ class ServedModel:
         self.args, self.limits_source = calibration.resolve(self.requested_args, device)
         # The dtype policy a device follows is its torch device's, as the engines read it.
         gpu = placement.accelerator.torch_device(device).type != "cpu"
+        host = dtypes.on_host(spec, self.args.dtype, placement.accelerator, device)
+        # BF16 on a CPU class with its own BF16 references, checked against them.
+        self.golden_dtype = "bfloat16" if host is not spec else None
+        spec = host
         self.dtype = dtypes.resolve(self.args.dtype, spec.dtype, gpu)
         self.precision = (
             dtypes.published(spec.dtype, gpu) if self.dtype == "auto" else self.dtype
@@ -603,8 +609,8 @@ class ServedModel:
             model.golden_compare,
             self.family.golden(self.package),
             placement.device.accelerator,
-            placement.accelerator.golden_reference(placement.device),
-            self.dtype,
+            placement.accelerator.golden_references(placement.device),
+            self.golden_dtype or self.dtype,
         )
         if self.dtype != "auto" and self.health.golden.status == "unverified":
             self.health.golden = replace(

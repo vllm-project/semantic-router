@@ -322,6 +322,34 @@ def test_a_base_writer_needs_the_base_eos(written, tmp_path, monkeypatch) -> Non
         family(base).describe(family(base).verify(PackageRef(base)))
 
 
+def test_bf16_on_a_cpu_class_rests_on_its_own_references(written, monkeypatch) -> None:
+    """The base's BF16 references don't let ``auto`` hold BF16 for an adapted model."""
+    from vllm_srun.families.vela3_d3 import family as d3
+
+    describe = Decision3Family.describe
+    recorded = frozenset({"cpu:x86_64:avx512:bf16_native:amd"})
+
+    def with_references(self, package):
+        spec = describe(self, package)
+        return replace(spec, dtype=replace(spec.dtype, cpu_bf16_references=recorded))
+
+    monkeypatch.setattr(d3.Decision3Family, "describe", with_references)
+    verified = family(written).verify(PackageRef(written))
+    assert family(written).describe(verified).dtype.cpu_bf16_references == frozenset()
+    monkeypatch.setattr(
+        Vela3D3Family,
+        "golden",
+        lambda self, package: [
+            {
+                "surface": "decisions",
+                "body": {},
+                "expected": {f"{key}@bfloat16": {} for key in recorded},
+            }
+        ],
+    )
+    assert family(written).describe(verified).dtype.cpu_bf16_references == recorded
+
+
 def test_an_unpinned_package_needs_sha256sums(written, tmp_path) -> None:
     root = copy(written, tmp_path)
     (root / "SHA256SUMS").unlink()
