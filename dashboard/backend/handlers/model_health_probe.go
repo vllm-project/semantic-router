@@ -324,9 +324,15 @@ func classifyModelHealthAnswer(result *modelHealthProbe, target modelHealthTarge
 	case status >= http.StatusOK && status < http.StatusMultipleChoices:
 		result.status = ModelHealthStatusHealthy
 		if target.check == modelHealthCheckList && target.providerModel != "" {
-			if listed, known := modelHealthListsModel(body, target.providerModel); known && !listed {
+			switch readModelHealthList(body, target.providerModel) {
+			case modelListOmitsModel:
 				result.status = ModelHealthStatusDegraded
 				result.reason = fmt.Sprintf("The backend does not list %s.", target.providerModel)
+			case modelListUnreadable:
+				result.status = ModelHealthStatusDegraded
+				result.reason = fmt.Sprintf("Reachable, but its answer is no model list, so %s is unconfirmed.", target.providerModel)
+			case modelListIncomplete:
+				result.reason = fmt.Sprintf("Reachable; its model list shows only part of the models, so %s is unconfirmed.", target.providerModel)
 			}
 		}
 	case target.check == modelHealthCheckPath:
@@ -358,42 +364,59 @@ func classifyModelHealthAnswer(result *modelHealthProbe, target modelHealthTarge
 	}
 }
 
-// modelHealthListsModel reports whether a model list names the model; known
-// is false when the answer is no complete list, such as one page of many.
-func modelHealthListsModel(body io.Reader, providerModel string) (listed bool, known bool) {
+// modelListAnswer is what a backend's model list says about one model.
+type modelListAnswer int
+
+const (
+	modelListNamesModel modelListAnswer = iota
+	modelListOmitsModel
+	// modelListIncomplete is one page of many, or a list too long to read
+	// whole: the model may be in the part not read.
+	modelListIncomplete
+	// modelListUnreadable is an answer that is no model list at all.
+	modelListUnreadable
+)
+
+func readModelHealthList(body io.Reader, providerModel string) modelListAnswer {
 	data, err := io.ReadAll(io.LimitReader(body, modelHealthMaxListBytes+1))
-	if err != nil || len(data) > modelHealthMaxListBytes {
-		return false, false
+	if err != nil {
+		return modelListUnreadable
+	}
+	if len(data) > modelHealthMaxListBytes {
+		return modelListIncomplete
 	}
 	type listItem struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
 	var payload struct {
-		Data          []listItem `json:"data"`
-		Models        []listItem `json:"models"`
-		HasMore       bool       `json:"has_more"`
-		NextPageToken string     `json:"nextPageToken"`
+		Data          *[]listItem `json:"data"`
+		Models        *[]listItem `json:"models"`
+		HasMore       bool        `json:"has_more"`
+		NextPageToken string      `json:"nextPageToken"`
 	}
-	if json.Unmarshal(data, &payload) != nil {
-		return false, false
+	if json.Unmarshal(data, &payload) != nil || (payload.Data == nil && payload.Models == nil) {
+		return modelListUnreadable
 	}
-	items := payload.Data
-	if len(items) == 0 {
-		items = payload.Models
+	var items []listItem
+	if payload.Data != nil {
+		items = append(items, *payload.Data...)
 	}
-	if len(items) == 0 || payload.HasMore || payload.NextPageToken != "" {
-		return false, false
+	if payload.Models != nil {
+		items = append(items, *payload.Models...)
 	}
 	want := strings.TrimPrefix(providerModel, "models/")
 	for _, item := range items {
 		for _, value := range []string{item.ID, item.Name} {
 			if strings.EqualFold(strings.TrimPrefix(strings.TrimSpace(value), "models/"), want) {
-				return true, true
+				return modelListNamesModel
 			}
 		}
 	}
-	return false, true
+	if payload.HasMore || payload.NextPageToken != "" {
+		return modelListIncomplete
+	}
+	return modelListOmitsModel
 }
 
 func aggregateModelHealth(plan modelHealthPlan, probes []modelHealthProbe) ModelHealthEntry {

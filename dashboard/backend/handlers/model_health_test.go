@@ -109,10 +109,11 @@ func TestModelHealthDegradesWhenTheBackendDoesNotListTheModel(t *testing.T) {
 		name   string
 		body   string
 		status string
+		reason string
 	}{
-		{name: "complete list without the model", body: `{"data":[{"id":"other"}]}`, status: ModelHealthStatusDegraded},
-		{name: "one page of many", body: `{"data":[{"id":"other"}],"has_more":true}`, status: ModelHealthStatusHealthy},
-		{name: "unreadable list", body: `not json`, status: ModelHealthStatusHealthy},
+		{name: "complete list without the model", body: `{"data":[{"id":"other"}]}`, status: ModelHealthStatusDegraded, reason: "The backend does not list provider/real-model."},
+		{name: "one page of many", body: `{"data":[{"id":"other"}],"has_more":true}`, status: ModelHealthStatusHealthy, reason: "Reachable; its model list shows only part of the models, so provider/real-model is unconfirmed."},
+		{name: "unreadable list", body: `not json`, status: ModelHealthStatusDegraded, reason: "Reachable, but its answer is no model list, so provider/real-model is unconfirmed."},
 		{name: "models key with prefix", body: `{"models":[{"name":"models/provider/real-model"}]}`, status: ModelHealthStatusHealthy},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -125,8 +126,8 @@ func TestModelHealthDegradesWhenTheBackendDoesNotListTheModel(t *testing.T) {
 			if entry.Status != test.status {
 				t.Fatalf("status = %q (%s), want %q", entry.Status, entry.Reason, test.status)
 			}
-			if test.status == ModelHealthStatusDegraded && entry.Reason != "The backend does not list provider/real-model." {
-				t.Fatalf("reason = %q", entry.Reason)
+			if entry.Reason != test.reason {
+				t.Fatalf("reason = %q, want %q", entry.Reason, test.reason)
 			}
 		})
 	}
@@ -189,6 +190,33 @@ func TestModelHealthClassifiesAnswers(t *testing.T) {
 			}
 			if result.answered != (test.want != ModelHealthStatusDown) {
 				t.Fatalf("answered = %v for %q", result.answered, test.want)
+			}
+		})
+	}
+}
+
+func TestModelHealthConfirmsTheModelFromItsList(t *testing.T) {
+	t.Parallel()
+
+	target := modelHealthTarget{check: modelHealthCheckList, providerModel: "qwen3-8b"}
+	for _, test := range []struct {
+		name, body, want, reason string
+	}{
+		{name: "listed", body: `{"data":[{"id":"qwen3-8b"}]}`, want: ModelHealthStatusHealthy},
+		{name: "listed by name", body: `{"models":[{"name":"models/qwen3-8b"}]}`, want: ModelHealthStatusHealthy},
+		{name: "listed on a first page", body: `{"data":[{"id":"qwen3-8b"}],"has_more":true}`, want: ModelHealthStatusHealthy},
+		{name: "complete list without it", body: `{"data":[{"id":"other"}]}`, want: ModelHealthStatusDegraded, reason: "The backend does not list qwen3-8b."},
+		{name: "empty list", body: `{"data":[]}`, want: ModelHealthStatusDegraded, reason: "The backend does not list qwen3-8b."},
+		{name: "not JSON", body: `<html>ok</html>`, want: ModelHealthStatusDegraded, reason: "Reachable, but its answer is no model list, so qwen3-8b is unconfirmed."},
+		{name: "JSON without a list", body: `{"status":"ok"}`, want: ModelHealthStatusDegraded, reason: "Reachable, but its answer is no model list, so qwen3-8b is unconfirmed."},
+		{name: "other page", body: `{"data":[{"id":"other"}],"has_more":true}`, want: ModelHealthStatusHealthy, reason: "Reachable; its model list shows only part of the models, so qwen3-8b is unconfirmed."},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			var result modelHealthProbe
+			classifyModelHealthAnswer(&result, target, http.StatusOK, strings.NewReader(test.body), 0)
+			if result.status != test.want || result.reason != test.reason {
+				t.Fatalf("classified %s as %q (%q), want %q (%q)", test.body, result.status, result.reason, test.want, test.reason)
 			}
 		})
 	}

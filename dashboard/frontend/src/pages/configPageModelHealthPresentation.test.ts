@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ModelHealth } from '../utils/modelHealthApi'
 import {
+  endpointShortfall,
   checkedAgo,
   formatLatency,
   healthSortValue,
@@ -205,5 +206,28 @@ describe('backend model traffic', () => {
     expect(trafficUnavailableReason(404)).toBe('replay_off')
     expect(trafficUnavailableReason(403)).toBe('forbidden')
     expect(trafficUnavailableReason(502)).toBe('router_unreachable')
+  })
+})
+
+describe('endpointShortfall', () => {
+  const health = (statuses: string[]) => ({
+    model: 'qwen/qwen3.8-27b',
+    status: 'degraded' as const,
+    recentMs: [],
+    endpoints: statuses.map((status, index) => ({
+      name: `ep-${index}`,
+      status: status as 'healthy' | 'down',
+    })),
+  })
+
+  it('says how many of several endpoints are down', () => {
+    expect(endpointShortfall(health(['healthy', 'healthy', 'down']))).toBe('1 of 3 endpoints down')
+    expect(endpointShortfall(health(['down', 'down']))).toBe('2 of 2 endpoints down')
+  })
+
+  it('says nothing for one endpoint or when every endpoint answers', () => {
+    expect(endpointShortfall(health(['down']))).toBeUndefined()
+    expect(endpointShortfall(health(['healthy', 'healthy']))).toBeUndefined()
+    expect(endpointShortfall(undefined)).toBeUndefined()
   })
 })

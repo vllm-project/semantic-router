@@ -2,6 +2,7 @@ import { Skeleton, Sparkline, StatusLabel, Tooltip } from '../ui'
 import type { ModelHealth, ModelHealthIssue } from '../utils/modelHealthApi'
 import {
   checkedAgo,
+  endpointShortfall,
   formatLatency,
   MODEL_HEALTH_META,
   modelHealthIssueText,
@@ -47,12 +48,21 @@ export function ModelHealthCell({
   const p95 = visibleP95(health)
   const reason = health ? health.reason : modelHealthIssueText(phase, issue)
   const ago = checkedAgo(health?.checkedAt)
+  const shortfall = endpointShortfall(health)
+  const failing = health?.endpoints.filter((endpoint) => endpoint.status === 'down') ?? []
   return (
     <Tooltip
       side="left"
       content={
         <span className="flex max-w-72 flex-col gap-0.5 py-0.5 text-left leading-snug">
           <span>{reason ?? MODEL_HEALTH_META[modelHealthStatus(health)].label}</span>
+          {shortfall
+            ? failing.map((endpoint) => (
+                <span key={endpoint.name} className="opacity-70">
+                  {endpoint.name}: {endpoint.reason ?? 'down'}
+                </span>
+              ))
+            : null}
           {health?.latencyMs !== undefined && p95 !== undefined ? (
             <span className="opacity-70">
               Latest {formatLatency(health.latencyMs)} · p95 of {health.recentMs.length}{' '}
@@ -65,7 +75,9 @@ export function ModelHealthCell({
     >
       <span className="inline-flex flex-col gap-0.5">
         <HealthLabel health={health} checking={checking} />
-        {p95 !== undefined ? (
+        {shortfall ? (
+          <span className="pl-3.5 text-[11px] text-subtle-foreground">{shortfall}</span>
+        ) : p95 !== undefined ? (
           <span className="pl-3.5 font-mono text-[11px] tabular text-subtle-foreground">
             p95 {formatLatency(p95)}
           </span>

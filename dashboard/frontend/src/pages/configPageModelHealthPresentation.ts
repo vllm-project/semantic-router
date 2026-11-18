@@ -90,6 +90,14 @@ export function modelHealthIssueText(
   return undefined
 }
 
+/** "1 of 3 endpoints down" when some of a model's several endpoints fail. */
+export function endpointShortfall(health: ModelHealth | undefined): string | undefined {
+  const endpoints = health?.endpoints ?? []
+  if (endpoints.length < 2) return undefined
+  const down = endpoints.filter((endpoint) => endpoint.status === 'down').length
+  return down ? `${down} of ${endpoints.length} endpoints down` : undefined
+}
+
 /** "just now", "12 s ago", "4 min ago": how old a check is. */
 export function checkedAgo(checkedAt: string | undefined, now = Date.now()): string | null {
   const time = checkedAt ? Date.parse(checkedAt) : Number.NaN
