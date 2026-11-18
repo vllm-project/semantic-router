@@ -243,6 +243,12 @@ order, answers the whole request with `code` `question_failed`:
   request has an image, a video or an asset to read; a state that is not a
   text, an object of parts or media placed in front of a state is refused the
   same way, naming the state.
+- An image or video the model cannot read is refused with 400 and its
+  `reason`: `unsupported_media_type` when it is not a base64 data URL of a
+  format the model reads (`image_format`, `video_format`), `invalid_media` when
+  its data does not decode (`image_malformed`, `video_malformed`). A media
+  limit (bytes, pixels, aspect ratio, duration, video tokens) is
+  `invalid_request` with its `reason` and `limit`.
 - Per question, choices number 2 to 255, labels 1 to 255 and levels 2 to 10;
   there is no limit on the number of questions.
 
