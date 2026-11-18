@@ -38,6 +38,7 @@ import ConfigSaveWarnings from '../../components/ConfigSaveWarnings'
 import type { DeployResult, DeployStep } from '@/types/dsl'
 import { changedRegion } from './editorDiff'
 import {
+  MonacoBoundary,
   defineEditorTheme,
   editorBaseOptions,
   useEditorMonacoTheme,
@@ -169,6 +170,19 @@ function Outcome({ result }: { result: DeployResult }) {
   }
 }
 
+// The editor package disposes the diff's models before the diff editor, which
+// Monaco reports as an error; a layout cleanup runs first and detaches them.
+function DetachDiffModels({ editor }: { editor: React.MutableRefObject<MonacoDiffEditor | null> }) {
+  React.useLayoutEffect(
+    () => () => {
+      editor.current?.setModel(null)
+      editor.current = null
+    },
+    [editor],
+  )
+  return null
+}
+
 /** Review the merged config as a diff, deploy it, and follow the reload or restart outcome. */
 export function EditorDeployDialog({
   open,
@@ -192,7 +206,7 @@ export function EditorDeployDialog({
   const [stats, setStats] = React.useState<DiffStats | null>(null)
   const diffRef = React.useRef<MonacoDiffEditor | null>(null)
   const theme = useEditorMonacoTheme(monaco)
-  const loadState = useMonacoLoader()
+  const loadState = useMonacoLoader(open)
   const plain = React.useMemo(
     () =>
       loadState === 'failed' && !previewLoading && !previewError
@@ -282,7 +296,7 @@ export function EditorDeployDialog({
                         changed region · {plain.lines.length} lines
                       </span>
                     ) : null}
-                    {stats && !identical ? (
+                    {stats && !identical && !plain ? (
                       <span className="font-mono text-[11.5px] tabular">
                         <span className="text-success-foreground">+{stats.added}</span>{' '}
                         <span className="text-destructive-foreground">−{stats.removed}</span>
@@ -359,8 +373,7 @@ export function EditorDeployDialog({
                     ) : plain ? (
                       <div className="h-full overflow-auto py-2 font-mono text-[12px] leading-5">
                         <p className="px-4 pb-2 font-sans text-xs text-muted-foreground">
-                          The diff editor could not load from its CDN; this is the changed region as
-                          plain text.
+                          The diff editor could not load; this is the changed region as plain text.
                         </p>
                         {plain.lines.slice(0, 600).map((line, index) => (
                           <div
@@ -396,50 +409,59 @@ export function EditorDeployDialog({
                         ))}
                       </div>
                     ) : (
-                      <DiffEditor
-                        original={currentYaml}
-                        modified={mergedYaml}
-                        language="yaml"
-                        theme={theme}
-                        loading={null}
-                        beforeMount={(api) =>
-                          defineEditorTheme(
-                            api,
-                            document.documentElement.classList.contains('dark') ? 'dark' : 'light',
-                          )
-                        }
-                        onMount={(editor, api) => {
-                          diffRef.current = editor
-                          setMonaco(api)
-                          const update = () => {
-                            const changes = editor.getLineChanges() ?? []
-                            let added = 0
-                            let removed = 0
-                            for (const change of changes) {
-                              if (change.modifiedEndLineNumber >= change.modifiedStartLineNumber)
-                                added +=
-                                  change.modifiedEndLineNumber - change.modifiedStartLineNumber + 1
-                              if (change.originalEndLineNumber >= change.originalStartLineNumber)
-                                removed +=
-                                  change.originalEndLineNumber - change.originalStartLineNumber + 1
-                            }
-                            setStats({ hunks: changes.length, added, removed })
+                      <MonacoBoundary>
+                        <DetachDiffModels editor={diffRef} />
+                        <DiffEditor
+                          original={currentYaml}
+                          modified={mergedYaml}
+                          language="yaml"
+                          theme={theme}
+                          loading={null}
+                          beforeMount={(api) =>
+                            defineEditorTheme(
+                              api,
+                              document.documentElement.classList.contains('dark')
+                                ? 'dark'
+                                : 'light',
+                            )
                           }
-                          editor.onDidUpdateDiff(update)
-                        }}
-                        options={{
-                          ...editorBaseOptions(),
-                          readOnly: true,
-                          originalEditable: false,
-                          renderSideBySide: split === 'split',
-                          useInlineViewWhenSpaceIsLimited: false,
-                          hideUnchangedRegions: { enabled: true, contextLineCount: 3 },
-                          renderOverviewRuler: false,
-                          renderIndicators: true,
-                          stickyScroll: { enabled: false },
-                          contextmenu: false,
-                        }}
-                      />
+                          onMount={(editor, api) => {
+                            diffRef.current = editor
+                            setMonaco(api)
+                            const update = () => {
+                              const changes = editor.getLineChanges() ?? []
+                              let added = 0
+                              let removed = 0
+                              for (const change of changes) {
+                                if (change.modifiedEndLineNumber >= change.modifiedStartLineNumber)
+                                  added +=
+                                    change.modifiedEndLineNumber -
+                                    change.modifiedStartLineNumber +
+                                    1
+                                if (change.originalEndLineNumber >= change.originalStartLineNumber)
+                                  removed +=
+                                    change.originalEndLineNumber -
+                                    change.originalStartLineNumber +
+                                    1
+                              }
+                              setStats({ hunks: changes.length, added, removed })
+                            }
+                            editor.onDidUpdateDiff(update)
+                          }}
+                          options={{
+                            ...editorBaseOptions(),
+                            readOnly: true,
+                            originalEditable: false,
+                            renderSideBySide: split === 'split',
+                            useInlineViewWhenSpaceIsLimited: false,
+                            hideUnchangedRegions: { enabled: true, contextLineCount: 3 },
+                            renderOverviewRuler: false,
+                            renderIndicators: true,
+                            stickyScroll: { enabled: false },
+                            contextmenu: false,
+                          }}
+                        />
+                      </MonacoBoundary>
                     )}
                   </div>
                 </div>

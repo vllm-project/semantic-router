@@ -6,6 +6,7 @@ import { useDSLStore } from '@/stores/dslStore'
 import type { Diagnostic } from '@/types/dsl'
 import { Alert, Skeleton, Textarea } from '../../ui'
 import {
+  MonacoBoundary,
   defineEditorTheme,
   editorBaseOptions,
   useEditorMonacoTheme,
@@ -133,15 +134,17 @@ export const EditorCodePane = React.forwardRef<CodePaneHandle, EditorCodePanePro
     )
 
     React.useEffect(() => {
-      if (loadState === 'failed') onReady?.()
+      if (loadState !== 'failed') return
+      // A worker failure can arrive after Monaco mounted; reveal then targets the textarea.
+      editorRef.current = null
+      onReady?.()
     }, [loadState, onReady])
 
     if (loadState === 'failed') {
       return (
         <div className="flex h-full min-h-0 flex-col gap-2 p-3">
           <Alert tone="warning" title="The code editor could not load">
-            It is served from a CDN this browser cannot reach. You can still edit the DSL as plain
-            text; validation and the problems panel keep working.
+            Edit the DSL as plain text; validation and the problems panel still work.
           </Alert>
           <Textarea
             ref={fallback}
@@ -167,22 +170,24 @@ export const EditorCodePane = React.forwardRef<CodePaneHandle, EditorCodePanePro
         <style>{revealCss}</style>
         {loadState === 'loading' ? <CodeSkeleton /> : null}
         {loadState === 'ready' ? (
-          <Editor
-            height="100%"
-            language={DSL_LANGUAGE_ID}
-            value={value}
-            theme={theme}
-            loading={<CodeSkeleton />}
-            beforeMount={beforeMount}
-            onMount={onMount}
-            onChange={(next) => onChange(next ?? '')}
-            options={{
-              ...editorBaseOptions(),
-              readOnly,
-              suggest: { showKeywords: true, showSnippets: true },
-              quickSuggestions: { strings: false, other: true, comments: false },
-            }}
-          />
+          <MonacoBoundary>
+            <Editor
+              height="100%"
+              language={DSL_LANGUAGE_ID}
+              value={value}
+              theme={theme}
+              loading={<CodeSkeleton />}
+              beforeMount={beforeMount}
+              onMount={onMount}
+              onChange={(next) => onChange(next ?? '')}
+              options={{
+                ...editorBaseOptions(),
+                readOnly,
+                suggest: { showKeywords: true, showSnippets: true },
+                quickSuggestions: { strings: false, other: true, comments: false },
+              }}
+            />
+          </MonacoBoundary>
         ) : null}
       </div>
     )

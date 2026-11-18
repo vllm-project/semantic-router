@@ -1,5 +1,4 @@
 import { expect } from '@playwright/test'
-import path from 'node:path'
 
 import { mockAuthenticatedAppShell, test } from './support/compiler'
 
@@ -26,13 +25,6 @@ recipes:
 
 test('keeps quotes and backslashes intact when a Builder signal is saved', async ({ page }) => {
   await mockAuthenticatedAppShell(page)
-  // Serve the pinned editor dependency locally so DSL mode works without a CDN.
-  await page.route('https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/**', async (route) => {
-    const asset = new URL(route.request().url()).pathname.split('/min/vs/')[1]
-    await route.fulfill({
-      path: path.join(process.cwd(), 'node_modules/monaco-editor/min/vs', asset),
-    })
-  })
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: config }))
   await page.goto('/builder')
 

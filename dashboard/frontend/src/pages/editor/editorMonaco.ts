@@ -1,28 +1,45 @@
 import * as React from 'react'
-import { loader } from '@monaco-editor/react'
 import type * as monacoNs from 'monaco-editor'
 import { useTheme } from '../../shell/theme'
+import { createMonacoLoad } from './editorMonacoLoad'
 
-export type MonacoLoadState = 'loading' | 'ready' | 'failed'
+const monacoLoad = createMonacoLoad(async (fail) => {
+  const { installMonaco } = await import('./monacoSetup')
+  await installMonaco(fail)
+})
 
 /**
- * Whether Monaco could be loaded. The editor package fetches Monaco from a
- * CDN, so an offline or filtered network leaves the editors to a plain-text
- * fallback instead of an endless placeholder.
+ * Loads the bundled Monaco once a view that shows it is `enabled`. If its code
+ * or worker fails, the editors switch to their plain-text fallbacks for the
+ * rest of the page.
  */
-export function useMonacoLoader(): MonacoLoadState {
-  const [state, setState] = React.useState<MonacoLoadState>('loading')
+export function useMonacoLoader(enabled = true): 'loading' | 'ready' | 'failed' {
+  const state = React.useSyncExternalStore(monacoLoad.subscribe, monacoLoad.getState)
   React.useEffect(() => {
-    const init = loader.init()
-    init.then(
-      () => setState('ready'),
-      (error: unknown) => {
-        if ((error as { type?: string } | null)?.type !== 'cancelation') setState('failed')
-      },
-    )
-    return () => init.cancel()
-  }, [])
-  return state
+    if (enabled) void monacoLoad.start()
+  }, [enabled])
+  return state === 'idle' ? 'loading' : state
+}
+
+/** Turns anything Monaco throws while mounting into the plain-text fallback, not a route crash. */
+export class MonacoBoundary extends React.Component<
+  { children: React.ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: unknown) {
+    // This boundary already renders nothing, so even a cancellation-shaped throw must fall back.
+    monacoLoad.fail(error instanceof Error ? error : new Error(String(error)))
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
 }
 
 type MonacoApi = typeof monacoNs
