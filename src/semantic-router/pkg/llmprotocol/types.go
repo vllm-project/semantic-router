@@ -30,6 +30,23 @@ const (
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
 )
 
+// APIName is the API a wire format serves, as clients and operators call it;
+// the identifier itself is not client-facing.
+func (format WireFormat) APIName() string {
+	switch format {
+	case OpenAIChatV1:
+		return "Chat Completions"
+	case OpenAIResponsesV1:
+		return "Responses"
+	case AnthropicMessagesV1:
+		return "Anthropic Messages"
+	case OpenAIImagesV1:
+		return "Images"
+	default:
+		return string(format)
+	}
+}
+
 type Role string
 
 const (

@@ -226,7 +226,18 @@ providers:
 
 ## 校验和失败行为
 
-- 即使客户端和后端格式匹配，公共请求也会被解码为中立契约。未知或不支持的请求字段会失败关闭。
+- 即使客户端和后端格式匹配，公共请求也会被解码为中立契约。未知或不支持的请求字段会以 `400` `invalid_request_error`
+  失败关闭，并像 OpenAI 那样给出字段：
+
+  | 请求 | 错误码 | 消息 |
+  | --- | --- | --- |
+  | API 未定义的成员 | `unknown_parameter`，`param` 为该成员的路径 | `Unrecognized request argument supplied: new_field`；位于消息内时为 `messages[].new_field` |
+  | 合法 JSON，但值的类型错误 | `invalid_type`，`param` 为该成员的路径 | `Invalid type for 'max_tokens': expected an integer, but got a decimal number instead.` |
+  | 不是 JSON 的请求体 | `invalid_json` | `request JSON is invalid` |
+  | Router 认识但无法承载的成员 | `unsupported_<field>` | 给出该字段 |
+
+  Anthropic Messages 客户端在 Anthropic 的 `invalid_request_error` 中收到相同的消息，该信封没有 code 字段。
+- 后端的 `4xx` 错误以客户端的错误格式到达客户端，使用 Router 的错误码和客户端发送的字段名；见[请求预算错误](../api/router#request-budget-errors)。
 - Chat 请求接受但不转发客户端库在回放 assistant 消息时添加的字段：LiteLLM 的 `provider_specific_fields`（存放其消息类型没有的回复字段），以及 openai SDK 自己的解析结果 `parsed` 和 `tool_calls[].function.parsed_arguments`。取值不为 null 的字段报告为 `dropped`。与其他 Responses 输入项一样，reasoning 项可以带有 `status`，openai SDK 的流式辅助方法会设置它。
 - 函数工具的 `parameters` 为 `null` 时（OpenAI 的类型化客户端会为不带参数的工具这样发送），Router 将其视为没有 `parameters` 的工具，Responses 的 `tools[]` 和 Chat 的 `tools[].function` 均是如此：每种后端收到的都是 schema `{"type":"object"}`，而不是 `null`。
 - 跨协议请求保留共享语义。无法表示的目标特定功能会返回类型化协议错误。对于运维人员可以接受的损失（例如 `tool_result.is_error`），`lossy_translation` 错误会指出接受该损失的 `global.router.allow_lossy_translation` 设置，请求中带签名 thinking 的 `unsupported_capability` 错误也会指出；其他 `unsupported_capability` 错误不会指出。

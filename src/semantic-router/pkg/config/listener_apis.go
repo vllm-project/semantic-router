@@ -25,9 +25,10 @@ type ListenerAPI struct {
 	// on an API without versions is a load error.
 	Schema string `yaml:"schema,omitempty" json:"schema,omitempty" jsonschema:"enum=vllm-sr/5.0,enum=vllm-sr/4.0"`
 	// Models, when set, are the only request models the API accepts, by
-	// exact `model` value; others get 403 model_not_allowed. Omitted, the API
-	// accepts every model of its kind: the LLM models for the LLM APIs, the
-	// public System One models for systemone.
+	// exact `model` value; others get 403 model_not_allowed, or, on an LLM
+	// API, 404 model_not_found when the Router serves them on no listener.
+	// Omitted, the API accepts every model of its kind: the LLM models for
+	// the LLM APIs, the public System One models for systemone.
 	Models []string `yaml:"models,omitempty" json:"models,omitempty"`
 	// MaxDeadlineMs (systemone) bounds how long the listener waits for a
 	// model it calls directly, however long a request's options.deadline_ms

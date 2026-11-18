@@ -731,7 +731,7 @@ func decodeResponsesObjectToolChoice(raw json.RawMessage, policy llmprotocol.Pol
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_tool_choice",
-			"Responses tool choice cannot be represented by the neutral protocol",
+			"the Router does not support this Responses tool choice",
 			nil,
 		)
 	}

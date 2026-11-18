@@ -350,12 +350,13 @@ func (r *OpenAIRouter) unavailableModelResponse(
 	if ctx != nil {
 		requestID = ctx.RequestID
 	}
+	failure := modelNotFoundFailure(model)
 	logging.ComponentWarnEvent("extproc", "specified_model_not_found", map[string]interface{}{
 		"request_id": requestID,
-		"code":       routingFailureModelNotFound.code,
+		"code":       failure.code,
 		"model":      model,
 	})
 	// The name is client text: a label per name would grow without bound.
-	metrics.RecordRequestError(consts.UnknownLabel, "model_not_found")
-	return r.routingFailureResponse(ctx, routingFailureModelNotFound)
+	metrics.RecordRequestError(consts.UnknownLabel, failure.code)
+	return r.routingFailureResponse(ctx, failure)
 }

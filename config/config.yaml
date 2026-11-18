@@ -29,7 +29,8 @@ listeners:
     # of chat_completions and messages.
     apis:
       # Standalone mode: accept only these request models (exact `model`
-      # values); others get 403 model_not_allowed. Omitted, every LLM model.
+      # values); others get 403 model_not_allowed, or 404 model_not_found
+      # when the Router serves them on no listener. Omitted, every LLM model.
       chat_completions:
         models: [vllm-sr/exhaustive-default]
       responses:

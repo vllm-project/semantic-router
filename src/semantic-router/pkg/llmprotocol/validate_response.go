@@ -380,7 +380,7 @@ func RequireCapabilities(format WireFormat, available, required CapabilitySet) e
 	}
 	return NewError(
 		ErrorUnsupportedFeature, "unsupported_capability",
-		fmt.Sprintf("wire format %q does not support: %s", format, strings.Join(missing, ", ")), nil,
+		fmt.Sprintf("the %s API does not support: %s", format.APIName(), strings.Join(missing, ", ")), nil,
 	)
 }
 
