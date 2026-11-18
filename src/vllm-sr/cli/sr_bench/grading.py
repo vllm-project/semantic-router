@@ -7,12 +7,15 @@ import math
 import re
 from typing import Any, Literal, TypeAlias
 
+from .agent_task_kernel import score_answer
+
 MCQ_GRADER_VERSION = "sr-bench-mcq-final-v2"
 FINAL_GRADER_VERSION = "sr-bench-final-v2"
 ARC_MAX_COLOR = 9
-ResultKind: TypeAlias = Literal["binary", "weighted-rubric-v1"]
+ResultKind: TypeAlias = Literal["binary", "weighted-rubric-v1", "token-coverage-v1"]
 BINARY_RESULT: ResultKind = "binary"
 WEIGHTED_RUBRIC_RESULT: ResultKind = "weighted-rubric-v1"
+TOKEN_COVERAGE_RESULT: ResultKind = "token-coverage-v1"
 
 
 def frozen_result_kind(manifest: dict[str, Any], benchmark: str) -> ResultKind:
@@ -20,7 +23,11 @@ def frozen_result_kind(manifest: dict[str, Any], benchmark: str) -> ResultKind:
     if not isinstance(declarations, dict):
         raise ValueError("Frozen result kinds must be an object")
     kind = declarations.get(benchmark, BINARY_RESULT)
-    if not isinstance(kind, str) or kind not in {BINARY_RESULT, WEIGHTED_RUBRIC_RESULT}:
+    if not isinstance(kind, str) or kind not in {
+        BINARY_RESULT,
+        WEIGHTED_RUBRIC_RESULT,
+        TOKEN_COVERAGE_RESULT,
+    }:
         raise ValueError("Unknown frozen result kind")
     return kind
 
@@ -32,7 +39,7 @@ def require_binary_results(manifest: dict[str, Any], operation: str) -> None:
         for case in manifest["cases"]
     ):
         raise ValueError(
-            f"{operation} supports binary results only; weighted rubric diagnostics require a separate protocol"
+            f"{operation} supports binary results only; non-binary diagnostics require a separate protocol"
         )
 
 
@@ -44,6 +51,9 @@ def validate_result(kind: ResultKind, result: object) -> None:
             or result.get("score") not in {0, 1}
         ):
             raise ValueError("Adapter result requires a terminal binary graded outcome")
+        return
+    if kind == TOKEN_COVERAGE_RESULT:
+        _validate_token_coverage(result)
         return
     if kind != WEIGHTED_RUBRIC_RESULT:
         raise ValueError("Unknown adapter result kind")
@@ -87,6 +97,49 @@ def validate_result(kind: ResultKind, result: object) -> None:
         raise ValueError(
             "Weighted rubric score differs from its signed-weight contract"
         )
+
+
+def _validate_token_coverage(result: object) -> None:
+    if (
+        not isinstance(result, dict)
+        or result.get("correct") is not None
+        or not isinstance(result.get("answer"), str)
+    ):
+        raise ValueError(
+            "Token coverage requires a final answer, not binary correctness"
+        )
+    details = result.get("details")
+    coverage = details.get("token_coverage") if isinstance(details, dict) else None
+    if not isinstance(coverage, dict):
+        raise ValueError("Token coverage requires its expected and matched terms")
+    terms = coverage.get("expected_terms")
+    if (
+        not isinstance(terms, list)
+        or not terms
+        or any(not isinstance(term, str) or not term for term in terms)
+    ):
+        raise ValueError("Token coverage requires a positive count of nonempty terms")
+    score = result.get("score")
+    if (
+        isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or not math.isfinite(score)
+        or not 0 <= score <= 1
+    ):
+        raise ValueError(
+            "Token coverage credit must be finite and bounded by zero and one"
+        )
+    expected_score, missing = score_answer(
+        content=result["answer"], expected_terms=tuple(terms)
+    )
+    matched = [term for term in terms if term not in missing]
+    if (
+        score != expected_score
+        or coverage.get("matched_terms") != matched
+        or coverage.get("missing_terms") != missing
+        or coverage.get("full_credit") is not (score == 1.0)
+    ):
+        raise ValueError("Token coverage differs from native rounded substring credit")
 
 
 _STRICT_ANSWER = re.compile(r"(?:ANSWER\s*:\s*)?\(?([A-J])\)?[.]?", re.IGNORECASE)
