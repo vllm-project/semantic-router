@@ -26,6 +26,7 @@ import (
 type semanticResponseStreamState struct {
 	responseID string
 	model      string
+	createdAt  time.Time
 	stop       llmprotocol.StopReason
 	stopSeq    string
 	usage      llmprotocol.Usage
@@ -315,7 +316,7 @@ func responseStreamContext(
 	streamContext := llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Source: source, Target: target,
 		Options:     clientStreamOptions(ctx),
-		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
+		PublicModel: ctx.RequestModel, ResponseRender: responseObjectRender(ctx),
 		// The model the upstream reports, as buffered and same-format replies pass it through.
 		PreferProviderModel: true,
 	}
@@ -372,6 +373,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 		}
 		if event.Model != "" {
 			state.model = event.Model
+		}
+		if state.createdAt.IsZero() {
+			state.createdAt = event.CreatedAt
 		}
 		if event.Usage != nil {
 			state.usage = *event.Usage
@@ -533,8 +537,12 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 	if state.stop == "" {
 		state.stop = llmprotocol.StopUnknown
 	}
+	createdAt := state.createdAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
 	return &llmprotocol.Response{
-		Generation: 1, ID: state.responseID, CreatedAt: time.Now().UTC(),
+		Generation: 1, ID: state.responseID, CreatedAt: createdAt,
 		Model: state.model, Output: output, StopReason: state.stop,
 		MatchedStopSequence: state.stopSeq, Usage: state.usage,
 	}, nil

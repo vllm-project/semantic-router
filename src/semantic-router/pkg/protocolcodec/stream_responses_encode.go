@@ -22,6 +22,44 @@ func (encoder *responsesStreamEncoder) Push(event llmprotocol.Event) ([][]byte, 
 		return nil, nil, err
 	}
 	event = normalized
+	if encoder.createdAt == 0 {
+		encoder.createdAt = responsesCreatedAt(event.CreatedAt)
+	}
+	var released [][]byte
+	if event.Type != llmprotocol.EventUsageUpdated {
+		cut := event.Type == llmprotocol.EventResponseCompleted && responsesOutputLimitStop(event.StopReason)
+		if released, err = encoder.releaseHeldMessage(cut); err != nil {
+			return nil, nil, err
+		}
+	}
+	frames, diagnostics, err := encoder.encodeResponsesEvent(event)
+	return append(released, frames...), diagnostics, err
+}
+
+// releaseHeldMessage sends the held message's done event, marking the message
+// incomplete when the output limit ended it.
+func (encoder *responsesStreamEncoder) releaseHeldMessage(cut bool) ([][]byte, error) {
+	held := encoder.heldMessage
+	if held == nil {
+		return nil, nil
+	}
+	encoder.heldMessage = nil
+	if cut {
+		held.item.Status = "incomplete"
+	}
+	wire := responsesEventWire{
+		Type: "response.output_item.done", Sequence: encoder.nextWireSequence(),
+		OutputIndex: responsesOutputIndex(held.outputIndex), Item: marshalResponsesEventItem(held.item),
+	}
+	encoder.recordResponsesCompletedOutput(held.outputIndex, wire.Item)
+	frame, err := encoder.encodeResponsesStreamFrame(wire)
+	if err != nil {
+		return nil, err
+	}
+	return [][]byte{frame}, nil
+}
+
+func (encoder *responsesStreamEncoder) encodeResponsesEvent(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
 	if event.Content != nil && event.Content.ReasoningDetail != nil {
 		// Ciphertext is recorded by streamState but never rendered as a text part.
 		frames, _, startErr := encoder.ensureResponsesOutputStarted(event, responsesOutputReasoning)
@@ -200,7 +238,7 @@ func (encoder *responsesStreamEncoder) encodeResponsesStart(event llmprotocol.Ev
 		return nil, nil
 	}
 	encoder.responseStarted = true
-	response := newResponsesResponseWire(event.ResponseID, event.Model, "in_progress", 0, encoder.context.PreviousResponseID)
+	response := newResponsesResponseWire(event.ResponseID, event.Model, "in_progress", encoder.createdAt, encoder.context.ResponseRender)
 	frames := make([][]byte, 0, 2)
 	for _, eventType := range []string{"response.created", "response.in_progress"} {
 		wire := responsesEventWire{
@@ -277,7 +315,7 @@ func (encoder *responsesStreamEncoder) responsesCompletionWire(
 		return responsesEventWire{}, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "terminal usage is invalid", nil)
 	}
 	encoder.terminal = true
-	response := newResponsesResponseWire(event.ResponseID, event.Model, "completed", 0, encoder.context.PreviousResponseID)
+	response := newResponsesResponseWire(event.ResponseID, event.Model, "completed", encoder.createdAt, encoder.context.ResponseRender)
 	output, err := encoder.responsesCompletedOutput()
 	if err != nil {
 		return responsesEventWire{}, nil, err
@@ -305,7 +343,7 @@ func (encoder *responsesStreamEncoder) responsesFailureWire(
 		return responsesEventWire{}, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "error_event_invalid", "error event is invalid", nil)
 	}
 	encoder.terminal = true
-	response := newResponsesResponseWire(event.ResponseID, event.Model, "failed", 0, encoder.context.PreviousResponseID)
+	response := newResponsesResponseWire(event.ResponseID, event.Model, "failed", encoder.createdAt, encoder.context.ResponseRender)
 	output, err := encoder.responsesCompletedOutput()
 	if err != nil {
 		return responsesEventWire{}, nil, err
@@ -535,6 +573,12 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesItem(
 		keys = append(keys, key)
 	}
 	for _, key := range keys {
+		// A later output of the same item follows a held message.
+		released, err := encoder.releaseHeldMessage(false)
+		if err != nil {
+			return nil, nil, err
+		}
+		frames = append(frames, released...)
 		completed, diagnostics, err := encoder.encodeCompletedResponsesOutput(event, key)
 		if err != nil {
 			return nil, diagnostics, err
@@ -629,6 +673,10 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesContent(
 			lowest = key.content
 			item.EncryptedContent, _ = json.Marshal(detail.Data.Value)
 		}
+	}
+	if outputKey.kind == responsesOutputMessage {
+		encoder.heldMessage = &responsesHeldItem{outputIndex: index, item: item}
+		return frames, nil, nil
 	}
 	wire := responsesEventWire{
 		Type: "response.output_item.done", Sequence: encoder.nextWireSequence(),

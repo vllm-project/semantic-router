@@ -288,7 +288,9 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	// Flattening a namespace or dropping a no-op value advances
 	// request.Generation, which retires the replay claim on source bytes that
 	// still carry them.
-	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy), diagnostics, nil
+	envelope := requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy)
+	envelope.ResponseRender.RequestEcho = responsesRequestEcho(wire)
+	return request, envelope, diagnostics, nil
 }
 
 // decodeResponsesDroppedFields reports client telemetry that is not model input.
