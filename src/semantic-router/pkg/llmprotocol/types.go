@@ -151,6 +151,13 @@ type InstructionBlock struct {
 	Role    Role
 	Content []Content
 	Name    string // Chat Completions participant name; formats without one drop it.
+	// Position is how many conversation messages came before the instruction
+	// where the client sent it, zero for one that leads the conversation. Chat
+	// Completions and Responses decoding read a system or developer message
+	// anywhere as an instruction and record it here. Code that inserts or
+	// removes conversation messages keeps it with InsertMessages and
+	// KeepInstructionPositions. It is not a wire field.
+	Position int `json:",omitempty"`
 }
 
 type ToolCall struct {
