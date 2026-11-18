@@ -90,7 +90,6 @@ export const HARNESS_SIGNALS = [
   'compaction',
   'housekeeping',
   'images',
-  'tool_loops',
 ] as const
 
 export type HarnessSignal = (typeof HARNESS_SIGNALS)[number]
