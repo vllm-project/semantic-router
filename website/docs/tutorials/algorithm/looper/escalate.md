@@ -77,7 +77,9 @@ recipes:
 `providers.models[].param_size` first, `cost` the cheapest priced model
 first, and omitting it keeps the `modelRefs` order. `size` reads the leading
 count of a size, so `397B (17B active)` is 397B and `1.6T` is 1600B. A model
-without a readable size, or for `cost` without pricing, is tried last.
+without a readable size, or for `cost` without pricing, is tried last; a Model
+whose catalog [list price](../../../installation/catalog-backed-models#list-prices)
+prices it is placed by that price.
 
 `accept` names exactly one check:
 

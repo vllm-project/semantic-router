@@ -255,6 +255,38 @@ func TestRedactRouterReplayResponseDoesNotTrustContentType(t *testing.T) {
 	}
 }
 
+func TestRedactRouterReplayResponseRedactsTrajectoryRoutes(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"object":"router_replay.trajectory","session_id":"session-1","messages":[],"routes":[{"record_id":"replay-1","selected_model":"model-a","selection_reasoning":"private-canary","session_reason":"private-canary"}]}`)
+	req, err := http.NewRequest(http.MethodGet, "http://dashboard.local/api/v1/observability/replays/trajectory?session_id=session-1", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error = %v", err)
+	}
+	req = req.WithContext(auth.WithAuthContext(req.Context(), auth.AuthContext{
+		Role:  auth.RoleRead,
+		Perms: map[string]bool{auth.PermReplayRead: true},
+	}))
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Header:        http.Header{"Content-Type": []string{"application/json"}},
+		Body:          io.NopCloser(bytes.NewReader(body)),
+		ContentLength: int64(len(body)),
+		Request:       req,
+	}
+
+	if redactErr := redactRouterReplayResponse(resp); redactErr != nil {
+		t.Fatalf("redactRouterReplayResponse() error = %v", redactErr)
+	}
+	redacted, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("io.ReadAll() error = %v", err)
+	}
+	if bytes.Contains(redacted, []byte("private-canary")) || !bytes.Contains(redacted, []byte(`"selected_model":"model-a"`)) {
+		t.Fatalf("trajectory routes were not redacted to routing metadata: %s", redacted)
+	}
+}
+
 func TestShouldRedactRouterReplayResponseRejectsLookalikePrefix(t *testing.T) {
 	t.Parallel()
 

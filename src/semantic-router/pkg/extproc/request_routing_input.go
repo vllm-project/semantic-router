@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 )
@@ -13,8 +14,38 @@ func (r *OpenAIRouter) routingInputSelector() *routinginput.Selector {
 	return routinginput.For(r.Config.RoutingInput)
 }
 
-func observeRoutingInput(outcome routinginput.Outcome) {
+// observeRoutingInput counts what routing_input removed and logs a request
+// it would have left without routing text, which routes on its last user
+// message instead.
+func observeRoutingInput(ctx *RequestContext, outcome routinginput.Outcome) {
 	metrics.RecordRoutingInputRemovals(outcome.SkippedMessages, outcome.StrippedBlocks)
+	if outcome.Fallback {
+		requestID := ""
+		if ctx != nil {
+			requestID = ctx.RequestID
+		}
+		logging.ComponentEvent("extproc", "routing_input_fallback", map[string]interface{}{
+			"request_id":       requestID,
+			"skipped_messages": outcome.SkippedMessages,
+			"stripped_blocks":  outcome.StrippedBlocks,
+			"reason":           "every user message matched routing_input, so routing reads the last one",
+		})
+	}
+}
+
+// routingUserTexts lists a request's user messages as routing_input reads
+// them, for a walk's fallback; none without a selector.
+func routingUserTexts(selector *routinginput.Selector, messages []llmprotocol.Message) []routinginput.UserText {
+	if selector == nil {
+		return nil
+	}
+	var texts []routinginput.UserText
+	for index, message := range messages {
+		if message.Role == llmprotocol.RoleUser {
+			texts = append(texts, routinginput.UserText{Index: index, Text: semanticText(message.Content), TextOnly: textOnlyMessage(message)})
+		}
+	}
+	return texts
 }
 
 // replayPrompt is the prompt a Replay record keeps and its privacy check reads:

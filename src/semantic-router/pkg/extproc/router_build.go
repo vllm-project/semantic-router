@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/maskingregistry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
@@ -67,6 +68,7 @@ type routerComponents struct {
 	recipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
 	fallbackCircuitBreaker      *fallback.BackendCircuitBreaker
 	resources                   *resourceScope
+	maskingIdentities           map[string]*maskingregistry.Identity
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -377,6 +379,10 @@ func (components *routerComponents) buildFallbackRuntime() {
 	if cfg.RoutingDefaults.Fallback != nil {
 		fallbackPolicy = cfg.RoutingDefaults.Fallback.WithDefaults()
 	}
+	perUser := cfg.HasCallerBackends()
+	if perUser {
+		fallbackPolicy = fallbackPolicy.ForPerUserCredentials()
+	}
 	components.fallbackCircuitBreaker = fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
 	components.fallbackOrchestrator = fallback.NewOrchestrator(fallbackPolicy, components.fallbackCircuitBreaker)
 
@@ -389,6 +395,9 @@ func (components *routerComponents) buildFallbackRuntime() {
 		recipePolicy := fallback.DefaultPolicy()
 		if recipe.Profile.Fallback != nil {
 			recipePolicy = recipe.Profile.Fallback.WithDefaults()
+		}
+		if perUser {
+			recipePolicy = recipePolicy.ForPerUserCredentials()
 		}
 		breaker, ok := breakersByPolicy[recipePolicy.CircuitBreaker]
 		if !ok {
@@ -410,6 +419,10 @@ func (components *routerComponents) buildEarlyResources() error {
 	}
 
 	components.toolCatalogs, err = loadToolCatalogs(components.cfg)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
+	components.maskingIdentities, err = openMaskingIdentities(components.cfg)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
@@ -494,9 +507,11 @@ func rollbackResources(resources *resourceScope, cause error) error {
 }
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
+	prepareContextWindowCheck(components.cfg)
 	router := &OpenAIRouter{
 		signals:                     components.signals,
 		Config:                      components.cfg,
+		maskingIdentities:           components.maskingIdentities,
 		Embeddings:                  components.embeddings,
 		serviceEmbeddings:           components.serviceEmbeddings,
 		cacheEmbeddings:             components.cacheEmbeddings,

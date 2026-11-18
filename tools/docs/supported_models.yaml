@@ -3,7 +3,9 @@
 # comes from the built-in catalog; this file only says what each model is for
 # and which records to link. tools/docs/generate_model_pages.py fails when a
 # catalog model has no entry here, or an entry names a model or record that
-# does not exist. Regenerate with: make docs-model-pages
+# does not exist. A model entry may set family_label when its release is not
+# its runtime family's label (vela3.1-fast loads with the vela3 family).
+# Regenerate with: make docs-model-pages
 
 families:
   decision3:
@@ -21,6 +23,9 @@ families:
   vela3_d3:
     dir: vela-3
     label: Vela 3.0
+  vela3_pico:
+    dir: vela-3
+    label: Vela 3.1
   vela2:
     dir: vela-2
     label: Vela 2.0
@@ -172,6 +177,13 @@ models:
       for every built-in routing question, calibrated thresholds, and spans for
       PII and hallucination checks.
     records: [vela3-parity.md, vela3-router-signals.md]
+  vllm-sr/vela3.1-fast:
+    page: vela3-1-fast
+    family_label: Vela 3.1
+    summary: >-
+      The Vela 3.1 release of vela3-fast: the same router questions and spans
+      with new weights, and described yes/no questions such as "can wait" or
+      "needs immediate action". Opt-in; it has no calibrated thresholds yet.
   vllm-sr/vela3-lite:
     page: vela3-lite
     summary: >-
@@ -197,6 +209,20 @@ models:
       d3-turbo's state-once path, then asks the router questions again with
       their adapters on.
     records: [vela3-d3-parity.md, state-once.md]
+  vllm-sr/vela3.1-pico-380m:
+    page: vela3-1-pico-380m
+    summary: >-
+      A small Vela 3.1 model: one 380M encoder answers the built-in routing
+      questions and the PII and hallucination spans, a whole call in one pass
+      when it fits 8,192 tokens. Opt-in; it has no calibrated thresholds yet.
+    records: [vela31-pico-parity.md]
+  vllm-sr/vela3.1-pico-150m:
+    page: vela3-1-pico-150m
+    summary: >-
+      The smallest Vela 3.1 model, a 150M encoder for small CPU hosts, with
+      the same questions and spans as vela3.1-pico-380m. Opt-in; it has no
+      calibrated thresholds yet.
+    records: [vela31-pico-parity.md]
 
   vllm-sr/Vela-2.0-0.3B:
     page: vela-2-0-3b

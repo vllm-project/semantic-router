@@ -15,8 +15,6 @@ var resourceManifests = []string{
 	"e2e/profiles/streaming/backend.yaml",
 	"deploy/kubernetes/streaming/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/streaming/full-duplex.yaml",
-	// Serves the System One fixture the jailbreak and PII rules ask.
-	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 // Profile implements the Streaming Body test profile.
@@ -33,11 +31,14 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "streaming",
 			SemanticRouterValuesFile: valuesFile,
-			ResourceManifests:        resourceManifests,
+			// provider-mocker serves the System One and embedding fixtures,
+			// which the Router prepares as it starts.
+			PrerequisiteManifests: []string{"deploy/kubernetes/hallucination/provider-mocker.yaml"},
+			PrerequisiteWaits:     []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
+			ResourceManifests:     resourceManifests,
 			WaitDeployments: []helpers.DeploymentRef{
 				{Namespace: "default", Name: "full-duplex-selected"},
 				{Namespace: "default", Name: "full-duplex-default"},
-				{Namespace: "default", Name: "provider-mocker"},
 			},
 		}),
 	}

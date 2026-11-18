@@ -16,6 +16,7 @@ interface JSONSchemaNode {
   oneOf?: JSONSchemaNode[]
   minimum?: number
   maximum?: number
+  deprecated?: boolean
 }
 
 interface RouterConfigDocument extends JSONSchemaNode {
@@ -134,9 +135,10 @@ function fieldsFromObjectSchema(
     typeof schemaOrRef === 'string' ? { $ref: schemaOrRef } : schemaOrRef,
   )
   const required = new Set(schema.required ?? [])
-  return Object.entries(schema.properties ?? {}).map(([key, property]) =>
-    fieldFromSchema(key, property, required.has(key), nextRefs),
-  )
+  // A deprecated field loads rewritten as its replacement, so no form offers it.
+  return Object.entries(schema.properties ?? {})
+    .filter(([, property]) => !property.deprecated)
+    .map(([key, property]) => fieldFromSchema(key, property, required.has(key), nextRefs))
 }
 
 export function routerConfigFieldsForRef(

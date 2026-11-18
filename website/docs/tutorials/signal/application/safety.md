@@ -64,6 +64,7 @@ recipes:
 | `labels` | Harm categories the rule matches; without them, the rule matches an unsafe request |
 | `predicate` | Without labels, the least probability of `unsafe`: by default the model's calibrated threshold (0.52 on vela3-fast) at the request stage, else 0.5. With labels, the least probability of a listed category; without one, the model's own selection |
 | `stage` | `request` (default) or `response`, which reads the model's answer |
+| `min_coverage` | The share of a long input's windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
 Every rule without labels shares one question per stage, and every rule with
@@ -75,14 +76,15 @@ explicit priorities.
 
 The question reads its whole input: an input longer than one of the
 deployment's `scan_window`s is read in overlapping windows, the tail first,
-then the head, then the middle, and any window found unsafe, or in a listed
-category, flags the input (see
+then the head, then the middle by halves, and any window found unsafe, or in a
+listed category, flags the input (see
 [Long inputs](../../../system-one/deploy/performance.md#long-inputs)). Like
 `jailbreak`, it also reads what `global.router.routing_input` removes from the
 routing text. When the deadline ends before every window is read, the rule
-decides on the windows read. A model that answers no window leaves the rule
-unknown, and the decision's `rules.on_unknown` decides: `fail_request` above
-returns HTTP 503.
+decides on the windows read, once they are its `min_coverage` share of them if
+it sets one; below that share it is unknown. A model that answers no window
+leaves the rule unknown, and the decision's `rules.on_unknown` decides:
+`fail_request` above returns HTTP 503.
 
 ### Harm categories
 

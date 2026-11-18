@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"cmp"
 	"math"
 	"strings"
 
@@ -83,6 +84,8 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 	result := &requestSignalSnapshot{
 		Model: request.Model, Stream: request.Stream,
 		JailbreakInput: extractJailbreakInput(request),
+		sourceFormat:   request.Trusted.SourceFormat,
+		toolCalls:      map[string]*llmprotocol.ToolCall{},
 	}
 	switch request.ToolChoice.Mode {
 	case llmprotocol.ToolChoiceRequired, llmprotocol.ToolChoiceNamed:
@@ -105,7 +108,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 		}
 		recordNonUserSignalMessage(result, string(instruction.Role), text)
 	}
-	routing := selector.Walk()
+	routing := selector.Walk(routingUserTexts(selector, request.Messages)...)
 	for index, message := range request.Messages {
 		if message.Role == llmprotocol.RoleUser && selector != nil {
 			var skipped bool
@@ -116,6 +119,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 		consumeSemanticMessage(result, message)
 	}
 	result.RoutingInput = routing.Outcome()
+	result.Images = requestImages(request)
 	result.ToolDefinitionCount = len(request.Tools)
 	estimate := llmprotocol.EstimateInput(request)
 	result.ContextTokenFloor = estimate.Tokens
@@ -131,18 +135,26 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	previousWasTool := result.LastMessageToolResult || result.LastMessageRole == string(llmprotocol.RoleTool)
 	role := string(message.Role)
 	text := semanticText(message.Content)
-	result.LastMessageRole = role
-	result.LastMessageToolResult = false
-	result.LastMessageFlowToolResult = false
-	result.LastAssistantToolCall = false
-	result.LastUserAfterToolResult = false
+	// Like the request's instructions, a system or developer message inside
+	// the conversation is not a turn: the last-message facts stay those of the
+	// user turn or tool result it follows.
+	if !isInstructionRole(message.Role) {
+		result.LastMessageRole = role
+		result.LastMessageToolResult = false
+		result.LastMessageFlowToolResult = false
+		result.LastAssistantToolCall = false
+		result.LastUserAfterToolResult = false
+	}
 	switch message.Role {
 	case llmprotocol.RoleUser:
 		result.UserMessageCount++
 		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
+		if !message.WithToolResults {
+			result.ToolFailures = classification.ToolFailureCount{}
+		}
 		recordUserInputModalities(result, message.Content, text)
-		result.UserImages, result.UserVideos = userInlineMedia(message.Content)
+		result.UserVideos = userInlineVideos(message.Content)
 		if text != "" {
 			if result.UserContent != "" {
 				result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
@@ -182,10 +194,18 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 			if message.Role == llmprotocol.RoleAssistant {
 				result.LastAssistantToolCall = true
 			}
+			if content.ToolCall != nil {
+				result.toolCalls[content.ToolCall.ID] = content.ToolCall
+			}
 		case llmprotocol.ContentToolResult:
 			result.ToolResultCount++
 			result.LastMessageToolResult = true
-			if content.ToolResult != nil && looper.IsWorkflowToolCallID(content.ToolResult.CallID) {
+			if content.ToolResult == nil {
+				continue
+			}
+			result.ToolFailures.Observe(classification.ToolResultStatusOf(result.sourceFormat,
+				result.toolCalls[content.ToolResult.CallID], content.ToolResult.IsError, semanticText(content.ToolResult.Content)))
+			if looper.IsWorkflowToolCallID(content.ToolResult.CallID) {
 				result.LastMessageFlowToolResult = true
 			}
 		}
@@ -241,22 +261,53 @@ func saturatingNeutralAdd(left, right int) int {
 	return left + right
 }
 
-// userInlineMedia are a user message's inline images and videos as base64
-// data URLs, in order. Remote URLs and local paths never cross this boundary.
-func userInlineMedia(contents []llmprotocol.Content) (images, videos []string) {
-	for _, content := range contents {
-		switch content.Kind {
-		case llmprotocol.ContentImage:
-			if image := neutralInlineImageDataURL(content); image != "" {
-				images = append(images, image)
-			}
-		case llmprotocol.ContentVideo:
-			if video := neutralInlineVideoDataURL(content); video != "" {
-				videos = append(videos, video)
+// requestImages are every image the request as sent carries, in order, as
+// base64 data URLs: each turn's, earlier ones included, and those in tool
+// results and generated-image items, since the backend gets them all.
+// Remote URLs and local paths never cross this boundary: such an image is an
+// empty entry, so a rule that reads images is unknown rather than asked
+// about the rest.
+func requestImages(request *llmprotocol.Request) []string {
+	var images []string
+	var consume func([]llmprotocol.Content)
+	consume = func(contents []llmprotocol.Content) {
+		for _, content := range contents {
+			switch content.Kind {
+			case llmprotocol.ContentImage:
+				images = append(images, neutralInlineImageDataURL(content))
+			case llmprotocol.ContentGeneratedImage:
+				if generated := content.GeneratedImage; generated != nil && generated.Result != nil && *generated.Result != "" {
+					format := "image/" + cmp.Or(generated.OutputFormat, "png")
+					images = append(images, neutralInlineImageDataURL(llmprotocol.Content{MediaType: format, Data: *generated.Result}))
+				}
+			case llmprotocol.ContentToolResult:
+				if content.ToolResult != nil {
+					consume(content.ToolResult.Content)
+				}
 			}
 		}
 	}
-	return images, videos
+	for _, instruction := range request.Instructions {
+		consume(instruction.Content)
+	}
+	for _, message := range request.Messages {
+		consume(message.Content)
+	}
+	return images
+}
+
+// userInlineVideos are a user message's inline videos as base64 data URLs,
+// in order. Remote URLs and local paths never cross this boundary.
+func userInlineVideos(contents []llmprotocol.Content) (videos []string) {
+	for _, content := range contents {
+		if content.Kind != llmprotocol.ContentVideo {
+			continue
+		}
+		if video := neutralInlineVideoDataURL(content); video != "" {
+			videos = append(videos, video)
+		}
+	}
+	return videos
 }
 
 // neutralInlineVideoDataURL returns an inline video as a base64 data URL.

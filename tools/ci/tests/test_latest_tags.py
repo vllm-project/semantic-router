@@ -174,5 +174,17 @@ class MoveTests(unittest.TestCase):
             self.run_move(self.history.c)
 
 
+class RegistryRetryTests(unittest.TestCase):
+    def test_registry_calls_retry_a_transient_registry_error(self) -> None:
+        # ghcr.io answered 500 to one layer upload of a Main publication.
+        with patch.object(latest_tags.subprocess, "run") as run:
+            run.return_value = subprocess.CompletedProcess([], 0, b"{}", b"")
+            latest_tags.move("ghcr.io/o/semantic-router/vllm-sr", "abc")
+            latest_tags.registry_manifest("ghcr.io/o/semantic-router/vllm-sr:abc")
+        for call in run.call_args_list:
+            self.assertEqual(call.args[0][2:4], ["--retry-times", "3"])
+        self.assertEqual(run.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

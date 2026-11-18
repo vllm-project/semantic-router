@@ -114,9 +114,14 @@ func (a *RecipeActivator) Activate(ctx context.Context, request recipe.ActivateR
 }
 
 func (a *RecipeActivator) activateLocked(ctx context.Context, request recipe.ActivateRequest) (recipe.ActivateResult, error) {
-	target, _, err := a.store.ActivationTarget(request.RecipeDigest, request.AcknowledgeWarnings)
+	target, rawConfig, err := a.store.ActivationTarget(request.RecipeDigest, request.AcknowledgeWarnings)
 	if err != nil {
 		return recipe.ActivateResult{}, err
+	}
+	// Activation writes the config the Router loads and expands; a caller who
+	// may not read secrets may not activate a Recipe that binds a reference.
+	if refusal := refuseEnvironmentBindingWithoutSecrets(ctx, rawConfig); refusal != nil {
+		return recipe.ActivateResult{}, refusal
 	}
 	active, state, _ := a.store.ActivationStatus()
 	if state == recipe.ActivationActive && active.RecipeDigest == target.RecipeDigest {
@@ -583,7 +588,7 @@ func writeActivationConfig(path string, data []byte) error {
 	}
 	temp := file.Name()
 	defer func() { _ = os.Remove(temp) }()
-	if writeErr := writeActivationTempFile(file, data); writeErr != nil {
+	if writeErr := writeActivationTempFile(file, path, data); writeErr != nil {
 		return writeErr
 	}
 	if renameErr := os.Rename(temp, path); renameErr != nil {
@@ -611,11 +616,15 @@ func validateActivationConfigDestination(path string) error {
 	return nil
 }
 
-// writeActivationTempFile stages the active config with the mode of every
-// config the Dashboard saves: `vllm-sr serve` reads it as its own user, and the
-// `.vllm-sr` directory, not the file, keeps other users out.
-func writeActivationTempFile(file *os.File, data []byte) error {
+// writeActivationTempFile stages the active config at path with the mode of
+// the config it replaces (KeepReplacedFileMode), or else the mode of every
+// config the Dashboard saves: `vllm-sr serve` reads it as its own user, and
+// the `.vllm-sr` directory, not the file, keeps other users out.
+func writeActivationTempFile(file *os.File, path string, data []byte) error {
 	err := file.Chmod(0o644)
+	if err == nil {
+		err = routerconfig.KeepReplacedFileMode(file, path)
+	}
 	if err == nil {
 		_, err = file.Write(data)
 	}

@@ -40,7 +40,7 @@ from .errors import (
     VerificationError,
     with_reason,
 )
-from .placement import Placement, check_device, device_kind, place
+from .placement import Placement, check_device, device_kind, lm_head_parameters, place
 from .plugins import registry
 from .plugins.base import (
     DEADLINE,
@@ -345,6 +345,9 @@ class ServedModel:
         self.kernel_choices: KernelChoices | None = None
         self.unpinned: str | None = None
         self._stall: _Stall | None = None
+        # The scheduler failure the model was degraded for (``report_failure``).
+        self._reported: BaseException | None = None
+        self._reporting = threading.Lock()
 
     # -- names ---------------------------------------------------------------
 
@@ -406,7 +409,8 @@ class ServedModel:
                 )
             package = replace(package, max_input_tokens=limit)
         spec = family.describe(package)
-        parameters = package.loaded_parameters or 0
+        # A grafted LM head loads beside the backbone at the backbone's dtype.
+        parameters = (package.loaded_parameters or 0) + lm_head_parameters(spec)
         budget = config.memory_budget_gib or process.memory_budget_gib
         dtype = self.requested_args.dtype
         placement = place(
@@ -580,6 +584,9 @@ class ServedModel:
             ),
             device_fault=placement.accelerator.device_fault,
             planning=self.runtime.planning_before,
+            on_failure=lambda error: self.report_failure(
+                error, f"model worker failed: {type(error).__name__}: {error}"
+            ),
         )
 
         with self.runtime._lifecycle_lock:
@@ -814,6 +821,19 @@ class ServedModel:
 
     def device_failure(self) -> BaseException | None:
         return self.scheduler.failure if self.scheduler else None
+
+    def report_failure(self, failure: BaseException, reason: str) -> None:
+        """Degrade the model for its scheduler's ``failure`` once, however many callers see it.
+
+        Its health cannot tell a failure already reported: the watchdog also
+        degrades a stalled forward, then restores the replaced state once
+        that forward returns, even when it returned a device fault.
+        """
+        with self._reporting:
+            if failure is self._reported:
+                return
+            self._reported = failure
+        self.runtime.degrade(reason, self)
 
     # -- description ---------------------------------------------------------
 
@@ -1456,7 +1476,16 @@ class Runtime:
         if not requests:
             return []
         lookups: list[_Lookup | None] = [None] * len(requests)
-        if size is not None and size <= INLINE_PLAN_BYTES:
+        # A served model that runs forwards while planning moves every small request
+        # off the event loop, whichever model it names.
+        if (
+            size is not None
+            and size <= INLINE_PLAN_BYTES
+            and not any(
+                served.model is not None and served.model.plans_run_forwards
+                for served in self.served
+            )
+        ):
             planned = [
                 self._prepare_outcome(surface, body, received, part)
                 for surface, body, part in requests
@@ -1567,7 +1596,7 @@ class Runtime:
         if any(isinstance(result, BaseException) for result in results):
             failure = served.device_failure()
             if failure is not None:
-                self.degrade(f"{type(failure).__name__}: {failure}", served)
+                served.report_failure(failure, f"{type(failure).__name__}: {failure}")
         finished = time.monotonic()
         compute_ms = (finished - submitted) * 1000.0
         for member, (index, prepared) in enumerate(members):

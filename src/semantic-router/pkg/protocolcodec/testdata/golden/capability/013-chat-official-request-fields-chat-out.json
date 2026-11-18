@@ -131,10 +131,18 @@
     {
       "name": "logit_bias",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_logit_bias"
+        "status": "ok",
+        "body": {
+          "logit_bias": {
+            "42": 1
+          },
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
         }
       }
     },

@@ -51,6 +51,7 @@ PRECISION = {
     ("vela2", "qwen3_5_text"): ("BF16", "FP32"),
     ("vela2", "modernbert"): ("FP32", "FP32"),
     ("vela3", "ultrabert"): ("FP32", "FP32"),
+    ("vela3_pico", "ultrabert"): ("FP32", "FP32"),
 }
 BYTES = {"BF16": 2, "FP32": 4}
 BACKBONES = {
@@ -411,7 +412,7 @@ def load_models() -> list[Model]:
                 calibration=calibration.get(repo, {}),
                 editorial=text,
                 family_dir=family["dir"],
-                family_label=family["label"],
+                family_label=text.get("family_label", family["label"]),
                 trained=item["family"] in trained,
                 quantizable=item["family"] in quantizable,
                 records=text.get("records", []),
@@ -614,8 +615,8 @@ def render_page(model: Model) -> str:
     lines += [""]
     if "image" in model.modalities:
         lines += [
-            "Rules that read the turn's images (`input.image`) or videos (`input.video`) can",
-            "resolve to it.",
+            "Rules that read the request's images (`input.image`) or the current turn's",
+            "videos (`input.video`) can resolve to it.",
             "",
         ]
     lines += ["## Built-in questions", ""]

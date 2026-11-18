@@ -45,6 +45,18 @@ func DoPOSTRequest(ctx context.Context, httpClient *http.Client, url string, pay
 	return doJSONRequest(ctx, httpClient, http.MethodPost, url, payload, nil)
 }
 
+// DoPOSTRequestWithHeaders sends an authenticated or otherwise header-scoped
+// POST request with a JSON payload and returns the raw HTTP response.
+func DoPOSTRequestWithHeaders(
+	ctx context.Context,
+	httpClient *http.Client,
+	url string,
+	payload any,
+	headers map[string]string,
+) (*HTTPResponse, error) {
+	return doJSONRequest(ctx, httpClient, http.MethodPost, url, payload, headers)
+}
+
 // DoDELETERequest sends a DELETE request and returns the raw HTTP response.
 func DoDELETERequest(ctx context.Context, httpClient *http.Client, url string) (*HTTPResponse, error) {
 	return doJSONRequest(ctx, httpClient, http.MethodDelete, url, nil, nil)

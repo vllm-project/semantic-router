@@ -6,7 +6,11 @@ import ProductIcon from '../components/ProductIcon'
 import { useReadonly } from '../contexts/ReadonlyContext'
 
 import styles from './InsightsPage.module.css'
-import { fetchInsightsRecord, fetchInsightsTrajectory } from './insightsPageApi'
+import {
+  fetchInsightsRecord,
+  fetchInsightsSessionReviews,
+  fetchInsightsTrajectory,
+} from './insightsPageApi'
 import {
   buildInsightsRecordSections,
   buildInsightsRecordTitle,
@@ -17,14 +21,28 @@ import {
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import InsightsRecordSection from './InsightsRecordSection'
 import InsightsRecordTrace from './InsightsRecordTrace'
-import InsightsSessionRoutes from './InsightsSessionRoutes'
+import InsightsSessionRoutes, { InsightsSessionPosition } from './InsightsSessionRoutes'
+import { ModelLabelsProvider, ModelName, useModelLabels } from './insightsModelLabelSupport'
+import { getRunPath } from './insightsRunSupport'
 
+// One record, its models read by their labels.
 export default function InsightsRecordPage() {
+  return (
+    <ModelLabelsProvider>
+      <RecordInsight />
+    </ModelLabelsProvider>
+  )
+}
+
+function RecordInsight() {
   const navigate = useNavigate()
   const { recordId } = useParams<{ recordId: string }>()
   const { isReadonly } = useReadonly()
+  const modelLabels = useModelLabels()
   const [record, setRecord] = useState<InsightsRecord | null>(null)
   const [trajectory, setTrajectory] = useState<InsightsTrajectory | null>(null)
+  const [sessionReviews, setSessionReviews] =
+    useState<Awaited<ReturnType<typeof fetchInsightsSessionReviews>>>()
   const [traceError, setTraceError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -40,6 +58,7 @@ export default function InsightsRecordPage() {
 
     setLoading(true)
     setTrajectory(null)
+    setSessionReviews(undefined)
     setTraceError(null)
 
     try {
@@ -47,6 +66,10 @@ export default function InsightsRecordPage() {
       setRecord(nextRecord)
       setError(null)
       if (nextRecord.session_id) {
+        // Reviews only mark the session's history; a failed lookup leaves it unmarked.
+        void fetchInsightsSessionReviews(nextRecord.session_id)
+          .then(setSessionReviews)
+          .catch(() => setSessionReviews(undefined))
         try {
           setTrajectory(
             await fetchInsightsTrajectory(nextRecord.session_id, nextRecord.recipe || ''),
@@ -101,8 +124,8 @@ export default function InsightsRecordPage() {
   }, [shareUrl])
 
   const sections = useMemo(
-    () => (record ? buildInsightsRecordSections(record, { isReadonly }) : []),
-    [isReadonly, record],
+    () => (record ? buildInsightsRecordSections(record, { isReadonly, modelLabels }) : []),
+    [isReadonly, modelLabels, record],
   )
 
   const lifecycle = record ? getInsightsLifecyclePresentation(record) : null
@@ -115,6 +138,16 @@ export default function InsightsRecordPage() {
           Insights
         </button>
         <div className={styles.recordActions}>
+          {record?.session_id ? (
+            <button
+              type="button"
+              onClick={() => navigate(getRunPath(record.session_id ?? '', record.id))}
+              className={styles.recordAction}
+            >
+              <ProductIcon name="trace" width={15} height={15} />
+              Open run
+            </button>
+          ) : null}
           <button type="button" onClick={() => void loadRecord()} className={styles.recordAction}>
             <ProductIcon name="refresh" width={15} height={15} />
             Refresh
@@ -145,7 +178,9 @@ export default function InsightsRecordPage() {
               <span className={styles.recordEyebrow}>Request insight</span>
               <h1>{buildInsightsRecordTitle(record)}</h1>
               <div className={styles.recordRoute} aria-label="Selected route">
-                <span>{record.original_model || 'Requested model'}</span>
+                <span>
+                  <ModelName name={record.original_model} fallback="Requested model" />
+                </span>
                 <ProductIcon name="arrow-right" width={15} height={15} />
                 <strong>
                   {record.decision
@@ -153,8 +188,11 @@ export default function InsightsRecordPage() {
                     : record.selection_method || 'Route'}
                 </strong>
                 <ProductIcon name="arrow-right" width={15} height={15} />
-                <span>{record.selected_model || 'No backend selected'}</span>
+                <span>
+                  <ModelName name={record.selected_model} fallback="No backend selected" />
+                </span>
               </div>
+              <InsightsSessionPosition trajectory={trajectory} current={record.id} />
             </div>
             {lifecycle ? (
               <span
@@ -173,7 +211,12 @@ export default function InsightsRecordPage() {
                 sectionIndex={sectionIndex}
               />
             ))}
-            <InsightsSessionRoutes trajectory={trajectory} />
+            <InsightsSessionRoutes
+              trajectory={trajectory}
+              current={record.id}
+              reviews={sessionReviews?.reviews}
+              reviewsTruncated={sessionReviews?.truncated}
+            />
             <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
           </div>
         </>

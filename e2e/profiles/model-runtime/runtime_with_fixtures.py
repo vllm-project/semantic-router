@@ -28,6 +28,7 @@ PACKAGES = {
     "decision-attached": ("decision2", "qwen3", 5),
     "embedding": ("task_heads", "embedding", 6),
     "vela2-attached": ("vela2", "encoder", 9),
+    "vela31": ("vela3", "encoder31", 0),
 }
 
 

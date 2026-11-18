@@ -58,6 +58,8 @@ class CIStaticChecksTests(unittest.TestCase):
         skips = set(env["SKIP"].split(","))
         self.assertIn("shellcheck", skips)
         self.assertIn("supply-chain-security-scan", skips)
+        # The Dashboard lane lints the whole frontend, so CI skips the hook.
+        self.assertIn("dashboard-js-ts-lint", skips)
         self.assertIn("decision-runtime-catalog-generated", skips)
         self.assertNotIn("architecture-check", skips)
 

@@ -167,8 +167,8 @@ func newEffectiveBackendSemantics(
 }
 
 func effectiveBackendCredential(instance modelcatalog.ProviderInstance) effectiveCredentialIdentity {
-	if instance.AuthCredential == CredentialDelegated {
-		return effectiveCredentialIdentity{source: CredentialDelegated}
+	if instance.AuthCredential == CredentialDelegated || instance.AuthCredential == CredentialCaller {
+		return effectiveCredentialIdentity{source: instance.AuthCredential}
 	}
 	credentials := instance.Credentials
 	if credentials.APIKey != "" {
@@ -176,6 +176,9 @@ func effectiveBackendCredential(instance modelcatalog.ProviderInstance) effectiv
 	}
 	if credentials.APIKeyEnv != "" {
 		return effectiveCredentialIdentity{source: "environment", value: credentials.APIKeyEnv}
+	}
+	if credentials.APIKeyFile != "" {
+		return effectiveCredentialIdentity{source: "file", value: credentials.APIKeyFile}
 	}
 	return effectiveCredentialIdentity{}
 }

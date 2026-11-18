@@ -36,8 +36,8 @@ A small Decision 3.0 model for questions about text, images and video, and the b
 | `set` | Yes, asked as one `noul` per label |
 | `span` | No: bind span questions, such as PII and hallucination, to a span-capable model |
 
-Rules that read the turn's images (`input.image`) or videos (`input.video`) can
-resolve to it.
+Rules that read the request's images (`input.image`) or the current turn's
+videos (`input.video`) can resolve to it.
 
 ## Built-in questions
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -49,6 +50,8 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 		ctx.SessionID = pinned
 		ctx.SessionProvenance, ctx.SessionIDHeader = SessionProvenanceHeader, pinnedHeader
 	}
+	// Protection may key on it later, after routing has edited the request.
+	ctx.conversationStart()
 
 	if ctx.SessionID == "" {
 		if sid := deriveSessionIDFromAnthropicSignals(ctx); sid != "" {
@@ -168,7 +171,7 @@ func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 		ctx.SessionProvenance = SessionProvenanceMessageHash
 		return
 	}
-	ctx.SessionID = deriveSessionIDFromSemanticStructure(ctx.SemanticRequest.Messages)
+	ctx.SessionID = ctx.conversationStart()
 	if ctx.SessionID != "" {
 		ctx.SessionProvenance = SessionProvenanceMessageHash
 	}
@@ -178,6 +181,22 @@ func populateSemanticSessionIDIfNeeded(ctx *RequestContext) {
 	if ctx.SessionID == "" {
 		logging.Debugf("Session: could not derive session ID for chat completion request")
 	}
+}
+
+// conversationStart is the request's conversation-start fingerprint
+// (deriveConversationStartID), taken once from the request as the client sent
+// it, so that later Router edits to the request cannot move it. A Responses
+// request has none: its retained lineage already ties its turns together.
+func (ctx *RequestContext) conversationStart() string {
+	if ctx == nil || ctx.ResponseObjectState != nil {
+		return ""
+	}
+	if !ctx.conversationStartTaken && ctx.SemanticRequest != nil {
+		ctx.conversationStartTaken = true
+		tenant := strings.TrimSpace(headerValueCI(ctx, headers.AuthzTenantID))
+		ctx.conversationStartID = deriveConversationStartID(ctx.SemanticRequest, tenant)
+	}
+	return ctx.conversationStartID
 }
 
 // setSessionIDFromRequestIDFallback assigns ctx.SessionID and its

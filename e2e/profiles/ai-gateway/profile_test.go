@@ -152,8 +152,18 @@ func TestDomainRecipePreservesEveryBaselineLabelAndSelection(t *testing.T) {
 	baseline := profileNamed(t, config["recipes"], "default")
 	routing := profileNamed(t, config["recipes"], "e2e-domain")
 	signals := profileMap(t, routing, "signals")
-	if len(signals) != 1 || !reflect.DeepEqual(signals["domains"], profileMap(t, baseline, "signals")["domains"]) {
-		t.Fatal("domain recipe must retain the original domain labels without competing signal families")
+	// The same labels, each asked of the System One fixture.
+	var want []any
+	for _, raw := range profileMap(t, baseline, "signals")["domains"].([]any) {
+		label := map[string]any{}
+		for key, value := range raw.(map[string]any) {
+			label[key] = value
+		}
+		label["deployment"] = "fake-systemone"
+		want = append(want, label)
+	}
+	if len(signals) != 1 || !reflect.DeepEqual(signals["domains"], want) {
+		t.Fatal("domain recipe must retain the original domain labels, on the fixture, without competing signal families")
 	}
 	decisions := routing["decisions"].([]any)
 	if len(decisions) != 14 {

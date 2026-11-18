@@ -9,7 +9,7 @@ names one of the rule's options.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -22,6 +22,16 @@ OnUnknown = Literal["match", "no_match"]
 # What a jailbreak or pii rule reads as when only some windows of a long input
 # were read.
 OnUnscanned = Literal["best_effort", "match", "no_match", "unknown"]
+# The share of a long input's windows a guard rule that read only some of them
+# must have read to decide on them (best_effort); below it the rule is unknown.
+MinCoverage = Annotated[float, Field(ge=0, le=1)]
+
+
+def min_coverage_error(min_coverage: float | None, on_unscanned: str | None) -> str:
+    """Why a rule's min_coverage does not apply to its on_unscanned, or ""."""
+    if min_coverage and on_unscanned not in (None, "best_effort"):
+        return "min_coverage applies to on_unscanned: best_effort, which decides on the windows read"
+    return ""
 
 
 class ApplicationRule(BaseModel):
@@ -90,7 +100,14 @@ class JailbreakRule(ApplicationRule):
     stage: Stage | None = None
     input: JailbreakInput | None = None
     on_unscanned: OnUnscanned | None = None
+    min_coverage: MinCoverage | None = None
     on_unknown: OnUnknown | None = None
+
+    @model_validator(mode="after")
+    def validate_min_coverage(self):
+        if error := min_coverage_error(self.min_coverage, self.on_unscanned):
+            raise ValueError(error)
+        return self
 
 
 class SafetyRule(ApplicationRule):
@@ -99,6 +116,7 @@ class SafetyRule(ApplicationRule):
     labels: list[str] = Field(default_factory=list)
     predicate: NumericPredicate | None = None
     stage: Stage | None = None
+    min_coverage: MinCoverage | None = None
 
 
 class PIIInput(BaseModel):
@@ -117,11 +135,14 @@ class PIIRule(ApplicationRule):
     ignore_labels: list[str] = Field(default_factory=list)
     input: PIIInput | None = None
     on_unscanned: OnUnscanned | None = None
+    min_coverage: MinCoverage | None = None
     on_unknown: OnUnknown | None = None
 
     @model_validator(mode="after")
     def validate_input(self):
         if self.input and (error := turnless_input_error(self.input, None)):
+            raise ValueError(error)
+        if error := min_coverage_error(self.min_coverage, self.on_unscanned):
             raise ValueError(error)
         return self
 
