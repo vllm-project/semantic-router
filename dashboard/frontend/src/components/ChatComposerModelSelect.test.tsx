@@ -63,8 +63,8 @@ describe('ChatComposerModelSelect', () => {
   it('keeps options compact and presents recipe names as objective chips', () => {
     const source = readFileSync(new URL('./ChatComposerModelSelect.tsx', import.meta.url), 'utf8')
 
-    expect(source).toContain('styles.objectiveChip')
+    expect(source).toContain('data-recipe-chip')
     expect(source).not.toContain('recipe: {model.recipe}')
-    expect(source).not.toContain('styles.optionDescription')
+    expect(source).not.toContain('{model.description}')
   })
 })

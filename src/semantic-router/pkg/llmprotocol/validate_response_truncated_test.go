@@ -74,3 +74,21 @@ func withAlternative(response Response, arguments string) Response {
 	response.Alternatives = [][]OutputItem{alternative}
 	return response
 }
+
+// A content filter or an output limit can end a reply before any output, as
+// when the limit went to reasoning the client asked to omit. Any other stop
+// with no output is an upstream defect.
+func TestValidateResponseAcceptsNoOutputOnlyWhenTheStopExplainsIt(t *testing.T) {
+	limits := DefaultPolicy().Limits
+	for stop, explained := range map[StopReason]bool{
+		StopMaxTokens: true, StopContextWindow: true, StopContentFilter: true,
+		StopEndTurn: false, StopToolCall: false,
+	} {
+		err := ValidateResponse(Response{Generation: 1, ID: "response", StopReason: stop, Usage: Usage{State: UsageUnavailable}}, limits)
+		if !explained {
+			requireLLMProtocolErrorCode(t, err, "empty_response_output")
+		} else if err != nil {
+			t.Errorf("stop %s: %v", stop, err)
+		}
+	}
+}

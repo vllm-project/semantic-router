@@ -245,13 +245,13 @@ System One question, so no application rule can bind them.
 | `standalone-0` | Standalone `multi-objective` | 129 |
 | `standalone-1` | Standalone `balance`, `knowledge` | 91 |
 | `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 103 |
-| `built-in-latest-mom-v1-0` to `-15` | Built-in latest `mom-v1`, one probe shard each | 21–32 (366 total) |
+| `built-in-latest-mom-v1-0` to `-7` | Built-in latest `mom-v1`, one probe shard each | 43–53 (366 total) |
 
 All eight recipes remain. Weights count authored probe variants, not measured
 seconds. The heavy built-in recipe remains alone: its historical median job
 time was 35.02 minutes, versus 4.85–7.48 minutes for standalone recipe jobs in
 the sampled complete runs. With Vela 2.0 0.8B as its decision model, its
-`evaluation.shards: 16` splits the probes into 16 jobs of similar estimated
+`evaluation.shards: 8` splits the probes into 8 jobs of similar estimated
 read cost, and the report merges them. Inventory and report aggregation add two
 jobs.
 

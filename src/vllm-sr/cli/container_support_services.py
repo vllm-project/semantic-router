@@ -35,6 +35,8 @@ log = get_logger(__name__)
 
 GRAFANA_REKEY_TIMEOUT_SECONDS = 15
 GRAFANA_REKEY_POLL_INTERVAL_SECONDS = 0.5
+GRAFANA_READY_TIMEOUT_SECONDS = 60
+GRAFANA_EXIT_LOG_LINES = 20
 
 JAEGER_IMAGE = "docker.io/jaegertracing/all-in-one:1.76.0"
 PROMETHEUS_IMAGE = "docker.io/prom/prometheus:v2.53.0"
@@ -42,6 +44,40 @@ GRAFANA_IMAGE = "docker.io/grafana/grafana:11.5.1"
 
 GRAFANA_LIVE_ALLOWED_ORIGINS_ENV = "GF_LIVE_ALLOWED_ORIGINS"
 _GRAFANA_LIVE_ALLOWED_ORIGINS_PLACEHOLDER = "__GF_LIVE_ALLOWED_ORIGINS__"
+
+
+def _wait_for_grafana_ready(
+    container_runtime: str, container_name: str, timeout: int
+) -> tuple[int, str, str]:
+    """Wait until Grafana answers its health check, or say why it never will.
+
+    On a fresh volume Grafana migrates its database before it serves. A
+    ``grafana cli`` started during the migrations opens the same SQLite file,
+    and the server's migrator then fails with ``database is locked`` and exits.
+    """
+
+    running = [container_runtime, "inspect", "-f", "{{.State.Running}}"]
+    health = [container_runtime, "exec", container_name, "wget", "-q", "-T", "5"]
+    health += ["-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+    logs = [container_runtime, "logs", "--tail", str(GRAFANA_EXIT_LOG_LINES)]
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        state = subprocess.run(
+            [*running, container_name], capture_output=True, text=True, check=False
+        )
+        if state.returncode != 0 or state.stdout.strip() != "true":
+            exited = subprocess.run(
+                [*logs, container_name],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            tail = f"{exited.stdout}{exited.stderr}".strip()
+            return (1, "", f"Grafana exited before it was ready:\n{tail}")
+        if subprocess.run(health, capture_output=True, check=False).returncode == 0:
+            return (0, "", "")
+        time.sleep(GRAFANA_REKEY_POLL_INTERVAL_SECONDS)
+    return (1, "", f"Grafana did not answer its health check within {timeout}s")
 
 
 def rekey_grafana_admin(
@@ -55,10 +91,15 @@ def rekey_grafana_admin(
     Grafana applies ``GF_SECURITY_ADMIN_PASSWORD__FILE`` only while it creates
     the database. A reused ``/var/lib/grafana`` volume keeps the old password.
     The reset reads the mounted file inside the container, so the password is
-    not placed in process arguments or logs.
+    not placed in process arguments or logs. It waits for the server first.
     """
 
     container_runtime = runtime or get_container_runtime()
+    ready = _wait_for_grafana_ready(
+        container_runtime, container_name, GRAFANA_READY_TIMEOUT_SECONDS
+    )
+    if ready[0] != 0:
+        return ready
     command = [
         container_runtime,
         "exec",

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -54,8 +55,7 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 		return nil, "", nil, err
 	}
 	if !streaming {
-		envelope := llmprotocol.Envelope{}
-		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+		envelope := llmprotocol.Envelope{ResponseRender: responseObjectRender(ctx)}
 		encoded, encodeErr := engine.EncodeResponse(format, *response, envelope)
 		if encodeErr != nil {
 			return nil, "", nil, encodeErr
@@ -68,7 +68,7 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 		Context: ctx.TraceContext, Source: format, Target: format,
 		Options:     clientStreamOptions(ctx),
 		PublicModel: response.Model, ResponseID: response.ID,
-		PreviousResponseID: responseObjectPreviousID(ctx),
+		ResponseRender: responseObjectRender(ctx),
 	})
 	if err != nil {
 		return nil, "", nil, err
@@ -152,8 +152,12 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
-	ctx.SemanticRequest = &request
+	attachSemanticRequest(ctx, &request)
+	observeAgentTurn(ctx, body)
+	r.observeApprovalReview(ctx, body, &request)
+	observeSessionTitleRequest(ctx, &request)
 	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
+	ctx.unstatedReasoningOutputLimit = unstatedReasoningOutputLimit(request)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream
@@ -236,6 +240,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, err
 	}
 	requestBackendStreamUsage(format, &dispatchRequest)
+	r.requestUnstoredOnCallerLogin(format, &dispatchRequest)
 	encoded, err := engine.EncodeRequest(format, dispatchRequest, ctx.ProtocolEnvelope)
 	if err != nil {
 		return nil, err
@@ -296,7 +301,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
-	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
+	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired || len(decoded.Envelope.Response) > 0 && !bytes.Equal(decoded.Envelope.Response, body)
 	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
@@ -364,7 +369,7 @@ func (r *OpenAIRouter) encodeClientResponseWithReplay(
 			format = ctx.SourceFormat
 		}
 		envelope = ctx.ResponseEnvelope
-		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+		envelope.ResponseRender = responseObjectRender(ctx)
 	}
 	if !replay {
 		envelope.ResponseReencodeRequired = true
@@ -505,9 +510,9 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 
 // logProtocolRejection records why the Router refused a request. Every refusal
 // that carries a protocol error leaves through encodeImmediateResponseForClient,
-// and the client's error body is otherwise the only trace: the request never
-// reaches replay. Only the protocol error's own message is logged, never the
-// request body.
+// and the client's error body is otherwise the only trace of a refusal before
+// routing, which never reaches replay. Only the protocol error's own message
+// is logged, never the request body.
 func logProtocolRejection(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, status int) {
 	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", map[string]interface{}{
 		"request_id": ctx.RequestID,

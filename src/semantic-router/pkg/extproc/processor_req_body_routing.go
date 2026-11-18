@@ -85,7 +85,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	}
 	// Bind response policy where the backend is selected.
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
-	ctx.SemanticRequest = request
+	attachSemanticRequest(ctx, request)
 	// Per-model accounting keys off the validated concrete dispatch model.
 	ctx.RequestModel = dispatch.logicalModel
 
@@ -154,7 +154,7 @@ func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.Capa
 func (r *OpenAIRouter) providerCapabilityMismatch(model string, format llmprotocol.WireFormat, required llmprotocol.CapabilitySet) error {
 	available, ok := r.codecCapabilitiesForFormat(format)
 	if !ok {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability", fmt.Sprintf("model %q has no codec for %q", model, format), nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability", fmt.Sprintf("the Router cannot reach model %q over the %s API", model, format.APIName()), nil)
 	}
 	if err := llmprotocol.RequireCapabilities(format, available, required); err != nil {
 		return err
@@ -254,6 +254,10 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) (bool, error) {
+	if explicitAnthropicReasoningDisabled(ctx, dispatch) {
+		// The backend keeps the client's thinking off whatever a decision chose.
+		ctx.VSRReasoningMode = "off"
+	}
 	if dispatch.decisionName == "" {
 		// A Looper hop already carries its decision's prompt; a request that
 		// matched no decision, or names a concrete model, runs its defaults'.
@@ -386,6 +390,11 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 			ctx.FallbackRequest = snapshot
 		}
 	}
+	// Every dispatch, a Looper hop's included, reserves its estimated cost
+	// last, on the request the provider receives.
+	if refusal := r.reserveDispatchSpend(ctx, dispatch.logicalModel, ctx.SemanticRequest); refusal != nil {
+		return r.respondBudgetRefused(ctx, dispatch.logicalModel, refusal), nil
+	}
 	captureRequestDemand(
 		ctx,
 		requestDemandStageProviderBound,
@@ -517,11 +526,19 @@ func (r *OpenAIRouter) appendProviderCredential(
 	// No upstream receives the authenticator's delegated credential header; a
 	// delegated backend receives its value under the provider auth header.
 	state.removeHeaders = append(state.removeHeaders, r.delegatedCredentialHeadersForRemoval()...)
+	if !state.profile.Caller() {
+		// The ChatGPT account a login acts for goes only with that login, so
+		// a model beside a caller pool, such as a local one, never sees it.
+		state.removeHeaders = append(state.removeHeaders, callerCredentialCompanions["openai"]...)
+	}
 	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
 		return refused
 	}
 	if state.profile.Delegated() {
 		return r.appendDelegatedCredential(state, providerAuth, model, backendName, ctx)
+	}
+	if state.profile.Caller() {
+		return r.appendCallerCredential(state, model, backendName, ctx)
 	}
 	if providerAuth.Strategy == "none" {
 		if r.CredentialResolver != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
@@ -509,6 +510,46 @@ func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// With messages[].role listed, a Chat backend receives the instructions that
+// lead the retained conversation as one system message, and the developer
+// item of the current input as user text after the history it follows.
+func TestPreviousResponseSendsTheCurrentDeveloperItemsInPlace(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldSystemMessageRole}
+	router.ResponseAPIFilter = NewResponseAPIFilter(NewMockResponseStore())
+	first := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-1", TraceContext: t.Context()}
+	dispatchTestTurn(t, router, model, first, `{"model":"`+model+`","instructions":"Old instructions.","input":[`+
+		`{"type":"message","role":"developer","content":"Always answer in French."},`+
+		`{"type":"message","role":"user","content":"What is 2+2?"}]}`)
+	if reply := router.handleNonStreamingResponseBody(extProcResponseFixture(llmprotocol.OpenAIChatV1), first, 0, false); reply.GetImmediateResponse() != nil {
+		t.Fatalf("turn 1 reply was replaced: %s", reply.GetImmediateResponse().GetBody())
+	}
+	second := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-2", TraceContext: t.Context()}
+	body := dispatchTestTurn(t, router, model, second, `{"model":"`+model+`","instructions":"Be brief.","previous_response_id":"`+
+		first.ResponseObjectState.GeneratedResponseID+`","input":[{"type":"message","role":"developer","content":"Now answer in digits."},`+
+		`{"type":"message","role":"user","content":"And 3+3?"}]}`)
+	var sent struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("%v: %s", err, body)
+	}
+	var got []string
+	for _, message := range sent.Messages {
+		got = append(got, message.Role+": "+message.Content)
+	}
+	want := []string{
+		"system: Be brief.\n\nAlways answer in French.", "user: What is 2+2?", "assistant: hello",
+		"user: Now answer in digits.", "user: And 3+3?",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("backend conversation = %q, want %q", got, want)
 	}
 }
 

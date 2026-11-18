@@ -136,10 +136,11 @@ func TestAttachRouterReplayResponseMergesNeutralTrace(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := &RequestContext{
-		RequestID:            "req-tool-2",
-		RouterReplayID:       replayID,
-		RouterReplayRecorder: recorder,
-		SourceFormat:         llmprotocol.OpenAIChatV1,
+		RequestID:                "req-tool-2",
+		RouterReplayID:           replayID,
+		RouterReplayRecorder:     recorder,
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureResponseBody: true},
+		SourceFormat:             llmprotocol.OpenAIChatV1,
 		SemanticResponse: &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
 			Role:    llmprotocol.RoleAssistant,
 			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "It is sunny."}},
@@ -250,8 +251,10 @@ func TestBuildReplayRoutingRecordCapturesToolResultsOnlyWhenOptedIn(t *testing.T
 		policy  *config.RouterReplayPluginConfig
 		capture bool
 	}{
-		{"default", &config.RouterReplayPluginConfig{Enabled: true}, false},
-		{"opted in", &config.RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true}, true},
+		{"default", &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw}, false},
+		{"opted in", &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureToolResults: true}, true},
+		{"no prompt capture", &config.RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true}, false},
+		{"verified capture", &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureVerified, CaptureToolResults: true}, false},
 		{"personal data withheld", &config.RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true, CapturePersonalData: &no}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -282,7 +285,7 @@ func TestBuildReplayRoutingRecordCapturesToolResultsOnlyWhenOptedIn(t *testing.T
 
 func TestReplayToolResultCaptureIsBoundedByMaxToolTraceBytes(t *testing.T) {
 	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}},
-		replayTestPlugin(map[string]interface{}{"enabled": true, "capture_tool_results": true, "max_tool_trace_bytes": 5}))
+		replayTestPlugin(map[string]interface{}{"enabled": true, "prompt_capture": config.PromptCaptureRaw, "capture_tool_results": true, "max_tool_trace_bytes": 5}))
 	router := replayRuntimeRouter(t, cfg)
 	ctx := toolResultReplayContext(t, "Sunny, 21C in San Francisco.")
 	router.startRouterReplay(ctx, "vllm-sr/auto", "model-a", "")

@@ -30,6 +30,10 @@ type SessionAwareConfig struct {
 	RemainingTurnPriorWeight     float64
 	RemainingTurnPriorHorizon    int
 	MinRemainingTurnPriorSamples int
+
+	// CacheEconomics prices a switch from the session's cache receipts in
+	// place of the heuristic prefix-cache terms. Off unless protection sets it.
+	CacheEconomics config.CacheEconomicsConfig
 }
 
 // DefaultSessionAwareConfig returns the production-oriented default policy.
@@ -200,9 +204,15 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 		trace.MissingSignals = append(trace.MissingSignals, "adjusted_scores")
 		return s.wrapBaseSelection(base, "missing_adjusted_scores", trace), nil
 	}
+	scoreBest, proposal := adjusted[best].Candidate.Model, adjusted[best].Candidate.Model
+	if proposal == current {
+		proposal = base.SelectedModel
+	}
+	paying := withoutUnpaidSwitches(adjusted, candidateTraces)
+	best = paying.Best(HigherIsBetter, false)
 
-	bestRef, bestScore := &adjusted[best].Candidate, adjusted[best].Score
-	confidence := candidateScoreConfidence(best, adjusted)
+	bestRef, bestScore := &paying[best].Candidate, paying[best].Score
+	confidence := candidateScoreConfidence(best, paying)
 	reason := fmt.Sprintf(
 		"session_aware: base=%s current=%s selected=%s idle_expired=%t active_tool_loop=%t",
 		base.Method, current, bestRef.Model, idleExpired, session.ActiveToolLoop,
@@ -214,6 +224,7 @@ func (s *SessionAwareSelector) Select(ctx context.Context, selCtx *SelectionCont
 	if bestRef.Model == current {
 		trace.DecisionReason = "stay_has_best_adjusted_score"
 	}
+	recordCacheEconomics(trace, candidateTraces, proposal, scoreBest, bestRef.Model)
 	logging.Infof("[SessionAwareSelector] %s score=%.4f confidence=%.2f", reason, bestScore, confidence)
 	return &SelectionResult{
 		SelectedModel:     bestRef.Model,

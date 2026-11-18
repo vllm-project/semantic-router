@@ -55,6 +55,8 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"output_config", "service_tier", "stop_sequences", "stream", "system", "temperature", "thinking",
 				"tool_choice", "tools", "top_k", "top_p",
 			),
+			// Claude Code's auto mode sends it for Anthropic's classifier review.
+			extensions: fields("safeguards"),
 		},
 	}
 
@@ -100,7 +102,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			name: "OpenAI Responses",
 			wire: responsesRequestWire{},
 			semantic: fields(
-				"conversation", "input", "instructions", "max_output_tokens", "metadata", "model",
+				"conversation", "include", "input", "instructions", "max_output_tokens", "metadata", "model",
 				"parallel_tool_calls", "previous_response_id", "prompt_cache_key", "reasoning", "store",
 				"stream", "temperature", "text", "tool_choice", "tools", "top_p", "truncation", "user",
 			),
@@ -112,7 +114,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			transport:  fields("stream_options"),
 			extensions: fields("auto_store"),
 			// Accepted but never forwarded; decode reports each as a dropped diagnostic.
-			dropped: fields("client_metadata", "include"),
+			dropped: fields("client_metadata"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -122,6 +124,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"system", "temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 			unsupported: fields("cache_control", "container", "inference_geo", "service_tier"),
+			extensions:  fields("safeguards"),
 		},
 	}
 	for _, test := range tests {
@@ -204,9 +207,11 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 				"completion_tokens", "completion_tokens_details", "compute_units", "prompt_tokens",
 				"prompt_tokens_details", "total_tokens",
 			),
-			// xAI, Groq and OpenRouter accounting fields on their Chat endpoints.
+			// xAI, Groq and OpenRouter accounting fields on their Chat endpoints,
+			// plus DeepSeek prompt cache token extensions.
 			extensions: fields(
 				"completion_time", "cost", "cost_details", "cost_in_usd_ticks", "is_byok", "num_sources_used",
+				"prompt_cache_hit_tokens", "prompt_cache_miss_tokens",
 				"prompt_time", "queue_time", "server_tool_use", "service_tier", "total_time",
 			),
 		},

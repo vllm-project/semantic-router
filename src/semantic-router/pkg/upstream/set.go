@@ -9,6 +9,8 @@ import (
 
 	"golang.org/x/net/http/httpguts"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
@@ -181,6 +183,14 @@ func (s *Set) Do(ctx context.Context, req *Request) (*Response, error) {
 		return nil, failure
 	}
 	metrics.RecordUpstreamRequest(c.spec.Name, string(failure.Kind))
+	logging.ComponentWarnEvent("upstream", "upstream_call_failed", map[string]interface{}{
+		"request_id": req.Header.Get(headers.RequestID),
+		"cluster":    c.spec.Name,
+		"endpoint":   failure.Endpoint,
+		"kind":       string(failure.Kind),
+		"attempts":   len(cl.attempts),
+		"error":      failure.Error(),
+	})
 	return cl.localReply(failure), nil
 }
 

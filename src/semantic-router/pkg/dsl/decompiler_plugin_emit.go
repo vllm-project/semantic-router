@@ -99,6 +99,9 @@ func emitFastResponsePluginConfig(sb *strings.Builder, p *config.DecisionPlugin)
 	if cfg.Message != "" {
 		fmt.Fprintf(sb, "    message: %q\n", cfg.Message)
 	}
+	if cfg.Block {
+		sb.WriteString("    block: true\n")
+	}
 }
 
 func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {

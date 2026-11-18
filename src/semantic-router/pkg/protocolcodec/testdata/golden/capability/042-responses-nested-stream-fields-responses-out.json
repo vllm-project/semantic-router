@@ -9,7 +9,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "resp_1",
                   "incomplete_details": null,
@@ -33,7 +33,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "resp_1",
                   "incomplete_details": null,
@@ -179,7 +179,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "resp_1",
                   "incomplete_details": null,
@@ -238,6 +238,10 @@
         },
         "diagnostics": [
           {
+            "field": "output.status",
+            "action": "dropped"
+          },
+          {
             "field": "stream.logprobs",
             "action": "dropped"
           },
@@ -257,7 +261,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "resp_2",
                   "incomplete_details": null,
@@ -281,7 +285,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "resp_2",
                   "incomplete_details": null,
@@ -352,7 +356,13 @@
               "event": "error"
             }
           ]
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
@@ -364,7 +374,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "resp_3",
                   "incomplete_details": null,
@@ -388,7 +398,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "resp_3",
                   "incomplete_details": null,
@@ -460,7 +470,13 @@
               "event": "error"
             }
           ]
-        }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

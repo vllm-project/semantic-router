@@ -60,7 +60,7 @@ func (engine *Engine) DecodeResponseStream(
 		return llmprotocol.Response{}, nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"streaming_unsupported",
-			"wire format does not support streaming",
+			fmt.Sprintf("the %s API does not stream", format.APIName()),
 			nil,
 		)
 	}
@@ -149,7 +149,7 @@ func (accumulator *responseAccumulator) applyEvent(event llmprotocol.Event) erro
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"opaque_stream_event",
-			"provider-opaque stream events cannot enter the neutral response contract",
+			"the model service streamed an event the Router cannot translate",
 			nil,
 		)
 	default:
@@ -214,6 +214,9 @@ func (accumulator *responseAccumulator) applyEventMetadata(event llmprotocol.Eve
 	if event.Model != "" {
 		accumulator.result.Model = event.Model
 	}
+	if !event.CreatedAt.IsZero() {
+		accumulator.result.CreatedAt = event.CreatedAt
+	}
 	if event.Usage != nil {
 		accumulator.result.Usage = *event.Usage
 	}
@@ -230,7 +233,10 @@ func (accumulator *responseAccumulator) startItem(event llmprotocol.Event) error
 	if event.ToolCall != nil {
 		call := *event.ToolCall
 		item.call = &call
-	} else if event.Content != nil {
+	} else if event.Content != nil && (event.Content.Kind != llmprotocol.ContentReasoning ||
+		event.Content.Text != "" || event.Content.Signature != "" || event.Content.ReasoningDetail != nil || event.Content.Reasoning != "") {
+		// An empty reasoning item-start only frames later content. Reserving its
+		// index would collide with an encrypted-only Responses item's blob.
 		content := *event.Content
 		item.contents[event.ContentIndex] = &content
 	}

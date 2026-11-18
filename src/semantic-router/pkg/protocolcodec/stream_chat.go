@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"sort"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -615,7 +616,11 @@ func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
 func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	events := make([]llmprotocol.Event, 0, 8)
 	if !decoder.started {
-		event, nextErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseStarted, ResponseID: chunk.ID, Model: chunk.Model})
+		start := llmprotocol.Event{Type: llmprotocol.EventResponseStarted, ResponseID: chunk.ID, Model: chunk.Model}
+		if chunk.Created > 0 {
+			start.CreatedAt = time.Unix(chunk.Created, 0).UTC()
+		}
+		event, nextErr := decoder.next(start)
 		if nextErr != nil {
 			return nil, nil, nextErr
 		}
@@ -908,6 +913,12 @@ func (decoder *chatStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, l
 }
 
 func (encoder *chatStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.Content != nil {
+		if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, []llmprotocol.Content{*event.Content}); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	if encoder.terminal {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
 	}

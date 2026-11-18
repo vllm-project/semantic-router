@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -30,7 +31,7 @@ import (
 )
 
 var routingFailures = []routingFailure{
-	routingFailureModelNotFound,
+	modelNotFoundFailure("no-such-model"),
 	routingFailureNoRoute,
 	routingFailureContextLength,
 	routingFailureDecisionUnresolved,
@@ -137,7 +138,7 @@ func routingFailureCases() []routingFailureCase {
 			name:    "unknown-model",
 			path:    "/v1/chat/completions",
 			body:    `{"model":"no-such-model","messages":[{"role":"user","content":"Hello there."}]}`,
-			failure: routingFailureModelNotFound,
+			failure: modelNotFoundFailure("no-such-model"),
 			event:   "specified_model_not_found",
 		},
 		{
@@ -281,6 +282,7 @@ func TestRoutingRejectionsReturnTheirReasonCode(t *testing.T) {
 			router := &OpenAIRouter{ReplayRecorder: recorder}
 			replayConfig := config.DefaultRouterReplayPluginConfig()
 			replayConfig.Enabled = true
+			replayConfig.PromptCapture = config.PromptCaptureRaw
 			replayConfig.CaptureResponseBody = true
 			ctx := &RequestContext{
 				RequestID: "rejected-request", SourceFormat: llmprotocol.OpenAIChatV1,
@@ -325,8 +327,8 @@ func TestUnknownModelNamesShareOneErrorSeries(t *testing.T) {
 		{name: "azure", path: "/openai/deployments/no-such-deployment/chat/completions?api-version=2024-10-21", body: `{` + messages + `}`},
 	}
 	for _, c := range cases {
-		if got := viaSession.Run(context.Background(), c.parityCase()); got.Response == nil || got.Response.Status != routingFailureModelNotFound.status {
-			t.Fatalf("%s: response = %+v, want %d", c.name, got.Response, routingFailureModelNotFound.status)
+		if got := viaSession.Run(context.Background(), c.parityCase()); got.Response == nil || got.Response.Status != http.StatusNotFound {
+			t.Fatalf("%s: response = %+v, want %d", c.name, got.Response, http.StatusNotFound)
 		}
 	}
 	if got := testutil.CollectAndCount(metrics.RequestErrorsTotal); got != series {

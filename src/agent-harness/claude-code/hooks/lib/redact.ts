@@ -1,4 +1,4 @@
-import type { Tag } from '../../types'
+import type { BuiltinTag, Tag } from '../../types'
 import { isRecord, numberAt, type Reply } from './classify'
 
 // A piece of text to hide, in UTF-16 offsets of the text it was found in; `probability` the classifier's, for a span it found.
@@ -10,7 +10,7 @@ export const PII_QUESTIONS = { pii: { preset: 'pii' } }
 
 // DATE_TIME is left out: the runtime tags every date, commit dates included, and hiding them
 // stopped Claude from lining events up in a live run.
-const LABEL_TAGS: Record<string, Tag> = {
+const LABEL_TAGS: Record<string, BuiltinTag> = {
   PERSON: 'name',
   EMAIL_ADDRESS: 'email',
   PHONE_NUMBER: 'phone',
@@ -158,13 +158,19 @@ export type Hidden = { text: string; counts: Partial<Record<Tag, number>> }
 // The Router's masking plugin leaves text of this shape alone (placeholderPattern in pkg/masking), so keep it.
 export const tagText = (tag: Tag) => `[vsr:${tag}]`
 
-// Replaces each found piece with its tag; of two that overlap, the one that starts first stays.
+// Replaces each found piece with its tag. Pieces that overlap are hidden as one, under the tag of the one that starts
+// first (the longer at an equal start), so the tail of a piece that crosses another is not left in clear text.
 export function hide(text: string, found: readonly Found[]): Hidden {
+  const merged: Found[] = []
+  for (const one of [...found].sort((a, b) => a.from - b.from || b.to - a.to)) {
+    const last = merged.at(-1)
+    if (last !== undefined && one.from < last.to) last.to = Math.max(last.to, one.to)
+    else merged.push({ ...one })
+  }
   const counts: Partial<Record<Tag, number>> = {}
   let out = ''
   let at = 0
-  for (const one of [...found].sort((a, b) => a.from - b.from || b.to - a.to)) {
-    if (one.from < at) continue
+  for (const one of merged) {
     out += `${text.slice(at, one.from)}${tagText(one.tag)}`
     counts[one.tag] = (counts[one.tag] ?? 0) + 1
     at = one.to

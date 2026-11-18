@@ -33,7 +33,13 @@ func externalAPIClient(timeout time.Duration) *http.Client {
 			IdleConnTimeout:     90 * time.Second,
 		}
 	})
-	return &http.Client{Timeout: timeout, Transport: externalAPITransport}
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: externalAPITransport,
+		// The endpoint is configured by the operator: a redirect would replay
+		// the configured credential headers and the query to another origin.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }
 
 // validateHeaderName validates a header name to prevent header injection

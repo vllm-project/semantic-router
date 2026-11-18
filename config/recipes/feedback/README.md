@@ -132,7 +132,9 @@ rerun the probes.
 
 ## Data handling and safety
 
-The checked-in recipe does not enable Router Replay. Its clarification route
+The checked-in recipe sets no `router_replay` plugin, so Router Replay keeps
+only its default record of each request's routing data, with no request or
+response text. Its clarification route
 does enable an in-memory response cache with a 30-minute TTL, so an equivalent
 request and its prior response can be retained and reused while the Router is
 running. Other routes do not opt into that cache.

@@ -190,6 +190,11 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
           min_turns_before_switch: number('Minimum Turns Before Switch', { min: 0 }),
           switch_margin: number('Switch Margin', { min: 0 }),
           stability_weight: number('Stability Weight', { min: 0 }),
+          cache_economics: object('Cache Economics', {
+            enabled: boolean('Enabled'),
+            cache_ttl_seconds: number('Cache TTL Seconds', { min: 1, max: 86400 }),
+            default_remaining_turns: number('Default Remaining Turns', { min: 1 }),
+          }),
         }),
       }),
     },
@@ -258,6 +263,35 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
           ),
         },
         'type',
+      ),
+    },
+  },
+  budgets: {
+    run: {
+      label: 'Run Budget',
+      description:
+        "Spend limit of one agent run: a user's session with every subagent, Looper hop, retry and Router model call in it.",
+      schema: object('Run Budget', {
+        limit: number('Limit', { required: true, min: 0, step: 0.01 }),
+        idle_timeout_seconds: number('Idle Timeout Seconds', { min: 0, placeholder: '86400' }),
+      }),
+    },
+    users: {
+      label: 'User Budgets',
+      description:
+        'Spend limits per user over a calendar window in UTC; every matching rule applies.',
+      schema: objectList(
+        'User Budget',
+        {
+          name: text('Name', { required: true }),
+          match: object('Match', {
+            user: text('User'),
+            group: text('Group'),
+          }),
+          limit: number('Limit', { required: true, min: 0, step: 0.01 }),
+          window: select('Window', ['hour', 'day', 'week', 'month'], true),
+        },
+        'name',
       ),
     },
   },
@@ -399,6 +433,7 @@ export function createRouterStructuredValue(schema: RouterStructuredSchema): unk
       return []
     case 'string-map':
     case 'object':
+    case 'object-map':
       return {}
     default:
       return ''
@@ -489,6 +524,24 @@ export function normalizeRouterStructuredValue(
           item,
           `${path}[${index + 1}]`,
         ),
+      )
+    }
+    case 'object-map': {
+      const record = asRecord(value)
+      if (!record) throw new Error(`${path} must be a mapping.`)
+      if (Object.keys(record).some((key) => !key.trim())) {
+        throw new Error(`${path} entries need a name.`)
+      }
+      if (!schema.item) return { ...record }
+      return Object.fromEntries(
+        Object.entries(record).map(([key, item]) => [
+          key,
+          normalizeRouterStructuredValue(
+            schema.item as RouterStructuredSchema,
+            item,
+            `${path}.${key}`,
+          ),
+        ]),
       )
     }
   }

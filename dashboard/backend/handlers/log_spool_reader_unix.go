@@ -14,11 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
-	maxLogSpoolReadBytes      = 4 << 20
-	maxRuntimeLogLineBytes    = 64 << 10
-	runtimeLogTruncatedMarker = " ... [log record truncated]"
-)
+const maxLogSpoolReadBytes = 4 << 20
 
 var (
 	errLogSpoolUnsupported = errors.New("bounded log spool is unsupported")
@@ -135,12 +131,7 @@ func (reader *logSpoolReader) Tail(component string, lineLimit int) ([]string, e
 	}
 	lines := make([]string, 0, len(parts))
 	for _, part := range parts {
-		if len(part) > maxRuntimeLogLineBytes {
-			prefixBytes := maxRuntimeLogLineBytes - len(runtimeLogTruncatedMarker)
-			part = append(append([]byte{}, part[:prefixBytes]...), []byte(runtimeLogTruncatedMarker)...)
-		}
-		line := strings.ToValidUTF8(string(bytes.TrimSuffix(part, []byte{'\r'})), "�")
-		if line != "" {
+		if line := boundRuntimeLogLine(part); line != "" {
 			lines = append(lines, line)
 		}
 	}

@@ -110,6 +110,9 @@ func addRoutingTrace(trace *headers.Trace, ctx *RequestContext) {
 	}
 	trace.Set(headers.TraceClientProtocol, headers.Token(normalizeProtocol(string(ctx.SourceFormat))))
 	trace.Set(headers.TraceUpstreamProtocol, headers.Token(normalizeProtocol(string(ctx.TargetFormat))))
+	if ctx.RequestedModel != "" {
+		trace.Set(headers.TraceRequestedModel, headers.String(ctx.RequestedModel))
+	}
 	if ctx.SkipProcessing || ctx.LooperRequest || ctx.VSRCacheHit || ctx.SemanticRequest == nil {
 		return
 	}
@@ -149,6 +152,7 @@ func matchedSignalTrace(ctx *RequestContext) []headers.Item {
 		{config.SignalTypeConversation, ctx.VSRMatchedConversation},
 		{config.SignalTypeMetadata, ctx.VSRMatchedMetadata},
 		{config.SignalTypeInputModality, ctx.VSRMatchedInputModality},
+		{config.SignalTypeAgent, ctx.VSRMatchedAgent},
 		{config.SignalTypeSystemOne, append(slices.Clone(ctx.VSRMatchedDecisionModel), response[config.SignalTypeSystemOne]...)},
 		{config.SignalTypeProjection, ctx.VSRMatchedProjection},
 	}
@@ -171,7 +175,11 @@ func addDecisionDetailTrace(trace *headers.Trace, ctx *RequestContext) {
 		trace.Set(headers.TraceCategory, headers.String(ctx.VSRSelectedCategory))
 	}
 	if ctx.VSRReasoningMode != "" {
-		trace.Set(headers.TraceReasoning, headers.Token(ctx.VSRReasoningMode))
+		item := headers.Token(ctx.VSRReasoningMode)
+		if ctx.VSRReasoningReason != "" {
+			item = item.With("reason", headers.Token(ctx.VSRReasoningReason))
+		}
+		trace.Set(headers.TraceReasoning, item)
 	}
 	if decision := ctx.VSRSelectedDecision; decision != nil && decision.Output != nil {
 		kinds := decision.Output.Kinds()

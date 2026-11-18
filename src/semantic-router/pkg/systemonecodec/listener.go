@@ -233,7 +233,8 @@ func (Listener40) AnswerListing(body []byte) ([]byte, error) { return body, nil 
 // state is read there. A batch is POST /v1/systemone/batch. An error is the
 // standard detail (a list on a 422) with the flat code, question, state,
 // reason and limit, and an overloaded server answers 529. The listing's
-// models carry version, features and card. /v1/decisions stays native.
+// models carry version, features and card, and the listener's vsr profile
+// stays beside them. /v1/decisions stays native.
 type Listener50 struct{}
 
 func (Listener50) ID() SchemaID { return SchemaVLLMSR50 }
@@ -329,7 +330,11 @@ func (Listener50) AnswerListing(body []byte) ([]byte, error) {
 		}
 		models = append(models, model.With("card", entry))
 	}
-	return json.Marshal(systemoneprotocol.Object(systemoneprotocol.Member{Key: "models", Value: systemoneprotocol.Array(models...)}))
+	listed := systemoneprotocol.Object(systemoneprotocol.Member{Key: "models", Value: systemoneprotocol.Array(models...)})
+	if profile, ok := value.Get("vsr"); ok {
+		listed = listed.With("vsr", profile)
+	}
+	return json.Marshal(listed)
 }
 
 // answerBatch writes a batch endpoint's answer: the internal form's entries

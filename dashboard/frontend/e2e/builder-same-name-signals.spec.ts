@@ -40,13 +40,13 @@ const openBuilder = async (page: Page) => {
 }
 
 const sidebarSignal = (page: Page, signalType: string) =>
-  page.getByRole('button', { name: /^Long Request\b/ }).filter({ hasText: signalType })
+  page.getByRole('button', { name: /^long_request\b/ }).filter({ hasText: signalType })
 
 test('opens and deletes the selected one of two same-name signals', async ({ page }) => {
   await openBuilder(page)
   const keyword = sidebarSignal(page, 'keyword')
   const context = sidebarSignal(page, 'context')
-  const typeBadge = page.locator('[class*="editorBadge"]')
+  const typeBadge = page.getByTestId('editor-entity-type')
 
   await context.click()
   await expect(typeBadge).toHaveText('context')

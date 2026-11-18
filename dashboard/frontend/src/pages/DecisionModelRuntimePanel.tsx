@@ -1,5 +1,24 @@
 import { useState } from 'react'
+import { ChevronDown, Cpu } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  Alert,
+  Card,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  EmptyState,
+  KeyValueGrid,
+  MiniStat,
+  ProviderLogo,
+  Segmented,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  StatusLabel,
+} from '../ui'
 import { canAccessDashboardPath } from '../utils/accessControl'
 import { decisionRuntimeModelName, type ModelRuntimeInventory } from './decisionModelManagement'
 import {
@@ -10,25 +29,27 @@ import {
 import DecisionModelMonitoringCharts, {
   DecisionModelMetricCards,
 } from './DecisionModelMonitoringCharts'
-import { useDecisionModelMetrics } from './useDecisionModelMetrics'
-import styles from './DecisionModelPage.module.css'
 import DecisionReplicaStatus from './DecisionReplicaStatus'
+import { useDecisionModelMetrics } from './useDecisionModelMetrics'
 
-const shown = (value?: string) => value?.trim() || 'Not reported'
+const shown = (value?: string | number) =>
+  value === undefined || value === '' ? 'Not reported' : String(value)
 
 export default function DecisionModelRuntimePanel({
   inventory,
   refreshedAt,
   loading,
+  initialDeployment,
 }: {
   inventory: ModelRuntimeInventory | null
   refreshedAt: Date | null
   loading: boolean
+  initialDeployment?: string | null
 }) {
   const { user } = useAuth()
   const [timeWindow, setTimeWindow] = useState<DecisionModelTimeWindow>(3_600)
-  const [selectedDeployment, setSelectedDeployment] = useState('')
-  const canReadMetrics = canAccessDashboardPath(user, '/monitoring')
+  const [selectedDeployment, setSelectedDeployment] = useState(initialDeployment ?? '')
+  const canReadMetrics = canAccessDashboardPath(user, '/observe/metrics')
   const deployments = inventory?.deployments ?? []
   const deployment = deployments.find(({ name }) => name === selectedDeployment) ?? deployments[0]
   const metrics = useDecisionModelMetrics(
@@ -41,127 +62,146 @@ export default function DecisionModelRuntimePanel({
   const ready = deployment?.ready && deployment.state === 'ready'
 
   return (
-    <section
-      className={`${styles.panel} ${styles.monitoringPanel}`}
-      aria-labelledby="decision-runtime-title"
-    >
-      <div className={styles.monitoringHeader}>
-        <div>
-          <span className={styles.eyebrow}>Live telemetry</span>
-          <h2 id="decision-runtime-title">Model runtime deployments</h2>
-          <p className={styles.muted}>
-            Follow traffic, latency, and cache behavior for each runtime.
+    <section className="flex flex-col gap-4" aria-labelledby="decision-runtime-title">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 id="decision-runtime-title" className="text-[15px] font-semibold tracking-[-0.012em]">
+            Model runtime deployments
+          </h2>
+          <p className="text-[13px] text-muted-foreground">
+            Traffic, latency and cache behavior for each runtime, from Prometheus.
           </p>
         </div>
-        <div className={styles.timeWindows} role="group" aria-label="Monitoring time range">
-          {DECISION_MODEL_TIME_WINDOWS.map((window) => (
-            <button
-              key={window.seconds}
-              type="button"
-              aria-pressed={timeWindow === window.seconds}
-              onClick={() => setTimeWindow(window.seconds)}
-            >
-              {window.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {deployments.length > 1 ? (
+            <Select value={deployment?.name} onValueChange={setSelectedDeployment}>
+              <SelectTrigger size="sm" className="gap-2" aria-label="Runtime deployment">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {deployments.map((candidate) => (
+                  <SelectItem key={candidate.name} value={candidate.name}>
+                    <span className="font-mono text-[12.5px]">{candidate.name}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          <Segmented
+            aria-label="Monitoring time range"
+            value={String(timeWindow)}
+            onValueChange={(value) => setTimeWindow(Number(value) as DecisionModelTimeWindow)}
+            options={DECISION_MODEL_TIME_WINDOWS.map((window) => ({
+              value: String(window.seconds),
+              label: window.label,
+            }))}
+          />
         </div>
       </div>
       {!canReadMetrics ? (
-        <p className={styles.notice}>
+        <Alert tone="neutral" title="Statistics need observability access">
           Viewing model statistics requires observability read access.
-        </p>
+        </Alert>
       ) : metrics.unavailable.length > 0 ? (
-        <p className={styles.notice}>
-          Some model statistics are unavailable. Check the Prometheus connection and router scrape.
-          <span className={styles.unavailableMetrics}>
-            Unavailable: {metrics.unavailable.join(', ')}.
-          </span>
-        </p>
+        <Alert tone="warning" title="Statistics are incomplete">
+          Some model statistics are unavailable. Check the Prometheus connection and router scrape.{' '}
+          Unavailable: {metrics.unavailable.join(', ')}.
+        </Alert>
       ) : null}
       {!deployment ? (
-        <div className={styles.runtimeEmpty}>
-          <strong>
-            {loading ? 'Loading runtime deployments…' : 'No model runtime deployments reported.'}
-          </strong>
-          <p>
-            {loading
-              ? 'Fetching the latest deployment observations.'
-              : 'Deploy a decision model to inspect its runtime and collected observations.'}
-          </p>
-        </div>
+        <Card>
+          <EmptyState
+            compact
+            icon={Cpu}
+            tone="violet"
+            title={
+              loading ? 'Loading runtime deployments…' : 'No model runtime deployments reported.'
+            }
+            description={
+              loading
+                ? 'Fetching the latest deployment observations.'
+                : 'Deploy a decision model, or start the Router, to inspect its runtime and collected observations.'
+            }
+          />
+        </Card>
       ) : (
-        <article className={styles.deployment} key={deployment.name} aria-label={deployment.name}>
-          <div className={styles.deploymentTitle}>
-            <div className={styles.deploymentIdentity}>
-              <div className={styles.runtimeIcon} aria-hidden="true">
-                <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <rect x="5" y="5" width="14" height="14" rx="3" />
-                  <rect x="9" y="9" width="6" height="6" rx="1" />
-                  <path d="M9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4" />
-                </svg>
-              </div>
-              <div>
-                {deployments.length > 1 ? (
-                  <div
-                    className={styles.deploymentChoices}
-                    role="group"
-                    aria-label="Runtime deployment"
-                  >
-                    {deployments.map((candidate) => (
-                      <button
-                        type="button"
-                        key={candidate.name}
-                        aria-pressed={candidate.name === deployment.name}
-                        onClick={() => setSelectedDeployment(candidate.name)}
-                      >
-                        {candidate.name}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <h3>{decisionRuntimeModelName(deployment) ?? deployment.name}</h3>
-                )}
-              </div>
-            </div>
-            <span className={`${styles.runtimeState} ${ready ? styles.ready : styles.pending}`}>
-              <i />
-              {ready ? 'Ready' : deployment.state || 'Not ready'}
-            </span>
-          </div>
-          {deployment.reason && <p className={styles.notice}>{deployment.reason}</p>}
-          <dl className={styles.runtimeMeta}>
-            <div>
-              <dt>Device</dt>
-              <dd>{shown(deployment.device)}</dd>
-            </div>
-            <div>
-              <dt>Engine backend</dt>
-              <dd>{shown(deployment.engine)}</dd>
-            </div>
-            <div>
-              <dt>Restarts</dt>
-              <dd>{deployment.restarts ?? 'Not reported'}</dd>
-            </div>
-            <div>
-              <dt>Ownership</dt>
-              <dd>{deployment.managed ? 'Managed worker' : 'External deployment'}</dd>
-            </div>
-          </dl>
-          <DecisionReplicaStatus deployment={deployment} />
-          {canReadMetrics && (
-            <>
-              <div className={styles.metricsCaption}>
-                <span>
-                  Latest observation <span className={styles.captionSeparator}>/</span> 5-minute
-                  rolling rates
+        <article aria-label={deployment.name} className="flex flex-col gap-4">
+          <Card className="gap-4 p-5">
+            <div className="flex flex-wrap items-center gap-3">
+              <ProviderLogo provider="vllm" size={20} framed />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <h3 className="truncate font-mono text-[14px] font-semibold">
+                  {decisionRuntimeModelName(deployment) ?? deployment.name}
+                </h3>
+                <span className="truncate text-xs text-subtle-foreground">
+                  Deployment <span className="font-mono">{deployment.name}</span>
                 </span>
+              </div>
+              <StatusLabel tone={ready ? 'success' : deployment.ready ? 'warning' : 'neutral'}>
+                {ready ? 'Ready' : deployment.state || 'Not ready'}
+              </StatusLabel>
+            </div>
+            {deployment.reason ? (
+              <p className="text-xs text-muted-foreground">{deployment.reason}</p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <MiniStat
+                label="Device"
+                value={<span className="font-mono text-base">{shown(deployment.device)}</span>}
+              />
+              <MiniStat
+                label="Engine backend"
+                value={<span className="font-mono text-base">{shown(deployment.engine)}</span>}
+              />
+              <MiniStat label="Restarts" value={deployment.restarts ?? 'Not reported'} />
+              <MiniStat
+                label="Ownership"
+                value={
+                  <span className="text-base">
+                    {deployment.managed ? 'Managed worker' : 'External deployment'}
+                  </span>
+                }
+              />
+            </div>
+            <DecisionReplicaStatus deployment={deployment} />
+            <Collapsible>
+              <CollapsibleTrigger className="group inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40">
+                <ChevronDown className="size-3.5 transition-transform group-data-[state=open]:rotate-180" />
+                Deployment details
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <KeyValueGrid
+                  className="mt-3 rounded-lg border border-border bg-surface-subtle/50 p-3"
+                  columns={3}
+                  items={[
+                    { label: 'Deployment', value: deployment.name, mono: true },
+                    { label: 'Repository', value: shown(deployment.repo), mono: true },
+                    { label: 'Revision', value: shown(deployment.revision), mono: true },
+                    { label: 'Profile', value: shown(deployment.profile) },
+                    { label: 'Family', value: shown(deployment.family) },
+                    { label: 'Process', value: shown(deployment.process), mono: true },
+                    { label: 'Served model', value: shown(deployment.served_name), mono: true },
+                    {
+                      label: 'Supported APIs',
+                      value: deployment.surfaces?.length
+                        ? deployment.surfaces.join(', ')
+                        : 'Not reported',
+                    },
+                    {
+                      label: 'Model heads',
+                      value: deployment.heads?.length
+                        ? deployment.heads.map((head) => head.name).join(', ')
+                        : 'Not reported',
+                    },
+                  ]}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+          </Card>
+          {canReadMetrics ? (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>Latest observation · 5-minute rolling rates</span>
                 <span>
                   {metrics.loading
                     ? 'Updating statistics…'
@@ -172,52 +212,13 @@ export default function DecisionModelRuntimePanel({
               </div>
               <DecisionModelMetricCards points={points} />
               <DecisionModelMonitoringCharts points={points} loading={metrics.loading} />
-              <p className={styles.metricsFootnote}>
+              <p className="text-xs text-subtle-foreground">
                 Aggregated across routers scraped by Prometheus. Runtime calls may share a question
                 batch; they do not count backend LLM chat requests. Gaps mean no usable samples, not
                 zero. Token counts and GPU memory are not reported by these metrics.
               </p>
             </>
-          )}
-          <details className={styles.hashes}>
-            <summary>Deployment details</summary>
-            <dl className={styles.facts}>
-              <div>
-                <dt>Deployment</dt>
-                <dd>{deployment.name}</dd>
-              </div>
-              <div>
-                <dt>Repository</dt>
-                <dd>{shown(deployment.repo)}</dd>
-              </div>
-              <div>
-                <dt>Revision</dt>
-                <dd>{shown(deployment.revision)}</dd>
-              </div>
-              <div>
-                <dt>Profile</dt>
-                <dd>{shown(deployment.profile)}</dd>
-              </div>
-              <div>
-                <dt>Family</dt>
-                <dd>{shown(deployment.family)}</dd>
-              </div>
-              <div>
-                <dt>Process</dt>
-                <dd>{shown(deployment.process)}</dd>
-              </div>
-              <div>
-                <dt>Served model</dt>
-                <dd>{shown(deployment.served_name)}</dd>
-              </div>
-            </dl>
-            {deployment.surfaces?.length ? (
-              <p>Supported APIs: {deployment.surfaces.join(', ')}</p>
-            ) : null}
-            {deployment.heads?.length ? (
-              <p>Model heads: {deployment.heads.map((head) => head.name).join(', ')}</p>
-            ) : null}
-          </details>
+          ) : null}
         </article>
       )}
     </section>

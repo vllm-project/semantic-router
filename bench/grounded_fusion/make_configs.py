@@ -142,6 +142,10 @@ def build(base: dict, grounding_on: bool, policy: str = "weight") -> dict:
     c["entrypoints"] = [
         {"model_names": [FUSION_MODEL], "recipe": "default", "default": True}
     ]
+    # A listener's vSR rules name rules of the recipes replaced above.
+    for listener in c.get("listeners", []):
+        systemone = (listener.get("apis") or {}).get("systemone") or {}
+        (systemone.get("vsr") or {}).pop("rules", None)
 
     # Drop the request plugins (the context plugin recalls from the memory
     # store) and the external-dependency stores (llama_stack, redis) for a

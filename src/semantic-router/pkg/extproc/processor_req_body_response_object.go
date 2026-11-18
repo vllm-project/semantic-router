@@ -58,13 +58,20 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	if history == nil || len(history.Instructions) == 0 && len(history.Messages) == 0 {
 		return false, nil
 	}
+	if err := llmprotocol.ClaimHistoryToolNames(request, *history); err != nil {
+		return false, err
+	}
 	// The developer and system items of the stored input decode as
 	// instructions, as they do at ingress. In turn order they follow this
 	// request's top-level instructions and precede the developer and system
 	// items of its own input, which decode after them. The earlier request's
 	// top-level instructions are not carried over.
 	at := max(0, len(request.Instructions)-instructionInputItems(input))
-	request.Instructions = slices.Insert(request.Instructions, at, history.Instructions...)
+	instructions := slices.Insert(slices.Clone(request.Instructions), at, history.Instructions...)
+	for index := at + len(history.Instructions); index < len(instructions); index++ {
+		instructions[index].Position += len(history.Messages)
+	}
+	request.Instructions = instructions
 	request.Messages = append(history.Messages, request.Messages...)
 	return true, nil
 }
@@ -153,7 +160,9 @@ func storedResponseItems(storedResponses []*responseapi.StoredResponse) ([]json.
 func marshalStoredInputItems(items []responseapi.InputItem) ([]json.RawMessage, error) {
 	encoded := make([]json.RawMessage, 0, len(items))
 	for _, item := range items {
-		item.Status = ""
+		if item.Type != responseapi.ItemTypeImageGenerationCall {
+			item.Status = ""
+		}
 		body, err := json.Marshal(item)
 		if err != nil {
 			return nil, err
@@ -166,7 +175,9 @@ func marshalStoredInputItems(items []responseapi.InputItem) ([]json.RawMessage, 
 func marshalStoredOutputItems(items []responseapi.OutputItem) ([]json.RawMessage, error) {
 	encoded := make([]json.RawMessage, 0, len(items))
 	for _, item := range items {
-		item.Status = ""
+		if item.Type != responseapi.ItemTypeImageGenerationCall {
+			item.Status = ""
+		}
 		body, err := json.Marshal(item)
 		if err != nil {
 			return nil, err

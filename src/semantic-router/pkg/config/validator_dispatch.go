@@ -28,9 +28,12 @@ var (
 		validateRoutingInputContracts,
 		validateContextWindowContracts,
 		validateRouterHeadersContracts,
+		validateDrainTimeoutContract,
+		validateBudgetsContract,
 		validateFlowContracts,
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,
+		validateModelSignalOverloadContracts,
 		validateBackendTLSFiles,
 		validateModelDeploymentContracts,
 		validateFallbackForwardRequestHeaders,
@@ -39,6 +42,7 @@ var (
 		validateGlobalToolSessionsContracts,
 		validateGlobalRouterReplayCaptureContracts,
 		validateGlobalPluginContracts,
+		validateMaskingIdentity,
 	}
 
 	// These contracts need the complete routing graph, including all recipes.
@@ -120,9 +124,12 @@ func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationSta
 	}); err != nil {
 		return err
 	}
-	// Which calls reach a delegated upstream follows from the whole, valid
-	// routing graph.
-	return validateDelegatedUpstreams(cfg)
+	// Which calls reach a delegated or caller upstream follows from the
+	// whole, valid routing graph.
+	if err := validateDelegatedUpstreams(cfg); err != nil {
+		return err
+	}
+	return validateCallerUpstreams(cfg)
 }
 
 func runConfigContractValidators(cfg *RouterConfig, validators []configContractValidator) error {

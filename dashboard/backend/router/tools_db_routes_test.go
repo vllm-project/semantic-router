@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
+	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 )
 
 func TestToolsDBRouteFollowsSavedConfig(t *testing.T) {
@@ -102,7 +102,7 @@ func TestToolsDBRouteResourcePathContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !tc.invalidConfig {
-				if _, err := routercontract.ReadToolSelection(configPath); err != nil {
+				if _, err := handlers.ReadToolSelection(configPath); err != nil {
 					t.Fatalf("normal canonical fixture did not parse: %v", err)
 				}
 			}
@@ -147,7 +147,7 @@ func TestToolsDBRouteKeepsExplicitContainerAssetRoot(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte("version: v0.5\nglobal: {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := routercontract.ReadToolSelection(configPath); err != nil {
+	if _, err := handlers.ReadToolSelection(configPath); err != nil {
 		t.Fatalf("normal canonical fixture did not parse: %v", err)
 	}
 	if err := os.WriteFile(toolsPath, []byte(`[{"name":"fixture"}]`), 0o600); err != nil {

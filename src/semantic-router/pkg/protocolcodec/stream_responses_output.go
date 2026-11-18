@@ -24,6 +24,10 @@ func (encoder *responsesStreamEncoder) collectCompletedResponsesContent(
 		if kind == "" {
 			kind = llmprotocol.ContentText
 		}
+		// An encrypted-only item completes without inventing a plaintext part.
+		if kind == llmprotocol.ContentReasoning && !encoder.contentStarted[key] && encoder.contentText[key] == nil {
+			continue
+		}
 		contentEvent := event
 		contentEvent.ContentIndex = key.content
 		completed, err := encoder.completeResponsesContent(contentEvent, outputKey, kind)
@@ -73,6 +77,7 @@ func marshalCompletedResponsesItem(
 		return item, err
 	}
 	item.Type, item.Role = "reasoning", ""
+	item.Summary = json.RawMessage(`[]`)
 	var err error
 	if len(parts.reasoningSummary) > 0 {
 		item.Summary, err = json.Marshal(parts.reasoningSummary)
@@ -356,9 +361,13 @@ func (encoder *responsesStreamEncoder) Finalize(reason error) ([][]byte, llmprot
 		return nil, nil, nil
 	}
 	encoder.terminal = true
+	frames, err := encoder.releaseHeldMessage(false)
+	if err != nil {
+		return nil, nil, err
+	}
 	protocolError := streamFinalizationError(reason, "stream ended before completion")
 	frame, err := encoder.encodeTransportError(protocolError)
-	return [][]byte{frame}, nil, err
+	return append(frames, frame), nil, err
 }
 
 func (encoder *responsesStreamEncoder) encodeTransportError(protocolError *llmprotocol.ProtocolError) ([]byte, error) {

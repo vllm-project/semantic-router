@@ -39,7 +39,11 @@ def test_recipe_policy_fields_reject_invalid_contract(payload):
         Recipe.model_validate({"name": "default", **payload})
 
 
-def test_personal_data_capture_override_does_not_require_a_pii_signal():
+@pytest.mark.parametrize(
+    "capture",
+    [{"prompt_capture": "verified"}, {"capture_personal_data": False}],
+)
+def test_verified_prompt_capture_does_not_require_a_pii_signal(capture):
     config = UserConfig.model_validate(
         {
             "version": "v0.5",
@@ -47,7 +51,7 @@ def test_personal_data_capture_override_does_not_require_a_pii_signal():
                 "plugins": [
                     {
                         "type": "router_replay",
-                        "configuration": {"capture_personal_data": False},
+                        "configuration": capture,
                     }
                 ]
             },
@@ -61,7 +65,7 @@ def test_personal_data_capture_override_does_not_require_a_pii_signal():
                             "plugins": [
                                 {
                                     "type": "router_replay",
-                                    "configuration": {"capture_personal_data": False},
+                                    "configuration": capture,
                                 }
                             ],
                         }

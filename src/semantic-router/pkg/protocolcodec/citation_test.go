@@ -11,6 +11,42 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+func TestAnthropicTextCitationsNullability(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		field  string
+		absent bool
+	}{
+		{"omitted", "", true},
+		{"null", `,"citations":null`, true},
+		{"whitespace_null", ",\"citations\": \n null \t", true},
+		{"string_null", `,"citations":"null"`, false},
+		{"empty_array", `,"citations":[]`, false},
+		{"citation_array", `,"citations":[{"type":"char_location"}]`, false},
+		{"object", `,"citations":{}`, false},
+	} {
+		body := json.RawMessage(`{"type":"text","text":"hello"` + tc.field + `}`)
+		for name, decode := range map[string]anthropicContentBlockDecoder{
+			"request":  decodeAnthropicRequestContentBlock,
+			"response": decodeAnthropicResponseContentBlock,
+		} {
+			t.Run(tc.name+"/"+name, func(t *testing.T) {
+				content, err := decode(body, llmprotocol.DefaultPolicy())
+				if !tc.absent {
+					assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_citations")
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if content.Text != "hello" || len(content.Citations) != 0 {
+					t.Fatalf("text without citations changed: %+v", content)
+				}
+			})
+		}
+	}
+}
+
 func TestChatResponseAcceptsNullAnnotationsWithoutWeakeningUnknownFields(t *testing.T) {
 	engine := NewBuiltinEngine()
 	withNull := []byte(`{"id":"response_1","model":"source-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello","annotations":null},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`)
@@ -295,7 +331,7 @@ func pushResponsesCitationPrefix(t *testing.T, stream *StreamEngine) {
 		{
 			Type: "response.created", Sequence: 0,
 			Response: func() *responsesResponseWire {
-				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, "")
+				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, llmprotocol.ResponseRenderContext{})
 				return &response
 			}(),
 		},

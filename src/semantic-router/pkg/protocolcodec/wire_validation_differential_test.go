@@ -215,6 +215,12 @@ func outcome(value any, err error) string {
 		if !errors.As(err, &protocolErr) {
 			return "unexpected error type: " + err.Error()
 		}
+		// The single pass names the member at fault where the reference only
+		// says the JSON is invalid, so those errors compare as one kind.
+		switch protocolErr.Code {
+		case "invalid_json", "unknown_parameter", "invalid_type":
+			return "error invalid_json"
+		}
 		return "error " + protocolErr.Code + ": " + protocolErr.Message
 	}
 	encoded, marshalErr := json.Marshal(value)

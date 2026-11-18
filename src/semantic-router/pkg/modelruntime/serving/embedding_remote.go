@@ -103,6 +103,7 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 			}
 			texts[i] = input.Text
 		}
+		ctx = modelservice.WithMeterDeployment(ctx, spec.Binding.Deployment)
 		vectors, embedErr := value.(*embedding.OpenAICompatibleProvider).EmbedBatch(ctx, texts)
 		if embedErr != nil {
 			return nil, embedErr
