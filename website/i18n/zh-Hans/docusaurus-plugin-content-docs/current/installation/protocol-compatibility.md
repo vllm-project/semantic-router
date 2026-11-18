@@ -184,6 +184,13 @@ Responses 请求的 `service_tier` 和 `safety_identifier` 遵循同样的规则
 `background`、`context_management`、`max_tool_calls`、`moderation`、`prompt`、`prompt_cache_options`、
 `prompt_cache_retention` 和 `top_logprobs`，会以 `unsupported_<field>` 失败。
 
+Responses 的响应对象（缓冲响应以及流式的每个 `response.*` 事件）按客户端发送的原样重复请求的
+`instructions`、`tools`、`tool_choice`、`parallel_tool_calls`、`max_output_tokens`、`temperature`、
+`top_p`、`text`、`reasoning`、`metadata`、`truncation`、`user` 和 `prompt_cache_key`，
+不受路由为后端所做改动的影响。请求未提供或设为 `null` 的成员保留默认值。`created_at`
+是后端的创建时间；后端未报告时（例如 Messages 后端）使用 Router 的时间。输出上限截断回答时，
+其 message 项在 `response.output_item.done` 和终止响应中均为 `incomplete`。
+
 ### 后端拒绝的采样控制 {#sampling-controls-a-backend-rejects}
 
 有些后端会拒绝其线路格式定义的采样控制。例如，运行推测解码（speculative
