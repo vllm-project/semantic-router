@@ -120,10 +120,11 @@ func TestKeywordCountUnspacedScriptDigitBoundaries(t *testing.T) {
 	}
 }
 
-// Each edge of a match is checked by the keyword's rune at that edge. A Thai
-// or Lao edge must not end before a following vowel that is a letter, not a
-// combining mark ("เก" inside "เกาหลี"). A Latin or digit edge of a mixed
-// keyword stays a word edge, as it is for a keyword without these scripts.
+// No edge of a match splits a cluster, and each edge is also checked by the
+// keyword's rune at that edge. A Thai or Lao edge must not end before a
+// following vowel that is a letter, not a combining mark ("เก" inside
+// "เกาหลี"). A Latin or digit edge of a mixed keyword stays a word edge, as it
+// is for a keyword without these scripts.
 var unspacedScriptKeywordEdgeCases = []struct {
 	word, text string
 	want       bool
@@ -150,6 +151,11 @@ var unspacedScriptKeywordEdgeCases = []struct {
 	{"AI ไทย", "โมเดลAI ไทยดีไหม", true},
 	{"AI ไทย", "OpenAI ไทย", false},
 	{"AI ไทย", "ใช้ AI ไทยดีไหม", true},
+	// A Latin or CJK edge of a mixed keyword keeps the cluster checks.
+	{"ราคา cafe", "ราคา cafe\u0301", false},
+	{"ราคา cafe", "ราคา cafe\u0301 ราคา cafe", true},
+	{"ราคา价", "ราคา价\u0301", false},
+	{"AI ไทย", "เAI ไทย", false},
 	// A Thai or Lao edge does not join an underscore, as a CJK edge does not.
 	{"ราคา", "price_ราคา", true},
 	// CJK edges keep their substring behavior.
@@ -180,6 +186,8 @@ func TestKeywordCountUnspacedScriptEdges(t *testing.T) {
 		{"ราคา", "ราคาเท่าไหร่ อยากทราบราคา ราคาถูก", 3},
 		{"เก", "เกาหลี เก", 1},
 		{"รุ่น 15", "รุ่น 150 รุ่น 15", 1},
+		{"ราคา cafe", "ราคา cafe\u0301", 0},
+		{"ราคา cafe", "ราคา cafe\u0301 ราคา cafe", 1},
 		{"must", "ต้องmustเลย must๓", 1},
 	} {
 		t.Run(tc.word+"/"+tc.text, func(t *testing.T) {
@@ -205,6 +213,8 @@ func TestKeywordRuleSpansUnspacedScriptEdges(t *testing.T) {
 		{"ราคา", "อยากทราบราคาสินค้า", []string{"ราคา"}},
 		{"ไม", "ไม่ไม", []string{"ไม"}},
 		{"รุ่น 15", "รุ่น 150 รุ่น 15", []string{"รุ่น 15"}},
+		{"ราคา cafe", "ราคา cafe\u0301", nil},
+		{"ราคา cafe", "ราคา cafe\u0301 ราคา cafe", []string{"ราคา cafe"}},
 	} {
 		t.Run(tc.word+"/"+tc.text, func(t *testing.T) {
 			c, err := NewKeywordClassifier([]config.KeywordRule{{Name: "found", Operator: "OR", Keywords: []string{tc.word}}})

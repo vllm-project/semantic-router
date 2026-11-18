@@ -120,12 +120,12 @@ rather than locate occurrences, so a rule that counts uses literal keywords or
 
 A literal keyword in Thai, Lao, Khmer, or Myanmar, scripts written without
 spaces between words, matches inside running text the way a CJK keyword does,
-and a Latin keyword matches next to their letters. An edge of the match that
-is a letter or mark of these scripts does not count when a combining mark or a
-Thai or Lao following vowel such as `า` comes right after it (`ไม` in `ไม่`,
-`เก` in `เกาหลี`), or when a Thai or Lao preposed vowel, a Khmer coeng, or a
-Myanmar virama comes right before it (`ขา` in `เขา`). A Latin or digit edge of
-a mixed keyword stays a word edge: `รุ่น 15` matches in `รุ่น 15 ราคา`, not in
+and a Latin keyword matches next to their letters. Such a match does not count
+when a combining mark comes right after it (`ไม` in `ไม่`), or when a Thai or
+Lao preposed vowel, a Khmer coeng, or a Myanmar virama comes right before it
+(`ขา` in `เขา`). An edge that is a Thai or Lao letter also does not count before
+a following vowel such as `า` (`เก` in `เกาหลี`). A Latin or digit edge of a
+mixed keyword stays a word edge: `รุ่น 15` matches in `รุ่น 15 ราคา`, not in
 `รุ่น 150`.
 
 The rule publishes the number as its value whether or not its predicate holds:

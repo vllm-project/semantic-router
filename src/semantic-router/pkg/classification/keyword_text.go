@@ -42,12 +42,12 @@ const (
 const followingVowels = "\u0E30\u0E32\u0E33\u0E45\u0EB0\u0EB2\u0EB3\u0EBD"
 
 // keywordSyllableMatch reports whether a match of a keyword in an unspaced
-// syllabic script counts. Each edge follows the rune of the keyword at that
-// edge: a Thai, Lao, Khmer or Myanmar edge must not end before a combining
-// mark or a Thai or Lao following vowel, nor start after a preposed vowel or a
-// stacking sign that belongs to the next consonant; a CJK edge is not checked,
-// as for a CJK keyword; any other edge, such as a Latin letter or a digit,
-// must be a word edge, as for a spaced-script keyword.
+// syllabic script counts. No edge may split a cluster: the match must not end
+// before a combining mark, nor start after a preposed vowel or a stacking sign
+// that belongs to the next consonant. Each edge also follows the rune of the
+// keyword at that edge: a Thai or Lao edge must not end before a following
+// vowel; a Latin letter, a digit or another spaced-script edge must be a word
+// edge, as for a spaced-script keyword; a CJK edge has no further check.
 func keywordSyllableMatch(text string, start, end int) bool {
 	first, _ := utf8.DecodeRuneInString(text[start:end])
 	last, _ := utf8.DecodeLastRuneInString(text[start:end])
@@ -55,23 +55,32 @@ func keywordSyllableMatch(text string, start, end int) bool {
 }
 
 func keywordStartMatch(text string, start int, first rune) bool {
-	if start == 0 || isCJK(first) {
+	if start == 0 {
 		return true
 	}
 	prev, _ := utf8.DecodeLastRuneInString(text[:start])
-	if isSyllabicScript(first) {
-		return !unicode.Is(unicode.Logical_Order_Exception, prev) && prev != khmerCoeng && prev != myanmarVirama
+	if unicode.Is(unicode.Logical_Order_Exception, prev) || prev == khmerCoeng || prev == myanmarVirama {
+		return false
+	}
+	if isCJK(first) || isSyllabicScript(first) {
+		return true
 	}
 	return prev != '_' && !isBoundaryBlockingRune(prev)
 }
 
 func keywordEndMatch(text string, end int, last rune) bool {
-	if end == len(text) || isCJK(last) {
+	if end == len(text) {
 		return true
 	}
 	next, _ := utf8.DecodeRuneInString(text[end:])
+	if unicode.In(next, unicode.Mn, unicode.Mc) {
+		return false
+	}
+	if isCJK(last) {
+		return true
+	}
 	if isSyllabicScript(last) {
-		return !unicode.In(next, unicode.Mn, unicode.Mc) && !strings.ContainsRune(followingVowels, next)
+		return !strings.ContainsRune(followingVowels, next)
 	}
 	return next != '_' && !isBoundaryBlockingRune(next)
 }
