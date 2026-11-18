@@ -1,0 +1,218 @@
+package extproc
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+)
+
+const (
+	// The agent Cursor's servers send with the calls of a custom OpenAI base
+	// URL, and the browser built into the Cursor desktop app.
+	cursorTestUserAgent        = "Cursor/1.0"
+	cursorBrowserTestUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Cursor/3.27.22 Chrome/142.0.0.0 Electron/39.2.3 Safari/537.36"
+	// OpenClaw 2026.11.5 sends the OpenAI SDK's agent and opens its system
+	// prompt with this comment.
+	openClawTestUserAgent = "OpenAI/JS 7.39.0"
+	openClawTestSystem    = "<!-- openclaw:attempt:STABLE -->\nYou are a personal assistant running inside OpenClaw."
+	// A one-pixel PNG.
+	testImageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+)
+
+// cursorCall is a Chat call shaped as Cursor sends one: streamed with usage,
+// a user field, its agent tools, one system message and the conversation.
+func cursorCall(firstUser string, followUp bool) string {
+	call := `{"model":"vllm-sr/auto","stream":true,"stream_options":{"include_usage":true},"user":"cursor-account-1",` +
+		`"tools":[{"type":"function","function":{"name":"Read","parameters":{"type":"object","properties":{"path":{"type":"string"}}}}},` +
+		`{"type":"function","function":{"name":"Grep","parameters":{"type":"object","properties":{"pattern":{"type":"string"}}}}}],` +
+		`"messages":[{"role":"system","content":"You are an AI coding assistant. You operate in Cursor."},` +
+		`{"role":"user","content":"<user_info>OS: linux</user_info> ` + firstUser + `"}`
+	if followUp {
+		call += `,{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"Read","arguments":"{\"path\":\"app/stats.py\"}"}}]},` +
+			`{"role":"tool","tool_call_id":"call_1","content":"def median(values): ..."}`
+	}
+	return call + `]}`
+}
+
+func recordReplayCall(t *testing.T, router *OpenAIRouter, requestHeaders map[string]string, format llmprotocol.WireFormat, body string) store.Record {
+	t.Helper()
+	ctx := &RequestContext{SourceFormat: format, Headers: requestHeaders, RequestID: "call", TraceContext: t.Context()}
+	_, immediate := router.prepareProtocolRequest([]byte(body), ctx)
+	require.Nil(t, immediate)
+	ctx.RouterReplayPluginConfig = router.Config.EffectiveRouterReplayConfig(nil)
+	router.startRouterReplay(ctx, "vllm-sr/auto", "qwen", "all")
+	require.NotEmpty(t, ctx.RouterReplayID)
+	record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+	require.True(t, ok)
+	return record
+}
+
+func memoryReplayRouter(t *testing.T) *OpenAIRouter {
+	t.Helper()
+	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}},
+		replayTestPlugin(map[string]interface{}{"enabled": true}))
+	return replayRuntimeRouter(t, cfg)
+}
+
+func TestCursorAndOpenClawAreNamed(t *testing.T) {
+	openClaw := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: openClawTestSystem}}},
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Run the tests."}}},
+	}}
+	instructions := &llmprotocol.Request{Instructions: []llmprotocol.InstructionBlock{
+		{Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "  " + openClawTestSystem}}},
+	}}
+	other := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "You talk about OpenClaw."}}},
+	}}
+	for name, test := range map[string]struct {
+		headers map[string]string
+		request *llmprotocol.Request
+		harness string
+	}{
+		"cursor's servers":             {map[string]string{headers.UserAgent: cursorTestUserAgent}, nil, config.AgentHarnessCursor},
+		"cursor, another version":      {map[string]string{headers.UserAgent: " cursor/2.3"}, nil, config.AgentHarnessCursor},
+		"cursor's built-in browser":    {map[string]string{headers.UserAgent: cursorBrowserTestUserAgent}, nil, ""},
+		"openclaw's system prompt":     {map[string]string{headers.UserAgent: openClawTestUserAgent}, openClaw, config.AgentHarnessOpenClaw},
+		"openclaw as instructions":     {map[string]string{}, instructions, config.AgentHarnessOpenClaw},
+		"a prompt that names openclaw": {map[string]string{headers.UserAgent: openClawTestUserAgent}, other, ""},
+		"claude code headers lead":     {map[string]string{headers.UserAgent: cursorTestUserAgent, headers.XClaudeCodeSessionID: "s1"}, nil, config.AgentHarnessClaudeCode},
+		"no user agent":                {map[string]string{}, nil, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := &RequestContext{Headers: test.headers, SemanticRequest: test.request}
+			require.Equal(t, test.harness, agentHarness(ctx))
+			require.Equal(t, test.harness, requestHarness(ctx))
+		})
+	}
+}
+
+func TestAgentRulesNameCursorAndOpenClawWithoutRequestClasses(t *testing.T) {
+	for _, harness := range []string{config.AgentHarnessCursor, config.AgentHarnessOpenClaw} {
+		require.NoError(t, config.ValidateAgentRuleContract(config.AgentRule{Name: "client", Harness: harness}))
+		require.ErrorContains(t, config.ValidateAgentRuleContract(config.AgentRule{
+			Name: "client", Harness: harness, RequestClasses: []string{config.AgentRequestClassCompaction},
+		}), "carry no request class")
+	}
+}
+
+// Cursor names no session, so Replay files a conversation's calls under one
+// id hashed from how the conversation opens, and another conversation, or
+// the same opening from another account, under another; no text is kept in
+// the id.
+func TestReplayFilesACursorConversationUnderOneSession(t *testing.T) {
+	router := memoryReplayRouter(t)
+	cursor := map[string]string{headers.UserAgent: cursorTestUserAgent}
+	first := recordReplayCall(t, router, cursor, llmprotocol.OpenAIChatV1, cursorCall("What does median return?", false))
+	followUp := recordReplayCall(t, router, cursor, llmprotocol.OpenAIChatV1, cursorCall("What does median return?", true))
+	other := recordReplayCall(t, router, cursor, llmprotocol.OpenAIChatV1, cursorCall("What does spread compute?", false))
+	account := recordReplayCall(t, router, cursor, llmprotocol.OpenAIChatV1,
+		strings.Replace(cursorCall("What does median return?", false), "cursor-account-1", "cursor-account-2", 1))
+
+	require.Equal(t, store.HarnessCursor, first.Agent.Harness)
+	require.True(t, strings.HasPrefix(first.SessionID, "cursor-start-"), first.SessionID)
+	require.Equal(t, first.SessionID, followUp.SessionID)
+	require.NotEqual(t, first.SessionID, other.SessionID)
+	require.NotEqual(t, first.SessionID, account.SessionID)
+	require.NotContains(t, first.SessionID, "median")
+	require.Equal(t, 0, first.ImageCount)
+}
+
+// A Claude Code subagent's call keeps its type and request class, and the
+// image a tool returned in its newest turn is counted apart from history.
+func TestReplayRecordsAgentFactsAndImages(t *testing.T) {
+	router := memoryReplayRouter(t)
+	claude := map[string]string{
+		headers.XClaudeCodeSessionID: "cc-run", headers.XClaudeCodeAgentID: "a1", headers.XClaudeCodeAgentType: "Explore",
+		headers.XClaudeCodeRequestClass: "subagent",
+	}
+	image := `{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + testImageBase64 + `"}}`
+	body := `{"model":"vllm-sr/auto","max_tokens":8,"messages":[` +
+		`{"role":"user","content":[{"type":"text","text":"Compare these."},` + image + `]},` +
+		`{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"path":"shot.png"}}]},` +
+		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":[` + image + `]}]}]}`
+	record := recordReplayCall(t, router, claude, llmprotocol.AnthropicMessagesV1, body)
+
+	require.Equal(t, store.HarnessClaudeCode, record.Agent.Harness)
+	require.Equal(t, "Explore", record.Agent.Type)
+	require.Equal(t, "subagent", record.Agent.RequestClass)
+	require.Equal(t, 1, record.ImageCount)
+	require.Equal(t, 1, record.HistoryImageCount)
+}
+
+func TestRequestImageCountsSplitTheNewestTurn(t *testing.T) {
+	text := func(role llmprotocol.Role) llmprotocol.Message {
+		return llmprotocol.Message{Role: role, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "x"}}}
+	}
+	picture := llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentImage}}}
+	for name, test := range map[string]struct {
+		messages      []llmprotocol.Message
+		turn, history int
+	}{
+		"a picture in the newest turn":  {[]llmprotocol.Message{text(llmprotocol.RoleUser), text(llmprotocol.RoleAssistant), picture}, 1, 0},
+		"a picture only in the history": {[]llmprotocol.Message{picture, text(llmprotocol.RoleAssistant), text(llmprotocol.RoleUser)}, 0, 1},
+		"no assistant yet":              {[]llmprotocol.Message{picture, picture}, 2, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			turn, history := requestImageCounts(&llmprotocol.Request{Messages: test.messages})
+			require.Equal(t, test.turn, turn)
+			require.Equal(t, test.history, history)
+		})
+	}
+}
+
+// A run marks the events every harness shares: compactions, housekeeping
+// calls, images, tool loops, a subagent's first call, and a guard decision
+// that refused with its fast response.
+func TestRunCallsMarkSharedAgentEvents(t *testing.T) {
+	agent := func(class string) *store.AgentIdentity {
+		return &store.AgentIdentity{Harness: store.HarnessClaudeCode, RequestClass: class}
+	}
+	for name, test := range map[string]struct {
+		record routerreplay.RoutingRecord
+		marker string
+		absent bool
+	}{
+		"a compaction":            {record: routerreplay.RoutingRecord{Agent: agent(config.AgentRequestClassCompaction)}, marker: routerreplay.RunMarkerCompaction},
+		"an auxiliary call":       {record: routerreplay.RoutingRecord{Agent: agent(config.AgentRequestClassAuxiliary)}, marker: routerreplay.RunMarkerHousekeeping},
+		"a session title":         {record: routerreplay.RoutingRecord{RequestKind: store.RequestKindSessionTitle}, marker: routerreplay.RunMarkerHousekeeping},
+		"an image":                {record: routerreplay.RoutingRecord{ImageCount: 1}, marker: routerreplay.RunMarkerImage},
+		"a guard's fast response": {record: routerreplay.RoutingRecord{JailbreakDetected: true, SelectionMethod: "fast_response", ResponseStatus: 200}, marker: routerreplay.RunMarkerBlock},
+		"a plain fast response":   {record: routerreplay.RoutingRecord{SelectionMethod: "fast_response", ResponseStatus: 200}, marker: routerreplay.RunMarkerBlock, absent: true},
+		"a main call":             {record: routerreplay.RoutingRecord{Agent: agent(config.AgentRequestClassMain)}, marker: routerreplay.RunMarkerCompaction, absent: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			call := buildReplayRunCall(test.record)
+			if test.absent {
+				require.NotContains(t, call.Markers, test.marker)
+				return
+			}
+			require.Contains(t, call.Markers, test.marker)
+		})
+	}
+
+	record := routerreplay.RoutingRecord{Agent: agent(config.AgentRequestClassMain), ImageCount: 2}
+	call := buildReplayRunCall(record)
+	require.Equal(t, config.AgentRequestClassMain, call.RequestClass)
+	require.Equal(t, 2, call.ImageCount)
+}
+
+func TestRunMarksASubagentsFirstCallWithItsType(t *testing.T) {
+	lanes := newReplayRunLanes()
+	main := lanes.place(replayRunEntry{})
+	first := lanes.place(replayRunEntry{agent: store.AgentIdentity{ID: "sub", Type: "Explore"}})
+	second := lanes.place(replayRunEntry{agent: store.AgentIdentity{ID: "sub", Type: "Explore"}})
+
+	require.NotContains(t, main.Markers, routerreplay.RunMarkerSubagentStart)
+	require.Contains(t, first.Markers, routerreplay.RunMarkerSubagentStart)
+	require.NotContains(t, second.Markers, routerreplay.RunMarkerSubagentStart)
+	agents := lanes.agents(nil, []routerreplay.RunCall{main, first, second})
+	require.Equal(t, "Explore", agents[1].Type)
+}

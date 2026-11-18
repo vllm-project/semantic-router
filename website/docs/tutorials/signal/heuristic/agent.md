@@ -62,7 +62,7 @@ recipes:
 | Field | Meaning |
 | --- | --- |
 | `role` | `main` or `subagent`. |
-| `harness` | `claude_code`, `codex`, `opencode` or `deepseek_harness`. |
+| `harness` | `claude_code`, `codex`, `opencode`, `deepseek_harness`, `cursor` or `openclaw`. |
 | `types` | Subagent types, any of which matches. The comparison ignores case. A rule with `types` matches subagents only, so `role: main` is refused with it. |
 | `request_classes` | Request classes, any of which matches: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`. Claude Code sends the class and OpenCode calls get one as the table below shows; Codex calls carry none, so `harness: codex` is refused with it. |
 
@@ -106,6 +106,16 @@ DeepSeek Harness is known by its User-Agent, `deepseek-harness/<version>`. It
 names no session, subagent or request class, so `request_classes` cannot go
 with `harness: deepseek_harness`, and its calls take the `main` role only when
 the request pins a session in `x-vsr-session-id`.
+
+Cursor, with a custom OpenAI base URL, sends its calls from Cursor's servers
+with `User-Agent: Cursor/<version>`; an agent that only contains `Cursor/`,
+such as the browser built into the Cursor desktop app, is not Cursor. OpenClaw
+sends the generic agent of the OpenAI SDK it calls through, so it is known by
+the comment its system prompt opens with, `<!-- openclaw:`. Neither names a
+session, subagent or request class, so `request_classes` cannot go with
+`harness: cursor` or `harness: openclaw`, and their calls take the `main` role
+only when the request pins a session in `x-vsr-session-id`. This was checked
+with OpenClaw 2026.11.5 and with Cursor's recorded calls.
 
 ## Decision Usage
 

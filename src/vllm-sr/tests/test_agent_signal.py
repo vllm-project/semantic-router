@@ -104,7 +104,15 @@ def test_a_decision_routes_and_blocks_by_agent_rule():
             "request_classes cannot go with harness deepseek_harness",
         ),
         ({"name": "x", "role": "child"}, "role"),
-        ({"name": "x", "harness": "cursor"}, "harness"),
+        (
+            {"name": "x", "harness": "cursor", "request_classes": ["main"]},
+            "request_classes cannot go with harness cursor",
+        ),
+        (
+            {"name": "x", "harness": "openclaw", "request_classes": ["compaction"]},
+            "request_classes cannot go with harness openclaw",
+        ),
+        ({"name": "x", "harness": "gemini_cli"}, "harness"),
         (
             {"name": "x", "role": "main", "types": ["Explore"]},
             "types name a subagent's type",
@@ -119,7 +127,8 @@ def test_agent_rule_refuses_what_the_router_refuses(rule, message):
 
 
 @pytest.mark.parametrize(
-    "harness", ["claude_code", "codex", "opencode", "deepseek_harness"]
+    "harness",
+    ["claude_code", "codex", "opencode", "deepseek_harness", "cursor", "openclaw"],
 )
 def test_agent_rule_accepts_every_harness_the_router_names(harness):
     assert (

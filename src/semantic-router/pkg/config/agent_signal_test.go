@@ -90,7 +90,7 @@ func TestValidateAgentContracts(t *testing.T) {
 		{name: "codex request class", rule: AgentRule{Name: "x", Harness: AgentHarnessCodex, RequestClasses: []string{"compaction"}}, want: "request_classes cannot go with harness codex"},
 		{name: "deepseek harness request class", rule: AgentRule{Name: "x", Harness: AgentHarnessDeepSeekHarness, RequestClasses: []string{"auxiliary"}}, want: "request_classes cannot go with harness deepseek_harness"},
 		{name: "unknown role", rule: AgentRule{Name: "x", Role: "child"}, want: "role must be one of main, subagent"},
-		{name: "unknown harness", rule: AgentRule{Name: "x", Harness: "cursor"}, want: "harness must be one of claude_code, codex, opencode"},
+		{name: "unknown harness", rule: AgentRule{Name: "x", Harness: "gemini_cli"}, want: "harness must be one of claude_code, codex, opencode"},
 		{name: "main with types", rule: AgentRule{Name: "x", Role: AgentRoleMain, Types: []string{"Explore"}}, want: "types name a subagent's type"},
 		{name: "blank type", rule: AgentRule{Name: "x", Types: []string{" "}}, want: "types[0] must be nonempty and trimmed"},
 		{name: "untrimmed name", rule: AgentRule{Name: " x ", Role: AgentRoleMain}, want: "name must not contain surrounding whitespace"},
