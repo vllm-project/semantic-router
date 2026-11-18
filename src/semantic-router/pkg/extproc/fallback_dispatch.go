@@ -58,12 +58,13 @@ func isClientStreamingRequested(ctx *RequestContext) bool {
 }
 
 // candidateReasoningChoice resolves the effective reasoning policy for a
-// fallback candidate, off when the request's output limit is too small for it.
+// fallback candidate, off when a request that states no reasoning preference
+// sets an output limit too small for it or stop sequences.
 func (r *OpenAIRouter) candidateReasoningChoice(ctx *RequestContext, candidateModel string) bool {
 	if ctx == nil {
 		return false
 	}
-	return r.decisionReasoningChoice(ctx, candidateModel) && !r.outputBudgetTurnsReasoningOff(ctx, candidateModel)
+	return r.decisionReasoningChoice(ctx, candidateModel) && r.unstatedReasoningOffReason(ctx, candidateModel) == ""
 }
 
 func (r *OpenAIRouter) decisionReasoningChoice(ctx *RequestContext, candidateModel string) bool {

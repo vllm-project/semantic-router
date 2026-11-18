@@ -313,6 +313,12 @@ request without `thinking` whose decision turns reasoning on can spend a small
 limit reaches the backend with the model's reasoning off; see
 [Model reasoning](model-reasoning#turn-reasoning-off-for-small-output-limits).
 
+A stop sequence can also end such a request before any text, because
+backends such as vLLM match `stop_sequences` against the thinking as well as
+the answer. Such a request that sets `stop_sequences` therefore reaches the
+backend with the model's reasoning off; see
+[Model reasoning](model-reasoning#turn-reasoning-off-for-requests-with-stop-sequences).
+
 A `system` message inside `messages`, such as the environment section and the
 file-change notices Claude Code inserts during a session, reaches these
 backends as a system message in the same place. Listing `messages[].role`
