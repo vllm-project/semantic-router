@@ -35,6 +35,8 @@ For a reviewable workload-to-recipe configuration, use the
 [Configure-recipe skill](https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/SKILL.md).
 To explain a route, fallback, or delivery failure, use the
 [Routing-diagnosis skill](https://vllm-sr.ai/install/agent/vllm-sr-diagnose-routing/SKILL.md).
+For a bounded, reproducible sr-bench run, use the
+[Benchmark skill](https://vllm-sr.ai/install/agent/vllm-sr-benchmark/SKILL.md).
 
 :::note Release channel
 The Skill follows `main`, as these pages do. It installs the stable release
