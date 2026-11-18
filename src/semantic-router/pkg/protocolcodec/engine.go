@@ -93,10 +93,27 @@ func (engine *Engine) decodeRequest(
 	}
 	applyRequestSemanticDefaults(&request)
 	llmprotocol.MarkDeferredToolLinks(&request)
+	diagnostics = appendDiagnostics(diagnostics, closeTruncatedHistoryCalls(format, &request, engine.policy.Limits), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, diagnostics, err
 	}
 	return request, envelope, diagnostics, nil
+}
+
+// closeTruncatedHistoryCalls accepts the calls an output limit cut at the end
+// of an assistant turn in the request's history, as a client keeps a cut call
+// the Router passed on. Every backend receives the members completed before
+// the cut.
+func closeTruncatedHistoryCalls(source llmprotocol.WireFormat, request *llmprotocol.Request, limits llmprotocol.Limits) llmprotocol.Diagnostics {
+	if llmprotocol.CloseTruncatedHistoryCalls(request, limits.JSONDepth) == 0 {
+		return nil
+	}
+	// The source bytes still carry the cut arguments.
+	request.Generation++
+	return llmprotocol.Diagnostics{{
+		Source: source, Field: "tool_call.arguments", Action: llmprotocol.DiagnosticApproximated,
+		Reason: "a tool call an output limit cut at the end of its assistant turn is sent with the members completed before the cut",
+	}}
 }
 
 // applyRequestSemanticDefaults makes provider-documented defaults explicit in
@@ -164,6 +181,7 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	}
 	applyRequestSemanticDefaults(&request)
 	llmprotocol.MarkDeferredToolLinks(&request)
+	diagnostics = appendDiagnostics(diagnostics, closeTruncatedHistoryCalls(source, &request, engine.policy.Limits), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
