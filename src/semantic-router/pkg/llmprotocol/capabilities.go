@@ -60,6 +60,10 @@ const (
 	CapabilityTextVerbosity
 	CapabilityReasoningContinuity
 	CapabilitySamplingLogitBias
+	// CapabilityDeveloperRole is a backend reading a developer message as an
+	// instruction, the way OpenAI reads it. Models only declare it
+	// unsupported; no request requires it.
+	CapabilityDeveloperRole
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -149,6 +153,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
 		{CapabilityReasoningContinuity, "reasoning_continuity"},
+		{CapabilityDeveloperRole, "developer_role"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -508,6 +513,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
 		"reasoning_continuity":  CapabilityReasoningContinuity,
+		"developer_role":        CapabilityDeveloperRole,
 	}
 	var set CapabilitySet
 	for _, name := range names {

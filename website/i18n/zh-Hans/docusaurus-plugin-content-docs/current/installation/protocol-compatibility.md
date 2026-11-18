@@ -155,9 +155,32 @@ providers:
 - **会报告。** `x-vsr-warnings` 会为每个被省略的字段（`min_p` 或 `logit_bias`）报告 `dropped` 诊断。
 - **其他模型不受影响。** 同一决策的其他模型仍会收到这些字段。
 
-该列表接受 `sampling_min_p` 和 `sampling_logit_bias`；其他名称会在加载时失败。网关会把模型的请求分摊到它的各个
+该列表接受 `sampling_min_p`、`sampling_logit_bias` 和 `developer_role`（[见下文](#developer-messages-a-backend-drops)）；其他名称会在加载时失败。网关会把模型的请求分摊到它的各个
 `backend_refs`，因此只要其中任何一个拒绝某个控制，就应列出它。若要为决策路由到的每个模型移除某个控制，请改为在该决策的
 [`request_params`](../tutorials/plugin/request-params) `blocked_params` 中列出它。
+
+### 后端丢弃的 developer 消息 {#developer-messages-a-backend-drops}
+
+OpenAI 把 `developer` 消息和 `system` 消息一样当作指令。Chat Completions 客户端用 `developer` 角色发送指令，
+Responses 请求的 `instructions` 及其 `developer` 输入项到达 Chat 后端时也是 developer 消息。而 vLLM 遵循的
+DeepSeek V4 编码把 developer 消息当作独立的一轮：模型开启思考且请求不带工具时，会丢弃最后一条用户消息之前的所有
+developer 消息，模型因此看不到这些指令。请在这类模型的 `unsupported_capabilities` 中列出 `developer_role`：
+
+```yaml
+providers:
+  models:
+    - name: deepseek-v4-flash
+      api_format: chat_completions
+      unsupported_capabilities: [developer_role]
+      backend_refs:
+        - name: deepseek-pool
+          endpoint: deepseek-server:8000
+          provider: vllm
+```
+
+- **对该模型以 system 发送。** 发给该模型的请求，无论它是决策的选择还是回退候选，其中所有 developer 指令和消息到达时都是 `system` 角色。
+- **会报告。** `x-vsr-warnings` 会为 `messages[].role` 报告 `approximated` 诊断。
+- **其他模型不受影响。** 同一决策的其他模型仍会收到 `developer` 角色。
 
 ## 配置后端格式
 

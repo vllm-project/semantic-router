@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -161,7 +162,7 @@ func TestReplayRunsListsOneSummaryPerSession(t *testing.T) {
 func TestReplayRunRedactsWhatItsRecordsWould(t *testing.T) {
 	router, ids := newReplayRunRouter(t)
 	for _, path := range []string{"/api/v1/observability/replays/run?session_id=run-1", "/api/v1/observability/replays/runs"} {
-		response := router.handleRouterReplayAPI("GET", path).GetImmediateResponse()
+		response := router.handleRouterReplayAPI(context.Background(), "GET", path).GetImmediateResponse()
 		redacted, changed, err := redaction.RedactResponseBody(response.Body)
 		require.NoError(t, err)
 		require.True(t, changed, path)
@@ -173,7 +174,7 @@ func TestReplayRunRedactsWhatItsRecordsWould(t *testing.T) {
 		require.Contains(t, body, `"parent":"subagent 1"`, path)
 	}
 	var record map[string]interface{}
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/"+ids["sub-2"]).GetImmediateResponse()
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/"+ids["sub-2"]).GetImmediateResponse()
 	require.NotNil(t, response)
 	redacted, _, err := redaction.RedactResponseBody(response.Body)
 	require.NoError(t, err)
@@ -238,7 +239,7 @@ func TestReplayRunTakesTheSessionName(t *testing.T) {
 	require.Equal(t, "fix average", runs.Data[0].Prompt)
 
 	for _, path := range []string{"/api/v1/observability/replays/run?session_id=cc-run", "/api/v1/observability/replays/runs"} {
-		response := router.handleRouterReplayAPI("GET", path).GetImmediateResponse()
+		response := router.handleRouterReplayAPI(context.Background(), "GET", path).GetImmediateResponse()
 		redacted, _, err := redaction.RedactResponseBody(response.Body)
 		require.NoError(t, err)
 		require.NotContains(t, string(redacted), "Renamed by the user", path)

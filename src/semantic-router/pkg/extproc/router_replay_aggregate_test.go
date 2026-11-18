@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -16,6 +17,7 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 	router := newReplayAggregateTestRouter(t)
 
 	response := router.handleRouterReplayAPI(
+		context.Background(),
 		"GET",
 		"/api/v1/observability/replays?recipe=beta&decision=decision-b&cache_status=streamed&limit=10",
 	)
@@ -38,7 +40,7 @@ func TestHandleRouterReplayAPIListAppliesFilters(t *testing.T) {
 func TestHandleRouterReplayAPIListSearchesSessionIDs(t *testing.T) {
 	router := newReplayAggregateTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?search=6582A295-CLAUDE&limit=10")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays?search=6582A295-CLAUDE&limit=10")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate replay list response")
 	}
@@ -54,7 +56,7 @@ func TestHandleRouterReplayAPIListSearchesSessionIDs(t *testing.T) {
 func TestHandleRouterReplayAggregateAPIReturnsChartsAndSummary(t *testing.T) {
 	router := newReplayAggregateTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/aggregate")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate aggregate response")
 	}
@@ -122,6 +124,7 @@ func TestHandleRouterReplayAggregateAPIAppliesFilters(t *testing.T) {
 	router := newReplayAggregateTestRouter(t)
 
 	response := router.handleRouterReplayAPI(
+		context.Background(),
 		"GET",
 		"/api/v1/observability/replays/aggregate?cache_status=cached&search=alpha",
 	)
@@ -174,7 +177,7 @@ func TestHandleRouterReplayAggregateAPIGroupsCurrenciesWithoutConversion(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/aggregate")
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
 	summary := body["summary"].(map[string]interface{})
 	if summary["currency"] != nil || summary["total_saved"].(float64) != 0 || int(summary["cost_record_count"].(float64)) != 2 || int(summary["excluded_record_count"].(float64)) != 1 {
@@ -297,7 +300,7 @@ func TestRouterReplayAggregateCountsEverySignalFamily(t *testing.T) {
 	}
 	router := &OpenAIRouter{ReplayRecorder: recorder}
 	payload := routerreplay.AggregateResponse{}
-	if err := json.Unmarshal(router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate").GetImmediateResponse().GetBody(), &payload); err != nil {
+	if err := json.Unmarshal(router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/aggregate").GetImmediateResponse().GetBody(), &payload); err != nil {
 		t.Fatal(err)
 	}
 	got := map[string]int{}
