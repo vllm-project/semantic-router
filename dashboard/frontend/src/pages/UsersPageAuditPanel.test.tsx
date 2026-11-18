@@ -7,19 +7,18 @@ import { TooltipProvider } from '../ui'
 import UsersPageAuditPanel from './UsersPageAuditPanel'
 
 describe('UsersPageAuditPanel', () => {
-  it('renders search, response and date filters, refresh, paging and a loading state', () => {
+  it('filters with chips, exports, pages and shows a loading state without a refresh button', () => {
     const markup = renderToStaticMarkup(
       createElement(TooltipProvider, null, createElement(UsersPageAuditPanel)),
     )
 
     expect(markup).toContain('Search activity')
-    expect(markup).toContain('aria-label="Response status"')
-    expect(markup).toContain('aria-label="From date"')
-    expect(markup).toContain('aria-label="To date"')
-    expect(markup).toContain('More filters')
-    expect(markup).toContain('Refresh audit logs')
+    for (const chip of ['Person', 'Action', 'Result', 'Time']) expect(markup).toContain(chip)
+    expect(markup).toContain('Newest first')
+    expect(markup).toContain('Export CSV')
+    expect(markup).not.toMatch(/Refresh|More filters|aria-label="Response status"/)
     expect(markup).toContain('Page 1 / 1')
-    expect(markup).toContain('0 records')
+    expect(markup).toContain('0 events')
     expect(markup).toContain('data-slot="skeleton"')
   })
 

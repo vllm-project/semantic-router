@@ -13,8 +13,12 @@ import {
   DialogTitle,
   cn,
 } from '../ui'
-import { yamlDiff, type DiffHunk } from './configPageRouterSettingsYaml'
-import { ROUTER_CONTRACT_VERSION, contractOrdered } from './configPageRouterSettingsModel'
+import {
+  ROUTER_CONFIG_DOCUMENT_SCHEMA,
+  configYamlDiff,
+  type ConfigYamlHunk,
+} from '../lib/configYaml'
+import { ROUTER_CONTRACT_VERSION } from './configPageRouterSettingsModel'
 import type { JsonRecord } from './configPageRouterSettingsDraft'
 
 export interface RestartNotice {
@@ -22,13 +26,13 @@ export interface RestartNotice {
   reason: string
 }
 
-export function YamlDiffView({ hunks }: { hunks: DiffHunk[] }) {
+export function YamlDiffView({ hunks }: { hunks: ConfigYamlHunk[] }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-sunken/50 font-mono text-[12px] leading-[1.75] dark:bg-surface-sunken">
       {hunks.map((hunk, hunkIndex) => (
         <div key={`${hunk.header}-${hunkIndex}`} className="border-b border-border last:border-0">
           <div className="flex items-center gap-2 truncate bg-surface-subtle px-3 py-1 text-[11px] text-subtle-foreground">
-            <span>@@ global.{hunk.header.replace(/^global\.?/, '')} @@</span>
+            <span>@@ {hunk.header || 'global'} @@</span>
             {hunk.skippedBefore > 0 ? (
               <span className="ml-auto font-sans">{hunk.skippedBefore} unchanged lines above</span>
             ) : null}
@@ -41,7 +45,7 @@ export function YamlDiffView({ hunks }: { hunks: DiffHunk[] }) {
                   'flex min-w-fit',
                   line.kind === 'add' && 'bg-success-soft',
                   line.kind === 'remove' && 'bg-destructive-soft',
-                  line.kind === 'equal' && 'text-subtle-foreground',
+                  line.kind === 'same' && 'text-subtle-foreground',
                 )}
               >
                 <span className="w-10 shrink-0 select-none pr-2 text-right text-[11px] text-subtle-foreground/70 tabular">
@@ -89,7 +93,13 @@ export function RouterSettingsReviewDialog({
 }) {
   const hunks = React.useMemo(
     () =>
-      open ? yamlDiff({ global: contractOrdered(saved) }, { global: contractOrdered(draft) }) : [],
+      open
+        ? configYamlDiff(
+            { global: saved },
+            { global: draft },
+            { schema: ROUTER_CONFIG_DOCUMENT_SCHEMA },
+          )
+        : [],
     [draft, open, saved],
   )
   return (

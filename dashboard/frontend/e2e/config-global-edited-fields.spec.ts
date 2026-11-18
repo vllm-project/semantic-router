@@ -55,11 +55,21 @@ async function mockGlobalConfig(
   return updates
 }
 
+// The page renders every global section, which can take a while on a loaded machine.
+async function openRouterSettings(page: Page, hash = '') {
+  await page.goto(`/settings/router${hash}`)
+  await expect(
+    page.getByRole('heading', { name: 'Router settings', exact: true }).first(),
+  ).toBeVisible({
+    timeout: 20_000,
+  })
+}
+
 test.describe('Router settings saves', () => {
   test('shows inherited defaults and writes nothing when an edit is undone', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     const updates = await mockGlobalConfig(page)
-    await page.goto('/settings/router')
+    await openRouterSettings(page)
 
     const maxEntries = page.locator('#setting-stores-response_cache-max_entries')
     await expect(maxEntries).toHaveValue('')
@@ -76,7 +86,7 @@ test.describe('Router settings saves', () => {
   test('writes only the field the user changed', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     const updates = await mockGlobalConfig(page)
-    await page.goto('/settings/router')
+    await openRouterSettings(page)
 
     await page.locator('#setting-stores-response_cache-max_entries').fill('2000')
     await page.getByRole('button', { name: 'Review & save' }).click()
@@ -92,7 +102,7 @@ test.describe('Router settings saves', () => {
   test('writes a whole map entry when an inherited one is edited', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     const updates = await mockGlobalConfig(page)
-    await page.goto('/settings/router#global-section-admission')
+    await openRouterSettings(page, '#global-section-admission')
 
     const admission = page.locator('#global-section-admission')
     await admission.getByRole('button', { name: /hazard/ }).click()
@@ -116,7 +126,7 @@ test.describe('Router settings saves', () => {
     const updates = await mockGlobalConfig(page, {
       model_catalog: { embeddings: { default: { deployment: 'vela-embedding' } } },
     })
-    await page.goto('/settings/router#global-section-embedding_models')
+    await openRouterSettings(page, '#global-section-embedding_models')
 
     const card = page.locator('#global-section-embedding_models')
     const defaultDeployment = card.getByRole('textbox', { name: 'Default deployment' })
@@ -168,7 +178,7 @@ test.describe('Router settings saves', () => {
       },
     }
     const updates = await mockGlobalConfig(page, { model_catalog: modelCatalog })
-    await page.goto('/settings/router#global-section-system_models')
+    await openRouterSettings(page, '#global-section-system_models')
 
     const card = page.locator('#global-section-system_models')
     await expect(card).toBeInViewport()

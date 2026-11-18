@@ -24,22 +24,20 @@ import { MCPServersSection } from './MCPServersSection'
 import { MCPToolDetailModal } from './MCPToolDetailModal'
 import type {
   BuiltInTool,
-  ServerFilter,
-  ServerSort,
-  ToolSort,
+  ServerFilters,
   ToolSourceFilter,
   UnifiedTool,
 } from './mcpConfigPanelTypes'
-import {
-  buildUnifiedTools,
-  filterAndSortServers,
-  filterAndSortUnifiedTools,
-} from './mcpConfigPanelUtils'
+import { buildUnifiedTools, filterServers, filterUnifiedTools } from './mcpConfigPanelUtils'
 import {
   createLatestMCPRequestRunner,
   fetchMCPToolsDatabase,
   getMCPRequestErrorMessage,
 } from './mcpRequestSupport'
+import { useQuietRefresh } from '../hooks/useQuietRefresh'
+
+const NO_SERVER_FILTERS: ServerFilters = { transports: [], statuses: [] }
+const STATUS_POLL_MS = 15_000
 
 interface MCPConfigPanelProps {
   /** Frames the panel, given the header actions and the content. */
@@ -95,12 +93,10 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({
   const [registryTools] = useState<RegisteredTool[]>(() => toolRegistry.getAll())
   const [toolSearch, setToolSearch] = useState('')
   const [toolSourceFilter, setToolSourceFilter] = useState<ToolSourceFilter>('all')
-  const [toolSort, setToolSort] = useState<ToolSort>('name-asc')
   const [selectedTool, setSelectedTool] = useState<UnifiedTool | null>(null)
   const [pendingDeleteServer, setPendingDeleteServer] = useState<MCPServerConfig | null>(null)
-  const [serverFilter, setServerFilter] = useState<ServerFilter>('all')
+  const [serverFilters, setServerFilters] = useState<ServerFilters>(NO_SERVER_FILTERS)
   const [serverSearch, setServerSearch] = useState('')
-  const [serverSort, setServerSort] = useState<ServerSort>('name-asc')
   const deferredToolSearch = useDeferredValue(toolSearch)
   const deferredServerSearch = useDeferredValue(serverSearch)
   const toolsDbRequestRef = useRef<LatestMCPRequestRunner | null>(null)
@@ -168,13 +164,12 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({
     [servers, registryTools, toolsDbTools],
   )
   const filteredTools = useMemo(
-    () =>
-      filterAndSortUnifiedTools(allAvailableTools, deferredToolSearch, toolSourceFilter, toolSort),
-    [allAvailableTools, deferredToolSearch, toolSort, toolSourceFilter],
+    () => filterUnifiedTools(allAvailableTools, deferredToolSearch, toolSourceFilter),
+    [allAvailableTools, deferredToolSearch, toolSourceFilter],
   )
   const filteredServers = useMemo(
-    () => filterAndSortServers(servers, serverFilter, deferredServerSearch, serverSort),
-    [deferredServerSearch, serverFilter, serverSort, servers],
+    () => filterServers(servers, deferredServerSearch, serverFilters),
+    [deferredServerSearch, serverFilters, servers],
   )
 
   const runConnectionAction = useCallback(
@@ -288,9 +283,16 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({
     void runConnectionAction(retry.id, retry.name, retry.mode)
   }, [actionError, runConnectionAction])
 
-  const handleRefresh = useCallback(() => {
-    void Promise.all([refreshServers(), refreshTools(), loadToolsDb()])
-  }, [loadToolsDb, refreshServers, refreshTools])
+  useQuietRefresh(() => void Promise.all([refreshServers(), refreshTools()]), {
+    everyMs: STATUS_POLL_MS,
+    enabled:
+      !loading &&
+      !activeServerId &&
+      !showAddDialog &&
+      !editingServer &&
+      !pendingDeleteServer &&
+      !actionLoading,
+  })
 
   const actions = (
     <>
@@ -383,33 +385,28 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({
       <MCPServersSection
         servers={servers}
         filteredServers={filteredServers}
-        serverFilter={serverFilter}
+        serverFilters={serverFilters}
         serverSearch={serverSearch}
-        serverSort={serverSort}
         isReadonly={mutationDisabled}
         actionLoading={actionLoading}
         activeServerId={activeServerId ?? undefined}
-        onServerFilterChange={setServerFilter}
+        onServerFiltersChange={setServerFilters}
         onServerSearchChange={setServerSearch}
-        onServerSortChange={setServerSort}
         onOpenServer={(id) => openServer(id)}
         onToggleConnection={handleToggleConnection}
         onToggleEnabled={(server) => void handleToggleEnabled(server)}
         onEditServer={setEditingServer}
         onDeleteServer={handleDeleteRequest}
         onAddServer={() => setShowAddDialog(true)}
-        onRefresh={handleRefresh}
       />
 
       <MCPAvailableToolsSection
         allAvailableTools={allAvailableTools}
         filteredTools={filteredTools}
         toolSearch={toolSearch}
-        toolSort={toolSort}
         toolSourceFilter={toolSourceFilter}
         onSearchChange={setToolSearch}
         onSelectTool={setSelectedTool}
-        onSortChange={setToolSort}
         onSourceFilterChange={setToolSourceFilter}
       />
       {toolsDbLoading && toolsDbTools.length === 0 ? (

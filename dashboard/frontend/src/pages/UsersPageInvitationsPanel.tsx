@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link2, Mail, RefreshCw, UserPlus, X } from 'lucide-react'
+import { Link2, Mail, UserPlus, X } from 'lucide-react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
 import {
@@ -21,8 +21,8 @@ import {
   EmptyState,
   FilterPill,
   Label,
-  Progress,
   StatusLabel,
+  Tooltip,
   toast,
   type Column,
   type StatusTone,
@@ -35,6 +35,7 @@ import {
   relativeTime,
   responseText,
 } from './usersPageSupport'
+import { useQuietRefresh } from '../hooks/useQuietRefresh'
 
 interface UsersPageInvitationsPanelProps {
   onInvite: () => void
@@ -49,34 +50,32 @@ const STATUS_META: Record<InvitationStatus, { label: string; tone: StatusTone }>
   revoked: { label: 'Revoked', tone: 'neutral' },
 }
 
+/** How much of an invitation is used: one value, with the detail on hover. */
 export function InvitationProgress({ invitation }: { invitation: DashboardInvitation }) {
-  if (invitation.kind === 'personal') {
-    const joined = invitation.usedCount > 0 || invitation.status === 'accepted'
-    return (
-      <div className="flex flex-col">
-        <span className="text-[13px]">{joined ? 'Accepted and signed in' : 'Waiting to join'}</span>
-        <span className="text-xs text-muted-foreground">
-          {joined ? absoluteTime(invitation.acceptedAt) : '1 ticket available'}
-        </span>
-      </div>
-    )
-  }
-  const percentage = Math.min(
-    100,
-    Math.round((invitation.usedCount / Math.max(1, invitation.maxUses)) * 100),
-  )
+  const joined = invitation.usedCount > 0 || invitation.status === 'accepted'
+  const detail =
+    invitation.kind === 'personal'
+      ? joined
+        ? `Accepted ${absoluteTime(invitation.acceptedAt)}`
+        : 'Waiting for them to join'
+      : `${invitation.remainingUses} ${invitation.remainingUses === 1 ? 'ticket' : 'tickets'} left`
   return (
-    <div className="flex min-w-36 flex-col gap-1.5">
-      <div className="flex items-baseline justify-between gap-3 text-xs">
-        <span className="font-medium tabular text-foreground/90">
-          {invitation.usedCount} / {invitation.maxUses} used
-        </span>
-        <span className="tabular text-muted-foreground">
-          {invitation.remainingUses} tickets left
-        </span>
-      </div>
-      <Progress value={percentage} aria-label={`${percentage}% of tickets used`} />
-    </div>
+    <Tooltip content={detail}>
+      <span className="text-[13px] tabular">
+        {invitation.kind === 'personal' ? (
+          joined ? (
+            'Joined'
+          ) : (
+            <span className="text-muted-foreground">Not yet</span>
+          )
+        ) : (
+          <>
+            {invitation.usedCount}
+            <span className="text-subtle-foreground"> of {invitation.maxUses} used</span>
+          </>
+        )}
+      </span>
+    </Tooltip>
   )
 }
 
@@ -95,17 +94,20 @@ export default function UsersPageInvitationsPanel({
     null,
   )
 
-  const loadInvitations = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true)
+  const loadInvitations = useCallback(async (signal?: AbortSignal, quiet = false) => {
+    if (!quiet) setLoading(true)
     try {
       const response = await fetch('/api/admin/invitations', { signal })
       if (!response.ok) throw new Error(await responseText(response))
       const payload = (await response.json()) as { invitations?: DashboardInvitation[] }
-      setInvitations(payload.invitations ?? [])
+      const next = payload.invitations ?? []
+      setInvitations((current) =>
+        JSON.stringify(current) === JSON.stringify(next) ? current : next,
+      )
       setError(null)
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
-      setError(cause instanceof Error ? cause.message : 'Could not load invitations.')
+      if (!quiet) setError(cause instanceof Error ? cause.message : 'Could not load invitations.')
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
@@ -116,6 +118,13 @@ export default function UsersPageInvitationsPanel({
     void loadInvitations(controller.signal)
     return () => controller.abort()
   }, [loadInvitations, refreshToken])
+
+  // Reading invitations is audited, so the list reloads after changes and when
+  // the tab comes back instead of polling.
+  useQuietRefresh(() => void loadInvitations(undefined, true), {
+    afterAwayMs: 60_000,
+    enabled: rotated === null && revoking === null,
+  })
 
   const pending = invitations.filter((invitation) => invitation.status === 'pending').length
   useEffect(() => onPendingChange?.(pending), [onPendingChange, pending])
@@ -200,7 +209,7 @@ export default function UsersPageInvitationsPanel({
       },
       {
         id: 'progress',
-        header: 'Progress',
+        header: 'Uses',
         hideBelow: 'lg',
         cell: (row) => <InvitationProgress invitation={row} />,
       },
@@ -264,21 +273,10 @@ export default function UsersPageInvitationsPanel({
             />
           }
           actions={
-            <>
-              <span className="text-xs text-muted-foreground">
-                <span className="tabular">{pending}</span> pending ·{' '}
-                <span className="tabular">{invitations.length}</span> total
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Refresh invitations"
-                onClick={() => void loadInvitations()}
-                disabled={loading}
-              >
-                <RefreshCw className={loading ? 'animate-spin' : undefined} />
-              </Button>
-            </>
+            <span className="text-xs text-muted-foreground">
+              <span className="tabular">{pending}</span> pending ·{' '}
+              <span className="tabular">{invitations.length}</span> total
+            </span>
           }
         />
         <DataTable

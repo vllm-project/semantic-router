@@ -2,22 +2,9 @@ import React, { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Box, Blocks, Server, Wrench } from 'lucide-react'
 
-import {
-  Badge,
-  Button,
-  Card,
-  DataToolbar,
-  EmptyState,
-  IconTile,
-  Segmented,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui'
+import { Badge, Button, Card, DataToolbar, EmptyState, IconTile, Segmented } from '../ui'
 import { MCPListPagination } from './MCPListPagination'
-import type { ToolSort, ToolSourceFilter, UnifiedTool } from './mcpConfigPanelTypes'
+import type { ToolSourceFilter, UnifiedTool } from './mcpConfigPanelTypes'
 import { MCP_TOOLS_PAGE_SIZE } from './mcpConfigPanelTypes'
 import {
   TOOL_SOURCE_META,
@@ -30,11 +17,9 @@ interface MCPAvailableToolsSectionProps {
   allAvailableTools: UnifiedTool[]
   filteredTools: UnifiedTool[]
   toolSearch: string
-  toolSort: ToolSort
   toolSourceFilter: ToolSourceFilter
   onSearchChange: (value: string) => void
   onSelectTool: (tool: UnifiedTool) => void
-  onSortChange: (sort: ToolSort) => void
   onSourceFilterChange: (filter: ToolSourceFilter) => void
 }
 
@@ -85,11 +70,9 @@ export const MCPAvailableToolsSection: React.FC<MCPAvailableToolsSectionProps> =
   allAvailableTools,
   filteredTools,
   toolSearch,
-  toolSort,
   toolSourceFilter,
   onSearchChange,
   onSelectTool,
-  onSortChange,
   onSourceFilterChange,
 }) => {
   const [page, setPage] = useState(1)
@@ -100,13 +83,13 @@ export const MCPAvailableToolsSection: React.FC<MCPAvailableToolsSectionProps> =
       ? allAvailableTools.length
       : allAvailableTools.filter((tool) => tool.sourceType === source).length
 
-  useEffect(() => setPage(1), [toolSearch, toolSort, toolSourceFilter])
+  useEffect(() => setPage(1), [toolSearch, toolSourceFilter])
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
   }, [page, pageCount])
 
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="mcp-tools-title">
+    <section className="@container flex flex-col gap-3" aria-labelledby="mcp-tools-title">
       <div className="flex flex-col gap-0.5">
         <h3 id="mcp-tools-title" className="text-[15px] font-semibold tracking-[-0.012em]">
           Available tools
@@ -135,21 +118,11 @@ export const MCPAvailableToolsSection: React.FC<MCPAvailableToolsSectionProps> =
                 { value: 'backend', label: `Router · ${count('backend')}` },
               ]}
             />
-            <Select value={toolSort} onValueChange={(value) => onSortChange(value as ToolSort)}>
-              <SelectTrigger size="sm" aria-label="Sort tools" className="min-w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name-asc">Name A–Z</SelectItem>
-                <SelectItem value="source-asc">Source A–Z</SelectItem>
-                <SelectItem value="parameters-desc">Most parameters</SelectItem>
-              </SelectContent>
-            </Select>
           </>
         }
       />
       {filteredTools.length ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 @[30rem]:grid-cols-2 @[40rem]:grid-cols-3 @[50rem]:grid-cols-4">
           <AnimatePresence initial={false} mode="popLayout">
             {visibleTools.map((tool) => (
               <motion.div

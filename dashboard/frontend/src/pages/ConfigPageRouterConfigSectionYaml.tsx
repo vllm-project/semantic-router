@@ -1,20 +1,30 @@
 import * as React from 'react'
-import { FileCode2, RefreshCw } from 'lucide-react'
+import { FileCode2, PencilLine, RefreshCw } from 'lucide-react'
 import {
   Alert,
   Badge,
   Button,
   Card,
   CopyButton,
-  Segmented,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Skeleton,
   Textarea,
   cn,
   toast,
 } from '../ui'
-import { contractOrdered } from './configPageRouterSettingsModel'
+import {
+  ROUTER_CONFIG_DOCUMENT_SCHEMA,
+  configYaml,
+  configYamlDiff,
+  configYamlLines,
+} from '../lib/configYaml'
 import type { JsonRecord } from './configPageRouterSettingsDraft'
-import { toYaml, yamlDiff } from './configPageRouterSettingsYaml'
 
 function YamlText({ text }: { text: string }) {
   const match = text.match(/^(\s*(?:- )?)([^:#]+?)(:)(.*)$/)
@@ -34,38 +44,55 @@ function OverridesView({
   saved,
   draft,
   dirty,
+  readOnly,
   onEditForm,
+  onOpenRaw,
 }: {
   saved: JsonRecord
   draft: JsonRecord
   dirty: boolean
+  readOnly: boolean
   onEditForm: () => void
+  onOpenRaw: () => void
 }) {
-  const yaml = React.useMemo(() => toYaml({ global: contractOrdered(draft) }), [draft])
+  const yaml = React.useMemo(
+    () => configYaml({ global: draft }, ROUTER_CONFIG_DOCUMENT_SCHEMA),
+    [draft],
+  )
   const lines = React.useMemo(() => {
-    const [hunk] = yamlDiff(
-      { global: contractOrdered(saved) },
-      { global: contractOrdered(draft) },
-      Number.MAX_SAFE_INTEGER,
+    const [hunk] = configYamlDiff(
+      { global: saved },
+      { global: draft },
+      { schema: ROUTER_CONFIG_DOCUMENT_SCHEMA, context: Infinity },
     )
-    if (!hunk) return yaml.split('\n').map((text) => ({ text, changed: false }))
+    if (!hunk) {
+      return configYamlLines({ global: draft }, ROUTER_CONFIG_DOCUMENT_SCHEMA).map((line) => ({
+        text: line.text,
+        changed: false,
+      }))
+    }
     return hunk.lines
       .filter((line) => line.kind !== 'remove')
       .map((line) => ({ text: line.text, changed: line.kind === 'add' }))
-  }, [draft, saved, yaml])
-  const keys = lines.length - 1
+  }, [draft, saved])
   return (
     <Card className="overflow-hidden">
       <div className="flex h-10 items-center gap-2 border-b border-border bg-surface-subtle/70 pl-3.5 pr-1.5">
         <FileCode2 className="size-4 text-subtle-foreground" />
         <span className="font-mono text-xs font-medium">config.yaml</span>
-        <span className="text-xs text-subtle-foreground">· global · {keys} lines</span>
+        <span className="text-xs text-subtle-foreground">· global · {lines.length} lines</span>
         {dirty ? (
           <Badge tone="brand" size="sm" className="ml-1">
             unsaved draft
           </Badge>
         ) : null}
-        <CopyButton value={yaml} className="ml-auto" label="Copy YAML" />
+        <span className="ml-auto flex items-center gap-1">
+          <Button variant="ghost" size="xs" onClick={onOpenRaw}>
+            <PencilLine />
+            {readOnly ? 'Effective YAML' : 'Edit effective YAML'}
+          </Button>
+          <CopyButton value={yaml} label="Copy YAML" />
+        </span>
       </div>
       <pre className="max-h-[70vh] overflow-auto py-3 font-mono text-[12.5px] leading-[1.7] text-foreground/90">
         <code className="grid min-w-fit">
@@ -97,7 +124,9 @@ function OverridesView({
   )
 }
 
-function EffectiveEditor({
+function EffectiveYamlDialog({
+  open,
+  onOpenChange,
   yaml,
   loading,
   error,
@@ -106,6 +135,8 @@ function EffectiveEditor({
   onReload,
   onSave,
 }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   yaml: string
   loading: boolean
   error: string | null
@@ -118,96 +149,108 @@ function EffectiveEditor({
   const [saving, setSaving] = React.useState(false)
   const [saveError, setSaveError] = React.useState<string | null>(null)
   React.useEffect(() => setText(yaml), [yaml])
+  React.useEffect(() => {
+    if (!open) setSaveError(null)
+  }, [open])
   const changed = text !== yaml
+
+  const save = async () => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSave(text)
+      onOpenChange(false)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Failed to save the global YAML.'
+      setSaveError(message)
+      toast.error('The global YAML was not saved', { description: message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <Card className="overflow-hidden">
-      <div className="flex h-10 items-center gap-2 border-b border-border bg-surface-subtle/70 pl-3.5 pr-1.5">
-        <FileCode2 className="size-4 text-subtle-foreground" />
-        <span className="font-mono text-xs font-medium">global</span>
-        <span className="text-xs text-subtle-foreground">
-          · router defaults merged with config.yaml
-        </span>
-        {changed ? (
-          <Badge tone="brand" size="sm" className="ml-1">
-            edited
-          </Badge>
-        ) : null}
-        <span className="ml-auto flex items-center gap-1">
-          <Button variant="ghost" size="xs" onClick={onReload} disabled={loading || saving}>
+    <Dialog open={open} onOpenChange={(next) => !saving && onOpenChange(next)}>
+      <DialogContent size="xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            Effective global YAML
+            {changed ? (
+              <Badge tone="brand" size="sm">
+                edited
+              </Badge>
+            ) : null}
+          </DialogTitle>
+          <DialogDescription>
+            Router defaults merged with config.yaml. Saving replaces the global block with exactly
+            this YAML, so every key shown becomes explicit; empty content removes the block.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="flex flex-col gap-3 pb-4">
+          {error || saveError ? (
+            <Alert
+              tone="danger"
+              title={
+                saveError
+                  ? 'The router did not accept this YAML'
+                  : 'The effective global YAML could not be loaded'
+              }
+            >
+              <span className="whitespace-pre-wrap break-words">{saveError ?? error}</span>
+            </Alert>
+          ) : null}
+          {blocked && !readOnly ? (
+            <Alert tone="info" title="The form has unsaved changes">
+              Save or discard them before you replace the whole global block here.
+            </Alert>
+          ) : null}
+          {loading && !yaml ? (
+            <div className="flex flex-col gap-2 p-2">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <Skeleton
+                  key={index}
+                  className="h-3.5"
+                  style={{ width: `${40 + ((index * 23) % 50)}%` }}
+                />
+              ))}
+            </div>
+          ) : (
+            <Textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              readOnly={readOnly || saving}
+              spellCheck={false}
+              aria-label="Effective global YAML"
+              rows={22}
+              className="min-h-[min(52vh,460px)] font-mono text-[12.5px] leading-[1.7]"
+            />
+          )}
+        </DialogBody>
+        <DialogFooter>
+          <Button
+            variant="ghost"
+            className="mr-auto"
+            onClick={onReload}
+            disabled={loading || saving}
+          >
             <RefreshCw className={cn(loading && 'animate-spin')} />
             Reload
           </Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
+            {readOnly ? 'Close' : 'Cancel'}
+          </Button>
           {!readOnly ? (
             <Button
-              size="xs"
               disabled={!changed || saving || loading || blocked}
               loading={saving}
-              onClick={async () => {
-                setSaving(true)
-                setSaveError(null)
-                try {
-                  await onSave(text)
-                } catch (cause) {
-                  const message =
-                    cause instanceof Error ? cause.message : 'Failed to save the global YAML.'
-                  setSaveError(message)
-                  toast.error('The global YAML was not saved', { description: message })
-                } finally {
-                  setSaving(false)
-                }
-              }}
+              onClick={() => void save()}
             >
               Save YAML
             </Button>
           ) : null}
-        </span>
-      </div>
-      <div className="flex flex-col gap-3 p-3">
-        {error || saveError ? (
-          <Alert
-            tone="danger"
-            title={
-              saveError
-                ? 'The router did not accept this YAML'
-                : 'The effective global YAML could not be loaded'
-            }
-          >
-            <span className="whitespace-pre-wrap break-words">{saveError ?? error}</span>
-          </Alert>
-        ) : null}
-        {blocked && !readOnly ? (
-          <Alert tone="info" title="The form has unsaved changes">
-            Save or discard them before you replace the whole global block here.
-          </Alert>
-        ) : null}
-        {loading && !yaml ? (
-          <div className="flex flex-col gap-2 p-2">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <Skeleton
-                key={index}
-                className="h-3.5"
-                style={{ width: `${40 + ((index * 23) % 50)}%` }}
-              />
-            ))}
-          </div>
-        ) : (
-          <Textarea
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            readOnly={readOnly || saving}
-            spellCheck={false}
-            aria-label="Effective global YAML"
-            rows={24}
-            className="min-h-[420px] font-mono text-[12.5px] leading-[1.7]"
-          />
-        )}
-        <p className="text-xs text-muted-foreground">
-          Saving replaces the global block of config.yaml with exactly this YAML, so every key shown
-          here becomes explicit. Empty content removes the block; the router defaults stay in
-          effect.
-        </p>
-      </div>
-    </Card>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -234,39 +277,31 @@ export function RouterSettingsYamlPanel({
   onSaveRaw: (yaml: string) => Promise<void>
   onEditForm: () => void
 }) {
-  const [mode, setMode] = React.useState<'overrides' | 'effective'>('overrides')
+  const [rawOpen, setRawOpen] = React.useState(false)
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Segmented
-          size="sm"
-          aria-label="YAML view"
-          value={mode}
-          onValueChange={setMode}
-          options={[
-            { value: 'overrides', label: 'What config.yaml sets' },
-            { value: 'effective', label: 'Effective global' },
-          ]}
-        />
-        <span className="text-xs text-muted-foreground">
-          {mode === 'overrides'
-            ? 'Read-only draft of the global section.'
-            : 'Advanced: edit the merged block as raw YAML.'}
-        </span>
-      </div>
-      {mode === 'overrides' ? (
-        <OverridesView saved={saved} draft={draft} dirty={dirty} onEditForm={onEditForm} />
-      ) : (
-        <EffectiveEditor
-          yaml={rawYaml}
-          loading={rawLoading}
-          error={rawError}
-          readOnly={readOnly}
-          blocked={dirty}
-          onReload={onReloadRaw}
-          onSave={onSaveRaw}
-        />
-      )}
-    </div>
+    <>
+      <OverridesView
+        saved={saved}
+        draft={draft}
+        dirty={dirty}
+        readOnly={readOnly}
+        onEditForm={onEditForm}
+        onOpenRaw={() => {
+          setRawOpen(true)
+          onReloadRaw()
+        }}
+      />
+      <EffectiveYamlDialog
+        open={rawOpen}
+        onOpenChange={setRawOpen}
+        yaml={rawYaml}
+        loading={rawLoading}
+        error={rawError}
+        readOnly={readOnly}
+        blocked={dirty}
+        onReload={onReloadRaw}
+        onSave={onSaveRaw}
+      />
+    </>
   )
 }

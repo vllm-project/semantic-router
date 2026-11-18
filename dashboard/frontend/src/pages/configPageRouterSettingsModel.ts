@@ -581,18 +581,3 @@ export function restartReason(path: readonly string[]): string | undefined {
 }
 
 export const ROUTER_CONTRACT_VERSION = ROUTER_CONFIG_EXTENSION.config_version
-
-/** A copy whose mapping keys follow the contract's property order, so YAML reads like config.yaml. */
-export function contractOrdered(value: unknown, path: readonly string[] = ['global']): unknown {
-  if (Array.isArray(value)) return value.map((item) => contractOrdered(item, [...path, '[]']))
-  if (!value || typeof value !== 'object') return value
-  const record = value as Record<string, unknown>
-  const node = contractNodeAt(path)
-  const order = node ? Object.keys(concrete(node).properties ?? {}) : []
-  const rank = (key: string) => {
-    const index = order.indexOf(key)
-    return index === -1 ? order.length : index
-  }
-  const keys = Object.keys(record).sort((left, right) => rank(left) - rank(right))
-  return Object.fromEntries(keys.map((key) => [key, contractOrdered(record[key], [...path, key])]))
-}

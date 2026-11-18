@@ -838,14 +838,16 @@ test.describe('Dashboard auth flow', () => {
     })
 
     await page.goto('/config')
-    await expect(page).toHaveURL(/\/config\/global-config$/)
-    await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0)
+    await expect(page).toHaveURL(/\/settings\/router$/)
+    await expect(page.getByRole('navigation', { name: 'Settings' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Users & access' })).toHaveCount(0)
 
     await page.goto('/builder')
-    const deployButton = page.getByRole('button', { name: 'Deploy' })
+    await expect(page).toHaveURL(/\/routing\/editor$/)
+    const deployButton = page.getByRole('button', { name: 'Review & deploy' })
     await expect(deployButton).toBeDisabled()
-    await expect(deployButton).toHaveAttribute(
-      'title',
+    await deployButton.locator('..').hover()
+    await expect(page.getByRole('tooltip')).toContainText(
       'Deploy is disabled by the server-wide read-only policy',
     )
   })
@@ -971,120 +973,6 @@ test.describe('Dashboard auth flow', () => {
 
     await expect(page).toHaveURL(/\/users$/)
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
-  })
-
-  test('users page invites and edits accounts through centered dialogs', async ({ page }) => {
-    await mockAuthenticatedAppShell(page)
-
-    let invitationPayload: Record<string, unknown> | null = null
-    let patchPayload: Record<string, unknown> | null = null
-    let passwordPayload: Record<string, unknown> | null = null
-
-    await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          users: [
-            {
-              id: 'user-admin-1',
-              email: 'admin@example.com',
-              name: 'Admin User',
-              role: 'admin',
-              status: 'active',
-            },
-          ],
-        }),
-      })
-    })
-
-    await page.route('**/api/admin/invitations', async (route) => {
-      invitationPayload = route.request().postDataJSON() as Record<string, unknown>
-      await route.fulfill({
-        status: 201,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invitation: {
-            id: 'invitation-2',
-            kind: 'personal',
-            email: invitationPayload.email,
-            name: invitationPayload.name,
-            role: invitationPayload.role,
-            expiresAt: 1893456000,
-          },
-          token: 'one-time-invitation-token',
-        }),
-      })
-    })
-
-    await page.route('**/api/admin/users/user-admin-1', async (route) => {
-      patchPayload = route.request().postDataJSON() as Record<string, unknown>
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: 'user-admin-1',
-          email: 'admin@example.com',
-          name: 'Admin User',
-          role: patchPayload.role,
-          status: patchPayload.status,
-        }),
-      })
-    })
-
-    await page.route('**/api/admin/users/password', async (route) => {
-      passwordPayload = route.request().postDataJSON() as Record<string, unknown>
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ok: true }),
-      })
-    })
-
-    await page.goto('/users')
-    await expect(page).toHaveURL(/\/users$/)
-
-    await page.getByRole('button', { name: 'Invite user' }).click()
-    const inviteDialog = page.getByRole('dialog', { name: 'Invite user' })
-    await expect(inviteDialog).toBeVisible()
-    await inviteDialog.getByLabel('Name').fill('Writer User')
-    await inviteDialog.getByLabel('Email').fill('writer@example.com')
-    await inviteDialog.getByText('Builder', { exact: true }).click()
-    await inviteDialog.getByRole('button', { name: 'Create invitation' }).click()
-
-    await expect
-      .poll(() => invitationPayload)
-      .toEqual({
-        kind: 'personal',
-        email: 'writer@example.com',
-        name: 'Writer User',
-        role: 'write',
-      })
-    const readyDialog = page.getByRole('dialog', { name: 'Welcome Writer User' })
-    await expect(readyDialog).toBeVisible()
-    await readyDialog.getByRole('button', { name: 'Done' }).click()
-
-    await page.getByRole('button', { name: 'Edit user-admin-1', exact: true }).click()
-    const editDialog = page.getByRole('dialog', { name: 'Edit user' })
-    await expect(editDialog).toBeVisible()
-    await editDialog.locator('#edit-user-role').selectOption('admin')
-    await editDialog.locator('#edit-user-status').selectOption('inactive')
-    await editDialog.locator('#edit-user-password').fill('rotated-password')
-    await editDialog.getByRole('button', { name: 'Save changes' }).click()
-
-    await expect
-      .poll(() => patchPayload)
-      .toEqual({
-        role: 'admin',
-        status: 'inactive',
-      })
-    await expect
-      .poll(() => passwordPayload)
-      .toEqual({
-        userId: 'user-admin-1',
-        password: 'rotated-password',
-      })
-    await expect(page.getByText('User updated and password rotated.')).toBeVisible()
   })
 
   test('protected browser transports carry no reusable credential', async ({ page }) => {

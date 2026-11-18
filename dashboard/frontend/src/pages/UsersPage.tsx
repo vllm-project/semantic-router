@@ -1,13 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  ArrowDownWideNarrow,
-  ArrowUpNarrowWide,
   Ban,
   Check,
   Lock,
   Minus,
-  RefreshCw,
   ShieldCheck,
   Trash2,
   UserCheck,
@@ -39,6 +36,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   EmptyState,
+  FilterPill,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -53,10 +51,10 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-  Tooltip,
   cn,
   toast,
   type Column,
+  type DataTableSort,
 } from '../ui'
 import {
   canManageUsers as canManageDashboardUsers,
@@ -68,6 +66,7 @@ import { SettingsSection } from './SettingsLayout'
 import UsersPageAuditPanel, { type AuditActor } from './UsersPageAuditPanel'
 import UsersPageInvitationsPanel from './UsersPageInvitationsPanel'
 import UsersPageMemberSheet, { type MemberDraft } from './UsersPageMemberSheet'
+import { useQuietRefresh } from '../hooks/useQuietRefresh'
 import {
   DASHBOARD_ROLES,
   EMPTY_ROLE_PERMISSIONS,
@@ -89,13 +88,19 @@ import {
 type UsersView = 'users' | 'invitations' | 'audit'
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const
-const SORT_OPTIONS = [
-  { value: 'createdAt', label: 'Joined' },
-  { value: 'email', label: 'Email' },
-  { value: 'name', label: 'Name' },
-  { value: 'role', label: 'Role' },
-  { value: 'lastLoginAt', label: 'Last sign-in' },
-] as const
+/** The users API sort field behind each sortable column; unsorted means newest first. */
+const SORT_FIELDS: Record<string, string> = {
+  name: 'name',
+  role: 'role',
+  status: 'status',
+  lastLogin: 'lastLoginAt',
+  joined: 'createdAt',
+}
+const POLL_MS = 30_000
+
+function sameUsers(left: AdminUser[], right: AdminUser[]): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
@@ -201,8 +206,8 @@ const UsersPage: React.FC = () => {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
-  const [sortField, setSortField] = useState('createdAt')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [roleFilter, setRoleFilter] = useState<string[]>([])
+  const [sort, setSort] = useState<DataTableSort | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(10)
 
@@ -226,55 +231,60 @@ const UsersPage: React.FC = () => {
   const activeUserId = params.get('user')
   const activeUser = users.find((user) => user.id === activeUserId) ?? null
 
-  const fetchUsers = useCallback(async () => {
-    const request = userRequests.start()
-    setLoadingUsers(true)
-    try {
-      const q = new URLSearchParams()
-      if (statusFilter !== 'all') q.set('status', statusFilter)
-      if (debouncedQuery) q.set('q', debouncedQuery)
-      q.set('page', String(page))
-      q.set('limit', String(pageSize))
-      q.set('sort', sortField)
-      q.set('order', sortOrder)
-      const response = await fetch(`/api/admin/users?${q.toString()}`, {
-        method: 'GET',
-        headers: JSON_HEADERS,
-        signal: request.signal,
-      })
-      if (!response.ok) throw new Error(await responseText(response))
-      const payload = (await response.json()) as UsersPagePayload
-      if (!request.isCurrent()) return
-      const nextUsers = payload.users || []
-      const nextTotal = payload.total ?? nextUsers.length
-      const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize))
-      if (page > lastPage) {
-        setPage(lastPage)
-        return
+  const fetchUsers = useCallback(
+    async (quiet = false) => {
+      const request = userRequests.start()
+      if (!quiet) setLoadingUsers(true)
+      try {
+        const q = new URLSearchParams()
+        if (statusFilter !== 'all') q.set('status', statusFilter)
+        if (roleFilter.length && roleFilter.length < DASHBOARD_ROLES.length)
+          q.set('role', roleFilter.join(','))
+        if (debouncedQuery) q.set('q', debouncedQuery)
+        q.set('page', String(page))
+        q.set('limit', String(pageSize))
+        q.set('sort', (sort && SORT_FIELDS[sort.id]) || 'createdAt')
+        q.set('order', sort?.dir ?? 'desc')
+        const response = await fetch(`/api/admin/users?${q.toString()}`, {
+          method: 'GET',
+          headers: JSON_HEADERS,
+          signal: request.signal,
+        })
+        if (!response.ok) throw new Error(await responseText(response))
+        const payload = (await response.json()) as UsersPagePayload
+        if (!request.isCurrent()) return
+        const nextUsers = payload.users || []
+        const nextTotal = payload.total ?? nextUsers.length
+        const lastPage = Math.max(1, Math.ceil(nextTotal / pageSize))
+        if (page > lastPage) {
+          setPage(lastPage)
+          return
+        }
+        setUsers((current) => (sameUsers(current, nextUsers) ? current : nextUsers))
+        setTotalUsers(nextTotal)
+        setActiveUserCount(
+          payload.active ?? nextUsers.filter((user) => user.status === 'active').length,
+        )
+        setPrivilegedUserCount(
+          payload.privileged ?? nextUsers.filter((user) => user.role === 'admin').length,
+        )
+        setActors((current) => ({
+          ...current,
+          ...Object.fromEntries(
+            nextUsers.map((user) => [user.id, { name: user.name, email: user.email }]),
+          ),
+        }))
+        setUsersError(null)
+      } catch (err) {
+        if (!request.isCurrent() || isUsersRequestAbortError(err) || quiet) return
+        setUsersError((err as Error).message)
+      } finally {
+        if (request.isCurrent()) setLoadingUsers(false)
+        request.finish()
       }
-      setUsers(nextUsers)
-      setTotalUsers(nextTotal)
-      setActiveUserCount(
-        payload.active ?? nextUsers.filter((user) => user.status === 'active').length,
-      )
-      setPrivilegedUserCount(
-        payload.privileged ?? nextUsers.filter((user) => user.role === 'admin').length,
-      )
-      setActors((current) => ({
-        ...current,
-        ...Object.fromEntries(
-          nextUsers.map((user) => [user.id, { name: user.name, email: user.email }]),
-        ),
-      }))
-      setUsersError(null)
-    } catch (err) {
-      if (!request.isCurrent() || isUsersRequestAbortError(err)) return
-      setUsersError((err as Error).message)
-    } finally {
-      if (request.isCurrent()) setLoadingUsers(false)
-      request.finish()
-    }
-  }, [debouncedQuery, page, pageSize, sortField, sortOrder, statusFilter, userRequests])
+    },
+    [debouncedQuery, page, pageSize, roleFilter, sort, statusFilter, userRequests],
+  )
 
   const fetchRolePermissions = useCallback(async () => {
     if (!canManageUsers) {
@@ -333,7 +343,25 @@ const UsersPage: React.FC = () => {
     return () => window.clearTimeout(timer)
   }, [query])
 
-  useEffect(() => setSelected(new Set()), [users])
+  useEffect(
+    () =>
+      setSelected((current) => {
+        const kept = [...current].filter((id) => users.some((user) => user.id === id))
+        return kept.length === current.size ? current : new Set(kept)
+      }),
+    [users],
+  )
+
+  useQuietRefresh(() => void fetchUsers(true), {
+    everyMs: POLL_MS,
+    enabled:
+      canViewUsers &&
+      activeView === 'users' &&
+      !activeUserId &&
+      !inviteOpen &&
+      deleteTargets === null &&
+      selected.size === 0,
+  })
 
   const updateParams = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(params)
@@ -470,6 +498,7 @@ const UsersPage: React.FC = () => {
       {
         id: 'name',
         header: 'Person',
+        sortable: true,
         cell: (row) => (
           <div className="flex min-w-0 items-center gap-3">
             <Avatar
@@ -498,10 +527,11 @@ const UsersPage: React.FC = () => {
           </div>
         ),
       },
-      { id: 'role', header: 'Role', cell: (row) => <RoleBadge role={row.role} /> },
+      { id: 'role', header: 'Role', sortable: true, cell: (row) => <RoleBadge role={row.role} /> },
       {
         id: 'status',
         header: 'Status',
+        sortable: true,
         cell: (row) => (
           <StatusLabel tone={row.status === 'active' ? 'success' : 'neutral'}>
             {row.status === 'active' ? 'Active' : 'Inactive'}
@@ -511,6 +541,7 @@ const UsersPage: React.FC = () => {
       {
         id: 'lastLogin',
         header: 'Last sign-in',
+        sortable: true,
         hideBelow: 'md',
         cell: (row) => (
           <span className="text-xs text-muted-foreground" title={absoluteTime(row.lastLoginAt)}>
@@ -521,6 +552,7 @@ const UsersPage: React.FC = () => {
       {
         id: 'joined',
         header: 'Joined',
+        sortable: true,
         hideBelow: 'xl',
         cell: (row) => (
           <span className="text-xs text-muted-foreground">{absoluteTime(row.createdAt)}</span>
@@ -585,59 +617,27 @@ const UsersPage: React.FC = () => {
                   { value: 'inactive', label: 'Inactive' },
                 ]}
               />
-              <span className="flex items-center gap-1">
-                <Select
-                  value={sortField}
-                  onValueChange={(value) => {
-                    setSortField(value)
-                    setPage(1)
-                  }}
-                >
-                  <SelectTrigger size="sm" aria-label="Sort by" className="min-w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SORT_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Tooltip content={sortOrder === 'desc' ? 'Descending' : 'Ascending'}>
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label={sortOrder === 'desc' ? 'Sort ascending' : 'Sort descending'}
-                    onClick={() => {
-                      setSortOrder((current) => (current === 'desc' ? 'asc' : 'desc'))
-                      setPage(1)
-                    }}
-                  >
-                    {sortOrder === 'desc' ? <ArrowDownWideNarrow /> : <ArrowUpNarrowWide />}
-                  </Button>
-                </Tooltip>
-              </span>
+              <FilterPill
+                label="Role"
+                selected={roleFilter}
+                onChange={(next) => {
+                  setRoleFilter(next)
+                  setPage(1)
+                }}
+                options={DASHBOARD_ROLES.map((role) => ({
+                  value: role,
+                  label: ROLE_META[role].label,
+                }))}
+              />
             </>
           }
           actions={
-            <>
-              <span className="hidden text-xs text-muted-foreground lg:inline">
-                <span className="tabular">{totalUsers}</span> people ·{' '}
-                <span className="tabular">{activeUserCount}</span> active ·{' '}
-                <span className="tabular">{privilegedUserCount}</span>{' '}
-                {privilegedUserCount === 1 ? 'admin' : 'admins'}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Refresh users"
-                onClick={() => void fetchUsers()}
-                disabled={loadingUsers}
-              >
-                <RefreshCw className={cn(loadingUsers && 'animate-spin')} />
-              </Button>
-            </>
+            <span className="hidden text-xs text-muted-foreground lg:inline">
+              <span className="tabular">{totalUsers}</span> {totalUsers === 1 ? 'person' : 'people'}{' '}
+              · <span className="tabular">{activeUserCount}</span> active ·{' '}
+              <span className="tabular">{privilegedUserCount}</span>{' '}
+              {privilegedUserCount === 1 ? 'admin' : 'admins'}
+            </span>
           }
         />
         <DataTable
@@ -648,6 +648,11 @@ const UsersPage: React.FC = () => {
           selectable={canManageUsers}
           selected={selected}
           onSelectedChange={setSelected}
+          sort={sort}
+          onSortChange={(next) => {
+            setSort(next)
+            setPage(1)
+          }}
           activeRowId={activeUserId ?? undefined}
           onRowClick={(row) => {
             setSheetError(null)
@@ -714,18 +719,19 @@ const UsersPage: React.FC = () => {
               tone="slate"
               title="No users found"
               description={
-                debouncedQuery || statusFilter !== 'all'
+                debouncedQuery || statusFilter !== 'all' || roleFilter.length
                   ? 'No users match the current filters. Try another name, or clear the filters.'
                   : 'Invite teammates to give them dashboard access.'
               }
               actions={
-                debouncedQuery || statusFilter !== 'all' ? (
+                debouncedQuery || statusFilter !== 'all' || roleFilter.length ? (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       setQuery('')
                       setStatusFilter('all')
+                      setRoleFilter([])
                     }}
                   >
                     Clear filters
@@ -743,7 +749,7 @@ const UsersPage: React.FC = () => {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-2">
-          Page {currentPage} / {totalPages} · {totalUsers} users
+          Page {currentPage} / {totalPages} · {totalUsers} {totalUsers === 1 ? 'user' : 'users'}
           <Select
             value={String(pageSize)}
             onValueChange={(value) => {

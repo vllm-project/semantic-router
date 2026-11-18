@@ -1,4 +1,4 @@
-import { toYaml } from './configPageRouterSettingsYaml'
+import { ROUTER_CONFIG_DOCUMENT_SCHEMA, configYaml } from '../lib/configYaml'
 import {
   DEFAULT_SETUP_PROVIDER_ID,
   DEFAULT_SETUP_RUNTIME_BASE_URL,
@@ -645,7 +645,8 @@ export function maskSecrets(config: Record<string, unknown> | null): string {
 /** The draft config as YAML for review, with access keys masked. */
 export function maskedSetupYaml(config: Record<string, unknown> | null): string {
   if (!config) return ''
-  return toYaml(JSON.parse(maskSecrets(config)) as Record<string, unknown>)
+  const masked = JSON.parse(maskSecrets(config)) as Record<string, unknown>
+  return configYaml(masked, ROUTER_CONFIG_DOCUMENT_SCHEMA).trimEnd()
 }
 
 /** The model IDs a provider endpoint lists, through the dashboard's discovery helper. */

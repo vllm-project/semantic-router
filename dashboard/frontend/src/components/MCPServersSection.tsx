@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { Blocks, Pencil, Plug, Plus, Power, RefreshCw, Trash2, Unplug, Wrench } from 'lucide-react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Blocks, Pencil, Plug, Plus, Power, Trash2, Unplug, Wrench } from 'lucide-react'
 
 import type { MCPServerConfig, MCPServerState } from '../tools/mcp'
 import {
@@ -10,75 +10,90 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   EmptyState,
+  FilterPill,
   IconTile,
-  Segmented,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   StatusLabel,
   cn,
   type Column,
+  type DataTableSort,
 } from '../ui'
 import { MCPListPagination } from './MCPListPagination'
-import type { ServerFilter, ServerSort } from './mcpConfigPanelTypes'
+import type { ServerFilters } from './mcpConfigPanelTypes'
 import { MCP_SERVERS_PAGE_SIZE } from './mcpConfigPanelTypes'
 import {
   SERVER_STATUS_META,
+  SERVER_STATUS_RANK,
   TRANSPORT_META,
   getMCPPageCount,
   paginateMCPItems,
   serverTarget,
 } from './mcpConfigPanelUtils'
 
+const SORT_VALUE: Record<string, (server: MCPServerState) => string | number> = {
+  name: (server) => server.config.name.toLowerCase(),
+  status: (server) => SERVER_STATUS_RANK[server.status] ?? 9,
+  tools: (server) => server.tools?.length ?? 0,
+}
+
+function sortServers(servers: MCPServerState[], sort: DataTableSort | null): MCPServerState[] {
+  const value = sort ? SORT_VALUE[sort.id] : undefined
+  if (!sort || !value) return servers
+  return [...servers].sort((left, right) => {
+    const a = value(left)
+    const b = value(right)
+    const order =
+      typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b))
+    return sort.dir === 'asc' ? order : -order
+  })
+}
+
 interface MCPServersSectionProps {
   servers: MCPServerState[]
   filteredServers: MCPServerState[]
-  serverFilter: ServerFilter
+  serverFilters: ServerFilters
   serverSearch: string
-  serverSort: ServerSort
   isReadonly: boolean
   actionLoading: string | null
   activeServerId?: string
-  onServerFilterChange: (filter: ServerFilter) => void
+  onServerFiltersChange: (filters: ServerFilters) => void
   onServerSearchChange: (value: string) => void
-  onServerSortChange: (sort: ServerSort) => void
   onOpenServer: (id: string) => void
   onToggleConnection: (server: MCPServerState) => void
   onToggleEnabled: (server: MCPServerState) => void
   onEditServer: (server: MCPServerConfig) => void
   onDeleteServer: (id: string) => void
   onAddServer: () => void
-  onRefresh: () => void
 }
 
 export const MCPServersSection: React.FC<MCPServersSectionProps> = ({
   servers,
   filteredServers,
-  serverFilter,
+  serverFilters,
   serverSearch,
-  serverSort,
   isReadonly,
   actionLoading,
   activeServerId,
-  onServerFilterChange,
+  onServerFiltersChange,
   onServerSearchChange,
-  onServerSortChange,
   onOpenServer,
   onToggleConnection,
   onToggleEnabled,
   onEditServer,
   onDeleteServer,
   onAddServer,
-  onRefresh,
 }) => {
   const [page, setPage] = useState(1)
+  const [sort, setSort] = useState<DataTableSort | null>(null)
   const connectedCount = servers.filter((server) => server.status === 'connected').length
-  const pageCount = getMCPPageCount(filteredServers.length, MCP_SERVERS_PAGE_SIZE)
-  const visibleServers = paginateMCPItems(filteredServers, page, MCP_SERVERS_PAGE_SIZE)
+  const sortedServers = useMemo(() => sortServers(filteredServers, sort), [filteredServers, sort])
+  const pageCount = getMCPPageCount(sortedServers.length, MCP_SERVERS_PAGE_SIZE)
+  const visibleServers = paginateMCPItems(sortedServers, page, MCP_SERVERS_PAGE_SIZE)
+  const filtered =
+    serverSearch.trim() !== '' ||
+    serverFilters.transports.length > 0 ||
+    serverFilters.statuses.length > 0
 
-  useEffect(() => setPage(1), [serverFilter, serverSearch, serverSort])
+  useEffect(() => setPage(1), [serverFilters, serverSearch, sort])
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
   }, [page, pageCount])
@@ -87,6 +102,7 @@ export const MCPServersSection: React.FC<MCPServersSectionProps> = ({
     {
       id: 'name',
       header: 'Server',
+      sortable: true,
       cell: (row) => {
         const transport = TRANSPORT_META[row.config.transport] ?? TRANSPORT_META.stdio
         return (
@@ -129,6 +145,7 @@ export const MCPServersSection: React.FC<MCPServersSectionProps> = ({
     {
       id: 'status',
       header: 'Status',
+      sortable: true,
       cell: (row) => {
         const meta = SERVER_STATUS_META[row.status] ?? SERVER_STATUS_META.disconnected
         return (
@@ -142,6 +159,7 @@ export const MCPServersSection: React.FC<MCPServersSectionProps> = ({
       id: 'tools',
       header: 'Tools',
       align: 'right',
+      sortable: true,
       cell: (row) =>
         row.status === 'connected' ? (
           <span className="text-[13px] tabular">{row.tools?.length ?? 0}</span>
@@ -169,54 +187,44 @@ export const MCPServersSection: React.FC<MCPServersSectionProps> = ({
           filters={
             servers.length ? (
               <>
-                <Segmented
-                  size="sm"
-                  aria-label="Status"
-                  value={serverFilter}
-                  onValueChange={onServerFilterChange}
-                  options={[
-                    { value: 'all', label: 'All' },
-                    { value: 'connected', label: 'Connected' },
-                    { value: 'disconnected', label: 'Not connected' },
-                  ]}
+                <FilterPill
+                  label="Transport"
+                  selected={serverFilters.transports}
+                  onChange={(transports) => onServerFiltersChange({ ...serverFilters, transports })}
+                  options={Object.entries(TRANSPORT_META).map(([value, meta]) => ({
+                    value,
+                    label: meta.label,
+                    count: servers.filter((server) => server.config.transport === value).length,
+                  }))}
                 />
-                <Select
-                  value={serverSort}
-                  onValueChange={(value) => onServerSortChange(value as ServerSort)}
-                >
-                  <SelectTrigger size="sm" aria-label="Sort servers" className="min-w-36">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="name-asc">Name A–Z</SelectItem>
-                    <SelectItem value="status">Connection status</SelectItem>
-                    <SelectItem value="tools-desc">Most tools</SelectItem>
-                  </SelectContent>
-                </Select>
+                <FilterPill
+                  label="Status"
+                  selected={serverFilters.statuses}
+                  onChange={(statuses) => onServerFiltersChange({ ...serverFilters, statuses })}
+                  options={(['connected', 'connecting', 'error', 'disconnected'] as const).map(
+                    (value) => ({
+                      value,
+                      label: SERVER_STATUS_META[value].label,
+                      count: servers.filter((server) => server.status === value).length,
+                    }),
+                  )}
+                />
               </>
             ) : null
           }
           actions={
-            <>
-              <span className="text-xs text-muted-foreground">
-                <span className="tabular">{connectedCount}</span> of{' '}
-                <span className="tabular">{servers.length}</span> connected
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onRefresh}
-                aria-label="Refresh MCP data"
-              >
-                <RefreshCw />
-              </Button>
-            </>
+            <span className="text-xs text-muted-foreground">
+              <span className="tabular">{connectedCount}</span> of{' '}
+              <span className="tabular">{servers.length}</span> connected
+            </span>
           }
         />
         <DataTable
           data={visibleServers}
           columns={columns}
           getRowId={(row) => row.config.id}
+          sort={sort}
+          onSortChange={setSort}
           activeRowId={activeServerId}
           onRowClick={(row) => onOpenServer(row.config.id)}
           rowActions={(row) => (
@@ -268,19 +276,19 @@ export const MCPServersSection: React.FC<MCPServersSectionProps> = ({
               title={servers.length ? 'No servers match' : 'No MCP servers yet'}
               description={
                 servers.length
-                  ? 'No servers match the current search and status filter.'
+                  ? 'Clear the search or filters to see every server.'
                   : isReadonly
                     ? 'No MCP servers are configured.'
                     : 'Add a server to give decisions tools such as search, files or calendars.'
               }
               actions={
-                servers.length ? (
+                servers.length && filtered ? (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
                       onServerSearchChange('')
-                      onServerFilterChange('all')
+                      onServerFiltersChange({ transports: [], statuses: [] })
                     }}
                   >
                     Clear filters
@@ -296,9 +304,9 @@ export const MCPServersSection: React.FC<MCPServersSectionProps> = ({
           }
         />
       </div>
-      {filteredServers.length > MCP_SERVERS_PAGE_SIZE ? (
+      {sortedServers.length > MCP_SERVERS_PAGE_SIZE ? (
         <MCPListPagination
-          itemCount={filteredServers.length}
+          itemCount={sortedServers.length}
           itemLabel="servers"
           page={page}
           pageSize={MCP_SERVERS_PAGE_SIZE}

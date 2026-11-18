@@ -49,14 +49,7 @@ import {
   type SetupRoutingMode,
   type SetupStep,
 } from './setupWizardSupport'
-import { SETUP_PROVIDER_OPTIONS, type ProviderKind } from './setupWizardProviderCatalog'
-
-const PROVIDER_LOGO: Record<ProviderKind, string> = {
-  vllm: 'vllm',
-  ollama: 'ollama',
-  'openai-compatible': 'openai',
-  anthropic: 'anthropic',
-}
+import { SETUP_PROVIDER_OPTIONS, getSetupProviderOption } from './setupWizardProviderCatalog'
 
 interface SetupWizardStepRailProps {
   currentStep: SetupStep
@@ -224,7 +217,7 @@ function ModelCard({
   return (
     <article className="rounded-xl border border-border bg-card shadow-xs">
       <header className="flex items-center gap-3 border-b border-border px-4 py-3">
-        <ProviderLogo provider={PROVIDER_LOGO[model.providerKind]} size={18} framed />
+        <ProviderLogo provider={getSetupProviderOption(model.providerKind).logo} size={18} framed />
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground">
             Model {index + 1}
@@ -267,10 +260,11 @@ function ModelCard({
         <div
           role="radiogroup"
           aria-label={`Provider for model ${index + 1}`}
-          className="grid grid-cols-2 gap-2 @[42rem]:grid-cols-4"
+          className="grid grid-cols-2 gap-2 @[34rem]:grid-cols-3"
         >
           {SETUP_PROVIDER_OPTIONS.map((option) => {
             const active = option.id === model.providerKind
+            const generic = option.id === 'openai-compatible'
             return (
               <button
                 key={option.id}
@@ -279,14 +273,26 @@ function ModelCard({
                 aria-checked={active}
                 onClick={() => update('providerKind', option.id)}
                 className={cn(
-                  'flex items-center gap-2 rounded-lg border bg-card px-2.5 py-2 text-left text-[12.5px] font-medium outline-none transition-[border-color,box-shadow] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                  'flex min-w-0 items-center gap-2.5 rounded-lg border bg-card px-2.5 py-2 text-left outline-none transition-[border-color,box-shadow] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                  generic && 'col-span-full',
                   active
                     ? 'border-primary shadow-[0_0_0_3px_var(--ring)]'
                     : 'border-border hover:border-border-strong',
                 )}
               >
-                <ProviderLogo provider={PROVIDER_LOGO[option.id]} size={16} />
-                <span className="truncate">{option.label}</span>
+                <ProviderLogo provider={option.logo} size={16} />
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="truncate text-[12.5px] font-medium">
+                    {generic ? 'Any OpenAI-compatible endpoint' : option.label}
+                  </span>
+                  <span className="truncate text-[11px] text-subtle-foreground">
+                    {option.supportTier === 'runtime'
+                      ? 'Self-hosted'
+                      : generic
+                        ? 'Your own base URL and key'
+                        : 'Hosted API'}
+                  </span>
+                </span>
               </button>
             )
           })}

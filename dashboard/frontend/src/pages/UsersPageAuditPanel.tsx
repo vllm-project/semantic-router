@@ -1,6 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, RefreshCw, ScrollText, SlidersHorizontal } from 'lucide-react'
+import {
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  CalendarRange,
+  Check,
+  ChevronDown,
+  Download,
+  ScrollText,
+} from 'lucide-react'
 
 import {
   Alert,
@@ -11,7 +19,7 @@ import {
   CodeView,
   DataToolbar,
   EmptyState,
-  Field,
+  FilterPill,
   Input,
   Popover,
   PopoverContent,
@@ -21,35 +29,34 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Separator,
   Skeleton,
   cn,
+  toast,
+  type FilterOption,
 } from '../ui'
 import {
+  AUDIT_RESULT_OPTIONS,
+  AUDIT_TIME_PRESETS,
+  auditLogsCsv,
+  auditTimeBounds,
+  auditTimeLabel,
   buildAuditLogQuery,
   createLatestAuditRequest,
   isAbortError,
   normalizeAuditLogPage,
   type AuditLog,
+  type AuditLogFacets,
   type AuditSortOrder,
+  type AuditTimeRange,
 } from './usersAuditLogSupport'
 import { responseText } from './usersPageSupport'
+import { useQuietRefresh } from '../hooks/useQuietRefresh'
 
 const AUDIT_PAGE_SIZE_OPTIONS = [20, 50, 100] as const
-const AUDIT_SORT_OPTIONS = [
-  { value: 'createdAt', label: 'Time' },
-  { value: 'id', label: 'ID' },
-  { value: 'action', label: 'Action' },
-  { value: 'resource', label: 'Resource' },
-  { value: 'method', label: 'Method' },
-  { value: 'statusCode', label: 'Status code' },
-  { value: 'userId', label: 'User ID' },
-] as const
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All responses' },
-  { value: 'success', label: 'Successful' },
-  { value: 'client_error', label: 'Client error' },
-  { value: 'server_error', label: 'Server error' },
-] as const
+const EXPORT_PAGE_SIZE = 200
+const EXPORT_LIMIT = 10_000
+const ANY_TIME: AuditTimeRange = { preset: 'any', from: '', to: '' }
 
 export interface AuditActor {
   name: string
@@ -103,6 +110,10 @@ function details(log: AuditLog): string {
   )
 }
 
+function actorLabel(userId: string | undefined, actor?: AuditActor): string {
+  return actor?.name || actor?.email || (userId ? `User ${userId.slice(0, 8)}` : 'System')
+}
+
 function AuditRow({
   log,
   actor,
@@ -114,8 +125,7 @@ function AuditRow({
   open: boolean
   onToggle: () => void
 }) {
-  const who =
-    actor?.name || actor?.email || (log.userId ? `User ${log.userId.slice(0, 8)}` : 'System')
+  const who = actorLabel(log.userId, actor)
   const tone = statusTone(log.statusCode)
   return (
     <li>
@@ -187,6 +197,97 @@ function AuditRow({
   )
 }
 
+/** A filter chip for one time window, styled like FilterPill. */
+function TimeRangePill({
+  value,
+  onChange,
+}: {
+  value: AuditTimeRange
+  onChange: (next: AuditTimeRange) => void
+}) {
+  const label = auditTimeLabel(value)
+  const custom = value.preset === 'custom'
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex h-8 items-center gap-1.5 rounded-md border border-dashed border-border-strong bg-transparent px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+            label && 'border-solid bg-surface text-foreground shadow-xs',
+          )}
+        >
+          <CalendarRange className="size-3.5" />
+          Time
+          {label ? (
+            <>
+              <Separator orientation="vertical" className="mx-0.5 h-4" />
+              <span className="rounded bg-secondary px-1.5 text-xs">{label}</span>
+            </>
+          ) : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1">
+        {AUDIT_TIME_PRESETS.map((preset) => {
+          const checked = value.preset === preset.value
+          return (
+            <button
+              key={preset.value}
+              type="button"
+              role="menuitemradio"
+              aria-checked={checked}
+              onClick={() =>
+                onChange(
+                  preset.value === 'custom'
+                    ? { ...value, preset: 'custom' }
+                    : { preset: preset.value, from: '', to: '' },
+                )
+              }
+              className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px] hover:bg-accent"
+            >
+              <Check className={cn('size-3.5 text-primary', !checked && 'invisible')} />
+              {preset.label}
+            </button>
+          )
+        })}
+        {custom ? (
+          <div className="mt-1 grid grid-cols-2 gap-2 border-t border-border px-1.5 pb-1.5 pt-2.5">
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              From
+              <Input
+                type="date"
+                value={value.from}
+                max={value.to || undefined}
+                onChange={(event) => onChange({ ...value, from: event.target.value })}
+                className="h-8 px-2 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+              To
+              <Input
+                type="date"
+                value={value.to}
+                min={value.from || undefined}
+                onChange={(event) => onChange({ ...value, to: event.target.value })}
+                className="h-8 px-2 text-xs"
+              />
+            </label>
+          </div>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function downloadText(filename: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = ({
   actors = {},
 }) => {
@@ -195,26 +296,43 @@ const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = (
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
+  const [facets, setFacets] = useState<AuditLogFacets | null>(null)
+  const [directory, setDirectory] = useState<Record<string, AuditActor>>({})
+  const [exporting, setExporting] = useState(false)
 
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [userFilter, setUserFilter] = useState('')
-  const [debouncedUserFilter, setDebouncedUserFilter] = useState('')
-  const [actionFilter, setActionFilter] = useState('')
-  const [debouncedActionFilter, setDebouncedActionFilter] = useState('')
-  const [resourceFilter, setResourceFilter] = useState('')
-  const [debouncedResourceFilter, setDebouncedResourceFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
-  const [sortField, setSortField] = useState('createdAt')
-  const [sortOrder, setSortOrder] = useState<AuditSortOrder>('desc')
+  const [people, setPeople] = useState<string[]>([])
+  const [actions, setActions] = useState<string[]>([])
+  const [results, setResults] = useState<string[]>([])
+  const [range, setRange] = useState<AuditTimeRange>(ANY_TIME)
+  const [order, setOrder] = useState<AuditSortOrder>('desc')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState<number>(20)
   const [requests] = useState(createLatestAuditRequest)
+  const facetsRequested = useRef(false)
+
+  const known = useMemo(() => ({ ...directory, ...actors }), [actors, directory])
+
+  const queryFor = useCallback(
+    (pageNumber: number, limit: number) =>
+      buildAuditLogQuery({
+        query: debouncedQuery,
+        user: people.join(','),
+        action: actions.join(','),
+        resource: '',
+        status: results.length === AUDIT_RESULT_OPTIONS.length ? '' : results.join(','),
+        ...auditTimeBounds(range),
+        sort: 'createdAt',
+        order,
+        page: pageNumber,
+        limit,
+      }),
+    [actions, debouncedQuery, order, people, range, results],
+  )
 
   const fetchLogs = useCallback(async () => {
-    if (fromDate && toDate && fromDate > toDate) {
+    if (range.preset === 'custom' && range.from && range.to && range.from > range.to) {
       requests.abort()
       setLoading(false)
       setError('The start date must be on or before the end date.')
@@ -224,25 +342,16 @@ const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = (
     const request = requests.start()
     setLoading(true)
     setError(null)
+    const withFacets = !facetsRequested.current
     try {
-      const requestQuery = buildAuditLogQuery({
-        query: debouncedQuery,
-        user: debouncedUserFilter,
-        action: debouncedActionFilter,
-        resource: debouncedResourceFilter,
-        status: statusFilter,
-        from: fromDate,
-        to: toDate,
-        sort: sortField,
-        order: sortOrder,
-        page,
-        limit: pageSize,
-      })
-      const response = await fetch(`/api/admin/audit-logs?${requestQuery}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        signal: request.signal,
-      })
+      const response = await fetch(
+        `/api/admin/audit-logs?${queryFor(page, pageSize)}${withFacets ? '&facets=1' : ''}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: request.signal,
+        },
+      )
       if (!response.ok) throw new Error(await responseText(response))
       const payload = normalizeAuditLogPage(
         (await response.json()) as Parameters<typeof normalizeAuditLogPage>[0],
@@ -250,6 +359,10 @@ const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = (
         pageSize,
       )
       if (!request.isCurrent()) return
+      if (withFacets) {
+        facetsRequested.current = true
+        if (payload.facets) setFacets(payload.facets)
+      }
 
       const lastPage = Math.max(1, Math.ceil(payload.total / pageSize))
       if (page > lastPage) {
@@ -265,67 +378,120 @@ const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = (
       if (request.isCurrent()) setLoading(false)
       request.finish()
     }
-  }, [
-    debouncedActionFilter,
-    debouncedQuery,
-    debouncedResourceFilter,
-    debouncedUserFilter,
-    fromDate,
-    page,
-    pageSize,
-    requests,
-    sortField,
-    sortOrder,
-    statusFilter,
-    toDate,
-  ])
+  }, [page, pageSize, queryFor, range, requests])
 
   useEffect(() => {
     void fetchLogs()
     return () => requests.abort()
   }, [fetchLogs, requests])
 
+  // Reading the audit log is itself audited, so it refreshes when the tab
+  // comes back rather than on a timer.
+  useQuietRefresh(() => void fetchLogs(), { afterAwayMs: 60_000, enabled: page === 1 })
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedQuery(query.trim())
-      setDebouncedUserFilter(userFilter.trim())
-      setDebouncedActionFilter(actionFilter.trim())
-      setDebouncedResourceFilter(resourceFilter.trim())
-    }, 300)
+    const controller = new AbortController()
+    void fetch('/api/admin/users?limit=200&sort=name&order=asc', { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { users?: Array<{ id: string; name: string; email: string }> } | null) => {
+        if (!payload?.users) return
+        setDirectory(
+          Object.fromEntries(
+            payload.users.map((user) => [user.id, { name: user.name, email: user.email }]),
+          ),
+        )
+      })
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300)
     return () => window.clearTimeout(timer)
-  }, [actionFilter, query, resourceFilter, userFilter])
+  }, [query])
+
+  const personOptions = useMemo<FilterOption[]>(() => {
+    const ids = facets
+      ? facets.users.map((facet) => facet.value)
+      : Object.keys(known).filter((id) => logs.some((log) => log.userId === id))
+    const counts = new Map(facets?.users.map((facet) => [facet.value, facet.count]))
+    return [...new Set([...ids, ...people])].map((id) => {
+      const label = actorLabel(id, known[id])
+      return {
+        value: id,
+        label,
+        count: counts.get(id),
+        icon: <Avatar name={label} size={16} />,
+      }
+    })
+  }, [facets, known, logs, people])
+
+  const actionOptions = useMemo<FilterOption[]>(() => {
+    const counts = new Map(facets?.actions.map((facet) => [facet.value, facet.count]))
+    const values = facets
+      ? facets.actions.map((facet) => facet.value)
+      : [...new Set(logs.map((log) => log.action))].sort()
+    return [...new Set([...values, ...actions])].map((value) => ({
+      value,
+      label: value,
+      count: counts.get(value),
+    }))
+  }, [actions, facets, logs])
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const currentPage = Math.min(page, totalPages)
-  const advancedCount = [userFilter, actionFilter, resourceFilter].filter((value) =>
-    value.trim(),
-  ).length
   const hasFilters = Boolean(
     query.trim() ||
-      userFilter.trim() ||
-      actionFilter.trim() ||
-      resourceFilter.trim() ||
-      statusFilter !== 'all' ||
-      fromDate ||
-      toDate,
+      people.length ||
+      actions.length ||
+      results.length ||
+      auditTimeLabel(range) !== null,
   )
 
   const resetFilters = () => {
     setQuery('')
     setDebouncedQuery('')
-    setUserFilter('')
-    setDebouncedUserFilter('')
-    setActionFilter('')
-    setDebouncedActionFilter('')
-    setResourceFilter('')
-    setDebouncedResourceFilter('')
-    setStatusFilter('all')
-    setFromDate('')
-    setToDate('')
-    setSortField('createdAt')
-    setSortOrder('desc')
+    setPeople([])
+    setActions([])
+    setResults([])
+    setRange(ANY_TIME)
     setPage(1)
     setError(null)
+  }
+
+  const exportCsv = async () => {
+    setExporting(true)
+    try {
+      const collected: AuditLog[] = []
+      for (let pageNumber = 1; collected.length < EXPORT_LIMIT; pageNumber += 1) {
+        const response = await fetch(
+          `/api/admin/audit-logs?${queryFor(pageNumber, EXPORT_PAGE_SIZE)}`,
+        )
+        if (!response.ok) throw new Error(await responseText(response))
+        const payload = normalizeAuditLogPage(
+          (await response.json()) as Parameters<typeof normalizeAuditLogPage>[0],
+          pageNumber,
+          EXPORT_PAGE_SIZE,
+        )
+        collected.push(...payload.logs)
+        if (payload.logs.length < EXPORT_PAGE_SIZE || collected.length >= payload.total) break
+      }
+      const rows = collected.slice(0, EXPORT_LIMIT)
+      const stamp = new Date().toISOString().slice(0, 10)
+      downloadText(
+        `audit-log-${stamp}.csv`,
+        auditLogsCsv(rows, (userId) => (userId ? (known[userId]?.name ?? '') : '')),
+      )
+      toast.success('Audit log exported', {
+        description: `${rows.length.toLocaleString()} ${rows.length === 1 ? 'event' : 'events'} · audit-log-${stamp}.csv`,
+      })
+    } catch (cause) {
+      toast.error('The audit log was not exported', {
+        description: cause instanceof Error ? cause.message : String(cause),
+      })
+    } finally {
+      setExporting(false)
+    }
   }
 
   const days = useMemo(() => {
@@ -352,154 +518,52 @@ const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = (
         search={query}
         onSearchChange={filterChange(setQuery)}
         placeholder="Search activity…"
+        className="mb-0"
         filters={
           <>
-            <Select value={statusFilter} onValueChange={filterChange(setStatusFilter)}>
-              <SelectTrigger size="sm" aria-label="Response status" className="min-w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span className="flex items-center gap-1.5">
-              <Input
-                type="date"
-                value={fromDate}
-                max={toDate || undefined}
-                onChange={(event) => filterChange(setFromDate)(event.target.value)}
-                aria-label="From date"
-                className="h-8 w-[9.5rem] text-xs"
-              />
-              <span className="text-xs text-subtle-foreground">to</span>
-              <Input
-                type="date"
-                value={toDate}
-                min={fromDate || undefined}
-                onChange={(event) => filterChange(setToDate)(event.target.value)}
-                aria-label="To date"
-                className="h-8 w-[9.5rem] text-xs"
-              />
-            </span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <SlidersHorizontal />
-                  More filters
-                  {advancedCount ? (
-                    <Badge size="sm" tone="brand">
-                      {advancedCount}
-                    </Badge>
-                  ) : null}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-80">
-                <div className="flex flex-col gap-3">
-                  <Field label="User ID" htmlFor="audit-user">
-                    <Input
-                      id="audit-user"
-                      value={userFilter}
-                      onChange={(event) => filterChange(setUserFilter)(event.target.value)}
-                      placeholder="Exact user ID"
-                      className="h-8 font-mono text-[12.5px]"
-                    />
-                  </Field>
-                  <Field label="Action" htmlFor="audit-action">
-                    <Input
-                      id="audit-action"
-                      value={actionFilter}
-                      onChange={(event) => filterChange(setActionFilter)(event.target.value)}
-                      placeholder="user.update"
-                      className="h-8 font-mono text-[12.5px]"
-                    />
-                  </Field>
-                  <Field label="Resource" htmlFor="audit-resource">
-                    <Input
-                      id="audit-resource"
-                      value={resourceFilter}
-                      onChange={(event) => filterChange(setResourceFilter)(event.target.value)}
-                      placeholder="Exact resource"
-                      className="h-8 font-mono text-[12.5px]"
-                    />
-                  </Field>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Field label="Sort by" htmlFor="audit-sort">
-                      <Select value={sortField} onValueChange={filterChange(setSortField)}>
-                        <SelectTrigger id="audit-sort" size="sm" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AUDIT_SORT_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <Field label="Order" htmlFor="audit-order">
-                      <Select
-                        value={sortOrder}
-                        onValueChange={(value) =>
-                          filterChange(setSortOrder)(value === 'asc' ? 'asc' : 'desc')
-                        }
-                      >
-                        <SelectTrigger id="audit-order" size="sm" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="desc">Newest first</SelectItem>
-                          <SelectItem value="asc">Oldest first</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </div>
-                  <Field label="Rows per page" htmlFor="audit-rows">
-                    <Select
-                      value={String(pageSize)}
-                      onValueChange={(value) =>
-                        filterChange(setPageSize)(Number.parseInt(value, 10))
-                      }
-                    >
-                      <SelectTrigger id="audit-rows" size="sm" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {AUDIT_PAGE_SIZE_OPTIONS.map((size) => (
-                          <SelectItem key={size} value={String(size)}>
-                            {size}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={resetFilters}
-                    disabled={!hasFilters && sortField === 'createdAt' && sortOrder === 'desc'}
-                  >
-                    Reset filters
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <FilterPill
+              label="Person"
+              selected={people}
+              onChange={filterChange(setPeople)}
+              options={personOptions}
+            />
+            <FilterPill
+              label="Action"
+              selected={actions}
+              onChange={filterChange(setActions)}
+              options={actionOptions}
+            />
+            <FilterPill
+              label="Result"
+              selected={results}
+              onChange={filterChange(setResults)}
+              options={AUDIT_RESULT_OPTIONS.map((option) => ({ ...option }))}
+            />
+            <TimeRangePill value={range} onChange={filterChange(setRange)} />
           </>
         }
         actions={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => void fetchLogs()}
-            disabled={loading}
-            aria-label="Refresh audit logs"
-          >
-            <RefreshCw className={cn(loading && 'animate-spin')} />
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => filterChange(setOrder)(order === 'desc' ? 'asc' : 'desc')}
+              aria-label={order === 'desc' ? 'Show oldest first' : 'Show newest first'}
+            >
+              {order === 'desc' ? <ArrowDownWideNarrow /> : <ArrowUpNarrowWide />}
+              {order === 'desc' ? 'Newest first' : 'Oldest first'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void exportCsv()}
+              loading={exporting}
+              disabled={total === 0}
+            >
+              <Download />
+              Export CSV
+            </Button>
+          </>
         }
       />
 
@@ -544,7 +608,7 @@ const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = (
                   <AuditRow
                     key={log.id}
                     log={log}
-                    actor={log.userId ? actors[log.userId] : undefined}
+                    actor={log.userId ? known[log.userId] : undefined}
                     open={expanded === log.id}
                     onToggle={() => setExpanded((current) => (current === log.id ? null : log.id))}
                   />
@@ -560,13 +624,13 @@ const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = (
             title={hasFilters ? 'No activity matches' : 'No activity yet'}
             description={
               hasFilters
-                ? 'No audit entries match the current filters.'
-                : 'No audit log entries have been recorded.'
+                ? 'Clear the search or filters to see every recorded event.'
+                : 'Sign-ins, role changes and config saves show up here.'
             }
             actions={
               hasFilters ? (
                 <Button variant="outline" size="sm" onClick={resetFilters}>
-                  Reset filters
+                  Clear filters
                 </Button>
               ) : null
             }
@@ -575,9 +639,23 @@ const UsersPageAuditPanel: React.FC<{ actors?: Record<string, AuditActor> }> = (
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span aria-live="polite">
-          Page {currentPage} / {totalPages} · {total.toLocaleString()} records
-          {loading && logs.length > 0 ? ' · Refreshing…' : ''}
+        <span className="flex items-center gap-2" aria-live="polite">
+          Page {currentPage} / {totalPages} · {total.toLocaleString()} events
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) => filterChange(setPageSize)(Number.parseInt(value, 10))}
+          >
+            <SelectTrigger size="sm" aria-label="Rows per page" className="h-7 w-[4.5rem] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {AUDIT_PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </span>
         <span className="flex items-center gap-1.5">
           <Button

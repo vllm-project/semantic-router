@@ -141,50 +141,6 @@ async function expectInside(container: Locator, child: Locator) {
 }
 
 test.describe('Config surface layout regressions', () => {
-  test('opens decision model settings directly and saves the decision model and a binding', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await mockConfigSurface(page);
-
-    let decisionModel = 'main-judge';
-    let patch: Record<string, unknown> | undefined;
-    const deployments = {
-      'main-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-4B' },
-      'alternate-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-0.8B' },
-    };
-    await page.route('**/api/router/config/global', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          model_catalog: { system: { decision_model: { deployment: decisionModel } }, deployments },
-        }),
-      });
-    });
-    await page.route('**/api/router/config/global/update', async route => {
-      patch = route.request().postDataJSON().model_catalog;
-      decisionModel = 'alternate-judge';
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"success","warnings":[]}' });
-    });
-
-    await page.goto('/config/global-config#global-section-system_models');
-    const card = page.locator('#global-section-system_models');
-    await expect(card.getByRole('heading', { name: 'Decision Model & Bindings' })).toBeInViewport();
-    await expect(card.getByText('main-judge', { exact: true })).toBeVisible();
-    await card.getByRole('button', { name: 'Edit', exact: true }).click();
-
-    const modal = page.getByRole('dialog', { name: 'Edit Decision Model & Bindings' });
-    await expect(modal.getByLabel(/^Decision Model/)).toHaveValue('main-judge');
-    await modal.getByLabel(/^Decision Model/).selectOption('alternate-judge');
-    await modal.getByLabel('Domain', { exact: true }).selectOption('alternate-judge');
-    await modal.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(modal).toBeHidden();
-    expect(patch).toEqual({
-      system: { decision_model: { deployment: 'alternate-judge' } },
-      bindings: { domain: 'alternate-judge' },
-    });
-    await expect(card.getByText('alternate-judge', { exact: true })).toBeVisible();
-  });
-
   test('opens a new signal of any type in its drawer with schema-driven controls', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await mockConfigSurface(page);
@@ -285,61 +241,57 @@ test.describe('Config surface layout regressions', () => {
     expect(box!.y + box!.height).toBeLessThanOrEqual(844);
   });
 
-  test('stacks model catalog section path and actions cleanly inside global cards', async ({ page }) => {
+  test('keeps model catalog card paths and controls cleanly inside their router settings cards', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1200 });
     await mockConfigSurface(page);
 
-    await page.goto('/config/global-config');
-    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
+    await page.goto('/settings/router#global-section-system_models');
+    await expect(page.getByRole('heading', { name: 'Router settings', exact: true }).first()).toBeVisible({ timeout: 15_000 });
 
-    const systemBindingsCard = page.locator('article').filter({
-      has: page.getByRole('heading', { name: 'Decision Model & Bindings' }),
-    }).first();
-    const embeddingsCard = page.locator('article').filter({
-      has: page.getByRole('heading', { name: 'Embedding Models' }),
-    }).first();
+    const decisionCard = page.locator('#global-section-system_models');
+    const embeddingsCard = page.locator('#global-section-embedding_models');
+    await expect(decisionCard.getByRole('combobox', { name: /^Jailbreak/ })).toHaveText('guard-judge');
+    await expect(embeddingsCard.getByRole('textbox', { name: 'Default deployment' })).toHaveValue('qwen3-embedding');
 
-    await expect(systemBindingsCard).toBeVisible();
-    await expect(embeddingsCard).toBeVisible();
-    await expect(systemBindingsCard.getByText('guard-judge', { exact: true })).toBeVisible();
-    await expect(embeddingsCard.getByText('qwen3-embedding')).toBeVisible();
-
-    const systemPath = systemBindingsCard.getByText('global.model_catalog.system');
-    const systemButton = systemBindingsCard.getByRole('button', { name: 'Edit' });
-    const embeddingPath = embeddingsCard.getByText('global.model_catalog.embeddings');
-    const embeddingButton = embeddingsCard.getByRole('button', { name: 'Edit' });
-
-    for (const [card, path, button] of [
-      [systemBindingsCard, systemPath, systemButton],
-      [embeddingsCard, embeddingPath, embeddingButton],
+    for (const [card, path, control] of [
+      [
+        decisionCard,
+        decisionCard.getByText('global.model_catalog.system', { exact: true }),
+        decisionCard.getByRole('button', { name: 'Manage decision models' }),
+      ],
+      [
+        embeddingsCard,
+        embeddingsCard.getByText('global.model_catalog.embeddings', { exact: true }),
+        embeddingsCard.getByRole('radiogroup', { name: 'Embedding provider' }),
+      ],
     ] as const) {
       await expect(path).toBeVisible();
-      await expect(button).toBeVisible();
+      await expect(control).toBeVisible();
       await expectInside(card, path);
-      await expectInside(card, button);
+      await expectInside(card, control);
 
-      const [pathBox, buttonBox] = await Promise.all([path.boundingBox(), button.boundingBox()]);
+      const [pathBox, controlBox] = await Promise.all([path.boundingBox(), control.boundingBox()]);
       expect(pathBox).not.toBeNull();
-      expect(buttonBox).not.toBeNull();
+      expect(controlBox).not.toBeNull();
       const horizontallySeparated =
-        buttonBox!.x + buttonBox!.width <= pathBox!.x ||
-        pathBox!.x + pathBox!.width <= buttonBox!.x;
+        controlBox!.x + controlBox!.width <= pathBox!.x ||
+        pathBox!.x + pathBox!.width <= controlBox!.x;
       const verticallySeparated =
-        buttonBox!.y + buttonBox!.height <= pathBox!.y ||
-        pathBox!.y + pathBox!.height <= buttonBox!.y;
+        controlBox!.y + controlBox!.height <= pathBox!.y ||
+        pathBox!.y + pathBox!.height <= controlBox!.y;
       expect(horizontallySeparated || verticallySeparated).toBe(true);
     }
 
     await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0);
   });
 
-  test('falls back from the retired classifier route to Global Config', async ({ page }) => {
+  test('falls back from the retired classifier route to router settings', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1200 });
     await mockConfigSurface(page);
 
     await page.goto('/config/classifiers');
 
-    await expect(page).toHaveURL(/\/config\/global-config$/);
-    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/router$/);
+    await expect(page.getByRole('heading', { name: 'Router settings', exact: true }).first()).toBeVisible({ timeout: 15_000 });
   });
 });

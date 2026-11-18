@@ -53,7 +53,7 @@ import {
   type SetupStep,
   type SetupValidationState,
 } from './setupWizardSupport'
-import { type ProviderKind } from './setupWizardProviderCatalog'
+import { getSetupProviderOption, type ProviderKind } from './setupWizardProviderCatalog'
 import {
   DECISION_CATALOG_MODELS,
   DECISION_MODEL_OPTIONS,
@@ -62,13 +62,6 @@ import {
   withDecisionModel,
   type DecisionModelName,
 } from './decisionModelSupport'
-
-const PROVIDER_LOGO: Record<ProviderKind, string> = {
-  vllm: 'vllm',
-  ollama: 'ollama',
-  'openai-compatible': 'openai',
-  anthropic: 'anthropic',
-}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -651,7 +644,7 @@ const SetupWizardPage: React.FC = () => {
           .filter(Boolean)
   const providers =
     routingMode === 'scratch'
-      ? [...new Set(models.map((model) => PROVIDER_LOGO[model.providerKind]))]
+      ? [...new Set(models.map((model) => getSetupProviderOption(model.providerKind).logo))]
       : []
   const modelCount = modelNames.length || generatedCounts.models
   const defaultModel = String(

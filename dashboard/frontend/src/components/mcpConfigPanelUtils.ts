@@ -29,9 +29,7 @@ import {
 import type { RegisteredTool } from '../tools'
 import type {
   BuiltInTool,
-  ServerFilter,
-  ServerSort,
-  ToolSort,
+  ServerFilters,
   ToolSourceFilter,
   UnifiedTool,
   UnifiedToolParameter,
@@ -123,11 +121,10 @@ export function toUnifiedBuiltInTool(tool: BuiltInTool): UnifiedTool {
   }
 }
 
-export function filterAndSortUnifiedTools(
+export function filterUnifiedTools(
   tools: UnifiedTool[],
   searchValue: string,
   sourceFilter: ToolSourceFilter,
-  sort: ToolSort,
 ): UnifiedTool[] {
   const search = searchValue.trim().toLowerCase()
   return tools
@@ -142,43 +139,26 @@ export function filterAndSortUnifiedTools(
         ...tool.parameters.flatMap((parameter) => [parameter.name, parameter.description || '']),
       ].some((value) => value.toLowerCase().includes(search))
     })
-    .sort((left, right) => {
-      if (sort === 'source-asc') {
-        return (
-          left.source.localeCompare(right.source, undefined, { sensitivity: 'base' }) ||
-          left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-        )
-      }
-      if (sort === 'parameters-desc') {
-        return (
-          right.parameters.length - left.parameters.length ||
-          left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-        )
-      }
-      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-    })
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
 }
 
-export function filterAndSortServers(
+/** Connected servers first, then the ones still trying, then the rest. */
+export const SERVER_STATUS_RANK: Record<MCPServerState['status'], number> = {
+  connected: 0,
+  connecting: 1,
+  error: 2,
+  disconnected: 3,
+}
+
+export function filterServers(
   servers: MCPServerState[],
-  filter: ServerFilter,
   searchValue: string,
-  sort: ServerSort,
+  { transports, statuses }: ServerFilters,
 ): MCPServerState[] {
   const search = searchValue.trim().toLowerCase()
-  const statusRank: Record<MCPServerState['status'], number> = {
-    connected: 0,
-    connecting: 1,
-    error: 2,
-    disconnected: 3,
-  }
-
   return servers
-    .filter((server) => {
-      if (filter === 'all') return true
-      if (filter === 'connected') return server.status === 'connected'
-      return server.status !== 'connected'
-    })
+    .filter((server) => transports.length === 0 || transports.includes(server.config.transport))
+    .filter((server) => statuses.length === 0 || statuses.includes(server.status))
     .filter((server) => {
       if (!search) return true
       const connection = server.config.connection
@@ -192,21 +172,9 @@ export function filterAndSortServers(
         ...(server.tools || []).flatMap((tool) => [tool.name, tool.description || '']),
       ].some((value) => value.toLowerCase().includes(search))
     })
-    .sort((left, right) => {
-      if (sort === 'status') {
-        return (
-          statusRank[left.status] - statusRank[right.status] ||
-          left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
-        )
-      }
-      if (sort === 'tools-desc') {
-        return (
-          (right.tools?.length || 0) - (left.tools?.length || 0) ||
-          left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
-        )
-      }
-      return left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
-    })
+    .sort((left, right) =>
+      left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' }),
+    )
 }
 
 export function paginateMCPItems<T>(items: readonly T[], page: number, pageSize: number): T[] {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
+import { ROUTER_CONFIG_DOCUMENT_SCHEMA, configYaml, configYamlDiff } from '../lib/configYaml'
 import { ROUTER_SETTINGS_CARDS } from './configPageRouterSectionCatalog'
 import {
   applyMergePatch,
@@ -12,14 +13,12 @@ import {
 } from './configPageRouterSettingsDraft'
 import {
   contractNodeAt,
-  contractOrdered,
   restartReason,
   routerSettingsSections,
   settingLabel,
   settingPresentation,
 } from './configPageRouterSettingsModel'
 import { validateRouterSettings } from './configPageRouterSettingsValidation'
-import { toYaml, yamlDiff, yamlScalar } from './configPageRouterSettingsYaml'
 
 describe('router settings draft', () => {
   it('sets and unsets paths without touching siblings, pruning emptied objects', () => {
@@ -78,57 +77,52 @@ describe('router settings draft', () => {
 })
 
 describe('router settings YAML', () => {
-  it('quotes strings YAML would read as another type', () => {
-    expect(yamlScalar('on')).toBe('"on"')
-    expect(yamlScalar('25')).toBe('"25"')
-    expect(yamlScalar('')).toBe('""')
-    expect(yamlScalar('vsr:router-session:v1:')).toBe('"vsr:router-session:v1:"')
-    expect(yamlScalar('o200k_base')).toBe('o200k_base')
-    expect(yamlScalar('>folded')).toBe('">folded"')
-    expect(yamlScalar(0.05)).toBe('0.05')
-  })
+  const schema = ROUTER_CONFIG_DOCUMENT_SCHEMA
 
-  it('writes nested mappings and lists of mappings', () => {
+  it('writes the global block in contract order, with free-form maps sorted', () => {
     expect(
-      toYaml({
-        global: {
-          router: {
-            routing_input: { strip_blocks: [{ start: '<a>', end: '</a>' }] },
-            allow_lossy_translation: [],
+      configYaml(
+        {
+          global: {
+            plugins: [],
+            stores: {},
+            model_catalog: { deployments: { zeta: { provider: 'model_runtime' }, alpha: {} } },
+            router: { drain_timeout_seconds: 25, enabled: true },
           },
         },
-      }),
+        schema,
+      ),
     ).toBe(
       [
         'global:',
         '  router:',
-        '    routing_input:',
-        '      strip_blocks:',
-        '        - start: <a>',
-        '          end: </a>',
-        '    allow_lossy_translation: []',
+        '    enabled: true',
+        '    drain_timeout_seconds: 25',
+        '  stores: {}',
+        '  model_catalog:',
+        '    deployments:',
+        '      alpha: {}',
+        '      zeta:',
+        '        provider: model_runtime',
+        '  plugins: []',
+        '',
       ].join('\n'),
     )
   })
 
-  it('diffs into hunks that remove before they add', () => {
-    const hunks = yamlDiff(
+  it('diffs the global block into hunks that remove before they add', () => {
+    const hunks = configYamlDiff(
       { global: { router: { drain_timeout_seconds: 25, strategy: 'priority' } } },
       { global: { router: { drain_timeout_seconds: 40, strategy: 'priority' } } },
+      { schema },
     )
     expect(hunks).toHaveLength(1)
     expect(hunks[0].header).toBe('global.router')
     expect(
       hunks[0].lines
-        .filter((line) => line.kind !== 'equal')
+        .filter((line) => line.kind !== 'same')
         .map((line) => `${line.kind} ${line.text.trim()}`),
     ).toEqual(['remove drain_timeout_seconds: 25', 'add drain_timeout_seconds: 40'])
-  })
-
-  it('orders keys like the contract', () => {
-    expect(Object.keys(contractOrdered({ plugins: [], stores: {}, router: {} }) as object)).toEqual(
-      ['router', 'stores', 'plugins'],
-    )
   })
 })
 

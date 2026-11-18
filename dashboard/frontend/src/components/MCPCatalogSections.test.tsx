@@ -41,21 +41,18 @@ function serversSection(servers: MCPServerState[], isReadonly: boolean) {
     createElement(MCPServersSection, {
       servers,
       filteredServers: servers,
-      serverFilter: 'all',
+      serverFilters: { transports: [], statuses: [] },
       serverSearch: '',
-      serverSort: 'name-asc',
       isReadonly,
       actionLoading: null,
-      onServerFilterChange: vi.fn(),
+      onServerFiltersChange: vi.fn(),
       onServerSearchChange: vi.fn(),
-      onServerSortChange: vi.fn(),
       onOpenServer: vi.fn(),
       onToggleConnection: vi.fn(),
       onToggleEnabled: vi.fn(),
       onEditServer: vi.fn(),
       onDeleteServer: vi.fn(),
       onAddServer: vi.fn(),
-      onRefresh: vi.fn(),
     }),
   )
 }
@@ -68,11 +65,9 @@ describe('MCP catalog sections', () => {
         allAvailableTools: tools,
         filteredTools: tools,
         toolSearch: '',
-        toolSort: 'name-asc',
         toolSourceFilter: 'all',
         onSearchChange: vi.fn(),
         onSelectTool: vi.fn(),
-        onSortChange: vi.fn(),
         onSourceFilterChange: vi.fn(),
       }),
     )
@@ -96,6 +91,15 @@ describe('MCP catalog sections', () => {
     expect(markup).toContain('8 per page')
     expect(markup).toContain('Connected')
     expect(markup).toContain('Not connected')
+  })
+
+  it('filters with transport and status chips and sorts by header, without a refresh button', () => {
+    const markup = serversSection([makeServer(0), makeServer(1)], false)
+
+    expect(markup).toContain('Transport')
+    expect(markup).toContain('>Status<')
+    expect(markup.match(/<th[^>]*><button type="button"/g)?.length).toBe(3)
+    expect(markup).not.toMatch(/Refresh|Sort servers/)
   })
 
   it('offers adding a server only to people who may manage them', () => {

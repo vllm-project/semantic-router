@@ -8,7 +8,6 @@ import {
   Lock,
   RotateCw,
   SearchX,
-  ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react'
 import {
@@ -22,7 +21,6 @@ import {
   EmptyState,
   IconTile,
   Kbd,
-  MetaItem,
   Segmented,
   Select,
   SelectContent,
@@ -56,7 +54,6 @@ import {
   type RestartNotice,
 } from './ConfigPageRouterConfigSectionReview'
 import { RouterSettingsYamlPanel } from './ConfigPageRouterConfigSectionYaml'
-import { projectCanonicalConfigForManager } from './configPageCanonicalization'
 import { responseErrorMessage } from './configPageRequestErrors'
 import {
   buildEffectiveRouterConfig,
@@ -303,6 +300,7 @@ export default function ConfigPageRouterConfigSection({
   config,
   isReadonly,
   saveConfig,
+  refreshConfig,
 }: ConfigPageRouterConfigSectionProps) {
   const navigate = useNavigate()
   const { hash } = useLocation()
@@ -375,18 +373,10 @@ export default function ConfigPageRouterConfigSection({
   }, [loadEffective, loadRaw])
 
   const refreshSaved = React.useCallback(async () => {
-    try {
-      const response = await fetch('/api/router/config/all')
-      if (response.ok) {
-        const fresh = projectCanonicalConfigForManager(await response.json())
-        adoptSaved(isRecord(fresh.global) ? cloneJson(fresh.global as JsonRecord) : {})
-      }
-    } catch {
-      // The optimistic baseline stays until the next load.
-    }
+    await refreshConfig?.()
     void loadEffective()
     void loadRaw()
-  }, [adoptSaved, loadEffective, loadRaw])
+  }, [loadEffective, loadRaw, refreshConfig])
 
   const readOnlyReason = dashboardReadonly
     ? 'The dashboard runs in read-only mode, so router settings can be viewed but not changed.'
@@ -645,6 +635,13 @@ export default function ConfigPageRouterConfigSection({
   }
 
   const explicitTotal = leafPaths(draft).length
+  const inheritedTotal = React.useMemo(
+    () =>
+      effective
+        ? leafPaths(effective).filter((path) => getAt(draft, path) === undefined).length
+        : null,
+    [draft, effective],
+  )
   const switchView = (next: 'form' | 'yaml') => {
     const nextParams = new URLSearchParams(params)
     if (next === 'yaml') nextParams.set('view', 'yaml')
@@ -695,19 +692,6 @@ export default function ConfigPageRouterConfigSection({
             <FileCode2 />
             Edit as code
           </Button>
-        </>
-      }
-      meta={
-        <>
-          <MetaItem icon={<FileCode2 />} label="Writes">
-            <span className="font-mono text-[12px]">config.yaml · global</span>
-          </MetaItem>
-          <MetaItem label="Set">
-            <span className="tabular">{explicitTotal}</span> keys
-          </MetaItem>
-          <MetaItem icon={<ShieldCheck />} label="Contract">
-            {ROUTER_CONTRACT_VERSION}
-          </MetaItem>
         </>
       }
     >
@@ -783,9 +767,22 @@ export default function ConfigPageRouterConfigSection({
                     }
                     actions={
                       <>
-                        <span className="hidden text-xs text-muted-foreground 2xl:inline">
-                          Empty fields inherit the router default
-                        </span>
+                        <Tooltip
+                          content={`Writes the global section of config.yaml. Empty fields inherit the router default. Checked against the ${ROUTER_CONTRACT_VERSION} contract.`}
+                        >
+                          <span className="hidden cursor-default items-center gap-1.5 text-xs text-muted-foreground lg:inline-flex">
+                            <FileCode2 className="size-3.5 text-subtle-foreground" />
+                            <span>
+                              <span className="tabular">{explicitTotal}</span> set in config.yaml
+                              {inheritedTotal !== null ? (
+                                <>
+                                  {' '}
+                                  · <span className="tabular">{inheritedTotal}</span> inherited
+                                </>
+                              ) : null}
+                            </span>
+                          </span>
+                        </Tooltip>
                         {indexIds.length > 1 ? (
                           <div className="xl:hidden">
                             <Select value={activeSection} onValueChange={scrollTo}>
