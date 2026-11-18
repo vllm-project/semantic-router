@@ -45,7 +45,7 @@ from ..vela2.raw import RawRow
 from ..vela2.request import Plan as PartsPlan
 from ..vela3_answers import Answerer
 from ..vela3_calls import DECISION_BUDGET, Call, Output, Vela3Item
-from ..vela3_shared import PRESETS, layout, text, tokens
+from ..vela3_shared import PRESETS, decision_state, layout, text, tokens
 from .network import Networks
 from .package import (
     BACKBONE_FILE,
@@ -334,12 +334,15 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         asked = [a for a in request.asked if a.path == DECISION]
         if not asked:
             return
-        state = self.tokens.ids(
-            text("" if request.raw_state is None else request.raw_state)
+        state = decision_state(
+            self.tokens,
+            text("" if request.raw_state is None else request.raw_state),
+            self.max_len,
+            any(entry.question.truncate for entry in asked),
         )
         call = Call(None, DECISION_BUDGET)
         for entry in asked:
-            sequence = self._decision(entry, state)
+            sequence = None if state is None else self._decision(entry, state)
             if sequence is None:
                 plan.errors[entry.question.id] = {
                     "type": entry.question.kind,

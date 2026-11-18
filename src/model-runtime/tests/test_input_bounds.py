@@ -32,7 +32,7 @@ from tokenizers import (
 )
 from vllm_srun.api.app import create_app
 from vllm_srun.config import ModelConfig, ServeConfig
-from vllm_srun.families.vela2.layout import word_windows
+from vllm_srun.families.vela2.layout import Tokens, word_windows
 from vllm_srun.runtime import Runtime
 from vllm_srun.testing.embed_packages import write_tokenizer
 from vllm_srun.testing.fixtures import write_fixture
@@ -572,6 +572,7 @@ def decision_runtimes(tmp_path_factory, qwen3_package):
             root / "d1v", family="decision1", variant="vela-encoder"
         ),
         "vela2": write_fixture(root / "vela2", family="vela2", variant="encoder"),
+        "vela3": write_fixture(root / "vela3", family="vela3", variant="encoder"),
     }
     started = {}
     for name, package in packages.items():
@@ -629,6 +630,127 @@ def test_decisions_fail_a_long_state_as_they_fail_it_read_whole(
     )
     assert refused.status_code == 400
     assert refused.json()["error"]["code"] == "invalid_request"
+
+
+# Decisions of Vela 3.0: two that fail a state over the input and one that
+# keeps the state's first tokens.
+VELA3_DECISIONS = {
+    "whole": {"type": "noul", "instructions": "Is the request urgent?"},
+    "cut": {
+        "type": "noul",
+        "instructions": "Is the request urgent?",
+        "overflow": "truncate",
+    },
+    "topic": {
+        "type": "choice",
+        "instructions": "Which kind of advice does the user ask for?",
+        "criteria": {"medical": "health, drugs or doses", "legal": None},
+    },
+}
+
+
+def test_vela3_decisions_read_a_long_state_as_they_read_it_whole(
+    decision_runtimes, monkeypatch
+):
+    runtime = decision_runtimes["vela3"]
+    model = runtime.lookup(None).model
+    limit = model.package.max_input_tokens
+    sentence = "Please summarise the attached release notes. "
+    per_sentence = len(model.tokens.encode(sentence * 8).ids) // 8
+    states = {
+        "short": sentence,
+        "fits": sentence * (limit // per_sentence // 2),
+        "just over": sentence * (limit // per_sentence + 2),
+        "far over": LONG * 30,
+    }
+    failed = {}
+    for name, state in states.items():
+        bounded = model.plan(state, VELA3_DECISIONS)
+        with monkeypatch.context() as patch:
+            patch.setattr(bounds, "facts", lambda tokenizer: bounds.WHOLE)
+            whole = model.plan(state, VELA3_DECISIONS)
+        assert [list(item.ids) for item in bounded.items] == [
+            list(item.ids) for item in whole.items
+        ]
+        assert bounded.errors == whole.errors
+        failed[name] = {key: error["error"] for key, error in bounded.errors.items()}
+        # The decision that truncates keeps the whole state's first tokens. It
+        # renders as "whole" does, so where that one fails it fills the input.
+        item = bounded.items[bounded.decisions["cut"]]
+        start, end = item.sequence.questions[0].pool
+        kept = list(item.ids)[start + 1 : end]
+        assert kept == model.tokens.encode(state).ids[: len(kept)]
+        if "whole" in bounded.errors:
+            assert len(item.ids) == limit
+    over = {"whole": "max_length_exceeded", "topic": "max_length_exceeded"}
+    assert failed == {"short": {}, "fits": {}, "just over": over, "far over": over}
+    client = TestClient(create_app(runtime))
+    for state in states.values():
+        body = {"state": state, "questions": VELA3_DECISIONS}
+        bounded, whole = answers(
+            client, monkeypatch, "/v1/decisions", body, "DecisionResponse"
+        )
+        assert bounded == whole
+
+
+class RecordingTokenizer:
+    """A tokenizer that records every text it encodes."""
+
+    def __init__(self, tokenizer):
+        self.tokenizer, self.texts = tokenizer, []
+
+    def encode(self, text, **options):
+        self.texts.append(text)
+        return self.tokenizer.encode(text, **options)
+
+    def encode_batch(self, texts, **options):
+        self.texts.extend(texts)
+        return self.tokenizer.encode_batch(texts, **options)
+
+    def __getattr__(self, name):
+        return getattr(self.tokenizer, name)
+
+
+def test_vela3_decisions_read_no_more_of_a_long_state_than_the_input(
+    decision_runtimes, monkeypatch
+):
+    model = decision_runtimes["vela3"].lookup(None).model
+    recording = RecordingTokenizer(model.tokens.tokenizer)
+
+    def encode(value):
+        return recording.encode(value, add_special_tokens=False)
+
+    def ids(value):
+        return list(encode(value).ids) if value else []
+
+    monkeypatch.setattr(model, "tokens", Tokens(encode, ids, recording))
+    # The probe that tells which cuts this tokenizer keeps exact is not a read
+    # of the state.
+    bounds.facts(recording)
+    state = LONG * 30
+
+    def read_of_the_state():
+        """Characters of the longest prefix of the state the tokenizer encoded."""
+        return max(
+            (len(text) for text in recording.texts if text and state.startswith(text)),
+            default=0,
+        )
+
+    # No decision truncates: a state certainly over the input fails unread.
+    recording.texts.clear()
+    refusing = {key: VELA3_DECISIONS[key] for key in ("whole", "topic")}
+    refused = model.plan(state, refusing)
+    assert not refused.items
+    assert {error["error"] for error in refused.errors.values()} == {
+        "max_length_exceeded"
+    }
+    assert set(refused.errors) == set(refusing)
+    assert read_of_the_state() == 0
+    # One truncates: the state is read as far as the input and no further.
+    recording.texts.clear()
+    cut = model.plan(state, VELA3_DECISIONS)
+    assert set(cut.errors) == set(refusing) and set(cut.decisions) == {"cut"}
+    assert 0 < read_of_the_state() < len(state) // 10
 
 
 def vela2_scan(runtime) -> tuple[int, int]:
