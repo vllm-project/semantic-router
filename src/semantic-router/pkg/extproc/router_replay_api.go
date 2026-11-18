@@ -24,7 +24,8 @@ const (
 
 // routerReplayHarnesses are the values a harness filter lists.
 var routerReplayHarnesses = []string{
-	store.HarnessClaudeCode, store.HarnessCodex, store.HarnessOpenCode, store.HarnessDeepSeekHarness, store.HarnessAPIClient,
+	store.HarnessClaudeCode, store.HarnessCodex, store.HarnessOpenCode, store.HarnessDeepSeekHarness,
+	store.HarnessCursor, store.HarnessOpenClaw, store.HarnessAPIClient,
 }
 
 type routerReplayFilters struct {

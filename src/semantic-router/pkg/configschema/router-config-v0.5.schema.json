@@ -53,7 +53,9 @@
             "claude_code",
             "codex",
             "opencode",
-            "deepseek_harness"
+            "deepseek_harness",
+            "cursor",
+            "openclaw"
           ]
         },
         "types": {

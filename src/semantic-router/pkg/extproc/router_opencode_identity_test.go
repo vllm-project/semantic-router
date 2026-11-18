@@ -201,6 +201,8 @@ func TestReplayFilesOpenCodeCallsUnderTheirRun(t *testing.T) {
 	main := recordRunCall(t, router, openCodeHeaders("ses_main", ""), llmprotocol.OpenAIChatV1)
 	subagent := recordRunCall(t, router, openCodeHeaders("ses_child", "ses_main"), llmprotocol.OpenAIChatV1)
 	require.Equal(t, []string{"ses_main", "ses_main"}, []string{main.SessionID, subagent.SessionID})
-	require.Equal(t, &store.AgentIdentity{Harness: store.HarnessOpenCode}, main.Agent)
-	require.Equal(t, &store.AgentIdentity{Harness: store.HarnessOpenCode, ID: shortLearningIdentityHash("ses_child")}, subagent.Agent)
+	require.Equal(t, &store.AgentIdentity{Harness: store.HarnessOpenCode, RequestClass: config.AgentRequestClassMain}, main.Agent)
+	require.Equal(t, &store.AgentIdentity{
+		Harness: store.HarnessOpenCode, ID: shortLearningIdentityHash("ses_child"), RequestClass: config.AgentRequestClassSubagent,
+	}, subagent.Agent)
 }

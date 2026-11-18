@@ -16,6 +16,8 @@ const (
 	AgentHarnessCodex           = "codex"
 	AgentHarnessOpenCode        = "opencode"
 	AgentHarnessDeepSeekHarness = "deepseek_harness"
+	AgentHarnessCursor          = "cursor"
+	AgentHarnessOpenClaw        = "openclaw"
 )
 
 // The request classes Claude Code documents for x-claude-code-request-class.
@@ -49,7 +51,10 @@ func SupportedAgentRoles() []string { return []string{AgentRoleMain, AgentRoleSu
 
 // SupportedAgentHarnesses lists the harnesses an AgentRule may name.
 func SupportedAgentHarnesses() []string {
-	return []string{AgentHarnessClaudeCode, AgentHarnessCodex, AgentHarnessOpenCode, AgentHarnessDeepSeekHarness}
+	return []string{
+		AgentHarnessClaudeCode, AgentHarnessCodex, AgentHarnessOpenCode, AgentHarnessDeepSeekHarness,
+		AgentHarnessCursor, AgentHarnessOpenClaw,
+	}
 }
 
 // SupportedAgentRequestClasses lists the request classes an AgentRule may name.
@@ -113,6 +118,10 @@ func validateAgentRequestClasses(rule AgentRule) error {
 			return fmt.Errorf("request_classes cannot go with harness codex: Codex calls carry no request class")
 		case AgentHarnessDeepSeekHarness:
 			return fmt.Errorf("request_classes cannot go with harness deepseek_harness: DeepSeek Harness calls carry no request class")
+		case AgentHarnessCursor:
+			return fmt.Errorf("request_classes cannot go with harness cursor: Cursor calls carry no request class")
+		case AgentHarnessOpenClaw:
+			return fmt.Errorf("request_classes cannot go with harness openclaw: OpenClaw calls carry no request class")
 		}
 	}
 	for i, class := range rule.RequestClasses {
