@@ -641,6 +641,56 @@ request without `store` and reports a `dropped` diagnostic for `store` in
   reasoning summary keeps its own `response.reasoning_summary_part.added` and
   `response.reasoning_summary_part.done` events.
 
+### Structured output with tools
+
+Model servers such as vLLM apply an output format (Chat `response_format`,
+Responses `text.format`, Messages `output_config.format`) to the whole
+completion. A model given callable tools and a JSON Schema then can't call
+them; it answers with made-up JSON in the schema. The Router keeps the OpenAI
+contract for such a turn: the model may call tools, and only a final answer
+without tool calls is held to the schema.
+
+This applies to a request with `json_schema` or `json_object` output, at least
+one tool, and a `tool_choice` other than `none`:
+
+- **First call without the format.** The backend receives the turn with its
+  tools and `tool_choice` as the client sent them, without the output format.
+- **A tool call is the answer.** An answer that calls a tool reaches the client
+  as the backend gave it. So does one that refuses or doesn't end on its own:
+  cut at the output limit, filtered, or failed.
+- **A final answer is asked for again.** For an answer without tool calls, the
+  Router sends the same backend a second call with the same request,
+  `tool_choice: none` and the output format, and returns that call's answer. A
+  Chat Completions backend receives this call without its tools, like any
+  `tool_choice: none` request; Messages and Responses backends keep them. The
+  first answer's text and reasoning are discarded.
+- **Usage counts both calls.** The answer's usage, `x-vsr-cost`, spend, the
+  rate limiter's token counts and the Router Replay record add up the two
+  calls. The replay record also carries a `structured_output` outcome with
+  each call's output tokens.
+- **Streams wait for the answer.** A streamed request is held until the first
+  call ends. A tool call then arrives as the stream the backend sent, and a
+  final answer arrives as the second call's answer, all at once. Such a turn
+  doesn't stream incrementally.
+- **Failure.** When the second call fails, the client receives the backend's
+  error with its status, or `503` (`504` on timeout) when no backend
+  answered. A streamed request receives it as the stream's error event. The
+  first answer isn't sent instead, because it doesn't follow the format.
+- **Timeout.** The second call is bounded by the shortest `total_timeout` or
+  `per_try_timeout` that the decision's and the model's `reliability` set,
+  else by 300 seconds, and always by the request's own deadline. Behind
+  Envoy, the ext_proc `message_timeout` bounds it too.
+
+Every backend format takes the two calls, including APIs that already allow
+tool calls beside an output format. `x-vsr-warnings` still reports what the
+format loses toward the backend, such as `output_format.name` toward Messages,
+although the first call carries no format. A format the backend can't carry is
+refused before any call, as without tools.
+
+These requests keep one call with the format: `tool_choice: none`, no tools,
+several candidates (`n` above 1), fallback candidates, Looper decisions, and
+metadata-only models whose transport an external gateway owns.
+
 ## Configure a backend format
 
 The client can use any supported client-facing endpoint; `api_format` controls
