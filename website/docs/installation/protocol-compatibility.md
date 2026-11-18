@@ -251,6 +251,19 @@ blocks are omitted:
 | Non-empty text, including whitespace | The same text |
 | A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
 
+### The answer after reasoning
+
+A reasoning parser, such as vLLM's `qwen3` parser, splits a model's output at
+the closing think tag and keeps the blank line the model writes after it at the
+start of the answer. The Router drops the whitespace in front of the first
+answer text of a reply that carries reasoning, so a Chat Completions,
+Responses, or Messages client reads `Red` and not a blank line and `Red`,
+buffered or streamed. A reply without reasoning keeps its text, leading
+whitespace included, and the reasoning and tool calls are never changed.
+
+A Messages client of an `anthropic` backend that streams reasoning still gets
+the backend's frames as sent, so a separator in front of its answer stays.
+
 ### Anthropic Messages clients on other backends
 
 For an Anthropic Messages client using a Chat Completions or Responses

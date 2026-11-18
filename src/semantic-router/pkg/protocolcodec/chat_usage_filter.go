@@ -10,14 +10,16 @@ import (
 
 // ChatUsageStreamFilter frames a same-format Chat stream before exposing it to
 // the client. It removes Router-requested accounting evidence when the client
-// did not opt into usage, and provider decorations that the neutral codec
-// reports as dropped. Undecorated frames retain their original bytes. A
+// did not opt into usage, provider decorations that the neutral codec reports
+// as dropped, and the whitespace a reasoning parser leaves in front of the
+// answer. Undecorated frames retain their original bytes. A
 // provider error event ends the public stream: the filter drops it and every
 // later frame, and UpstreamFailed reports it.
 type ChatUsageStreamFilter struct {
 	framer          sseFramer
 	stripUsage      bool
 	seenFinish      map[int]bool
+	answer          answerSeparator
 	frames          int
 	pendingTerminal []byte
 	failure         error
@@ -97,7 +99,7 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 			continue
 		}
 		filtered, keep, hasData, terminal, err := filterChatUsageFrame(
-			frame, filter.framer.limit, filter.frames == 0, filter.stripUsage, filter.seenFinish,
+			frame, filter.framer.limit, filter.frames == 0, filter.stripUsage, filter.seenFinish, &filter.answer,
 		)
 		filter.frames++
 		if errors.Is(err, errChatUpstreamErrorFrame) {
@@ -136,7 +138,9 @@ func (filter *ChatUsageStreamFilter) poison(err error) error {
 	return filter.failure
 }
 
-func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool) ([]byte, bool, bool, bool, error) {
+func filterChatUsageFrame(
+	frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool, answer *answerSeparator,
+) ([]byte, bool, bool, bool, error) {
 	parsed, err := parseSSEFrameAtPosition(frame, limit, first)
 	if err != nil {
 		return nil, false, false, false, err
@@ -172,6 +176,10 @@ func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenF
 		}
 		if removed {
 			choices[index] = choice
+			changed = true
+		}
+		if trimmed := answer.trimChatChoice(choices[index]); trimmed != nil {
+			choices[index] = trimmed
 			changed = true
 		}
 	}

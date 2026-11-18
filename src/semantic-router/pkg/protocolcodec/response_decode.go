@@ -38,6 +38,7 @@ func (engine *Engine) DecodeResponse(
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
+	trimDecodedAnswerSeparator(pair.buffered, false, &response, &envelope)
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return response, envelope, diagnostics, err
 	}

@@ -300,7 +300,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
-	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
+	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired || decoded.Envelope.ResponseReplayAmended
 	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
