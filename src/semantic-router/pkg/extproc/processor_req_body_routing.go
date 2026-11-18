@@ -254,6 +254,10 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) (bool, error) {
+	if explicitAnthropicReasoningDisabled(ctx, dispatch) {
+		// The backend keeps the client's thinking off whatever a decision chose.
+		ctx.VSRReasoningMode = "off"
+	}
 	if dispatch.decisionName == "" {
 		// A Looper hop already carries its decision's prompt; a request that
 		// matched no decision, or names a concrete model, runs its defaults'.
