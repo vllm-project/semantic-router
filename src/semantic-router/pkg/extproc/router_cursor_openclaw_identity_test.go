@@ -94,13 +94,13 @@ func TestCursorAndOpenClawAreNamed(t *testing.T) {
 	}
 }
 
-func TestAgentRulesNameCursorAndOpenClawWithoutRequestClasses(t *testing.T) {
+func TestAgentRulesNameCursorAndOpenClaw(t *testing.T) {
 	for _, harness := range []string{config.AgentHarnessCursor, config.AgentHarnessOpenClaw} {
 		require.NoError(t, config.ValidateAgentRuleContract(config.AgentRule{Name: "client", Harness: harness}))
-		require.ErrorContains(t, config.ValidateAgentRuleContract(config.AgentRule{
-			Name: "client", Harness: harness, RequestClasses: []string{config.AgentRequestClassCompaction},
-		}), "carry no request class")
 	}
+	require.ErrorContains(t, config.ValidateAgentRuleContract(config.AgentRule{
+		Name: "client", Harness: config.AgentHarnessCursor, RequestClasses: []string{config.AgentRequestClassCompaction},
+	}), "carry no request class")
 }
 
 // Cursor names no session, so Replay files a conversation's calls under one
