@@ -76,7 +76,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		failed := llmprotocol.Event{
 			Type: llmprotocol.EventResponseFailed, ResponseID: response.ID,
 			Model: response.Model, StopReason: llmprotocol.StopError, Error: response.Error,
-			Failure: llmprotocol.FailureResponse,
+			Failure: llmprotocol.FailureResponse, CreatedAt: response.CreatedAt,
 		}
 		if response.Usage.State != "" {
 			usage := response.Usage
@@ -88,6 +88,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		Type:       llmprotocol.EventResponseStarted,
 		ResponseID: response.ID,
 		Model:      response.Model,
+		CreatedAt:  response.CreatedAt,
 	}
 	if response.Usage.State != "" {
 		usage := response.Usage

@@ -449,13 +449,13 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			format = llmprotocol.OpenAIChatV1
 		}
 		streamBody, diags, streamErr := engine.EncodeResponseStream(format, candidateResponse, llmprotocol.StreamContext{
-			Context:            ctx.TraceContext,
-			Source:             format,
-			Target:             format,
-			Options:            clientStreamOptions(ctx),
-			PublicModel:        candidateModel,
-			ResponseID:         candidateResponse.ID,
-			PreviousResponseID: responseObjectPreviousID(ctx),
+			Context:        ctx.TraceContext,
+			Source:         format,
+			Target:         format,
+			Options:        clientStreamOptions(ctx),
+			PublicModel:    candidateModel,
+			ResponseID:     candidateResponse.ID,
+			ResponseRender: responseObjectRender(ctx),
 		})
 		if streamErr != nil {
 			attemptOutcome.Error = streamErr
@@ -544,13 +544,13 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			}
 			streamResp := *ctx.SemanticResponse
 			reencodedStream, _, streamErr := engine.EncodeResponseStream(format, streamResp, llmprotocol.StreamContext{
-				Context:            ctx.TraceContext,
-				Source:             format,
-				Target:             format,
-				Options:            clientStreamOptions(ctx),
-				PublicModel:        candidateModel,
-				ResponseID:         ctx.SemanticResponse.ID,
-				PreviousResponseID: responseObjectPreviousID(ctx),
+				Context:        ctx.TraceContext,
+				Source:         format,
+				Target:         format,
+				Options:        clientStreamOptions(ctx),
+				PublicModel:    candidateModel,
+				ResponseID:     ctx.SemanticResponse.ID,
+				ResponseRender: responseObjectRender(ctx),
 			})
 			if streamErr == nil {
 				if validateErr := engine.ValidateEncodedResponse(reencodedStream, true); validateErr == nil {
@@ -560,13 +560,13 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 					// Produce a bounded stream containing the policy result by chunking text across frames within SSE limits.
 					boundedResp := splitResponseTextContent(streamResp, 64*1024)
 					boundedStream, _, boundedErr := engine.EncodeResponseStream(format, boundedResp, llmprotocol.StreamContext{
-						Context:            ctx.TraceContext,
-						Source:             format,
-						Target:             format,
-						Options:            clientStreamOptions(ctx),
-						PublicModel:        candidateModel,
-						ResponseID:         ctx.SemanticResponse.ID,
-						PreviousResponseID: responseObjectPreviousID(ctx),
+						Context:        ctx.TraceContext,
+						Source:         format,
+						Target:         format,
+						Options:        clientStreamOptions(ctx),
+						PublicModel:    candidateModel,
+						ResponseID:     ctx.SemanticResponse.ID,
+						ResponseRender: responseObjectRender(ctx),
 					})
 					if boundedErr == nil && engine.ValidateEncodedResponse(boundedStream, true) == nil {
 						responseBody = boundedStream

@@ -568,6 +568,16 @@ request without `store` and reports a `dropped` diagnostic for `store` in
 - **Verbosity.** Responses `text.verbosity` maps to the Chat `verbosity`
   field. Messages has no equivalent, so the Router drops this hint and reports
   `text.verbosity` in `x-vsr-warnings`.
+- **Response objects.** The response object, buffered and in every streamed
+  `response.*` event, repeats the request's `instructions`, `tools`,
+  `tool_choice`, `parallel_tool_calls`, `max_output_tokens`, `temperature`,
+  `top_p`, `text`, `reasoning`, `metadata`, `truncation`, `user` and
+  `prompt_cache_key` as the client sent them, whatever routing changed for the
+  backend. A member the request leaves out or sets to `null` keeps its
+  default. `created_at` is the backend's creation time, or the Router's when
+  the backend reports none, as Messages backends don't. When the output limit
+  ends the answer, its message item is `incomplete`, in
+  `response.output_item.done` and in the terminal response.
 
 ## Configure a backend format
 

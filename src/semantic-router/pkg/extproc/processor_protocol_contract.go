@@ -55,8 +55,7 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 		return nil, "", nil, err
 	}
 	if !streaming {
-		envelope := llmprotocol.Envelope{}
-		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+		envelope := llmprotocol.Envelope{ResponseRender: responseObjectRender(ctx)}
 		encoded, encodeErr := engine.EncodeResponse(format, *response, envelope)
 		if encodeErr != nil {
 			return nil, "", nil, encodeErr
@@ -69,7 +68,7 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 		Context: ctx.TraceContext, Source: format, Target: format,
 		Options:     clientStreamOptions(ctx),
 		PublicModel: response.Model, ResponseID: response.ID,
-		PreviousResponseID: responseObjectPreviousID(ctx),
+		ResponseRender: responseObjectRender(ctx),
 	})
 	if err != nil {
 		return nil, "", nil, err
@@ -370,7 +369,7 @@ func (r *OpenAIRouter) encodeClientResponseWithReplay(
 			format = ctx.SourceFormat
 		}
 		envelope = ctx.ResponseEnvelope
-		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+		envelope.ResponseRender = responseObjectRender(ctx)
 	}
 	if !replay {
 		envelope.ResponseReencodeRequired = true

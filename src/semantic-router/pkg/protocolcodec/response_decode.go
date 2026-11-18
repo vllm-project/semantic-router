@@ -215,6 +215,9 @@ func (accumulator *responseAccumulator) applyEventMetadata(event llmprotocol.Eve
 	if event.Model != "" {
 		accumulator.result.Model = event.Model
 	}
+	if !event.CreatedAt.IsZero() {
+		accumulator.result.CreatedAt = event.CreatedAt
+	}
 	if event.Usage != nil {
 		accumulator.result.Usage = *event.Usage
 	}

@@ -272,18 +272,25 @@ func (c *compiler) programs() {
 	}
 }
 
+// routes compiles one route per name of each entrypoint, named by its API as
+// well: entrypoint names are unique per API, so a Chat and a System One
+// entrypoint may share one.
 func (c *compiler) routes() {
 	for index, entrypoint := range c.cfg.Entrypoints {
 		path := "entrypoints[" + strconv.Itoa(index) + "]"
-		secret := c.entrypointSecret(path, entrypoint)
+		api := entrypoint.API
+		if api == "" {
+			api = config.ChatAPI
+		}
+		secret := c.entrypointSecret(path, api, entrypoint)
 		for _, model := range entrypoint.ModelNames {
 			program := Ref{Kind: KindProgram, Name: string(entrypoint.Recipe)}
 			route := &Resource{
-				Ref:  Ref{Kind: KindRoute, Name: model},
+				Ref:  Ref{Kind: KindRoute, Name: string(api) + "/" + model},
 				Path: path,
-				Hash: fingerprint(model, program.Name, entrypoint.ClientAuth),
+				Hash: fingerprint(api, model, program.Name, entrypoint.ClientAuth),
 				Refs: []Ref{program},
-				Spec: RouteSpec{Model: model, Program: program.Name},
+				Spec: RouteSpec{API: api, Model: model, Program: program.Name},
 			}
 			if secret != nil {
 				route.Refs = append(route.Refs, secret.Ref)
@@ -295,13 +302,9 @@ func (c *compiler) routes() {
 
 // entrypointSecret compiles where the keys of a protected entrypoint come
 // from, or returns nil for a public one. Its routes share it.
-func (c *compiler) entrypointSecret(path string, entrypoint config.EntrypointMapping) *Resource {
+func (c *compiler) entrypointSecret(path string, api config.InferenceAPI, entrypoint config.EntrypointMapping) *Resource {
 	if entrypoint.ClientAuth == nil || len(entrypoint.ModelNames) == 0 {
 		return nil
-	}
-	api := entrypoint.API
-	if api == "" {
-		api = config.ChatAPI
 	}
 	spec := SecretSpec{Env: append([]string(nil), entrypoint.ClientAuth.APIKeyEnvs...)}
 	secret := &Resource{

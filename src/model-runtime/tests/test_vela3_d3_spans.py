@@ -163,9 +163,9 @@ def test_a_window_is_the_d3_prompt_with_word_and_option_positions(model) -> None
         f"{model.codes[0]}: dose: an amount of a drug\n{model.codes[1]}: drug\n\n"
         "Reply with only the code of the best option."
     )
-    encoding = model.tokenizer.encode(render(user), add_special_tokens=False)
+    rendered = "".join(render(user))
+    encoding = model.tokenizer.encode(rendered, add_special_tokens=False)
     assert window.ids == tuple(encoding.ids)
-    rendered = render(user)
     text = STATE["answer"]
     words = [text[a:b] for a, b in window.word_offsets]
     assert words[:4] == ["Adults", "can", "take", "up"]

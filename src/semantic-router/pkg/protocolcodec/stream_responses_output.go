@@ -361,9 +361,13 @@ func (encoder *responsesStreamEncoder) Finalize(reason error) ([][]byte, llmprot
 		return nil, nil, nil
 	}
 	encoder.terminal = true
+	frames, err := encoder.releaseHeldMessage(false)
+	if err != nil {
+		return nil, nil, err
+	}
 	protocolError := streamFinalizationError(reason, "stream ended before completion")
 	frame, err := encoder.encodeTransportError(protocolError)
-	return [][]byte{frame}, nil, err
+	return append(frames, frame), nil, err
 }
 
 func (encoder *responsesStreamEncoder) encodeTransportError(protocolError *llmprotocol.ProtocolError) ([]byte, error) {
