@@ -416,6 +416,27 @@ these responses through: the Router drops the signature, keeps the reasoning
 text and reports the loss as `approximated`. The signature can't come back on
 later turns, so use this only with backends that don't need it, such as vLLM.
 
+A Messages client sends that thinking back, signature included, on every
+later turn. When a session an `anthropic` backend answered moves to a Chat
+Completions or Responses backend, the request fails before routing with
+`unsupported_capability`, and the message names the first signed block:
+
+```text
+messages[1].content[0].signature: the selected model cannot accept signed thinking; an operator can accept this loss by listing reasoning.signature in global.router.allow_lossy_translation
+```
+
+The same setting lets these requests through:
+
+- **Text kept.** Such a backend receives each thinking block's text without
+  its signature.
+- **Reported.** `x-vsr-warnings` reports an `approximated` diagnostic for
+  `reasoning.signature`.
+- **Anthropic backends are unaffected.** An `anthropic` backend, as the
+  decision's choice or as a fallback candidate, still receives the signature.
+
+A thinking block whose signature is empty, `"signature": ""`, carries none, so
+it reaches every backend without the setting.
+
 ### Stored completions
 
 A Chat Completions client asks the provider to keep the completion with
@@ -516,10 +537,11 @@ tools or error translation.
   that cannot be represented return a typed protocol error. A
   `lossy_translation` error for a loss an operator may accept, such as
   `tool_result.is_error`, names the `global.router.allow_lossy_translation`
-  setting that accepts it, and so does the `unsupported_tools_defer_loading`
-  error. The `unsupported_capability` errors for files,
-  signed reasoning and stored completions don't; their sections above name
-  the setting.
+  setting that accepts it, and so do the `unsupported_tools_defer_loading`
+  error and the `unsupported_capability` error for signed thinking in a
+  request. The `unsupported_capability` errors for files, signed reasoning in
+  a response and stored completions don't; their sections above name the
+  setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
   Responses requests. By default the Router rejects this translation with
   `lossy_translation`, while a false or absent flag remains supported and
@@ -540,9 +562,9 @@ tools or error translation.
   also accepts `messages[].role` for system messages inside the conversation
   and `content.file` for files a model cannot read and `tools.defer_loading`
   for deferred tool loading, all described above,
-  `reasoning.signature` (see the signed thinking note above), `store` (see
-  stored completions above), and every other lossy translation still fails
-  closed.
+  `reasoning.signature` for signed thinking in a response or in a Messages
+  request's history (see signed reasoning above), `store` (see stored
+  completions above), and every other lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
