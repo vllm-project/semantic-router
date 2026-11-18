@@ -506,7 +506,8 @@ declare them:
   `user` / `prompt` are the user part; `answer` / `response` the answer part;
   everything else the context part. A question's `over` names the field it
   reads (default the whole state; for a span, the answer if present, else the
-  request).
+  request; a Vela 3.0 d3 span reads one key, so over a state of several keys
+  with neither it must name one).
 - **Thresholds.** A Set or Span question may carry `threshold`; the response
   always reports the applied one in `thresholds.<id>`, including
   length-dependent rules.
