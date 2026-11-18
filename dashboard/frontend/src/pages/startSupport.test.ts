@@ -298,4 +298,23 @@ describe('buildStartChecklist', () => {
     })
     expect(loading.map((step) => step.state)).toEqual(['pending', 'pending', 'pending', 'pending'])
   })
+
+  it('reads the decision model step from the state Models reads when the page has it', () => {
+    const base = {
+      status: { overall: 'healthy', deployment_type: 'kubernetes', services: [] },
+      statusFailed: false,
+      config: { providers: { models: [] } },
+      replay: { state: 'ready' as const, count: 0 },
+    }
+    const ready = buildStartChecklist({
+      ...base,
+      decisionModel: { model: 'vela3-turbo', label: 'Ready' },
+    })
+    expect(ready[2]).toMatchObject({ state: 'done', detail: 'vela3-turbo is ready' })
+    const degraded = buildStartChecklist({
+      ...base,
+      decisionModel: { model: 'vela3-turbo', label: 'Degraded capacity' },
+    })
+    expect(degraded[2]).toMatchObject({ state: 'todo', detail: 'vela3-turbo · Degraded capacity' })
+  })
 })

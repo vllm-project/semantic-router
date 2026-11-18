@@ -9,6 +9,7 @@ import type { SystemStatus } from '../utils/routerRuntime'
 import { useDashboardObservation } from '../utils/useDashboardObservation'
 import { withRoutingView } from './configPageCanonicalLayout'
 import DashboardRouterIntelligence from './DashboardRouterIntelligence'
+import { decisionModelHealth } from './dashboardRouterIntelligenceSupport'
 import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
 import type { RouterConfig } from './dashboardPageTypes'
 import { describeServingMode } from './dashboardServingMode'
@@ -236,6 +237,7 @@ const DashboardPage = () => {
     statusFailed,
     config,
     replay: rangeReplay ?? latestReplay,
+    decisionModel: config ? decisionModelHealth(config, inventory.data, status?.models) : null,
     now,
   })
   const unhealthy = status?.services.filter((service) => !service.healthy) ?? []

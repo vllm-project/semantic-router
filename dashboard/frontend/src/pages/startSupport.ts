@@ -457,12 +457,15 @@ export function buildStartChecklist({
   statusFailed,
   config,
   replay,
+  decisionModel,
   now = Date.now(),
 }: {
   status: SystemStatus | null
   statusFailed: boolean
   config: RouterConfig | null
   replay: ReplayFacts
+  /** The decision model's state as Models › Decision models reads it; the Router's report otherwise. */
+  decisionModel?: { model: string; label: string } | null
   now?: number
 }): StartStep[] {
   const overall = status?.overall?.toLowerCase()
@@ -494,20 +497,32 @@ export function buildStartChecklist({
     to: '/models/backends',
   }
 
-  const runtime = config ? getDecisionRuntimeSummary(config, status?.models) : null
-  const decision: StartStep = {
-    id: 'decision-model',
-    label: 'Deploy a decision model',
-    detail: runtime
-      ? runtime.state === 'ready'
-        ? `${runtime.model} is ready`
-        : runtime.state === 'attention'
-          ? `${runtime.model} needs attention`
-          : `${runtime.model} is not reported by the runtime`
-      : 'Configuration is unavailable',
-    state: runtime?.state === 'ready' ? 'done' : runtime ? 'todo' : 'pending',
-    to: '/models/decision',
-  }
+  const runtime =
+    config && !decisionModel ? getDecisionRuntimeSummary(config, status?.models) : null
+  const decision: StartStep = decisionModel
+    ? {
+        id: 'decision-model',
+        label: 'Deploy a decision model',
+        detail:
+          decisionModel.label === 'Ready'
+            ? `${decisionModel.model} is ready`
+            : `${decisionModel.model} · ${decisionModel.label}`,
+        state: decisionModel.label === 'Ready' ? 'done' : 'todo',
+        to: '/models/decision',
+      }
+    : {
+        id: 'decision-model',
+        label: 'Deploy a decision model',
+        detail: runtime
+          ? runtime.state === 'ready'
+            ? `${runtime.model} is ready`
+            : runtime.state === 'attention'
+              ? `${runtime.model} needs attention`
+              : `${runtime.model} is not reported by the runtime`
+          : 'Configuration is unavailable',
+        state: runtime?.state === 'ready' ? 'done' : runtime ? 'todo' : 'pending',
+        to: '/models/decision',
+      }
 
   const firstRequest: StartStep = {
     id: 'first-request',
