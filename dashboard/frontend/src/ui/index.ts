@@ -135,6 +135,7 @@ export {
   DataToolbar,
   FilterPill,
   type Column,
+  type DataTableSort,
   type FilterOption,
 } from './patterns/data-table'
 export { ChartLegend, ChartTooltip, chartAxis, chartGrid, useChartReady } from './patterns/charts'

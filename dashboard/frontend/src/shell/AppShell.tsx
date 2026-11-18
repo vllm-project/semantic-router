@@ -9,7 +9,7 @@ import {
 } from './AppSidebar'
 import { CommandMenu, type CommandSection } from './CommandMenu'
 import type { NavItem } from './navigation'
-import { Topbar, type ShellNotification, type TopbarStatus } from './Topbar'
+import { NAVIGATION_TRIGGER_ID, Topbar, type ShellNotification, type TopbarStatus } from './Topbar'
 import { useShell } from './shell-context'
 
 export interface AppShellProps {
@@ -57,6 +57,10 @@ export function AppShell({
             side="left"
             size="sm"
             className="inset-y-0 left-0 w-[280px] rounded-none rounded-r-xl border-y-0 border-l-0 bg-sidebar p-0"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              document.getElementById(NAVIGATION_TRIGGER_ID)?.focus()
+            }}
           >
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <SidebarContents

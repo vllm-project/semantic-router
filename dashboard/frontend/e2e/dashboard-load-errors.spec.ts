@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
 
@@ -10,6 +10,21 @@ const config = {
   },
   recipes: [{ name: 'default', decisions: [] }],
 }
+
+// The page refreshes itself; the range control's tooltip says when it last did.
+async function refreshNote(page: Page) {
+  const tooltip = page.getByRole('tooltip')
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Open playground' }).focus()
+    await page.getByRole('radio', { name: '24h' }).focus()
+    await expect(tooltip).toBeAttached({ timeout: 1_000 })
+  }).toPass()
+  return tooltip
+}
+
+// Under 20 seconds ago, and at least the 30 seconds a failed refresh leaves it.
+const RECENT = /Updated (just now|1?\d s ago)/
+const STALE = /Updated ([3-5]\d s|\d+ min) ago/
 
 test('dashboard overview reports a failed config request and recovers on retry', async ({
   page,
@@ -37,14 +52,17 @@ test('dashboard overview reports a failed config request and recovers on retry',
   await expect(
     page.getByText('Failed to load data: Router config request failed (HTTP 500)'),
   ).toBeVisible()
-  await expect(page.getByText(/^Updated /)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0)
+  const before = await refreshNote(page)
+  await expect(before).toContainText('Refreshes every 30 seconds')
+  await expect(before).not.toContainText('Updated')
 
   configStatus = 200
   await page.getByRole('button', { name: 'Retry' }).click()
 
   await expect(page.getByText(/^Failed to load data:/)).toHaveCount(0)
-  await expect(page.getByText(/^Updated /)).toBeVisible()
   await expect(page.getByTestId('home-count-models')).toContainText('1')
+  await expect(await refreshNote(page)).toContainText(RECENT)
 })
 
 test('dashboard overview keeps the last loaded config when a refresh fails and recovers automatically', async ({
@@ -66,25 +84,23 @@ test('dashboard overview keeps the last loaded config when a refresh fails and r
 
   await page.clock.install()
   await page.goto('/dashboard')
-  const updated = page.getByText(/^Updated /)
-  await expect(updated).toBeVisible()
-  const updatedBefore = await updated.textContent()
+  await expect(page.getByTestId('home-count-models')).toContainText('1')
+  await expect(await refreshNote(page)).toContainText(RECENT)
 
   configStatus = 502
-  await page.clock.fastForward(5_000)
-  await page.getByRole('button', { name: 'Refresh' }).click()
+  await page.clock.fastForward(30_000)
 
   await expect(
     page.getByText('Failed to load data: Router config request failed (HTTP 502)'),
   ).toBeVisible()
-  await expect(updated).toHaveText(updatedBefore ?? '')
   await expect(page.getByTestId('home-count-models')).toContainText('1')
+  await expect(await refreshNote(page)).toContainText(STALE)
 
   configStatus = 200
   await page.clock.fastForward(30_000)
 
   await expect(page.getByText(/^Failed to load data:/)).toHaveCount(0)
-  await expect(updated).not.toHaveText(updatedBefore ?? '')
+  await expect(await refreshNote(page)).toContainText(RECENT)
 })
 
 test('dashboard overview keeps the previous update time when only the status request fails', async ({
@@ -113,16 +129,13 @@ test('dashboard overview keeps the previous update time when only the status req
 
   await page.clock.install()
   await page.goto('/dashboard')
-  const updated = page.getByText(/^Updated /)
-  await expect(updated).toBeVisible()
-  const updatedBefore = await updated.textContent()
+  await expect(await refreshNote(page)).toContainText(RECENT)
 
   statusCode = 500
-  await page.clock.fastForward(5_000)
-  await page.getByRole('button', { name: 'Refresh' }).click()
+  await page.clock.fastForward(30_000)
 
   await expect(
     page.getByText('Failed to load data: System status request failed (HTTP 500)'),
   ).toBeVisible()
-  await expect(updated).toHaveText(updatedBefore ?? '')
+  await expect(await refreshNote(page)).toContainText(STALE)
 })

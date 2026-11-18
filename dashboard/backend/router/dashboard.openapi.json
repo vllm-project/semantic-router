@@ -1970,6 +1970,210 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/models/health": {
+      "get": {
+        "operationId": "getModelHealth",
+        "summary": "Health of the configured backend models",
+        "description": "Checks each backend with a cheap read, never inference: its reliability.health_check_path when set, else the provider's model list with the backend's credentials, else its base URL. Repeat ?model= to check only those models. Checks younger than 20 s answer every viewer; ?refresh=1 checks again unless the last check of a model is under 5 s old. Backends are named as the configuration names them, without URLs or credentials.",
+        "tags": [
+          "models"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest health of each requested model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "checkedAt": {
+                      "type": "string"
+                    },
+                    "intervalSeconds": {
+                      "type": "integer"
+                    },
+                    "models": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "checkedAt": {
+                            "type": "string"
+                          },
+                          "endpoints": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "httpStatus": {
+                                  "type": "integer"
+                                },
+                                "latencyMs": {
+                                  "nullable": true,
+                                  "type": "integer"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "status"
+                              ]
+                            }
+                          },
+                          "latencyMs": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "p95Ms": {
+                            "nullable": true,
+                            "type": "integer"
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "recentMs": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            }
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "model",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "checkedAt",
+                    "intervalSeconds",
+                    "models"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "error invalid_request for an empty or oversized model name, or more than 64 models",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "error model_not_found for a model the active configuration does not declare",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "error config_unavailable when the active configuration cannot be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/models/verify": {
       "post": {
         "operationId": "postApiModelsVerify",

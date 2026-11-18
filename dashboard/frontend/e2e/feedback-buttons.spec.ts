@@ -34,13 +34,15 @@ test.describe('FeedbackButtons', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           object: 'list',
-          data: [{
-            id: 'vllm-sr/auto',
-            object: 'model',
-            owned_by: 'vllm-semantic-router',
-            description: 'Intelligent Router for Mixture-of-Models',
-            routing: { resolution: 'virtual', selectable: true, default_route: true },
-          }],
+          data: [
+            {
+              id: 'vllm-sr/auto',
+              object: 'model',
+              owned_by: 'vllm-semantic-router',
+              description: 'Intelligent Router for Mixture-of-Models',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
+            },
+          ],
         }),
       })
     })
@@ -97,7 +99,7 @@ test.describe('FeedbackButtons', () => {
     await expect(page.getByText('Feedback Sent!')).toBeVisible({ timeout: 3000 })
     await expect(page.getByRole('link', { name: 'View request' })).toHaveAttribute(
       'href',
-      `/insights/${MOCK_REPLAY_ID}`,
+      `/observe/requests/${MOCK_REPLAY_ID}`,
     )
   })
 

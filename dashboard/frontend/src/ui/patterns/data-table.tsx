@@ -31,6 +31,8 @@ export interface Column<T> {
   header: React.ReactNode
   cell: (row: T) => React.ReactNode
   sortValue?: (row: T) => string | number
+  /** Sortable by the caller, for a table whose `onSortChange` orders the rows itself. */
+  sortable?: boolean
   align?: 'left' | 'right' | 'center'
   className?: string
   headerClassName?: string
@@ -46,6 +48,17 @@ const hideClass = {
   '2xl': 'max-2xl:hidden',
 }
 
+export interface DataTableSort {
+  id: string
+  dir: 'asc' | 'desc'
+}
+
+/** A header click cycles descending, ascending, then unsorted. */
+function nextSort(current: DataTableSort | null, id: string): DataTableSort | null {
+  if (current?.id !== id) return { id, dir: 'desc' }
+  return current.dir === 'desc' ? { id, dir: 'asc' } : null
+}
+
 export function DataTable<T>({
   data,
   columns,
@@ -58,6 +71,8 @@ export function DataTable<T>({
   empty,
   loading = false,
   activeRowId,
+  sort: controlledSort,
+  onSortChange,
   className,
 }: {
   data: T[]
@@ -71,11 +86,24 @@ export function DataTable<T>({
   empty?: React.ReactNode
   loading?: boolean
   activeRowId?: string
+  /**
+   * With `onSortChange` the caller owns the order: the headers show `sort`
+   * and the rows render as given, for example sorted by the server.
+   */
+  sort?: DataTableSort | null
+  onSortChange?: (next: DataTableSort | null) => void
   className?: string
 }) {
-  const [sort, setSort] = React.useState<{ id: string; dir: 'asc' | 'desc' } | null>(null)
+  const [localSort, setLocalSort] = React.useState<DataTableSort | null>(null)
+  const controlled = onSortChange !== undefined
+  const sort = controlled ? (controlledSort ?? null) : localSort
+  const toggleSort = (id: string) => {
+    const next = nextSort(sort, id)
+    if (controlled) onSortChange(next)
+    else setLocalSort(next)
+  }
   const sorted = React.useMemo(() => {
-    if (!sort) return data
+    if (!sort || controlled) return data
     const column = columns.find((c) => c.id === sort.id)
     if (!column?.sortValue) return data
     const value = column.sortValue
@@ -88,7 +116,7 @@ export function DataTable<T>({
           : String(av).localeCompare(String(bv))
       return sort.dir === 'asc' ? cmp : -cmp
     })
-  }, [data, columns, sort])
+  }, [data, columns, sort, controlled])
 
   const ids = sorted.map(getRowId)
   const selectedSet = selected ?? new Set<string>()
@@ -121,10 +149,18 @@ export function DataTable<T>({
             ) : null}
             {columns.map((column) => {
               const active = sort?.id === column.id
+              const sortable = Boolean(column.sortValue || (controlled && column.sortable))
               return (
                 <TableHead
                   key={column.id}
                   style={column.width ? { width: column.width } : undefined}
+                  aria-sort={
+                    sortable && active
+                      ? sort?.dir === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : undefined
+                  }
                   className={cn(
                     column.align === 'right' && 'text-right',
                     column.align === 'center' && 'text-center',
@@ -132,18 +168,10 @@ export function DataTable<T>({
                     column.headerClassName,
                   )}
                 >
-                  {column.sortValue ? (
+                  {sortable ? (
                     <button
                       type="button"
-                      onClick={() =>
-                        setSort((current) =>
-                          current?.id !== column.id
-                            ? { id: column.id, dir: 'desc' }
-                            : current.dir === 'desc'
-                              ? { id: column.id, dir: 'asc' }
-                              : null,
-                        )
-                      }
+                      onClick={() => toggleSort(column.id)}
                       className={cn(
                         '-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors hover:text-foreground',
                         active && 'text-foreground',

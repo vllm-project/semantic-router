@@ -34,6 +34,9 @@ import { findNavItem } from './navigation'
 import { useShell } from './shell-context'
 import { ThemeToggle } from './ThemeToggle'
 
+/** The button that opens the navigation drawer, which gets focus back when the drawer closes. */
+export const NAVIGATION_TRIGGER_ID = 'shell-navigation-trigger'
+
 export interface ShellNotification {
   id: string
   title: string
@@ -74,6 +77,7 @@ export function Topbar({
   return (
     <header className="sticky top-0 z-30 flex h-[52px] shrink-0 items-center gap-2 border-b border-border bg-background/80 px-3 backdrop-blur-md md:px-4">
       <Button
+        id={NAVIGATION_TRIGGER_ID}
         variant="ghost"
         size="icon-sm"
         className="lg:hidden"
