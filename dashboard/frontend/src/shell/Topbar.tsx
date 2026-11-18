@@ -127,16 +127,13 @@ export function Topbar({
           <Search />
         </Button>
 
-        <Link
-          to="/observe/status"
-          className="hidden h-8 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 text-xs font-medium text-foreground/85 shadow-xs transition-colors hover:border-border-strong sm:flex"
-        >
-          <StatusDot tone={status.tone} pulse={status.tone !== 'neutral'} />
-          {status.label}
-          {status.detail ? (
-            <span className="font-mono text-[11px] text-subtle-foreground">{status.detail}</span>
-          ) : null}
-        </Link>
+        <Tooltip content={status.detail ? `${status.label} · ${status.detail}` : status.label}>
+          <Button variant="ghost" size="icon-sm" className="hidden sm:inline-flex" asChild>
+            <Link to="/observe/status" aria-label={`Status: ${status.label}`}>
+              <StatusDot tone={status.tone} pulse={status.tone !== 'neutral'} />
+            </Link>
+          </Button>
+        </Tooltip>
 
         {trailing}
 

@@ -1,7 +1,6 @@
 import { ArrowRight, BrainCircuit } from 'lucide-react'
 
 import {
-  Badge,
   Button,
   Card,
   CardAction,
@@ -10,36 +9,27 @@ import {
   CardHeader,
   CardTitle,
   IconTile,
+  Skeleton,
+  StatusLabel,
 } from '../ui'
-import RouterModelInventory from '../components/RouterModelInventory'
 import { formatRouterModelLabel } from '../components/routerModelPresentation'
-import {
-  getLoadedModelCount,
-  getTotalKnownModelCount,
-  type RouterModelInfo,
-  type RouterModelsInfo,
-} from '../utils/routerRuntime'
+import type { RouterModelsInfo } from '../utils/routerRuntime'
 import type { RouterConfig } from './dashboardPageTypes'
 import {
   buildIntelligenceRoutingScopes,
-  getDecisionRuntimeSummary,
+  decisionModelHealth,
 } from './dashboardRouterIntelligenceSupport'
+import type { ModelRuntimeInventory } from './decisionModelManagement'
 
 interface DashboardRouterIntelligenceProps {
   config: RouterConfig | null
-  modelsInfo?: RouterModelsInfo | null
+  /** Still loading the configuration, as opposed to having failed to. */
+  loading: boolean
+  inventory?: ModelRuntimeInventory | null
+  routerModels?: RouterModelsInfo | null
   onConfigure: () => void
-  onOpenStatus: () => void
-  onSelectModel: (model: RouterModelInfo) => void
+  className?: string
 }
-
-const runtimeLabels = {
-  ready: 'Shared runtime ready',
-  attention: 'Runtime needs attention',
-  unreported: 'Runtime not reported',
-}
-
-const runtimeTones = { ready: 'success', attention: 'warning', unreported: 'neutral' } as const
 
 function Chips({ items }: { items: Array<{ name: string; kind?: string }> }) {
   return (
@@ -57,25 +47,23 @@ function Chips({ items }: { items: Array<{ name: string; kind?: string }> }) {
   )
 }
 
-/** The decision model behind learned signals, each recipe's questions and signals, and the runtimes. */
+/** The decision model with its deployment state, and what each recipe asks it. */
 export default function DashboardRouterIntelligence({
   config,
-  modelsInfo,
+  loading,
+  inventory,
+  routerModels,
   onConfigure,
-  onOpenStatus,
-  onSelectModel,
+  className,
 }: DashboardRouterIntelligenceProps) {
-  const runtime = config ? getDecisionRuntimeSummary(config, modelsInfo) : null
+  const health = config ? decisionModelHealth(config, inventory, routerModels) : null
   const scopes = config ? buildIntelligenceRoutingScopes(config) : []
-  const knownModels = getTotalKnownModelCount(modelsInfo)
 
   return (
-    <Card aria-labelledby="router-intelligence-title" role="region" className="xl:col-span-2">
+    <Card aria-labelledby="router-intelligence-title" role="region" className={className}>
       <CardHeader>
         <CardTitle id="router-intelligence-title">Router intelligence</CardTitle>
-        <CardDescription>
-          The decision model, what each recipe asks it, and the runtimes.
-        </CardDescription>
+        <CardDescription>The decision model and what each recipe asks it.</CardDescription>
         <CardAction>
           <Button variant="ghost" size="xs" onClick={onConfigure}>
             Manage decision model
@@ -84,35 +72,28 @@ export default function DashboardRouterIntelligence({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-5 pt-3">
-        {runtime ? (
+        {health ? (
           <div
             className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-surface-subtle/60 px-3.5 py-3"
             data-testid="decision-model-overview"
           >
             <IconTile icon={BrainCircuit} tone="violet" size="md" />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-xs text-subtle-foreground">Configured decision model</span>
-              <h3 className="truncate font-mono text-[13.5px] font-semibold">{runtime.model}</h3>
+              <span className="text-xs text-subtle-foreground">Decision model</span>
+              <h3 className="truncate font-mono text-[13.5px] font-semibold">{health.model}</h3>
               <p className="text-xs text-muted-foreground">
-                Default model for learned signals, custom questions and decision selectors.
+                Answers learned signals, custom questions and decision selectors.
               </p>
             </div>
-            <div className="flex flex-col items-start gap-1 sm:items-end">
-              <Badge tone={runtimeTones[runtime.state]} dot>
-                {runtimeLabels[runtime.state]}
-              </Badge>
-              {runtime.bindings > 0 ? (
-                <span className="text-xs text-muted-foreground tabular">
-                  {runtime.resources} runtime{runtime.resources === 1 ? '' : 's'} ·{' '}
-                  {runtime.bindings} reported binding{runtime.bindings === 1 ? '' : 's'}
-                </span>
-              ) : null}
+            <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
+              <StatusLabel tone={health.tone}>{health.label}</StatusLabel>
+              <span className="text-xs text-muted-foreground">{health.detail}</span>
             </div>
           </div>
+        ) : loading ? (
+          <Skeleton className="h-[74px] w-full rounded-lg" />
         ) : (
-          <p className="text-[13px] text-muted-foreground">
-            Decision model configuration is unavailable.
-          </p>
+          <p className="text-[13px] text-muted-foreground">The configuration did not load.</p>
         )}
 
         {scopes.length > 0 ? (
@@ -173,27 +154,6 @@ export default function DashboardRouterIntelligence({
             </div>
           </div>
         ) : null}
-
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xs font-medium text-subtle-foreground">Runtime inventory</h3>
-            {knownModels > 0 ? (
-              <span className="text-xs text-muted-foreground tabular">
-                {getLoadedModelCount(modelsInfo)}/{knownModels} runtimes ready
-              </span>
-            ) : null}
-            <Button variant="ghost" size="xs" className="ml-auto" onClick={onOpenStatus}>
-              Status
-              <ArrowRight />
-            </Button>
-          </div>
-          <RouterModelInventory
-            mode="preview"
-            modelsInfo={modelsInfo}
-            emptyMessage="No runtime inventory reported yet."
-            onSelectModel={onSelectModel}
-          />
-        </div>
       </CardContent>
     </Card>
   )

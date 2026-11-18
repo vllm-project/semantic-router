@@ -9,6 +9,7 @@ import type {
   InsightsTrafficBucket,
   InsightsTrafficSeries,
 } from './insightsPageTypes'
+import type { RunSummary } from './insightsRunTypes'
 
 export type HomeRange = '1h' | '24h' | '7d'
 
@@ -24,11 +25,11 @@ export const HOME_RANGE_LABEL: Record<HomeRange, string> = {
   '7d': 'last 7 days',
 }
 
-const RANGE_MS: Record<HomeRange, number> = {
-  '1h': 3_600_000,
-  '24h': 86_400_000,
-  '7d': 604_800_000,
-}
+const MINUTE_MS = 60_000
+const HOUR_MS = 60 * MINUTE_MS
+const DAY_MS = 24 * HOUR_MS
+
+const RANGE_MS: Record<HomeRange, number> = { '1h': HOUR_MS, '24h': DAY_MS, '7d': 7 * DAY_MS }
 
 // 5-minute, 1-hour and 6-hour buckets.
 const BUCKETS: Record<HomeRange, number> = { '1h': 12, '24h': 24, '7d': 28 }
@@ -214,10 +215,9 @@ export function trafficFromWindow(
   range: HomeRange,
   windowTotal: number,
   now = Date.now(),
-): TrafficView | null {
+): TrafficView {
   const times = records.map((record) => Date.parse(record.timestamp)).filter(Number.isFinite)
-  if (times.length === 0) return null
-  const coversRange = windowTotal <= records.length
+  const coversRange = windowTotal <= records.length || times.length === 0
   const count = BUCKETS[range]
   const start = coversRange ? now - RANGE_MS[range] : Math.min(...times)
   const width = Math.max(1, (now - start) / count)
@@ -266,17 +266,15 @@ export function trafficFromWindow(
 }
 
 /** The range's traffic: the aggregate's series when the router returns one, else the newest records'. */
-export function readTraffic(
-  aggregate: InsightsAggregateResponse | null,
-  records: readonly InsightsRecord[],
-  windowTotal: number,
+export function homeTrafficView(
+  aggregate: HomeAggregate | null,
+  window: TrafficView | null,
   range: HomeRange,
-  now = Date.now(),
 ): TrafficView | null {
-  if (aggregate?.traffic?.buckets?.length) {
+  if (aggregate?.traffic && hasTrafficSeries(aggregate)) {
     return trafficFromSeries(aggregate.traffic, range, spendSummary(aggregate).currency)
   }
-  return trafficFromWindow(records, range, windowTotal, now)
+  return window
 }
 
 /** The p95 of each interval for a sparkline, carrying the last one through intervals without any. */
@@ -288,9 +286,6 @@ export function carriedP95(points: readonly TrafficPoint[]): number[] {
   })
 }
 
-const MINUTE_MS = 60_000
-const HOUR_MS = 60 * MINUTE_MS
-const DAY_MS = 24 * HOUR_MS
 const TICK_STEPS = [5, 10, 15, 30, 60, 120, 180, 240, 360, 720, 1440].map(
   (minutes) => minutes * MINUTE_MS,
 )
@@ -356,7 +351,7 @@ type SpendGroup = Pick<
 const groupSpend = (group: SpendGroup) => Math.abs(group.total_spend ?? group.actual_spend ?? 0)
 
 /** The currency that carries the most spend leads; currencies without spend are not counted. */
-export function spendSummary(aggregate: InsightsAggregateResponse): SpendSummary {
+export function spendSummary(aggregate: Pick<InsightsAggregateResponse, 'summary'>): SpendSummary {
   const summary = aggregate.summary
   const groups: SpendGroup[] = summary.by_currency?.length ? summary.by_currency : [summary]
   const lead = groups.reduce((best, group) => (groupSpend(group) > groupSpend(best) ? group : best))
@@ -392,4 +387,140 @@ export function topShares(
     .sort((left, right) => right.value - left.value)
     .slice(0, limit)
     .map((entry) => ({ ...entry, share: total > 0 ? (entry.value / total) * 100 : 0 }))
+}
+
+// ---------------------------------------------------------------- replay reads
+
+/** The newest records Home lists. */
+export const HOME_RECENT_LIMIT = 7
+/** The newest records Home charts when the router's aggregate has no traffic series. */
+export const HOME_WINDOW_LIMIT = 100
+/** The newest agent runs Home reads session titles from. */
+export const HOME_RUN_LIMIT = 20
+
+/** The parts of the replay aggregate Home shows. */
+export type HomeAggregate = Pick<
+  InsightsAggregateResponse,
+  'record_count' | 'lifecycle' | 'summary' | 'model_selection' | 'decision_distribution' | 'traffic'
+>
+
+export function homeAggregate(aggregate: InsightsAggregateResponse): HomeAggregate {
+  const { record_count, lifecycle, summary, model_selection, decision_distribution, traffic } =
+    aggregate
+  return {
+    record_count,
+    lifecycle,
+    summary,
+    model_selection: model_selection ?? [],
+    decision_distribution: decision_distribution ?? [],
+    ...(traffic ? { traffic } : {}),
+  }
+}
+
+/** Whether the aggregate carries the range's traffic in intervals. */
+export function hasTrafficSeries(aggregate: HomeAggregate | null): boolean {
+  return Boolean(aggregate?.traffic?.buckets?.length)
+}
+
+/** Whether the range's traffic has to be drawn from its newest records instead. */
+export function needsTrafficWindow(aggregate: HomeAggregate | null): boolean {
+  return Boolean(aggregate && aggregate.record_count > 0 && !hasTrafficSeries(aggregate))
+}
+
+/** The start of a range, to the minute, so the reads of one minute share one query. */
+export function homeSince(range: HomeRange, now: number): string {
+  return new Date(Math.floor(now / MINUTE_MS) * MINUTE_MS - RANGE_MS[range]).toISOString()
+}
+
+export function homeQuery(params: Record<string, string | number>): string {
+  return `?${new URLSearchParams(
+    Object.entries(params).map(([key, value]) => [key, String(value)]),
+  ).toString()}`
+}
+
+/**
+ * Where run titles are read from: a day back, or the oldest listed record when
+ * it is older, so the scan holds the sessions of every listed record.
+ */
+export function runTitlesSince(rows: readonly InsightsRecord[], now: number): string {
+  const oldest = Math.min(
+    now - DAY_MS,
+    ...rows.map((record) => Date.parse(record.timestamp)).filter(Number.isFinite),
+  )
+  return new Date(Math.floor(oldest / MINUTE_MS) * MINUTE_MS).toISOString()
+}
+
+/** The sessions of the listed records that neither the record nor a read title names. */
+export function untitledSessions(
+  rows: readonly InsightsRecord[],
+  titles: Readonly<Record<string, string>>,
+): string[] {
+  const sessions = rows.flatMap((record) =>
+    record.session_id && !record.session_name && !titles[record.session_id]
+      ? [record.session_id]
+      : [],
+  )
+  return [...new Set(sessions)]
+}
+
+/** The names the runs give their sessions. */
+export function runTitles(runs: readonly RunSummary[]): Record<string, string> {
+  return Object.fromEntries(
+    runs.flatMap((run) =>
+      run.session_id && run.session_name?.trim() ? [[run.session_id, run.session_name]] : [],
+    ),
+  )
+}
+
+/** What Home last showed for a range, kept for the tab's session. */
+export interface HomeSnapshot {
+  savedAt: number
+  aggregate: HomeAggregate | null
+  rows: InsightsRecord[]
+  /** The newest records' traffic, for a router whose aggregate has no series. */
+  window: TrafficView | null
+  titles: Record<string, string>
+}
+
+const SNAPSHOT_VERSION = 1
+
+export function homeSnapshotKey(scope: string, range: HomeRange): string {
+  return `vsr.home.v${SNAPSHOT_VERSION}:${scope}:${range}`
+}
+
+export function serializeHomeSnapshot(snapshot: HomeSnapshot): string {
+  return JSON.stringify({ v: SNAPSHOT_VERSION, ...snapshot })
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** A stored snapshot, when this version wrote it within the last day. */
+export function parseHomeSnapshot(text: string | null, now: number): HomeSnapshot | null {
+  if (!text) return null
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (
+    !isObject(value) ||
+    value.v !== SNAPSHOT_VERSION ||
+    typeof value.savedAt !== 'number' ||
+    now - value.savedAt > DAY_MS ||
+    !Array.isArray(value.rows) ||
+    (value.aggregate !== null && !isObject(value.aggregate)) ||
+    (value.window !== null && !(isObject(value.window) && Array.isArray(value.window.points))) ||
+    !isObject(value.titles)
+  ) {
+    return null
+  }
+  return {
+    savedAt: value.savedAt,
+    aggregate: value.aggregate as HomeAggregate | null,
+    rows: value.rows as InsightsRecord[],
+    window: value.window as TrafficView | null,
+    titles: value.titles as Record<string, string>,
+  }
 }

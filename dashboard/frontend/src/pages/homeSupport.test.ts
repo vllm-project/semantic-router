@@ -4,17 +4,32 @@ import {
   carriedP95,
   formatUpdatedAgo,
   greeting,
+  hasTrafficSeries,
+  homeAggregate,
+  homeQuery,
+  homeSince,
+  homeSnapshotKey,
+  homeTrafficView,
   latencyStats,
   moreCurrenciesLabel,
+  needsTrafficWindow,
+  parseHomeSnapshot,
   percentile,
   readHomeRange,
+  runTitles,
+  runTitlesSince,
+  serializeHomeSnapshot,
   spendSummary,
   timeTicks,
   topShares,
   trafficFromSeries,
   trafficFromWindow,
+  untitledSessions,
+  type HomeAggregate,
+  type HomeSnapshot,
 } from './homeSupport'
 import type { InsightsAggregateResponse, InsightsRecord } from './insightsPageTypes'
+import type { RunSummary } from './insightsRunTypes'
 
 const HOUR = 3_600_000
 const now = Date.parse('2026-11-18T12:00:00Z')
@@ -71,8 +86,15 @@ describe('home traffic helpers', () => {
     expect(view?.hasBaseline).toBe(true)
     expect(carriedP95(view?.points ?? []).slice(17, 20)).toEqual([0, 100, 100])
     expect(carriedP95(view?.points ?? [])[23]).toBe(400)
+  })
 
-    expect(trafficFromWindow([], '1h', 0, now)).toBeNull()
+  it('draws an empty range when the newest records hold none', () => {
+    const view = trafficFromWindow([], '1h', 0, now)
+    expect(view.coversRange).toBe(true)
+    expect(view.points).toHaveLength(12)
+    expect(view.points[0].start).toBe(now - HOUR)
+    expect(view.points.every((point) => point.requests === 0)).toBe(true)
+    expect(view.latency).toEqual({ p50: undefined, p95: undefined })
   })
 
   it('spans only the newest records when the range holds more', () => {
@@ -196,6 +218,117 @@ describe('home traffic helpers', () => {
     ).toMatchObject({ currency: 'EUR', otherCurrencies: 1 })
     expect(moreCurrenciesLabel(0)).toBeUndefined()
     expect(moreCurrenciesLabel(2)).toBe('+2 more currencies')
+  })
+
+  it('charts the aggregate series when the router has one, else the newest records', () => {
+    const window = trafficFromWindow([record(1)], '24h', 1, now)
+    const aggregate = {
+      record_count: 1,
+      lifecycle: { completed: 1, failed: 0, aborted: 0, in_progress: 0, unknown: 0 },
+      summary: {
+        total_saved: 0,
+        baseline_spend: 0,
+        actual_spend: 0,
+        cost_record_count: 0,
+        excluded_record_count: 0,
+      },
+      model_selection: [],
+      decision_distribution: [],
+    } as HomeAggregate
+    expect(homeTrafficView(aggregate, window, '24h')).toBe(window)
+    expect(homeTrafficView(null, null, '24h')).toBeNull()
+    expect(needsTrafficWindow(aggregate)).toBe(true)
+    expect(needsTrafficWindow({ ...aggregate, record_count: 0 })).toBe(false)
+    expect(needsTrafficWindow(null)).toBe(false)
+
+    const series = {
+      since: new Date(now - 24 * HOUR).toISOString(),
+      interval_seconds: 3600,
+      buckets: [
+        { start: new Date(now - HOUR).toISOString(), requests: 1, cached: 0, failed: 0, cost: [] },
+      ],
+    }
+    const withSeries = { ...aggregate, traffic: series }
+    expect(hasTrafficSeries(withSeries)).toBe(true)
+    expect(needsTrafficWindow(withSeries)).toBe(false)
+    const points = homeTrafficView(withSeries, window, '24h')?.points ?? []
+    expect(points[points.length - 1]?.requests).toBe(1)
+    expect(hasTrafficSeries({ ...aggregate, traffic: { ...series, buckets: [] } })).toBe(false)
+  })
+
+  it('keeps only what Home shows of the aggregate', () => {
+    const full = {
+      object: 'router_replay.aggregate',
+      record_count: 4,
+      lifecycle: { completed: 4, failed: 0, aborted: 0, in_progress: 0, unknown: 0 },
+      summary: {
+        total_saved: 0,
+        baseline_spend: 0,
+        actual_spend: 0,
+        cost_record_count: 0,
+        excluded_record_count: 0,
+      },
+      model_selection: [{ name: 'm', value: 4 }],
+      decision_distribution: [{ name: 'd', value: 4 }],
+      signal_distribution: [{ name: 's', value: 4 }],
+      available_models: ['m'],
+    } as unknown as InsightsAggregateResponse
+    expect(homeAggregate(full)).toEqual({
+      record_count: 4,
+      lifecycle: full.lifecycle,
+      summary: full.summary,
+      model_selection: full.model_selection,
+      decision_distribution: full.decision_distribution,
+    })
+  })
+
+  it('queries a range from the start of its minute', () => {
+    const at = Date.parse('2026-11-18T12:00:42.500Z')
+    expect(homeSince('1h', at)).toBe('2026-11-18T11:00:00.000Z')
+    expect(homeSince('7d', at)).toBe('2026-11-11T12:00:00.000Z')
+    expect(homeQuery({ since: homeSince('24h', at), interval: '1h' })).toBe(
+      '?since=2026-11-17T12%3A00%3A00.000Z&interval=1h',
+    )
+  })
+
+  it('asks run titles only for sessions nothing names yet, from far enough back', () => {
+    const rows = [
+      record(0.1, { session_id: 'a' }),
+      record(0.2, { session_id: 'a' }),
+      record(0.3, { session_id: 'b', session_name: 'Fix the login flow' }),
+      record(0.4, { session_id: 'c' }),
+      record(0.5),
+    ]
+    expect(untitledSessions(rows, {})).toEqual(['a', 'c'])
+    expect(untitledSessions(rows, { c: 'Ship the release' })).toEqual(['a'])
+    expect(runTitlesSince(rows, now)).toBe(new Date(now - 24 * HOUR).toISOString())
+    expect(runTitlesSince([record(50)], now + 30_000)).toBe(new Date(now - 50 * HOUR).toISOString())
+    expect(
+      runTitles([
+        { session_id: 'a', session_name: 'Refactor the router' },
+        { session_id: 'c', session_name: '  ' },
+        { session_id: 'd' },
+      ] as RunSummary[]),
+    ).toEqual({ a: 'Refactor the router' })
+  })
+
+  it('keeps a snapshot for a day, for its account and range', () => {
+    const snapshot: HomeSnapshot = {
+      savedAt: now,
+      aggregate: null,
+      rows: [record(1)],
+      window: trafficFromWindow([record(1)], '1h', 1, now),
+      titles: { a: 'Title' },
+    }
+    const text = serializeHomeSnapshot(snapshot)
+    expect(parseHomeSnapshot(text, now + HOUR)).toEqual(snapshot)
+    expect(parseHomeSnapshot(text, now + 25 * HOUR)).toBeNull()
+    expect(parseHomeSnapshot(JSON.stringify({ ...snapshot, v: 0 }), now)).toBeNull()
+    expect(parseHomeSnapshot(JSON.stringify({ ...JSON.parse(text), rows: {} }), now)).toBeNull()
+    expect(parseHomeSnapshot('{', now)).toBeNull()
+    expect(parseHomeSnapshot(null, now)).toBeNull()
+    expect(homeSnapshotKey('user-1', '7d')).not.toBe(homeSnapshotKey('user-2', '7d'))
+    expect(homeSnapshotKey('user-1', '7d')).not.toBe(homeSnapshotKey('user-1', '24h'))
   })
 
   it('ranks a distribution with each entry’s share', () => {

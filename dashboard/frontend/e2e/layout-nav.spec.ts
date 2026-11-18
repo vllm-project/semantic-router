@@ -135,6 +135,7 @@ services:
 const statusResponse = {
   overall: 'healthy',
   deployment_type: 'local',
+  version: 'v0.5.0-dev.e1ba40498f',
   services: [
     {
       name: 'router',
@@ -728,6 +729,65 @@ test.describe('Shell navigation', () => {
     await expect.poll(async () => (await frame())?.left).toBe(60)
     await page.getByRole('button', { name: 'Expand sidebar' }).click()
     await expect.poll(async () => (await frame())?.left).toBe(248)
+  })
+
+  test('keeps the wordmark in proportion beside a fixed release pill and an icon-only status', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
+    await page.goto('/routing/signals')
+
+    const wordmark = page.getByTestId('brand-lockup').getByRole('img', {
+      name: 'vLLM Semantic Router',
+    })
+    await expect(wordmark).toBeVisible()
+    await expect
+      .poll(() =>
+        wordmark.evaluate((image: HTMLImageElement) =>
+          image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0,
+        ),
+      )
+      .toBeCloseTo(2166 / 696, 2)
+    const version = page.getByTestId('sidebar-version')
+    await expect(version).toHaveText('v0.5.0')
+    await expect(version).toHaveAccessibleName(/^Version v0\.5\.0-dev\.e1ba40498f, /)
+    const collapse = page.getByRole('button', { name: 'Collapse sidebar' })
+    const [logoBox, versionBox, collapseBox] = await Promise.all(
+      [wordmark, version, collapse].map(async (element) => {
+        const bounds = await element.boundingBox()
+        expect(bounds).not.toBeNull()
+        return bounds!
+      }),
+    )
+    expect(logoBox.height).toBe(32)
+    expect(logoBox.width / logoBox.height).toBeCloseTo(2166 / 696, 1)
+    expect(Math.round(versionBox.width)).toBe(64)
+    expect(logoBox.x + logoBox.width).toBeLessThanOrEqual(versionBox.x)
+    expect(versionBox.x + versionBox.width).toBeLessThanOrEqual(collapseBox.x)
+    const middle = (bounds: { y: number; height: number }) => bounds.y + bounds.height / 2
+    expect(Math.abs(middle(logoBox) - middle(collapseBox))).toBeLessThanOrEqual(1)
+    expect(Math.abs(middle(versionBox) - middle(collapseBox))).toBeLessThanOrEqual(1)
+
+    await version.click()
+    await expect(page.getByRole('dialog')).toContainText('v0.5.0-dev.e1ba40498f')
+    await page.keyboard.press('Escape')
+
+    const status = page.getByRole('link', { name: 'Status: Router healthy' })
+    await expect(status).toBeVisible()
+    await expect(status).toHaveText('')
+    await expect(status).toHaveAttribute('href', '/observe/status')
+    await status.hover()
+    await expect(page.getByRole('tooltip')).toContainText('Router healthy')
+    await status.click()
+    await expect(page).toHaveURL(/\/observe\/status$/)
+
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect(page.getByTestId('brand-lockup')).toHaveCount(0)
+    await expect(
+      page.locator('aside').getByRole('img', { name: 'vLLM Semantic Router' }),
+    ).toBeVisible()
   })
 
   test('switches to compact navigation at 961px with full access and a long account name', async ({

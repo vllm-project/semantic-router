@@ -43,10 +43,9 @@ import {
   countSignals,
 } from './dashboardPageStats'
 import type { RouterConfig } from './dashboardPageTypes'
-import { HOME_RANGE_LABEL, topShares, type HomeRange } from './homeSupport'
+import { HOME_RANGE_LABEL, topShares, type HomeAggregate, type HomeRange } from './homeSupport'
 import { modelProviderId } from './insightsConfigFacts'
 import { modelLabel, useModelLabels } from './insightsModelLabelSupport'
-import type { InsightsAggregateResponse } from './insightsPageTypes'
 import { formatInsightsDecisionName } from './insightsPageSupport'
 import { listPublicModels } from './startSupport'
 
@@ -62,7 +61,10 @@ interface CountTile {
   to: string
 }
 
-/** The routing configuration at a glance; each tile opens its manager. */
+/**
+ * The routing configuration at a glance; each tile opens its manager. Stacked
+ * beside a card on wide screens, the tiles share its height.
+ */
 export function HomeConfigTiles({
   config,
   loading,
@@ -125,7 +127,10 @@ export function HomeConfigTiles({
   return (
     <nav
       aria-label="Routing configuration"
-      className={cn('grid grid-cols-2 content-start gap-3', className)}
+      className={cn(
+        'grid grid-cols-2 gap-4 sm:grid-cols-4 xl:auto-rows-fr xl:grid-cols-1',
+        className,
+      )}
     >
       {tiles.map((tile) => (
         <Link
@@ -188,7 +193,7 @@ export function HomeRoutingMix({
   config,
   range,
 }: {
-  aggregate: InsightsAggregateResponse | null
+  aggregate: HomeAggregate | null
   config: RouterConfig | null
   range: HomeRange
 }) {
@@ -290,7 +295,7 @@ export function HomeModelsInUse({
   range,
   modelProviders,
 }: {
-  aggregate: InsightsAggregateResponse | null
+  aggregate: HomeAggregate | null
   config: RouterConfig | null
   range: HomeRange
   modelProviders: Record<string, string>

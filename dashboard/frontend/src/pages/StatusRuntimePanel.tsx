@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Boxes, Server, Waypoints } from 'lucide-react'
+import { ArrowRight, BrainCircuit, Server, Waypoints } from 'lucide-react'
 
 import {
   Alert,
@@ -11,13 +10,11 @@ import {
   CardHeader,
   CardTitle,
   CopyButton,
-  DataTable,
-  EmptyState,
   IconTile,
   KeyValueGrid,
   Progress,
+  Skeleton,
   StatusLabel,
-  type Column,
   type StatusTone,
 } from '../ui'
 import {
@@ -25,13 +22,10 @@ import {
   getActiveRouterRuntime,
   getLoadedModelCount,
   getModelStatusSummary,
-  getPreviewRouterModels,
-  getRouterModelState,
-  getRouterModelStateLabel,
   getTotalKnownModelCount,
-  type RouterModelInfo,
   type SystemStatus,
 } from '../utils/routerRuntime'
+import type { DecisionModelHealth } from './dashboardRouterIntelligenceSupport'
 import {
   embeddingProviderHealthLabel,
   embeddingProviderTone,
@@ -42,19 +36,7 @@ import {
   formatStatusLabel,
 } from './statusPageSupport'
 
-/** The status endpoint also reports the public listener URLs. */
-export type StatusSnapshot = SystemStatus & { endpoints?: string[] }
-
 const summaryTone: Record<string, StatusTone> = { ok: 'success', warn: 'warning', down: 'danger' }
-
-const modelTone = (state: string): StatusTone =>
-  state === 'ready'
-    ? 'success'
-    : state === 'downloading' || state === 'initializing'
-      ? 'info'
-      : state === 'pending'
-        ? 'warning'
-        : 'neutral'
 
 const embeddingTone: Record<string, StatusTone> = {
   healthy: 'success',
@@ -62,9 +44,7 @@ const embeddingTone: Record<string, StatusTone> = {
   pending: 'neutral',
 }
 
-const MODEL_PREVIEW = 8
-
-function RouterCard({ status }: { status: StatusSnapshot | null }) {
+function RouterCard({ status }: { status: SystemStatus | null }) {
   const summary = getModelStatusSummary(status)
   const runtime = status?.router_runtime
   const starting = getActiveRouterRuntime(status)
@@ -76,7 +56,7 @@ function RouterCard({ status }: { status: StatusSnapshot | null }) {
   const message = runtime?.message || models?.summary?.message
 
   return (
-    <Card className="min-w-0">
+    <Card className="min-w-0" data-testid="status-router">
       <CardHeader className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 items-center gap-3">
           <IconTile icon={Waypoints} tone="slate" size="md" />
@@ -96,7 +76,7 @@ function RouterCard({ status }: { status: StatusSnapshot | null }) {
         {total > 0 ? (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-baseline justify-between text-xs">
-              <span className="text-muted-foreground">Router models ready</span>
+              <span className="text-muted-foreground">Required models ready</span>
               <span className="font-mono tabular-nums text-foreground">
                 {loaded} / {total}
               </span>
@@ -104,7 +84,7 @@ function RouterCard({ status }: { status: StatusSnapshot | null }) {
             <Progress
               value={(loaded / total) * 100}
               tone={loaded === total ? 'success' : 'brand'}
-              aria-label="Router models ready"
+              aria-label="Required models ready"
             />
           </div>
         ) : null}
@@ -163,7 +143,7 @@ function RouterCard({ status }: { status: StatusSnapshot | null }) {
           <p className="text-xs leading-relaxed text-muted-foreground">
             The Router has not reported its runtime. Start it with{' '}
             <code className="font-mono text-foreground">vllm-sr serve</code> to see its startup
-            phase, signal models and embedding provider here.
+            phase and readiness here.
           </p>
         ) : null}
         {runtime?.phase === 'error' ? (
@@ -221,11 +201,10 @@ function RouterCard({ status }: { status: StatusSnapshot | null }) {
   )
 }
 
-function DeploymentCard({ status }: { status: StatusSnapshot | null }) {
+function DeploymentCard({ status }: { status: SystemStatus | null }) {
   const history = status?.history
-  const endpoints = status?.endpoints ?? []
   return (
-    <Card className="min-w-0">
+    <Card className="min-w-0" data-testid="status-deployment">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
           <IconTile icon={Server} tone="slate" size="md" />
@@ -235,7 +214,7 @@ function DeploymentCard({ status }: { status: StatusSnapshot | null }) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent>
         <KeyValueGrid
           items={[
             {
@@ -263,139 +242,77 @@ function DeploymentCard({ status }: { status: StatusSnapshot | null }) {
             },
           ]}
         />
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs text-subtle-foreground">Public endpoints</span>
-          {endpoints.length ? (
-            <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
-              {endpoints.map((endpoint) => (
-                <li key={endpoint} className="flex min-w-0 items-center gap-2 py-1 pl-3 pr-1">
-                  <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">
-                    {endpoint}
-                  </span>
-                  <CopyButton value={endpoint} label={`Copy ${endpoint}`} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <span className="text-[13px] text-muted-foreground">
-              No endpoints reported. They appear once a listener is serving.
-            </span>
-          )}
-        </div>
       </CardContent>
     </Card>
   )
 }
 
-function RouterModels({ models }: { models: RouterModelInfo[] }) {
-  const [expanded, setExpanded] = useState(false)
-  const rows = expanded ? models : models.slice(0, MODEL_PREVIEW)
-  const ready = models.filter((model) => getRouterModelState(model) === 'ready').length
-  const columns: Column<RouterModelInfo>[] = [
-    {
-      id: 'model',
-      header: 'Model',
-      className: 'w-full max-w-0',
-      cell: (model) => (
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate font-mono text-[12.5px] text-foreground">
-            {model.registry?.repo_id ?? model.name}
-          </span>
-          <span className="truncate text-xs text-subtle-foreground">
-            {model.recipe && model.recipe !== 'default' ? `${model.recipe} / ` : ''}
-            {model.name}
-          </span>
-        </div>
-      ),
-    },
-    {
-      id: 'type',
-      header: 'Purpose',
-      hideBelow: 'md',
-      cell: (model) => (
-        <span className="text-xs text-muted-foreground">{formatStatusLabel(model.type)}</span>
-      ),
-    },
-    {
-      id: 'state',
-      header: 'State',
-      width: '140px',
-      cell: (model) => {
-        const state = getRouterModelState(model)
-        return (
-          <StatusLabel tone={modelTone(state)} pulse={state === 'downloading'}>
-            {getRouterModelStateLabel(model)}
-          </StatusLabel>
-        )
-      },
-    },
-    {
-      id: 'memory',
-      header: 'Memory',
-      align: 'right',
-      hideBelow: 'lg',
-      cell: (model) => (
-        <span className="font-mono text-xs tabular-nums text-muted-foreground">
-          {model.memory_usage ?? '—'}
-        </span>
-      ),
-    },
-  ]
+/** The configured decision model's deployment state, linking to where it is managed. */
+function DecisionModelCard({
+  health,
+  loading,
+  onOpen,
+}: {
+  health: DecisionModelHealth | null
+  loading: boolean
+  onOpen: () => void
+}) {
   return (
-    <section className="flex min-w-0 flex-col gap-3" aria-labelledby="status-router-models">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h2 id="status-router-models" className="text-[15px] font-semibold tracking-[-0.012em]">
-            Router models
-          </h2>
-          <p className="text-[13px] text-muted-foreground">
-            Classifiers and embedding models the Router loads for signals.
-          </p>
+    <Card className="min-w-0" data-testid="status-decision-model">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4">
+        <IconTile icon={BrainCircuit} tone="violet" size="md" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <CardTitle>Decision model</CardTitle>
+          {health ? (
+            <span className="truncate font-mono text-[12.5px] text-muted-foreground">
+              {health.model}
+              {health.deployment !== health.model ? ` · ${health.deployment}` : ''}
+            </span>
+          ) : loading ? (
+            <Skeleton className="h-4 w-40" />
+          ) : (
+            <span className="text-[13px] text-muted-foreground">
+              The configuration did not load, so the decision model is unknown.
+            </span>
+          )}
         </div>
-        <Badge tone={ready === models.length ? 'success' : 'warning'}>
-          {ready} of {models.length} ready
-        </Badge>
-      </div>
-      <DataTable
-        data={rows}
-        columns={columns}
-        getRowId={(model) => `${model.recipe ?? 'default'}:${model.name}`}
-      />
-      {models.length > MODEL_PREVIEW ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="self-start"
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? 'Show fewer' : `Show all ${models.length} models`}
+        {health ? (
+          <span className="flex min-w-0 flex-col items-start gap-0.5 sm:items-end">
+            <StatusLabel tone={health.tone}>{health.label}</StatusLabel>
+            <span className="text-xs text-muted-foreground">{health.detail}</span>
+          </span>
+        ) : null}
+        <Button variant="outline" size="sm" onClick={onOpen}>
+          Decision models
+          <ArrowRight />
         </Button>
-      ) : null}
-    </section>
+      </div>
+    </Card>
   )
 }
 
-export default function StatusRuntimePanel({ status }: { status: StatusSnapshot | null }) {
-  const models = getPreviewRouterModels(status?.models)
+export default function StatusRuntimePanel({
+  status,
+  decisionModel,
+  decisionModelLoading,
+  onOpenDecisionModels,
+}: {
+  status: SystemStatus | null
+  decisionModel: DecisionModelHealth | null
+  decisionModelLoading: boolean
+  onOpenDecisionModels: () => void
+}) {
   return (
-    <div className="flex min-w-0 flex-col gap-6">
-      <div className="grid min-w-0 grid-cols-1 items-start gap-4 xl:grid-cols-2">
+    <div className="flex min-w-0 flex-col gap-4">
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
         <RouterCard status={status} />
         <DeploymentCard status={status} />
       </div>
-      {models.length ? (
-        <RouterModels models={models} />
-      ) : status?.models ? (
-        <Card className="border-dashed shadow-none">
-          <EmptyState
-            compact
-            icon={Boxes}
-            tone="slate"
-            title="No router models reported"
-            description="Classifier and embedding models appear here once the Router loads its recipes."
-          />
-        </Card>
-      ) : null}
+      <DecisionModelCard
+        health={decisionModel}
+        loading={decisionModelLoading}
+        onOpen={onOpenDecisionModels}
+      />
     </div>
   )
 }

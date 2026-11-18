@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { HeartPulse, RefreshCw } from 'lucide-react'
 
 import {
@@ -11,9 +12,14 @@ import {
   StatusLabel,
   cn,
 } from '../ui'
+import type { SystemStatus } from '../utils/routerRuntime'
+import { useDashboardObservation } from '../utils/useDashboardObservation'
 import StatusAvailabilityPanel from './StatusAvailabilityPanel'
-import StatusRuntimePanel, { type StatusSnapshot } from './StatusRuntimePanel'
+import StatusRuntimePanel from './StatusRuntimePanel'
 import { fetchDashboardJson } from './dashboardPageRequests'
+import type { RouterConfig } from './dashboardPageTypes'
+import { decisionModelHealth } from './dashboardRouterIntelligenceSupport'
+import type { ModelRuntimeInventory } from './decisionModelManagement'
 import { formatElapsed } from './statusPageSupport'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 
@@ -37,22 +43,32 @@ function StatusSkeleton() {
         <Skeleton className="h-64 rounded-xl" />
         <Skeleton className="h-64 rounded-xl" />
       </div>
+      <Skeleton className="h-[74px] rounded-xl" />
     </div>
   )
 }
 
 const StatusPage: React.FC = () => {
-  const [status, setStatus] = useState<StatusSnapshot | null>(null)
+  const navigate = useNavigate()
+  const [status, setStatus] = useState<SystemStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const now = useNow(1000)
+  // Observations are cached by path with the first reader's options: these match Models › Decision models.
+  const config = useDashboardObservation<RouterConfig>('/api/router/config/all', {
+    freshMs: 60_000,
+    pollMs: 0,
+  })
+  const inventory = useDashboardObservation<ModelRuntimeInventory>(
+    '/api/router/api/v1/inventory/model-runtime',
+  )
 
   const fetchStatus = useCallback(async () => {
     setChecking(true)
     try {
-      setStatus(await fetchDashboardJson<StatusSnapshot>('/api/status', 'System status'))
+      setStatus(await fetchDashboardJson<SystemStatus>('/api/status', 'System status'))
       setLastUpdated(new Date())
       setError(null)
     } catch (cause) {
@@ -64,6 +80,11 @@ const StatusPage: React.FC = () => {
   }, [])
 
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
+  const refreshInventory = inventory.refresh
+  const checkNow = useCallback(() => {
+    void statusRequest.run({ allowHidden: true })
+    void refreshInventory()
+  }, [refreshInventory, statusRequest])
 
   useEffect(() => {
     void statusRequest.run({ allowHidden: true })
@@ -79,6 +100,9 @@ const StatusPage: React.FC = () => {
   }, [statusRequest])
 
   const live = Boolean(lastUpdated && !error)
+  const decisionModel = config.data
+    ? decisionModelHealth(config.data, inventory.data, status?.models)
+    : null
 
   return (
     <PageContainer>
@@ -86,7 +110,7 @@ const StatusPage: React.FC = () => {
         <PageHeader
           icon={<IconTile icon={HeartPulse} tone="green" size="lg" />}
           title="Status"
-          description="Health of every service in this deployment, the Router's live state and how the stack is deployed."
+          description="Health of every service in this deployment, the Router's live state, its decision model and how the stack is deployed."
           actions={
             <>
               <span className="mr-1 flex flex-col items-end gap-0.5 text-xs" aria-live="polite">
@@ -101,7 +125,7 @@ const StatusPage: React.FC = () => {
               </span>
               <Button
                 variant="outline"
-                onClick={() => void statusRequest.run({ allowHidden: true })}
+                onClick={checkNow}
                 aria-label="Refresh system status"
                 title={
                   lastUpdated ? `Last checked ${lastUpdated.toLocaleTimeString()}` : 'Check now'
@@ -121,11 +145,7 @@ const StatusPage: React.FC = () => {
               tone="danger"
               title={status ? 'Showing the last known status' : 'Status check failed'}
               actions={
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void statusRequest.run({ allowHidden: true })}
-                >
+                <Button size="sm" variant="outline" onClick={checkNow}>
                   Try again
                 </Button>
               }
@@ -143,13 +163,18 @@ const StatusPage: React.FC = () => {
             <StatusSkeleton />
           </>
         ) : (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
             <StatusAvailabilityPanel
               status={status}
               lastUpdated={lastUpdated}
               unavailable={Boolean(error)}
             />
-            <StatusRuntimePanel status={status} />
+            <StatusRuntimePanel
+              status={status}
+              decisionModel={decisionModel}
+              decisionModelLoading={config.loading}
+              onOpenDecisionModels={() => navigate('/models/decision')}
+            />
           </div>
         )}
       </div>

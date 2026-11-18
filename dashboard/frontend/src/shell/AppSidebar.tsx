@@ -40,6 +40,7 @@ import {
 import { navigation, navItemMatch, type NavItem } from './navigation'
 import { useShell } from './shell-context'
 import { useTheme, type AccentPreset, type ThemePreference } from './theme'
+import { shortRelease } from './version'
 
 export interface ShellAccount {
   name: string
@@ -148,18 +149,22 @@ function SidebarLink({
   )
 }
 
-/** Version pill beside the wordmark (LiteLLM-style); opens the connected instance's details. */
+/**
+ * The release beside the wordmark, in a pill of fixed width so the lockup never
+ * moves; it opens the full version and the connected instance's details.
+ */
 function VersionBadge({ instance }: { instance: ShellInstance }) {
+  const release = shortRelease(instance.version)
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
           aria-label={`Version ${instance.version}, ${instance.statusLabel}`}
-          className="inline-flex h-5 max-w-[96px] shrink-0 items-center gap-1 rounded-full border border-sidebar-border bg-surface/80 px-1.5 font-mono text-[10.5px] font-medium text-muted-foreground outline-none transition-colors hover:border-border-strong hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-sidebar-ring data-[state=open]:text-foreground dark:bg-white/[0.04]"
+          data-testid="sidebar-version"
+          className="inline-flex h-5 w-16 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-surface/80 px-2 font-mono text-[10.5px] font-medium text-muted-foreground outline-none transition-colors hover:border-border-strong hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-sidebar-ring data-[state=open]:text-foreground dark:bg-white/[0.04]"
         >
-          <StatusDot tone={instance.status} className="size-1.5" />
-          <span className="truncate">{instance.version}</span>
+          <span className="truncate">{release}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" side="bottom" className="w-72 p-0">
@@ -172,9 +177,9 @@ function VersionBadge({ instance }: { instance: ShellInstance }) {
         </div>
         <dl className="grid gap-2 px-3.5 py-3 text-xs">
           {instance.details.map((detail) => (
-            <div key={detail.label} className="flex items-center justify-between gap-3">
-              <dt className="text-subtle-foreground">{detail.label}</dt>
-              <dd className="truncate font-mono text-[11.5px] text-foreground/85">
+            <div key={detail.label} className="flex items-baseline justify-between gap-3">
+              <dt className="shrink-0 text-subtle-foreground">{detail.label}</dt>
+              <dd className="min-w-0 text-right font-mono text-[11.5px] text-foreground/85 [overflow-wrap:anywhere]">
                 {detail.value}
               </dd>
             </div>
@@ -332,7 +337,7 @@ export function SidebarContents({
       >
         <NavLink
           to="/"
-          className="min-w-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring"
+          className="shrink-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-sidebar-ring"
           aria-label="Home"
         >
           <BrandLockup collapsed={collapsed} />

@@ -59,17 +59,18 @@ import {
   getInsightsRecordPath,
 } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
-import type { RequestsData } from './insightsRequestsData'
-import type { RunSummary } from './insightsRunTypes'
 import {
   carriedP95,
   HOME_RANGE_LABEL,
+  HOME_RECENT_LIMIT,
   moreCurrenciesLabel,
+  needsTrafficWindow,
   spendSummary,
   TRAFFIC_UNAVAILABLE,
   type HomeRange,
   type TrafficView,
 } from './homeSupport'
+import type { HomeTraffic } from './homeTraffic'
 
 function KpiLink({ to, label, children }: { to: string; label: string; children: ReactNode }) {
   return (
@@ -83,25 +84,40 @@ function KpiLink({ to, label, children }: { to: string; label: string; children:
   )
 }
 
+/** A metric card whose value is still on its way, with its label already in place. */
+function PendingStat({ label, icon }: { label: string; icon: ReactNode }) {
+  return (
+    <Card aria-busy="true" className="flex flex-col gap-3 px-4 pb-3 pt-4">
+      <span className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
+        {icon}
+        {label}
+      </span>
+      <Skeleton className="h-[26px] w-24" />
+      <Skeleton className="h-4 w-36" />
+    </Card>
+  )
+}
+
 /**
  * Requests, latency, spend and savings over the range, from Router Replay.
  * Without replay data the traffic chart explains why, so the row stays out.
  */
 export function HomeKpis({
-  data,
+  traffic,
   view,
   range,
 }: {
-  data: RequestsData
+  traffic: HomeTraffic
   view: TrafficView | null
   range: HomeRange
 }) {
-  if (data.unavailable || (data.error && !data.aggregate)) return null
-  const aggregate = data.aggregate
+  if (traffic.unavailable || (traffic.error && !traffic.aggregate)) return null
+  const aggregate = traffic.aggregate
   if (!aggregate) {
     return (
       <section
         aria-label="Key metrics"
+        aria-busy="true"
         className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
       >
         {[0, 1, 2, 3].map((index) => (
@@ -118,6 +134,8 @@ export function HomeKpis({
   // A sparkline covering only the newest records would draw a false start.
   const series = view?.coversRange ? view.points : undefined
   const latency = view?.latency ?? {}
+  // Without a series, latency waits for the newest records while the rest shows.
+  const latencyPending = !view && needsTrafficWindow(aggregate) && !traffic.windowError
   const sampledNote =
     view && !view.coversRange
       ? `newest ${formatInsightsCount(view.sampled ?? 0)}`
@@ -153,19 +171,25 @@ export function HomeKpis({
         />
       </KpiLink>
       <KpiLink to={`/observe/requests${rangeQuery}`} label="p95 latency: open Requests">
-        <StatCard
-          label="p95 latency"
-          icon={<Gauge className="size-4 text-chart-3" />}
-          value={latency.p95 ?? 0}
-          format={(value) => (latency.p95 === undefined ? '—' : formatLatency(value))}
-          hint={
-            latency.p50 === undefined
-              ? 'No completed request yet'
-              : `p50 ${formatLatency(latency.p50)} · ${sampledNote}`
-          }
-          spark={series ? carriedP95(series) : undefined}
-          sparkColor="var(--chart-3)"
-        />
+        {latencyPending ? (
+          <PendingStat label="p95 latency" icon={<Gauge className="size-4 text-chart-3" />} />
+        ) : (
+          <StatCard
+            label="p95 latency"
+            icon={<Gauge className="size-4 text-chart-3" />}
+            value={latency.p95 ?? 0}
+            format={(value) => (latency.p95 === undefined ? '—' : formatLatency(value))}
+            hint={
+              latency.p50 !== undefined
+                ? `p50 ${formatLatency(latency.p50)} · ${sampledNote}`
+                : !view && traffic.windowError
+                  ? 'The newest requests did not load'
+                  : 'No completed request yet'
+            }
+            spark={series ? carriedP95(series) : undefined}
+            sparkColor="var(--chart-3)"
+          />
+        )}
       </KpiLink>
       <KpiLink to={`/observe/requests${rangeQuery}`} label="Spend: open Requests">
         <StatCard
@@ -229,8 +253,8 @@ export function HomeKpis({
   )
 }
 
-function requestTitle(record: InsightsRecord, run?: RunSummary): string {
-  const title = run?.session_name || record.session_name
+function requestTitle(record: InsightsRecord, sessionTitle?: string): string {
+  const title = sessionTitle || record.session_name
   if (title) return title
   if (record.session_id) return compactSessionId(record.session_id)
   return compactIdentifier(record.request_id || record.id, 10, 6)
@@ -238,12 +262,12 @@ function requestTitle(record: InsightsRecord, run?: RunSummary): string {
 
 function RequestCell({
   record,
-  run,
+  sessionTitle,
   rules,
   now,
 }: {
   record: InsightsRecord
-  run?: RunSummary
+  sessionTitle?: string
   rules?: AgentRuleIndex
   now: number
 }) {
@@ -270,7 +294,7 @@ function RequestCell({
           className="truncate rounded-sm text-[13px] font-medium text-foreground outline-none hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/40"
           title={record.session_id ?? record.request_id ?? record.id}
         >
-          {requestTitle(record, run)}
+          {requestTitle(record, sessionTitle)}
         </Link>
         <span className="flex min-w-0 items-center gap-1.5 text-xs text-subtle-foreground">
           {lifecycle.errored ? (
@@ -298,23 +322,21 @@ function RequestCell({
 
 /** The newest recorded requests, each with the agent that sent it and the route it took. */
 export function HomeRecentRequests({
-  data,
-  runs,
+  traffic,
   rules,
   range,
   now,
 }: {
-  data: RequestsData
-  runs: Map<string, RunSummary>
+  traffic: HomeTraffic
   rules?: AgentRuleIndex
   range: HomeRange
   now: number
 }) {
   const navigate = useNavigate()
-  const rows = data.rows.slice(0, 7)
+  const rows = traffic.rows.slice(0, HOME_RECENT_LIMIT)
   let body: ReactNode
-  if (data.unavailable || (data.error && rows.length === 0)) {
-    const copy = data.unavailable ? TRAFFIC_UNAVAILABLE[data.unavailable] : undefined
+  if (traffic.unavailable || (traffic.rowsError && rows.length === 0)) {
+    const copy = traffic.unavailable ? TRAFFIC_UNAVAILABLE[traffic.unavailable] : undefined
     body = (
       <EmptyState
         compact
@@ -322,17 +344,24 @@ export function HomeRecentRequests({
         tone={copy?.tone ?? 'slate'}
         title={copy ? 'No recorded requests to show' : 'Requests could not load'}
         description={
-          data.unavailable === 'replay_off'
+          traffic.unavailable === 'replay_off'
             ? 'Each request appears here with the agent that sent it, its decision and its model once Router Replay records it.'
-            : data.unavailable === 'forbidden'
+            : traffic.unavailable === 'forbidden'
               ? copy?.description
-              : data.unavailable
+              : traffic.unavailable
                 ? 'They load again as soon as the router API answers.'
-                : data.error
+                : traffic.rowsError
+        }
+        actions={
+          traffic.unavailable ? undefined : (
+            <Button size="sm" variant="outline" onClick={traffic.refresh}>
+              Try again
+            </Button>
+          )
         }
       />
     )
-  } else if (data.loading && rows.length === 0) {
+  } else if (traffic.rowsLoading && rows.length === 0) {
     body = <TableSkeleton rows={6} columns={5} />
   } else if (rows.length === 0) {
     body = (
@@ -377,7 +406,7 @@ export function HomeRecentRequests({
               <TableCell className="max-w-[280px]">
                 <RequestCell
                   record={record}
-                  run={record.session_id ? runs.get(record.session_id) : undefined}
+                  sessionTitle={record.session_id ? traffic.titles[record.session_id] : undefined}
                   rules={rules}
                   now={now}
                 />
@@ -420,8 +449,8 @@ export function HomeRecentRequests({
       <CardHeader className="pb-3">
         <CardTitle>Recent requests</CardTitle>
         <CardDescription>
-          {data.aggregate
-            ? `${formatInsightsCount(data.aggregate.record_count)} in the ${HOME_RANGE_LABEL[range]}, from Router Replay`
+          {traffic.aggregate
+            ? `${formatInsightsCount(traffic.aggregate.record_count)} in the ${HOME_RANGE_LABEL[range]}, from Router Replay`
             : 'From Router Replay'}
         </CardDescription>
         <CardAction>

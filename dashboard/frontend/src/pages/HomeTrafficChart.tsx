@@ -36,14 +36,15 @@ import {
 } from '../utils/insightsCost'
 import {
   HOME_RANGE_LABEL,
+  needsTrafficWindow,
   timeTicks,
   TRAFFIC_UNAVAILABLE,
   type HomeRange,
   type TrafficView,
 } from './homeSupport'
+import type { HomeTraffic } from './homeTraffic'
 import { formatLatency } from './insightsDisplayFormat'
 import type { InsightsUnavailableReason } from './insightsPageApi'
-import type { RequestsData } from './insightsRequestsData'
 
 type Metric = 'requests' | 'latency' | 'cost'
 
@@ -278,26 +279,31 @@ function legendFor(view: TrafficView, metric: Metric) {
 
 /** Requests, latency and spend over the range, from Router Replay. */
 export function HomeTrafficChart({
-  data,
+  traffic,
   view,
   range,
 }: {
-  data: RequestsData
+  traffic: HomeTraffic
   view: TrafficView | null
   range: HomeRange
 }) {
   const [metric, setMetric] = useState<Metric>('requests')
-  const unavailable = Boolean(data.unavailable || (data.error && !data.aggregate))
-  // Without a series the chart waits for the newest records, which load after the aggregate.
+  const windowFailed = !view && needsTrafficWindow(traffic.aggregate) && traffic.windowError
+  const unavailable = Boolean(
+    traffic.unavailable || (traffic.error && !traffic.aggregate) || windowFailed,
+  )
+  // Without a series the chart waits for the newest records, which load beside the aggregate.
   const loading =
-    !unavailable && !view && (data.loading || !data.aggregate || data.aggregate.record_count > 0)
+    !unavailable && !view && (!traffic.aggregate || needsTrafficWindow(traffic.aggregate))
   const empty = !view || view.points.every((point) => point.requests === 0)
   const rangeLabel = HOME_RANGE_LABEL[range]
   const description = unavailable
     ? 'Requests, latency and spend over time'
-    : view && !view.coversRange
-      ? `Last ${formatInsightsCount(view.sampled ?? 0)} requests`
-      : `${rangeLabel.charAt(0).toUpperCase()}${rangeLabel.slice(1)} across every public model`
+    : traffic.error
+      ? 'Showing the last loaded traffic: the latest refresh failed'
+      : view && !view.coversRange
+        ? `Last ${formatInsightsCount(view.sampled ?? 0)} requests`
+        : `${rangeLabel.charAt(0).toUpperCase()}${rangeLabel.slice(1)} across every public model`
 
   return (
     <Card className="min-w-0 xl:col-span-2" data-testid="home-traffic">
@@ -318,13 +324,19 @@ export function HomeTrafficChart({
       </CardHeader>
       <CardContent className="pt-2">
         {unavailable ? (
-          <TrafficNotice reason={data.unavailable} error={data.error} onRetry={data.refresh} />
+          <TrafficNotice
+            reason={traffic.unavailable}
+            error={windowFailed ? traffic.windowError : traffic.error}
+            onRetry={traffic.refresh}
+          />
         ) : (
           <>
             {view ? (
               <ChartLegend className="mb-2" items={legendFor(view, metric)} />
-            ) : (
+            ) : loading ? (
               <Skeleton className="mb-2 h-4 w-48" />
+            ) : (
+              <div aria-hidden className="mb-2 h-4" />
             )}
             <div className="relative h-[260px]">
               {loading ? (

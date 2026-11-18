@@ -42,6 +42,9 @@ export function LogoMark({
   )
 }
 
+/** The wordmark images' pixel size; the lockup keeps this ratio at every height. */
+const WORDMARK = { width: 2166, height: 696 }
+
 /**
  * The vLLM Semantic Router wordmark: black lettering in light mode, white in
  * dark mode. Collapsed spaces show only the vLLM mark.
@@ -49,7 +52,7 @@ export function LogoMark({
 export function BrandLockup({
   collapsed = false,
   className,
-  height = 34,
+  height = 32,
 }: {
   collapsed?: boolean
   className?: string
@@ -62,18 +65,28 @@ export function BrandLockup({
       </span>
     )
   }
+  // A flex row would otherwise narrow the image and squash the lettering.
+  const width = Math.round((height * WORDMARK.width) / WORDMARK.height)
   return (
-    <span className={cn('flex min-w-0 items-center', className)} style={{ height }}>
+    <span
+      className={cn('block shrink-0', className)}
+      style={{ width, height }}
+      data-testid="brand-lockup"
+    >
       <img
         src="/brand/vllm-sr-logo-black.png"
         alt="vLLM Semantic Router"
-        className="block h-full w-auto select-none dark:hidden"
+        width={WORDMARK.width}
+        height={WORDMARK.height}
+        className="block size-full max-w-none select-none object-contain dark:hidden"
         draggable={false}
       />
       <img
         src="/brand/vllm-sr-logo-white.png"
         alt="vLLM Semantic Router"
-        className="hidden h-full w-auto select-none dark:block"
+        width={WORDMARK.width}
+        height={WORDMARK.height}
+        className="hidden size-full max-w-none select-none object-contain dark:block"
         draggable={false}
       />
     </span>

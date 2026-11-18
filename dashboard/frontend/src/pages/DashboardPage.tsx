@@ -3,20 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { MessagesSquare, Rocket } from 'lucide-react'
 
 import { Alert, Badge, Button, PageContainer, PageHeader, Segmented, Tooltip } from '../ui'
-import RouterModelInventory from '../components/RouterModelInventory'
-import ViewModal from '../components/ViewModal'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import {
-  getRouterModelConsumers,
-  type RouterModelInfo,
-  type SystemStatus,
-} from '../utils/routerRuntime'
+import type { SystemStatus } from '../utils/routerRuntime'
+import { useDashboardObservation } from '../utils/useDashboardObservation'
 import { withRoutingView } from './configPageCanonicalLayout'
 import DashboardRouterIntelligence from './DashboardRouterIntelligence'
 import { fetchDashboardJson, settleDashboardRequests } from './dashboardPageRequests'
 import type { RouterConfig } from './dashboardPageTypes'
 import { describeServingMode } from './dashboardServingMode'
+import type { ModelRuntimeInventory } from './decisionModelManagement'
 import {
   HomeConfigTiles,
   HomeModelsInUse,
@@ -30,11 +26,11 @@ import {
   formatUpdatedAgo,
   greeting,
   HOME_RANGES,
+  homeTrafficView,
   readHomeRange,
-  readTraffic,
-  TRAFFIC_INTERVAL,
   type HomeRange,
 } from './homeSupport'
+import { useHomeTraffic } from './homeTraffic'
 import {
   buildAgentRuleIndex,
   buildModelProviders,
@@ -46,7 +42,6 @@ import { useNow } from './insightsDisplayFormat'
 import { ModelLabelsProvider } from './insightsModelLabelSupport'
 import { fetchInsightsJSON, insightsUnavailableReason } from './insightsPageApi'
 import type { InsightsListResponse } from './insightsPageTypes'
-import { readRequestFilters, useRecentRuns, useRequestsData } from './insightsRequestsData'
 import { listPublicModels, buildStartChecklist, type ReplayFacts } from './startSupport'
 import { StartChecklistCard } from './StartChecklist'
 import { useInstanceDeployment } from './useInstanceDeployment'
@@ -55,10 +50,14 @@ import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 const STATUS_POLL_MS = 10_000
 const REFRESH_MS = 30_000
 
-/** Whether any request was ever recorded, for the checklist; independent of the range. */
-function useLatestReplay(refreshKey: number): ReplayFacts {
+/**
+ * Whether any request was ever recorded, for the checklist. The range's newest
+ * records answer it when they hold any; only an empty range asks Router Replay.
+ */
+function useLatestReplay(refreshKey: number, enabled: boolean): ReplayFacts {
   const [facts, setFacts] = useState<ReplayFacts>({ state: 'loading', count: 0 })
   useEffect(() => {
+    if (!enabled) return undefined
     let cancelled = false
     fetchInsightsJSON<InsightsListResponse>(
       '/api/router/api/v1/observability/replays?limit=1&offset=0&showDetails=false',
@@ -79,7 +78,7 @@ function useLatestReplay(refreshKey: number): ReplayFacts {
     return () => {
       cancelled = true
     }
-  }, [refreshKey])
+  }, [refreshKey, enabled])
   return facts
 }
 
@@ -109,7 +108,6 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<number | null>(null)
-  const [selectedRuntimeModel, setSelectedRuntimeModel] = useState<RouterModelInfo | null>(null)
   const [replayKey, setReplayKey] = useState(0)
 
   const fetchStatus = useCallback(async () => {
@@ -158,28 +156,28 @@ const DashboardPage = () => {
         : EMPTY_CONFIG_FACTS,
     [rawConfig],
   )
-  const filters = useMemo(() => readRequestFilters(new URLSearchParams({ range })), [range])
-  const requests = useRequestsData({
-    filters,
-    page: 1,
-    live: false,
-    held: false,
-    rules: facts.agentRules,
-    interval: TRAFFIC_INTERVAL[range],
-  })
-  const runs = useRecentRuns(
-    requests.rows.some((record) => record.session_id),
-    requests.rows[0]?.id ?? '',
+  const traffic = useHomeTraffic(range, user?.id ?? 'anonymous')
+  const view = useMemo(
+    () => homeTrafficView(traffic.aggregate, traffic.window, range),
+    [range, traffic.aggregate, traffic.window],
   )
-  const latestReplay = useLatestReplay(replayKey)
+  const inventory = useDashboardObservation<ModelRuntimeInventory>(
+    '/api/router/api/v1/inventory/model-runtime',
+  )
+  const rangeReplay: ReplayFacts | null = traffic.unavailable
+    ? { state: 'unavailable', count: 0, reason: traffic.unavailable }
+    : traffic.rows.length
+      ? {
+          state: 'ready',
+          count: traffic.aggregate?.record_count || traffic.rows.length,
+          latestAt: traffic.rows[0].timestamp,
+        }
+      : null
+  const latestReplay = useLatestReplay(replayKey, !rangeReplay && !traffic.rowsLoading)
   const now = useNow(REFRESH_MS)
-  const traffic = useMemo(
-    () => readTraffic(requests.aggregate, requests.window, requests.windowTotal, range, now),
-    [now, range, requests.aggregate, requests.window, requests.windowTotal],
-  )
 
-  const refreshTraffic = useRef(requests.refresh)
-  refreshTraffic.current = requests.refresh
+  const refreshTraffic = useRef(traffic.refresh)
+  refreshTraffic.current = traffic.refresh
 
   useEffect(() => {
     const pollStatus = () => {
@@ -233,7 +231,13 @@ const DashboardPage = () => {
     [config],
   )
   const backendCount = Array.isArray(config?.providers?.models) ? config.providers.models.length : 0
-  const steps = buildStartChecklist({ status, statusFailed, config, replay: latestReplay, now })
+  const steps = buildStartChecklist({
+    status,
+    statusFailed,
+    config,
+    replay: rangeReplay ?? latestReplay,
+    now,
+  })
   const unhealthy = status?.services.filter((service) => !service.healthy) ?? []
   const overall = status?.overall?.toLowerCase()
   const firstName = user?.name?.trim().split(/\s+/)[0]
@@ -349,17 +353,17 @@ const DashboardPage = () => {
       <InsightsConfigContext.Provider value={facts}>
         <ModelLabelsProvider>
           <div className="flex flex-col gap-4">
-            <HomeKpis data={requests} view={traffic} range={range} />
+            <HomeKpis traffic={traffic} view={view} range={range} />
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-              <HomeTrafficChart data={requests} view={traffic} range={range} />
+              <HomeTrafficChart traffic={traffic} view={view} range={range} />
               <StartChecklistCard steps={steps} />
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-              <HomeRoutingMix aggregate={requests.aggregate} config={config} range={range} />
+              <HomeRoutingMix aggregate={traffic.aggregate} config={config} range={range} />
               <HomeModelsInUse
-                aggregate={requests.aggregate}
+                aggregate={traffic.aggregate}
                 config={config}
                 range={range}
                 modelProviders={facts.modelProviders}
@@ -369,8 +373,7 @@ const DashboardPage = () => {
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
               <HomeRecentRequests
-                data={requests}
-                runs={runs}
+                traffic={traffic}
                 rules={facts.agentRules}
                 range={range}
                 now={now}
@@ -385,49 +388,17 @@ const DashboardPage = () => {
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
               <DashboardRouterIntelligence
                 config={config}
-                modelsInfo={status?.models}
-                onConfigure={() => navigate('/models/decision')}
-                onOpenStatus={() => navigate('/observe/status')}
-                onSelectModel={setSelectedRuntimeModel}
-              />
-              <HomeConfigTiles
-                config={config}
                 loading={loading}
-                className="sm:grid-cols-4 xl:grid-cols-1"
+                inventory={inventory.data}
+                routerModels={status?.models}
+                onConfigure={() => navigate('/models/decision')}
+                className="xl:col-span-2"
               />
+              <HomeConfigTiles config={config} loading={loading} />
             </div>
           </div>
         </ModelLabelsProvider>
       </InsightsConfigContext.Provider>
-
-      {selectedRuntimeModel ? (
-        <ViewModal
-          isOpen
-          title="Runtime model details"
-          onClose={() => setSelectedRuntimeModel(null)}
-          sections={[
-            {
-              fields: [
-                {
-                  label: 'Runtime',
-                  fullWidth: true,
-                  value: (
-                    <RouterModelInventory
-                      mode="detail"
-                      modelsInfo={{
-                        models: getRouterModelConsumers(
-                          status?.models?.models ?? [],
-                          selectedRuntimeModel,
-                        ),
-                      }}
-                    />
-                  ),
-                },
-              ],
-            },
-          ]}
-        />
-      ) : null}
     </PageContainer>
   )
 }

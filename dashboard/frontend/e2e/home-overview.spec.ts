@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
 const config = {
@@ -41,12 +41,14 @@ const base = {
   signals: {},
 }
 
+const claudeSession = 'key_1:49b948ac-48b9-4fd5-b4e8-ccb8f6fba483'
+
 const records = [
   {
     ...base,
     id: 'claude-subagent',
     timestamp: minutesAgo(2),
-    session_id: 'key_1:49b948ac-48b9-4fd5-b4e8-ccb8f6fba483',
+    session_id: claudeSession,
     decision: 'agentic',
     selected_model: 'deepseek/deepseek-v4.1-flash',
     duration_ms: 170,
@@ -168,9 +170,19 @@ async function mockHome(
       },
     }),
   )
+  await page.route('**/api/router/api/v1/inventory/model-runtime', (route) =>
+    route.fulfill({ json: { deployments: [] } }),
+  )
   const aggregateQueries: string[] = []
+  const listQueries: URLSearchParams[] = []
+  const runQueries: URLSearchParams[] = []
+  // A stalled router: replay reads stay open, as a slow aggregate does.
+  const replies = { stalled: false }
   await page.route('**/api/router/api/v1/observability/replays**', (route) => {
     const url = new URL(route.request().url())
+    if (url.pathname.endsWith('/models'))
+      return route.fulfill({ json: { object: 'list', data: [] } })
+    if (replies.stalled) return
     if (!replay) return route.fulfill({ status: 404, json: { error: 'not found' } })
     if (url.pathname.endsWith('/aggregate')) {
       aggregateQueries.push(url.search)
@@ -186,20 +198,29 @@ async function mockHome(
             : aggregate,
       })
     }
-    if (url.pathname.endsWith('/runs')) return route.fulfill({ json: { object: 'list', data: [] } })
-    if (url.pathname.endsWith('/models'))
-      return route.fulfill({ json: { object: 'list', data: [] } })
+    if (url.pathname.endsWith('/runs')) {
+      runQueries.push(url.searchParams)
+      return route.fulfill({
+        json: {
+          object: 'router_replay.runs',
+          data: [{ session_id: claudeSession, session_name: 'Fix the login redirect' }],
+        },
+      })
+    }
+    listQueries.push(url.searchParams)
     // Without a series, a range holding more records than the newest page charts only those.
     const total = series ? records.length : 500
+    const limit = Number(url.searchParams.get('limit') ?? records.length)
     return route.fulfill({
-      json: { object: 'list', data: records, count: records.length, total },
+      json: { object: 'list', data: records.slice(0, limit), count: records.length, total },
     })
   })
-  return { aggregateQueries }
+  const windowReads = () => listQueries.filter((query) => query.get('limit') === '100')
+  return { aggregateQueries, listQueries, runQueries, windowReads, replies }
 }
 
 test('summarizes traffic, recent requests and the routing configuration', async ({ page }) => {
-  const { aggregateQueries } = await mockHome(page)
+  const { aggregateQueries, listQueries, runQueries, windowReads } = await mockHome(page)
   await page.goto('/')
 
   await expect(page.getByTestId('dashboard-serving-mode')).toContainText('Router mode')
@@ -230,6 +251,14 @@ test('summarizes traffic, recent requests and the routing configuration', async 
   await expect(recent.getByRole('img', { name: 'Codex' })).toBeVisible()
   await expect(recent.locator('[data-request-class="subagent"]')).toBeVisible()
   await expect(recent.getByText('API client')).toBeVisible()
+  // The session title arrives last, from one bounded read of the newest runs.
+  await expect(recent.getByRole('link', { name: 'Fix the login redirect' })).toBeVisible()
+  expect(runQueries).toHaveLength(1)
+  expect(runQueries[0].get('limit')).toBe('20')
+  expect(runQueries[0].get('since')).toBeTruthy()
+  // A router with traffic intervals charts from the aggregate alone.
+  expect(listQueries.every((query) => query.get('limit') === '7' && query.get('since'))).toBe(true)
+  expect(windowReads()).toHaveLength(0)
 
   await expect(page.getByTestId('home-routing-mix')).toContainText('66.7%')
   await expect(page.getByTestId('home-models')).toContainText('qwen3-8b')
@@ -267,11 +296,82 @@ test('explains missing traffic when Router Replay is off and keeps the configura
 })
 
 test('charts the newest requests when the router returns no traffic series', async ({ page }) => {
-  await mockHome(page, { series: false })
+  const { windowReads } = await mockHome(page, { series: false })
   await page.goto('/')
 
   const traffic = page.getByTestId('home-traffic')
   await expect(traffic).toContainText('Last 3 requests')
   await expect(traffic.locator('.recharts-surface')).toBeVisible()
   await expect(traffic).toContainText('Served from cache')
+  await expect(page.getByRole('link', { name: 'p95 latency: open Requests' })).toContainText(
+    'newest 3',
+  )
+
+  // One read of the newest 100 records per range, however often the range comes back.
+  await page.getByRole('radio', { name: '7d' }).click()
+  await expect.poll(() => windowReads().length).toBe(2)
+  await page.getByRole('radio', { name: '24h' }).click()
+  await expect(traffic).toContainText('Last 3 requests')
+  expect(windowReads().map((query) => query.get('limit'))).toEqual(['100', '100'])
+})
+
+test('shows the last traffic at once on a return visit while the router answers slowly', async ({
+  page,
+}) => {
+  const { replies } = await mockHome(page)
+  await page.goto('/')
+  const requests = page.getByRole('link', { name: 'Requests: open Requests' })
+  await expect(requests).toContainText('3')
+  await expect(page.getByTestId('home-recent-requests')).toContainText('Fix the login redirect')
+
+  replies.stalled = true
+  await page.reload()
+  await expect(requests).toContainText('3')
+  await expect(page.getByRole('link', { name: 'p95 latency: open Requests' })).toContainText(
+    '1.50s',
+  )
+  await expect(page.getByTestId('home-traffic').locator('.recharts-surface')).toBeVisible()
+  await expect(
+    page.getByTestId('home-recent-requests').getByRole('link', { name: 'Fix the login redirect' }),
+  ).toBeVisible()
+})
+
+test('keeps the Home grid rows level and leaves the runtime inventory off', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1400 })
+  await mockHome(page)
+  await page.goto('/')
+  await expect(page.getByRole('link', { name: 'Requests: open Requests' })).toContainText('3')
+
+  const intelligence = page.getByRole('region', { name: 'Router intelligence' })
+  await expect(intelligence).toBeVisible()
+  await expect(page.getByText('Runtime inventory')).toHaveCount(0)
+  await expect(page.getByText('No runtime inventory reported yet.')).toHaveCount(0)
+
+  const box = async (cell: Locator) => {
+    const bounds = await cell.boundingBox()
+    expect(bounds).not.toBeNull()
+    return bounds!
+  }
+  const level = async (...cells: Locator[]) => {
+    const boxes = await Promise.all(cells.map(box))
+    for (const bounds of boxes.slice(1)) {
+      expect(Math.abs(bounds.y - boxes[0].y)).toBeLessThanOrEqual(1)
+      expect(Math.abs(bounds.height - boxes[0].height)).toBeLessThanOrEqual(1)
+    }
+  }
+  await level(page.getByTestId('home-traffic'), page.getByTestId('start-checklist'))
+  await level(
+    page.getByTestId('home-routing-mix'),
+    page.getByTestId('home-models'),
+    page.getByTestId('home-public-models'),
+  )
+  await level(page.getByTestId('home-recent-requests'), page.getByTestId('home-services'))
+  await level(intelligence, page.getByRole('navigation', { name: 'Routing configuration' }))
+  const [first, last] = await Promise.all([
+    box(page.getByTestId('home-count-recipes')),
+    box(page.getByTestId('home-count-models')),
+  ])
+  const panel = await box(intelligence)
+  expect(Math.abs(first.y - panel.y)).toBeLessThanOrEqual(1)
+  expect(Math.abs(last.y + last.height - (panel.y + panel.height))).toBeLessThanOrEqual(1)
 })
