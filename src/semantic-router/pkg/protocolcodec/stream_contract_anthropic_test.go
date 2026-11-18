@@ -111,6 +111,14 @@ func officialUnsupportedAnthropicStreamCases() []unsupportedAnthropicStreamCase 
 			code: "unknown_stream_delta",
 		},
 		{
+			name: "toolset tool use block",
+			event: map[string]any{
+				"type": "content_block_start", "index": 0,
+				"content_block": map[string]any{"type": "tool_use", "id": "call_1", "name": "lookup", "input": map[string]any{}, "toolset_name": "web"},
+			},
+			code: "unsupported_content_toolset_name",
+		},
+		{
 			name: "redacted thinking block",
 			event: map[string]any{
 				"type": "content_block_start", "index": 0,
