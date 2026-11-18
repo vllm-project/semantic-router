@@ -170,6 +170,7 @@ def test_the_card_reports_branching_on(runtimes):
 )
 def test_the_state_block_ends_where_the_question_begins(packages, state):
     backend, _ = prompt.load_tokenizer(packages["prefix_bidir"])
+    encoder = prompt.PromptEncoder(backend)
     codes = json.loads((packages["prefix_bidir"] / "decision_config.json").read_text())[
         "codes"
     ]
@@ -183,13 +184,17 @@ def test_the_state_block_ends_where_the_question_begins(packages, state):
             whole = prompt.render(
                 prompt.user_prompt(state, instructions, options, codes), images
             )
-            assert head + block == whole
-            split = backend.encode_batch([head, block], add_special_tokens=False)
-            joined = backend.encode(whole, add_special_tokens=False)
+            assert "".join(head + block) == "".join(whole)
+            split = encoder.encode_batch([head, block])
+            joined = encoder.encode(whole)
             assert split[0].ids + split[1].ids == joined.ids
             assert prompt.state_tokens(split[0].offsets, head) == reference_split(
-                whole, state, joined.offsets
+                "".join(whole), state, joined.offsets
             )
+            if "<|" not in prompt.describe(state):
+                released = backend.encode("".join(whole), add_special_tokens=False)
+                assert joined.ids == released.ids
+                assert joined.offsets == [tuple(span) for span in released.offsets]
 
 
 def reference_split(text, state, offsets) -> int:
@@ -203,7 +208,7 @@ def test_question_blocks_open_with_the_blank_line_after_the_state(runtimes):
     model = model_of(runtimes, "prefix_bidir")
     for state in ("ends with a word", "ends with a stop.", "trailing spaces  ", ""):
         plan = model.plan(state, QUESTIONS)
-        whole = model.tokenizer.encode(
+        text = "".join(
             prompt.render(
                 prompt.user_prompt(
                     state,
@@ -211,23 +216,12 @@ def test_question_blocks_open_with_the_blank_line_after_the_state(runtimes):
                     prompt.option_texts("noul", None),
                     model.codes,
                 )
-            ),
-            add_special_tokens=False,
+            )
         )
+        whole = model.tokenizer.encode(text, add_special_tokens=False)
         item = plan.items[1]
         assert item.ids == whole.ids
-        assert len(item.state.ids) == reference_split(
-            prompt.render(
-                prompt.user_prompt(
-                    state,
-                    QUESTIONS["reasoning"]["instructions"],
-                    prompt.option_texts("noul", None),
-                    model.codes,
-                )
-            ),
-            state,
-            whole.offsets,
-        )
+        assert len(item.state.ids) == reference_split(text, state, whole.offsets)
         # Every question of the request shares the state block and the opening of its block.
         assert all(other.state is item.state for other in plan.items)
 
@@ -238,8 +232,8 @@ def test_random_states_split_cleanly(packages):
     alphabet = "ab Q\n\t.,!?:;-_()[]{}\"'0123456789éü漢🙂\u0301\r"
     for _ in range(300):
         state = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 40)))
-        head = prompt.state_block(state)
-        block = prompt.question_block("Q?", ["A", "B"], ["A", "B"])
+        head = "".join(prompt.state_block(state))
+        block = "".join(prompt.question_block("Q?", ["A", "B"], ["A", "B"]))
         split = backend.encode_batch([head, block], add_special_tokens=False)
         joined = backend.encode(head + block, add_special_tokens=False).ids
         assert split[0].ids + split[1].ids == joined, repr(state)
@@ -782,14 +776,20 @@ def test_question_errors_stay_per_question(runtimes, png_url, monkeypatch):
         "state": "x",
         "questions": {
             "ok": QUESTIONS["reasoning"],
-            "literal": {"type": "noul", "instructions": "Has <|image_pad|>?"},
+            "typed": {"type": "noul", "instructions": "Has <|image_pad|>?"},
+            "broken": {
+                "type": "score",
+                "instructions": "How hard?",
+                "criteria": ["Easy", "Easy"],
+            },
         },
         "images": [png_url(64, 64, 1)],
     }
     status, answer = call(runtime, body)
     assert status == 200
-    assert answer["answers"]["literal"]["error"] == "invalid_question"
+    assert answer["answers"]["broken"]["error"] == "invalid_question"
     assert "error" not in answer["answers"]["ok"]
+    assert "error" not in answer["answers"]["typed"]
     short = {"type": "noul", "instructions": "Is it short?"}
     long = {"type": "noul", "instructions": "word " * 400}
     alone = model.plan("state", {"a": short})

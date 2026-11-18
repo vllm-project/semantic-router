@@ -106,27 +106,19 @@ class StateOnceModel(Decision3Model):
         videos = len(media.videos) if media else 0
         read, errors = self._read(questions)
         head = prompt.state_block(state, images, videos, self._header(read, media))
-        rendered: list[tuple[str, str, list[str], list[Any], str]] = []
-        for question_id, kind, instructions, keys, texts, descriptions in read:
-            text = prompt.question_block(instructions, texts, self.codes)
-            whole = head + text
-            if media and (
-                whole.count(prompt.IMAGE_TOKEN) != images
-                or whole.count(prompt.VIDEO_TOKEN) != videos
-            ):
-                errors[question_id] = question_error(
-                    kind,
-                    QuestionError(
-                        INVALID_QUESTION,
-                        "the state or question contains a literal image or video placeholder token",
-                    ),
-                )
-                continue
-            rendered.append((question_id, kind, keys, descriptions, text))
+        rendered = [
+            (
+                question_id,
+                kind,
+                keys,
+                descriptions,
+                prompt.question_block(instructions, texts, self.codes),
+            )
+            for question_id, kind, instructions, keys, texts, descriptions in read
+        ]
         temperature = self.request_temperature(len(rendered))
-        # One call for the state and every question: the tokenizer releases the GIL for a batch.
-        encodings = self.tokenizer.encode_batch(
-            [head, *(entry[-1] for entry in rendered)], add_special_tokens=False
+        encodings = self.prompts.encode_batch(
+            [head, *(entry[-1] for entry in rendered)]
         )
         split = prompt.state_tokens(encodings[0].offsets, head)
         state_ids = list(encodings[0].ids[:split])
@@ -236,10 +228,10 @@ class StateOnceModel(Decision3Model):
             else None
         )
         head = prompt.state_block(hoisted, len(front), len(videos or []))
-        encodings = self.tokenizer.encode_batch([head], add_special_tokens=False)
-        split = prompt.state_tokens(encodings[0].offsets, head)
-        state_ids = list(encodings[0].ids[:split])
-        opening = list(encodings[0].ids[split:])
+        encoding = self.prompts.encode(head)
+        split = prompt.state_tokens(encoding.offsets, head)
+        state_ids = list(encoding.ids[:split])
+        opening = list(encoding.ids[split:])
         if media:
             state_ids = self._expand(state_ids, media)
         shared = RequestState(tuple(state_ids), media)
@@ -511,8 +503,7 @@ class StateOnceModel(Decision3Model):
                     INVALID_QUESTION,
                     "a video Box reads the video; images go in the state",
                 )
-            ids = list(self.tokenizer.encode(text, add_special_tokens=False).ids)
-            block = list(state.opening) + ids
+            block = list(state.opening) + self.prompts.encode(text).ids
             refused = self.length_error(len(state.ids) + len(block))
             if refused is not None:
                 raise refused
@@ -543,7 +534,7 @@ class StateOnceModel(Decision3Model):
             )
         images = self.request_media(front, None).images if front else ()
         head = prompt.state_block(hoisted, len(front), 1)
-        encoding = self.tokenizer.encode(head, add_special_tokens=False)
+        encoding = self.prompts.encode(head)
         split = prompt.state_tokens(encoding.offsets, head)
         out = []
         limit = self.info.limits.get("box_video_max_seconds")
@@ -626,13 +617,6 @@ class StateOnceModel(Decision3Model):
         if not isinstance(question, dict):
             raise QuestionError(INVALID_QUESTION, "a question must be an object")
         kind = question.get("type")
-        for value in (question.get("instructions"), question.get("criteria")):
-            text = json.dumps(value, ensure_ascii=False) if value is not None else ""
-            if prompt.IMAGE_TOKEN in text or prompt.VIDEO_TOKEN in text:
-                raise QuestionError(
-                    INVALID_QUESTION,
-                    "the question contains a literal image or video placeholder token",
-                )
         at = None
         readouts: tuple[Any, ...] | None = None
         if kind == "box":
@@ -683,14 +667,9 @@ class StateOnceModel(Decision3Model):
         block_images = tuple(
             self.image(assets[ref], f"assets[{json.dumps(ref)}]") for ref in used
         )
-        ids = list(self.tokenizer.encode(text, add_special_tokens=False).ids)
-        expanded: list[int] = []
-        pending = iter(block_images)
-        for token in ids:
-            if token == self.image_token:
-                expanded.extend([token] * next(pending).tokens)
-            else:
-                expanded.append(token)
+        expanded = self._expand(
+            self.prompts.encode(text).ids, RequestMedia(block_images)
+        )
         return kind, keys, descriptions, opening + expanded, readouts, block_images, at
 
     def _composed_rows(self, items: list[Item]) -> list[list[float] | None]:

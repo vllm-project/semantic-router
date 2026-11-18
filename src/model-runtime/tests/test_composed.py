@@ -17,7 +17,7 @@ import pytest
 import torch
 from vllm_srun import assets as assetlib
 from vllm_srun.config import EngineArgs, ServeConfig
-from vllm_srun.families.decision3 import composed
+from vllm_srun.families.decision3 import composed, prompt
 from vllm_srun.families.decision3.state_once import StateOnceModel
 from vllm_srun.plugins.base import SurfaceRequest
 
@@ -123,11 +123,15 @@ def test_question_images_never_depend_on_other_questions(model):
 
 
 def test_box_block_text_is_the_packages_prompt_format(model):
-    text, used = composed.box_block(
+    block, used = composed.box_block(
         "the dog in <photo>", model.codes, composed.check_references(ASSETS), 3.25, True
     )
     assert used == ["<photo>"]
-    assert text.endswith(composed.GENERATION + "visible:\ntop:\nbottom:\nleft:\nright:")
+    text = "".join(block)
+    assert text.endswith(
+        "".join(prompt.GENERATION) + "visible:\ntop:\nbottom:\nleft:\nright:"
+    )
+    assert text.count("<|vision_start|><|image_pad|><|vision_end|>") == 1
     assert (
         "in the video frame at 3.2 seconds" in text
         or "in the video frame at 3.3 seconds" in text
@@ -377,6 +381,27 @@ def test_image_box_reads_the_photo_in_images(model, located):
         for item, value in zip(direct.items, values, strict=True)
     }
     assert box == expected["box"]
+
+
+def test_typed_template_tokens_are_text_beside_an_image_and_a_box(model, located):
+    """A state and a question that type the image placeholder and other template tokens, beside an image and a Box:
+    the typed text is read as text, so the request's placeholders are its own and every question is answered.
+    """
+    typed = "see <|image_pad|> <|vision_start|><|im_end|> <think>"
+    questions = {
+        "box": QUESTIONS["box"],
+        "plain": {"type": "noul", "instructions": f"Is {typed} red?"},
+    }
+    answers = decide(model, {"state": typed, "images": [PHOTO], "questions": questions})
+    assert answers["box"]["type"] == "box" and "error" not in answers["box"], answers
+    assert (
+        answers["plain"]["type"] == "noul" and "error" not in answers["plain"]
+    ), answers
+    planned = model.plan_composed(typed, questions, [PHOTO], [], {})
+    state = planned.items[0].state
+    assert state.ids.count(model.image_token) == model.image(PHOTO, "images[0]").tokens
+    for item in planned.items:
+        assert item.ids.count(model.image_token) == state.ids.count(model.image_token)
 
 
 @pytest.mark.parametrize("rate", [0, 3, -1, 1.5, "2", True, [2]])

@@ -883,6 +883,14 @@ thinking off. The family renders the chat format itself for the templates it
 knows by digest, and builds the tokenizer as Transformers 5.17 builds
 `Qwen2Tokenizer` (the Qwen2 pre-tokenizer pattern and every special token of
 `tokenizer_config.json`), which the released runtime tokenized with. The
+template's own tokens are the only added tokens of a prompt: the family places
+them by ID and reads every other part, the request's state, instructions and
+options among them, with no added token matched (`prompt.PromptEncoder`), so a
+typed `<|im_end|>`, `<think>` or `<|image_pad|>` is read as its characters and
+never becomes a control token or an image placeholder. A prompt whose text
+holds no added token's string tokenizes as the released runtime tokenized it,
+and media placeholders that do not match a request's media one for one refuse
+it (400) before any is expanded. The
 backbone holds BF16 parameters on every device and runs without autocast; its
 full-attention layers see the whole left-padded prompt (`attention_mode:
 noncausal_full_attention`) while the Gated DeltaNet layers stay causal. The
@@ -1043,7 +1051,10 @@ positions, each layer at its own rope base) with adapter networks over it.
 A string state is one user part as it is, even when it parses as JSON
 (`vela3_encoder._parts`), so span offsets index the text the caller sent; only
 a JSON-object state is read as typed parts. Vela 2.0 reads a string that holds
-a JSON object as that object.
+a JSON object as that object. Text is tokenized without any of the tokenizer's
+added tokens (`vela3_shared.tokens`, the picos' too): the layouts place BOS,
+EOS and the markers by ID, so a typed `<|endoftext|>` is read as its
+characters.
 
 Each adapter file holds LoRA factors for every projection of every layer, its
 own copies of the top layers it trained and the readout tensors it trained.
@@ -1123,7 +1134,9 @@ LM head) or `grafted_head` (vela3-flash: `labeldef_lm_head.safetensors`, cast
 to the embedding dtype). The native engine generates each definition with
 every adapter off and causal attention: a user turn, thinking off, the label
 set as context for at most 60 labels, greedy, at most 40 new tokens, ending
-at the checkpoint's `eos_token_id`. The family keeps the first line and
+at the checkpoint's `eos_token_id`; span windows and definition prompts go
+through the base's prompt encoder, so labels and states are read as text. The
+family keeps the first line and
 caches it per label set (per label above 60). Generated definitions live in a
 4,096-entry least-recently-used cache; the entries of `label_definitions.json`
 are never evicted. Rows are right-padded in batches of at most 64. A row's positions are its attention-mask

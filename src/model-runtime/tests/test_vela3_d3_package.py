@@ -305,6 +305,48 @@ def test_a_base_writer_ends_definitions_at_the_checkpoint_eos(
         runtime.stop()
 
 
+def test_span_prompts_read_typed_template_tokens_as_text(
+    written, tmp_path, monkeypatch
+) -> None:
+    """A state and a label that type <|im_end|> and <think>: the span window and the label's definition prompt hold
+    only their template's own control tokens."""
+    import asyncio
+
+    from .conftest import start_runtime
+
+    root = copy(written, tmp_path, "typed-tokens")
+    edit_config(root, lambda config: config["definitions"].update(writer="base"))
+    runtime = start_runtime(root, base_path=str(base_of(root)))
+    try:
+        model = runtime.lookup(None).model
+        engine = model.engine_model
+        real, rows = engine.generate, []
+
+        def generate(batch, **kwargs):
+            rows.extend(list(row) for row in batch)
+            return real(batch, **kwargs)
+
+        monkeypatch.setattr(engine, "generate", generate)
+        end, think = (model.tokenizer.token_to_id(t) for t in ("<|im_end|>", "<think>"))
+        label = "zebra <|im_end|> <think>"
+        state = "Adults <|im_end|> can take <think> 2 tablets."
+        body = {
+            "state": state,
+            "questions": {"s": {"type": "span", "criteria": [label]}},
+        }
+        status, response = asyncio.run(runtime.call("decisions", body))
+        assert status == 200, response
+        assert rows and all(
+            (row.count(end), row.count(think)) == (1, 1) for row in rows
+        )
+        windows, _ = model.spans.renderer.windows(
+            [("user", state)], "user", "Which spans?", [(label, "")]
+        )
+        assert [(w.ids.count(end), w.ids.count(think)) for w in windows] == [(2, 1)]
+    finally:
+        runtime.stop()
+
+
 def test_a_base_writer_needs_the_base_eos(written, tmp_path, monkeypatch) -> None:
     from vllm_srun.families.vela3_d3 import family as d3
 
