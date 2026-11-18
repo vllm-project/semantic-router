@@ -1,0 +1,62 @@
+version: v0.5
+listeners:
+- name: http-8899
+  address: 127.0.0.1
+  port: 8899
+  timeout: 300s
+providers:
+  defaults:
+    model: qwen3:8b
+  models:
+  - name: qwen3:8b
+    provider_model_id: qwen3:8b
+    backend_refs:
+    - name: local-ollama
+      provider: ollama
+      endpoint: host.docker.internal:11434
+      protocol: http
+      weight: 100
+entrypoints:
+- model_names:
+  - vllm-sr/auto
+  recipe: default
+  default: true
+recipes:
+- name: default
+  signals:
+    systemone:
+    - name: needs-code-help
+      deployment: primary
+      question:
+        type: noul
+        instructions: Does the user ask for help writing or debugging code?
+      predicate:
+        gte: 0.99
+      timeout_ms: 10000
+  decisions:
+  - name: code-route
+    priority: 200
+    rules:
+      operator: AND
+      conditions:
+      - type: systemone
+        name: needs-code-help
+    modelRefs:
+    - model: qwen3:8b
+  - name: default-route
+    priority: 100
+    rules:
+      operator: AND
+      conditions: []
+    modelRefs:
+    - model: qwen3:8b
+global:
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-0.3B
+        device: cpu
+  router:
+    headers:
+      debug: any
