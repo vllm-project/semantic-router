@@ -1,9 +1,14 @@
+import { formatSignalRef } from '@/lib/dslMutations'
+import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
+
 export type SignalDescriptor = { signalType: string; name: string }
+
+export type SignalRuleNode = { signalType: string; signalName: string; fields?: DSLFieldObject }
 
 export type RuleNode =
   | { operator: 'AND' | 'OR'; conditions: RuleNode[] }
   | { operator: 'NOT'; conditions: [RuleNode] }
-  | { signalType: string; signalName: string }
+  | SignalRuleNode
 
 export type NodePath = number[]
 
@@ -31,7 +36,7 @@ interface ParseCtx {
 
 export const DRAG_MIME = 'application/x-expr-builder'
 
-export function isLeaf(n: RuleNode): n is { signalType: string; signalName: string } {
+export function isLeaf(n: RuleNode): n is SignalRuleNode {
   return 'signalType' in n
 }
 
@@ -40,7 +45,7 @@ export function isOperator(n: RuleNode): n is Exclude<RuleNode, { signalType: st
 }
 
 export function serializeNode(n: RuleNode): string {
-  if (isLeaf(n)) return `${n.signalType}("${n.signalName}")`
+  if (isLeaf(n)) return formatSignalRef(n.signalType, n.signalName, n.fields)
   if (n.operator === 'NOT') {
     const child = n.conditions[0]
     if (!child) return 'NOT (?)'
@@ -140,11 +145,8 @@ function parseAtom(src: string, ctx: ParseCtx): RuleNode {
     if (src[ctx.pos] === ')') ctx.pos++
     return inner
   }
-  const signalMatch = src.slice(ctx.pos).match(/^(\w+)\("([^"]*)"\)/)
-  if (signalMatch) {
-    ctx.pos += signalMatch[0].length
-    return { signalType: signalMatch[1], signalName: signalMatch[2] }
-  }
+  const signal = parseSignalRef(src, ctx)
+  if (signal) return signal
   const wordMatch = src.slice(ctx.pos).match(/^\w+/)
   if (wordMatch) {
     ctx.pos += wordMatch[0].length
@@ -153,12 +155,92 @@ function parseAtom(src: string, ctx: ParseCtx): RuleNode {
   throw new Error('Unexpected token')
 }
 
+const SIGNAL_TYPE = /\w+/y
+const FIELD_KEY = /[A-Za-z_][\w\-./]*/y
+const NUMBER = /[+-]?\d+(?:\.\d+)?/y
+
+function readPattern(src: string, ctx: ParseCtx, pattern: RegExp): string | null {
+  skipWhitespace(src, ctx)
+  pattern.lastIndex = ctx.pos
+  const match = pattern.exec(src)
+  if (!match) return null
+  ctx.pos = pattern.lastIndex
+  return match[0]
+}
+
+function readChar(src: string, ctx: ParseCtx, char: string): boolean {
+  skipWhitespace(src, ctx)
+  if (src[ctx.pos] !== char) return false
+  ctx.pos++
+  return true
+}
+
+function readString(src: string, ctx: ParseCtx): string | null {
+  skipWhitespace(src, ctx)
+  if (src[ctx.pos] !== '"') return null
+  let end = ctx.pos + 1
+  while (end < src.length && src[end] !== '"') end += src[end] === '\\' ? 2 : 1
+  if (end >= src.length) throw new Error('Unterminated string')
+  const literal = src.slice(ctx.pos, end + 1)
+  ctx.pos = end + 1
+  return JSON.parse(literal) as string
+}
+
+function readFields(src: string, ctx: ParseCtx, close: string): DSLFieldObject {
+  const fields: DSLFieldObject = {}
+  while (!readChar(src, ctx, close)) {
+    readChar(src, ctx, ',')
+    const key = readPattern(src, ctx, FIELD_KEY)
+    if (key === null || !readChar(src, ctx, ':')) throw new Error('Expected a field')
+    fields[key] = readValue(src, ctx)
+  }
+  return fields
+}
+
+function readValue(src: string, ctx: ParseCtx): DSLFieldValue {
+  const text = readString(src, ctx)
+  if (text !== null) return text
+  if (readChar(src, ctx, '{')) return readFields(src, ctx, '}')
+  if (readChar(src, ctx, '[')) {
+    const items: DSLFieldValue[] = []
+    while (!readChar(src, ctx, ']')) {
+      items.push(readValue(src, ctx))
+      readChar(src, ctx, ',')
+    }
+    return items
+  }
+  const number = readPattern(src, ctx, NUMBER)
+  if (number !== null) return Number(number)
+  const word = readPattern(src, ctx, FIELD_KEY)
+  if (word === null) throw new Error('Expected a value')
+  return word === 'true' || word === 'false' ? word === 'true' : word
+}
+
+// Reads classifier("risk", label: "unsafe", predicate: { gte: 0.5 }); null leaves ctx untouched.
+function parseSignalRef(src: string, ctx: ParseCtx): SignalRuleNode | null {
+  const start = ctx.pos
+  try {
+    const signalType = readPattern(src, ctx, SIGNAL_TYPE)
+    if (signalType === null || !readChar(src, ctx, '(')) throw new Error('Expected a signal')
+    const signalName = readString(src, ctx)
+    if (signalName === null) throw new Error('Expected a signal name')
+    const fields = readFields(src, ctx, ')')
+    if (Object.keys(fields).length === 0) return { signalType, signalName }
+    return { signalType, signalName, fields }
+  } catch {
+    ctx.pos = start
+    return null
+  }
+}
+
 export function boolExprToRuleNode(expr: Record<string, unknown> | null): RuleNode | null {
   if (!expr) return null
   const type = expr.type as string
   switch (type) {
-    case 'signal_ref':
-      return { signalType: expr.signalType as string, signalName: expr.signalName as string }
+    case 'signal_ref': {
+      const leaf = { signalType: expr.signalType as string, signalName: expr.signalName as string }
+      return expr.fields ? { ...leaf, fields: expr.fields as DSLFieldObject } : leaf
+    }
     case 'and': {
       const left = boolExprToRuleNode(expr.left as Record<string, unknown>)
       const right = boolExprToRuleNode(expr.right as Record<string, unknown>)
