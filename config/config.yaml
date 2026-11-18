@@ -71,6 +71,11 @@ providers:
   defaults:
     model: qwen3-8b
     reasoning_effort: medium
+    # A backend counts reasoning against the output limit. A request that
+    # states no reasoning preference (no thinking, reasoning_effort, reasoning
+    # or chat_template_kwargs thinking switch) and sets a smaller limit than
+    # this runs with the model's reasoning off. 0 or unset turns the rule off.
+    reasoning_min_output_tokens: 512
     # The CA bundle of every https backend whose own tls names no ca_file. It
     # replaces the system roots for those backends, in Envoy and in the
     # Router's own calls, so it must hold every CA they chain to.

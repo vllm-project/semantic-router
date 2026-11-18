@@ -315,7 +315,7 @@ export const TRACE_CONTEXT_TOKENS = 'context_tokens'
 /** Domain category the classifier chose, such as `math`. */
 export const TRACE_CATEGORY = 'category'
 
-/** Reasoning mode chosen for the request: `on` or `off`. */
+/** Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off. */
 export const TRACE_REASONING = 'reasoning'
 
 /** Output kinds of the selected decision's output contract, such as `(image)` or `(text image)`; omitted for a decision that declares none. */

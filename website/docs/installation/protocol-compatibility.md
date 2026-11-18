@@ -267,6 +267,13 @@ backend:
 
 Other unsupported controls fail with a typed request error.
 
+On every backend, `max_tokens` covers thinking as well as the answer. A
+request without `thinking` whose decision turns reasoning on can spend a small
+`max_tokens` on thinking and come back without text. With
+`providers.defaults.reasoning_min_output_tokens` set, such a request below that
+limit reaches the backend with the model's reasoning off; see
+[Model reasoning](model-reasoning#turn-reasoning-off-for-small-output-limits).
+
 A `system` message inside `messages`, such as the environment section and the
 file-change notices Claude Code inserts during a session, reaches these
 backends as a system message in the same place. Many open-model chat

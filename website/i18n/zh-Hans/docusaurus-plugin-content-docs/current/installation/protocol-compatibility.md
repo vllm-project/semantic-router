@@ -113,6 +113,11 @@ Chat 的 tool 消息只能携带文本。发往 Chat 后端时，工具结果中
 提示词和工具结果仍会派发，`x-vsr-warnings` 会为 `cache_control` 报告
 `dropped` 诊断。
 
+在所有后端上，`max_tokens` 都同时覆盖思考和回答。没有 `thinking` 且决策开启推理的
+请求，可能把较小的 `max_tokens` 用于思考而返回不了文本。设置
+`providers.defaults.reasoning_min_output_tokens` 后，`max_tokens` 低于该值的这类请求
+会以模型推理关闭的方式发往后端；参见[模型推理](model-reasoning#turn-reasoning-off-for-small-output-limits)。
+
 从 Anthropic 后端转换推理内容时，如果后端附带推理签名，转换会失败；其 thinking
 响应默认携带签名。Chat Completions 或 Responses 客户端的缓冲请求会收到类型化的
 `unsupported_capability` 错误；流式请求则会在流中途、响应头和可能的早期增量已经

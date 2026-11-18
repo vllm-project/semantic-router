@@ -861,6 +861,10 @@
         "reasoning_effort": {
           "type": "string"
         },
+        "reasoning_min_output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
         "tls": {
           "$ref": "#/$defs/ProviderDefaultsTLS"
         }
