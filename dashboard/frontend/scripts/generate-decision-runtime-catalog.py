@@ -17,43 +17,6 @@ OUTPUT = ROOT / "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.j
 BACKEND_OUTPUT = ROOT / "src/semantic-router/pkg/config/decision_catalog.generated.json"
 RELEASE_OUTPUT = RUNTIME / "registry/releases.generated.json"
 
-# Released models the runtime does not register yet. The Dashboard lists them
-# as pending and never deploys them; a registry table that pins the same
-# repository replaces the entry with its own facts.
-PULLS = "https://github.com/vllm-project/semantic-router/pull"
-ANNOUNCED = (
-    {
-        "id": "vllm-sr/vela3.1-fast",
-        "family": "vela3",
-        "backbone": "",
-        "minMemoryGiB": None,
-        "parameters": None,
-        "summary": "The released Vela 3.1 fast model, which the vela3 family loads. "
-        "The runtime registry does not pin it yet.",
-        "pending": f"{PULLS}/6391",
-    },
-    {
-        "id": "vllm-sr/vela3.1-pico-150m",
-        "family": "vela3_pico",
-        "backbone": "ultrabert",
-        "minMemoryGiB": 2,
-        "parameters": 153_207_299,
-        "summary": "The smallest Vela 3.1 model: one UltraBERT encoder in the new "
-        "vela3_pico family.",
-        "pending": f"{PULLS}/6390",
-    },
-    {
-        "id": "vllm-sr/vela3.1-pico-380m",
-        "family": "vela3_pico",
-        "backbone": "ultrabert",
-        "minMemoryGiB": 3,
-        "parameters": 380_961_027,
-        "summary": "A Vela 3.1 pico model: one larger UltraBERT encoder in the new "
-        "vela3_pico family.",
-        "pending": f"{PULLS}/6390",
-    },
-)
-
 
 def release_literal(node, bindings):
     if isinstance(node, ast.Name):
@@ -388,16 +351,16 @@ def editorial():
 def dashboard_projection(data, backend):
     """Every release of a family the Router's decision catalog serves: what the
     catalog says it answers and reads (nothing for a release it leaves out,
-    such as vela3-fast-vision), the registry's facts and the editorial text;
-    then each announced model the registry does not pin yet."""
+    such as vela3-fast-vision), the registry's facts and the editorial text."""
     families, summaries = editorial()
     served = {model["id"]: model for model in backend["models"]}
     served_families = {model["family"] for model in backend["models"]}
-    announced = {entry["id"]: entry for entry in ANNOUNCED}
-    releases = registry_releases()
     models = []
-
-    def listed(repo, facts, answers, summary, pending):
+    for repo, facts in registry_releases().items():
+        if facts["family"] not in served_families:
+            continue
+        answers = served.get(repo, {})
+        editorial_entry = summaries.get(repo, {})
         organization, _, name = repo.partition("/")
         models.append(
             {
@@ -405,7 +368,7 @@ def dashboard_projection(data, backend):
                 "name": name,
                 "provider": organization,
                 "family": facts["family"],
-                "familyLabel": summaries.get(repo, {}).get("family_label")
+                "familyLabel": editorial_entry.get("family_label")
                 or families.get(facts["family"], {}).get("label", ""),
                 "revision": facts.get("revision", ""),
                 "backbone": facts["backbone"],
@@ -414,18 +377,9 @@ def dashboard_projection(data, backend):
                 "questionTypes": answers.get("question_types", []),
                 "modalities": answers.get("modalities", []),
                 "spanHeads": answers.get("span_heads", []),
-                "summary": summary,
-                "pending": pending,
+                "summary": editorial_entry.get("summary", ""),
             }
         )
-
-    for repo, facts in releases.items():
-        if facts["family"] in served_families or repo in announced:
-            editorial_summary = summaries.get(repo, {}).get("summary", "")
-            listed(repo, facts, served.get(repo, {}), editorial_summary, "")
-    for repo, entry in announced.items():
-        if repo not in releases:
-            listed(repo, entry, {}, entry["summary"], entry["pending"])
     models.sort(key=lambda model: model["id"])
     return {"questionTypes": data["questionTypes"], "models": models}
 

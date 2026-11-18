@@ -110,76 +110,33 @@ describe('Decision catalog generation boundary', () => {
     }
   }, 60_000)
 
-  it('lists announced models as pending until a registry table pins the same repository', () => {
+  it('lists every release of a served family with its registry facts and editorial family', () => {
     const fixture = copyFixture()
     try {
-      const generated = () => JSON.parse(readFileSync(join(fixture, projection), 'utf8')).models
-      const pending = generated().filter(({ pending }) => pending)
-      expect(pending.map(({ id, family, pending: link }) => [id, family, link])).toEqual([
-        [
-          'vllm-sr/vela3.1-fast',
-          'vela3',
-          'https://github.com/vllm-project/semantic-router/pull/6391',
-        ],
-        [
-          'vllm-sr/vela3.1-pico-150m',
-          'vela3_pico',
-          'https://github.com/vllm-project/semantic-router/pull/6390',
-        ],
-        [
-          'vllm-sr/vela3.1-pico-380m',
-          'vela3_pico',
-          'https://github.com/vllm-project/semantic-router/pull/6390',
-        ],
-      ])
-      for (const entry of pending) expect(entry).toMatchObject({ revision: '', questionTypes: [] })
-      expect(pending[1]).toMatchObject({
-        parameters: 153_207_299,
-        minMemoryGiB: 2,
-        backbone: 'ultrabert',
-      })
-      expect(pending[0]).toMatchObject({ parameters: null, minMemoryGiB: null })
-      const table = join(fixture, runtime, 'registry/tables/vela3.py')
-      const release = `    _vela(
-        "vela3.1-fast",
-        "${'d'.repeat(40)}",
-        "${'e'.repeat(64)}",
-        380_961_027,
-        "ultrabert",
-        3,
-        {},
-    ),
-)
-MODELS = with_recorded(MODELS, "golden_answers_vela3.json"`
-      writeFileSync(
-        table,
-        readFileSync(table, 'utf8').replace(
-          ')\nMODELS = with_recorded(MODELS, "golden_answers_vela3.json"',
-          release,
-        ),
-      )
       expect(spawnSync('python3', [join(fixture, generator)], { encoding: 'utf8' }).status).toBe(0)
-      const models = generated()
-      const listed = models.filter(({ id }) => id === 'vllm-sr/vela3.1-fast')
-      expect(listed).toEqual([
-        expect.objectContaining({
-          name: 'vela3.1-fast',
-          family: 'vela3',
-          familyLabel: 'Vela 3.0',
-          revision: 'd'.repeat(40),
+      const models = JSON.parse(readFileSync(join(fixture, projection), 'utf8')).models
+      const model = (id) => models.find((entry) => entry.id === id)
+      expect(models.filter((entry) => 'pending' in entry)).toEqual([])
+      expect(model('vllm-sr/vela3.1-fast')).toMatchObject({
+        family: 'vela3',
+        familyLabel: 'Vela 3.1',
+        parameters: 1_927_527_449,
+        minMemoryGiB: 15,
+      })
+      for (const [id, parameters, minMemoryGiB] of [
+        ['vllm-sr/vela3.1-pico-150m', 153_207_299, 2],
+        ['vllm-sr/vela3.1-pico-380m', 380_961_027, 3],
+      ])
+        expect(model(id)).toMatchObject({
+          family: 'vela3_pico',
+          familyLabel: 'Vela 3.1',
           backbone: 'ultrabert',
-          minMemoryGiB: 3,
-          parameters: 380_961_027,
-          questionTypes: ['choice', 'noul', 'span'],
-          modalities: ['text'],
-          pending: '',
-        }),
-      ])
-      expect(models.filter(({ pending }) => pending).map(({ id }) => id)).toEqual([
-        'vllm-sr/vela3.1-pico-150m',
-        'vllm-sr/vela3.1-pico-380m',
-      ])
-      expect(models.find(({ id }) => id === 'vllm-sr/vela3-fast-vision')).toMatchObject({
+          parameters,
+          minMemoryGiB,
+        })
+      for (const id of ['vllm-sr/vela3.1-fast', 'vllm-sr/vela3.1-pico-150m'])
+        expect(model(id).questionTypes.length).toBeGreaterThan(0)
+      expect(model('vllm-sr/vela3-fast-vision')).toMatchObject({
         family: 'vela3',
         questionTypes: [],
       })

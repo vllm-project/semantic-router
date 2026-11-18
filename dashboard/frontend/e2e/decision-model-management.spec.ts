@@ -940,7 +940,7 @@ async function mockDecisionRuntimeCatalog(
 }
 
 test.describe('Decision model catalog and deployment bindings', () => {
-  test('lists every family from the registry projection, filters capabilities and marks pending releases, without loading Model Hub', async ({
+  test('lists every family from the registry projection, filters capabilities and serves the Vela 3.1 releases, without loading Model Hub', async ({
     page,
   }, testInfo) => {
     const fixture = await mockDecisionRuntimeCatalog(page)
@@ -966,17 +966,13 @@ test.describe('Decision model catalog and deployment bindings', () => {
       'Decision-2.0-Kai-0.6B',
     ])
       await expect(catalog.getByText(name, { exact: true })).toBeVisible()
-    const pending = catalog.getByRole('region', { name: 'Vela 3.1 models' })
-    await expect(pending.getByRole('article')).toHaveCount(3)
-    await expect(pending.getByText('Runtime support pending', { exact: true })).toHaveCount(3)
-    await expect(pending.getByRole('link', { name: /#6391/ })).toHaveAttribute(
-      'href',
-      'https://github.com/vllm-project/semantic-router/pull/6391',
-    )
-    await expect(pending.getByRole('link', { name: /#6390/ })).toHaveCount(2)
-    await expect(
-      pending.getByRole('button', { name: /runtime support pending/ }).first(),
-    ).toBeDisabled()
+    const vela31 = catalog.getByRole('region', { name: 'Vela 3.1 models' })
+    await expect(vela31.getByRole('article')).toHaveCount(3)
+    for (const label of ['Vela 3.1 fast', 'Vela 3.1 pico 150M', 'Vela 3.1 pico 380M'])
+      await expect(
+        vela31.getByRole('button', { name: `Deploy ${label}`, exact: true }),
+      ).toBeVisible()
+    await expect(vela31.getByText('Not servable yet')).toHaveCount(0)
     await catalog.getByRole('radio', { name: 'Decision 1.0', exact: true }).click()
     await expect(catalog.getByRole('article')).toHaveCount(7)
     await page.getByPlaceholder('Search decision models…').fill('Lex')

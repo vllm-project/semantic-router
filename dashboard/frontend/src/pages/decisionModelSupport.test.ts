@@ -63,17 +63,20 @@ describe('default decision deployment', () => {
       'd3-turbo',
       'Decision-2.0-Vega-27B',
       'Decision-1.0-Route-0.6B',
+      'vela3.1-fast',
+      'vela3.1-pico-150m',
+      'vela3.1-pico-380m',
     ])
       expect(names).toContain(name)
     const order = [...new Set(DECISION_CATALOG_MODELS.map((model) => model.family))]
-    expect(order.slice(0, 5)).toEqual([
+    expect(order.slice(0, 6)).toEqual([
+      'Vela 3.1',
       'Vela 3.0',
       'Vela 2.0',
       'Decision 3.0',
       'Decision 2.0',
       'Decision 1.0',
     ])
-    expect(order).toContain('Vela 3.1')
     const vision = DECISION_CATALOG_MODELS.find((model) => model.name === 'vela3-fast-vision')
     expect(vision).toMatchObject({ servable: false, questionTypes: [] })
     expect(DECISION_MODEL_OPTIONS.some((model) => model.name === 'vela3-fast-vision')).toBe(false)
@@ -86,24 +89,24 @@ describe('default decision deployment', () => {
     })
   })
 
-  it('lists the announced Vela 3.1 models as pending, never deployable', () => {
-    const pending = DECISION_CATALOG_MODELS.filter((model) => model.pending)
-    expect(
-      pending.map((model) => [model.name, model.family, model.pending?.split('/').pop()]),
-    ).toEqual([
-      ['vela3.1-fast', 'Vela 3.1', '6391'],
-      ['vela3.1-pico-150m', 'Vela 3.1', '6390'],
-      ['vela3.1-pico-380m', 'Vela 3.1', '6390'],
-    ])
-    for (const model of pending) {
-      expect(model.servable).toBe(false)
-      expect(DECISION_MODEL_OPTIONS).not.toContainEqual(
-        expect.objectContaining({ name: model.name }),
-      )
+  it('serves the Vela 3.1 models the registry pins', () => {
+    for (const name of ['vela3.1-fast', 'vela3.1-pico-150m', 'vela3.1-pico-380m']) {
+      expect(DECISION_CATALOG_MODELS.find((model) => model.name === name)).toMatchObject({
+        family: 'Vela 3.1',
+        servable: true,
+      })
+      expect(DECISION_MODEL_OPTIONS).toContainEqual(expect.objectContaining({ name }))
     }
-    expect(pending[1]).toMatchObject({ parameters: 153_207_299, minMemoryGiB: 2, device: 'cpu' })
-    expect(pending[0]).toMatchObject({ parameters: null, minMemoryGiB: null, device: null })
-    expect(formatParameters(pending[0].parameters)).toBe('Not published')
+    expect(
+      DECISION_CATALOG_MODELS.find((model) => model.name === 'vela3.1-pico-150m'),
+    ).toMatchObject({
+      parameters: 153_207_299,
+      minMemoryGiB: 2,
+    })
+    expect(DECISION_CATALOG_MODELS.find((model) => model.name === 'vela3.1-fast')).toMatchObject({
+      parameters: 1_927_527_449,
+      minMemoryGiB: 15,
+    })
   })
 
   it('derives labels, families, sizes and device hints from release facts', () => {

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowUpRight, Cpu, Hourglass, Link2, Plus } from 'lucide-react'
+import { Cpu, Link2, Plus } from 'lucide-react'
 import {
   Alert,
   Badge,
@@ -44,14 +44,9 @@ const normalize = (value: string) =>
 function familySummary(models: readonly DecisionModelOption[]): string {
   const modalities = [...new Set(models.flatMap((model) => model.modalities))]
   const servable = models.filter((model) => model.servable).length
-  const pending = models.filter((model) => model.pending).length
   return [
     `${models.length} ${models.length === 1 ? 'model' : 'models'}`,
-    pending === models.length
-      ? 'runtime support pending'
-      : servable < models.length
-        ? `${servable} servable`
-        : '',
+    servable < models.length ? `${servable} servable` : '',
     modalities.length ? `reads ${modalities.join(', ')}` : '',
   ]
     .filter(Boolean)
@@ -119,7 +114,7 @@ function ModelCard({
                 Recommended for CPU
               </Badge>
             ) : null}
-            {!model.servable && !model.pending ? (
+            {!model.servable ? (
               <Badge tone="outline" size="sm">
                 Not servable yet
               </Badge>
@@ -135,14 +130,20 @@ function ModelCard({
             {
               label: 'Parameters',
               value: model.parameters === null ? null : formatParameters(model.parameters),
-              title: model.parameters === null ? undefined : `${model.parameters.toLocaleString()} parameters`,
+              title:
+                model.parameters === null
+                  ? undefined
+                  : `${model.parameters.toLocaleString()} parameters`,
             },
             {
               label: 'Memory',
               value: model.minMemoryGiB === null ? null : `${model.minMemoryGiB} GiB`,
               title: 'Device memory floor',
             },
-            { label: 'Backbone', value: model.backbone ? (BACKBONES[model.backbone] ?? model.backbone) : null },
+            {
+              label: 'Backbone',
+              value: model.backbone ? (BACKBONES[model.backbone] ?? model.backbone) : null,
+            },
           ].map((fact) => (
             <div key={fact.label} className="flex min-w-0 flex-col gap-0.5">
               <dt className="text-[11px] text-subtle-foreground">{fact.label}</dt>
@@ -159,14 +160,7 @@ function ModelCard({
           ))}
         </dl>
         <div className="mt-3 flex min-h-7 items-center gap-2">
-          {model.pending ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-xs text-info-foreground">
-              <Hourglass className="size-3.5 shrink-0" />
-              <span className="truncate">Runtime support pending</span>
-            </span>
-          ) : (
-            <ModalityIcons modalities={model.modalities} />
-          )}
+          <ModalityIcons modalities={model.modalities} />
           {deployedAs.length ? (
             <Button
               variant="ghost"
@@ -181,31 +175,6 @@ function ModelCard({
                 <span className="text-subtle-foreground">+{deployedAs.length - 1}</span>
               ) : null}
             </Button>
-          ) : model.pending ? (
-            <span className="ml-auto flex items-center gap-2">
-              <a
-                href={model.pending}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline"
-              >
-                #{model.pending.split('/').pop()}
-                <ArrowUpRight className="size-3" />
-              </a>
-              <Tooltip content={`Runtime support pending (#${model.pending.split('/').pop()})`}>
-                <span>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    disabled
-                    aria-label={`Deploy ${model.label}: runtime support pending`}
-                  >
-                    <Plus />
-                    Deploy
-                  </Button>
-                </span>
-              </Tooltip>
-            </span>
           ) : model.servable ? (
             <Tooltip
               content={
@@ -265,9 +234,7 @@ export default function DecisionModelCatalog({
       (family === 'all' || model.family === family) &&
       capabilities.every((capability) => model.questionTypes.includes(capability)) &&
       (devices.length === 0 || (model.device !== null && devices.includes(model.device))) &&
-      normalize(
-        `${model.label} ${model.name} ${model.artifact} ${model.family}`,
-      ).includes(query),
+      normalize(`${model.label} ${model.name} ${model.artifact} ${model.family}`).includes(query),
   )
   const groups = families
     .map((name) => ({

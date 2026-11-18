@@ -10,10 +10,10 @@ export interface DecisionRuntimeCatalogEntry {
   family: string
   /** The Supported models pages' family label, such as Vela 3.0. */
   familyLabel: string
-  /** Empty for an announced model the registry does not pin yet. */
+  /** The pinned Hugging Face revision; empty when the registry pins none. */
   revision: string
   backbone: string
-  /** Null when no registry table or announcement states it. */
+  /** Null when the registry table does not state it. */
   minMemoryGiB: number | null
   parameters: number | null
   /** What the Router's decision catalog says the model answers; empty when it serves none. */
@@ -21,8 +21,6 @@ export interface DecisionRuntimeCatalogEntry {
   modalities: readonly string[]
   spanHeads: readonly string[]
   summary: string
-  /** The pull request that adds runtime support for an announced model; empty once registered. */
-  pending: string
 }
 
 // Generated from model-runtime's canonical registry; never add release pins here.

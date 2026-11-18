@@ -87,12 +87,14 @@ describe('Decision runtime catalog projection', () => {
     expect(family('decision1')).toHaveLength(7)
     expect(family('decision3')).toHaveLength(8)
     expect(family('vela2')).toHaveLength(4)
-    expect(
-      family('vela3').map((value) => [value.name, value.pending ? 'pending' : 'pinned']),
-    ).toEqual([
-      ['vela3-fast', 'pinned'],
-      ['vela3-fast-vision', 'pinned'],
-      ['vela3.1-fast', 'pending'],
+    expect(family('vela3').map((value) => value.name)).toEqual([
+      'vela3-fast',
+      'vela3-fast-vision',
+      'vela3.1-fast',
+    ])
+    expect(family('vela3_pico').map((value) => value.name)).toEqual([
+      'vela3.1-pico-150m',
+      'vela3.1-pico-380m',
     ])
     expect(
       family('vela3_d3')

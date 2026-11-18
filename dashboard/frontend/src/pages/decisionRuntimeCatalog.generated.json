@@ -24,8 +24,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "The smallest Decision 1.0 decoder, on the Qwen3.5 backbone.",
-      "pending": ""
+      "summary": "The smallest Decision 1.0 decoder, on the Qwen3.5 backbone."
     },
     {
       "id": "vllm-sr/Decision-1.0-Kai-0.6B",
@@ -46,8 +45,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU.",
-      "pending": ""
+      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU."
     },
     {
       "id": "vllm-sr/Decision-1.0-Lex-0.6B",
@@ -68,8 +66,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU.",
-      "pending": ""
+      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU."
     },
     {
       "id": "vllm-sr/Decision-1.0-Lux-9B",
@@ -90,8 +87,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "The 9B Decision 1.0 decoder on the Qwen3.5 backbone, the family's largest, for a GPU.",
-      "pending": ""
+      "summary": "The 9B Decision 1.0 decoder on the Qwen3.5 backbone, the family's largest, for a GPU."
     },
     {
       "id": "vllm-sr/Decision-1.0-Nox-4B",
@@ -112,8 +108,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "A 4B Decision 1.0 decoder on the Qwen3.5 backbone, for a GPU.",
-      "pending": ""
+      "summary": "A 4B Decision 1.0 decoder on the Qwen3.5 backbone, for a GPU."
     },
     {
       "id": "vllm-sr/Decision-1.0-Route-0.6B",
@@ -134,8 +129,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU.",
-      "pending": ""
+      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU."
     },
     {
       "id": "vllm-sr/Decision-1.0-Sol-2B",
@@ -156,8 +150,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "A 2B Decision 1.0 decoder on the Qwen3.5 backbone.",
-      "pending": ""
+      "summary": "A 2B Decision 1.0 decoder on the Qwen3.5 backbone."
     },
     {
       "id": "vllm-sr/Decision-2.0-Eos-0.8B",
@@ -178,8 +171,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "A 0.8B Decision 2.0 model for slightly harder questions than Kai-0.6B, at a similar cost.",
-      "pending": ""
+      "summary": "A 0.8B Decision 2.0 model for slightly harder questions than Kai-0.6B, at a similar cost."
     },
     {
       "id": "vllm-sr/Decision-2.0-Kai-0.6B",
@@ -200,8 +192,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "The smallest Decision 2.0 model, for fast, simple routing questions: the size to try first in this family. Two questions take about 0.2 s on 16 CPU cores.",
-      "pending": ""
+      "summary": "The smallest Decision 2.0 model, for fast, simple routing questions: the size to try first in this family. Two questions take about 0.2 s on 16 CPU cores."
     },
     {
       "id": "vllm-sr/Decision-2.0-Lux-9B",
@@ -222,8 +213,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "A 9B Decision 2.0 model, the most accurate at moderate cost, on a GPU with 24 GB or more.",
-      "pending": ""
+      "summary": "A 9B Decision 2.0 model, the most accurate at moderate cost, on a GPU with 24 GB or more."
     },
     {
       "id": "vllm-sr/Decision-2.0-Nox-4B",
@@ -244,8 +234,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "A 4B Decision 2.0 model for nuanced questions and questions with many options, on a GPU.",
-      "pending": ""
+      "summary": "A 4B Decision 2.0 model for nuanced questions and questions with many options, on a GPU."
     },
     {
       "id": "vllm-sr/Decision-2.0-Sol-2B",
@@ -266,8 +255,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "A 2B Decision 2.0 model for questions that need more judgment. Serve it on a GPU, or on a CPU for low traffic.",
-      "pending": ""
+      "summary": "A 2B Decision 2.0 model for questions that need more judgment. Serve it on a GPU, or on a CPU for low traffic."
     },
     {
       "id": "vllm-sr/Decision-2.0-Vega-27B",
@@ -288,8 +276,7 @@
         "text"
       ],
       "spanHeads": [],
-      "summary": "The 27B Decision 2.0 model, the most accurate of the family, on one GPU with 64 GB or more.",
-      "pending": ""
+      "summary": "The 27B Decision 2.0 model, the most accurate of the family, on one GPU with 64 GB or more."
     },
     {
       "id": "vllm-sr/Vela-2.0-0.3B",
@@ -314,8 +301,7 @@
       "spanHeads": [
         "router"
       ],
-      "summary": "The previous default decision model, a ModernBERT encoder for a CPU. It answers set and span questions as well, with calibrated thresholds for the built-in questions.",
-      "pending": ""
+      "summary": "The previous default decision model, a ModernBERT encoder for a CPU. It answers set and span questions as well, with calibrated thresholds for the built-in questions."
     },
     {
       "id": "vllm-sr/Vela-2.0-0.8B",
@@ -341,8 +327,7 @@
         "router",
         "broad"
       ],
-      "summary": "The smallest Vela 2.0 decoder. On a GPU it is ahead of the Vela 1.0 specialists on most built-in signals; on a CPU a request takes seconds.",
-      "pending": ""
+      "summary": "The smallest Vela 2.0 decoder. On a GPU it is ahead of the Vela 1.0 specialists on most built-in signals; on a CPU a request takes seconds."
     },
     {
       "id": "vllm-sr/Vela-2.0-4B",
@@ -368,8 +353,7 @@
         "router",
         "broad"
       ],
-      "summary": "A 4B Vela 2.0 decoder, ahead of the Vela 1.0 specialists on every built-in signal but fact check, on a GPU.",
-      "pending": ""
+      "summary": "A 4B Vela 2.0 decoder, ahead of the Vela 1.0 specialists on every built-in signal but fact check, on a GPU."
     },
     {
       "id": "vllm-sr/Vela-2.0-9B",
@@ -395,8 +379,7 @@
         "router",
         "broad"
       ],
-      "summary": "The 9B Vela 2.0 decoder, ahead of the Vela 1.0 specialists on every built-in signal, on a GPU.",
-      "pending": ""
+      "summary": "The 9B Vela 2.0 decoder, ahead of the Vela 1.0 specialists on every built-in signal, on a GPU."
     },
     {
       "id": "vllm-sr/d3",
@@ -419,8 +402,7 @@
         "video"
       ],
       "spanHeads": [],
-      "summary": "The 27B Decision 3.0 model, the family's largest, for your own questions about text, images and video. Its quantized packages hold it in a third to three fifths of the memory.",
-      "pending": ""
+      "summary": "The 27B Decision 3.0 model, the family's largest, for your own questions about text, images and video. Its quantized packages hold it in a third to three fifths of the memory."
     },
     {
       "id": "vllm-sr/d3-edge",
@@ -443,8 +425,7 @@
         "video"
       ],
       "spanHeads": [],
-      "summary": "The smallest Decision 3.0 model, a pruned d3-lite. It answers your own questions about text, images and video on a small GPU.",
-      "pending": ""
+      "summary": "The smallest Decision 3.0 model, a pruned d3-lite. It answers your own questions about text, images and video on a small GPU."
     },
     {
       "id": "vllm-sr/d3-flash",
@@ -467,8 +448,7 @@
         "video"
       ],
       "spanHeads": [],
-      "summary": "A 9B Decision 3.0 model for your own questions about text, images and video, and the base of vela3-flash.",
-      "pending": ""
+      "summary": "A 9B Decision 3.0 model for your own questions about text, images and video, and the base of vela3-flash."
     },
     {
       "id": "vllm-sr/d3-lite",
@@ -491,8 +471,7 @@
         "video"
       ],
       "spanHeads": [],
-      "summary": "A small Decision 3.0 model for questions about text, images and video, and the base that vela3-lite's adapters were trained on.",
-      "pending": ""
+      "summary": "A small Decision 3.0 model for questions about text, images and video, and the base that vela3-lite's adapters were trained on."
     },
     {
       "id": "vllm-sr/d3-mini",
@@ -515,8 +494,7 @@
         "video"
       ],
       "spanHeads": [],
-      "summary": "A 4B Decision 3.0 model for your own questions about text, images and video, and the base of vela3-mini.",
-      "pending": ""
+      "summary": "A 4B Decision 3.0 model for your own questions about text, images and video, and the base of vela3-mini."
     },
     {
       "id": "vllm-sr/d3-nano",
@@ -539,8 +517,7 @@
         "video"
       ],
       "spanHeads": [],
-      "summary": "A 2B Decision 3.0 model for your own questions about text, images and video.",
-      "pending": ""
+      "summary": "A 2B Decision 3.0 model for your own questions about text, images and video."
     },
     {
       "id": "vllm-sr/d3-turbo",
@@ -563,8 +540,7 @@
         "video"
       ],
       "spanHeads": [],
-      "summary": "A 27B Decision 3.0 model that reads a request's input once and answers every question from that reading, so asking many questions about one input costs little more than asking one. It also locates things in images and videos.",
-      "pending": ""
+      "summary": "A 27B Decision 3.0 model that reads a request's input once and answers every question from that reading, so asking many questions about one input costs little more than asking one. It also locates things in images and videos."
     },
     {
       "id": "vllm-sr/d3-ultra",
@@ -587,8 +563,7 @@
         "video"
       ],
       "spanHeads": [],
-      "summary": "A 27B Decision 3.0 model that reads a text request's list of questions in front of its state, so every question sees what else is asked. It is also offered as a hosted System One API.",
-      "pending": ""
+      "summary": "A 27B Decision 3.0 model that reads a text request's list of questions in front of its state, so every question sees what else is asked. It is also offered as a hosted System One API."
     },
     {
       "id": "vllm-sr/vela3-fast",
@@ -611,8 +586,7 @@
       "spanHeads": [
         "router"
       ],
-      "summary": "The default decision model. A CPU-friendly encoder with trained adapters for every built-in routing question, calibrated thresholds, and spans for PII and hallucination checks.",
-      "pending": ""
+      "summary": "The default decision model. A CPU-friendly encoder with trained adapters for every built-in routing question, calibrated thresholds, and spans for PII and hallucination checks."
     },
     {
       "id": "vllm-sr/vela3-fast-vision",
@@ -627,8 +601,7 @@
       "questionTypes": [],
       "modalities": [],
       "spanHeads": [],
-      "summary": "",
-      "pending": ""
+      "summary": ""
     },
     {
       "id": "vllm-sr/vela3-flash",
@@ -654,8 +627,7 @@
       "spanHeads": [
         "router"
       ],
-      "summary": "Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the built-in questions and spans.",
-      "pending": ""
+      "summary": "Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the built-in questions and spans."
     },
     {
       "id": "vllm-sr/vela3-lite",
@@ -681,8 +653,7 @@
       "spanHeads": [
         "router"
       ],
-      "summary": "Vela 3.0 on d3-lite: trained adapters for the built-in questions, spans, and image input, with lower latency on a small GPU.",
-      "pending": ""
+      "summary": "Vela 3.0 on d3-lite: trained adapters for the built-in questions, spans, and image input, with lower latency on a small GPU."
     },
     {
       "id": "vllm-sr/vela3-mini",
@@ -708,8 +679,7 @@
       "spanHeads": [
         "router"
       ],
-      "summary": "Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions still on trained adapters and spans.",
-      "pending": ""
+      "summary": "Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions still on trained adapters and spans."
     },
     {
       "id": "vllm-sr/vela3-turbo",
@@ -735,56 +705,76 @@
       "spanHeads": [
         "router"
       ],
-      "summary": "Vela 3.0 on d3-turbo, the largest Vela: it answers each request on d3-turbo's state-once path, then asks the router questions again with their adapters on.",
-      "pending": ""
+      "summary": "Vela 3.0 on d3-turbo, the largest Vela: it answers each request on d3-turbo's state-once path, then asks the router questions again with their adapters on."
     },
     {
       "id": "vllm-sr/vela3.1-fast",
       "name": "vela3.1-fast",
       "provider": "vllm-sr",
       "family": "vela3",
-      "familyLabel": "Vela 3.0",
-      "revision": "",
-      "backbone": "",
-      "minMemoryGiB": null,
-      "parameters": null,
-      "questionTypes": [],
-      "modalities": [],
-      "spanHeads": [],
-      "summary": "The released Vela 3.1 fast model, which the vela3 family loads. The runtime registry does not pin it yet.",
-      "pending": "https://github.com/vllm-project/semantic-router/pull/6391"
+      "familyLabel": "Vela 3.1",
+      "revision": "0ed6ed301fbbf0c312f11a13ad17e3a6f8887262",
+      "backbone": "ultrabert",
+      "minMemoryGiB": 15,
+      "parameters": 1927527449,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "The Vela 3.1 release of vela3-fast: the same router questions and spans with new weights, and described yes/no questions such as \"can wait\" or \"needs immediate action\". Opt-in; it has no calibrated thresholds yet."
     },
     {
       "id": "vllm-sr/vela3.1-pico-150m",
       "name": "vela3.1-pico-150m",
       "provider": "vllm-sr",
       "family": "vela3_pico",
-      "familyLabel": "",
-      "revision": "",
+      "familyLabel": "Vela 3.1",
+      "revision": "dad77ad7a83c884b3e608a58c13cf25beba00803",
       "backbone": "ultrabert",
       "minMemoryGiB": 2,
       "parameters": 153207299,
-      "questionTypes": [],
-      "modalities": [],
-      "spanHeads": [],
-      "summary": "The smallest Vela 3.1 model: one UltraBERT encoder in the new vela3_pico family.",
-      "pending": "https://github.com/vllm-project/semantic-router/pull/6390"
+      "questionTypes": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "The smallest Vela 3.1 model, a 150M encoder for small CPU hosts, with the same questions and spans as vela3.1-pico-380m. Opt-in; it has no calibrated thresholds yet."
     },
     {
       "id": "vllm-sr/vela3.1-pico-380m",
       "name": "vela3.1-pico-380m",
       "provider": "vllm-sr",
       "family": "vela3_pico",
-      "familyLabel": "",
-      "revision": "",
+      "familyLabel": "Vela 3.1",
+      "revision": "a79cbf66ee09245ef8f40f66afa9bcbd57ccf5a5",
       "backbone": "ultrabert",
       "minMemoryGiB": 3,
       "parameters": 380961027,
-      "questionTypes": [],
-      "modalities": [],
-      "spanHeads": [],
-      "summary": "A Vela 3.1 pico model: one larger UltraBERT encoder in the new vela3_pico family.",
-      "pending": "https://github.com/vllm-project/semantic-router/pull/6390"
+      "questionTypes": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "A small Vela 3.1 model: one 380M encoder answers the built-in routing questions and the PII and hallucination spans, a whole call in one pass when it fits 8,192 tokens. Opt-in; it has no calibrated thresholds yet."
     }
   ]
 }

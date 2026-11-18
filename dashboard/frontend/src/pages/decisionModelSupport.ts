@@ -31,8 +31,6 @@ export interface DecisionModelOption {
   revision?: string
   /** False for a release the Router's decision catalog serves no questions with. */
   servable: boolean
-  /** The pull request adding runtime support for an announced model. */
-  pending?: string
 }
 
 export const DECISION_DEVICE_LABELS: Record<DecisionDeviceClass, string> = {
@@ -95,7 +93,7 @@ export function compareDecisionFamilies(left: string, right: string): number {
 
 function catalogOption(entry: DecisionRuntimeCatalogEntry): DecisionModelOption {
   const device = decisionDeviceClass(entry)
-  const servable = entry.questionTypes.length > 0 && !entry.pending
+  const servable = entry.questionTypes.length > 0
   return {
     name: entry.name,
     artifact: entry.id,
@@ -123,7 +121,6 @@ function catalogOption(entry: DecisionRuntimeCatalogEntry): DecisionModelOption 
     backbone: entry.backbone,
     revision: entry.revision || undefined,
     servable,
-    ...(entry.pending ? { pending: entry.pending } : {}),
   }
 }
 

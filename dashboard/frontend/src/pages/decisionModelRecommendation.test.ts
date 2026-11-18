@@ -24,8 +24,11 @@ describe('CPU decision model recommendation', () => {
     )
   })
 
+  it('recommends vela3.1-fast on CPU from the shipped catalog', () => {
+    expect(cpuRecommendedDecisionModel(DECISION_CATALOG_MODELS, cpu)).toBe('vela3.1-fast')
+  })
+
   it('falls back to the CPU default while no Vela 3.1 model is servable', () => {
-    expect(cpuRecommendedDecisionModel(DECISION_CATALOG_MODELS, cpu)).toBe('vela3-fast')
     expect(
       cpuRecommendedDecisionModel(
         [
