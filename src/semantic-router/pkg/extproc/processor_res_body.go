@@ -82,10 +82,10 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 		if contextRecoveryFailClosed(r.Config, ctx) {
 			return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, "Context recovery followup failed", "request_processing_failed")
 		}
-		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {
 		responseBody = recoveredBody
 	}
+	responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 
 	return r.handleNonStreamingResponseBody(
 		responseBody,
