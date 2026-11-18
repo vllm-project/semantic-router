@@ -1841,6 +1841,10 @@ test.describe('Playground Chat Component', () => {
     const thinking = page.getByTestId('chat-thinking')
     await expect(thinking).toBeVisible({ timeout: 5000 })
     await expect(rail.locator('[data-testid="chat-thinking"]')).toHaveCount(1)
+    // The wait shows in the answer's own row, so the rail has one assistant avatar.
+    await expect(
+      rail.locator('[data-message-role="assistant"] [data-testid="chat-thinking"]'),
+    ).toHaveCount(1)
 
     const [railBox, thinkingBox] = await Promise.all([rail.boundingBox(), thinking.boundingBox()])
     expect(railBox).not.toBeNull()

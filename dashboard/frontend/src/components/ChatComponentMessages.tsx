@@ -255,6 +255,22 @@ interface MessageCardProps {
   onInspectMessage?: (messageId: string) => void
   onToggleToolCard: (toolCallId: string) => void
   prevUserQuery?: string
+  /** What the turn waits for while its answer has nothing to show yet. */
+  waitingLabel?: string
+}
+
+function WaitingForAnswer({ label }: { label: string }) {
+  return (
+    <span
+      className="flex h-7 items-center gap-2 text-[13px] text-muted-foreground"
+      role="status"
+      aria-live="polite"
+      data-testid="chat-thinking"
+    >
+      <ThinkingOrb state="composing" size={20} aria-label={label} />
+      <span>{label}</span>
+    </span>
+  )
 }
 
 function UserMessageText({ content }: { content: string }) {
@@ -348,6 +364,7 @@ const MessageCard = memo(
     onInspectMessage,
     onToggleToolCard,
     prevUserQuery,
+    waitingLabel,
   }: MessageCardProps) {
     const isAssistant = message.role === 'assistant'
     const isRatingsMessage = isAssistant && Boolean(message.choices && message.choices.length > 1)
@@ -376,6 +393,11 @@ const MessageCard = memo(
         >
           {!isAssistant ? (
             <UserOrSystemMessage message={message} />
+          ) : waitingLabel &&
+            !message.content &&
+            !message.toolCalls?.length &&
+            !message.thinkingProcess ? (
+            <WaitingForAnswer label={waitingLabel} />
           ) : isRatingsMessage ? (
             <AssistantRatingsMessage
               canSubmitFeedback={canSubmitFeedback}
@@ -453,6 +475,7 @@ const MessageCard = memo(
     prevProps.inspected === nextProps.inspected &&
     prevProps.message === nextProps.message &&
     prevProps.prevUserQuery === nextProps.prevUserQuery &&
+    prevProps.waitingLabel === nextProps.waitingLabel &&
     prevProps.onInspectMessage === nextProps.onInspectMessage &&
     prevProps.onToggleToolCard === nextProps.onToggleToolCard &&
     prevProps.expandedToolCards === nextProps.expandedToolCards,
@@ -504,6 +527,11 @@ export default function ChatComponentMessages({
     return <EmptyConversation onSuggestion={onSuggestion} />
   }
 
+  // The turn's own answer row shows the wait, so the rail never shows a second avatar.
+  const last = messages[messages.length - 1]
+  const answerPending = thinking && last?.role === 'assistant' && Boolean(last.isStreaming)
+  const waitingLabel = thinkingProcess ? 'Working' : 'Routing your message'
+
   return (
     <div
       className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-4 pb-8 pt-6 sm:px-6"
@@ -524,10 +552,11 @@ export default function ChatComponentMessages({
             onInspectMessage={onInspectMessage}
             onToggleToolCard={onToggleToolCard}
             prevUserQuery={prevUserQuery}
+            waitingLabel={answerPending && message === last ? waitingLabel : undefined}
           />
         )
       })}
-      {thinking ? <ThinkingAnimation thinkingProcess={thinkingProcess} /> : null}
+      {thinking && !answerPending ? <ThinkingAnimation thinkingProcess={thinkingProcess} /> : null}
     </div>
   )
 }
