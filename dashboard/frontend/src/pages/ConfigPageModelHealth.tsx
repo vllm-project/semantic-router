@@ -1,15 +1,14 @@
 import { Skeleton, Sparkline, StatusLabel, Tooltip } from '../ui'
-import type { ModelHealth } from '../utils/modelHealthApi'
+import type { ModelHealth, ModelHealthIssue } from '../utils/modelHealthApi'
 import {
   checkedAgo,
   formatLatency,
   MODEL_HEALTH_META,
+  modelHealthIssueText,
   modelHealthStatus,
   visibleP95,
 } from './configPageModelHealthPresentation'
-import type { BackendModelHealth } from './useBackendModelHealth'
-
-const UNAVAILABLE_REASON = 'Health checks are not available on this Dashboard.'
+import type { ModelHealthPhase } from './useBackendModelHealth'
 
 function HealthLabel({ health, checking }: { health?: ModelHealth; checking: boolean }) {
   const meta = MODEL_HEALTH_META[modelHealthStatus(health)]
@@ -28,10 +27,13 @@ function HealthLabel({ health, checking }: { health?: ModelHealth; checking: boo
 export function ModelHealthCell({
   health,
   phase,
+  issue,
   checking,
 }: {
   health?: ModelHealth
-  phase: BackendModelHealth['phase']
+  phase: ModelHealthPhase
+  /** Why the last check failed, as the health hook reports it. */
+  issue?: ModelHealthIssue
   checking: boolean
 }) {
   if (phase === 'loading' && !health) {
@@ -43,7 +45,7 @@ export function ModelHealthCell({
     )
   }
   const p95 = visibleP95(health)
-  const reason = phase === 'unavailable' && !health ? UNAVAILABLE_REASON : health?.reason
+  const reason = health ? health.reason : modelHealthIssueText(phase, issue)
   const ago = checkedAgo(health?.checkedAt)
   return (
     <Tooltip
@@ -77,10 +79,13 @@ export function ModelHealthCell({
 export function ModelHealthSummary({
   health,
   phase,
+  issue,
   checking,
 }: {
   health?: ModelHealth
-  phase: BackendModelHealth['phase']
+  phase: ModelHealthPhase
+  /** Why the last check failed, as the health hook reports it. */
+  issue?: ModelHealthIssue
   checking: boolean
 }) {
   if (phase === 'loading' && !health) {
@@ -88,7 +93,7 @@ export function ModelHealthSummary({
   }
   const status = modelHealthStatus(health)
   const p95 = visibleP95(health)
-  const reason = phase === 'unavailable' && !health ? UNAVAILABLE_REASON : health?.reason
+  const issueText = modelHealthIssueText(phase, issue)
   const ago = checkedAgo(health?.checkedAt)
   const samples = health?.recentMs ?? []
   return (
@@ -105,15 +110,24 @@ export function ModelHealthSummary({
           </span>
         ) : null}
         <span className="ml-auto text-xs text-subtle-foreground">
-          {ago ? `Checked ${ago}` : phase === 'unavailable' ? 'Not available' : 'Not checked yet'}
+          {ago
+            ? `Checked ${ago}`
+            : phase === 'unavailable'
+              ? 'Not available'
+              : phase === 'retrying'
+                ? 'Retrying'
+                : 'Not checked yet'}
         </span>
       </div>
-      {reason ? (
-        <p className="text-xs leading-relaxed text-muted-foreground">{reason}</p>
-      ) : status === 'healthy' ? (
+      {health?.reason ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">{health.reason}</p>
+      ) : status === 'healthy' && !issueText ? (
         <p className="text-xs text-muted-foreground">
           Every backend answered its last health check.
         </p>
+      ) : null}
+      {issueText ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">{issueText}</p>
       ) : null}
       {samples.length > 1 && p95 !== undefined ? (
         <div className="flex flex-col">

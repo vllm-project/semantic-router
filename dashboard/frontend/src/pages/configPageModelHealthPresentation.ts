@@ -1,5 +1,6 @@
 import type { StatusTone } from '../ui'
-import type { ModelHealth, ModelHealthStatus } from '../utils/modelHealthApi'
+import type { ModelHealth, ModelHealthIssue, ModelHealthStatus } from '../utils/modelHealthApi'
+import type { ModelHealthPhase } from './useBackendModelHealth'
 
 export const MODEL_HEALTH_META: Record<
   ModelHealthStatus,
@@ -64,6 +65,29 @@ export function modelHealthHint(totals: ModelHealthTotals): string {
     totals.unchecked ? `${totals.unchecked} not checked` : '',
   ].filter(Boolean)
   return parts.length ? parts.join(' · ') : 'Every model answers'
+}
+
+const HEALTH_ISSUE_TEXT: Record<ModelHealthIssue, string> = {
+  forbidden: 'Your account cannot read model health.',
+  unsupported: 'This Dashboard has no health checks.',
+  unreachable: 'Health could not be checked. Retrying automatically.',
+}
+
+/**
+ * Why health is missing or stale, from the failure the hook reports or, when
+ * a caller passes only the phase, from the phase. Undefined while health
+ * loads or answers.
+ */
+export function modelHealthIssueText(
+  phase: ModelHealthPhase,
+  issue?: ModelHealthIssue,
+): string | undefined {
+  if (phase === 'retrying') return HEALTH_ISSUE_TEXT.unreachable
+  if (phase === 'unavailable') return HEALTH_ISSUE_TEXT[issue ?? 'unsupported']
+  if (phase === 'ready' && issue === 'unreachable') {
+    return 'The latest check failed, so this is the previous result. Retrying automatically.'
+  }
+  return undefined
 }
 
 /** "just now", "12 s ago", "4 min ago": how old a check is. */

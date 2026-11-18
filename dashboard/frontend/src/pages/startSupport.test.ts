@@ -55,7 +55,7 @@ describe('resolveGatewayEndpoint', () => {
       apiBase: 'http://router.internal:8899/v1',
       listener: 'http-8899',
       requiresKey: false,
-      custom: false,
+      source: 'listener',
     })
   })
 
@@ -72,6 +72,9 @@ describe('resolveGatewayEndpoint', () => {
     expect(resolveGatewayEndpoint({ fallbackPort: 8801, hostname: 'localhost' }).origin).toBe(
       'http://localhost:8801',
     )
+    expect(resolveGatewayEndpoint({ fallbackPort: 0, hostname: 'localhost' }).origin).toBe(
+      'http://localhost:8899',
+    )
     const custom = resolveGatewayEndpoint({
       listeners: config.listeners,
       hostname: 'localhost',
@@ -80,8 +83,48 @@ describe('resolveGatewayEndpoint', () => {
     expect(custom).toMatchObject({
       origin: 'https://gateway.example.com',
       apiBase: 'https://gateway.example.com/v1',
-      custom: true,
+      source: 'custom',
     })
+  })
+
+  it('prefers the declared public address to the listener guess, and a typed one to both', () => {
+    const declared = {
+      listeners: config.listeners,
+      hostname: 'dashboard.vllm-sr.ai',
+      publicBaseUrl: 'https://mom.vllm-sr.ai/',
+      publicRequiresKey: true,
+    }
+    expect(resolveGatewayEndpoint(declared)).toMatchObject({
+      origin: 'https://mom.vllm-sr.ai',
+      apiBase: 'https://mom.vllm-sr.ai/v1',
+      listener: 'http-8899',
+      requiresKey: true,
+      source: 'public',
+    })
+    expect(resolveGatewayEndpoint({ ...declared, override: 'http://10.0.0.5:8899' })).toMatchObject(
+      { origin: 'http://10.0.0.5:8899', requiresKey: true, source: 'custom' },
+    )
+    expect(resolveGatewayEndpoint({ ...declared, publicBaseUrl: 'not a url' })).toMatchObject({
+      origin: 'http://dashboard.vllm-sr.ai:8899',
+      requiresKey: false,
+      source: 'listener',
+    })
+  })
+
+  it('asks for a key at a public address when the listener behind it checks keys', () => {
+    const endpoint = resolveGatewayEndpoint({
+      listeners: [{ name: 'keyed', port: 8899, api_key_files: ['/keys'] }],
+      hostname: 'localhost',
+      publicBaseUrl: 'https://mom.vllm-sr.ai',
+    })
+    expect(endpoint).toMatchObject({ source: 'public', requiresKey: true })
+    expect(
+      resolveGatewayEndpoint({
+        listeners: config.listeners,
+        hostname: 'localhost',
+        publicBaseUrl: 'https://mom.vllm-sr.ai',
+      }).requiresKey,
+    ).toBe(false)
   })
 
   it('accepts only http(s) base URLs', () => {

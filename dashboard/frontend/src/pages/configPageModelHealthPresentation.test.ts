@@ -7,10 +7,16 @@ import {
   healthSortValue,
   median,
   modelHealthHint,
+  modelHealthIssueText,
   modelHealthTotals,
   visibleP95,
 } from './configPageModelHealthPresentation'
-import { isPermanentHealthFailure, mergeModelHealth } from './useBackendModelHealth'
+import {
+  healthAfterFailure,
+  isPermanentHealthFailure,
+  mergeModelHealth,
+  type BackendModelHealth,
+} from './useBackendModelHealth'
 import { parseBackendTraffic, trafficUnavailableReason } from './useBackendModelTraffic'
 import { ModelHealthApiError } from '../utils/modelHealthApi'
 
@@ -103,6 +109,57 @@ describe('backend model health state', () => {
     expect(isPermanentHealthFailure(new ModelHealthApiError('forbidden', 403))).toBe(true)
     expect(isPermanentHealthFailure(new ModelHealthApiError('config', 503))).toBe(false)
     expect(isPermanentHealthFailure(new Error('network'))).toBe(false)
+  })
+
+  const health = (phase: BackendModelHealth['phase']): BackendModelHealth => ({
+    phase,
+    byModel: new Map([['a', entry('a', 'healthy', 100)]]),
+    intervalSeconds: 30,
+    checking: false,
+    checkingModels: new Set(),
+  })
+
+  it('retries a passing failure and keeps the last answer', () => {
+    const first = healthAfterFailure(health('loading'), new ModelHealthApiError('down', 503))
+    expect(first.stop).toBe(false)
+    expect(first.state).toMatchObject({ phase: 'retrying', issue: 'unreachable' })
+
+    const later = healthAfterFailure(health('ready'), new TypeError('Failed to fetch'))
+    expect(later.stop).toBe(false)
+    expect(later.state).toMatchObject({ phase: 'ready', issue: 'unreachable' })
+    expect(later.state.byModel.get('a')?.status).toBe('healthy')
+  })
+
+  it('stops on a refusal or a missing endpoint and says which', () => {
+    const forbidden = healthAfterFailure(health('loading'), new ModelHealthApiError('no', 403))
+    expect(forbidden).toMatchObject({
+      stop: true,
+      state: { phase: 'unavailable', issue: 'forbidden' },
+    })
+    const missing = healthAfterFailure(health('ready'), new ModelHealthApiError('gone', 404))
+    expect(missing).toMatchObject({
+      stop: true,
+      state: { phase: 'unavailable', issue: 'unsupported' },
+    })
+  })
+
+  it('explains each failure in its own words', () => {
+    expect(modelHealthIssueText('unavailable', 'forbidden')).toBe(
+      'Your account cannot read model health.',
+    )
+    expect(modelHealthIssueText('unavailable', 'unsupported')).toBe(
+      'This Dashboard has no health checks.',
+    )
+    expect(modelHealthIssueText('unavailable')).toBe('This Dashboard has no health checks.')
+    expect(modelHealthIssueText('retrying', 'unreachable')).toBe(
+      'Health could not be checked. Retrying automatically.',
+    )
+    expect(modelHealthIssueText('retrying')).toBe(
+      'Health could not be checked. Retrying automatically.',
+    )
+    expect(modelHealthIssueText('ready', 'unreachable')).toMatch(/previous result/)
+    expect(modelHealthIssueText('ready')).toBeUndefined()
+    expect(modelHealthIssueText('loading')).toBeUndefined()
   })
 })
 

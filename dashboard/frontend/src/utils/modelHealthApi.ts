@@ -28,6 +28,7 @@ export interface ModelHealthSnapshot {
 }
 
 export class ModelHealthApiError extends Error {
+  /** The HTTP status, or 0 when no answer arrived. */
   readonly status: number
   readonly code: string
 
@@ -38,6 +39,22 @@ export class ModelHealthApiError extends Error {
     this.code = code
   }
 }
+
+/**
+ * Why health could not be read. forbidden and unsupported repeat on every
+ * request; unreachable (a server error, no answer, or a timeout) may pass.
+ */
+export type ModelHealthIssue = 'forbidden' | 'unsupported' | 'unreachable'
+
+export function modelHealthIssue(error: unknown): ModelHealthIssue {
+  if (error instanceof ModelHealthApiError) {
+    if (error.status === 401 || error.status === 403) return 'forbidden'
+    if (error.status === 404 || error.status === 405 || error.status === 501) return 'unsupported'
+  }
+  return 'unreachable'
+}
+
+const REQUEST_TIMEOUT_MS = 20_000
 
 const STATUSES = new Set<ModelHealthStatus>(['healthy', 'degraded', 'down', 'unchecked'])
 
@@ -112,31 +129,62 @@ export function parseModelHealthSnapshot(value: unknown): ModelHealthSnapshot {
 /**
  * The health of the configured backend models, or of `models` only. The
  * Dashboard shares recent checks between viewers; `refresh` asks for a new
- * check unless one ran moments ago.
+ * check unless one ran moments ago. No answer within `timeoutMs` fails like
+ * a network error; aborting `signal` rejects with the abort itself.
  */
 export async function fetchModelHealth({
   models = [],
   refresh = false,
   signal,
-}: { models?: string[]; refresh?: boolean; signal?: AbortSignal } = {}) {
+  timeoutMs = REQUEST_TIMEOUT_MS,
+}: { models?: string[]; refresh?: boolean; signal?: AbortSignal; timeoutMs?: number } = {}) {
   const query = new URLSearchParams()
   for (const model of models) query.append('model', model)
   if (refresh) query.set('refresh', '1')
   const search = query.toString()
-  const response = await fetch(`/api/models/health${search ? `?${search}` : ''}`, { signal })
-  if (!response.ok) {
-    let message = `Model health is unavailable (HTTP ${response.status}).`
-    let code = 'health_failed'
-    try {
-      const body: unknown = await response.json()
-      if (isRecord(body)) {
-        message = text(body.message) ?? message
-        code = text(body.error) ?? code
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  if (signal?.aborted) abort()
+  signal?.addEventListener('abort', abort, { once: true })
+  const timer = setTimeout(abort, timeoutMs)
+  try {
+    const response = await fetch(`/api/models/health${search ? `?${search}` : ''}`, {
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      let message = `Model health is unavailable (HTTP ${response.status}).`
+      let code = 'health_failed'
+      try {
+        const body: unknown = await response.json()
+        if (isRecord(body)) {
+          message = text(body.message) ?? message
+          code = text(body.error) ?? code
+        }
+      } catch {
+        // A proxy or an older Dashboard answers without the JSON error body.
       }
-    } catch {
-      // A proxy or an older Dashboard answers without the JSON error body.
+      throw new ModelHealthApiError(message, response.status, code)
     }
-    throw new ModelHealthApiError(message, response.status, code)
+    return parseModelHealthSnapshot(await response.json())
+  } catch (error) {
+    if (error instanceof ModelHealthApiError || signal?.aborted) throw error
+    if (controller.signal.aborted) {
+      throw new ModelHealthApiError(
+        `Model health did not answer within ${Math.round(timeoutMs / 1000)} s.`,
+        0,
+        'timeout',
+      )
+    }
+    if (error instanceof SyntaxError) {
+      throw new ModelHealthApiError(
+        'Model health returned an invalid answer.',
+        502,
+        'invalid_health_contract',
+      )
+    }
+    throw new ModelHealthApiError('The Dashboard could not be reached.', 0, 'network')
+  } finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
   }
-  return parseModelHealthSnapshot(await response.json())
 }

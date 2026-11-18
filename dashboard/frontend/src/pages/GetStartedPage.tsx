@@ -66,6 +66,7 @@ import { StartChecklistCard } from './StartChecklist'
 import {
   API_KEY_ENV,
   DEFAULT_PUBLIC_MODEL,
+  PUBLIC_BASE_URL_ENV,
   buildAgentSnippets,
   buildRequestSnippets,
   buildStartChecklist,
@@ -73,6 +74,7 @@ import {
   normalizeBaseUrl,
   resolveGatewayEndpoint,
   type AgentHarnessId,
+  type GatewayEndpointSource,
   type PublicModel,
 } from './startSupport'
 import {
@@ -215,18 +217,41 @@ function ModelChoice({
   )
 }
 
+function EndpointNote({ source, listener }: { source: GatewayEndpointSource; listener?: string }) {
+  if (source === 'custom') return <span>The base URL you entered, saved in this browser.</span>
+  if (source === 'public') return <span>The public address this deployment declares.</span>
+  return (
+    <span>
+      {listener ? (
+        <>
+          From listener <InlineCode>{listener}</InlineCode> on the host this dashboard is open at;
+        </>
+      ) : (
+        'From the listener port setup reports, on the host this dashboard is open at;'
+      )}{' '}
+      set <InlineCode>{PUBLIC_BASE_URL_ENV}</InlineCode> when the router sits behind a proxy.
+    </span>
+  )
+}
+
 function EndpointStep({
   apiBase,
   model,
   listener,
-  custom,
+  source,
+  publicDeclared,
+  ready,
   requiresKey,
   onCustomBase,
 }: {
   apiBase: string
   model: string
   listener?: string
-  custom: boolean
+  source: GatewayEndpointSource
+  /** The deployment declares a public address, which a typed one replaces. */
+  publicDeclared: boolean
+  /** Setup has reported any public address, so the derived guess never shows first. */
+  ready: boolean
   requiresKey: boolean
   onCustomBase: (value: string) => void
 }) {
@@ -265,8 +290,10 @@ function EndpointStep({
                 Cancel
               </Button>
             </form>
-          ) : (
+          ) : ready ? (
             <CopyField value={apiBase} />
+          ) : (
+            <Skeleton className="h-9" />
           )}
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -276,21 +303,8 @@ function EndpointStep({
       </div>
       <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          {custom ? (
-            <span>The base URL you entered, saved in this browser.</span>
-          ) : (
-            <span>
-              {listener ? (
-                <>
-                  Listener <InlineCode>{listener}</InlineCode> on the host this dashboard is open
-                  at.
-                </>
-              ) : (
-                'The listener port setup reports, on the host this dashboard is open at.'
-              )}
-            </span>
-          )}
-          {editing ? null : custom ? (
+          <EndpointNote source={source} listener={listener} />
+          {editing || !ready ? null : source === 'custom' ? (
             <Button
               variant="ghost"
               size="xs"
@@ -298,7 +312,7 @@ function EndpointStep({
               onClick={() => onCustomBase('')}
             >
               <Undo2 />
-              Use the listener
+              {publicDeclared ? 'Use the public address' : 'Use the listener'}
             </Button>
           ) : (
             <Button
@@ -311,7 +325,7 @@ function EndpointStep({
               }}
             >
               <Pencil />
-              Behind another address?
+              {source === 'public' ? 'Use another address' : 'Behind another address?'}
             </Button>
           )}
         </p>
@@ -319,8 +333,11 @@ function EndpointStep({
           <p className="flex items-start gap-2">
             <KeyRound className="mt-0.5 size-3.5 shrink-0 text-info" />
             <span>
-              The listener checks client keys. Send yours as a bearer token; the agent setups read
-              it from <InlineCode>{API_KEY_ENV}</InlineCode>.
+              {source === 'listener'
+                ? 'The listener checks client keys.'
+                : 'This address requires a client key.'}{' '}
+              Send yours as a bearer token; the agent setups read it from{' '}
+              <InlineCode>{API_KEY_ENV}</InlineCode>.
             </span>
           </p>
         ) : (
@@ -331,7 +348,9 @@ function EndpointStep({
               <Link to="/settings/router" className="font-medium text-primary hover:underline">
                 Router settings
               </Link>{' '}
-              before you expose it.
+              {source === 'public'
+                ? 'unless the proxy in front checks keys.'
+                : 'before you expose it.'}
             </span>
           </p>
         )}
@@ -665,6 +684,8 @@ export default function GetStartedPage() {
     fallbackPort: data.setupPort,
     hostname: window.location.hostname,
     override: customBase,
+    publicBaseUrl: data.publicBaseUrl,
+    publicRequiresKey: data.publicRequiresKey,
   })
   const target = {
     origin: endpoint.origin,
@@ -717,8 +738,14 @@ export default function GetStartedPage() {
       {data.configError && !data.loading ? (
         <Alert tone="warning" className="mb-6" title="The router configuration could not load">
           {chatModels.length
-            ? 'The models below are the ones the router advertises; the endpoint uses the listener port setup reports.'
-            : `The snippets use ${DEFAULT_PUBLIC_MODEL} and the default listener. ${data.configError}`}
+            ? `The models below are the ones the router advertises${
+                endpoint.source === 'listener'
+                  ? '; the endpoint uses the listener port setup reports'
+                  : ''
+              }.`
+            : `The snippets use ${DEFAULT_PUBLIC_MODEL}${
+                endpoint.source === 'listener' ? ' and the default listener' : ''
+              }. ${data.configError}`}
         </Alert>
       ) : null}
 
@@ -779,14 +806,16 @@ export default function GetStartedPage() {
           <Step
             index={2}
             title="Copy the endpoint"
-            description="Use the gateway listener, not the dashboard address."
+            description="Clients call the router's gateway, not the dashboard address."
             done
           >
             <EndpointStep
               apiBase={endpoint.apiBase}
               model={modelName}
               listener={endpoint.listener}
-              custom={endpoint.custom}
+              source={endpoint.source}
+              publicDeclared={Boolean(data.publicBaseUrl)}
+              ready={data.setupSettled}
               requiresKey={endpoint.requiresKey}
               onCustomBase={changeBase}
             />
@@ -847,19 +876,29 @@ export default function GetStartedPage() {
                   label: 'Protocols',
                   value: listenerApis(data.config?.listeners, endpoint.listener),
                 },
-                { label: 'Base URL', value: endpoint.apiBase, mono: true },
+                {
+                  label: 'Base URL',
+                  value: endpoint.apiBase,
+                  mono: true,
+                  loading: !data.setupSettled,
+                },
                 { label: 'Streaming', value: 'Server-sent events' },
                 { label: 'Recipe', value: selected?.recipe ?? 'default', mono: true },
                 {
                   label: 'Client key',
                   value: endpoint.requiresKey ? 'Required, as a bearer token' : 'Not required',
+                  loading: !data.setupSettled,
                 },
               ].map((row) => (
                 <div key={row.label} className="flex min-w-0 flex-col gap-0.5">
                   <span className="text-xs text-subtle-foreground">{row.label}</span>
-                  <span className={cn('break-words', row.mono && 'font-mono text-[12.5px]')}>
-                    {row.value}
-                  </span>
+                  {row.loading ? (
+                    <Skeleton className="my-0.5 h-4 w-44" />
+                  ) : (
+                    <span className={cn('break-words', row.mono && 'font-mono text-[12.5px]')}>
+                      {row.value}
+                    </span>
+                  )}
                 </div>
               ))}
             </CardContent>

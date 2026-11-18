@@ -49,9 +49,13 @@ const healthyStatus = {
 
 async function mockGetStarted(
   page: Page,
-  { replayTotal = 0, configStatus = 200 }: { replayTotal?: number; configStatus?: number } = {},
+  {
+    replayTotal = 0,
+    configStatus = 200,
+    setupState,
+  }: { replayTotal?: number; configStatus?: number; setupState?: Record<string, unknown> } = {},
 ) {
-  await mockAuthenticatedAppShell(page)
+  await mockAuthenticatedAppShell(page, { setupState })
   await page.route('**/api/router/config/all', (route) =>
     configStatus === 200
       ? route.fulfill({ json: config })
@@ -96,6 +100,8 @@ test('shows the endpoint, public models and client snippets from the configurati
   await expect(balanced).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByText('http://localhost:8899/v1').first()).toBeVisible()
   await expect(page.getByText('http-8899', { exact: true })).toBeVisible()
+  // the listener address is a guess, so the page names the setting that replaces it
+  await expect(page.getByText('VLLM_SR_PUBLIC_BASE_URL', { exact: true })).toBeVisible()
   await expect(page.getByText('"model": "vllm-sr/balanced"').first()).toBeVisible()
 
   await page.getByRole('button', { name: /vllm-sr\/private/ }).click()
@@ -227,4 +233,31 @@ test('keeps a typed gateway address and falls back without the configuration', a
   await expect(page.getByText('https://gateway.example.com/v1').first()).toBeVisible()
   await page.getByRole('button', { name: 'Use the listener' }).click()
   await expect(page.getByText('http://localhost:8700/v1').first()).toBeVisible()
+})
+
+test('shows the public address the deployment declares instead of the listener', async ({
+  page,
+}) => {
+  await mockGetStarted(page, {
+    setupState: { publicBaseUrl: 'https://gateway.example.com', publicRequiresKey: true },
+  })
+  await page.goto('/get-started')
+
+  await expect(page.getByText('The public address this deployment declares.')).toBeVisible()
+  await expect(page.getByText('https://gateway.example.com/v1').first()).toBeVisible()
+  await expect(
+    page.getByText('curl -sS -i https://gateway.example.com/v1/chat/completions \\').first(),
+  ).toBeVisible()
+  await expect(page.getByText('Authorization: Bearer $VLLM_SR_API_KEY').first()).toBeVisible()
+  await expect(
+    page.getByText('This address requires a client key.', { exact: false }),
+  ).toBeVisible()
+  await expect(page.getByText(':8899/v1')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Use another address' }).click()
+  await page.getByRole('textbox', { name: 'Gateway base URL' }).fill('http://10.0.0.5:8899')
+  await page.getByRole('button', { name: 'Use', exact: true }).click()
+  await expect(page.getByText('http://10.0.0.5:8899/v1').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Use the public address' }).click()
+  await expect(page.getByText('https://gateway.example.com/v1').first()).toBeVisible()
 })

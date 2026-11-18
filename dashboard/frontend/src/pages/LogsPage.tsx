@@ -1,19 +1,21 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowDown,
   ChevronRight,
   Copy,
   Download,
+  Info,
   ListFilter,
-  RefreshCw,
+  RotateCw,
   ScrollText,
   Search,
   SearchX,
+  ShieldAlert,
   WrapText,
 } from 'lucide-react'
 
 import {
-  Alert,
   Button,
   Card,
   CopyButton,
@@ -42,38 +44,32 @@ import {
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import {
   LOG_LEVELS,
-  describeLogsAvailability,
+  LOG_SOURCE_LABEL,
+  componentLabel,
+  componentOptions,
+  countNewLines,
+  describeEmptyLogs,
+  entryKey,
   filterLogs,
+  formatLogTime,
   getLogLevel,
+  lineSource,
+  logLineText,
+  logSourceOf,
   logsDownloadName,
+  logsRequestFailure,
   matchRanges,
   parseStructuredLine,
-  splitServicePrefix,
+  shortPodName,
   type LogEntry,
   type LogLevel,
+  type LogsNotice,
+  type LogsResponse,
 } from './logsPageSupport'
-
-interface LogsResponse {
-  deployment_type: string
-  service: string
-  supported: boolean
-  logs: LogEntry[]
-  count: number
-  error?: string
-  message?: string
-}
-
-type Component = 'all' | 'router' | 'envoy' | 'dashboard'
-
-const COMPONENTS: { value: Component; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'router', label: 'Router' },
-  { value: 'envoy', label: 'Envoy' },
-  { value: 'dashboard', label: 'Dashboard' },
-]
 
 const LINE_OPTIONS = [100, 200, 500, 1000]
 const FOLLOW_MS = 5000
+const MAX_SOURCE_WIDTH = 24
 
 const levelBadge: Record<LogLevel, string> = {
   error: 'bg-destructive-soft text-destructive-foreground',
@@ -105,14 +101,13 @@ const serviceTone: Record<string, string> = {
   dashboard: 'text-chart-3',
 }
 
-function formatDeploymentType(type: string) {
-  if (type === 'none') return 'Not detected'
-  if (type === 'detecting...') return 'Detecting'
-  return type
-    .split(/[-_\s]+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
+const noticeIcon: Record<LogsNotice['kind'], typeof ScrollText> = {
+  unavailable: ShieldAlert,
+  error: AlertTriangle,
+  empty: ScrollText,
 }
+
+const noticeTone = { unavailable: 'gold', error: 'rose', empty: 'slate' } as const
 
 function Highlighted({ text, query }: { text: string; query: string }) {
   const ranges = matchRanges(text, query)
@@ -132,12 +127,19 @@ function Highlighted({ text, query }: { text: string; query: string }) {
   return <>{parts}</>
 }
 
+/** The source column: a pod without its ReplicaSet hash, or a component. */
+function sourceText(entry: LogEntry): string {
+  return entry.pod ? shortPodName(entry.pod) : componentLabel(entry.service ?? '')
+}
+
 const LogRow = React.memo(function LogRow({
   entry,
   index,
   query,
   wrap,
   expanded,
+  showTime,
+  sourceWidth,
   onToggle,
   onFilter,
 }: {
@@ -146,15 +148,18 @@ const LogRow = React.memo(function LogRow({
   query: string
   wrap: boolean
   expanded: boolean
+  showTime: boolean
+  /** The source column's width in characters; 0 hides it. */
+  sourceWidth: number
   onToggle: (index: number) => void
   onFilter: (value: string) => void
 }) {
   const level = getLogLevel(entry.line)
-  const { service, rest } = splitServicePrefix(entry.line)
   const fields = expanded ? parseStructuredLine(entry.line) : null
   const requestId = fields
     ? String(fields.request_id ?? fields.requestId ?? fields.x_request_id ?? '')
     : ''
+  const source = lineSource(entry)
   return (
     <div
       className={cn(
@@ -178,9 +183,15 @@ const LogRow = React.memo(function LogRow({
             expanded && 'rotate-90',
           )}
         />
-        <span className="w-10 shrink-0 select-none text-right tabular-nums text-subtle-foreground/70">
-          {index + 1}
-        </span>
+        {showTime ? (
+          <span className="w-[8ch] shrink-0 select-none tabular-nums text-subtle-foreground/80">
+            {formatLogTime(entry.timestamp) ?? '—'}
+          </span>
+        ) : (
+          <span className="w-10 shrink-0 select-none text-right tabular-nums text-subtle-foreground/70">
+            {index + 1}
+          </span>
+        )}
         <span
           className={cn(
             'mt-px inline-flex h-[17px] w-[52px] shrink-0 items-center justify-center rounded text-[10px] font-semibold uppercase tracking-[0.04em]',
@@ -189,6 +200,18 @@ const LogRow = React.memo(function LogRow({
         >
           {level === 'other' ? '—' : level}
         </span>
+        {sourceWidth ? (
+          <span
+            title={source}
+            style={{ width: `${sourceWidth}ch` }}
+            className={cn(
+              'shrink-0 truncate font-medium',
+              serviceTone[entry.service ?? ''] ?? 'text-muted-foreground',
+            )}
+          >
+            {sourceText(entry)}
+          </span>
+        ) : null}
         <span
           className={cn(
             'min-w-0 flex-1',
@@ -200,19 +223,16 @@ const LogRow = React.memo(function LogRow({
                 : 'text-foreground/90',
           )}
         >
-          {service ? (
-            <span className={cn('font-medium', serviceTone[service])}>[{service}]</span>
-          ) : null}
-          {service ? ' ' : null}
-          <Highlighted text={rest} query={query} />
+          <Highlighted text={entry.line} query={query} />
         </span>
       </button>
       {expanded ? (
         <div className="mx-3 mb-2 ml-[4.75rem] mt-1 overflow-hidden rounded-lg border border-border bg-card font-sans">
           <div className="flex items-center gap-1 border-b border-border py-1 pl-3 pr-1 text-[11px] text-subtle-foreground">
-            <span className="mr-auto">
-              {fields ? 'Structured fields' : 'Full line'}
-              {entry.service ? ` · ${entry.service}` : ''}
+            <span className="mr-auto min-w-0 truncate">
+              {[fields ? 'Structured fields' : 'Full line', source, entry.timestamp]
+                .filter(Boolean)
+                .join(' · ')}
             </span>
             {requestId ? (
               <Button variant="ghost" size="xs" onClick={() => onFilter(requestId)}>
@@ -232,14 +252,10 @@ const LogRow = React.memo(function LogRow({
 })
 
 const LogsPage: React.FC = () => {
-  const [component, setComponent] = useState<Component>('all')
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [deploymentType, setDeploymentType] = useState<string>('detecting...')
-  const [supported, setSupported] = useState<boolean | null>(null)
+  const [component, setComponent] = useState('all')
+  const [response, setResponse] = useState<LogsResponse | null>(null)
+  const [requestError, setRequestError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [fetching, setFetching] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
   const [follow, setFollow] = useState(true)
   const [lines, setLines] = useState(200)
   const [query, setQuery] = useState('')
@@ -257,50 +273,36 @@ const LogsPage: React.FC = () => {
     requestControllerRef.current?.abort()
     const controller = new AbortController()
     requestControllerRef.current = controller
-    setFetching(true)
     try {
-      const response = await fetch(`/api/logs?component=${component}&lines=${lines}`, {
-        signal: controller.signal,
-      })
-      if (!response.ok) {
-        throw new Error(`Failed to fetch logs: ${response.statusText || `HTTP ${response.status}`}`)
+      const result = await fetch(
+        `/api/logs?component=${encodeURIComponent(component)}&lines=${lines}`,
+        { signal: controller.signal },
+      )
+      if (!result.ok) {
+        throw new Error(logsRequestFailure(result.status, await result.json().catch(() => null)))
       }
-      const data: LogsResponse = await response.json()
+      const data = (await result.json()) as LogsResponse
       if (controller.signal.aborted) return
-      const next = data.logs || []
-      const previous = logsRef.current
-      if (!atBottomRef.current && previous.length && next.length) {
-        const last = previous[previous.length - 1].line
-        let position = -1
-        for (let index = next.length - 1; index >= 0; index -= 1) {
-          if (next[index].line === last) {
-            position = index
-            break
-          }
-        }
-        setUnseen((count) => count + (position === -1 ? next.length : next.length - 1 - position))
-      }
+      const next = data.logs ?? []
+      if (!atBottomRef.current) setUnseen((count) => count + countNewLines(logsRef.current, next))
       logsRef.current = next
-      setLogs(next)
-      setDeploymentType(data.deployment_type)
-      setSupported(data.supported)
-      setError(data.error || null)
-      setMessage(data.message || null)
+      setResponse({ ...data, logs: next })
+      setRequestError(null)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      setRequestError(err instanceof Error ? err.message : 'The log request failed.')
     } finally {
-      if (requestControllerRef.current === controller) {
-        setLoading(false)
-        setFetching(false)
-      }
+      if (requestControllerRef.current === controller) setLoading(false)
     }
   }, [component, lines])
 
   const logsRequest = useMemo(() => createVisibilityAwareRequest(fetchLogs), [fetchLogs])
 
   useEffect(() => {
+    logsRef.current = []
+    setResponse((current) => (current ? { ...current, logs: [], count: 0 } : current))
     setLoading(true)
+    setUnseen(0)
     setExpanded(new Set())
     void logsRequest.run({ allowHidden: true })
 
@@ -314,7 +316,8 @@ const LogsPage: React.FC = () => {
     }
   }, [logsRequest])
 
-  const polling = follow && supported !== false
+  const unsupported = response?.supported === false
+  const polling = follow && !unsupported
   useEffect(() => {
     if (!polling) return
     const interval = window.setInterval(() => {
@@ -323,6 +326,13 @@ const LogsPage: React.FC = () => {
     return () => window.clearInterval(interval)
   }, [polling, logsRequest])
 
+  const components = response?.components
+  useEffect(() => {
+    if (components && component !== 'all' && !components.includes(component)) setComponent('all')
+  }, [component, components])
+
+  const logs = useMemo(() => response?.logs ?? [], [response])
+  const source = logSourceOf(response?.deployment_type)
   const visible = useMemo(() => filterLogs(logs, query, levels), [levels, logs, query])
   const counts = useMemo(() => {
     const result: Record<LogLevel, number> = { error: 0, warn: 0, info: 0, debug: 0, other: 0 }
@@ -331,6 +341,27 @@ const LogsPage: React.FC = () => {
   }, [logs])
   const visibleErrors = visible.filter((entry) => getLogLevel(entry.line) === 'error').length
   const visibleWarnings = visible.filter((entry) => getLogLevel(entry.line) === 'warn').length
+  const showTime = logs.some((entry) => entry.timestamp)
+  const mixed = source === 'kubernetes' || component === 'all'
+  const sourceWidth = useMemo(() => {
+    if (!mixed || !logs.length) return 0
+    const longest = Math.max(...logs.map((entry) => sourceText(entry).length))
+    return Math.min(Math.max(longest, 6), MAX_SOURCE_WIDTH)
+  }, [logs, mixed])
+
+  const emptyNotice = describeEmptyLogs({ response, requestError, following: polling })
+  const inlineNotice: { tone: 'danger' | 'info'; text: string } | null = logs.length
+    ? requestError
+      ? {
+          tone: 'danger',
+          text: `Showing the last lines received. ${requestError}${polling ? ' Follow retries every 5 seconds.' : ''}`,
+        }
+      : response?.error
+        ? { tone: 'danger', text: response.error }
+        : response?.message
+          ? { tone: 'info', text: response.message }
+          : null
+    : null
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
     const element = bodyRef.current
@@ -364,18 +395,18 @@ const LogsPage: React.FC = () => {
     setLevels([])
   }
 
+  const visibleText = () => visible.map((entry) => logLineText(entry, mixed)).join('\n')
+
   const copyVisible = () => {
     void navigator.clipboard
-      ?.writeText(visible.map((entry) => entry.line).join('\n'))
+      ?.writeText(visibleText())
       .then(() => toast.success(`Copied ${visible.length.toLocaleString()} lines`))
       .catch(() => toast.error('The clipboard is not available in this browser.'))
   }
 
   const download = () => {
     const name = logsDownloadName(component, new Date())
-    const url = URL.createObjectURL(
-      new Blob([visible.map((entry) => entry.line).join('\n')], { type: 'text/plain' }),
-    )
+    const url = URL.createObjectURL(new Blob([visibleText()], { type: 'text/plain' }))
     const anchor = document.createElement('a')
     anchor.href = url
     anchor.download = name
@@ -386,20 +417,24 @@ const LogsPage: React.FC = () => {
     })
   }
 
-  const unsupported = supported === false
   const filtering = Boolean(query.trim()) || levels.length > 0
+  const NoticeIcon = emptyNotice ? noticeIcon[emptyNotice.kind] : ScrollText
 
   return (
     <PageContainer width="wide">
       <PageHeader
         icon={<IconTile icon={ScrollText} tone="slate" size="lg" />}
         title="Logs"
-        description="Live output from the Router, Envoy and Dashboard, read from the stack's bounded log spool."
+        description="Recent output of the Router and its services, redacted before it reaches the browser."
         meta={
           <>
-            <MetaItem label="Deployment">{formatDeploymentType(deploymentType)}</MetaItem>
-            <MetaItem label="Access">{describeLogsAvailability(supported)}</MetaItem>
-            <MetaItem label="Buffered">{logs.length.toLocaleString()} lines</MetaItem>
+            <MetaItem label="Source">
+              {source ? LOG_SOURCE_LABEL[source] : 'Detecting'}
+              {source === 'kubernetes' && response?.namespace ? ` · ${response.namespace}` : ''}
+            </MetaItem>
+            {source === 'kubernetes' && !unsupported ? (
+              <MetaItem label="Pods">{(response?.pods?.length ?? 0).toLocaleString()}</MetaItem>
+            ) : null}
           </>
         }
         actions={
@@ -412,46 +447,30 @@ const LogsPage: React.FC = () => {
               <Download aria-hidden="true" />
               <span className="max-xl:sr-only">Download</span>
             </Button>
-            <Button variant="outline" onClick={() => void logsRequest.run({ allowHidden: true })}>
-              <RefreshCw aria-hidden="true" className={cn(fetching && 'animate-spin')} />
-              Refresh
-            </Button>
           </>
         }
       />
 
-      {error ? (
-        <div role="alert" className="mb-4">
-          <Alert
-            tone="danger"
-            title={logs.length ? 'Showing the last lines received' : 'Logs could not be read'}
-          >
-            {error}
-          </Alert>
-        </div>
-      ) : null}
-      {message && !error ? (
-        <Alert tone={unsupported ? 'warning' : 'info'} className="mb-4">
-          {message}
-        </Alert>
-      ) : null}
-
-      <Card className="min-w-0 overflow-hidden">
+      <Card className="h-[calc(100dvh-15.5rem)] min-h-[460px] min-w-0 overflow-hidden">
         <section className="border-b border-border px-3 pt-3" aria-label="Log filters">
           <DataToolbar
             filters={
               <>
-                <Segmented
-                  aria-label="Log source"
-                  value={component}
-                  onValueChange={setComponent}
-                  options={COMPONENTS}
-                />
+                {components ? (
+                  <Segmented
+                    aria-label="Component"
+                    value={component}
+                    onValueChange={setComponent}
+                    options={componentOptions(components)}
+                  />
+                ) : (
+                  <Skeleton className="h-8 w-52" />
+                )}
                 <InputGroup
                   type="search"
                   aria-label="Search logs"
                   value={query}
-                  placeholder="Search lines…"
+                  placeholder={source === 'kubernetes' ? 'Search lines and pods…' : 'Search lines…'}
                   leading={<Search aria-hidden="true" />}
                   containerClassName="w-full sm:w-64"
                   className="h-8"
@@ -484,16 +503,6 @@ const LogsPage: React.FC = () => {
             }
             actions={
               <>
-                <span className="hidden text-xs text-muted-foreground tabular-nums xl:inline">
-                  {visible.length.toLocaleString()}{' '}
-                  {visible.length === logs.length ? 'lines' : `of ${logs.length.toLocaleString()}`}
-                  {visibleErrors ? (
-                    <span className="text-destructive-foreground"> · {visibleErrors} errors</span>
-                  ) : null}
-                  {visibleWarnings ? (
-                    <span className="text-warning-foreground"> · {visibleWarnings} warnings</span>
-                  ) : null}
-                </span>
                 <Tooltip content={wrap ? 'Truncate long lines' : 'Wrap long lines'}>
                   <Button
                     variant={wrap ? 'secondary' : 'ghost'}
@@ -506,8 +515,22 @@ const LogsPage: React.FC = () => {
                   </Button>
                 </Tooltip>
                 <span className="flex items-center gap-2">
-                  <Switch id="logs-follow" checked={follow} onCheckedChange={setFollow} />
-                  <Label htmlFor="logs-follow" className="text-foreground/85">
+                  <Switch
+                    id="logs-follow"
+                    checked={follow && !unsupported}
+                    disabled={unsupported}
+                    onCheckedChange={setFollow}
+                  />
+                  <Label
+                    htmlFor="logs-follow"
+                    className="inline-flex items-center gap-1.5 text-foreground/85"
+                  >
+                    {polling ? (
+                      <StatusDot
+                        tone={requestError ? 'warning' : 'success'}
+                        pulse={!requestError}
+                      />
+                    ) : null}
                     Follow
                   </Label>
                 </span>
@@ -516,14 +539,30 @@ const LogsPage: React.FC = () => {
           />
         </section>
 
-        <div className="relative">
+        {inlineNotice ? (
+          <div
+            role={inlineNotice.tone === 'danger' ? 'alert' : 'status'}
+            className={cn(
+              'flex items-start gap-2 border-b border-border px-3 py-2 text-xs leading-5',
+              inlineNotice.tone === 'danger'
+                ? 'bg-destructive-soft/50 text-destructive-foreground'
+                : 'bg-info-soft/50 text-foreground/85',
+            )}
+          >
+            {inlineNotice.tone === 'danger' ? (
+              <AlertTriangle aria-hidden="true" className="mt-[3px] size-3.5 shrink-0" />
+            ) : (
+              <Info aria-hidden="true" className="mt-[3px] size-3.5 shrink-0 text-info" />
+            )}
+            <span className="min-w-0">{inlineNotice.text}</span>
+          </div>
+        ) : null}
+
+        <div className="relative min-h-0 flex-1">
           <div
             ref={bodyRef}
             onScroll={onScroll}
-            className={cn(
-              'min-h-[360px] overflow-y-auto bg-surface-sunken py-1.5 font-mono text-[12px] leading-5',
-              error || message ? 'h-[calc(100dvh-25rem)]' : 'h-[calc(100dvh-21rem)]',
-            )}
+            className="absolute inset-0 overflow-y-auto bg-surface-sunken py-1.5 font-mono text-[12px] leading-5"
             aria-label="Log lines"
             role="region"
             tabIndex={0}
@@ -539,26 +578,25 @@ const LogsPage: React.FC = () => {
                   />
                 ))}
               </div>
-            ) : unsupported ? (
+            ) : emptyNotice ? (
               <EmptyState
                 compact
-                icon={ScrollText}
-                tone="slate"
-                className="font-sans"
-                title="Runtime logs unavailable"
-                description="Start the local split runtime with vllm-sr serve to provision its bounded shared log spool."
-              />
-            ) : logs.length === 0 ? (
-              <EmptyState
-                compact
-                icon={ScrollText}
-                tone="slate"
-                className="font-sans"
-                title="No logs available"
-                description={
-                  deploymentType === 'none'
-                    ? 'No running deployment detected. Start the router first.'
-                    : 'The spool has no recent lines for this source. New output appears here automatically while Follow is on.'
+                icon={NoticeIcon}
+                tone={noticeTone[emptyNotice.kind]}
+                className="mx-auto h-full max-w-xl px-6 font-sans"
+                title={emptyNotice.title}
+                description={emptyNotice.description}
+                actions={
+                  emptyNotice.kind === 'empty' ? undefined : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void logsRequest.run({ allowHidden: true })}
+                    >
+                      <RotateCw aria-hidden="true" />
+                      Check again
+                    </Button>
+                  )
                 }
               />
             ) : visible.length === 0 ? (
@@ -566,9 +604,9 @@ const LogsPage: React.FC = () => {
                 compact
                 icon={SearchX}
                 tone="slate"
-                className="font-sans"
-                title="No matching logs"
-                description="Change the search or level filter."
+                className="h-full font-sans"
+                title="No matching lines"
+                description="Change the search or the level filter."
                 actions={
                   filtering ? (
                     <Button size="sm" variant="outline" onClick={clearFilters}>
@@ -580,12 +618,14 @@ const LogsPage: React.FC = () => {
             ) : (
               visible.map((entry, index) => (
                 <LogRow
-                  key={`${entry.service ?? 'service'}-${index}-${entry.line.slice(0, 32)}`}
+                  key={`${index}-${entryKey(entry)}`}
                   entry={entry}
                   index={index}
                   query={query}
                   wrap={wrap}
                   expanded={expanded.has(index)}
+                  showTime={showTime}
+                  sourceWidth={sourceWidth}
                   onToggle={toggle}
                   onFilter={setQuery}
                 />
@@ -620,19 +660,14 @@ const LogsPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-surface-subtle/70 px-3 py-1.5 text-[11px] text-subtle-foreground">
           <span className="tabular-nums" aria-live="polite">
             {visible.length === logs.length
-              ? `${logs.length.toLocaleString()} entries`
-              : `${visible.length.toLocaleString()} of ${logs.length.toLocaleString()} entries`}
-          </span>
-          <span aria-hidden="true">·</span>
-          <span>Last {lines.toLocaleString()} lines from the bounded spool</span>
-          <span aria-hidden="true">·</span>
-          <span className="inline-flex items-center gap-1.5">
-            <StatusDot tone={polling ? 'success' : 'neutral'} pulse={polling && !error} />
-            {polling
-              ? 'Following every 5 s'
-              : follow
-                ? 'Follow paused until a log spool is mounted'
-                : 'Follow is off'}
+              ? `${logs.length.toLocaleString()} lines`
+              : `${visible.length.toLocaleString()} of ${logs.length.toLocaleString()} lines`}
+            {visibleErrors ? (
+              <span className="text-destructive-foreground"> · {visibleErrors} errors</span>
+            ) : null}
+            {visibleWarnings ? (
+              <span className="text-warning-foreground"> · {visibleWarnings} warnings</span>
+            ) : null}
           </span>
           <span className="ml-auto hidden sm:inline">
             Select a line for its full text and fields

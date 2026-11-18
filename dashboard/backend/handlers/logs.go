@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,41 +11,55 @@ import (
 )
 
 const (
-	logSpoolRootEnv       = "VLLM_SR_LOG_SPOOL_DIR"
-	defaultLogTailLines   = 100
-	maxLogTailLines       = 1000
-	maxLogsResponseBytes  = 1 << 20
-	logsResponseHeadroom  = 4 << 10
-	logsUnsupportedNotice = "Runtime logs are unsupported for this deployment because the bounded shared log spool is not mounted."
+	logSpoolRootEnv           = "VLLM_SR_LOG_SPOOL_DIR"
+	defaultLogTailLines       = 100
+	maxLogTailLines           = 1000
+	maxLogsResponseBytes      = 1 << 20
+	logsResponseHeadroom      = 4 << 10
+	maxRuntimeLogLineBytes    = 64 << 10
+	runtimeLogTruncatedMarker = " ... [log record truncated]"
+	logsUnsupportedNotice     = "Runtime logs are unavailable: no bounded log spool is mounted, and the Dashboard is not running in Kubernetes. Start the stack with vllm-sr serve, or deploy the Dashboard in Kubernetes beside the Router."
 )
 
 var logSpoolComponents = []string{"router", "envoy", "dashboard"}
 
-// LogEntry represents one centrally redacted line from a fixed runtime spool.
+// LogEntry represents one centrally redacted line from a log source.
 type LogEntry struct {
 	Line    string `json:"line"`
 	Service string `json:"service,omitempty"`
+	// Pod and Timestamp are set for lines read from Kubernetes pods.
+	Pod       string `json:"pod,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
 }
 
 // LogsResponse is the bounded Dashboard log API contract.
 type LogsResponse struct {
-	DeploymentType string     `json:"deployment_type"`
-	Service        string     `json:"service"`
-	Supported      bool       `json:"supported"`
-	Logs           []LogEntry `json:"logs"`
-	Count          int        `json:"count"`
-	Error          string     `json:"error,omitempty"`
-	Message        string     `json:"message,omitempty"`
+	// DeploymentType names the source: local-spool, kubernetes or unsupported.
+	DeploymentType string `json:"deployment_type"`
+	Service        string `json:"service"`
+	Supported      bool   `json:"supported"`
+	// Components lists the components this source can read.
+	Components []string `json:"components"`
+	Namespace  string   `json:"namespace,omitempty"`
+	// Pods lists the pods read for this answer.
+	Pods    []string   `json:"pods,omitempty"`
+	Logs    []LogEntry `json:"logs"`
+	Count   int        `json:"count"`
+	Error   string     `json:"error,omitempty"`
+	Message string     `json:"message,omitempty"`
 }
 
 // LogsHandler retains the historical constructor shape while deliberately
-// ignoring the Router URL. Logs are read only from the bounded shared spool;
-// this handler never invokes a container runtime or mounts its control socket.
+// ignoring the Router URL. Logs are read from the bounded shared spool, or,
+// without one, from the Kubernetes API when the Dashboard runs in a cluster.
+// This handler never invokes a container runtime or mounts its control socket.
 func LogsHandler(_ string) http.HandlerFunc {
-	return newLogsHandler(os.Getenv(logSpoolRootEnv))
+	return newLogsHandler(os.Getenv(logSpoolRootEnv), newInClusterPodLogSource())
 }
 
-func newLogsHandler(spoolRoot string) http.HandlerFunc {
+// newLogsHandler serves the spool at spoolRoot and falls back to pods when no
+// spool is mounted; pods may be nil outside a cluster.
+func newLogsHandler(spoolRoot string, pods *podLogSource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
@@ -63,20 +78,28 @@ func newLogsHandler(spoolRoot string) http.HandlerFunc {
 			return
 		}
 		lines := requestedLogTailLines(r.URL.Query().Get("lines"))
+
+		reader, err := openLogSpoolReader(spoolRoot)
+		if errors.Is(err, errLogSpoolUnsupported) {
+			if pods != nil {
+				writeLogsResponse(w, pods.read(r.Context(), component, lines))
+				return
+			}
+			writeLogsResponse(w, LogsResponse{
+				DeploymentType: "unsupported",
+				Service:        component,
+				Components:     []string{},
+				Logs:           []LogEntry{},
+				Message:        logsUnsupportedNotice,
+			})
+			return
+		}
 		response := LogsResponse{
 			DeploymentType: "local-spool",
 			Service:        component,
 			Supported:      true,
+			Components:     logSpoolComponents,
 			Logs:           []LogEntry{},
-		}
-
-		reader, err := openLogSpoolReader(spoolRoot)
-		if errors.Is(err, errLogSpoolUnsupported) {
-			response.DeploymentType = "unsupported"
-			response.Supported = false
-			response.Message = logsUnsupportedNotice
-			writeLogsResponse(w, response)
-			return
 		}
 		if err != nil {
 			response.Error = "The bounded log spool is unavailable or unsafe."
@@ -91,12 +114,8 @@ func newLogsHandler(spoolRoot string) http.HandlerFunc {
 			writeLogsResponse(w, response)
 			return
 		}
-		response.Logs = limitLogEntriesByJSONBytes(
-			entries,
-			maxLogsResponseBytes-logsResponseHeadroom,
-		)
-		response.Count = len(response.Logs)
-		if response.Count == 0 {
+		response.Logs = entries
+		if len(entries) == 0 {
 			response.Message = "No recent log entries are available for this service."
 		}
 		writeLogsResponse(w, response)
@@ -128,7 +147,7 @@ func requestedLogTailLines(raw string) int {
 
 func readRequestedLogEntries(reader *logSpoolReader, component string, lines int) ([]LogEntry, error) {
 	if component != "all" {
-		return readComponentLogEntries(reader, component, lines, false)
+		return readComponentLogEntries(reader, component, lines)
 	}
 
 	entries := make([]LogEntry, 0, lines)
@@ -142,7 +161,7 @@ func readRequestedLogEntries(reader *logSpoolReader, component string, lines int
 		if allocation == 0 {
 			continue
 		}
-		componentEntries, err := readComponentLogEntries(reader, candidate, allocation, true)
+		componentEntries, err := readComponentLogEntries(reader, candidate, allocation)
 		if err != nil {
 			return nil, err
 		}
@@ -151,12 +170,7 @@ func readRequestedLogEntries(reader *logSpoolReader, component string, lines int
 	return entries, nil
 }
 
-func readComponentLogEntries(
-	reader *logSpoolReader,
-	component string,
-	lines int,
-	prefixService bool,
-) ([]LogEntry, error) {
+func readComponentLogEntries(reader *logSpoolReader, component string, lines int) ([]LogEntry, error) {
 	rawLines, err := reader.Tail(component, lines)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -170,12 +184,19 @@ func readComponentLogEntries(
 		if line == "" {
 			continue
 		}
-		if prefixService {
-			line = "[" + component + "] " + line
-		}
 		entries = append(entries, LogEntry{Line: line, Service: component})
 	}
 	return entries, nil
+}
+
+// boundRuntimeLogLine applies the per-record size limit every log source
+// shares.
+func boundRuntimeLogLine(record []byte) string {
+	if len(record) > maxRuntimeLogLineBytes {
+		prefixBytes := maxRuntimeLogLineBytes - len(runtimeLogTruncatedMarker)
+		record = append(append([]byte{}, record[:prefixBytes]...), runtimeLogTruncatedMarker...)
+	}
+	return strings.ToValidUTF8(string(bytes.TrimSuffix(record, []byte{'\r'})), "\uFFFD")
 }
 
 func limitLogEntriesByJSONBytes(entries []LogEntry, budget int) []LogEntry {
@@ -201,7 +222,17 @@ func limitLogEntriesByJSONBytes(entries []LogEntry, budget int) []LogEntry {
 	return selected
 }
 
+// writeLogsResponse keeps the newest entries that fit the response limit
+// beside the rest of the answer.
 func writeLogsResponse(w http.ResponseWriter, response LogsResponse) {
+	entries := response.Logs
+	response.Logs = []LogEntry{}
+	envelope, err := json.Marshal(response)
+	if err != nil {
+		writeLogsError(w, http.StatusInternalServerError, "encoding_failed", "The log response could not be encoded safely.")
+		return
+	}
+	response.Logs = limitLogEntriesByJSONBytes(entries, maxLogsResponseBytes-len(envelope)-logsResponseHeadroom)
 	response.Count = len(response.Logs)
 	data, err := json.Marshal(response)
 	if err != nil || len(data)+1 > maxLogsResponseBytes {

@@ -2,14 +2,24 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
   fetchModelHealth,
-  ModelHealthApiError,
+  modelHealthIssue,
   type ModelHealth,
+  type ModelHealthIssue,
   type ModelHealthSnapshot,
 } from '../utils/modelHealthApi'
 
+/**
+ * loading: the first check is in flight.
+ * ready: an answer arrived; it stays while a later check fails in passing.
+ * retrying: no answer yet, and the last check failed in passing; polling continues.
+ * unavailable: this account cannot read health, or this Dashboard has none; polling stops.
+ */
+export type ModelHealthPhase = 'loading' | 'ready' | 'retrying' | 'unavailable'
+
 export interface BackendModelHealth {
-  /** unavailable: the Dashboard has no health checks, or this viewer may not read them. */
-  phase: 'loading' | 'ready' | 'unavailable'
+  phase: ModelHealthPhase
+  /** Why the last check failed; the next answer clears it. */
+  issue?: ModelHealthIssue
   byModel: ReadonlyMap<string, ModelHealth>
   checkedAt?: string
   intervalSeconds: number
@@ -18,9 +28,6 @@ export interface BackendModelHealth {
 }
 
 const DEFAULT_INTERVAL_SECONDS = 30
-// An older Dashboard without health checks, or a viewer who may not read
-// them, answers the same way on every later poll.
-const PERMANENT_STATUSES = new Set([401, 403, 404, 405, 501])
 
 const INITIAL_HEALTH: BackendModelHealth = {
   phase: 'loading',
@@ -42,7 +49,24 @@ export function mergeModelHealth(
 }
 
 export function isPermanentHealthFailure(error: unknown): boolean {
-  return error instanceof ModelHealthApiError && PERMANENT_STATUSES.has(error.status)
+  return modelHealthIssue(error) !== 'unreachable'
+}
+
+/**
+ * The state after a failed poll. A refusal or a missing endpoint stops
+ * polling; a passing failure keeps the last answer and polls again.
+ */
+export function healthAfterFailure(
+  current: BackendModelHealth,
+  error: unknown,
+): { state: BackendModelHealth; stop: boolean } {
+  const issue = modelHealthIssue(error)
+  if (issue !== 'unreachable')
+    return { state: { ...current, phase: 'unavailable', issue }, stop: true }
+  return {
+    state: { ...current, phase: current.phase === 'ready' ? 'ready' : 'retrying', issue },
+    stop: false,
+  }
 }
 
 /**
@@ -62,6 +86,7 @@ export function useBackendModelHealth(configRevision: unknown) {
       setState((current) => ({
         ...current,
         phase: 'ready',
+        issue: undefined,
         byModel: mergeModelHealth(current.byModel, snapshot, partial),
         checkedAt: partial ? (current.checkedAt ?? snapshot.checkedAt) : snapshot.checkedAt,
         intervalSeconds: snapshot.intervalSeconds,
@@ -96,10 +121,7 @@ export function useBackendModelHealth(configRevision: unknown) {
       } catch (error) {
         if (controller.signal.aborted) return
         stopped = isPermanentHealthFailure(error)
-        // A passing failure keeps the last answer; the next poll may succeed.
-        setState((current) =>
-          current.phase === 'ready' && !stopped ? current : { ...current, phase: 'unavailable' },
-        )
+        setState((current) => healthAfterFailure(current, error).state)
       } finally {
         loading = false
       }

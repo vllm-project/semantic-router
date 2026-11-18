@@ -141,6 +141,40 @@ Feature controls:
 | `SR_BENCH_TOKEN_ENV` | Environment variable containing the service token; default `SR_BENCH_TOKEN`. The browser never receives this token. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 
+Deployment facts, which have no flags:
+
+| Variable | Purpose |
+| --- | --- |
+| `VLLM_SR_PUBLIC_BASE_URL` | The address clients use to reach the Router's gateway when it sits behind a proxy or edge, as an `http` or `https` URL without credentials, for example `https://gateway.example.com`. **Get started** shows it in place of the address it derives from the listener port and the host the Dashboard is open at, which is wrong behind a proxy. Empty means unset; an invalid value is ignored with a warning. |
+| `VLLM_SR_PUBLIC_REQUIRES_KEY` | `true` when clients of `VLLM_SR_PUBLIC_BASE_URL` must send an API key; **Get started** then puts the key in its snippets. It also does so whenever the listener itself checks client keys. |
+| `VLLM_SR_LOG_SPOOL_DIR` | The bounded log spool `vllm-sr serve` mounts. **Logs** reads it when it is mounted. |
+| `VLLM_SR_K8S_ROUTER_LOG_SELECTOR` | Label selector of the Router pods **Logs** reads when no spool is mounted and the Dashboard runs in Kubernetes; default `app=router`. |
+| `VLLM_SR_K8S_DASHBOARD_LOG_SELECTOR` | Label selector of the Dashboard pods; default `app=dashboard`. |
+| `VLLM_SR_K8S_ENVOY_LOG_SELECTOR` | Label selector of the Envoy pods; unset, Envoy logs are not read from Kubernetes. |
+
+### Logs on Kubernetes
+
+Without a log spool, a Dashboard running in Kubernetes reads recent log lines
+of the pods those selectors match through the Kubernetes API, with its own
+service account. It reads the namespace in `VLLM_SR_K8S_CONFIGMAP_NAMESPACE`,
+else its own, and the container named after the component, else each pod's
+first container. Replicas are merged by timestamp and each line names its
+pod. Lines pass the same redaction and size limits as the spool, and the
+Dashboard still runs no container runtime. The service account needs this
+Role in that namespace, bound to it with a RoleBinding:
+
+```yaml
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+```
+
+Without it, **Logs** names the missing permission.
+
 ## sr-bench evaluation
 
 The Evaluations page (**Observe → Evaluations**) is sr-bench 1.0. It uses the
@@ -279,7 +313,8 @@ never inspects containers.
 The Status page (**Observe → Status**) reads the Router's and Envoy's HTTP probes. For a service that
 does not answer, it reads the stack's files instead: the runtime config's setup
 block (standby), the heartbeat of a `vllm-sr serve` that is starting the stack
-(starting), and the pending activation. Logs come from the bounded log spool.
+(starting), and the pending activation. Logs come from the bounded log spool,
+or from the Kubernetes API (see [Logs on Kubernetes](#logs-on-kubernetes)).
 
 `vllm-sr serve` owns the Router management credential the Dashboard uses
 (`VLLM_SR_DASHBOARD_RECIPE_TOKEN`) and passes it in the environment; the

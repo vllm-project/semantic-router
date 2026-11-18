@@ -24,6 +24,11 @@ export interface GetStartedData {
   statusFailed: boolean
   /** The listener port setup reports, for a viewer who cannot read the configuration. */
   setupPort?: number
+  /** The gateway address the deployment declares for clients, and whether it requires a key. */
+  publicBaseUrl?: string
+  publicRequiresKey: boolean
+  /** The setup state answered or failed, so the endpoint no longer changes on its own. */
+  setupSettled: boolean
   /** The chat models the router advertises now; null until it answers or when it cannot. */
   liveModels: RouterModelOption[] | null
   replay: ReplayFacts
@@ -43,6 +48,10 @@ export function useGetStartedData(): GetStartedData {
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [statusFailed, setStatusFailed] = useState(false)
   const [setupPort, setSetupPort] = useState<number>()
+  const [publicEndpoint, setPublicEndpoint] = useState<{ baseUrl?: string; requiresKey: boolean }>({
+    requiresKey: false,
+  })
+  const [setupSettled, setSetupSettled] = useState(false)
   const [liveModels, setLiveModels] = useState<RouterModelOption[] | null>(null)
   const [replay, setReplay] = useState<ReplayFacts>({ state: 'loading', count: 0 })
   const [latest, setLatest] = useState<InsightsRecord | null>(null)
@@ -90,14 +99,25 @@ export function useGetStartedData(): GetStartedData {
       .catch((error: unknown) => {
         if (!cancelled) setConfigError(error instanceof Error ? error.message : String(error))
       })
-    const loadSetup = fetchDashboardJson<{ listenerPort?: number }>(
-      '/api/setup/state',
-      'Setup state',
-    )
+    const loadSetup = fetchDashboardJson<{
+      listenerPort?: number
+      publicBaseUrl?: string
+      publicRequiresKey?: boolean
+    }>('/api/setup/state', 'Setup state')
       .then((value) => {
-        if (!cancelled && typeof value.listenerPort === 'number') setSetupPort(value.listenerPort)
+        if (cancelled) return
+        if (typeof value.listenerPort === 'number' && value.listenerPort > 0) {
+          setSetupPort(value.listenerPort)
+        }
+        setPublicEndpoint({
+          baseUrl: typeof value.publicBaseUrl === 'string' ? value.publicBaseUrl : undefined,
+          requiresKey: value.publicRequiresKey === true,
+        })
       })
       .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setSetupSettled(true)
+      })
     const loadModels = fetchDashboardJson<unknown>('/api/router/v1/models', 'Router models')
       .then((payload) => {
         if (!cancelled) setLiveModels(listRouterModels(payload))
@@ -141,6 +161,9 @@ export function useGetStartedData(): GetStartedData {
     status,
     statusFailed,
     setupPort,
+    publicBaseUrl: publicEndpoint.baseUrl,
+    publicRequiresKey: publicEndpoint.requiresKey,
+    setupSettled,
     liveModels,
     replay,
     latest,

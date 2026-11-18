@@ -6270,6 +6270,12 @@
                     "models": {
                       "type": "integer"
                     },
+                    "publicBaseUrl": {
+                      "type": "string"
+                    },
+                    "publicRequiresKey": {
+                      "type": "boolean"
+                    },
                     "reason": {
                       "type": "string"
                     },

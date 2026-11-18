@@ -21,6 +21,8 @@ export const DEFAULT_PUBLIC_MODEL = 'vllm-sr/auto'
 export const DEFAULT_LISTENER_PORT = 8899
 /** The variable `vllm-sr connect` and the agent settings read the listener key from. */
 export const API_KEY_ENV = 'VLLM_SR_API_KEY'
+/** The Dashboard variable that declares the gateway address clients use behind a proxy. */
+export const PUBLIC_BASE_URL_ENV = 'VLLM_SR_PUBLIC_BASE_URL'
 
 // ---------------------------------------------------------------- endpoint
 
@@ -33,17 +35,23 @@ interface ListenerLike {
   api_key_files?: unknown
 }
 
+/**
+ * Where the address comes from: a base URL the viewer typed, the public URL
+ * the deployment declares, or the listener on the host this dashboard is
+ * open at, which is only a guess behind a proxy.
+ */
+export type GatewayEndpointSource = 'custom' | 'public' | 'listener'
+
 export interface GatewayEndpoint {
   /** Scheme, host and port, as `vllm-sr connect --base-url` takes it. */
   origin: string
   /** The OpenAI-compatible base URL SDKs take: the origin and /v1. */
   apiBase: string
-  /** The listener it was derived from. */
+  /** The listener that serves chat. */
   listener?: string
-  /** The listener checks client keys (api_keys or api_key_files). */
+  /** Clients send a key: the listener checks client keys, or the public address requires one. */
   requiresKey: boolean
-  /** A base URL the viewer typed in, in place of the derived one. */
-  custom: boolean
+  source: GatewayEndpointSource
 }
 
 const nonEmpty = (value: unknown) => Array.isArray(value) && value.length > 0
@@ -75,44 +83,62 @@ export function normalizeBaseUrl(value: string): string | undefined {
 }
 
 /**
- * The inference address clients call: the first listener that serves Chat
- * Completions, as `vllm-sr connect` reaches it, on the host the dashboard is
- * open at; a base URL the viewer typed wins over it.
+ * The inference address clients call: a base URL the viewer typed, else the
+ * public URL the deployment declares, else the first listener that serves
+ * Chat Completions, as `vllm-sr connect` reaches it, on the host the
+ * dashboard is open at. The listener checks its client keys behind any
+ * proxy, so they count for every address.
  */
 export function resolveGatewayEndpoint({
   listeners,
   fallbackPort,
   hostname,
   override,
+  publicBaseUrl,
+  publicRequiresKey = false,
 }: {
   listeners?: unknown
   fallbackPort?: number
   hostname: string
   override?: string
+  publicBaseUrl?: string
+  publicRequiresKey?: boolean
 }): GatewayEndpoint {
   const candidates = Array.isArray(listeners)
     ? listeners.filter((item): item is ListenerLike => Boolean(item && typeof item === 'object'))
     : []
   const listener = candidates.find(servesChat)
-  const requiresKey = Boolean(
+  const listenerName = typeof listener?.name === 'string' ? listener.name : undefined
+  const listenerKey = Boolean(
     listener && (nonEmpty(listener.api_keys) || nonEmpty(listener.api_key_files)),
   )
+  const declared = publicBaseUrl ? normalizeBaseUrl(publicBaseUrl) : undefined
+  const requiresKey = listenerKey || Boolean(declared && publicRequiresKey)
   const custom = override ? normalizeBaseUrl(override) : undefined
-  if (custom) {
-    return { origin: custom, apiBase: `${custom}/v1`, requiresKey, custom: true }
+  const chosen = custom ?? declared
+  if (chosen) {
+    return {
+      origin: chosen,
+      apiBase: `${chosen}/v1`,
+      listener: listenerName,
+      requiresKey,
+      source: custom ? 'custom' : 'public',
+    }
   }
   const port =
     typeof listener?.port === 'number' && listener.port > 0
       ? listener.port
-      : (fallbackPort ?? DEFAULT_LISTENER_PORT)
+      : fallbackPort && fallbackPort > 0
+        ? fallbackPort
+        : DEFAULT_LISTENER_PORT
   const scheme = listener?.tls ? 'https' : 'http'
   const origin = `${scheme}://${browserHost(hostname)}:${port}`
   return {
     origin,
     apiBase: `${origin}/v1`,
-    listener: typeof listener?.name === 'string' ? listener.name : undefined,
+    listener: listenerName,
     requiresKey,
-    custom: false,
+    source: 'listener',
   }
 }
 
