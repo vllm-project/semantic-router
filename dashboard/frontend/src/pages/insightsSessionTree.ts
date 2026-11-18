@@ -85,7 +85,6 @@ function runSignals(run: RunSummary): Partial<Record<HarnessSignal, number>> {
     compaction: events.compaction ?? 0,
     housekeeping: events.housekeeping ?? 0,
     images: events.image ?? 0,
-    tool_loops: events.tool_loop ?? 0,
   }
 }
 
@@ -134,5 +133,4 @@ export const HARNESS_SIGNAL_LABELS: Record<HarnessSignal, string> = {
   compaction: 'Compaction',
   housekeeping: 'Title / housekeeping',
   images: 'Images',
-  tool_loops: 'Tool loops',
 }

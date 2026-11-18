@@ -794,9 +794,12 @@ model, duration and tokens. The calls a run marks share one set of event chips
 across the request list, the sessions and the run page: a subagent's first call,
 a compaction, a session title or another housekeeping call, a tool loop, an image
 in the newest turn, a guard refusal and a failure. **Signals by harness** shows
-which of these each harness gave in the loaded sessions, which ones its requests
-never carry, and which sessions the Router keyed itself because the client sent
-no session id. Cost figures compare each request with its reference model at list
+which agent signals each harness gave in the loaded sessions (a session id,
+subagents and their types, request classes, compactions, titles or other
+housekeeping calls, and images), which ones its requests never carry, and which
+sessions the Router keyed itself because the client sent no session id. Tool
+loops come from the request body for every harness, so they show on each turn
+rather than in that table. Cost figures compare each request with its reference model at list
 prices: they are cost-only estimates, not a quality comparison, and a figure the
 recorded data cannot support shows a dash with the reason.
 
