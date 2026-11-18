@@ -508,7 +508,8 @@ declare them:
   `user` / `prompt` are the user part; `answer` / `response` the answer part;
   everything else the context part. A question's `over` names the field it
   reads (default the whole state; for a span, the answer if present, else the
-  request).
+  request; a Vela 3.0 d3 span reads one key, so over a state of several keys
+  with neither it must name one).
 - **Thresholds.** A Set or Span question may carry `threshold`; the response
   always reports the applied one in `thresholds.<id>`, including
   length-dependent rules.
@@ -847,7 +848,12 @@ The family owns the published readouts (text pooling, the image and speech
 projections, the frozen CLAP residual and the unit normalisations) and the
 processors: the tokenizer, SigLIP's resize and normalisation, and the Whisper
 and CLAP log-mel features, with the Slaney filter banks computed as
-Transformers computes them. Verification checks the SHA-256 of every file it
+Transformers computes them. Mini's contract pins no input sample rate (Nano
+pins 16, 44.1 and 48 kHz), so the resampler refuses a rate whose reduced
+ratio to 16 or 48 kHz would need a sinc kernel above `MAX_KERNEL_ELEMENTS`
+(4M float64 elements, 32 MiB): every standard rate from 8 to 384 kHz reduces
+to under 300K elements, while 8,001 Hz, coprime with both, would need 128M
+per target and the float64 temporaries to build it. Verification checks the SHA-256 of every file it
 reads against the pinned table, that the safetensors header holds exactly the
 tensors the towers and readouts read, and the declared parameter count. The
 towers equal the reference Transformers modules bit for bit on CPU, SigLIP
