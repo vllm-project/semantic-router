@@ -57,6 +57,9 @@ import {
   X_VSR_SELECTED_MODEL,
   X_VSR_SELECTED_RECIPE,
 } from '../generated/vsrHeaders'
+import { useDashboardObservation } from '../utils/useDashboardObservation'
+import { decisionModelHealth } from './dashboardRouterIntelligenceSupport'
+import type { ModelRuntimeInventory } from './decisionModelManagement'
 import { formatLatency, timeAgo } from './insightsDisplayFormat'
 import { HarnessLogo } from './InsightsHarness'
 import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
@@ -643,6 +646,9 @@ function listenerApis(listeners: unknown, name?: string): string {
 
 export default function GetStartedPage() {
   const data = useGetStartedData()
+  const inventory = useDashboardObservation<ModelRuntimeInventory>(
+    '/api/router/api/v1/inventory/model-runtime',
+  )
   const [params, setParams] = useSearchParams()
   const [customBase, setCustomBase] = useState(readStoredBaseUrl)
 
@@ -700,6 +706,9 @@ export default function GetStartedPage() {
     statusFailed: data.statusFailed,
     config: data.config,
     replay: data.replay,
+    decisionModel: data.config
+      ? decisionModelHealth(data.config, inventory.data, data.status?.models)
+      : null,
   }).map((step) => (step.id === 'first-request' ? { ...step, to: '/observe/requests' } : step))
   const firstRequestSeen = data.replay.state === 'ready' && data.replay.count > 0
 
