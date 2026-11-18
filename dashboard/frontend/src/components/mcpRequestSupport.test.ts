@@ -7,6 +7,16 @@ import {
   isMCPAbortError,
 } from './mcpRequestSupport'
 
+const failing = (status: number, statusText: string, body: string) =>
+  new Response(body, { status, statusText })
+
+const jsonError = (status: number, statusText: string, body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status,
+    statusText,
+    headers: { 'Content-Type': 'application/json' },
+  })
+
 describe('MCP request support', () => {
   afterEach(() => vi.unstubAllGlobals())
 
@@ -67,7 +77,7 @@ describe('MCP request support', () => {
     expect(getMCPRequestErrorMessage(null, 'fallback')).toBe('fallback')
   })
 
-  it('loads tools-db with an abort signal and rejects non-success responses', async () => {
+  it('loads tools-db with an abort signal and keeps successful loads unchanged', async () => {
     const signal = new AbortController().signal
     const fetchMock = vi.fn(async () => ({
       ok: true,
@@ -79,15 +89,75 @@ describe('MCP request support', () => {
 
     await expect(fetchMCPToolsDatabase(signal)).resolves.toEqual([])
     expect(fetchMock).toHaveBeenCalledWith('/api/tools-db', { signal })
+  })
 
+  it('surfaces the sanitized tools database reason instead of only the status', async () => {
+    const signal = new AbortController().signal
+    const cases = [
+      {
+        response: failing(404, 'Not Found', 'Tools database not found\n'),
+        reason: 'Tools database not found',
+      },
+      {
+        response: failing(500, 'Internal Server Error', 'Failed to read tools database\n'),
+        reason: 'Failed to read tools database',
+      },
+      {
+        response: failing(500, 'Internal Server Error', 'Failed to parse tools database\n'),
+        reason: 'Failed to parse tools database',
+      },
+      {
+        response: jsonError(500, 'Internal Server Error', {
+          message: 'Failed to parse tools database',
+        }),
+        reason: 'Failed to parse tools database',
+      },
+    ]
+
+    for (const { response, reason } of cases) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => response),
+      )
+      await expect(fetchMCPToolsDatabase(signal)).rejects.toThrow(new Error(reason))
+    }
+  })
+
+  it('falls back to the status-based message when the failure body is unusable', async () => {
+    const signal = new AbortController().signal
+    const fallback = 'Failed to load the tools database (500 Internal Server Error)'
+    const cases = [
+      failing(500, 'Internal Server Error', ''),
+      failing(500, 'Internal Server Error', '  \n\t'),
+      jsonError(500, 'Internal Server Error', { error: { code: 500 } }),
+      failing(500, 'Internal Server Error', '<html><body>Bad gateway</body></html>'),
+    ]
+
+    for (const response of cases) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => response),
+      )
+      await expect(fetchMCPToolsDatabase(signal)).rejects.toThrow(new Error(fallback))
+    }
+  })
+
+  it('falls back to the status-based message when the failure body cannot be read', async () => {
+    const signal = new AbortController().signal
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
         ok: false,
-        status: 503,
-        statusText: 'Service Unavailable',
+        status: 502,
+        statusText: 'Bad Gateway',
+        text: async () => {
+          throw new Error('stream closed')
+        },
       })),
     )
-    await expect(fetchMCPToolsDatabase(signal)).rejects.toThrow('503 Service Unavailable')
+
+    await expect(fetchMCPToolsDatabase(signal)).rejects.toThrow(
+      new Error('Failed to load the tools database (502 Bad Gateway)'),
+    )
   })
 })
