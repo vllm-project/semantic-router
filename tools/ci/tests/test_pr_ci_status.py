@@ -129,6 +129,9 @@ class Client:
             return [copy.deepcopy(self.pull)]
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
+        if path.startswith("check-runs/"):
+            identity = int(path.rsplit("/", 1)[1])
+            return copy.deepcopy(next(c for c in self.checks if c["id"] == identity))
         if path.startswith(f"commits/{HEAD}/check-runs?"):
             checks = self.checks
             if "filter=latest" in path:
