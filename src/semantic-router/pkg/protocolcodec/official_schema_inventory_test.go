@@ -208,11 +208,12 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 				"prompt_tokens_details", "total_tokens",
 			),
 			// xAI, Groq and OpenRouter accounting fields on their Chat endpoints,
-			// plus DeepSeek prompt cache token extensions.
+			// plus DeepSeek prompt cache token extensions and the flat detail fields
+			// cumulative-usage gateways emit beside the canonical nested details objects.
 			extensions: fields(
-				"completion_time", "cost", "cost_details", "cost_in_usd_ticks", "is_byok", "num_sources_used",
-				"prompt_cache_hit_tokens", "prompt_cache_miss_tokens",
-				"prompt_time", "queue_time", "server_tool_use", "service_tier", "total_time",
+				"cached_tokens", "completion_time", "cost", "cost_details", "cost_in_usd_ticks", "is_byok",
+				"num_sources_used", "prompt_cache_hit_tokens", "prompt_cache_miss_tokens",
+				"prompt_time", "queue_time", "reasoning_tokens", "server_tool_use", "service_tier", "total_time",
 			),
 		},
 		{

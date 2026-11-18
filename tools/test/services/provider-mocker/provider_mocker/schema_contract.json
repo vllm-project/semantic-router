@@ -258,6 +258,7 @@
         "total_tokens"
       ],
       "extension_usage_fields": [
+        "cached_tokens",
         "completion_time",
         "cost",
         "cost_details",
@@ -268,6 +269,7 @@
         "prompt_cache_miss_tokens",
         "prompt_time",
         "queue_time",
+        "reasoning_tokens",
         "server_tool_use",
         "service_tier",
         "total_time"
