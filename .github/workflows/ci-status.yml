@@ -51,6 +51,7 @@ jobs:
     concurrency:
       group: ci-status-${{ needs.resolve.outputs.run_id }}
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

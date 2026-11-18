@@ -182,11 +182,13 @@ def validate_status_publisher(
         != {
             "group": "ci-status-${{ needs.resolve.outputs.run_id }}",
             "cancel-in-progress": False,
+            "queue": "max",
         }
         or publisher.data.get("concurrency")
     ):
         errors.append(
-            "ci-status.yml must serialize observations of the same qualification run"
+            "ci-status.yml must serialize observations and keep queued jobs "
+            "for the same qualification run"
         )
     executions = [step for step in job.get("steps", []) if "run" in step]
     env = executions[0].get("env", {}) if len(executions) == 1 else {}

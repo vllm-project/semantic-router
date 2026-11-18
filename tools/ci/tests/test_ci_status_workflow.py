@@ -76,6 +76,7 @@ class CIStatusWorkflowTests(unittest.TestCase):
         job["concurrency"] = {
             "group": "ci-status-${{ github.event.workflow_run.id }}",
             "cancel-in-progress": False,
+            "queue": "max",
         }
         errors = []
         validate_status_publisher(self.workflows, errors)
@@ -121,6 +122,77 @@ class CIStatusWorkflowTests(unittest.TestCase):
             len([c for c in client.checks if c["status"] == "in_progress"]), 1
         )
         self.assertFalse(any(c.get("conclusion") == "success" for c in client.checks))
+
+    def test_community_waiter_does_not_displace_terminal_publication(self):
+        concurrency = self.publisher.jobs["publish"]["concurrency"]
+        for verdict in ("success", "failure"):
+            with self.subTest(verdict=verdict):
+                client = PendingClient()
+                client.visible = {80}
+                client.write = super(PendingClient, client).write
+                client.run.update(status="in_progress", conclusion=None)
+                started = {
+                    "action": "in_progress",
+                    "workflow_run": copy.deepcopy(client.run),
+                }
+                running_job = invoke(client, started, resolve=True)
+                self.assertEqual(invoke(client, started).get("state"), "running")
+
+                client.run.update(status="completed", conclusion=verdict)
+                if verdict == "success":
+                    client.plan["deferred_verifications"] = []
+                    client.plan["required_verification_ids"] = client.plan[
+                        "expected_verification_ids"
+                    ]
+                    client.refresh_report()
+                terminal = {
+                    "action": "completed",
+                    "workflow_run": copy.deepcopy(client.run),
+                }
+                community = client.event()
+                jobs = [
+                    running_job,
+                    invoke(client, terminal, resolve=True),
+                    invoke(client, community, resolve=True),
+                ]
+                self.assertEqual(
+                    [job["mode"] for job in jobs], ["publish", "publish", "pending"]
+                )
+                groups = [
+                    concurrency["group"].replace(
+                        "${{ needs.resolve.outputs.run_id }}", str(job["run_id"])
+                    )
+                    for job in jobs
+                ]
+                self.assertEqual(groups, ["ci-status-101"] * 3)
+
+                # While the first publisher owns the group, the default
+                # Actions queue replaces its prior waiter with the new job.
+                waiting = [terminal, community]
+                if concurrency.get("queue", "single") == "single":
+                    waiting = waiting[-1:]
+                results = [invoke(client, event) for event in waiting]
+
+                self.assertEqual(
+                    [check["conclusion"] for check in client.checks],
+                    [verdict],
+                    "Community recovery displaced the terminal publisher",
+                )
+                self.assertEqual(results[0].get("state"), verdict)
+                self.assertIn("ignored", results[1])
+
+    def test_status_publisher_rejects_replacing_waiting_jobs(self):
+        for queue in (None, "single"):
+            with self.subTest(queue=queue):
+                workflows = copy.deepcopy(self.workflows)
+                concurrency = workflows["ci-status.yml"].jobs["publish"]["concurrency"]
+                if queue is None:
+                    concurrency.pop("queue", None)
+                else:
+                    concurrency["queue"] = queue
+                errors = []
+                validate_status_publisher(workflows, errors)
+                self.assertTrue(any("keep queued" in error for error in errors), errors)
 
     def test_current_workflows_preserve_the_pr_gate_contract(self) -> None:
         errors: list[str] = []
