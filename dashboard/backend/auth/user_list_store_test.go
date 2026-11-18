@@ -51,4 +51,13 @@ func TestUserListSupportsServerSearchPagingAndStats(t *testing.T) {
 	if stats.Active != 2 || stats.Privileged != 1 {
 		t.Fatalf("UserDirectoryStats() = %#v, want active=2 privileged=1", stats)
 	}
+
+	byRole := UserListOptions{Role: RoleAdmin + ", " + RoleRead, Sort: "email", Order: "asc"}
+	users, err = store.ListUsers(ctx, byRole)
+	if err != nil || len(users) != 2 || users[0].Email != "alpha@example.com" || users[1].Email != "reader@example.com" {
+		t.Fatalf("ListUsers(roles) = %#v, %v; want the admin and the reader", users, err)
+	}
+	if total, err = store.CountFilteredUsers(ctx, UserListOptions{Role: RoleWrite, Status: "active"}); err != nil || total != 1 {
+		t.Fatalf("CountFilteredUsers(role and status) = %d, %v; want 1", total, err)
+	}
 }

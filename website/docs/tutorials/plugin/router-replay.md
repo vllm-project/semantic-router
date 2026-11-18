@@ -2,15 +2,15 @@
 
 ## Overview
 
-Use Router Replay to inspect requests in Dashboard Insights: the selected route,
-model, token usage, response, and tool trajectory. Configure storage in
+Use Router Replay to inspect requests in the Dashboard's **Requests** page: the
+selected route, model, token usage, response, and tool trajectory. Configure storage in
 `global.services.router_replay`, and the switch and capture defaults in a
 `router_replay` plugin in `global.plugins`; use a recipe's or a decision's
 `router_replay` plugin to override only the capture fields that differ.
 
 Replay is on by default. A configuration without a `router_replay` plugin
-records every request's routing data and none of its text, so Insights,
-sessions and cost work with no extra configuration.
+records every request's routing data and none of its text, so the **Requests**
+page, sessions and cost work with no extra configuration.
 
 ## What Problem Does It Solve?
 
@@ -31,8 +31,8 @@ Without a store in `global.services.router_replay`, Replay uses the `file`
 store. It writes each record once, when the request ends (completed, failed or
 aborted), to `.vllm-sr/router-replay.jsonl` in the configuration file's
 directory, a file only its owner can read, and reads the records back when the
-Router starts, so Insights keeps its history across restarts and configuration
-reloads. `vllm-sr serve` mounts that directory from the host, so the file
+Router starts, so the **Requests** page keeps its history across restarts and
+configuration reloads. `vllm-sr serve` mounts that directory from the host, so the file
 outlives the Router container.
 
 - **In progress.** A request still in progress when the Router crashes is not
@@ -329,12 +329,12 @@ route, or on one recipe or decision. A request sent to a model dearer than the
 baseline then shows a negative saving. A record whose baseline is priced in
 another currency than the selected model has no baseline and says why
 (`baseline_unavailable`); it never falls back to the default. Each record names
-how its baseline was chosen in `cost_accounting.baseline_source`, and Insights
-shows which baselines the savings cover.
+how its baseline was chosen in `cost_accounting.baseline_source`, and the
+**Requests** page shows which baselines the savings cover.
 
 A model with no `pricing` of its own takes its provider's list price from the
-built-in catalog when the catalog has one, and Insights marks that cost as a
-list price estimate. For a backend on the client's own login
+built-in catalog when the catalog has one, and the **Requests** page marks that
+cost as a list price estimate. For a backend on the client's own login
 (`auth.credential: caller`) a cost is the API-price equivalent of its tokens,
 not what the client's plan charges; set `pricing` on such a model to see it.
 
@@ -345,8 +345,8 @@ Each entry names its model, input and output tokens, cost and currency, or an
 unpriced reason. Fused runtime tasks count once; cached results and startup or
 warmup calls add no request spend. Calls spent before a decision fails remain
 in its record and in aggregate router spend. A record's generation cost and
-`cost_savings` keep their meaning, while the savings Insights and the aggregate
-API report are net of the Router calls of the requests they compare, with the
+`cost_savings` keep their meaning, while the savings the Dashboard and the
+aggregate API report are net of the Router calls of the requests they compare, with the
 figure before them kept as `gross_saved`. A request whose Router call has no
 price leaves the savings instead of being netted as free. Router spend is also
 added to total spend. Auxiliary model calls made by internal Looper hops count
@@ -761,8 +761,10 @@ Keep datasets out of this repository.
 
 ## Read the results
 
-Open **Insights** in the Dashboard, or use the
+Open **Observe → Requests** in the Dashboard, or use the
 [Replay API](../../api/router#router-replay) to filter records and inspect a session.
+Each request names the coding-agent harness that sent it, its session, and
+whether the main agent or a subagent made the call.
 The search finds a record by its request id, its recipe or its session id, so
 the session id an agent harness sends, such as Claude Code's
 `x-claude-code-session-id`, finds every call of that session. A record's header
@@ -803,7 +805,7 @@ vllm-sr usage --since 7d --json
 vllm-sr usage --endpoint http://localhost:8080
 ```
 
-`vllm-sr usage` prints the figures Insights shows for one window, read from
+`vllm-sr usage` prints the figures the Dashboard shows for one window, read from
 the replay list and aggregate with `since`:
 
 ```text
@@ -895,7 +897,7 @@ that session's requests. Every store keeps the review on the record; PostgreSQL
 also keeps `request_kind`, the status, the outcome and the risk in indexed
 columns, added to an existing table when the Router starts.
 
-In **Insights**, the **Reviews** switch shows reviews alone: the number of
+In **Requests**, the **Reviews** tab shows reviews alone: the number of
 reviews, the approval rate, denials, failures, p50 and p95 latency and cost,
 reviews over time by result, requests by review model, and a table with each
 review's time, result, risk, action, session, model, latency, tokens and cost.
@@ -933,9 +935,9 @@ keeps the ids on the record; PostgreSQL also keeps them in columns, with
 indexes on `turn_id` and `parent_turn_id`, added to an existing table when the
 Router starts.
 
-Trajectory routes carry `turn_id` and `parent_turn_id` too. In **Insights**, a
+Trajectory routes carry `turn_id` and `parent_turn_id` too. In **Requests**, a
 record's Session Routing section shows its Codex thread, turn and parent turn,
-and each turn opens the request list filtered to it (`/insights?turn=...`),
+and each turn opens the request list filtered to it (`/observe/requests?turn=...`),
 with a chip that clears the filter. A session's routing history opens each
 Codex turn with a row that links there and counts its calls, so a turn's own
 calls and its subagents' calls read as one unit, and a review that names the
@@ -953,6 +955,7 @@ points protection at:
 | --- | --- | --- | --- |
 | Claude Code | `x-claude-code-session-id` | `x-claude-code-agent-id`, sent on subagent calls only | none: every subagent hangs off the main agent |
 | Codex | `session-id`, the root session on every thread | `thread-id`; the root thread, equal to `session-id`, is the main agent | `x-codex-parent-thread-id`, unless it is the root thread |
+| OpenCode | `x-session-id`; a subagent's calls are filed under the session that spawned it, its `x-parent-session-id` | on a subagent's calls, its own session in `x-session-id` | none: every subagent hangs off the main agent |
 | Others | the pinned session, `x-vsr-session-id` or a `session_id_headers` header, or the one `identity.headers.session` names | the header `identity.headers.agent` names | none |
 
 A call protection cannot key is filed under its run all the same, not under a
@@ -963,7 +966,7 @@ not send, is filed under its `session-id`. Each record keeps its agent in
 
 | Field | Holds |
 | --- | --- |
-| `harness` | `claude_code` or `codex`, when the request carries their identity headers. |
+| `harness` | `claude_code` or `codex` when the request carries their identity headers, `opencode` or `deepseek_harness` when its User-Agent names OpenCode or DeepSeek Harness. |
 | `id` | The short SHA-256 hash of the agent id, empty for the main agent. |
 | `parent_id` | The hash of the agent that spawned it, empty when the main agent did. |
 | `kind` | The subagent kind Codex sends in `x-openai-subagent`, such as `collab_spawn` or `review`. |
@@ -996,9 +999,9 @@ loses what its records would: the session name, the prompt, the agent hashes,
 the reasons and the text of reported outcomes. The runs list reads the filtered
 records whole, so bound it with `since` on a large PostgreSQL store.
 
-In **Insights**, the **Runs** view lists one row per run: its session name or
+In **Requests**, the **Agent runs** tab lists one row per run: its session name or
 task, the harness, the agents, the models, the outcome, the cost and duration,
-and the events. Insights shows a model by its label wherever it names one: the
+and the events. **Requests** shows a model by its label wherever it names one: the
 runs, records and reviews lists, the model filters and charts, a run's lanes,
 legend and step panel, and a record's route, routing, candidate scores, cost
 text and session history, with the configured name beside it, in its tooltip,
@@ -1032,13 +1035,15 @@ For a complete decision fragment, see
 
 A run reads by the name its harness shows for the session, where the gateway
 can see that name. Each harness names a session with a side request of its own,
-which Replay recognises by what the harness marks, never by its prompt, and
-records with `request_kind: session_title`:
+which Replay recognises by what the harness marks, and records with
+`request_kind: session_title`. OpenCode marks nothing, so its title request is
+the one recognised by its prompt:
 
 | Harness | How it names the session | What Replay records |
 | --- | --- | --- |
 | Claude Code 2.1.273 and later | After the first prompt, an `x-claude-code-request-class: auxiliary` request asking for a JSON object of one `title` field. `/rename` sends nothing; the next request carries the command and its output in its history. | The title the answer gives on the title request's record, and the name a `/rename` gave on the record of each request whose history shows it. The latest names the run. |
 | Codex CLI 0.166.0 | Its terminal UI starts a thread of its own whose turn metadata says `thread_source: thread_title`, under a new `session-id`. No field of that request names the thread it titles, and `/rename` sends nothing. `codex exec` names no thread. | Neither name. A session holding only title requests is no run and is left out of the list. |
+| OpenCode 1.18.10 | At the start of a session, a call without tools, under the session's own `x-session-id`, whose instructions open with `You are a title generator.` | The first line of the answer on the title request's record, which names the run. |
 
 Claude Code marks its request class only with `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1`,
 which `vllm-sr connect claude-code` sets. The title is response text and a rename

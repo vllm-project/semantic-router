@@ -80,6 +80,19 @@ ROUTE sensitive-turn {
 emit only one retention directive. Explicit values are reported in the
 `retention` member of `x-vsr-trace` and in routing diagnostics.
 
+## Backend Acknowledgement
+
+The Router records a versioned, provider-neutral retention receipt in Replay
+diagnostics and telemetry. The receipt keeps the requested directive separate
+from the adapter lifecycle: `translated`, `acknowledged`, and `observed` mean
+that the corresponding adapter step returned that result. A backend without a
+versioned retention adapter is recorded as `unsupported`; the Router does not
+infer enforcement from a successful request or response.
+
+The first contract is intentionally adapter-only. It provides deterministic
+fake-adapter coverage and an explicit no-op result while provider-specific
+integrations are evaluated separately.
+
 ## Data and Security
 
 The directive carries policy metadata, not prompt or response content. The

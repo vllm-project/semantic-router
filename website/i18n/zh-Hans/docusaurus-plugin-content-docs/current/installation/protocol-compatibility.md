@@ -101,6 +101,8 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 
 Messages 没有图像 detail 级别，也没有文档文件名。发往 `anthropic` 后端时，`auto` 以外的图像 `detail` 和文件 `filename` 会被省略，`x-vsr-warnings` 会将其分别报告为 `dropped`。
 
+Chat 的 tool 消息只能携带文本。发往 Chat 后端时，工具结果中的图像（例如 Claude Code 用 `Read` 读取的图片、Codex 的 `view_image` 返回的图片）会放进紧跟在回答本轮的 tool 消息之后的一条 user 消息里，开头是 "The tool results above returned these images."；结果只有图像的 tool 消息会注明图像在下一条消息中。`x-vsr-warnings` 以字段 `messages[].content.tool_result.image` 将这一移动报告为 `approximated`。工具结果中的其他媒体（例如文档）仍以 `tool_result_media` 拒绝。
+
 对于使用 Chat Completions 或 Responses 后端的 Anthropic Messages 客户端，
 `thinking.type: adaptive` 使用后端模型的默认推理行为，`output_config.effort` 会保留。
 `thinking.display: omitted` 会从转换后的响应中移除推理内容，包括流式输出。显式设置
@@ -115,7 +117,18 @@ Messages 没有图像 detail 级别，也没有文档文件名。发往 `anthrop
 响应默认携带签名。Chat Completions 或 Responses 客户端的缓冲请求会收到类型化的
 `unsupported_capability` 错误；流式请求则会在流中途、响应头和可能的早期增量已经
 发送后失败，因为签名随推理增量才到达编码器。同格式流量不受影响，包括 Messages
-客户端读取 Anthropic 后端的情况。
+客户端读取 Anthropic 后端的情况。在 `global.router.allow_lossy_translation` 中列出
+`reasoning.signature` 后，这些响应可以通过：Router 丢弃签名、保留推理文本，并将该
+损失报告为 `approximated`。
+
+Messages 客户端在之后的每一轮都会把这些 thinking 连同签名一起发回。当由 `anthropic`
+后端回答过的会话转到 Chat Completions 或 Responses 后端时，请求会在路由前以
+`unsupported_capability` 失败，错误消息指出第一个带签名的块，例如
+`messages[1].content[0].signature: the selected model cannot accept signed thinking`。
+同一设置也允许这类请求通过：这些后端收到每个 thinking 块的文本，但不带签名；
+`x-vsr-warnings` 为 `reasoning.signature` 报告 `approximated` 诊断；`anthropic`
+后端（无论是决策的选择还是回退候选）仍会收到签名。签名为空（`"signature": ""`）的
+thinking 块不携带签名，无需该设置即可发往任何后端。
 
 Chat Completions 客户端可以用 `store: true` 要求提供方保存补全，而 Messages 后端
 不保存补全。`store: false` 不要求这类后端做任何额外的事，因此请求去掉该字段后照常
@@ -155,9 +168,32 @@ providers:
 - **会报告。** `x-vsr-warnings` 会为每个被省略的字段（`min_p` 或 `logit_bias`）报告 `dropped` 诊断。
 - **其他模型不受影响。** 同一决策的其他模型仍会收到这些字段。
 
-该列表接受 `sampling_min_p` 和 `sampling_logit_bias`；其他名称会在加载时失败。网关会把模型的请求分摊到它的各个
+该列表接受 `sampling_min_p`、`sampling_logit_bias` 和 `developer_role`（[见下文](#developer-messages-a-backend-drops)）；其他名称会在加载时失败。网关会把模型的请求分摊到它的各个
 `backend_refs`，因此只要其中任何一个拒绝某个控制，就应列出它。若要为决策路由到的每个模型移除某个控制，请改为在该决策的
 [`request_params`](../tutorials/plugin/request-params) `blocked_params` 中列出它。
+
+### 后端丢弃的 developer 消息 {#developer-messages-a-backend-drops}
+
+OpenAI 把 `developer` 消息和 `system` 消息一样当作指令。Chat Completions 客户端用 `developer` 角色发送指令，
+Responses 请求的 `instructions` 及其 `developer` 输入项到达 Chat 后端时也是 developer 消息。而 vLLM 遵循的
+DeepSeek V4 编码把 developer 消息当作独立的一轮：模型开启思考且请求不带工具时，会丢弃最后一条用户消息之前的所有
+developer 消息，模型因此看不到这些指令。请在这类模型的 `unsupported_capabilities` 中列出 `developer_role`：
+
+```yaml
+providers:
+  models:
+    - name: deepseek-v4-flash
+      api_format: chat_completions
+      unsupported_capabilities: [developer_role]
+      backend_refs:
+        - name: deepseek-pool
+          endpoint: deepseek-server:8000
+          provider: vllm
+```
+
+- **对该模型以 system 发送。** 发给该模型的请求，无论它是决策的选择还是回退候选，其中所有 developer 指令和消息到达时都是 `system` 角色。
+- **会报告。** `x-vsr-warnings` 会为 `messages[].role` 报告 `approximated` 诊断。
+- **其他模型不受影响。** 同一决策的其他模型仍会收到 `developer` 角色。
 
 ## 配置后端格式
 
@@ -187,7 +223,8 @@ providers:
 
 - 即使客户端和后端格式匹配，公共请求也会被解码为中立契约。未知或不支持的请求字段会失败关闭。
 - Chat 请求接受但不转发客户端库在回放 assistant 消息时添加的字段：LiteLLM 的 `provider_specific_fields`（存放其消息类型没有的回复字段），以及 openai SDK 自己的解析结果 `parsed` 和 `tool_calls[].function.parsed_arguments`。取值不为 null 的字段报告为 `dropped`。与其他 Responses 输入项一样，reasoning 项可以带有 `status`，openai SDK 的流式辅助方法会设置它。
-- 跨协议请求保留共享语义。无法表示的目标特定功能会返回类型化协议错误。对于运维人员可以接受的损失（例如 `tool_result.is_error`），`lossy_translation` 错误会指出接受该损失的 `global.router.allow_lossy_translation` 设置；`unsupported_capability` 错误不会指出。
+- 函数工具的 `parameters` 为 `null` 时（OpenAI 的类型化客户端会为不带参数的工具这样发送），Router 将其视为没有 `parameters` 的工具，Responses 的 `tools[]` 和 Chat 的 `tools[].function` 均是如此：每种后端收到的都是 schema `{"type":"object"}`，而不是 `null`。
+- 跨协议请求保留共享语义。无法表示的目标特定功能会返回类型化协议错误。对于运维人员可以接受的损失（例如 `tool_result.is_error`），`lossy_translation` 错误会指出接受该损失的 `global.router.allow_lossy_translation` 设置，请求中带签名 thinking 的 `unsupported_capability` 错误也会指出；其他 `unsupported_capability` 错误不会指出。
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。

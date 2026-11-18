@@ -1,7 +1,7 @@
 """Parity of the vela3 family with the Vela 3.0 encoder package's own runtime (``vela3_encoder.py``).
 
     python3 tools/vela3_parity.py --package DIR --output OUT.json [--requests REQUESTS.jsonl | --generate N]
-        [--device cpu|cuda:0|rocm:0] [--seed 0] [--approximate]
+        [--device cpu|cuda:0|rocm:0] [--seed 0] [--approximate] [--consented-kernels]
 
 The reference is the package's ``Vela3Encoder.system_one``, imported from the package directory by this tool
 only (the runtime never imports package code), on the same device class. The runtime side verifies and loads
@@ -259,8 +259,14 @@ def generate(count: int, seed: int, schemas: dict[str, Any]) -> list[dict[str, A
 # --------------------------------------------------------------------------- the two sides
 
 
-def load_runtime(package: Path, device: str, engine: str = "native") -> Any:
-    """The package through the vela3 family on the named engine plugin."""
+def load_runtime(
+    package: Path, device: str, engine: str = "native", consented: bool = False
+) -> Any:
+    """The package through the vela3 family on the named engine plugin.
+
+    ``consented`` loads the kernels the family consents to on this device class, as
+    ``--dtype auto`` serves them (``EngineOptions.exact_kernels_only`` off).
+    """
     accelerator = ACCELERATORS[device.split(":", maxsplit=1)[0]]()
     devices = accelerator.devices()
     index = int(device.split(":")[1]) if ":" in device else 0
@@ -268,7 +274,10 @@ def load_runtime(package: Path, device: str, engine: str = "native") -> Any:
     verified = family.verify(PackageRef(package))
     spec = family.describe(verified)
     engine_model = instantiate("engines", engine).load(
-        spec, accelerator, devices[index], EngineOptions()
+        spec,
+        accelerator,
+        devices[index],
+        EngineOptions(exact_kernels_only=not consented),
     )
     return family.load(verified, spec, engine_model)
 
@@ -387,6 +396,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--approximate", action="store_true")
+    parser.add_argument(
+        "--consented-kernels",
+        action="store_true",
+        help="load the approximate kernels the family consents to on this device class",
+    )
     args = parser.parse_args()
 
     schemas = json.loads((args.package / "vela3_config.json").read_text())["span"][
@@ -400,7 +414,7 @@ def main() -> None:
         ]
     else:
         requests = generate(args.generate, args.seed, schemas)
-    model = load_runtime(args.package, args.device)
+    model = load_runtime(args.package, args.device, consented=args.consented_kernels)
     reference = load_reference(args.package, args.device)
     accelerator = ACCELERATORS[args.device.split(":", maxsplit=1)[0]]()
     info = accelerator.devices()[
@@ -450,6 +464,12 @@ def main() -> None:
         "package": str(args.package),
         "device": args.device,
         "approximate": args.approximate,
+        "consented_kernels": args.consented_kernels,
+        "kernels": (
+            kernels.describe()
+            if (kernels := getattr(model.engine_model, "kernels", None)) is not None
+            else None
+        ),
         "requests": len(requests),
         "questions": sum(len(case["questions"]) for case in cases),
         "failures": failures,

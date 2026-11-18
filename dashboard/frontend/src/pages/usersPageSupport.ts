@@ -72,3 +72,86 @@ export const createLatestUsersRequest = () => {
     },
   }
 }
+
+export type AdminUser = {
+  id: string
+  email: string
+  name: string
+  role: string
+  status: string
+  createdAt?: number
+  updatedAt?: number
+  lastLoginAt?: number
+}
+
+export type UsersPagePayload = {
+  users?: AdminUser[]
+  total?: number
+  page?: number
+  active?: number
+  privileged?: number
+}
+
+export const DASHBOARD_ROLES = ['admin', 'write', 'read'] as const
+
+export type DashboardRoleTone = 'brand' | 'violet' | 'neutral'
+
+// The backend's role ids with the names the dashboard shows for them.
+export const ROLE_META: Record<
+  string,
+  { label: string; description: string; tone: DashboardRoleTone }
+> = {
+  admin: {
+    label: 'Admin',
+    description: 'Everything, including people, roles and router settings.',
+    tone: 'brand',
+  },
+  write: { label: 'Builder', description: 'Create, tune and deploy routing work.', tone: 'violet' },
+  read: {
+    label: 'Read',
+    description: 'Explore configuration, requests and results.',
+    tone: 'neutral',
+  },
+}
+
+export const roleLabel = (role: string) => ROLE_META[role]?.label ?? role
+
+/** "3 min ago", "2 days ago"; a Unix timestamp in seconds. */
+export function relativeTime(seconds: number | undefined, now = Date.now()): string {
+  if (!seconds) return 'Never'
+  const delta = Math.max(0, now - seconds * 1000)
+  const minute = 60_000
+  const hour = 60 * minute
+  const day = 24 * hour
+  if (delta < minute) return 'Just now'
+  if (delta < hour) return `${Math.floor(delta / minute)} min ago`
+  if (delta < day) return `${Math.floor(delta / hour)} h ago`
+  if (delta < 30 * day) {
+    const days = Math.floor(delta / day)
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`
+  }
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(seconds * 1000))
+}
+
+export function absoluteTime(seconds: number | undefined): string {
+  if (!seconds) return '—'
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(seconds * 1000))
+}
+
+export const responseText = async (response: Response) =>
+  (await response.text()) || `Request failed (${response.status})`
+
+/** The page an invitation link opens, for a token the backend returned. */
+export function invitationUrl(token: string): string {
+  return new URL(`/invite/${encodeURIComponent(token)}`, window.location.origin).toString()
+}

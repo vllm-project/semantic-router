@@ -1,6 +1,5 @@
 import { recordedSignalMatches } from './insightsRecordSignals'
 import type { InsightsRecord } from './insightsPageTypes'
-import styles from './InsightsPage.module.css'
 
 const SHOWN = 2
 
@@ -31,32 +30,35 @@ export default function InsightsSignalsCell({ record }: { record: InsightsRecord
   if (matches.length === 0) return <span>-</span>
   const all = matches.map((match) => match.text).join(', ')
   return (
-    <span className={styles.signalCell} title={all}>
+    <span className="flex min-w-0 flex-col gap-1" title={all}>
       {matches.slice(0, SHOWN).map((match) => {
         const [question, answer] = match.text.includes(': ')
           ? match.text.split(': ', 2)
           : ['', match.text]
         const { probability } = match
         return (
-          <span key={`${match.type}:${match.value}`} className={styles.signalItem}>
-            <span className={styles.signalText}>
+          <span key={`${match.type}:${match.value}`} className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate text-xs text-muted-foreground [&_strong]:font-medium [&_strong]:text-foreground">
               {question ? <span>{question} </span> : null}
               <strong>{answer}</strong>
             </span>
             {probability === undefined ? null : (
               <span
-                className={styles.signalMeter}
+                className="block h-[3px] w-full overflow-hidden rounded-full bg-muted"
                 role="img"
                 aria-label={`${Math.round(probability * 100)}%`}
               >
-                <span style={{ width: `${probability * 100}%` }} />
+                <span
+                  className="block h-full rounded-full bg-chart-2"
+                  style={{ width: `${probability * 100}%` }}
+                />
               </span>
             )}
           </span>
         )
       })}
       {matches.length > SHOWN ? (
-        <span className={styles.signalMore}>+{matches.length - SHOWN} more</span>
+        <span className="text-[11px] text-subtle-foreground">+{matches.length - SHOWN} more</span>
       ) : null}
     </span>
   )

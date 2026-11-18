@@ -81,8 +81,8 @@ backend, the Router rewrites the request to that backend's model name.
 Entrypoints are listed by `/v1/models` with routing metadata. With
 `global.router.list_backend_models: true` the list also names, sorted, every
 model and LoRA name a direct request is served for. Successful routed
-responses expose `x-vsr-selected-recipe`; Router Replay and Insights can also
-filter records by recipe.
+responses expose `x-vsr-selected-recipe`; Router Replay and the Dashboard's
+**Requests** page can also filter records by recipe.
 
 To rename the default entrypoint, give the entrypoint marked `default: true`
 your desired `model_names`. This replaces the built-in `vllm-sr/auto` name, so

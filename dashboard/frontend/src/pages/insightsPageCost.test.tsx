@@ -4,13 +4,22 @@ import { describe, expect, it } from 'vitest'
 import {
   buildInsightsRecordSections,
   buildInsightsSummary,
-  createInsightsTableColumns,
   getInsightsCostUnavailableReason,
   hasCompleteCostData,
+  renderInsightsCostCell,
+  renderInsightsSavingsCell,
 } from './insightsPageSupport'
+import type { ModelLabels } from './insightsModelLabelSupport'
 import type { InsightsRecord } from './insightsPageTypes'
-import { formatInsightsCost } from '../utils/insightsCost'
+import { formatInsightsCompactCount, formatInsightsCost } from '../utils/insightsCost'
 import InsightsRecordSection from './InsightsRecordSection'
+
+const costColumn = (labels: ModelLabels = {}) => ({
+  render: (record: InsightsRecord) => renderInsightsCostCell(record, labels),
+})
+const savingsColumn = (labels: ModelLabels = {}) => ({
+  render: (record: InsightsRecord) => renderInsightsSavingsCell(record, labels),
+})
 
 const complete: InsightsRecord = {
   id: 'cost-record',
@@ -55,10 +64,25 @@ describe('Insights configured-rate estimates', () => {
     expect(formatInsightsCost(Number.NaN, 'USD')).toBe('N/A')
   })
 
+  it('rounds totals to cents, names no currency for XXX, and leaves a named column bare', () => {
+    expect(formatInsightsCost(1740.2211, 'USD', { total: true })).toBe('$1,740.22')
+    expect(formatInsightsCost(0.0405, 'USD', { total: true })).toBe('$0.04')
+    expect(formatInsightsCost(0.004, 'USD', { total: true })).toBe('$0.0040')
+    expect(formatInsightsCost(0, 'USD', { total: true })).toBe('$0.00')
+    expect(formatInsightsCost(579.0035, 'XXX', { total: true })).toBe('579.00')
+    expect(formatInsightsCost(0.0405, 'XXX')).toBe('0.0405')
+    expect(formatInsightsCost(0.000001, 'XXX')).toBe('<0.0001')
+    expect(formatInsightsCost(-0.00035, 'USD', { total: true, bare: true })).toBe('-0.0004')
+    expect(formatInsightsCost(12, 'credits', { total: true })).toBe('12.00 credits')
+    expect(formatInsightsCompactCount(7011358023)).toBe('7.0B')
+    expect(formatInsightsCompactCount(412345678)).toBe('412.3M')
+    expect(formatInsightsCompactCount(950)).toBe('950')
+  })
+
   it('preserves tiny amounts in record cells and details', () => {
     const record = { ...complete, actual_cost: 0.000001 }
-    const column = createInsightsTableColumns().find((item) => item.key === 'actual_cost')!
-    expect(renderToStaticMarkup(<>{column.render!(record)}</>)).toContain('&lt;$0.0001')
+    const column = costColumn()
+    expect(renderToStaticMarkup(<>{column.render(record)}</>)).toContain('&lt;$0.0001')
     const usage = buildInsightsRecordSections(record, { isReadonly: false }).find(
       (section) => section.title === 'Usage & Cost',
     )
@@ -76,8 +100,8 @@ describe('Insights configured-rate estimates', () => {
       cost_savings: 0,
     }
     const before = { ...record }
-    const column = createInsightsTableColumns().find((item) => item.key === 'cost_savings')!
-    const html = renderToStaticMarkup(<>{column.render!(record)}</>)
+    const column = savingsColumn()
+    const html = renderToStaticMarkup(<>{column.render(record)}</>)
     expect(html).toContain('No savings')
     expect(html).toContain(reason)
     expect(html).toContain('Baseline (configured rates):')
@@ -94,8 +118,8 @@ describe('Insights configured-rate estimates', () => {
 
   it('never describes tiny nonzero savings as no savings', () => {
     const record = { ...complete, selected_model: 'cheaper', cost_savings: 0.000001 }
-    const column = createInsightsTableColumns().find((item) => item.key === 'cost_savings')!
-    const html = renderToStaticMarkup(<>{column.render!(record)}</>)
+    const column = savingsColumn()
+    const html = renderToStaticMarkup(<>{column.render(record)}</>)
     expect(html).toContain('&lt;$0.0001')
     expect(html).not.toContain('No savings')
     const usage = buildInsightsRecordSections(record, { isReadonly: false }).find(
@@ -110,7 +134,7 @@ describe('Insights configured-rate estimates', () => {
     )!
     const field = usage.fields.find((item) => item.label === 'Current pricing')!
     const html = renderToStaticMarkup(<>{field.value}</>)
-    expect(html).toContain('href="/config/models"')
+    expect(html).toContain('href="/models/backends"')
     expect(html).toContain('View current configured model rates')
     expect(html).toContain('Current rates may differ from this record')
     expect(html).toContain('historical records are not repriced')
@@ -172,8 +196,6 @@ describe('Insights configured-rate estimates', () => {
   })
 
   it('labels configured-rate costs and exposes the baseline basis in details', () => {
-    const columns = createInsightsTableColumns()
-    expect(columns.find((c) => c.key === 'actual_cost')?.header).toBe('Estimated Cost')
     const section = buildInsightsRecordSections(complete, { isReadonly: false }).find(
       (s) => s.title === 'Usage & Cost',
     )
@@ -191,7 +213,7 @@ describe('Insights configured-rate estimates', () => {
       ]),
     )
     const row = { ...complete, actual_cost: undefined }
-    const value = columns.find((c) => c.key === 'actual_cost')!.render!(row)
+    const value = costColumn().render(row)
     const markup = renderToStaticMarkup(<>{value}</>)
     expect(markup).toContain('Price not recorded')
     expect(markup).toContain('Historical records are not repriced')
@@ -208,10 +230,8 @@ describe('Insights configured-rate estimates', () => {
       baseline_model: undefined,
     }
     const before = { ...historical }
-    const columns = createInsightsTableColumns()
-    for (const key of ['actual_cost', 'cost_savings']) {
-      const cell = columns.find((column) => column.key === key)!
-      const markup = renderToStaticMarkup(<>{cell.render!(historical)}</>)
+    for (const cell of [costColumn(), savingsColumn()]) {
+      const markup = renderToStaticMarkup(<>{cell.render(historical)}</>)
       expect(markup).toContain('Price not recorded')
       expect(markup).not.toContain('No savings')
       expect(markup).toContain('current model rates')

@@ -18,9 +18,9 @@ engines. Start or bind the required provider services before serving a model.
 
 ## Build a Mixture-of-Model
 
-Run `vllm-sr serve` and open **Build → Mixture-of-Models → Recipes** in
-Dashboard. Under **Built-in recipes**, choose **Create model** on a Recipe, enter
-the public names that clients will send through the OpenAI-compatible API, and
+Run `vllm-sr serve` and open **Routing → Recipes** in Dashboard. On the
+**Recipes** tab, choose **Create model** on a built-in Recipe, enter the public
+names that clients will send through the OpenAI-compatible API, and
 assign connected Models to its backend decisions. A decision that responds
 without a backend, such as Vault's `guard`, needs none. Dashboard keeps
 connection credentials on Models and routing policy in the Recipe.

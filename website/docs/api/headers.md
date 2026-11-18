@@ -64,7 +64,7 @@ x-vsr-replay-id: replay_01J...
 
 - Read `x-vsr-schema-version` before parsing the other headers; the current value is `3`. Responses of the Router's own handlers never carry it, so its absence there is expected.
 - A request keeps the configuration version it started on, even when a hot reload activates another one while it runs. `x-vsr-config-version` counts the activations of one Router, which keeps its own configuration history; to check that replicas serve the same configuration, compare the `active_runtime_hash` that `GET /api/v1/config/hash` reports.
-- Recipe names scope local signal, projection, decision, cache, replay, metric, and learning or session identities. Use `x-vsr-selected-recipe` together with the local decision and signal names when correlating a response with Insights or metrics.
+- Recipe names scope local signal, projection, decision, cache, replay, metric, and learning or session identities. Use `x-vsr-selected-recipe` together with the local decision and signal names when correlating a response with the Dashboard's Requests page or metrics.
 
 ## The trace {#the-trace}
 
@@ -168,7 +168,7 @@ Clients send these to steer or identify a request. See [Session identification](
 | Header | Reaches providers | Since | Description |
 | --- | --- | --- | --- |
 | `x-vsr-session-id` | no | v0.5 | Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order. |
-| `x-session-id` | yes | v0.3 | Client session id `session_id_headers` accepts by default; providers receive it. |
+| `x-session-id` | yes | v0.3 | Client session id `session_id_headers` accepts by default, which OpenCode sends on every call; providers receive it. |
 | `x-claude-code-session-id` | yes | v0.3 | Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. |
 | `x-claude-code-agent-id` | yes | v0.5 | Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. |
 | `x-claude-code-agent-type` | yes | v0.5 | Subagent type Claude Code sends on a subagent's own turns when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: a built-in agent's name such as `Explore`, `Plan` or `general-purpose`, or `custom`, `teammate` or `fork`; `agent` signal rules match it as a type, and providers receive it. |
@@ -178,6 +178,7 @@ Clients send these to steer or identify a request. See [Session identification](
 | `x-openai-subagent` | yes | v0.5 | Kind of child thread Codex sends a request for, `collab_spawn` for a `spawn_agent` child whatever its role and `review` for a review child, which `agent` signal rules match as a type and Router Replay records with the agent; providers receive it. |
 | `x-codex-turn-metadata` | yes | v0.5 | Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. |
 | `x-codex-parent-thread-id` | yes | v0.5 | Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it. |
+| `x-parent-session-id` | yes | v0.5 | Session that spawned an OpenCode subagent's session, which OpenCode sends on every call of the child beside the child's own `x-session-id`; with `identity.headers` unset and no `x-vsr-session-id`, protection and Router Replay key the call by that session and the child as its agent, and the `agent` signal reads it as a subagent's; providers receive it. |
 | `x-conversation-id` | yes | v0.4 | Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it. |
 | `x-vsr-memory` | no | v0.5 | `off` keeps Router-managed memory out of the request. |
 | `x-vsr-skip-processing` | no | v0.3 | `true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set. |

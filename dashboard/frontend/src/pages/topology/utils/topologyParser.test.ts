@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getDecisionReachability } from './layoutGraphBuilderSupport'
+import { getDecisionReachability } from '../topologyGraph'
 import { parseConfigToTopology } from './topologyParser'
 
 describe('parseConfigToTopology rules', () => {

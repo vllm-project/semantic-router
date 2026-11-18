@@ -33,7 +33,7 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           key: 'harness',
           label: 'Harness',
           type: 'select',
-          options: ['claude_code', 'codex'],
+          options: ['claude_code', 'codex', 'opencode', 'deepseek_harness'],
           description: 'The harness whose identity headers the request carries.',
         },
         {
@@ -50,7 +50,7 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           type: 'string[]',
           placeholder: 'compaction',
           description:
-            'Any of these Claude Code request classes matches: main, subagent, workflow, compaction or auxiliary.',
+            'Any of these request classes matches: main, subagent, workflow, compaction or auxiliary. Claude Code sends the class; OpenCode session titles are auxiliary and its summaries compaction.',
         },
       ]
     case 'input_modality':

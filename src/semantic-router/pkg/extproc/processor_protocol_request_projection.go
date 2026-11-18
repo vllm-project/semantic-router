@@ -26,7 +26,13 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	target llmprotocol.WireFormat,
 	shadows ...*shadowTarget,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
-	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(request, model, target, shadows...)
+	// An OpenAI-hosted Responses target leaves out unsigned thinking, so the
+	// signatures go before that projection runs.
+	projected, signatureDiagnostics, err := r.projectReasoningSignatures(request, target)
+	if err != nil {
+		return request, nil, err
+	}
+	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(projected, model, target, shadows...)
 	projected, budgetDiagnostics, err := r.projectUnsupportedReasoningBudget(projected, model, target)
 	if err != nil {
 		return projected, nil, err
@@ -34,9 +40,9 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
-	projected, samplingDiagnostics := r.projectUnsupportedSampling(projected, model, target)
+	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(reasoningDiagnostics, budgetDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, samplingDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(signatureDiagnostics, reasoningDiagnostics, budgetDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
 }
 
 // projectUnsupportedReasoningBudget follows the same projection path during
@@ -99,12 +105,31 @@ func appendRequestProjectionDiagnostics(ctx *RequestContext, diagnostics llmprot
 	}
 }
 
-// projectUnsupportedSampling sends a model the request without the sampling
-// controls its unsupported_capabilities lists, such as min_p for a vLLM
-// backend that runs speculative decoding. Selection, dispatch and every
-// fallback candidate project through here, so another model still receives
-// them.
-func (r *OpenAIRouter) projectUnsupportedSampling(
+// projectReasoningSignatures sends signed thinking in the history to a backend
+// whose wire format cannot carry the signature: without the signature once the
+// operator accepts that loss, and otherwise not at all, with a refusal that
+// names the client's own field. An Anthropic backend keeps every signature.
+func (r *OpenAIRouter) projectReasoningSignatures(
+	request llmprotocol.Request,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
+	if available, ok := r.codecCapabilitiesForFormat(target); !ok || available.Supports(llmprotocol.CapabilityReasoningSignature) {
+		return request, nil, nil
+	}
+	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldReasoningSignature) {
+		return request, nil, llmprotocol.RefuseReasoningSignatures(request)
+	}
+	projected, diagnostics := llmprotocol.ProjectReasoningSignatures(request, target)
+	return projected, diagnostics, nil
+}
+
+// projectUnsupportedCapabilities sends a model the request its
+// unsupported_capabilities allow: without the sampling controls it rejects,
+// such as min_p for a vLLM backend that runs speculative decoding, and with
+// developer messages as system messages when it lacks the developer role, as
+// DeepSeek V4 does. Selection, dispatch and every fallback candidate project
+// through here, so another model still receives them.
+func (r *OpenAIRouter) projectUnsupportedCapabilities(
 	request llmprotocol.Request,
 	model string,
 	target llmprotocol.WireFormat,
@@ -120,7 +145,9 @@ func (r *OpenAIRouter) projectUnsupportedSampling(
 	if err != nil {
 		return request, nil
 	}
-	return llmprotocol.ProjectUnsupportedSampling(request, unsupported, target)
+	projected, samplingDiagnostics := llmprotocol.ProjectUnsupportedSampling(request, unsupported, target)
+	projected, developerDiagnostics := llmprotocol.ProjectUnsupportedDeveloperRole(projected, unsupported, target)
+	return projected, slices.Concat(samplingDiagnostics, developerDiagnostics)
 }
 
 // projectUnstoredRequest sends store: true without it to a backend whose wire

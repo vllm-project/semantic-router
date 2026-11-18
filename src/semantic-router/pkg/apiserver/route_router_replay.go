@@ -36,7 +36,7 @@ func apiRouterReplayRoutes() []apiRoute {
 				Path:        apiObservabilityReplaysPath + "/aggregate",
 				Method:      "GET",
 				Description: "Aggregate Router Replay routing and cost metadata",
-				Parameters:  routerReplayFilterParameters(),
+				Parameters:  routerReplayAggregateParameters(),
 			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
@@ -158,6 +158,12 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 	}
 }
 
+func routerReplayAggregateParameters() []OpenAPIParameter {
+	return append(routerReplayFilterParameters(),
+		queryParameter("interval", "With since, also return traffic: the records in contiguous intervals of this length from since to now, such as 5m or 1h; at least 1m and at most 1000 intervals.", "string"),
+	)
+}
+
 func routerReplayDatasetParameters() []OpenAPIParameter {
 	parameters := routerReplayFilterParameters()
 	return append(parameters,
@@ -196,7 +202,7 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 	if r.URL.RawQuery != "" {
 		requestTarget += "?" + r.URL.RawQuery
 	}
-	response, handled := runtime.HandleReplayRequest(r.Method, requestTarget)
+	response, handled := runtime.HandleReplayRequest(r.Context(), r.Method, requestTarget)
 	if !handled {
 		s.writeErrorResponse(w, http.StatusNotFound, "REPLAY_UNAVAILABLE", "router replay is disabled or unavailable")
 		return
