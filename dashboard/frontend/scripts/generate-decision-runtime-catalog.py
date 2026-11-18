@@ -389,7 +389,8 @@ def dashboard_projection(data, backend):
                 "name": name,
                 "provider": organization,
                 "family": facts["family"],
-                "familyLabel": families.get(facts["family"], {}).get("label", ""),
+                "familyLabel": summaries.get(repo, {}).get("family_label")
+                or families.get(facts["family"], {}).get("label", ""),
                 "revision": facts.get("revision", ""),
                 "backbone": facts["backbone"],
                 "minMemoryGiB": facts["minMemoryGiB"],
