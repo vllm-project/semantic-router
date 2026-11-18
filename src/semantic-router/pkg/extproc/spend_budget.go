@@ -53,8 +53,8 @@ type budgetRefusal struct {
 	estimate float64
 }
 
-// requestSpend returns the request's spend state, nil when no budget is
-// configured. A client request marks its context with its budgets, so the
+// requestSpend returns the request's spend state, nil when no budget
+// applies. A client request marks its context with its budgets, so the
 // Looper hops it makes in process spend the same ones.
 func (r *OpenAIRouter) requestSpend(ctx *RequestContext) *requestSpend {
 	if ctx == nil || r == nil || r.Config == nil || !r.Config.Budgets.Enabled() {
@@ -71,6 +71,11 @@ func (r *OpenAIRouter) requestSpend(ctx *RequestContext) *requestSpend {
 			parent = context.Background()
 		}
 		ctx.TraceContext = spendbudget.WithLimits(parent, limits)
+	}
+	// Keep even an empty scope on the context: Looper hops must inherit it
+	// instead of resolving a new scope from their own identity.
+	if len(limits) == 0 {
+		return nil
 	}
 	ctx.spend = &requestSpend{limits: limits, currency: r.Config.Budgets.EffectiveCurrency()}
 	return ctx.spend
