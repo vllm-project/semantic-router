@@ -58,7 +58,9 @@ def registry_releases():
                 bindings.update(
                     (arg.arg, value)
                     for arg, value in zip(
-                        parameters[len(parameters) - len(defaults) :], defaults
+                        parameters[len(parameters) - len(defaults) :],
+                        defaults,
+                        strict=True,
                     )
                 )
                 bindings.update(
@@ -319,6 +321,12 @@ def backend_projection(data):
     return {"models": models}
 
 
+# The Supported models YAML indents a family or model by two spaces and its
+# fields by four.
+EDITORIAL_ENTRY_INDENT = 2
+EDITORIAL_FIELD_INDENT = 4
+
+
 def editorial():
     """The family labels and model summaries of the Supported models pages
     (tools/docs/supported_models.yaml). Read without a YAML library: its
@@ -335,15 +343,15 @@ def editorial():
             entry = folded = None
         elif section is None:
             continue
-        elif indent == 2:
+        elif indent == EDITORIAL_ENTRY_INDENT:
             entry = section.setdefault(text.removesuffix(":"), {})
             folded = None
-        elif indent == 4 and entry is not None:
+        elif indent == EDITORIAL_FIELD_INDENT and entry is not None:
             key, _, value = text.partition(":")
             value = value.strip()
             folded = key if value in {">", ">-"} else None
             entry[key] = "" if folded else value
-        elif folded and indent > 4:
+        elif folded and indent > EDITORIAL_FIELD_INDENT:
             entry[folded] = f"{entry[folded]} {text}".strip()
     return sections["families"], sections["models"]
 
