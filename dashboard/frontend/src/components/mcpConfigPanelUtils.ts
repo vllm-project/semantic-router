@@ -4,12 +4,32 @@ import type {
   MCPToolDefinition,
   MCPTransportType,
 } from '../tools/mcp'
+import type { LucideIcon } from 'lucide-react'
+import {
+  AppWindow,
+  Calculator,
+  CalendarDays,
+  CircleDot,
+  Clock,
+  CloudSun,
+  Database,
+  FilePen,
+  FileText,
+  FolderTree,
+  GitCommitHorizontal,
+  GitPullRequest,
+  Globe,
+  Image,
+  Mail,
+  Newspaper,
+  Search,
+  Terminal,
+  Wrench,
+} from 'lucide-react'
 import type { RegisteredTool } from '../tools'
 import type {
   BuiltInTool,
-  ServerFilter,
-  ServerSort,
-  ToolSort,
+  ServerFilters,
   ToolSourceFilter,
   UnifiedTool,
   UnifiedToolParameter,
@@ -101,11 +121,10 @@ export function toUnifiedBuiltInTool(tool: BuiltInTool): UnifiedTool {
   }
 }
 
-export function filterAndSortUnifiedTools(
+export function filterUnifiedTools(
   tools: UnifiedTool[],
   searchValue: string,
   sourceFilter: ToolSourceFilter,
-  sort: ToolSort,
 ): UnifiedTool[] {
   const search = searchValue.trim().toLowerCase()
   return tools
@@ -120,43 +139,26 @@ export function filterAndSortUnifiedTools(
         ...tool.parameters.flatMap((parameter) => [parameter.name, parameter.description || '']),
       ].some((value) => value.toLowerCase().includes(search))
     })
-    .sort((left, right) => {
-      if (sort === 'source-asc') {
-        return (
-          left.source.localeCompare(right.source, undefined, { sensitivity: 'base' }) ||
-          left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-        )
-      }
-      if (sort === 'parameters-desc') {
-        return (
-          right.parameters.length - left.parameters.length ||
-          left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-        )
-      }
-      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
-    })
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
 }
 
-export function filterAndSortServers(
+/** Connected servers first, then the ones still trying, then the rest. */
+export const SERVER_STATUS_RANK: Record<MCPServerState['status'], number> = {
+  connected: 0,
+  connecting: 1,
+  error: 2,
+  disconnected: 3,
+}
+
+export function filterServers(
   servers: MCPServerState[],
-  filter: ServerFilter,
   searchValue: string,
-  sort: ServerSort,
+  { transports, statuses }: ServerFilters,
 ): MCPServerState[] {
   const search = searchValue.trim().toLowerCase()
-  const statusRank: Record<MCPServerState['status'], number> = {
-    connected: 0,
-    connecting: 1,
-    error: 2,
-    disconnected: 3,
-  }
-
   return servers
-    .filter((server) => {
-      if (filter === 'all') return true
-      if (filter === 'connected') return server.status === 'connected'
-      return server.status !== 'connected'
-    })
+    .filter((server) => transports.length === 0 || transports.includes(server.config.transport))
+    .filter((server) => statuses.length === 0 || statuses.includes(server.status))
     .filter((server) => {
       if (!search) return true
       const connection = server.config.connection
@@ -170,21 +172,9 @@ export function filterAndSortServers(
         ...(server.tools || []).flatMap((tool) => [tool.name, tool.description || '']),
       ].some((value) => value.toLowerCase().includes(search))
     })
-    .sort((left, right) => {
-      if (sort === 'status') {
-        return (
-          statusRank[left.status] - statusRank[right.status] ||
-          left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
-        )
-      }
-      if (sort === 'tools-desc') {
-        return (
-          (right.tools?.length || 0) - (left.tools?.length || 0) ||
-          left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
-        )
-      }
-      return left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' })
-    })
+    .sort((left, right) =>
+      left.config.name.localeCompare(right.config.name, undefined, { sensitivity: 'base' }),
+    )
 }
 
 export function paginateMCPItems<T>(items: readonly T[], page: number, pageSize: number): T[] {
@@ -307,4 +297,70 @@ function extractSchemaParameters(schema?: ParameterSchemaLike): UnifiedToolParam
     description: property.description,
     required: required.includes(name),
   }))
+}
+
+const TOOL_ICON_RULES: Array<[RegExp, LucideIcon]> = [
+  [/weather|forecast/, CloudSun],
+  [/calc|math/, Calculator],
+  [/e?mail/, Mail],
+  [/calendar|event|slot|schedule/, CalendarDays],
+  [/time|clock|date/, Clock],
+  [/image|photo|picture/, Image],
+  [/news/, Newspaper],
+  [/pull_request|pull-request|\bpr\b/, GitPullRequest],
+  [/issue/, CircleDot],
+  [/commit|git/, GitCommitHorizontal],
+  [/sql|query|table|database|\bdb\b/, Database],
+  [/director|folder|list_files/, FolderTree],
+  [/write|edit|save/, FilePen],
+  [/file|read|doc/, FileText],
+  [/page|browser|open_web|url/, AppWindow],
+  [/search|find|lookup|web/, Search],
+]
+
+/** A recognisable icon for a tool from its name; a wrench when nothing fits. */
+export function toolIcon(name: string): LucideIcon {
+  const key = name.toLowerCase()
+  return TOOL_ICON_RULES.find(([pattern]) => pattern.test(key))?.[1] ?? Wrench
+}
+
+export const TOOL_SOURCE_META: Record<
+  UnifiedTool['sourceType'],
+  { label: string; tone: 'brand' | 'neutral' | 'outline' }
+> = {
+  mcp: { label: 'MCP', tone: 'brand' },
+  frontend: { label: 'Built-in', tone: 'neutral' },
+  backend: { label: 'Router', tone: 'outline' },
+}
+
+export const TRANSPORT_META: Record<
+  MCPTransportType,
+  { label: string; icon: LucideIcon; hint: string }
+> = {
+  stdio: { label: 'stdio', icon: Terminal, hint: 'Runs as a local process next to the dashboard.' },
+  'streamable-http': {
+    label: 'HTTP',
+    icon: Globe,
+    hint: 'Streamable HTTP endpoint, usually ending in /mcp.',
+  },
+}
+
+/** Where a server connects, for display: its command line or URL. */
+export function serverTarget(config: MCPServerConfig): string {
+  if (config.transport === 'stdio') {
+    const args = (config.connection.args ?? []).filter((arg) => arg !== MCP_REDACTED_ARGUMENTS)
+    const hidden = (config.connection.args ?? []).length !== args.length
+    return [config.connection.command ?? '', ...args, hidden ? '…' : ''].filter(Boolean).join(' ')
+  }
+  return (config.connection.url ?? '').replace(MCP_REDACTED_ARGUMENTS, '•••')
+}
+
+export const SERVER_STATUS_META: Record<
+  MCPServerState['status'],
+  { label: string; tone: 'success' | 'info' | 'danger' | 'neutral'; pulse?: boolean }
+> = {
+  connected: { label: 'Connected', tone: 'success' },
+  connecting: { label: 'Connecting', tone: 'info', pulse: true },
+  error: { label: 'Error', tone: 'danger' },
+  disconnected: { label: 'Not connected', tone: 'neutral' },
 }

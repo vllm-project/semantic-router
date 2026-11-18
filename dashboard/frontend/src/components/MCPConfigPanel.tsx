@@ -3,45 +3,45 @@
  */
 
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { ArrowUpRight, Lock, Plus } from 'lucide-react'
 
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import ProductLoadingState from './ProductLoadingState'
 import { toolRegistry } from '../tools'
 import type { RegisteredTool } from '../tools'
 import { useMCPServers } from '../tools/mcp'
 import type { MCPServerConfig, MCPServerState } from '../tools/mcp'
 import type { LatestMCPRequestRunner } from '../tools/mcp/requestSupport'
-import { canManageMCP } from '../utils/accessControl'
+import { Alert, Button, Skeleton, toast } from '../ui'
+import { canManageMCP, canUseTools } from '../utils/accessControl'
 import ConfirmDialog from './ConfirmDialog'
 import { MCPAvailableToolsSection } from './MCPAvailableToolsSection'
-import styles from './MCPConfigPanel.module.css'
 import { MCPRequestNotice } from './MCPRequestNotice'
 import { MCPServerDialog } from './MCPServerDialog'
+import { MCPServerSheet } from './MCPServerSheet'
 import { MCPServersSection } from './MCPServersSection'
 import { MCPToolDetailModal } from './MCPToolDetailModal'
 import type {
   BuiltInTool,
-  ServerFilter,
-  ServerSort,
-  ToolSort,
+  ServerFilters,
   ToolSourceFilter,
   UnifiedTool,
 } from './mcpConfigPanelTypes'
-import {
-  buildUnifiedTools,
-  filterAndSortServers,
-  filterAndSortUnifiedTools,
-} from './mcpConfigPanelUtils'
+import { buildUnifiedTools, filterServers, filterUnifiedTools } from './mcpConfigPanelUtils'
 import {
   createLatestMCPRequestRunner,
   fetchMCPToolsDatabase,
   getMCPRequestErrorMessage,
 } from './mcpRequestSupport'
+import { useQuietRefresh } from '../hooks/useQuietRefresh'
+
+const NO_SERVER_FILTERS: ServerFilters = { transports: [], statuses: [] }
+const STATUS_POLL_MS = 15_000
 
 interface MCPConfigPanelProps {
-  onClose?: () => void
-  embedded?: boolean
+  /** Frames the panel, given the header actions and the content. */
+  frame?: (actions: React.ReactNode, content: React.ReactNode) => React.ReactNode
 }
 
 type ConnectionMode = 'connect' | 'disconnect'
@@ -54,14 +54,21 @@ interface ActionError {
   retry: RetryAction
 }
 
-export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedded = false }) => {
+export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({
+  frame = (actions, content) => (
+    <>
+      {actions}
+      {content}
+    </>
+  ),
+}) => {
   const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
   const { user, isLoading: authLoading } = useAuth()
   const canManageServers = canManageMCP(user)
   const mutationDisabled = authLoading || readonlyLoading || serverReadonly || !canManageServers
+  const canRunTools = !authLoading && canUseTools(user)
   const {
     servers,
-    tools,
     loading,
     error,
     toolsError,
@@ -74,34 +81,50 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
     refreshServers,
     refreshTools,
   } = useMCPServers()
+  const [params, setParams] = useSearchParams()
 
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [editingServer, setEditingServer] = useState<MCPServerConfig | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [actionError, setActionError] = useState<ActionError | null>(null)
-  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set())
-  const [builtInExpanded, setBuiltInExpanded] = useState(false)
-  const [toolsDbExpanded, setToolsDbExpanded] = useState(false)
   const [toolsDbTools, setToolsDbTools] = useState<BuiltInTool[]>([])
   const [toolsDbLoading, setToolsDbLoading] = useState(false)
   const [toolsDbError, setToolsDbError] = useState<string | null>(null)
   const [registryTools] = useState<RegisteredTool[]>(() => toolRegistry.getAll())
   const [toolSearch, setToolSearch] = useState('')
   const [toolSourceFilter, setToolSourceFilter] = useState<ToolSourceFilter>('all')
-  const [toolSort, setToolSort] = useState<ToolSort>('name-asc')
   const [selectedTool, setSelectedTool] = useState<UnifiedTool | null>(null)
   const [pendingDeleteServer, setPendingDeleteServer] = useState<MCPServerConfig | null>(null)
-  const [toolsSectionExpanded, setToolsSectionExpanded] = useState(true)
-  const [serversSectionExpanded, setServersSectionExpanded] = useState(true)
-  const [serverFilter, setServerFilter] = useState<ServerFilter>('all')
+  const [serverFilters, setServerFilters] = useState<ServerFilters>(NO_SERVER_FILTERS)
   const [serverSearch, setServerSearch] = useState('')
-  const [serverSort, setServerSort] = useState<ServerSort>('name-asc')
   const deferredToolSearch = useDeferredValue(toolSearch)
   const deferredServerSearch = useDeferredValue(serverSearch)
   const toolsDbRequestRef = useRef<LatestMCPRequestRunner | null>(null)
   const mutationRequestRef = useRef<LatestMCPRequestRunner | null>(null)
   if (!toolsDbRequestRef.current) toolsDbRequestRef.current = createLatestMCPRequestRunner()
   if (!mutationRequestRef.current) mutationRequestRef.current = createLatestMCPRequestRunner()
+
+  const activeServerId = params.get('server')
+  const activeServer = servers.find((server) => server.config.id === activeServerId) ?? null
+  const sheetTab =
+    params.get('tab') === 'test' && canRunTools
+      ? 'test'
+      : params.get('tab') === 'connection'
+        ? 'connection'
+        : 'tools'
+  const openServer = (id: string, tab = 'tools') => {
+    const next = new URLSearchParams(params)
+    next.set('server', id)
+    if (tab === 'tools') next.delete('tab')
+    else next.set('tab', tab)
+    setParams(next)
+  }
+  const closeServer = () => {
+    const next = new URLSearchParams(params)
+    next.delete('server')
+    next.delete('tab')
+    setParams(next)
+  }
 
   const loadToolsDb = useCallback(async () => {
     await toolsDbRequestRef.current?.run(fetchMCPToolsDatabase, {
@@ -141,23 +164,13 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
     [servers, registryTools, toolsDbTools],
   )
   const filteredTools = useMemo(
-    () =>
-      filterAndSortUnifiedTools(allAvailableTools, deferredToolSearch, toolSourceFilter, toolSort),
-    [allAvailableTools, deferredToolSearch, toolSort, toolSourceFilter],
+    () => filterUnifiedTools(allAvailableTools, deferredToolSearch, toolSourceFilter),
+    [allAvailableTools, deferredToolSearch, toolSourceFilter],
   )
   const filteredServers = useMemo(
-    () => filterAndSortServers(servers, serverFilter, deferredServerSearch, serverSort),
-    [deferredServerSearch, serverFilter, serverSort, servers],
+    () => filterServers(servers, deferredServerSearch, serverFilters),
+    [deferredServerSearch, serverFilters, servers],
   )
-
-  const toggleServerExpand = useCallback((serverId: string) => {
-    setExpandedServers((current) => {
-      const next = new Set(current)
-      if (next.has(serverId)) next.delete(serverId)
-      else next.add(serverId)
-      return next
-    })
-  }, [])
 
   const runConnectionAction = useCallback(
     async (id: string, name: string, mode: ConnectionMode) => {
@@ -169,11 +182,8 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
             setActionLoading(id)
             setActionError(null)
           },
-          onSuccess: () => {
-            if (mode === 'connect') {
-              setExpandedServers((current) => new Set(current).add(id))
-            }
-          },
+          onSuccess: () =>
+            toast.success(mode === 'connect' ? `${name} connected` : `${name} disconnected`),
           onError: (requestError) => {
             const verb = mode === 'connect' ? 'connect to' : 'disconnect from'
             setActionError({
@@ -196,6 +206,30 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
     [runConnectionAction],
   )
 
+  const handleToggleEnabled = useCallback(
+    async (server: MCPServerState) => {
+      if (mutationDisabled) return
+      const enabled = !server.config.enabled
+      await mutationRequestRef.current?.run(
+        (signal) => updateServer(server.config.id, { ...server.config, enabled }, signal),
+        {
+          onStart: () => {
+            setActionLoading(server.config.id)
+            setActionError(null)
+          },
+          onSuccess: () =>
+            toast(enabled ? `${server.config.name} turned on` : `${server.config.name} turned off`),
+          onError: (requestError) =>
+            toast.error(`${server.config.name} was not updated`, {
+              description: getMCPRequestErrorMessage(requestError, 'Failed to update the server.'),
+            }),
+          onFinish: () => setActionLoading(null),
+        },
+      )
+    },
+    [mutationDisabled, updateServer],
+  )
+
   const handleDeleteRequest = useCallback(
     (id: string) => {
       if (mutationDisabled) return
@@ -216,7 +250,17 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
         setActionLoading(server.id)
         setActionError(null)
       },
-      onSuccess: () => setPendingDeleteServer(null),
+      onSuccess: () => {
+        setPendingDeleteServer(null)
+        setParams((current) => {
+          if (current.get('server') !== server.id) return current
+          const next = new URLSearchParams(current)
+          next.delete('server')
+          next.delete('tab')
+          return next
+        })
+        toast(`${server.name} deleted`)
+      },
       onError: (requestError) => {
         setPendingDeleteServer(null)
         setActionError({
@@ -226,7 +270,7 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
       },
       onFinish: () => setActionLoading(null),
     })
-  }, [deleteServer, mutationDisabled, pendingDeleteServer])
+  }, [deleteServer, mutationDisabled, pendingDeleteServer, setParams])
 
   const handleRetryAction = useCallback(() => {
     const retry = actionError?.retry
@@ -239,190 +283,161 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
     void runConnectionAction(retry.id, retry.name, retry.mode)
   }, [actionError, runConnectionAction])
 
-  const handleRefresh = useCallback(() => {
-    void Promise.all([refreshServers(), refreshTools(), loadToolsDb()])
-  }, [loadToolsDb, refreshServers, refreshTools])
+  useQuietRefresh(() => void Promise.all([refreshServers(), refreshTools()]), {
+    everyMs: STATUS_POLL_MS,
+    enabled:
+      !loading &&
+      !activeServerId &&
+      !showAddDialog &&
+      !editingServer &&
+      !pendingDeleteServer &&
+      !actionLoading,
+  })
 
-  const mcpToolsCount = tools.length
-  const builtInCount = registryTools.length + toolsDbTools.length
-  const connectedCount = servers.filter((server) => server.status === 'connected').length
-  const totalToolsCount = mcpToolsCount + builtInCount
+  const actions = (
+    <>
+      <Button variant="outline" asChild>
+        <a
+          href="https://modelcontextprotocol.io/docs/getting-started/intro"
+          target="_blank"
+          rel="noreferrer"
+        >
+          About MCP
+          <ArrowUpRight />
+        </a>
+      </Button>
+      <Button
+        onClick={() => setShowAddDialog(true)}
+        disabled={mutationDisabled || Boolean(actionLoading)}
+      >
+        <Plus />
+        Add server
+      </Button>
+    </>
+  )
 
-  if (loading) {
-    return (
-      <div className={`${styles.panel} ${embedded ? styles.embeddedPanel : ''}`} aria-busy="true">
-        {!embedded ? (
-          <div className={styles.header}>
-            <h2>MCP Servers &amp; Tools</h2>
-            {onClose ? (
-              <button
-                type="button"
-                className={styles.closeBtn}
-                onClick={onClose}
-                aria-label="Close MCP panel"
-              >
-                ×
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        <ProductLoadingState label="Loading tools" compact />
+  const content = loading ? (
+    <div className="flex flex-col gap-3" aria-busy="true">
+      <Skeleton className="h-5 w-40" />
+      <Skeleton className="h-40 w-full rounded-xl" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-36 rounded-xl" />
+        ))}
       </div>
-    )
-  }
+    </div>
+  ) : (
+    <div className="flex flex-col gap-8">
+      {error ||
+      toolsError ||
+      toolsDbError ||
+      actionError ||
+      (!readonlyLoading && serverReadonly) ||
+      (!authLoading && !canManageServers) ? (
+        <div className="flex flex-col gap-3">
+          {error ? (
+            <MCPRequestNotice
+              title="MCP servers are unavailable"
+              message={error}
+              retryLabel="Retry servers"
+              onRetry={() => void refreshServers()}
+            />
+          ) : null}
+          {toolsError ? (
+            <MCPRequestNotice
+              title="MCP tools are unavailable"
+              message={toolsError}
+              retryLabel="Retry tools"
+              onRetry={() => void refreshTools()}
+            />
+          ) : null}
+          {toolsDbError ? (
+            <MCPRequestNotice
+              title="Semantic Router tools are unavailable"
+              message={toolsDbError}
+              retryLabel="Retry tools database"
+              onRetry={() => void loadToolsDb()}
+            />
+          ) : null}
+          {actionError ? (
+            <MCPRequestNotice
+              title="MCP server action failed"
+              message={actionError.message}
+              retryLabel={actionError.retry.kind === 'delete' ? 'Review and retry' : 'Retry action'}
+              onRetry={handleRetryAction}
+              onDismiss={() => setActionError(null)}
+            />
+          ) : null}
+          {!readonlyLoading && serverReadonly ? (
+            <Alert tone="neutral" title="View only" icon={<Lock />}>
+              The server-wide read-only policy disables MCP server changes. Runtime config mount
+              availability does not affect MCP management.
+            </Alert>
+          ) : !authLoading && !canManageServers ? (
+            <Alert tone="neutral" title="View only" icon={<Lock />}>
+              You can inspect MCP servers and tools. Connect, edit, and delete actions require the{' '}
+              <code className="font-mono text-[12px]">mcp.manage</code> permission.
+            </Alert>
+          ) : null}
+        </div>
+      ) : null}
+
+      <MCPServersSection
+        servers={servers}
+        filteredServers={filteredServers}
+        serverFilters={serverFilters}
+        serverSearch={serverSearch}
+        isReadonly={mutationDisabled}
+        actionLoading={actionLoading}
+        activeServerId={activeServerId ?? undefined}
+        onServerFiltersChange={setServerFilters}
+        onServerSearchChange={setServerSearch}
+        onOpenServer={(id) => openServer(id)}
+        onToggleConnection={handleToggleConnection}
+        onToggleEnabled={(server) => void handleToggleEnabled(server)}
+        onEditServer={setEditingServer}
+        onDeleteServer={handleDeleteRequest}
+        onAddServer={() => setShowAddDialog(true)}
+      />
+
+      <MCPAvailableToolsSection
+        allAvailableTools={allAvailableTools}
+        filteredTools={filteredTools}
+        toolSearch={toolSearch}
+        toolSourceFilter={toolSourceFilter}
+        onSearchChange={setToolSearch}
+        onSelectTool={setSelectedTool}
+        onSourceFilterChange={setToolSourceFilter}
+      />
+      {toolsDbLoading && toolsDbTools.length === 0 ? (
+        <p className="-mt-6 text-xs text-subtle-foreground" role="status">
+          Loading router tools…
+        </p>
+      ) : null}
+    </div>
+  )
 
   return (
-    <div className={`${styles.panel} ${embedded ? styles.embeddedPanel : ''}`}>
-      {!embedded ? (
-        <div className={styles.header}>
-          <h2>MCP Servers &amp; Tools</h2>
-          <div className={styles.headerActions}>
-            <button
-              type="button"
-              className={styles.refreshBtn}
-              onClick={handleRefresh}
-              title="Refresh MCP data"
-              aria-label="Refresh MCP data"
-            >
-              ↻
-            </button>
-            {onClose ? (
-              <button
-                type="button"
-                className={styles.closeBtn}
-                onClick={onClose}
-                aria-label="Close MCP panel"
-              >
-                ×
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+    <>
+      {frame(actions, content)}
 
-      {embedded ? (
-        <div className={styles.embeddedToolbar}>
-          <div className={styles.embeddedSummary}>
-            {totalToolsCount} tools ({mcpToolsCount} from MCP, {builtInCount} built-in) ·{' '}
-            {connectedCount} connected servers
-          </div>
-          <button
-            type="button"
-            className={styles.refreshBtn}
-            onClick={handleRefresh}
-            title="Refresh MCP data"
-            aria-label="Refresh MCP data"
-          >
-            ↻
-          </button>
-        </div>
-      ) : null}
-
-      {error ? (
-        <MCPRequestNotice
-          title="MCP servers are unavailable"
-          message={error}
-          retryLabel="Retry servers"
-          onRetry={() => void refreshServers()}
-        />
-      ) : null}
-      {toolsError ? (
-        <MCPRequestNotice
-          title="MCP tools are unavailable"
-          message={toolsError}
-          retryLabel="Retry tools"
-          onRetry={() => void refreshTools()}
-        />
-      ) : null}
-      {toolsDbError ? (
-        <MCPRequestNotice
-          title="Semantic Router tools are unavailable"
-          message={toolsDbError}
-          retryLabel="Retry tools database"
-          onRetry={() => void loadToolsDb()}
-        />
-      ) : null}
-      {actionError ? (
-        <MCPRequestNotice
-          title="MCP server action failed"
-          message={actionError.message}
-          retryLabel={actionError.retry.kind === 'delete' ? 'Review and retry' : 'Retry action'}
-          onRetry={handleRetryAction}
-          onDismiss={() => setActionError(null)}
-        />
-      ) : null}
-      {!readonlyLoading && serverReadonly ? (
-        <div className={styles.permissionNotice} role="note">
-          The server-wide read-only policy disables MCP server changes. Runtime config mount
-          availability does not affect MCP management.
-        </div>
-      ) : !authLoading && !canManageServers ? (
-        <div className={styles.permissionNotice} role="note">
-          You can inspect MCP servers and tools. Connect, edit, and delete actions require the{' '}
-          <code>mcp.manage</code> permission.
-        </div>
-      ) : null}
-
-      <div className={styles.serverList}>
-        <MCPAvailableToolsSection
-          allAvailableTools={allAvailableTools}
-          filteredTools={filteredTools}
-          toolSearch={toolSearch}
-          toolSort={toolSort}
-          toolSourceFilter={toolSourceFilter}
-          toolsSectionExpanded={toolsSectionExpanded}
-          onSearchChange={setToolSearch}
-          onSelectTool={setSelectedTool}
-          onSortChange={setToolSort}
-          onSourceFilterChange={setToolSourceFilter}
-          onToggleExpanded={() => setToolsSectionExpanded((current) => !current)}
-        />
-
-        <MCPServersSection
-          actionLoading={actionLoading}
-          builtInExpanded={builtInExpanded}
-          expandedServers={expandedServers}
-          filteredServers={filteredServers}
-          isReadonly={mutationDisabled}
-          registryTools={registryTools}
-          serverFilter={serverFilter}
-          serverSearch={serverSearch}
-          serverSort={serverSort}
-          servers={servers}
-          serversSectionExpanded={serversSectionExpanded}
-          toolsDbExpanded={toolsDbExpanded}
-          toolsDbLoading={toolsDbLoading}
-          toolsDbTools={toolsDbTools}
-          onDeleteServer={handleDeleteRequest}
-          onEditServer={setEditingServer}
-          onSelectTool={setSelectedTool}
-          onServerFilterChange={setServerFilter}
-          onServerSearchChange={setServerSearch}
-          onServerSortChange={setServerSort}
-          onToggleBuiltInExpanded={() => setBuiltInExpanded((current) => !current)}
-          onToggleConnection={handleToggleConnection}
-          onToggleServerExpand={toggleServerExpand}
-          onToggleServersSection={() => setServersSectionExpanded((current) => !current)}
-          onToggleToolsDbExpanded={() => setToolsDbExpanded((current) => !current)}
-        />
-      </div>
-
-      <div className={styles.footer}>
-        <button
-          type="button"
-          className={styles.addBtn}
-          onClick={() => setShowAddDialog(true)}
-          disabled={mutationDisabled || Boolean(actionLoading)}
-        >
-          + Add MCP Server
-        </button>
-        {!embedded ? (
-          <div className={styles.summary}>
-            {totalToolsCount} tools ({mcpToolsCount} from MCP, {builtInCount} built-in) ·{' '}
-            {connectedCount} connected servers
-          </div>
-        ) : null}
-      </div>
+      <MCPServerSheet
+        server={activeServer}
+        open={Boolean(activeServer)}
+        tab={sheetTab}
+        canManage={!mutationDisabled}
+        canRunTools={canRunTools}
+        actionLoading={actionLoading}
+        onTabChange={(tab) => activeServer && openServer(activeServer.config.id, tab)}
+        onOpenChange={(open) => {
+          if (!open) closeServer()
+        }}
+        onToggleConnection={handleToggleConnection}
+        onToggleEnabled={(server) => void handleToggleEnabled(server)}
+        onEdit={(server) => setEditingServer(server.config)}
+        onDelete={handleDeleteRequest}
+        onSelectTool={setSelectedTool}
+      />
 
       {!mutationDisabled && (showAddDialog || editingServer) ? (
         <MCPServerDialog
@@ -434,6 +449,11 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
           onSave={async (config) => {
             if (editingServer) await updateServer(editingServer.id, config)
             else await addServer(config)
+            toast.success(editingServer ? `${config.name} updated` : `${config.name} added`, {
+              description: editingServer
+                ? 'Changes apply the next time it connects.'
+                : 'Connect it to list its tools.',
+            })
             setShowAddDialog(false)
             setEditingServer(null)
           }}
@@ -451,11 +471,12 @@ export const MCPConfigPanel: React.FC<MCPConfigPanelProps> = ({ onClose, embedde
         title={pendingDeleteServer ? `Delete ${pendingDeleteServer.name}?` : 'Delete MCP server?'}
         description="This removes the server configuration and disconnects its tools from the control plane. This action cannot be undone."
         confirmLabel="Delete server"
+        tone="danger"
         pending={Boolean(pendingDeleteServer && actionLoading === pendingDeleteServer.id)}
         onCancel={() => setPendingDeleteServer(null)}
         onConfirm={handleConfirmDelete}
       />
-    </div>
+    </>
   )
 }
 

@@ -5,6 +5,7 @@ import {
   canAccessReplayFlowDetails,
   canDeployConfig,
   canManageMCP,
+  canUseTools,
   canManageUsers,
   canRunEvaluation,
   canSubmitFeedback,
@@ -104,5 +105,12 @@ describe('config write access', () => {
     expect(canManageUsers({ role: 'admin', permissions: [] })).toBe(false)
     expect(canViewUsers({ role: 'admin' })).toBe(true)
     expect(canManageUsers({ role: 'admin' })).toBe(true)
+  })
+
+  it('lets tools.use call tools and falls back to writers for role-only sessions', () => {
+    expect(canUseTools({ role: 'read', permissions: ['tools.use'] })).toBe(true)
+    expect(canUseTools({ role: 'admin', permissions: ['mcp.manage'] })).toBe(false)
+    expect(canUseTools({ role: 'write' })).toBe(true)
+    expect(canUseTools({ role: 'read' })).toBe(false)
   })
 })
