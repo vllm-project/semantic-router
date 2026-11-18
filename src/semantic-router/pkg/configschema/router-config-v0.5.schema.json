@@ -3254,6 +3254,9 @@
       "properties": {
         "history": {
           "type": "boolean"
+        },
+        "tool_results": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
