@@ -53,6 +53,9 @@ func TestMCPUnknownServerIDReturnsNotFound(t *testing.T) {
 	}{
 		{name: "connect", method: http.MethodPost, suffix: "/connect", handler: (*MCPHandler).ConnectServerHandler},
 		{name: "update", method: http.MethodPut, body: renamed, handler: (*MCPHandler).UpdateServerHandler},
+		// An update merges into the stored configuration, so a partial body is valid for a stored server and
+		// the missing ID must be reported before the merged result is validated.
+		{name: "update with a partial body", method: http.MethodPut, body: map[string]string{"name": "Renamed server"}, handler: (*MCPHandler).UpdateServerHandler},
 		{name: "delete", method: http.MethodDelete, handler: (*MCPHandler).DeleteServerHandler},
 		{name: "disconnect", method: http.MethodPost, suffix: "/disconnect", handler: (*MCPHandler).DisconnectServerHandler},
 		{name: "status", method: http.MethodGet, suffix: "/status", handler: (*MCPHandler).GetServerStatusHandler},
