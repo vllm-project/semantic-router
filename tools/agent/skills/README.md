@@ -13,7 +13,8 @@ Router behavior. Choose one by the task below. The development harness
 | Choose or inspect the decision model behind a route | [Decision model](vllm-sr-decision-model/SKILL.md) | Resolve the recipe's questions to deployments, then check readiness and a traced answer. |
 | Turn workload goals into a recipe and entrypoint proposal | [Configure recipe](vllm-sr-configure-recipe/SKILL.md) | Inspect the active or file baseline, packaged recipes, and verified backends. |
 | Change an existing Router configuration | [Operations: configure](vllm-sr-agent-operations/references/configuration-loop.md) | Read the current canonical configuration and discover the installed schema. |
-| Verify or diagnose a route | [Operations: verify](vllm-sr-agent-operations/references/route-verification.md) | Preview the route, then probe the full data path. |
+| Explain a selected route, fallback, or delivery failure | [Diagnose routing](vllm-sr-diagnose-routing/SKILL.md) | Pin the request and active config, then compare preview with a bounded probe. |
+| Verify a known route | [Operations: verify](vllm-sr-agent-operations/references/route-verification.md) | Preview the route, then probe the full data path. |
 | Evaluate quality, latency, and cost | [Operations: sr-bench](vllm-sr-agent-operations/references/sr-bench.md) | Freeze the workload and choose preview, live, or replay scope. |
 | Calibrate a maintained recipe | [Routing calibration](routing-calibration/SKILL.md) | Validate the versioned probe manifest. |
 | Change a request-visible Router contract | [Router contract change](router-contract-change/SKILL.md) | Read the affected change surfaces and nearest `AGENTS.md`. |
@@ -26,6 +27,8 @@ handles a focused first start. The [public decision-model skill](https://vllm-sr
 resolves model-backed questions and traces their answers. The
 [public configure-recipe skill](https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/SKILL.md)
 prepares a reviewable candidate. The
+[public routing-diagnosis skill](https://vllm-sr.ai/install/agent/vllm-sr-diagnose-routing/SKILL.md)
+explains a selected route or failure. The
 [public operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md)
 covers the broader lifecycle. Their authored sources are under
 `tools/agent/skills/`; `make agent-skill-sync` generates their website copies.
@@ -50,7 +53,6 @@ and do not yet have standalone skill files:
 
 | Proposed skill | Bounded workflow | Current entry |
 | --- | --- | --- |
-| `vllm-sr-diagnose-routing` | Explain a selected route or failure from real Router evidence. | [Verification reference](vllm-sr-agent-operations/references/route-verification.md) |
 | `vllm-sr-benchmark` | Run a bounded, reproducible sr-bench evaluation. | [sr-bench reference](vllm-sr-agent-operations/references/sr-bench.md) |
 | `vllm-sr-compare-configurations` | Compare paired runs and explain incomplete evidence. | [sr-bench reference](vllm-sr-agent-operations/references/sr-bench.md) |
 
