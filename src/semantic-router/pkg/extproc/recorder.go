@@ -308,6 +308,7 @@ func buildReplayRoutingRecord(
 		CacheEntryAgeSeconds: ctx.VSRCacheEntryAgeSeconds,
 		CacheTTLSeconds:      ctx.VSRCacheTTLSeconds,
 		ContextTokenCount:    ctx.VSRContextTokenCount,
+		RequestedModel:       ctx.RequestedModel,
 		HallucinationEnabled: hallucinationEnabled,
 	}
 	if state := ctx.ResponseObjectState; state != nil {

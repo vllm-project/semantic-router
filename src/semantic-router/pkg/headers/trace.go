@@ -21,6 +21,7 @@ const (
 	TraceOnUnknown                = "on_unknown"
 	TraceClientProtocol           = "client_protocol"
 	TraceUpstreamProtocol         = "upstream_protocol"
+	TraceRequestedModel           = "requested_model"
 	TraceEffectiveInputTokens     = "effective_input_tokens"
 	TraceEffectiveMaxOutputTokens = "effective_max_output_tokens"
 	TraceSignals                  = "signals"
@@ -65,6 +66,7 @@ var traceMembers = []TraceMember{
 	{TraceOnUnknown, "routing", "Decisions whose unknown result `rules.on_unknown` resolved, each with its `policy`."},
 	{TraceClientProtocol, "protocol", "Client wire protocol, such as `anthropic`."},
 	{TraceUpstreamProtocol, "protocol", "Provider wire protocol, such as `openai`."},
+	{TraceRequestedModel, "listener", "The model the client named when the listener's `unserved_models` routed the request to one of its own models."},
 	{TraceEffectiveInputTokens, "automatic_output", "Rendered input tokens of the final automatic-output dispatch, chat template included."},
 	{TraceEffectiveMaxOutputTokens, "automatic_output", "Output token limit of the final automatic-output dispatch, reasoning included."},
 	{TraceSignals, "signals", "Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`."},

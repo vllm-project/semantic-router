@@ -297,6 +297,9 @@ export const TRACE_CLIENT_PROTOCOL = 'client_protocol'
 /** Provider wire protocol, such as `openai`. */
 export const TRACE_UPSTREAM_PROTOCOL = 'upstream_protocol'
 
+/** The model the client named when the listener's `unserved_models` routed the request to one of its own models. */
+export const TRACE_REQUESTED_MODEL = 'requested_model'
+
 /** Rendered input tokens of the final automatic-output dispatch, chat template included. */
 export const TRACE_EFFECTIVE_INPUT_TOKENS = 'effective_input_tokens'
 
@@ -366,6 +369,7 @@ export const TRACE_MEMBERS = [
   TRACE_ON_UNKNOWN,
   TRACE_CLIENT_PROTOCOL,
   TRACE_UPSTREAM_PROTOCOL,
+  TRACE_REQUESTED_MODEL,
   TRACE_EFFECTIVE_INPUT_TOKENS,
   TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS,
   TRACE_SIGNALS,
