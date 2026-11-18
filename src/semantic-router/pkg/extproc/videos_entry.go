@@ -119,21 +119,31 @@ func (r *OpenAIRouter) videosObjectDispatchResponse(ctx *RequestContext) (*ext_p
 	if common.HeaderMutation == nil {
 		common.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
-	objectPath := videosCollectionPath + "/" + url.PathEscape(ctx.videosProviderID)
-	if ctx.videosContent {
-		objectPath += "/content"
-	}
-	// Replace the profile's create path in place: one :path option, the object
-	// path, so the wire order between two overwrites never decides.
+	// Append the object to the path the profile resolved, so a provider base
+	// path prefix survives; replace the option in place, leaving one :path.
+	collection := videosCollectionPath
 	restamped := false
 	for _, option := range common.HeaderMutation.GetSetHeaders() {
-		if option.GetHeader().GetKey() == ":path" {
-			option.Header.RawValue = []byte(objectPath)
-			restamped = true
-			break
+		if option.GetHeader().GetKey() != ":path" {
+			continue
 		}
+		collection = strings.TrimSuffix(string(option.GetHeader().GetRawValue()), "/")
+		if collection == "" {
+			collection = videosCollectionPath
+		}
+		objectPath := collection + "/" + url.PathEscape(ctx.videosProviderID)
+		if ctx.videosContent {
+			objectPath += "/content"
+		}
+		option.Header.RawValue = []byte(objectPath)
+		restamped = true
+		break
 	}
 	if !restamped {
+		objectPath := collection + "/" + url.PathEscape(ctx.videosProviderID)
+		if ctx.videosContent {
+			objectPath += "/content"
+		}
 		common.HeaderMutation.SetHeaders = append(common.HeaderMutation.SetHeaders, overwriteRequestHeader(":path", objectPath))
 	}
 	return response, nil
