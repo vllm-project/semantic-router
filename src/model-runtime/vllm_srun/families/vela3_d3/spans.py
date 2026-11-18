@@ -113,10 +113,11 @@ def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
     if listed is not None:
         criteria = listed_options(listed, "labels")
     elif isinstance(criteria, list):
-        names = [str(name) for name in criteria]
-        if len(set(names)) != len(names):
+        if not all(isinstance(name, str) for name in criteria):
+            raise invalid("criteria must list span labels as strings")
+        if len(set(criteria)) != len(criteria):
             raise invalid("span labels must be distinct")
-        criteria = dict.fromkeys(names)
+        criteria = dict.fromkeys(criteria)
     options = named_options(criteria, minimum=1)
     return [
         (name, "" if value is None else text(value)) for name, value in options.items()

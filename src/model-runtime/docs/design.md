@@ -1120,9 +1120,10 @@ the usage. Span passes add nothing to `usage.input_tokens` on any size, on
 purpose: the packages' runtime does not count them either, and every
 parity request's input tokens agree with it (the vela3 family counts its
 span windows). Requests with images, videos or assets and Box / track
-questions take the base alone; those with media refuse span questions. On
-every path a blank state is refused and span questions are planned before
-the base sees the rest.
+questions take the base alone; those with media refuse span questions. A
+blank state is refused unless the request has images, videos or assets (the
+base then reads an image-only state, as the d3 models do), and span questions
+are planned before the base sees the rest.
 A span question reads its whole target in windows, so `overflow` takes only
 `window`. The target holds at most 32,768 tokens on every size (the vela3
 family's default scan budget on a CPU; it does not follow the base's question
