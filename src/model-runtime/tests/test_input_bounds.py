@@ -33,6 +33,7 @@ from tokenizers import (
 from vllm_srun.api.app import create_app
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.families.vela2.layout import word_windows
+from vllm_srun.families.vela3_d3.package import SPAN_TARGET_TOKENS
 from vllm_srun.runtime import Runtime
 from vllm_srun.testing.embed_packages import write_tokenizer
 from vllm_srun.testing.fixtures import write_fixture
@@ -828,3 +829,110 @@ def test_vela2_reports_its_scan_budget_and_takes_one_from_its_options(
         assert vela2_scan(configured) == (window, 3 * window)
     finally:
         configured.stop()
+
+
+@pytest.fixture(scope="module")
+def vela3_d3_runtime(tmp_path_factory):
+    package = write_fixture(
+        tmp_path_factory.mktemp("bounded-spans") / "vela3-d3",
+        family="vela3_d3",
+        variant="text",
+    )
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), name="vela3-d3", device="cpu"),),
+            base_path=str(package.parent / f"{package.name}-base"),
+            result_cache_entries=0,
+        )
+    )
+    runtime.start(background=False)
+    yield runtime
+    runtime.stop()
+
+
+# A span question of the Vela 3.0 d3 sizes over the answer part, which the
+# fixture's tokenizer reads at a token a character. The targets are within the
+# span budget in one window and in several, just over it, far enough over it
+# to be read in part, and certainly over it.
+VELA3_D3_SPAN = {"type": "span", "criteria": ["dose"], "over": "answer"}
+VELA3_D3_TARGETS = {
+    "one window": "Adults can take up to 4 grams of paracetamol.",
+    "several windows": " ".join(f"w{index}" for index in range(3000)),
+    "just over": " ".join(["alpha"] * 6_000),
+    "over": " ".join(["alpha"] * 100_000),
+    "certainly over": " ".join(["alpha"] * 300_000),
+}
+
+
+def test_vela3_d3_spans_fail_a_long_target_as_they_fail_it_read_whole(
+    vela3_d3_runtime, monkeypatch
+):
+    client = TestClient(create_app(vela3_d3_runtime))
+    refused = {}
+    for name, target in VELA3_D3_TARGETS.items():
+        body = {
+            "state": {"user": "What is the dose?", "answer": target},
+            "questions": {"dose": VELA3_D3_SPAN},
+        }
+        bounded, whole = answers(
+            client, monkeypatch, "/v1/decisions", body, "DecisionResponse"
+        )
+        assert bounded == whole
+        answer = bounded["answers"]["dose"]
+        refused[name] = (answer.get("error"), answer.get("reason"))
+        assert ("dose" in bounded.get("spans", {})) == ("error" not in answer)
+    over = ("scan_budget_exceeded", "scan_budget")
+    assert refused == {
+        "one window": (None, None),
+        "several windows": (None, None),
+        "just over": over,
+        "over": over,
+        "certainly over": over,
+    }
+
+
+class TokenizerSpy:
+    """A tokenizer that records the texts it is asked to encode."""
+
+    def __init__(self, tokenizer):
+        self.tokenizer, self.texts = tokenizer, []
+
+    def encode(self, text, **options):
+        self.texts.append(text)
+        return self.tokenizer.encode(text, **options)
+
+    def __getattr__(self, name):
+        return getattr(self.tokenizer, name)
+
+
+def test_vela3_d3_spans_read_no_more_of_a_long_target_than_the_span_budget(
+    vela3_d3_runtime, monkeypatch
+):
+    model = vela3_d3_runtime.lookup(None).model
+    renderer = model.spans.renderer
+    spy = TokenizerSpy(renderer.prompts.text)
+    monkeypatch.setattr(renderer.prompts, "text", spy)
+    # The probe that tells which cuts this tokenizer keeps exact is not a read
+    # of the target.
+    bounds.facts(spy)
+    over, certain = VELA3_D3_TARGETS["over"], VELA3_D3_TARGETS["certainly over"]
+    assert bounds.surely_over(spy, certain, SPAN_TARGET_TOKENS)
+    assert not bounds.surely_over(spy, over, SPAN_TARGET_TOKENS)
+
+    def read_of(target):
+        """Characters of the longest prefix of the refused ``target`` the tokenizer encoded."""
+        spy.texts.clear()
+        plan = model.plan(
+            {"user": "What is the dose?", "answer": target}, {"dose": VELA3_D3_SPAN}
+        )
+        assert plan.errors["dose"]["error"] == "scan_budget_exceeded"
+        assert not plan.items
+        return max(
+            (len(text) for text in spy.texts if text and target.startswith(text)),
+            default=0,
+        )
+
+    # A target certainly over the budget is refused unread.
+    assert read_of(certain) == 0
+    # Any other is read one token past the budget and no further.
+    assert 0 < read_of(over) < len(over) // 2
