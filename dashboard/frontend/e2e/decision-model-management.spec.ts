@@ -1178,7 +1178,10 @@ test.describe('Decision model catalog and deployment bindings', () => {
     await page.getByRole('row').filter({ hasText: 'Task difficulty' }).click()
     const consumer = page.getByRole('combobox', { name: 'Model for Task difficulty' })
     await consumer.click()
+    // Escape closes the open list, not the dialog; it is only open once the list shows.
+    await expect(page.getByRole('listbox')).toBeVisible()
     await page.keyboard.press('Escape')
+    await expect(page.getByRole('listbox')).toHaveCount(0)
     await expect(consumer).toBeFocused()
     await expect(consumer).toHaveAttribute('aria-expanded', 'false')
     await consumer.click()

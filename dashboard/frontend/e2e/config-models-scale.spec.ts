@@ -209,7 +209,11 @@ function inventoryPagination(page: Page) {
 
 async function openRowAction(page: Page, model: string, action: string) {
   await page.getByRole('button', { name: `Actions for ${model}`, exact: true }).click()
-  await page.getByRole('menuitem', { name: action, exact: true }).click()
+  // The previous row's menu can still be animating out; act in the open one.
+  await page
+    .locator('[role="menu"][data-state="open"]')
+    .getByRole('menuitem', { name: action, exact: true })
+    .click()
 }
 
 function bodyOverflow(page: Page) {

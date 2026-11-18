@@ -284,7 +284,23 @@ test.describe('Setup wizard routing import', () => {
     await page.getByRole('button', { name: 'Continue' }).click()
 
     await expect(page.getByRole('heading', { name: 'Review & activate' })).toBeVisible()
-    await expect.poll(() => validatePayload).toEqual({ config: importedConfig })
+    // The imported config carries over as is; on a CPU-only instance the wizard
+    // adds the recommended decision model because the config names none.
+    await expect
+      .poll(() => validatePayload)
+      .toEqual({
+        config: {
+          ...importedConfig,
+          global: {
+            model_catalog: {
+              deployments: {
+                'vela3-1-fast': expect.objectContaining({ artifact: 'vllm-sr/vela3.1-fast' }),
+              },
+              system: { decision_model: { deployment: 'vela3-1-fast' } },
+            },
+          },
+        },
+      })
     await page.getByRole('button', { name: /config\.yaml/ }).click()
     await expect(page.getByText('remote-default')).toBeVisible()
   })
