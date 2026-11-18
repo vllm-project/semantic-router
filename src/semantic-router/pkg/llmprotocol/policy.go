@@ -1,6 +1,9 @@
 package llmprotocol
 
-import "slices"
+import (
+	"encoding/json"
+	"slices"
+)
 
 type UnknownFieldPolicy string
 
@@ -209,6 +212,10 @@ type Diagnostics []Diagnostic
 // provider state.
 type ResponseRenderContext struct {
 	PreviousResponseID string
+	// RequestEcho is a JSON object of the request members, as the client sent
+	// them, that the request format's response object repeats. The request
+	// codec writes it, and only the same format's response encoder reads it.
+	RequestEcho json.RawMessage
 }
 
 // Envelope is bounded, ephemeral wire fidelity and rendering state. It must
@@ -236,7 +243,7 @@ func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy 
 		if envelope.ResponseReencodeRequired {
 			return false
 		}
-		if envelope.ResponseRender.PreviousResponseID != "" {
+		if envelope.ResponseRender.PreviousResponseID != "" || len(envelope.ResponseRender.RequestEcho) > 0 {
 			return false
 		}
 		return len(envelope.Response) > 0
