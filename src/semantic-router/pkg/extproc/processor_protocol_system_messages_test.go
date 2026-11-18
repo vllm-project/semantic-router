@@ -12,13 +12,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// systemMessagesRouter serves every request from one vLLM Chat model. optIn
+// systemMessagesRouter serves every request from one vLLM Chat model. accepted
 // lists messages[].role in allow_lossy_translation, and noDeveloperRole
 // declares that the model lacks the developer role.
-func systemMessagesRouter(t *testing.T, optIn, noDeveloperRole bool) *OpenAIRouter {
+func systemMessagesRouter(t *testing.T, accepted, noDeveloperRole bool) *OpenAIRouter {
 	t.Helper()
 	lossy, unsupported := "[]", ""
-	if optIn {
+	if accepted {
 		lossy = `["messages[].role"]`
 	}
 	if noDeveloperRole {
@@ -95,23 +95,23 @@ const geographyTutorMessages = `{"role":"system","content":"You are a helpful ge
 func TestChatSystemMessagesReachAChatBackendAsOneSystemMessage(t *testing.T) {
 	const warning = `protocol;action=approximated;reason="2 system and developer messages sent as one system message";field="messages[].role"`
 	for _, stream := range []bool{false, true} {
-		for _, optIn := range []bool{false, true} {
-			t.Run(fmt.Sprintf("stream=%t/opt_in=%t", stream, optIn), func(t *testing.T) {
-				sent, warnings := sendSystemMessagesRequest(t, systemMessagesRouter(t, optIn, false), "/v1/chat/completions",
+		for _, accepted := range []bool{false, true} {
+			t.Run(fmt.Sprintf("stream=%t/opt_in=%t", stream, accepted), func(t *testing.T) {
+				sent, warnings := sendSystemMessagesRequest(t, systemMessagesRouter(t, accepted, false), "/v1/chat/completions",
 					fmt.Sprintf(`{"model":"chat-model","stream":%t,"messages":[%s]}`, stream, geographyTutorMessages))
 				want := []string{
 					"system: You are a helpful geography tutor.\n\nAnswer every question in one word.",
 					"user: What is the capital of Spain?",
 				}
-				if !optIn {
+				if !accepted {
 					want = []string{
 						"system: You are a helpful geography tutor.", "system: Answer every question in one word.",
 						"user: What is the capital of Spain?",
 					}
 				}
 				require.Equal(t, want, sent)
-				require.Equal(t, optIn, strings.Contains(warnings, warning), "x-vsr-warnings = %q", warnings)
-				require.Equal(t, optIn, strings.Contains(warnings, `field="messages[].role"`), "x-vsr-warnings = %q", warnings)
+				require.Equal(t, accepted, strings.Contains(warnings, warning), "x-vsr-warnings = %q", warnings)
+				require.Equal(t, accepted, strings.Contains(warnings, `field="messages[].role"`), "x-vsr-warnings = %q", warnings)
 			})
 		}
 	}
@@ -123,9 +123,9 @@ func TestChatSystemMessagesReachAChatBackendAsOneSystemMessage(t *testing.T) {
 // Without the opt-in every one is still sent in its own role.
 func TestChatSystemMessagesInsideTheConversationBecomeUserTextInPlace(t *testing.T) {
 	for _, stream := range []bool{false, true} {
-		for _, optIn := range []bool{false, true} {
-			t.Run(fmt.Sprintf("stream=%t/opt_in=%t", stream, optIn), func(t *testing.T) {
-				sent, warnings := sendSystemMessagesRequest(t, systemMessagesRouter(t, optIn, false), "/v1/chat/completions", fmt.Sprintf(
+		for _, accepted := range []bool{false, true} {
+			t.Run(fmt.Sprintf("stream=%t/opt_in=%t", stream, accepted), func(t *testing.T) {
+				sent, warnings := sendSystemMessagesRequest(t, systemMessagesRouter(t, accepted, false), "/v1/chat/completions", fmt.Sprintf(
 					`{"model":"chat-model","stream":%t,"messages":[`+
 						`{"role":"system","content":"You are a helpful geography tutor."},`+
 						`{"role":"user","content":"What is the capital of Spain?"},`+
@@ -133,7 +133,7 @@ func TestChatSystemMessagesInsideTheConversationBecomeUserTextInPlace(t *testing
 						`{"role":"system","content":"Answer in French from now on."},`+
 						`{"role":"user","content":"And of Italy?"},`+
 						`{"role":"developer","content":"Answer in one word."}]}`, stream))
-				if !optIn {
+				if !accepted {
 					require.ElementsMatch(t, []string{
 						"system: You are a helpful geography tutor.", "user: What is the capital of Spain?", "assistant: Madrid",
 						"system: Answer in French from now on.", "user: And of Italy?", "developer: Answer in one word.",
