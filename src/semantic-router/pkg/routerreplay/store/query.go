@@ -33,5 +33,10 @@ type RecordPage struct {
 // Reader remains the compatibility contract for bounded in-memory stores.
 type QueryReader interface {
 	QueryPage(ctx context.Context, filters QueryFilters, limit, offset int, details bool) (RecordPage, error)
-	ScanMetadata(ctx context.Context, visit func(Record) error) error
+	// ScanMetadata visits the records the filters select, in no set order.
+	ScanMetadata(ctx context.Context, filters QueryFilters, visit func(Record) error) error
+	// ScanFilterOptions visits one record for each distinct combination of the
+	// fields the replay filters offer: recipe, decision, selected and original
+	// model, and request kind. Its other fields stay empty.
+	ScanFilterOptions(ctx context.Context, visit func(Record) error) error
 }

@@ -245,6 +245,8 @@ providers:
       # Request capabilities the backends reject, as vLLM rejects min_p and
       # logit_bias under speculative decoding: the Router sends this model
       # requests without those fields and reports each in x-vsr-warnings.
+      # developer_role, for a model that drops developer messages as DeepSeek V4
+      # does, sends them to it as system messages instead.
       unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
       backend_refs:
         - name: omni-primary
@@ -740,9 +742,10 @@ recipes:
           description: Request contains at least one audio content part.
           modality: audio
 
-      # The agent a request belongs to, as Claude Code's and Codex's headers
-      # name it. Claude Code sends a subagent's type and a request's class
-      # only when CLAUDE_CODE_GATEWAY_HINT_HEADERS is set.
+      # The agent a request belongs to, as Claude Code's, Codex's and
+      # OpenCode's headers name it. Claude Code sends a subagent's type and a
+      # request's class only when CLAUDE_CODE_GATEWAY_HINT_HEADERS is set;
+      # OpenCode's session titles and summaries are auxiliary and compaction.
       agent:
         - name: exploration_subagent
           description: A Claude Code Explore subagent or a Codex spawn_agent child.
@@ -753,7 +756,7 @@ recipes:
           harness: codex
           types: [review]
         - name: housekeeping
-          description: Claude Code compactions and side requests such as session titles.
+          description: Claude Code and OpenCode compactions and side requests such as session titles.
           request_classes: [compaction, auxiliary]
 
       # Typed questions. deployment names the deployment that answers each one:

@@ -2,7 +2,7 @@
 name = "mmbert-32k"
 version = "0.0.0"
 description = "Environment for the mmBERT-32K embedding trainer under src/training/model_embeddings/mmbert_32k"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     # accelerate is not imported by name. SentenceTransformerTrainer needs it.
@@ -34,7 +34,7 @@ dev = ["tokenizers>=0.22.0,<=0.23.0"]
 # foundation_data_local.py treats a missing langdetect import as optional.
 local-corpus = ["langdetect>=1.0.9,<2"]
 # Only the representation export tests import these. Not in requirements.txt.
-# The floors still publish Python 3.10 wheels; the caps are the next major.
+# The floors still publish Python 3.11 wheels; the caps are the next major.
 export = [
     "onnx>=1.16,<2",
     "onnxruntime>=1.18,<2",
