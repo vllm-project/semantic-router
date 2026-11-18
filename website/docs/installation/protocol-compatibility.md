@@ -286,9 +286,9 @@ reported.
 
 A Responses request's `service_tier` and `safety_identifier` follow the same
 rule. Its other top-level fields the Router can't carry, `background`,
-`context_management`, `max_tool_calls`, `moderation`, `prompt`,
-`prompt_cache_options`, `prompt_cache_retention` and `top_logprobs`, fail with
-`unsupported_<field>`.
+`context_management`, `conversation`, `max_tool_calls`, `moderation`,
+`prompt`, `prompt_cache_options`, `prompt_cache_retention` and
+`top_logprobs`, fail with `unsupported_<field>`.
 
 ### Anthropic Messages clients on other backends
 
@@ -596,6 +596,12 @@ request without `store` and reports a `dropped` diagnostic for `store` in
   turn order: after the current request's top-level `instructions` and before
   the developer and system items of its own input. The earlier request's
   top-level `instructions` are not carried over.
+- **Conversations.** The Router keeps no Conversations objects, so it can
+  neither load a conversation's items nor add a response to them. A request
+  that names a `conversation`, as an ID or an object, fails with `400`
+  `unsupported_conversation` and `param: "conversation"` before it reaches a
+  backend; `conversation: null` names none. Continue a stored response with
+  `previous_response_id` instead.
 - **Custom tools.** Responses custom tools use `type: custom` with a flattened
   `format` object. Their `custom_tool_call` and `custom_tool_call_output`
   items keep free-form input, tool results and call IDs through Chat or

@@ -155,6 +155,11 @@ Chat Completions 和 Responses 后端仍按客户端发送的原样收到 `store
 
 Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。存储输入中的 developer 和 system 项按轮次顺序作为指令重放：位于当前请求的顶层 `instructions` 之后，并位于当前请求自身输入中的 developer 和 system 项之前。之前请求的顶层 `instructions` 不会沿用。
 
+Router 不保存 Conversations 对象，既无法加载会话中的项，也无法把响应加入会话。指定 `conversation`
+的请求（无论是 ID 还是对象）在到达任何后端之前就会以 `400` `unsupported_conversation` 失败，
+`param` 为 `"conversation"`；`conversation: null` 表示未指定会话。请改用 `previous_response_id`
+延续已存储的响应。
+
 Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它们的
 `custom_tool_call` 和 `custom_tool_call_output` 项在 Chat 或 Responses 后端上保留
 自由格式输入、工具结果和调用 ID，同时支持缓冲与流式响应。Messages 后端会以
@@ -192,7 +197,7 @@ Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它�
 | `text`、`json_object`、`json_schema` 以外的 `response_format` | `unsupported_output_format` | 无 |
 
 Responses 请求的 `service_tier` 和 `safety_identifier` 遵循同样的规则。它的其他 Router 无法承载的顶层字段，即
-`background`、`context_management`、`max_tool_calls`、`moderation`、`prompt`、`prompt_cache_options`、
+`background`、`context_management`、`conversation`、`max_tool_calls`、`moderation`、`prompt`、`prompt_cache_options`、
 `prompt_cache_retention` 和 `top_logprobs`，会以 `unsupported_<field>` 失败。
 
 Responses 的响应对象（缓冲响应以及流式的每个 `response.*` 事件）按客户端发送的原样重复请求的
