@@ -6,6 +6,8 @@ const (
 	HarnessCodex           = "codex"
 	HarnessOpenCode        = "opencode"
 	HarnessDeepSeekHarness = "deepseek_harness"
+	HarnessCursor          = "cursor"
+	HarnessOpenClaw        = "openclaw"
 )
 
 // HarnessAPIClient stands for the records no harness sent, plain API
@@ -25,12 +27,16 @@ func FilterHarness(record Record) string {
 // that spawned that one. ID and ParentID are short SHA-256 hashes of the ids
 // the harness sent. An empty ID is the run's main agent, and an empty
 // ParentID an agent the main agent spawned. Kind is the subagent kind Codex
-// names, such as collab_spawn or review.
+// names, such as collab_spawn or review. Type is the subagent type the
+// harness names, such as Claude Code's Explore, and RequestClass the class
+// of the call, such as compaction, as the agent signal reads them.
 type AgentIdentity struct {
-	Harness  string `json:"harness,omitempty"`
-	ID       string `json:"id,omitempty"`
-	ParentID string `json:"parent_id,omitempty"`
-	Kind     string `json:"kind,omitempty"`
+	Harness      string `json:"harness,omitempty"`
+	ID           string `json:"id,omitempty"`
+	ParentID     string `json:"parent_id,omitempty"`
+	Kind         string `json:"kind,omitempty"`
+	Type         string `json:"type,omitempty"`
+	RequestClass string `json:"request_class,omitempty"`
 }
 
 func cloneAgentIdentity(value *AgentIdentity) *AgentIdentity {

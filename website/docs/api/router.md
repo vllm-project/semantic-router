@@ -581,7 +581,7 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
 | `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session |
 | `GET` | `/api/v1/observability/replays/run?session_id=...` | Read one agent run as a tree of its agents and calls |
-| `GET` | `/api/v1/observability/replays/models` | List the configured models with the label Insights shows for each |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models with the label the Dashboard's **Requests** page shows for each |
 
 The runs list takes the list's filters, `limit` and `offset`; a run reads every
 recipe of its session. See
@@ -603,6 +603,27 @@ fields, so use it only when those fields are needed. See
 [Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
 for the review record and the aggregate's `reviews` summary.
 
+`harness` keeps the records sent by the harnesses it lists, comma-separated:
+`claude_code`, `codex`, `opencode`, `deepseek_harness`, `cursor`, `openclaw`, and `api_client` for
+the requests no harness sent, such as a script calling the API directly; a
+record's harness is its `agent.harness`, described in
+[Agent runs](../tutorials/plugin/router-replay#agent-runs). The list response
+carries `harness_counts`, the records every other filter selects counted by
+harness, such as `{"api_client": 51234, "claude_code": 1820, "codex": 977}`,
+so a page of one harness's records still shows how many each harness sent.
+
+With `since`, the aggregate also takes `interval`, a duration of at least `1m`
+such as `5m` or `1h` that splits the window into at most 1,000 intervals. The
+response then carries `traffic`: `since`, `interval_seconds`,
+`latency_p50_ms` and `latency_p95_ms` over the window's completed requests
+(estimated from 1,024 samples in a busier window), and `buckets` from `since`
+to now, oldest first and empty intervals included. Each bucket
+has its `start`, `requests`, `cached`, and `failed` (failed or aborted)
+counts, `latency_p50_ms` and `latency_p95_ms` over its completed requests
+(absent without one, and estimated from 256 samples in a busier interval),
+and `cost`, its spend per currency in the shape of `by_currency`. Without
+`interval` the response is unchanged.
+
 The aggregate and the runs list read the whole retained history. A Router
 answers each filter combination from one scan, shared by the requests that
 arrive while it runs, and keeps the answer for 30 seconds, so a record written
@@ -620,11 +641,11 @@ multiple requests at the same turn index.
 Records, trajectory routes, and messages include `conversation_id` when an
 explicit conversation identity is available. Messages are grouped by conversation
 and turn, so separate conversations in one session can each start at turn zero.
-Insights shows their boundaries and complete IDs. Records and trajectory routes
+The Dashboard's **Requests** page shows their boundaries and complete IDs. Records and trajectory routes
 also carry a Codex request's `turn_id` and `parent_turn_id`; see
 [Agent turns](../tutorials/plugin/router-replay#agent-turns).
 
-Dashboard Insights shows these routes alongside recorded signals, projections,
+The Dashboard's **Requests** page shows these routes alongside recorded signals, projections,
 candidate scores, and session-switch reasons. In `observe` mode, candidate and
 hold explanations describe what protection would have done; the selected model
 and route history still describe actual dispatch. Protection's `candidate_models`
@@ -679,7 +700,7 @@ as the record's `route_diagnostics` do.
 
 ### Configured-rate cost estimates
 
-Insights uses recorded token usage and configured input, cached-input,
+The Dashboard's **Requests** page uses recorded token usage and configured input, cached-input,
 cache-write, and output rates. These are estimates, not invoices or GPU running
 costs; infrastructure charges and billing adjustments are excluded.
 
@@ -742,7 +763,7 @@ compare against themselves. Alternative-model eligibility and tokenization are
 not re-evaluated; this is a rate comparison, not another inference.
 
 Missing usage, price, currency, or baseline stays unknown, with the reason shown
-in Insights. Explicitly configured free rates remain zero. Cache hits have zero
+on the Dashboard's **Requests** page. Explicitly configured free rates remain zero. Cache hits have zero
 additional model-inference cost; cache storage and lookup costs are excluded.
 Existing records keep their captured prices and baseline. **Price not recorded**
 means the historical record has no price; configuring rates today does not
@@ -751,7 +772,7 @@ backfill it.
 ### Provider prompt-cache breakdown
 
 New Replay records expose `provider_cache` in both the list and detail APIs.
-Dashboard Insights shows it under **Provider Prompt Cache**, separately from
+The Dashboard's **Requests** page shows it under **Provider Prompt Cache**, separately from
 Router response-cache hits and model-routing savings.
 
 Each of `uncached_input`, `cache_read`, `cache_write`, and `output` contains
@@ -784,7 +805,7 @@ are `-0.00035`. The input total remains 100; the tier counts partition the
 
 Partial, unavailable, or invalid usage does not produce a no-cache estimate or
 cache savings. A Router response-cache hit makes no new provider request, so
-its record has no `provider_cache`; Insights identifies it separately instead
+its record has no `provider_cache`; the **Requests** page identifies it separately instead
 of showing replayed provider usage as new provider savings.
 
 Aggregates use `summary.by_currency`, a sorted array with `currency`,
@@ -798,7 +819,7 @@ cross-currency total.
 `gross_saved`, `baseline_spend`, and `actual_spend` cover the
 `cost_record_count` completed records compared with a baseline. `gross_saved`
 is `baseline_spend - actual_spend`, the saving of the model choice alone.
-`total_saved`, the saving Insights shows, is net of the calls the Router made
+`total_saved`, the saving the Dashboard shows, is net of the calls the Router made
 itself for those same records: `total_saved = gross_saved -
 netted_router_call_spend`. For example, a request whose selected model costs
 `0.00010` against a `0.00100` baseline saves `0.00090` gross; a System One call

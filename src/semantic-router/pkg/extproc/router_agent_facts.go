@@ -49,6 +49,10 @@ func agentHarness(ctx *RequestContext) string {
 		return config.AgentHarnessOpenCode
 	case isDeepSeekHarness(ctx):
 		return config.AgentHarnessDeepSeekHarness
+	case isCursor(ctx):
+		return config.AgentHarnessCursor
+	case isOpenClaw(ctx):
+		return config.AgentHarnessOpenClaw
 	default:
 		return ""
 	}

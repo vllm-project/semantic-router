@@ -324,6 +324,10 @@ type Record struct {
 	// ParentRequestID the client request a Looper hop was made for.
 	Agent           *AgentIdentity `json:"agent,omitempty"`
 	ParentRequestID string         `json:"parent_request_id,omitempty"`
+	// ImageCount is the images in the request's newest turn, after its last
+	// assistant message, and HistoryImageCount the images before it.
+	ImageCount        int `json:"image_count,omitempty"`
+	HistoryImageCount int `json:"history_image_count,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`

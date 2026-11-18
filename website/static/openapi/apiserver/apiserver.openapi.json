@@ -19667,7 +19667,7 @@
           {
             "name": "harness",
             "in": "query",
-            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -19816,6 +19816,12 @@
                                 "type": "string"
                               },
                               "parent_id": {
+                                "type": "string"
+                              },
+                              "request_class": {
+                                "type": "string"
+                              },
+                              "type": {
                                 "type": "string"
                               }
                             }
@@ -20066,8 +20072,14 @@
                               "type": "string"
                             }
                           },
+                          "history_image_count": {
+                            "type": "integer"
+                          },
                           "id": {
                             "type": "string"
+                          },
+                          "image_count": {
+                            "type": "integer"
                           },
                           "jailbreak_confidence": {
                             "nullable": true,
@@ -22695,7 +22707,7 @@
           {
             "name": "harness",
             "in": "query",
-            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -23788,7 +23800,7 @@
           {
             "name": "harness",
             "in": "query",
-            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -24410,7 +24422,7 @@
           {
             "name": "harness",
             "in": "query",
-            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -25203,6 +25215,9 @@
                           "agent": {
                             "type": "string"
                           },
+                          "agent_type": {
+                            "type": "string"
+                          },
                           "completion_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -25235,6 +25250,9 @@
                             "items": {
                               "type": "object"
                             }
+                          },
+                          "image_count": {
+                            "type": "integer"
                           },
                           "lifecycle_state": {
                             "type": "string"
@@ -25312,6 +25330,9 @@
                             "type": "string"
                           },
                           "record_id": {
+                            "type": "string"
+                          },
+                          "request_class": {
                             "type": "string"
                           },
                           "request_id": {
@@ -25493,6 +25514,9 @@
                                 "type": "string"
                               },
                               "spawned_after_record_id": {
+                                "type": "string"
+                              },
+                              "type": {
                                 "type": "string"
                               }
                             },
@@ -26012,7 +26036,7 @@
           {
             "name": "harness",
             "in": "query",
-            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -26218,6 +26242,9 @@
                                   "type": "string"
                                 },
                                 "spawned_after_record_id": {
+                                  "type": "string"
+                                },
+                                "type": {
                                   "type": "string"
                                 }
                               },
@@ -27210,6 +27237,12 @@
                         },
                         "parent_id": {
                           "type": "string"
+                        },
+                        "request_class": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
                         }
                       }
                     },
@@ -27459,8 +27492,14 @@
                         "type": "string"
                       }
                     },
+                    "history_image_count": {
+                      "type": "integer"
+                    },
                     "id": {
                       "type": "string"
+                    },
+                    "image_count": {
+                      "type": "integer"
                     },
                     "jailbreak_confidence": {
                       "nullable": true,
