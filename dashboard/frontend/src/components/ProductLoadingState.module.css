@@ -5,6 +5,13 @@
   display: grid;
   place-items: center;
   pointer-events: none;
+  animation: loadingFadeIn var(--transition-slow) both;
+}
+
+@keyframes loadingFadeIn {
+  from {
+    opacity: 0;
+  }
 }
 
 .surface {
@@ -24,10 +31,21 @@
   flex: 0 0 auto;
 }
 
+/* A compact state takes its own place in the flow, so it never lies across
+   content that shares its container. */
 .compact {
-  position: absolute;
-  inset: 0;
-  min-height: 180px;
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  min-height: 7.5rem;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading {
+    animation: none;
+  }
 }
 
 .compact .surface {

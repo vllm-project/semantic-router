@@ -9,10 +9,15 @@ import (
 
 // protectionSessionID is the session id protection keys on and the header it
 // came from: identity.headers.session when configured, else the session id
-// the request pins, else the session a supported harness sends.
+// the request pins, else the session a supported harness sends. An OpenCode
+// subagent's call belongs to the session that spawned it unless the request
+// pins one in x-vsr-session-id.
 func protectionSessionID(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) (string, string) {
 	if cfg.HeaderName("session") == "" {
 		if sessionID, header := pinnedSessionID(ctx); sessionID != "" {
+			if parent, _ := openCodeSubagentSessions(ctx); parent != "" && header != headers.VSRSessionID {
+				return parent, headers.XParentSessionID
+			}
 			return sessionID, header
 		}
 	}
@@ -21,15 +26,21 @@ func protectionSessionID(ctx *RequestContext, cfg config.RouterLearningProtectio
 
 // protectionAgentID is the agent id protection keys on and the header it came
 // from: identity.headers.agent when configured, else the agent a supported
-// harness sends, a Claude Code subagent's id or a Codex thread's. A Codex
-// thread whose id is its session-id is the root thread, the main
-// conversation, and names no agent, also when the request pins a session.
+// harness sends, a Claude Code subagent's id, a Codex thread's or an OpenCode
+// subagent's child session. A Codex thread whose id is its session-id is the
+// root thread, the main conversation, and names no agent, also when the
+// request pins a session.
 func protectionAgentID(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) (string, string) {
 	agentID, header := protectionIdentityHeader(ctx, cfg, "agent", ctx.AgentTurn.ThreadID)
 	if header == headers.CodexThreadID || header == headers.XCodexTurnMetadata {
 		codexSessionID := strings.TrimSpace(headerValueCI(ctx, headers.CodexSessionID))
 		if agentID == codexSessionID || agentID == ctx.AgentTurn.SessionID {
 			return "", header
+		}
+	}
+	if agentID == "" && cfg.HeaderName("agent") == "" {
+		if _, child := openCodeSubagentSessions(ctx); child != "" {
+			return child, headers.XSessionID
 		}
 	}
 	return agentID, header

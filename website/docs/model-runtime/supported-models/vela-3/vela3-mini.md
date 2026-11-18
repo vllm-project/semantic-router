@@ -1,7 +1,7 @@
 ---
 title: "vela3-mini"
 sidebar_label: "vela3-mini"
-sidebar_position: 4
+sidebar_position: 5
 description: "Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions still on trained adapters and spans."
 custom_edit_url: null
 ---

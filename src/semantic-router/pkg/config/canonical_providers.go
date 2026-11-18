@@ -43,10 +43,12 @@ type CanonicalProviderModel struct {
 	Schema           string            `yaml:"schema,omitempty"`
 	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
 	// UnsupportedCapabilities lists the request capabilities the model's
-	// backends reject: sampling_min_p or sampling_logit_bias, both of which a
-	// vLLM backend that runs speculative decoding rejects. The Router sends
-	// this model requests without those fields and reports each in
-	// x-vsr-warnings; other models still receive them.
+	// backends lack: sampling_min_p or sampling_logit_bias, both of which a
+	// vLLM backend that runs speculative decoding rejects, and developer_role,
+	// which DeepSeek V4 drops without tools when it thinks. The Router sends
+	// this model requests without those sampling fields and with developer
+	// messages as system messages, and reports each change in x-vsr-warnings;
+	// other models still receive them.
 	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
 	// Tokenizer counts the model's prompts for the context window check: a
 	// Hugging Face repo id ([org/]name[@revision]), whose tokenizer.json the

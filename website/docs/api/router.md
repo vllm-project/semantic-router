@@ -582,6 +582,14 @@ fields, so use it only when those fields are needed. See
 [Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
 for the review record and the aggregate's `reviews` summary.
 
+The aggregate and the runs list read the whole retained history. A Router
+answers each filter combination from one scan, shared by the requests that
+arrive while it runs, and keeps the answer for 30 seconds, so a record written
+in that time counts from the next scan. A read stops when its client
+disconnects, and after 25 seconds at the most. A PostgreSQL store applies the
+filters itself, so a filtered aggregate, such as one `since` window, reads only
+the records it counts.
+
 Trajectory queries use the exact recipe name. Omitting `recipe` is supported
 only when the session's records belong to one recipe; an ambiguous session
 returns `400`. An explicit empty `recipe=` selects older, unscoped records.

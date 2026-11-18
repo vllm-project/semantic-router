@@ -16,6 +16,17 @@ from torch import nn
 PEFT_PREFIX = "base_model.model."
 
 
+def adapter_dtype_of(factor: nn.Module) -> torch.dtype:
+    """A LoRA factor's dtype: its weight's, or a laid-out layer's first tensor (packed weights are buffers)."""
+    weight = getattr(factor, "weight", None)
+    if isinstance(weight, torch.Tensor):
+        return weight.dtype
+    tensor = next(iter((*factor.parameters(), *factor.buffers())), None)
+    if tensor is None:
+        raise TypeError(f"{type(factor).__name__} holds no tensor to take a dtype from")
+    return tensor.dtype
+
+
 class LoRALinear(nn.Module):
     def __init__(self, base: nn.Linear, rank: int, scaling: float):
         super().__init__()
@@ -35,7 +46,7 @@ class LoRALinear(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         result: torch.Tensor = self.base_layer(x)
         result_dtype = result.dtype
-        adapter_dtype = self.lora_A.weight.dtype
+        adapter_dtype = adapter_dtype_of(self.lora_A)
         if x.dtype != adapter_dtype and x.is_floating_point():
             x = x.to(adapter_dtype)
         update = self.lora_B(self.lora_A(x))

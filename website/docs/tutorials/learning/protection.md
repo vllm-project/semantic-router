@@ -85,8 +85,8 @@ the session keeps its own key. See
 A harness such as Claude Code sends one session ID for a run and its subagents.
 Protection reads the agent each request is for and holds each agent on its own
 model, so a subagent keeps the model chosen for its first request, under the
-same rules as a session, while its parent keeps its own. Claude Code and Codex
-CLI need no identity headers configured for this:
+same rules as a session, while its parent keeps its own. Claude Code, Codex
+CLI and OpenCode need no identity headers configured for this:
 
 ```yaml
 protection:
@@ -115,6 +115,11 @@ protection:
   request never sets or moves its agent's model or replaces its cache
   receipt, even when the title request is the session's first call. Route
   them with the `agent` signal's `request_classes`.
+- **OpenCode** sends its session in `x-session-id` on every request. A
+  subagent runs in a child session of its own and also sends the session that
+  spawned it in `x-parent-session-id`. Unless the request pins a session in
+  `x-vsr-session-id`, the subagent is keyed as an agent of that session under
+  its own child session id, while the main agent keeps the session key.
 
 [Session identification](../../api/session-identification#choose-the-identity-you-need)
 lists the headers read by default. `identity.headers` replaces them: naming
@@ -122,8 +127,8 @@ lists the headers read by default. `identity.headers` replaces them: naming
 does not send holds every subagent on the model its parent was given, even
 when a decision routes the subagent's request elsewhere.
 
-These headers were checked with Codex CLI 0.167.0 and 0.166.0 and Claude Code
-2.1.325, configured as the
+These headers were checked with Codex CLI 0.167.0 and 0.166.0, Claude Code
+2.1.325 and OpenCode 1.18.10, configured as the
 [protocol compatibility guide](../../installation/protocol-compatibility)
 requires.
 
