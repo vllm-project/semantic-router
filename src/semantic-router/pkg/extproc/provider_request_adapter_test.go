@@ -177,6 +177,10 @@ func TestVLLMChatReasoningBudgetProjection(t *testing.T) {
 			name: "omitted budget stays omitted",
 			body: `{"model":"deepseek-model","messages":[],"reasoning_effort":"max"}`,
 		},
+		{
+			name: "null neutral budget stays omitted",
+			body: `{"model":"deepseek-model","messages":[],"reasoning_effort":"max","reasoning_budget_tokens":null}`,
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			adapted, err := router.adaptProviderRequest([]byte(test.body), dispatch, ctx)

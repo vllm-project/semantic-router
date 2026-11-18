@@ -140,6 +140,49 @@ func TestAnthropicThinkingBudgetToChatUsesLossyPolicy(t *testing.T) {
 	}
 }
 
+func TestNullChatReasoningBudgetIsOmittedBeforeNonVLLMDispatch(t *testing.T) {
+	for _, allow := range []bool{false, true} {
+		t.Run(map[bool]string{false: "strict", true: "opt-in"}[allow], func(t *testing.T) {
+			router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+			if allow {
+				router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldReasoningBudget}
+			}
+			body := []byte(`{"model":"` + model + `","messages":[{"role":"user","content":"hello"}],"reasoning_budget_tokens":null}`)
+			request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIChatV1, body)
+			if err != nil {
+				t.Fatalf("decode Chat request: %v", err)
+			}
+			if request.ReasoningBudgetTokens != nil {
+				t.Fatalf("decoded null reasoning budget = %v, want omitted", request.ReasoningBudgetTokens)
+			}
+
+			ctx := routingTestContext(llmprotocol.OpenAIChatV1, &request)
+			ctx.ProtocolEnvelope = envelope
+			ctx.TargetFormat = llmprotocol.OpenAIChatV1
+			ctx.RequestModel = model
+			dispatch := &providerDispatch{
+				logicalModel: model, backendModel: model, targetFormat: llmprotocol.OpenAIChatV1,
+				profile: &config.ProviderProfile{Type: "openai"},
+			}
+			replayed, err := router.encodeDispatchRequest(ctx)
+			if err != nil || !bytes.Equal(replayed, body) {
+				t.Fatalf("encode reused original request: body=%s error=%v", replayed, err)
+			}
+			prepared, err := router.materializePreparedProviderRequest(dispatch, ctx)
+			if err != nil {
+				t.Fatalf("materialize provider request: %v", err)
+			}
+			if bytes.Contains(prepared.body, []byte(`"reasoning_budget_tokens"`)) ||
+				bytes.Contains(prepared.body, []byte(`"thinking_token_budget"`)) {
+				t.Fatalf("provider request retained a null or projected budget: %s", prepared.body)
+			}
+			if len(ctx.ProtocolDiagnostics) != 0 {
+				t.Fatalf("null budget should not report a lossy translation: %+v", ctx.ProtocolDiagnostics)
+			}
+		})
+	}
+}
+
 func TestChatReasoningBudgetOptInPreservesEffortAndNoBudgetRequests(t *testing.T) {
 	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldReasoningBudget}

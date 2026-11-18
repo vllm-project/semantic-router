@@ -2,6 +2,8 @@ package protocolcodec
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -34,6 +36,16 @@ func TestOpenAIChatReasoningControlsRoundTripThroughNeutralIR(t *testing.T) {
 	}
 	if wire["reasoning_effort"] != "high" || wire["reasoning_budget_tokens"] != float64(512) {
 		t.Fatalf("encoded reasoning controls = %#v", wire)
+	}
+}
+
+func TestOpenAIChatRejectsProviderNativeThinkingBudget(t *testing.T) {
+	body := []byte(`{"model":"reasoning-model","messages":[{"role":"user","content":"solve this"}],"thinking_token_budget":512}`)
+	_, _, _, err := (OpenAIChatCodec{}).DecodeRequest(body, llmprotocol.DefaultPolicy())
+	var protocolErr *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolErr) || protocolErr.Category != llmprotocol.ErrorInvalidRequest ||
+		!strings.Contains(err.Error(), "thinking_token_budget") {
+		t.Fatalf("decode provider-native thinking budget error = %v, want an unknown-field rejection", err)
 	}
 }
 

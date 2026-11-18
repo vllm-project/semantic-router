@@ -81,8 +81,8 @@ func (r *OpenAIRouter) reportApproximatedReasoningDisplay(ctx *RequestContext, d
 
 // adaptChatReasoningBudget projects the Router-neutral Chat budget to vLLM's
 // native field. Other providers should have been rejected or projected by the
-// shared request projection before encoding. An explicit non-null vLLM value
-// takes precedence.
+// shared request projection before encoding. A null budget is equivalent to
+// an omitted field, and an explicit non-null vLLM value takes precedence.
 func (r *OpenAIRouter) adaptChatReasoningBudget(body []byte, dispatch *providerDispatch) ([]byte, error) {
 	if dispatch == nil || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 		return body, nil
@@ -90,6 +90,9 @@ func (r *OpenAIRouter) adaptChatReasoningBudget(body []byte, dispatch *providerD
 	neutralBudget := gjson.GetBytes(body, "reasoning_budget_tokens")
 	if !neutralBudget.Exists() {
 		return body, nil
+	}
+	if neutralBudget.Type == gjson.Null {
+		return sjson.DeleteBytes(body, "reasoning_budget_tokens")
 	}
 
 	providerType := ""
