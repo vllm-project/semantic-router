@@ -90,6 +90,21 @@ skills:
     handoff: Review expected calls and cost before any live run not already authorized.
     support: sr-bench 1.0; preview and replay do not establish live answer quality.
 
+  - id: vllm-sr-compare-configurations
+    name: vllm-sr-compare-configurations
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-compare-configurations/SKILL.md
+    published: website/static/install/agent/vllm-sr-compare-configurations/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Compare paired Router configuration runs and explain pass, fail, or insufficient evidence.
+    prerequisites: Two durable sr-bench run IDs and a prespecified objective and guard floors.
+    inputs: Frozen manifests, run reports, compatibility options, config identities, and paired service result.
+    outputs: Paired coverage, metrics, limitations, and evidence-backed verdict.
+    handoff: Human reviews any candidate promotion or recipe-lab iteration.
+    support: sr-bench 1.0 live comparison contract; replay and preview remain diagnostic.
+
   - id: router-contract-change
     name: router-contract-change
     audience: contributor

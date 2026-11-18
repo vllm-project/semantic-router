@@ -30,6 +30,9 @@ DECISION_SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-decision-mo
 CONFIGURE_SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-configure-recipe"
 DIAGNOSE_SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-diagnose-routing"
 BENCHMARK_SKILL = REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-benchmark"
+COMPARE_SKILL = (
+    REPO_ROOT / "tools" / "agent" / "skills" / "vllm-sr-compare-configurations"
+)
 PAGES = [
     SKILL / "SKILL.md",
     *sorted((SKILL / "references").glob("*.md")),
@@ -39,6 +42,8 @@ PAGES = [
     DIAGNOSE_SKILL / "SKILL.md",
     BENCHMARK_SKILL / "SKILL.md",
     *sorted((BENCHMARK_SKILL / "references").glob("*.md")),
+    COMPARE_SKILL / "SKILL.md",
+    *sorted((COMPARE_SKILL / "references").glob("*.md")),
 ]
 INSTALLER = REPO_ROOT / "install.sh"
 FENCE = re.compile(r"^[ \t]*```(\w*)[^\n]*\n(.*?)^[ \t]*```", re.M | re.S)
