@@ -221,9 +221,9 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
 	metadata.noteProviderSpecificFields(wire.Messages)
 	// Decoding drops client metadata and the text alias beside typed reasoning
-	// blocks, so the source bytes no longer describe the request and must not
-	// be replayed upstream.
-	if metadata.removed || chatMessagesDropReasoningAlias(wire.Messages) {
+	// blocks and replaces null tool schemas, so the source bytes no longer
+	// describe the request and must not be replayed upstream.
+	if metadata.removed || chatMessagesDropReasoningAlias(wire.Messages) || chatToolsHaveNullSchema(wire.Tools) {
 		envelope.Request = nil
 	}
 	return request, envelope, metadata.diagnostics(policy), nil
@@ -232,6 +232,15 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 func chatMessagesDropReasoningAlias(messages []chatMessageWire) bool {
 	for _, message := range messages {
 		if len(message.ReasoningDetails) > 0 && (message.Reasoning != nil || message.AlternateReasoning != nil) {
+			return true
+		}
+	}
+	return false
+}
+
+func chatToolsHaveNullSchema(tools []chatToolWire) bool {
+	for _, tool := range tools {
+		if len(tool.Function.Parameters) != 0 && !jsonFieldPresent(tool.Function.Parameters) {
 			return true
 		}
 	}
@@ -341,8 +350,9 @@ func decodeChatTools(tools []chatToolWire, request *llmprotocol.Request) error {
 		if toolWire.Type != "function" || toolWire.Custom != nil || strings.TrimSpace(toolWire.Function.Name) == "" {
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function and custom tools are supported", nil)
 		}
+		// Typed clients send null for a function without arguments.
 		schema := toolWire.Function.Parameters
-		if len(schema) == 0 {
+		if !jsonFieldPresent(schema) {
 			schema = json.RawMessage(`{"type":"object"}`)
 		}
 		request.Tools = append(request.Tools, llmprotocol.Tool{
