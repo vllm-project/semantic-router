@@ -20,9 +20,9 @@ const (
 // OpenAI request formats cannot carry.
 const LossyFieldToolResultError = "tool_result.is_error"
 
-// LossyFieldSystemMessageRole names the role of Anthropic system messages
-// inside the conversation, which ProjectAnthropicSystemMessages sends to Chat
-// and Responses backends as user text.
+// LossyFieldSystemMessageRole names the role of system and developer
+// messages, which ProjectSystemMessages sends a Chat backend as one leading
+// system message and, inside the conversation, as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
 // LossyFieldUnreadableFile names files in the conversation when the selected

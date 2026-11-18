@@ -262,7 +262,7 @@ func decodeResponsesMessageItem(item responsesItemWire, request *llmprotocol.Req
 		return err
 	}
 	if role == llmprotocol.RoleSystem || role == llmprotocol.RoleDeveloper {
-		request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: role, Content: content})
+		request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: role, Content: content, Position: len(request.Messages)})
 	} else {
 		request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: role, Content: content})
 	}
