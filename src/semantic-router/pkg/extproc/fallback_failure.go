@@ -53,15 +53,15 @@ func failedOutcomeAttempt(candidate *fallbackCandidate, outcome routing.Outcome)
 
 // failedAttemptResponse answers the client with the last attempt of a
 // fallback chain that ended without a success: the backend's error, with its
-// status, in the client's protocol (a refusal of a prompt over the window as
-// context_length_exceeded), or, when no backend answered, an unavailable
+// status, in the client's protocol and terms (normalizeUpstreamClientError),
+// or, when no backend answered, an unavailable
 // error that keeps the transport's detail out of the client's message. No
 // response phase sees that answer, so the record ends with it here.
 func (r *OpenAIRouter) failedAttemptResponse(ctx *RequestContext, attempt *failedAttempt) *ext_proc.ProcessingResponse {
 	if attempt == nil {
 		return nil
 	}
-	protocolError := r.failedAttemptError(attempt)
+	protocolError := r.failedAttemptError(ctx, attempt)
 	ctx.ImmediateProtocolError = protocolError
 	response := r.encodeImmediateResponseForClient(r.createErrorResponse(attempt.status, protocolError.Message), ctx)
 	reason := "upstream_error_response"
@@ -82,7 +82,7 @@ func (r *OpenAIRouter) fallbackCredentialRefusal(ctx *RequestContext) *ext_proc.
 	return refused
 }
 
-func (r *OpenAIRouter) failedAttemptError(attempt *failedAttempt) *llmprotocol.ProtocolError {
+func (r *OpenAIRouter) failedAttemptError(ctx *RequestContext, attempt *failedAttempt) *llmprotocol.ProtocolError {
 	if attempt.transport {
 		if attempt.status == http.StatusGatewayTimeout {
 			return llmprotocol.NewError(llmprotocol.ErrorUpstreamTimeout, "upstream_timeout", "the model service did not answer in time", nil)
@@ -97,7 +97,7 @@ func (r *OpenAIRouter) failedAttemptError(attempt *failedAttempt) *llmprotocol.P
 	if err != nil || decoded.Error == nil {
 		return upstreamTransportFallback(attempt.status, err)
 	}
-	_ = normalizeUpstreamContextLength(attempt.status)(&decoded)
+	_ = normalizeUpstreamClientError(ctx, attempt.status)(&decoded)
 	return decoded.Error
 }
 

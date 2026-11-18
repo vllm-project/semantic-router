@@ -221,6 +221,10 @@ type Envelope struct {
 	ResponseReencodeRequired bool // Provider decorations must not be replayed to a same-format client.
 	SourceStop               string
 	ResponseRender           ResponseRenderContext
+	// OutputLimitField is the member a Chat request set its output limit with,
+	// max_tokens or max_completion_tokens, so an error about the limit names
+	// the one the client sent.
+	OutputLimitField string
 }
 
 func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy Policy, response bool) bool {
