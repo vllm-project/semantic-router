@@ -87,9 +87,20 @@ func (engine *Engine) decodeRequest(
 	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	request, envelope, diagnostics, err := pair.buffered.DecodeRequest(body, policy)
+	captured, decodeBody, captureErr := captureRequestExtensions(body, policy)
+	if captureErr != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, captureErr
+	}
+	request, envelope, diagnostics, err := pair.buffered.DecodeRequest(decodeBody, policy)
 	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, diagnostics, err
+	}
+	if len(captured) > 0 {
+		request.ExtensionFields = captured
+		request.ExtensionFieldsFormat = format
+		if policy.SourcePreservation == llmprotocol.SourceBoundedSameFormat && len(body) <= policy.Limits.SourceEnvelopeBytes {
+			envelope.Request = body
+		}
 	}
 	applyRequestSemanticDefaults(&request)
 	llmprotocol.MarkDeferredToolLinks(&request)
@@ -128,7 +139,15 @@ func (engine *Engine) EncodeRequest(format llmprotocol.WireFormat, request llmpr
 	}
 	body, encodeDiagnostics, encodeRequestErr := pair.buffered.EncodeRequest(projected, envelope, engine.policy)
 	diagnostics := appendDiagnostics(projectionDiagnostics, encodeDiagnostics, engine.policy.Limits.Diagnostics)
-	return RequestResult{Request: projected, Envelope: envelope, Body: body, Diagnostics: diagnostics}, encodeRequestErr
+	if encodeRequestErr != nil {
+		return RequestResult{Request: projected, Envelope: envelope, Body: body, Diagnostics: diagnostics}, encodeRequestErr
+	}
+	merged, extensionDiagnostics, mergeErr := mergeRequestExtensions(format, projected, envelope, body)
+	diagnostics = appendDiagnostics(diagnostics, extensionDiagnostics, engine.policy.Limits.Diagnostics)
+	if mergeErr != nil {
+		return RequestResult{Request: projected, Envelope: envelope, Body: body, Diagnostics: diagnostics}, mergeErr
+	}
+	return RequestResult{Request: projected, Envelope: envelope, Body: merged, Diagnostics: diagnostics}, nil
 }
 
 // EncodeResponse validates and encodes an already-neutral response. Settlement
@@ -158,9 +177,20 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	if translateRequestErr != nil {
 		return RequestResult{}, translateRequestErr
 	}
-	request, envelope, diagnostics, translateRequestErr := sourcePair.buffered.DecodeRequest(body, decodePolicy)
+	captured, decodeBody, captureErr := captureRequestExtensions(body, engine.policy)
+	if captureErr != nil {
+		return RequestResult{}, captureErr
+	}
+	request, envelope, diagnostics, translateRequestErr := sourcePair.buffered.DecodeRequest(decodeBody, decodePolicy)
 	if translateRequestErr != nil {
 		return RequestResult{Diagnostics: diagnostics}, translateRequestErr
+	}
+	if len(captured) > 0 {
+		request.ExtensionFields = captured
+		request.ExtensionFieldsFormat = source
+		if engine.policy.SourcePreservation == llmprotocol.SourceBoundedSameFormat && len(body) <= engine.policy.Limits.SourceEnvelopeBytes {
+			envelope.Request = body
+		}
 	}
 	applyRequestSemanticDefaults(&request)
 	llmprotocol.MarkDeferredToolLinks(&request)
@@ -189,7 +219,15 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	}
 	encoded, encodeDiagnostics, translateRequestErr := targetPair.buffered.EncodeRequest(request, envelope, engine.policy)
 	diagnostics = appendDiagnostics(diagnostics, encodeDiagnostics, engine.policy.Limits.Diagnostics)
-	return RequestResult{Request: request, Envelope: envelope, Body: encoded, Diagnostics: diagnostics}, translateRequestErr
+	if translateRequestErr != nil {
+		return RequestResult{Request: request, Envelope: envelope, Body: encoded, Diagnostics: diagnostics}, translateRequestErr
+	}
+	merged, extensionDiagnostics, mergeErr := mergeRequestExtensions(target, request, envelope, encoded)
+	diagnostics = appendDiagnostics(diagnostics, extensionDiagnostics, engine.policy.Limits.Diagnostics)
+	if mergeErr != nil {
+		return RequestResult{Request: request, Envelope: envelope, Body: encoded, Diagnostics: diagnostics}, mergeErr
+	}
+	return RequestResult{Request: request, Envelope: envelope, Body: merged, Diagnostics: diagnostics}, nil
 }
 
 func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, body []byte, mutate ResponseMutation) (ResponseResult, error) {
@@ -599,6 +637,7 @@ func positiveProtocolLimits(limits llmprotocol.Limits) bool {
 		limits.StopSequences, limits.StopBytes, limits.LogitBiasEntries, limits.TextBytes,
 		limits.MediaReferenceBytes, limits.MediaDataBytes, limits.SSEFrameBytes,
 		limits.UnfinishedArguments, limits.Events, limits.Diagnostics,
+		limits.RequestExtensionBytes, limits.RequestExtensionMembers,
 	}
 	for _, value := range values {
 		if value <= 0 {

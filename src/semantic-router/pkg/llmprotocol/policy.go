@@ -119,6 +119,11 @@ type Policy struct {
 	// AllowedLossyFields are translated with a diagnostic even under
 	// LossyReject. Entries come from OptInLossyFields.
 	AllowedLossyFields []string
+	// AllowedRequestExtensions names top-level request members the wire
+	// format does not declare that the Router nevertheless captures at
+	// ingress and merges back on same-format dispatch. Entries come from
+	// operator configuration; every member not listed keeps failing closed.
+	AllowedRequestExtensions []string
 }
 
 type Limits struct {
@@ -160,6 +165,10 @@ type Limits struct {
 	UnfinishedArguments  int
 	Events               int
 	Diagnostics          int
+	// RequestExtensionBytes bounds the total captured extension member
+	// value bytes; RequestExtensionMembers bounds their count.
+	RequestExtensionBytes   int
+	RequestExtensionMembers int
 }
 
 func DefaultPolicy() Policy {
@@ -181,6 +190,7 @@ func DefaultPolicy() Policy {
 			MediaReferenceBytes: 16 << 10, MediaDataBytes: 48 << 20,
 			SSEFrameBytes: 1 << 20, UnfinishedArguments: 4 << 20,
 			Events: 1_000_000, Diagnostics: 64,
+			RequestExtensionBytes: 256 << 10, RequestExtensionMembers: 16,
 		},
 	}
 }

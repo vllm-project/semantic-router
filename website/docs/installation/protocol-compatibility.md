@@ -274,6 +274,36 @@ For backends served with such a template, add `messages[].role` to
   `messages[].role`.
 - Messages backends receive the message in place either way.
 
+### Request extension fields
+
+Some backends accept top-level request members their wire contract does not
+declare — a vLLM fork may read `vllm_xargs` for an acceleration algorithm,
+for example. The Router fails such requests closed: an unmodelled member
+would be silently erased by the neutral translation that model selection
+and plugins perform, so it is rejected instead of lost.
+
+Listing a member in `global.router.allow_request_extension_fields` changes
+that:
+
+- **Captured at ingress.** The Router lifts the member out of the request
+  before decoding, bounded by an extension budget, and carries it opaquely
+  through routing, model rewrite, and policy plugins.
+- **Merged on same-format dispatch.** The backend receives the member with
+  its original value; a replayed request keeps the original bytes.
+- **Dropped across formats, reported.** Dispatch that translates the
+  request to another wire format drops the member with a `dropped`
+  diagnostic in `x-vsr-warnings`.
+- **Never interpreted.** The Router does not read the member's value, and
+  it never influences routing decisions. Every member not listed keeps
+  failing closed.
+
+```yaml
+global:
+  router:
+    allow_request_extension_fields:
+      - vllm_xargs
+```
+
 ### Files a model can't read
 
 A model whose declared capabilities leave out `file_input` can't receive a

@@ -323,6 +323,14 @@ type Request struct {
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
 	// output, but targets that cannot carry it must reject it, not drop it.
 	PromptCacheKey string
+	// ExtensionFields holds operator-whitelisted top-level request members
+	// the wire format does not declare (Policy.AllowedRequestExtensions),
+	// captured opaquely at ingress. Same-format dispatch merges them back;
+	// crossing formats drops them with a diagnostic. The Router never
+	// interprets their values.
+	ExtensionFields map[string]json.RawMessage
+	// ExtensionFieldsFormat is the wire format the members were captured from.
+	ExtensionFieldsFormat WireFormat
 	// ToolNameOrigins is decode state that no wire carries. A request that
 	// flattened a Responses namespace keeps where each tool name came from, so
 	// retained history prepended later is checked against the same names.

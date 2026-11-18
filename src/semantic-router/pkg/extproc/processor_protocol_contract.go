@@ -118,6 +118,7 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 	policy.ResponseVendor = vendor
 	if r.Config != nil {
 		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
+		policy.AllowedRequestExtensions = r.Config.AllowRequestExtensionFields
 	}
 	return protocolcodec.NewEngine(registry, policy)
 }
