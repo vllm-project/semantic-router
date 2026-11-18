@@ -89,7 +89,7 @@ func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientse
 			"warned_tests": warned,
 			"failed_tests": failed, // real detection failures only
 			"infra_errors": infra,  // infrastructure errors, reported separately
-			"warning_rate": fmt.Sprintf("%.2f%%", detectionRate(warned, len(testCases))),
+			"warning_rate": fmt.Sprintf("%.2f%%", detectionRate(warned, warned+failed)),
 		})
 	}
 
@@ -170,6 +170,11 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 		result.Error = formatUnexpectedChatCompletionStatus(response)
 		logUnexpectedChatCompletionStatus(verbose, response, testCase.Description,
 			"Question: "+testCase.Question)
+		return result
+	}
+
+	if len(bytes.TrimSpace(response.Body)) == 0 {
+		result.Error = "empty HTTP response body"
 		return result
 	}
 
@@ -282,7 +287,8 @@ func printHallucinationResults(results []HallucinationResult, warnedCount int) {
 	fmt.Println(separator)
 	fmt.Printf("Total Tests: %d\n", len(results))
 	fmt.Printf("Responses Warned: %d\n", warnedCount)
-	fmt.Printf("Warning Rate: %.2f%%\n", detectionRate(warnedCount, len(results)))
+	warned, failed, _ := summarizeHallucinationResults(results)
+	fmt.Printf("Warning Rate: %.2f%%\n", detectionRate(warned, warned+failed))
 	fmt.Println(separator)
 
 	errorCount := 0
