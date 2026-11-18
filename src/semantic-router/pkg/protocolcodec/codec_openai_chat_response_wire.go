@@ -18,7 +18,7 @@ type chatResponseWire struct {
 	Provider          *string              `json:"provider,omitempty"`
 	Choices           []chatChoiceWire     `json:"choices"`
 	Usage             *chatUsageWire       `json:"usage,omitempty"`
-	Metadata          map[string]string    `json:"metadata,omitempty"`
+	Metadata          json.RawMessage      `json:"metadata,omitempty"`
 	Moderation        json.RawMessage      `json:"moderation,omitempty"`
 	Error             *chatErrorWire       `json:"error,omitempty"`
 	ServiceTier       *chatServiceTierWire `json:"service_tier,omitempty"`
@@ -52,6 +52,16 @@ type chatResponseWire struct {
 	// dropped with a diagnostic instead of failing the strict decode.
 	Citations     json.RawMessage `json:"citations,omitempty"`
 	SearchResults json.RawMessage `json:"search_results,omitempty"`
+}
+
+// hasMetadata preserves the string map's presence semantics: absent, null and
+// empty objects do not report a dropped field.
+func (wire chatResponseWire) hasMetadata() bool {
+	raw := bytes.TrimSpace(wire.Metadata)
+	if len(raw) >= 2 && raw[0] == '{' {
+		return len(bytes.TrimSpace(raw[1:len(raw)-1])) > 0
+	}
+	return jsonFieldPresent(raw)
 }
 
 // hasTimeInfo reports Cerebras's top-level serving timing metadata.
