@@ -930,7 +930,8 @@
             "type": "string",
             "enum": [
               "sampling_min_p",
-              "sampling_logit_bias"
+              "sampling_logit_bias",
+              "developer_role"
             ]
           },
           "type": "array"
@@ -3252,6 +3253,9 @@
     "JailbreakRuleInput": {
       "properties": {
         "history": {
+          "type": "boolean"
+        },
+        "tool_results": {
           "type": "boolean"
         }
       },

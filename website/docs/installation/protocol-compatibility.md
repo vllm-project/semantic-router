@@ -227,6 +227,15 @@ Responses requires a detail level on every input image. An image that arrives
 without one, as every Messages image and tool-result image does, reaches a
 Responses backend with `detail: auto`, the Responses default.
 
+A Chat tool message carries text only. Toward a Chat backend, the images a
+tool result holds, as Claude Code's `Read` of a picture or Codex's
+`view_image` returns, go in one user message right after the tool messages
+that answer the turn, opened with "The tool results above returned these
+images."; a tool message whose result held only images says that they follow.
+`x-vsr-warnings` reports the move as `approximated` with field
+`messages[].content.tool_result.image`. Other media in a tool result, such as
+a document, are still refused with `tool_result_media`.
+
 Messages has no image detail level and no document file name. Toward an
 `anthropic` backend, an image `detail` other than `auto` and a file `filename`
 are omitted, and `x-vsr-warnings` reports each as `dropped`.
@@ -351,12 +360,43 @@ providers:
 - **Other models are unaffected.** Another model of the same decision still
   receives the fields.
 
-The list accepts `sampling_min_p` and `sampling_logit_bias`; any other name
-fails at load. The gateway spreads a model's requests across its
+The list accepts `sampling_min_p`, `sampling_logit_bias` and `developer_role`
+([below](#developer-messages-a-backend-drops)); any other name fails at load. The gateway spreads a model's requests across its
 `backend_refs`, so list a control when any of them rejects it. To remove a
 control for every model a decision routes to, list it in the decision's
 [`request_params`](../tutorials/plugin/request-params) `blocked_params`
 instead.
+
+### Developer messages a backend drops
+
+OpenAI reads a `developer` message as an instruction, like a `system` one. Chat
+Completions clients send instructions in the `developer` role, and a Responses
+request's `instructions`, and its `developer` input items, reach a Chat backend
+as developer messages. DeepSeek V4's encoding, which vLLM follows, treats a
+developer message as a turn of its own instead: when the model thinks and the
+request has no tools, it drops every developer message before the last user
+message, so the model never sees those instructions. List `developer_role` in
+such a model's `unsupported_capabilities`:
+
+```yaml
+providers:
+  models:
+    - name: deepseek-v4-flash
+      api_format: chat_completions
+      unsupported_capabilities: [developer_role]
+      backend_refs:
+        - name: deepseek-pool
+          endpoint: deepseek-server:8000
+          provider: vllm
+```
+
+- **Sent as system for that model.** Every developer instruction and message
+  of a request sent to the model, as the decision's choice or as a fallback
+  candidate, reaches it in the `system` role.
+- **Reported.** `x-vsr-warnings` reports an `approximated` diagnostic for
+  `messages[].role`.
+- **Other models are unaffected.** Another model of the same decision still
+  receives the `developer` role.
 
 ### Signed reasoning from Anthropic backends
 

@@ -101,9 +101,9 @@ Card before using it; the card explains its intended use, backend roles, data
 handling, evaluation scope, and limitations.
 
 `config/recipes/built-in/` is the versioned source for virtual models bundled
-with the distribution. Dashboard presents these under **Build →
-Mixture-of-Models → Recipes** and lets operators assign connected Models
-without editing provider credentials into a Recipe.
+with the distribution. Dashboard presents these under **Routing → Recipes**
+and lets operators assign connected Models without editing provider
+credentials into a Recipe.
 
 ### Runtime examples
 

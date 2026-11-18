@@ -43,10 +43,6 @@ test('model hub URL state defaults are compact and stable', () => {
     },
     view: 'list',
     page: 1,
-    arenaScope: 'all',
-    arenaLayer: 'overall',
-    arenaCapability: '',
-    arenaBenchmark: '',
     selectedModelID: null,
   })
   assert.equal(support.serializeModelHubUrlState(state), '')
@@ -55,9 +51,7 @@ test('model hub URL state defaults are compact and stable', () => {
 test('every model hub control round-trips through the URL', () => {
   const search = '?q=mixture+router&kind=virtual&distribution=router_recipe'
     + '&creator=vLLM&provider=openai&capability=tools&lifecycle=all&sort=context'
-    + '&view=table&page=3&arena=virtual&arena_layer=benchmarks'
-    + '&arena_capability=vllm-sr%2Fcoding%401.0.0'
-    + '&arena_benchmark=livecodebench%2Flivecodebench%406.0.0'
+    + '&view=table&page=3'
     + '&model=openai%2Fgpt-6-astra'
   const state = support.parseModelHubUrlState(search)
 
@@ -73,10 +67,6 @@ test('every model hub control round-trips through the URL', () => {
   })
   assert.equal(state.view, 'table')
   assert.equal(state.page, 3)
-  assert.equal(state.arenaScope, 'virtual')
-  assert.equal(state.arenaLayer, 'benchmarks')
-  assert.equal(state.arenaCapability, 'vllm-sr/coding@1.0.0')
-  assert.equal(state.arenaBenchmark, 'livecodebench/livecodebench@6.0.0')
   assert.equal(state.selectedModelID, 'openai/gpt-6-astra')
   assert.deepEqual(
     support.parseModelHubUrlState(support.serializeModelHubUrlState(state)),
@@ -86,7 +76,7 @@ test('every model hub control round-trips through the URL', () => {
 
 test('invalid enum and page values fall back safely', () => {
   const state = support.parseModelHubUrlState(
-    '?kind=mixture&distribution=download&lifecycle=retired&sort=rank&view=cards&page=-2&arena=closed&arena_layer=domains',
+    '?kind=mixture&distribution=download&lifecycle=retired&sort=rank&view=cards&page=-2',
   )
 
   assert.equal(state.filters.kind, 'all')
@@ -95,8 +85,12 @@ test('invalid enum and page values fall back safely', () => {
   assert.equal(state.filters.sort, 'newest')
   assert.equal(state.view, 'list')
   assert.equal(state.page, 1)
-  assert.equal(state.arenaScope, 'all')
-  assert.equal(state.arenaLayer, 'overall')
+})
+
+test('serialization strips the removed Arena parameters from old links', () => {
+  const old = '?arena=virtual&arena_layer=benchmarks&arena_capability=x&arena_benchmark=y&q=glm'
+  const state = support.parseModelHubUrlState(old)
+  assert.equal(support.serializeModelHubUrlState(state, old), '?q=glm')
 })
 
 test('serialization preserves unrelated campaign parameters', () => {

@@ -195,11 +195,26 @@ func (r systemOneReading) besidesRequest(input config.SystemOneInput) []string {
 	return slices.DeleteFunc(texts, func(text string) bool { return strings.TrimSpace(text) == "" })
 }
 
-// hasInput reports whether a rule has text to read: a rule that leaves the
+// hasInput reports whether a rule has input to read. A rule that leaves the
 // current user turn out has none until the earlier turns or the tool results
-// it reads hold some, and is not asked, so it does not match.
+// it reads hold some. A rule that reads only the user's text, with the earlier
+// turns or tool results it may add, has none when they hold no text: a turn of
+// a picture alone, or of tool results the rule leaves out, gives it nothing to
+// judge. A rule with nothing to read is not asked, so it does not match; one
+// that also reads the answer, the context, earlier turns or media is asked.
 func (r systemOneReading) hasInput(rule config.SystemOneRule) bool {
-	return rule.Input.ReadsRequest() || len(r.besidesRequest(rule.Input)) > 0
+	input := rule.Input
+	if len(r.besidesRequest(input)) > 0 {
+		return true
+	}
+	if !input.ReadsRequest() {
+		return false
+	}
+	if input.Answer || input.Context || input.PreviousTurns > 0 || input.PreviousAnswer ||
+		input.Image || input.Audio || input.Video {
+		return true
+	}
+	return strings.TrimSpace(r.request) != ""
 }
 
 // unread is why a full-coverage rule misses part of its input, which it then
@@ -533,11 +548,21 @@ func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, resp
 			continue
 		}
 		answer, ok := response.Answers[asked.questionID()]
-		if !ok || answer.Error != "" {
+		// A full-coverage rule reads its whole input, and only an answer that
+		// attests complete coverage proves it did. The card-backed path
+		// derives that requirement in ExecuteQuestions, but a direct decider
+		// can return a plausible answer without covering the input, so its
+		// answer is unread here. A window call has its own coverage check: it
+		// reads one window and applyScan merges what the windows read.
+		uncovered := ok && call.scan == nil && asked.unread == "" && answer.Error == "" && rule.FullCoverage() && answer.InputCoverage != "complete"
+		if !ok || answer.Error != "" || uncovered {
 			c.recordGuardRead(results, asked, false)
 			reason := answer.Error
-			if !ok {
+			switch {
+			case !ok:
 				reason = "missing_answer"
+			case uncovered:
+				reason = "input_coverage_unknown"
 			}
 			if ok && rule.FullCoverage() && unscanned(reason) {
 				switch rule.EffectiveOnUnscanned() {
