@@ -1,10 +1,16 @@
-"""Vela 3.0: vela3-fast (the UltraBERT-380M encoder and its adapters) and vela3-fast-vision (the UltraVBERT image package).
+"""Vela 3.0 and 3.1: vela3-fast and vela3.1-fast (the UltraBERT-380M encoder and its adapters) and vela3-fast-vision (the UltraVBERT image package).
 
 Entries pin a revision, the SHA-256 of every file the family loads (the
 backbone, every adapter it routes to, the configs, the router questions and
 the tokenizer), the expected identity and parameter count; references live
 in ``registry/golden_answers_vela3.json``. The repositories are public; the
 pins are the revisions the records measured.
+
+``vela3.1-fast`` is the Vela 3.1 release of the same package: the same
+backbone shape, tokenizer and router questions with new weights, larger
+adapters and the released ``render31.py``, which the family fingerprints as
+data to read described yes/no questions and never imports. Its pin includes
+that file.
 
 ``vela3-fast-vision`` pins the ``vela3v-encoder/1`` image package: three
 UltraVBERT backbones (the raw image-hallucination/OCR backbone in
@@ -70,6 +76,31 @@ MODELS: tuple[BuiltinModel, ...] = (
             "span_sets_adapter.safetensors": "73c904acf7a765a38fd793b0d5d9d02633f9c5938620c9e063063aa1458cf006",
             "tokenizer.json": "38734bb17ef19f84c67b5eb5692bea19801ffd02cb5c5ffc11429e76b0242e08",
             "vela3_config.json": "ee5088605aa5151210fbc12e3f6ee0c9a382dddf90d3a43ac606c0df305d9ff2",
+        },
+    ),
+    _vela(
+        "vela3.1-fast",
+        "0ed6ed301fbbf0c312f11a13ad17e3a6f8887262",
+        "6d3114afbabc23cd6889aea9dc97649de30464a1105416cccdca3cdae8bfd87a",
+        1_927_527_449,
+        "ultrabert",
+        15,
+        {
+            "config.json": "8678694242f9545f1f6cac7d3e318718b267c29908e71a5e1804fd76bdadb787",
+            "domain_adapter.safetensors": "2935a0885fbc562a6ae4a0235a60ebc18e3a041784e8578e9e63b7f6248d12d3",
+            "evidence_adapter.safetensors": "dc388a941e854e1bd1da232f4f3b5b42549110047f81ea84873627c221253f27",
+            "factcheck_adapter.safetensors": "88e0efaa0455f77a809d13a108c01cff16f536ce81d888775a145c92f3aa36d9",
+            "feedback_df_adapter.safetensors": "8f734597e58859871eab73527ebc999e67cf0fb93b74a37fded08cf3f98460c1",
+            "model.safetensors": "3693b2866eb44cb5334367c8808f3f0891cc5b20052ccc2a35f54087f468b36c",
+            "ner_adapter.safetensors": "13f4f21d8368bc5a63f4410c906e6b5b606db917ceb48235e6997a26a5e590f6",
+            "relation_adapter.safetensors": "c5fd7d03b8370c55c6e8a24c614a5b94285d06bb493833b88ca2bae71f19efd7",
+            "render31.py": "d0c8ebc0896c7d3b942f5eba98cdd247ef01e08d329237015bef4fc55009c8ad",
+            "router_adapter.safetensors": "1aaa7931b058438b0cbd251260e49dd14c1c4bdda12c12893138606c745b7859",
+            "router_questions.json": "3ad4262d2d160ec9dc105a3fb72b33fe862566a9b5d2d82c1c9586f34f302450",
+            "span_adapter.safetensors": "e66f055acc24dc407ea8796aff9c3672dbeec64154cba5f799974e3e23ae658b",
+            "span_sets_adapter.safetensors": "dfd43e1709461884de0f3ce85a7a5d363013f2af874172902f98108ff10ffe68",
+            "tokenizer.json": "38734bb17ef19f84c67b5eb5692bea19801ffd02cb5c5ffc11429e76b0242e08",
+            "vela3_config.json": "2891e8b7055d3deaf95b66fbb0aba3b1b5bf2ca97943640019dcb95355afbf10",
         },
     ),
     _vela(

@@ -238,6 +238,11 @@ order, answers the whole request with `code` `question_failed`:
   starting answers 503 with `Retry-After`.
 - A body with a member the schema does not define is refused with 400
   `invalid_request`, naming it.
+- A state that gives no text (`""`, only white space, or an object without a
+  part) is refused with 400 `invalid_request` ("the state is empty") unless the
+  request has an image, a video or an asset to read; a state that is not a
+  text, an object of parts or media placed in front of a state is refused the
+  same way, naming the state.
 - Per question, choices number 2 to 255, labels 1 to 255 and levels 2 to 10;
   there is no limit on the number of questions.
 

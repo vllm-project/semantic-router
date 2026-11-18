@@ -2,7 +2,7 @@
 is_mtpe: false
 title: 开放智能指数
 sidebar_label: 智能指数
-description: Model Arena 排名和路由质量证据背后的版本化评测层级。
+description: Model Hub 和路由质量选择所用的版本化目录证据。
 translation:
   source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
   source_file: "docs/benchmarking/open-intelligence-index.md"
@@ -11,7 +11,7 @@ translation:
 
 # 开放智能指数 {#open-intelligence-index}
 
-开放智能指数是 Model Hub、Model Arena 和路由共用的目录证据图，保留版本化的已报告测量和缺失覆盖。它不是 [sr-bench 1.0](sr-bench) 的实时评测分数。新的单模型/MoM 能力、成本和延迟应由 sr-bench 实测；目录记录不能证明当前部署的新结果。
+开放智能指数是 Model Hub 和路由共用的目录证据图，保留版本化的已报告测量和缺失覆盖。它不是 [sr-bench 1.0](sr-bench) 的实时评测分数。新的单模型/MoM 能力、成本和延迟应由 sr-bench 实测；目录记录不能证明当前部署的新结果。
 
 ## Intelligence 1.0 {#intelligence-10}
 
@@ -65,17 +65,11 @@ Intelligence 1.0 = 100 × (
 - `partial` 有部分子项、空分数、精确覆盖率以及缺失列表；
 - `missing` 没有被接纳的子项，且分数为空。
 
-分数绝不会被填补、设为零、按已报告组件重新规范化，或从另一个检查点或推理力度借用。部分 Overall 仍可包含可用的类别分数。该模型可以出现在匹配的类别或基准排名中，并可为类别感知路由服务。
+分数绝不会被填补、设为零、按已报告组件重新规范化，或从另一个检查点或推理力度借用。部分 Overall 仍可包含可用的类别分数，该模型可为类别感知路由服务。
 
-## Model Arena {#model-arena}
+## Model Hub 证据 {#model-hub-evidence}
 
-Arena 对同一份数据提供三个视图：
-
-1. Overall Intelligence 排名；
-2. General、Reasoning、Coding 和 Agentic 排名；
-3. 六个原始基准排名。
-
-每个模型显示最高可用推理力度结果，并在该行暴露该力度。物理模型和虚拟模型使用相同的排名逻辑。URL 参数保留层级、所选能力或基准、模型范围和所选模型，因此每个视图都可分享。
+控制面板（**Models → Model Hub**）和网站 [Models 页面](/models) 中的 Model Hub 展示每个模型已发布的基准结果及其来源，作为该模型的证据，而不是排名。按 Overall、能力和基准为模型排名的 Model Arena 已在[控制面板 UX 重设计](../proposals/dashboard-ux-redesign)中从两处移除。目录中的指数数据保持不变，仍为多因素选择提供依据。
 
 ## 路由质量证据 {#routing-quality-evidence}
 

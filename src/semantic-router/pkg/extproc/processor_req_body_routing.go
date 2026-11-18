@@ -85,7 +85,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	}
 	// Bind response policy where the backend is selected.
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
-	ctx.SemanticRequest = request
+	attachSemanticRequest(ctx, request)
 	// Per-model accounting keys off the validated concrete dispatch model.
 	ctx.RequestModel = dispatch.logicalModel
 
@@ -154,7 +154,7 @@ func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.Capa
 func (r *OpenAIRouter) providerCapabilityMismatch(model string, format llmprotocol.WireFormat, required llmprotocol.CapabilitySet) error {
 	available, ok := r.codecCapabilitiesForFormat(format)
 	if !ok {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability", fmt.Sprintf("model %q has no codec for %q", model, format), nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability", fmt.Sprintf("the Router cannot reach model %q over the %s API", model, format.APIName()), nil)
 	}
 	if err := llmprotocol.RequireCapabilities(format, available, required); err != nil {
 		return err

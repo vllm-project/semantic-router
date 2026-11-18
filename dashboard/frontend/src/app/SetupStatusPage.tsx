@@ -1,5 +1,7 @@
 import React from 'react'
-import styles from './AppStatus.module.css'
+import { LoaderCircle, RotateCw, TriangleAlert } from 'lucide-react'
+import AuthBackdrop, { AuthCard } from '../components/AuthBackdrop'
+import { Button, cn } from '../ui'
 
 export interface SetupStatusPageProps {
   title: string
@@ -9,7 +11,7 @@ export interface SetupStatusPageProps {
   variant?: 'loading' | 'error'
 }
 
-/** Full-screen status card used during auth/setup loading and errors. */
+/** Full-screen status card shown while the session or setup state loads, or when it cannot be read. */
 const SetupStatusPage: React.FC<SetupStatusPageProps> = ({
   title,
   description,
@@ -17,21 +19,37 @@ const SetupStatusPage: React.FC<SetupStatusPageProps> = ({
   onAction,
   variant = 'error',
 }) => (
-  <div className={styles.viewport}>
-    <div className={styles.card} role="status" aria-live="polite">
-      <div className={styles.signalRow}>
-        <span className={`${styles.signal} ${variant === 'loading' ? styles.loadingSignal : ''}`} aria-hidden="true" />
-        <span>{variant === 'loading' ? 'Control plane startup' : 'Control plane attention'}</span>
+  <AuthBackdrop>
+    <AuthCard>
+      <div role="status" aria-live="polite" className="flex flex-col items-center text-center">
+        <span
+          className={cn(
+            'mb-5 grid size-12 place-items-center rounded-2xl border shadow-sm',
+            variant === 'loading'
+              ? 'border-border bg-surface text-primary'
+              : 'border-warning/30 bg-warning-soft text-warning-foreground',
+          )}
+          aria-hidden="true"
+        >
+          {variant === 'loading' ? (
+            <LoaderCircle className="size-5 animate-spin" />
+          ) : (
+            <TriangleAlert className="size-5" />
+          )}
+        </span>
+        <h1 className="text-lg font-semibold tracking-[-0.015em]">{title}</h1>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+          {description}
+        </p>
+        {variant === 'error' ? (
+          <Button className="mt-6 w-full" onClick={onAction}>
+            <RotateCw />
+            {actionLabel}
+          </Button>
+        ) : null}
       </div>
-      <h1 className={styles.title}>{title}</h1>
-      <p className={styles.description}>{description}</p>
-      {variant === 'error' ? (
-        <button type="button" className={styles.action} onClick={onAction}>
-          {actionLabel}
-        </button>
-      ) : null}
-    </div>
-  </div>
+    </AuthCard>
+  </AuthBackdrop>
 )
 
 export default SetupStatusPage

@@ -1,0 +1,60 @@
+{
+  "cases": [
+    {
+      "name": "parameters_omitted",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "What time is it?",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "function": {
+                "name": "get_time",
+                "parameters": {
+                  "type": "object"
+                },
+                "strict": false
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "parameters_null",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "What time is it?",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "function": {
+                "name": "get_time",
+                "parameters": {
+                  "type": "object"
+                },
+                "strict": false
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -90,13 +90,13 @@ can serve the requested task, the Router returns `unsupported_capability`.
 
 ## Configure Models in the Dashboard
 
-Open **Build → Routing → Models → Add Model**. You can then:
+Open **Models → Backend models** and choose **Connect model**. You can then:
 
 1. Choose a Provider, connect it, and select discovered or built-in model IDs.
 2. Enter a model ID when the Provider cannot list models.
 3. Use **Advanced settings** for a name prefix, a built-in reasoning family,
    routing metadata, pricing, and delivery settings.
-4. Use **Manual setup** from the Provider chooser for complete control over
+4. Use **Add manually** from the Provider chooser for complete control over
    `catalog`, inline reasoning fields, `provider_model_id`, `api_format`, and
    backend references.
 

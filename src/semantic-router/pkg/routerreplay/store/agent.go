@@ -2,9 +2,23 @@ package store
 
 // Harnesses an AgentIdentity names.
 const (
-	HarnessClaudeCode = "claude_code"
-	HarnessCodex      = "codex"
+	HarnessClaudeCode      = "claude_code"
+	HarnessCodex           = "codex"
+	HarnessOpenCode        = "opencode"
+	HarnessDeepSeekHarness = "deepseek_harness"
 )
+
+// HarnessAPIClient stands for the records no harness sent, plain API
+// clients, in a harness filter and its counts.
+const HarnessAPIClient = "api_client"
+
+// FilterHarness is the harness a harness filter matches a record by.
+func FilterHarness(record Record) string {
+	if record.Agent == nil || record.Agent.Harness == "" {
+		return HarnessAPIClient
+	}
+	return record.Agent.Harness
+}
 
 // AgentIdentity places a record in its agent run, the session it is filed
 // under: the harness that sent it, the agent that made the call and the agent

@@ -93,8 +93,9 @@ listeners:
 
 - 名称精确匹配（区分大小写，请求值去除首尾空白后比较），不展开别名：请列出客户端可能发送的每个名称。为空或不设置时，
   listener 接受所有模型。
-- 检查在 API key 检查之后、任何 signal、缓存或 decision 之前进行，使用的是 Router 为路由解析出的同一个模型。其他模型
-  （包括原本会直通的 provider 模型）得到 `403`，错误码 `model_not_allowed`，并以客户端协议返回。没有模型的请求得到
+- 检查在 API key 检查之后、任何 signal、缓存或 decision 之前进行，使用的是 Router 为路由解析出的同一个模型。Router
+  提供的其他模型（包括原本会直通的 provider 模型）得到 `403`，错误码 `model_not_allowed`，并以客户端协议返回。Router
+  在任何 listener 上都不提供的模型得到 `404` `model_not_found`，与 OpenAI SDK 的预期一致。没有模型的请求得到
   `400 model_required`。
 - 该 listener 上的 `GET /v1/models` 只列出目录中存在的允许名称。
 - decision 在进程内发起的模型调用（Looper 和 request-graph hop）不是客户端请求，不受限制，因此 `vllm-sr/auto`

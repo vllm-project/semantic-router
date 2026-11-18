@@ -206,7 +206,7 @@ Router 自行生成的 Chat 流（例如缓存重放）使用 `reasoning_content
 
 ## 路由错误 {#routing-errors}
 
-Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误和上下文长度错误外，消息不包含模型、决策或请求内容：
+Router 无法路由某个请求时，会直接应答该请求，不调用任何后端。错误采用客户端所用的协议。在 OpenAI Chat Completions 和 Responses 的错误中，`error.code` 是稳定的原因码，`error.message` 是简短消息。除预算错误、上下文长度错误和给出客户端所发模型的模型错误外，消息不包含模型、决策或请求内容：
 
 ```json
 {"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
@@ -214,7 +214,8 @@ Router 无法路由某个请求时，会直接应答该请求，不调用任何�
 
 | 代码 | 状态码 | `error.type` | 含义 |
 | --- | --- | --- | --- |
-| `model_not_found` | 400 | `invalid_request_error` | 请求指定的模型不由该 Router 提供。 |
+| `model_not_found` | 404 | `invalid_request_error` | 请求指定的模型在任何 listener 上都不由该 Router 提供：既不是入口名称，也不是 provider 模型或 LoRA 适配器。消息与 OpenAI 的相同：``The model `x` does not exist or you do not have access to it.``，OpenAI SDK 会将其识别为未知模型。Anthropic Messages 客户端收到 `not_found_error`。 |
+| `model_not_allowed` | 403 | `permission_error` | listener 的[模型白名单](../installation/gateway-modes#model-allow-list)没有列出一个 Router 在其他 listener 上提供的模型。消息会给出该模型。 |
 | `no_route` | 400 | `invalid_request_error` | 没有决策匹配，且没有可用的默认模型。配方入口会回退到已配置的 `providers.defaults.model`；Looper 入口遵循同样的配方规则，名称本身不会选择算法。 |
 | `context_length_exceeded` | 400 | `invalid_request_error` | Router 的计数表明请求超出了每个可服务它的模型的 `context_window_size` 周围的区间（用模型自己的分词器时为 3%，用代理分词器时为 30%）：在信号运行的同时，对照请求能到达的每个模型，并取消仍在运行的信号；或在决策之后，对照其候选。`param` 为 `messages`，消息像 OpenAI 的那样给出最宽的窗口和请求的估算计数：`This model's maximum context length is 1048576 tokens. However, your request has an estimated 1100000 input tokens. Please reduce the length of the input.` Anthropic Messages 客户端收到 `prompt is too long: 1100000 tokens > 1048576 maximum`。见[上下文窗口检查](../installation/model-configuration#check-prompts-against-the-context-window)。[请求预算检查](#request-budget-errors)也以同一错误码应答。 |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | 请求的输出超过了配置的模型上限。见[请求预算错误](#request-budget-errors)。 |
@@ -238,7 +239,17 @@ Router 会以 `WARN` 级别记录每一次此类失败，带上请求的 `x-requ
 
 缺少能力、上限未知、选择证据不可用以及混合失败，保持选择错误的行为，即 `no_eligible_model`。预算检查本身不会截断请求；需要时请启用[上下文压缩](../tutorials/plugin/context.md#compression-and-budget)。
 
-这些计数是估算值。后端仍可能拒绝请求；其有效的 HTTP 状态码和有意义的消息会被保留。vLLM 的整数错误码在 OpenAI 兼容错误中以字符串形式暴露：`code: 400` 的 `BadRequestError` 会变成 `code: "400"` 的 `invalid_request_error`。后端对超出其窗口的提示的拒绝（vLLM 的 `param: input_tokens`、提到上下文长度、窗口或大小的消息，或 Anthropic 的 `prompt is too long`）改为得到错误码 `context_length_exceeded`，并保留后端的消息，其中给出它的窗口和提示的计数。
+这些计数是估算值。后端仍可能拒绝请求。其 HTTP 状态码会被保留，`4xx` 错误以客户端的错误格式、用 Router 的术语到达客户端：
+
+- **超出窗口。** 后端以超出其窗口为由拒绝提示或输出上限时，得到 `context_length_exceeded`：vLLM 的 `param: input_tokens`、它的 `'max_tokens' or 'max_completion_tokens' is too large` 和 `max_completion_tokens=... cannot be greater than max_model_len=...` 错误、提到上下文长度、窗口或大小的消息，或 Anthropic 的 `prompt is too long`。
+- **其他拒绝。** 其他 `400` 得到 `invalid_request`。其他 `4xx` 保留后端的错误码，但 vLLM 的整数状态码会换成 Router 对该状态码使用的错误码，例如 `not_found`。`5xx` 原样传递。
+- **客户端的名称。** `param` 和消息给出客户端发送的字段：输出上限为 `max_tokens`、`max_completion_tokens` 或 `max_output_tokens`（尽管 Router 发给 Chat 后端的是 `max_completion_tokens`），提示为 `messages` 或 `input`。消息保留后端给出的数字，去掉后端自己的设置名（例如 `max_model_len`）和 vLLM 的 `(parameter=..., value=...)` 后缀。
+
+对窗口为 262,144 个 token 的模型发送 `max_tokens: 5000000` 的 Chat 请求，会收到：
+
+```json
+{"error":{"type":"invalid_request_error","code":"context_length_exceeded","message":"max_tokens is too large: 5000000. This model's maximum context length is 262144 tokens, and your request has 12 input tokens. Please request fewer output tokens.","param":"max_tokens"}}
+```
 
 在生成开始前被拒绝的流式请求，收到的是同样的非 2xx JSON 错误，而不是成功的 SSE 流。启用回放时，回放会记录失败的状态码和响应体；Router 的预算拒绝使用 `terminal_reason: request_budget_exceeded`。
 
@@ -277,11 +288,15 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 
 列表和聚合请求接受 `recipe`、`decision`、`model`、`session_id`、`cache_status` 和 `search` 等过滤器。分页使用 `limit` 和 `offset`；`limit` 上限为 100。`showDetails=true` 会请求大体量字段，仅在需要这些字段时使用。
 
+`harness` 只保留它列出的 Harness 发送的记录，多个值用逗号分隔：`claude_code`、`codex`、`opencode`、`deepseek_harness`，以及表示没有 Harness 的请求（例如直接调用 API 的脚本）的 `api_client`；记录的 Harness 即其 `agent.harness`。列表响应带有 `harness_counts`：按 Harness 统计其他过滤器选出的记录，例如 `{"api_client": 51234, "claude_code": 1820, "codex": 977}`，因此只看一个 Harness 的记录时，仍能看到每个 Harness 发送了多少请求。
+
+带 `since` 时，聚合请求还接受 `interval`：不小于 `1m` 的时长，例如 `5m` 或 `1h`，它把时间窗口切分为最多 1,000 个区间。此时响应带有 `traffic`：`since`、`interval_seconds`、窗口内已完成请求的 `latency_p50_ms` 和 `latency_p95_ms`（窗口较繁忙时根据 1,024 个样本估算），以及从 `since` 到当前时刻的 `buckets`，按从旧到新排列，空区间也包含在内。每个桶包含起始时间 `start`，`requests`、`cached` 和 `failed`（失败或中止）三项计数，该区间已完成请求的 `latency_p50_ms` 和 `latency_p95_ms`（没有已完成请求时省略，区间较繁忙时根据 256 个样本估算），以及 `cost`，即该区间按货币统计的花费，结构与 `by_currency` 相同。不带 `interval` 时，响应保持不变。
+
 轨迹查询使用精确配方名。仅当会话记录属于一个配方时，才允许省略 `recipe`；同一会话跨配方时返回 `400`。显式空值 `recipe=` 选择旧的未分配配方记录。响应保留每次请求的路由、延迟和生命周期，包括同一轮次中的多次请求。
 
-记录、轨迹中的路由和消息在具有显式对话身份时包含 `conversation_id`。消息按对话和轮次分组，因此同一会话内的不同对话都可以从第零轮开始。Insights 会显示对话边界和完整 ID。
+记录、轨迹中的路由和消息在具有显式对话身份时包含 `conversation_id`。消息按对话和轮次分组，因此同一会话内的不同对话都可以从第零轮开始。Dashboard 的 **Requests** 页面会显示对话边界和完整 ID。
 
-Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值，并叠加其所属配方自身的插件。`prompt_capture` 决定记录在路由证据之外保留什么：默认的 `none` 不保留任何请求或响应文本；`raw` 保留采集开关允许的文本；`verified` 只在配方的 PII 规则确认提示词不含个人数据时保留提示词，检测到 PII 或无法确认 PII 状态时省略它。`capture_personal_data` 是它已弃用的写法：`false` 加载为 `verified`，`true` 加载为 `raw`。
+Dashboard 的 **Requests** 页面将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值，并叠加其所属配方自身的插件。`prompt_capture` 决定记录在路由证据之外保留什么：默认的 `none` 不保留任何请求或响应文本；`raw` 保留采集开关允许的文本；`verified` 只在配方的 PII 规则确认提示词不含个人数据时保留提示词，检测到 PII 或无法确认 PII 状态时省略它。`capture_personal_data` 是它已弃用的写法：`false` 加载为 `verified`，`true` 加载为 `raw`。
 
 `capture_request_body: false` 会让整条记录都不含请求文本：请求体、`prompt`、`tool_definitions`，以及 `tool_trace` 中每个请求步骤的文本、参数和结果。`capture_response_body: false` 对响应体、响应步骤、`hallucination_spans`，以及回退结果 `execution_record` 中提供方返回的内容同样处理；每个失败的尝试只保留状态码和固定的原因。这些步骤保留类型、工具名、调用 ID 和状态。被省略的文本直接缺失，不标记为 `content_redacted`；该标记仍只表示对读者角色隐藏的内容，以及 `capture_tool_results` 未保留的工具结果。`max_tool_trace_bytes` 也会截断步骤文本，此时轨迹中的用户和助手消息带有 `content_truncated`。没有任何一层设置它时，每个字段保留 65,536 字节（64 KiB），步骤的 `raw_arguments` 和 `raw_output` 也包括在内，被截断时带有 `raw_truncated: true`；此时 `max_tool_trace_total_bytes` 为 262,144 字节（256 KiB），限制所有步骤的总和：最旧的步骤被丢弃，`tool_trace` 带有 `steps_truncated: true` 和 `dropped_step_count`，与 `max_tool_trace_steps` 相同。
 

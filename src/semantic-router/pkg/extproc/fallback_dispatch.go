@@ -57,11 +57,16 @@ func isClientStreamingRequested(ctx *RequestContext) bool {
 	return ctx.ExpectStreamingResponse || (ctx.SemanticRequest != nil && ctx.SemanticRequest.Stream)
 }
 
-// candidateReasoningChoice resolves the effective reasoning policy for a fallback candidate.
+// candidateReasoningChoice resolves the effective reasoning policy for a
+// fallback candidate, off when the request's output limit is too small for it.
 func (r *OpenAIRouter) candidateReasoningChoice(ctx *RequestContext, candidateModel string) bool {
 	if ctx == nil {
 		return false
 	}
+	return r.decisionReasoningChoice(ctx, candidateModel) && !r.outputBudgetTurnsReasoningOff(ctx, candidateModel)
+}
+
+func (r *OpenAIRouter) decisionReasoningChoice(ctx *RequestContext, candidateModel string) bool {
 	for i := range ctx.VSREligibleModelRefs {
 		ref := &ctx.VSREligibleModelRefs[i]
 		if candidateModelIdentity(*ref) == candidateModel {

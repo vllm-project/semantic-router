@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -69,12 +68,8 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackendWithDiagnostics(
 	if changed {
 		projected.Generation++ // The source envelope no longer describes this request.
 	}
-	var systemDiagnostics llmprotocol.Diagnostics
-	if r.Config != nil && slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldSystemMessageRole) {
-		projected, systemDiagnostics = llmprotocol.ProjectAnthropicSystemMessages(projected, target)
-	}
 	projected, cacheDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(projected, target)
-	return projected, append(systemDiagnostics, cacheDiagnostics...), nil
+	return projected, cacheDiagnostics, nil
 }
 
 func anthropicBackendCanDisableReasoning(family *config.ReasoningFamilyConfig) bool {

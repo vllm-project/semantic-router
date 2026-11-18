@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ModelLabelsContext } from './insightsModelLabelSupport'
 import { RunCallDetails, RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
-import { buildRunLanes } from './insightsRunSupport'
+import { buildRunTimeline } from './insightsRunTimeline'
 import type { RunCall, RunResponse } from './insightsRunTypes'
 
 const cost = {
@@ -18,7 +18,7 @@ const failed: RunCall = {
   agent: 'subagent 1',
   model: 'qwen-chat',
   timestamp: '2026-11-16T09:00:05Z',
-  duration_ms: 1000,
+  duration_ms: 5000,
   lifecycle_state: 'failed',
   response_status: 502,
   decision: 'remember',
@@ -67,16 +67,53 @@ const response: RunResponse = {
   ],
 }
 
+const timeline = buildRunTimeline(response, 0, 2)
+
 describe('run diagram', () => {
   it('draws a lane per agent with the spawn and the failure marked', () => {
     const html = renderToStaticMarkup(
-      <RunDiagram run={response.run} lanes={buildRunLanes(response)} onSelect={() => undefined} />,
+      <RunDiagram run={response.run} timeline={timeline} onSelect={() => undefined} />,
     )
     expect(html).toContain('↳ subagent 1')
     expect(html).toContain('collab_spawn')
     expect(html).toContain('title="Spawned by main"')
     expect(html).toContain('left:50%')
     expect(html).toContain('data-marker="failure"')
+  })
+
+  it("lets a lane's agent be followed, and dims the agents not followed", () => {
+    const html = renderToStaticMarkup(
+      <RunDiagram
+        run={response.run}
+        timeline={timeline}
+        agents={['subagent 1']}
+        onSelect={() => undefined}
+        onAgent={() => undefined}
+      />,
+    )
+    expect(html).toContain('aria-pressed="true"')
+    expect(html).toContain('aria-pressed="false"')
+    expect(html).toContain('title="Follow subagent 1&#x27;s calls"')
+    expect(html.match(/opacity-45/g)).toHaveLength(1)
+  })
+
+  it('folds a long idle stretch and says how long it lasted', () => {
+    const idle: RunResponse = {
+      ...response,
+      calls: [
+        { ...response.calls[0], duration_ms: 1000 },
+        { ...response.calls[0], record_id: 'rec-3', timestamp: '2026-11-16T09:10:00Z' },
+      ],
+    }
+    const html = renderToStaticMarkup(
+      <RunDiagram
+        run={response.run}
+        timeline={buildRunTimeline(idle, 0, 2)}
+        onSelect={() => undefined}
+      />,
+    )
+    expect(html).toContain('9m 59s idle')
+    expect(html).toContain('repeating-linear-gradient')
   })
 
   it('details a step with its route, a hidden reason, and its record', () => {
@@ -89,19 +126,19 @@ describe('run diagram', () => {
     expect(html).toContain('high')
     expect(html).toContain('failed 502')
     expect(html).toContain('Hidden from this viewer')
-    expect(html).toContain('href="/insights/rec-2"')
+    expect(html).toContain('href="/observe/requests/rec-2"')
   })
 
   it('shows each model by its label and keeps the configured name beside it', () => {
     const labels = { 'qwen-msg': 'Qwen3.6 35B A3B', 'qwen-chat': 'qwen36' }
-    const [, subagent] = buildRunLanes(response)
+    const [, subagent] = timeline.lanes
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <ModelLabelsContext.Provider value={labels}>
           <RunLegend run={response.run} />
-          <RunDiagram run={response.run} lanes={buildRunLanes(response)} onSelect={() => undefined} />
+          <RunDiagram run={response.run} timeline={timeline} onSelect={() => undefined} />
           <RunSegmentPanel
-            segment={subagent.segments[0]}
+            segment={subagent.blocks[0]}
             call={failed}
             onSelectCall={() => undefined}
           />

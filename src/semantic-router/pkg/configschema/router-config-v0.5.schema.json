@@ -51,7 +51,9 @@
           "type": "string",
           "enum": [
             "claude_code",
-            "codex"
+            "codex",
+            "opencode",
+            "deepseek_harness"
           ]
         },
         "types": {
@@ -859,6 +861,10 @@
         "reasoning_effort": {
           "type": "string"
         },
+        "reasoning_min_output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
         "tls": {
           "$ref": "#/$defs/ProviderDefaultsTLS"
         }
@@ -928,7 +934,8 @@
             "type": "string",
             "enum": [
               "sampling_min_p",
-              "sampling_logit_bias"
+              "sampling_logit_bias",
+              "developer_role"
             ]
           },
           "type": "array"
@@ -3250,6 +3257,9 @@
     "JailbreakRuleInput": {
       "properties": {
         "history": {
+          "type": "boolean"
+        },
+        "tool_results": {
           "type": "boolean"
         }
       },

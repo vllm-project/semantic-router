@@ -1,12 +1,5 @@
 import type { DecisionRule } from './dashboardPageTypes'
-import { getDecisionCategory, SIGNAL_COLORS } from './dashboardPageStats'
-
-export interface SignalBreakdownRow {
-  type: string
-  count: number
-  percent: number
-  color: string
-}
+import { getDecisionCategory } from './dashboardPageStats'
 
 export interface DecisionPreviewRow {
   key: string
@@ -17,21 +10,6 @@ export interface DecisionPreviewRow {
   typeLabel: string
   modelNames: string
   scopeLabel?: string
-}
-
-export function buildSignalBreakdownRows(byType: Record<string, number>): SignalBreakdownRow[] {
-  const entries = Object.entries(byType).filter(([, count]) => count > 0)
-  if (entries.length === 0) return []
-
-  const maxCount = Math.max(...entries.map(([, count]) => count))
-  return entries
-    .sort((a, b) => b[1] - a[1])
-    .map(([type, count]) => ({
-      type,
-      count,
-      percent: Math.round((count / maxCount) * 100),
-      color: SIGNAL_COLORS[type] || '#999',
-    }))
 }
 
 export function buildDecisionPreviewRows(

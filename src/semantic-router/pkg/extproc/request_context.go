@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
@@ -153,6 +154,11 @@ type RequestContext struct {
 	// before any phase reads it.
 	UpstreamResponseGzip bool
 
+	// ToolResultFailed is a request-scoped fact: the live semantic request
+	// carries a structured tool-result failure (ToolResult.IsError=true).
+	// Free-form tool text never sets this.
+	ToolResultFailed bool
+
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string
 	// ResponseHeadersContinued indicates whether response headers were forwarded
@@ -238,6 +244,7 @@ type RequestContext struct {
 	VSRSelectedDecisionConfidence       float64                                     // Confidence score from DecisionEngine evaluation
 	VSRSelectedDecisionConfidenceScored bool                                        // False for structural and error-policy matches without model scores
 	VSRReasoningMode                    string                                      // "on" or "off" - whether reasoning mode was determined to be used
+	VSRReasoningReason                  string                                      // Why VSRReasoningMode is not the decision's choice, such as "output_budget"
 	VSRSelectedModel                    string                                      // The model selected by VSR
 	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "static", "systemone", "escalate")
 	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
@@ -532,6 +539,10 @@ type RequestContext struct {
 	// RequestAutoStore snapshots the client's memory persistence override before
 	// provider preparation removes router controls. Nil uses configured defaults.
 	RequestAutoStore *bool
+	// unstatedReasoningOutputLimit snapshots the output limit of a client
+	// request that states no reasoning preference, before dispatch sets the
+	// reasoning controls; see outputBudgetTurnsReasoningOff.
+	unstatedReasoningOutputLimit *int64
 
 	ContextCompressionTargetTokens *int
 	ContextCompressionRecoveryKeys []string
@@ -553,6 +564,9 @@ type RequestContext struct {
 	// mutation does not poison the read-only config tree. nil means the
 	// matched decision declares no retention.
 	Retention *config.DecisionRetention
+	// RetentionOutcome is the provider-neutral backend acknowledgement receipt.
+	// It is explicit when no adapter is available and never claims enforcement.
+	RetentionOutcome *retention.Outcome
 }
 
 // embeddingContext returns the request-scoped context for outbound embedding

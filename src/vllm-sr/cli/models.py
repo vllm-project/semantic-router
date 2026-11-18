@@ -48,7 +48,7 @@ from pydantic import (
 
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import UnknownPolicy
-from .config_schema import routing_surface_catalog, surface_types
+from .config_schema import definition_enum, routing_surface_catalog, surface_types
 from .context_bands import (
     normalize_token_count,
     references_environment,
@@ -196,7 +196,8 @@ class ListenerAPI(BaseModel):
     models: Optional[List[str]] = Field(
         default=None,
         description="The only request models this API accepts, by exact "
-        "'model' value; others are rejected with HTTP 403 model_not_allowed. "
+        "'model' value; others are rejected with HTTP 403 model_not_allowed, "
+        "or 404 model_not_found when the Router serves them on no listener. "
         "Omitted, every model of the API's kind.",
     )
     max_deadline_ms: Optional[int] = Field(
@@ -593,6 +594,9 @@ class InputModalityRule(BaseModel):
         return self
 
 
+AGENT_HARNESSES = definition_enum("AgentRule", "harness")
+
+
 class AgentRule(BaseModel):
     """Matches the agent a request belongs to, from its harness's headers."""
 
@@ -601,7 +605,7 @@ class AgentRule(BaseModel):
     name: str
     description: Optional[str] = None
     role: Optional[Literal["main", "subagent"]] = None
-    harness: Optional[Literal["claude_code", "codex"]] = None
+    harness: Optional[str] = None
     types: Optional[List[str]] = None
     request_classes: Optional[
         List[Literal["main", "subagent", "workflow", "compaction", "auxiliary"]]
@@ -615,10 +619,15 @@ class AgentRule(BaseModel):
             raise ValueError(
                 "set at least one of role, harness, types or request_classes"
             )
-        if self.request_classes and self.harness == "codex":
+        if self.harness is not None and self.harness not in AGENT_HARNESSES:
             raise ValueError(
-                "only Claude Code sends a request class, so request_classes"
-                " cannot go with harness codex"
+                f"harness must be one of {', '.join(AGENT_HARNESSES)},"
+                f" got {self.harness!r}"
+            )
+        if self.request_classes and self.harness in ("codex", "deepseek_harness"):
+            raise ValueError(
+                "only Claude Code and OpenCode calls carry a request class, so"
+                f" request_classes cannot go with harness {self.harness}"
             )
         if self.role == "main" and self.types:
             raise ValueError(
@@ -2850,6 +2859,9 @@ class ProviderDefaults(BaseModel):
 
     model: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    # A request that states no reasoning preference and sets a smaller output
+    # limit runs with reasoning off; 0 or unset turns the rule off.
+    reasoning_min_output_tokens: Optional[int] = Field(default=None, ge=0)
     tls: Optional[ProviderDefaultsTLS] = None
 
 

@@ -38,7 +38,7 @@ providers:
           protocol: http
 ```
 
-在控制面板中，打开 **Build → Routing → Models → Add Model**，选择 Provider，然后选择 **Advanced settings → Reasoning family**。Models 页面上的 **Built-in Reasoning Families** 表显示可用 ID 及其原生参数。
+在控制面板中，打开 **Models → Backend models**，选择 **Connect model**，选择 Provider，然后选择 **Advanced settings → Reasoning family**。Backend models 页面上的 **Reasoning families** 标签页显示可用 ID 及其原生参数。
 
 ## 内联定义自定义家族
 
@@ -66,7 +66,7 @@ providers:
 
 Canonical v0.5 没有用户编写的全局家族注册表。旧的 `providers.defaults.reasoning_families` 加上按模型的 `reasoning_family` 组合会迁移到 `providers.models[].reasoning`：内置 ID 变为 `family` 引用，而自定义定义会被内联复制到每个使用它们的自定义 Model 上。
 
-在控制面板中使用 **Manual setup** 编写内联家族。将 **Built-in Catalog Model** 和 **Reasoning Family** 留空，然后填写 **Inline Reasoning** 字段。
+在控制面板中使用 **Add manually** 编写内联家族。将 **Built-in Catalog Model** 和 **Reasoning Family** 留空，然后填写 **Inline Reasoning** 字段。
 
 ## 理解内联字段
 
@@ -109,3 +109,19 @@ recipes:
 effort 必须由家族列出，并且被该 Model 的每个 Provider 绑定允许。`reasoning_mode` 必须与 `use_reasoning` 一致。省略 effort 以使用家族默认值，或在需要一个有效的部署级默认值优先时设置 `providers.defaults.reasoning_effort`。该默认值适用于家族列出它的每个 Model，因此这些 Model 的 Provider 绑定也必须允许它；家族未列出它的 Model 继续使用家族默认值。
 
 在控制面板决策编辑器中，先选择 Model。UI 从其有效家族派生 mode 和 effort 选项，并禁用 Model 或 Provider 不支持的控件。没有家族的自定义 Model 保持为透传模型，并且没有控制面板推理控件。透传模型的路由日志、指标和追踪不报告推理强度，其 `routing_decision` 日志行为 `reasoning_projected: false`。
+
+## 为较小的输出上限关闭推理 {#turn-reasoning-off-for-small-output-limits}
+
+后端会把推理计入请求的输出上限。决策开启推理时，输出上限较小的请求可能把上限全部用于思考，最终没有回答：Messages 响应只有 thinking 块，Chat 响应的 `content` 为 `null`，Responses 响应只有 reasoning 项。设置保留决策推理所需的最小上限：
+
+```yaml
+providers:
+  defaults:
+    reasoning_min_output_tokens: 512
+```
+
+- **未表明偏好且上限较小：关闭推理。** 未表明推理偏好、且输出上限低于该阈值的请求，会在模型推理关闭的情况下运行。输出上限指 Messages 的 `max_tokens`、Chat 的 `max_tokens` 或 `max_completion_tokens`，以及 Responses 的 `max_output_tokens`。
+- **哪些算作偏好。** 任意类型的 Messages `thinking`；Chat 的 `reasoning_effort`（包括 `none` 和 `minimal`）、`reasoning_budget_tokens`，或 `chat_template_kwargs` 中的 `enable_thinking`、`thinking`、`reasoning_effort` 成员；Responses 的 `reasoning.effort` 或 `reasoning.summary`。单独的 Messages `output_config.effort` 不算，因为它设置的是整个回答的 effort。表明了偏好的请求无论上限多少都照常路由。
+- **通过模型自己的控制关闭。** 后端收到模型推理家族的关闭控制，与 `use_reasoning: false` 相同。家族没有关闭控制的模型（例如始终开启的家族）保持推理。回退候选遵循同一规则。
+- **其他情况不变。** 没有输出上限、或上限不低于阈值的请求保持决策的推理，thinking 照常返回。不设置或设为 `0`（默认值）时该规则关闭。
+- **会报告。** `x-vsr-trace` 的 `reasoning` 成员为 `off;reason=output_budget`，Router Replay 记录的推理模式为 `off`。

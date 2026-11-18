@@ -68,8 +68,8 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "global", "models-entrypoints-serving.md"),
 		needles: []string{
-			"Build → Models",
-			"Build → Mixture-of-Models → Recipes",
+			"Models → Backend models",
+			"Routing → Recipes",
 			"vllm-sr serve --config my-models.yaml",
 			"vllm-sr status",
 			"vllm-sr logs router",
