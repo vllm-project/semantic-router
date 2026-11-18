@@ -73,8 +73,9 @@ func TestAnthropicThinkingBudgetToChatUsesLossyPolicy(t *testing.T) {
 				t.Fatalf("decode Anthropic request: %v", err)
 			}
 			request.Trusted.SourceFormat = llmprotocol.AnthropicMessagesV1
-			if request.ReasoningBudgetTokens == nil || *request.ReasoningBudgetTokens != 1024 {
-				t.Fatalf("decoded reasoning budget = %v, want 1024", request.ReasoningBudgetTokens)
+			if request.ReasoningMode != llmprotocol.ReasoningModeEnabled ||
+				request.ReasoningBudgetTokens == nil || *request.ReasoningBudgetTokens != 1024 {
+				t.Fatalf("decoded thinking controls = mode %q budget %v, want enabled and 1024", request.ReasoningMode, request.ReasoningBudgetTokens)
 			}
 
 			candidateErr := router.candidateCapabilityMismatch(
@@ -89,7 +90,7 @@ func TestAnthropicThinkingBudgetToChatUsesLossyPolicy(t *testing.T) {
 
 			ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
 			ctx.ProtocolEnvelope = envelope
-			_, err = router.prepareProviderDispatch(&request, model, "", false, ctx)
+			dispatch, err := router.prepareProviderDispatch(&request, model, "", false, ctx)
 			if !allow {
 				if !hasReasoningBudgetLossError(err) {
 					t.Fatalf("strict dispatch error = %v, want actionable lossy_translation", err)
@@ -105,15 +106,25 @@ func TestAnthropicThinkingBudgetToChatUsesLossyPolicy(t *testing.T) {
 			if err != nil {
 				t.Fatalf("opted-in dispatch: %v", err)
 			}
-			encoded, err := router.encodeDispatchRequest(ctx)
+			if dispatch.profile == nil || dispatch.profile.Type != "openai" {
+				t.Fatalf("test dispatch provider = %+v, want non-vLLM OpenAI Chat", dispatch.profile)
+			}
+			prepared, err := router.materializePreparedProviderRequest(dispatch, ctx)
 			if err != nil {
-				t.Fatalf("encode opted-in request: %v", err)
+				t.Fatalf("materialize opted-in provider request: %v", err)
 			}
-			if strings.Contains(string(encoded), `"reasoning_budget_tokens"`) || !strings.Contains(string(encoded), "Claude Code reasoning probe") {
-				t.Fatalf("provider request did not omit only the budget: %s", encoded)
+			observed := unmarshalReasoningRequest(t, prepared.body)
+			for _, field := range []string{"reasoning_budget_tokens", "thinking_token_budget", "reasoning_mode", "reasoning_effort", "chat_template_kwargs"} {
+				if _, found := observed[field]; found {
+					t.Fatalf("provider request unexpectedly carries %s after enabled thinking budget was dropped: %s", field, prepared.body)
+				}
 			}
-			if request.ReasoningBudgetTokens == nil || *request.ReasoningBudgetTokens != 1024 {
-				t.Fatalf("provider projection changed the semantic request: %+v", request)
+			if !strings.Contains(string(prepared.body), "Claude Code reasoning probe") {
+				t.Fatalf("provider request lost the user message: %s", prepared.body)
+			}
+			if request.ReasoningMode != llmprotocol.ReasoningModeEnabled ||
+				request.ReasoningBudgetTokens == nil || *request.ReasoningBudgetTokens != 1024 {
+				t.Fatalf("provider projection changed the semantic request: mode %q budget %v", request.ReasoningMode, request.ReasoningBudgetTokens)
 			}
 			want := llmprotocol.Diagnostic{
 				Source: llmprotocol.AnthropicMessagesV1, Target: llmprotocol.OpenAIChatV1,
