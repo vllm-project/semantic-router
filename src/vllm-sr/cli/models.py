@@ -196,7 +196,8 @@ class ListenerAPI(BaseModel):
     models: Optional[List[str]] = Field(
         default=None,
         description="The only request models this API accepts, by exact "
-        "'model' value; others are rejected with HTTP 403 model_not_allowed. "
+        "'model' value; others are rejected with HTTP 403 model_not_allowed, "
+        "or 404 model_not_found when the Router serves them on no listener. "
         "Omitted, every model of the API's kind.",
     )
     max_deadline_ms: Optional[int] = Field(

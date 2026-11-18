@@ -493,9 +493,21 @@ tools or error translation.
 ## Validation and failure behavior
 
 - Public requests are decoded into the neutral contract even when client and
-  backend formats match. Unknown or unsupported request fields fail closed,
-  and the error names an unknown field, such as
-  `request JSON contains a non-canonical field: unknown field "new_field"`.
+  backend formats match. Unknown or unsupported request fields fail closed
+  with `400` `invalid_request_error`, naming the field as OpenAI does:
+
+  | Request | Code | Message |
+  | --- | --- | --- |
+  | A member the API does not define | `unknown_parameter`, `param` the member's path | `Unrecognized request argument supplied: new_field`; inside a message, `messages[].new_field` |
+  | Valid JSON with a value of the wrong type | `invalid_type`, `param` the member's path | `Invalid type for 'max_tokens': expected an integer, but got a decimal number instead.` |
+  | A body that is not JSON | `invalid_json` | `request JSON is invalid` |
+  | A member the Router knows but cannot carry | `unsupported_<field>` | Names the field |
+
+  Anthropic Messages clients get the same message in Anthropic's
+  `invalid_request_error`, which has no code field.
+- A backend's `4xx` error reaches the client in the client's error format,
+  with the Router's codes and the field names the client sent; see
+  [request budget errors](../api/router#request-budget-errors).
 - Chat requests accept and don't forward the fields that client libraries add
   to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
   which holds the reply fields its message type lacks, and `parsed` and
