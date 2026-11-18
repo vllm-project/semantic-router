@@ -157,6 +157,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	r.observeApprovalReview(ctx, body, &request)
 	observeSessionTitleRequest(ctx, &request)
 	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
+	ctx.unstatedReasoningOutputLimit = unstatedReasoningOutputLimit(request)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream

@@ -765,6 +765,10 @@ Open **Observe → Requests** in the Dashboard, or use the
 [Replay API](../../api/router#router-replay) to filter records and inspect a session.
 Each request names the coding-agent harness that sent it, its session, and
 whether the main agent or a subagent made the call.
+The **Client** filter keeps the requests of the harnesses you pick, or of
+plain API clients. The Router applies it to the whole history and counts each
+client over every request the other filters select, so a script that sends
+most of the traffic does not hide older agent requests.
 The search finds a record by its request id, its recipe or its session id, so
 the session id an agent harness sends, such as Claude Code's
 `x-claude-code-session-id`, finds every call of that session. A record's header

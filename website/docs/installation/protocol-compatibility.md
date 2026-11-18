@@ -267,21 +267,20 @@ backend:
 
 Other unsupported controls fail with a typed request error.
 
+On every backend, `max_tokens` covers thinking as well as the answer. A
+request without `thinking` whose decision turns reasoning on can spend a small
+`max_tokens` on thinking and come back without text. With
+`providers.defaults.reasoning_min_output_tokens` set, such a request below that
+limit reaches the backend with the model's reasoning off; see
+[Model reasoning](model-reasoning#turn-reasoning-off-for-small-output-limits).
+
 A `system` message inside `messages`, such as the environment section and the
 file-change notices Claude Code inserts during a session, reaches these
-backends as a system message in the same place. Many open-model chat
-templates accept a system message only first: Qwen3.5 and later reject the
-request, and gpt-oss drops the text.
-
-For backends served with such a template, add `messages[].role` to
-`global.router.allow_lossy_translation` (see
-[Validation and failure behavior](#validation-and-failure-behavior)):
-
-- The text joins the user turn right before it, or becomes a user turn of its
-  own after a tool result.
-- `x-vsr-warnings` reports an `approximated` diagnostic for
-  `messages[].role`.
-- Messages backends receive the message in place either way.
+backends as a system message in the same place. Listing `messages[].role`
+sends it as user text in that place instead, for chat templates that accept a
+system message only first; see
+[System messages a chat template refuses](#system-messages-a-chat-template-refuses).
+Messages backends receive the message in place either way.
 
 ### Files a model can't read
 
@@ -367,6 +366,48 @@ control for every model a decision routes to, list it in the decision's
 [`request_params`](../tutorials/plugin/request-params) `blocked_params`
 instead.
 
+### System messages a chat template refuses
+
+A request can carry several system and developer messages. A Chat
+Completions client may give each instruction its own system message, a
+Responses request has its `instructions` and developer items, and coding
+agents insert system messages inside the conversation. Many open-model chat
+templates accept one system message, only first: Qwen3.5 and later reject the
+request with "System message must be at the beginning.", and gpt-oss drops
+the text. The same request then passes or fails with the model the decision
+picks.
+
+For backends served with such a template, add `messages[].role` to
+`global.router.allow_lossy_translation` (see
+[Validation and failure behavior](#validation-and-failure-behavior)):
+
+```yaml
+global:
+  router:
+    allow_lossy_translation: ["messages[].role"]
+```
+
+- **One system message, first.** A Chat backend receives the system and
+  developer messages that lead the conversation as one system message, their
+  texts in order with a blank line between them: a Chat request's leading
+  system and developer messages, or a Responses request's `instructions` and
+  leading developer and system items. A `cache_control` boundary stays at the
+  end of the text that set it. A request with one leading system message
+  reaches the backend unchanged.
+- **Later messages as user text.** A system or developer message inside the
+  conversation reaches a Chat backend as user text in the same place: it joins
+  the user turn right before it, or becomes a user turn of its own after an
+  assistant turn or a tool result. A Messages request's system messages inside
+  `messages` reach Responses backends the same way.
+- **Reported.** `x-vsr-warnings` reports one `approximated` diagnostic for
+  `messages[].role`.
+- **Other backends are unaffected.** Messages backends receive the messages
+  as sent, and Responses backends receive a Chat or Responses client's system
+  and developer messages in their own roles.
+
+Without the opt-in, every system and developer message reaches the backend in
+its own role.
+
 ### Developer messages a backend drops
 
 OpenAI reads a `developer` message as an instruction, like a `system` one. Chat
@@ -397,6 +438,11 @@ providers:
   `messages[].role`.
 - **Other models are unaffected.** Another model of the same decision still
   receives the `developer` role.
+
+With `messages[].role` listed, a Chat backend receives the leading developer
+messages in its one system message
+([above](#system-messages-a-chat-template-refuses)), and the request reports
+that diagnostic alone.
 
 ### Signed reasoning from Anthropic backends
 
@@ -528,9 +574,21 @@ tools or error translation.
 ## Validation and failure behavior
 
 - Public requests are decoded into the neutral contract even when client and
-  backend formats match. Unknown or unsupported request fields fail closed,
-  and the error names an unknown field, such as
-  `request JSON contains a non-canonical field: unknown field "new_field"`.
+  backend formats match. Unknown or unsupported request fields fail closed
+  with `400` `invalid_request_error`, naming the field as OpenAI does:
+
+  | Request | Code | Message |
+  | --- | --- | --- |
+  | A member the API does not define | `unknown_parameter`, `param` the member's path | `Unrecognized request argument supplied: new_field`; inside a message, `messages[].new_field` |
+  | Valid JSON with a value of the wrong type | `invalid_type`, `param` the member's path | `Invalid type for 'max_tokens': expected an integer, but got a decimal number instead.` |
+  | A body that is not JSON | `invalid_json` | `request JSON is invalid` |
+  | A member the Router knows but cannot carry | `unsupported_<field>` | Names the field |
+
+  Anthropic Messages clients get the same message in Anthropic's
+  `invalid_request_error`, which has no code field.
+- A backend's `4xx` error reaches the client in the client's error format,
+  with the Router's codes and the field names the client sent; see
+  [request budget errors](../api/router#request-budget-errors).
 - Chat requests accept and don't forward the fields that client libraries add
   to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
   which holds the reply fields its message type lacks, and `parsed` and
@@ -573,8 +631,8 @@ tools or error translation.
   The Router then omits the flag, leaves the tool-result content unchanged,
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
-  also accepts `messages[].role` for system messages inside the conversation
-  and `content.file` for files a model cannot read and `tools.defer_loading`
+  also accepts `messages[].role` for system and developer messages a chat
+  template refuses and `content.file` for files a model cannot read and `tools.defer_loading`
   for deferred tool loading, all described above,
   `reasoning.signature` for signed thinking in a response or in a Messages
   request's history (see signed reasoning above), `store` (see stored
