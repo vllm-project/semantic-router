@@ -21,9 +21,9 @@ const (
 )
 
 // The request classes Claude Code documents for x-claude-code-request-class.
-// OpenCode sends none; the Router gives its session-title and compaction
-// calls the auxiliary and compaction classes and every other call main or
-// subagent.
+// OpenCode, Codex and OpenClaw send none; the Router gives the calls their
+// built-in prompts mark the auxiliary or compaction class and every other
+// call main or subagent.
 const (
 	AgentRequestClassMain       = "main"
 	AgentRequestClassSubagent   = "subagent"
@@ -114,14 +114,10 @@ func ValidateAgentRuleContract(rule AgentRule) error {
 func validateAgentRequestClasses(rule AgentRule) error {
 	if len(rule.RequestClasses) > 0 {
 		switch rule.Harness {
-		case AgentHarnessCodex:
-			return fmt.Errorf("request_classes cannot go with harness codex: Codex calls carry no request class")
 		case AgentHarnessDeepSeekHarness:
 			return fmt.Errorf("request_classes cannot go with harness deepseek_harness: DeepSeek Harness calls carry no request class")
 		case AgentHarnessCursor:
 			return fmt.Errorf("request_classes cannot go with harness cursor: Cursor calls carry no request class")
-		case AgentHarnessOpenClaw:
-			return fmt.Errorf("request_classes cannot go with harness openclaw: OpenClaw calls carry no request class")
 		}
 	}
 	for i, class := range rule.RequestClasses {
