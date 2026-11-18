@@ -15,6 +15,21 @@ skills:
     handoff: Ask before changing an existing stack, exposing ports, or activating traffic.
     support: v0.5 workflow; check the installed CLI schema and current support matrix.
 
+  - id: vllm-sr-serve
+    name: vllm-sr-serve
+    audience: user
+    source: tools/agent/skills/vllm-sr-serve/SKILL.md
+    published: website/static/install/agent/vllm-sr-serve/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-serve/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Start or verify a local Router stack or decision-model Engine mode with vllm-sr serve.
+    prerequisites: Supported Docker or Podman host, CLI, and a complete Router config or model artifact.
+    inputs: Mode, platform, model endpoint or artifact, and stack directory.
+    outputs: Startup receipt and route or System One readiness evidence.
+    handoff: Review an existing stack, config replacement, exposed port, or stop before changing it.
+    support: v0.5 local-image Router and Engine modes; check installed CLI and support matrix.
+
   - id: router-contract-change
     name: router-contract-change
     audience: contributor
