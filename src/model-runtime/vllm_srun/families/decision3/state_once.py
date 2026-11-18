@@ -206,7 +206,9 @@ class StateOnceModel(Decision3Model):
         own images branch from the state as usual (a Box reads its four edge
         markers in the same forward); questions with their own images run as
         rows of their own (``_composed_rows``): the same mask, the state read
-        again for each, so their answers never depend on other questions.
+        again for each, so their answers never depend on other questions. A
+        Box without ``at`` locates its target among the images, so in a request
+        with videos it branches from a state of the images alone.
         ``decisions``, the request's Choice, Yes / No and Score questions (by
         default those of ``questions``), sets their temperature.
         """
@@ -227,18 +229,27 @@ class StateOnceModel(Decision3Model):
             if standard and (front or videos)
             else None
         )
-        head = prompt.state_block(hoisted, len(front), len(videos or []))
-        encoding = self.prompts.encode(head)
-        split = prompt.state_tokens(encoding.offsets, head)
-        state_ids = list(encoding.ids[:split])
-        opening = list(encoding.ids[split:])
-        if media:
-            state_ids = self._expand(state_ids, media)
-        shared = RequestState(tuple(state_ids), media)
+        shared = self._composed_state(hoisted, len(front), len(videos or []), media)
+        image_boxes = {
+            key
+            for key, question in questions.items()
+            if isinstance(question, dict)
+            and question.get("type") == "box"
+            and question.get("at") is None
+        }
+        boxed = shared
+        if videos and image_boxes:
+            boxed = self._composed_state(
+                hoisted,
+                len(front),
+                0,
+                RequestMedia(media.images) if media is not None and front else None,
+            )
         errors: dict[str, dict[str, Any]] = {}
         built: list[
             tuple[
                 str,
+                RequestState,
                 str,
                 list[str],
                 list[Any],
@@ -265,11 +276,13 @@ class StateOnceModel(Decision3Model):
                         windows,
                     )
                     continue
+                state = boxed if question_id in image_boxes else shared
                 built.append(
                     (
                         question_id,
+                        state,
                         *self._composed_question(
-                            question, refs, assets, opening, videos
+                            question, refs, assets, list(state.opening), videos
                         ),
                     )
                 )
@@ -277,35 +290,23 @@ class StateOnceModel(Decision3Model):
                 errors[question_id] = question_error(kind, exc)
         items: list[Item] = []
         accepted = []
-        for (
-            question_id,
-            kind,
-            keys,
-            descriptions,
-            block,
-            readouts,
-            block_images,
-            at,
-        ) in built:
-            refused = self.length_error(len(state_ids) + len(block))
+        for entry in built:
+            question_id, state, kind, block = entry[0], entry[1], entry[2], entry[5]
+            refused = self.length_error(len(state.ids) + len(block))
             if refused is not None:
                 errors[question_id] = question_error(kind, refused)
                 continue
-            accepted.append(
-                (
-                    question_id,
-                    kind,
-                    keys,
-                    descriptions,
-                    block,
-                    readouts,
-                    block_images,
-                    at,
-                )
+            accepted.append(entry)
+        # Each state's tokens are shared by the questions that branch from it.
+        shares = {
+            id(state): iter(
+                _shares(len(state.ids), sum(entry[1] is state for entry in accepted))
             )
-        shares = _shares(len(state_ids), len(accepted)) if accepted else []
+            for state in {id(entry[1]): entry[1] for entry in accepted}.values()
+        }
         for (
             question_id,
+            state,
             kind,
             keys,
             descriptions,
@@ -313,27 +314,27 @@ class StateOnceModel(Decision3Model):
             readouts,
             block_images,
             at,
-        ), share in zip(accepted, shares, strict=True):
+        ) in accepted:
             items.append(
                 Item(
                     question_id,
                     kind,
-                    state_ids + block,
+                    list(state.ids) + block,
                     keys,
                     descriptions,
-                    media,
-                    shared,
-                    share + len(block),
+                    state.media,
+                    state,
+                    next(shares[id(state)]) + len(block),
                     readouts=readouts,
                     block_images=block_images,
                     at=at,
                     temperature=temperature if kind in QUESTION_TYPES else None,
                 )
             )
-        # The request cap counts the request's state once and each question's own block once; a video Box or track
+        # The request cap counts each state once and each question's own block once; a video Box or track
         # question's frame windows and moments are bounded by the video limits instead.
         own = sum(item.cost or 0 for item in items) + (
-            0 if accepted else len(state_ids)
+            0 if accepted else len(shared.ids)
         )
         own += sum(
             {item.question_id: item.cost or 0 for item in reversed(windowed)}.values()
@@ -353,6 +354,19 @@ class StateOnceModel(Decision3Model):
             ),
             own,
         )
+
+    def _composed_state(
+        self, hoisted: Any, images: int, videos: int, media: RequestMedia | None
+    ) -> RequestState:
+        """A composed request's state over ``images`` and ``videos`` placeholders (expanded with ``media``), and the
+        tokens that open its question blocks."""
+        head = prompt.state_block(hoisted, images, videos)
+        encoding = self.prompts.encode(head)
+        split = prompt.state_tokens(encoding.offsets, head)
+        ids = list(encoding.ids[:split])
+        if media:
+            ids = self._expand(ids, media)
+        return RequestState(tuple(ids), media, tuple(encoding.ids[split:]))
 
     def plan_resolved(self, request: Any) -> RequestPlan[Item]:
         """The API layer's resolved request (``assets.Segments``) through ``plan_composed``: each
