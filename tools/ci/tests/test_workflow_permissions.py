@@ -210,6 +210,41 @@ class CommunityValidationTests(unittest.TestCase):
         self.assertIn("community_lifecycle.py accept-issue ", commands)
         self.assertNotIn("accept-issues", commands)
 
+    def test_assignment_commands_reconcile_after_the_prow_action(self) -> None:
+        steps = self.data["jobs"]["issue-manager"]["steps"]
+        action = next(
+            index
+            for index, step in enumerate(steps)
+            if "prow-github-actions" in str(step.get("uses", ""))
+        )
+        following = steps[action + 1 :]
+        sync = next(
+            step
+            for step in following
+            if "sync-issue-assignment" in step.get("run", "")
+        )
+        condition = " ".join(sync["if"].split())
+
+        self.assertIn("!cancelled()", condition)
+        self.assertIn("startsWith(github.event.comment.body, '/assign')", condition)
+        self.assertIn("startsWith(github.event.comment.body, '/unassign')", condition)
+        self.assertIn("GH_TOKEN", sync["env"])
+        self.assertTrue(
+            any(
+                str(step.get("uses", "")) == "actions/checkout@v4"
+                for step in following
+            )
+        )
+
+    def test_manual_assignment_events_keep_their_lifecycle_sync(self) -> None:
+        events = self.data.get("on", self.data.get(True))
+        self.assertIn("assigned", events["issues"]["types"])
+        self.assertIn("unassigned", events["issues"]["types"])
+        job = self.data["jobs"]["issue-lifecycle"]
+        self.assertIn("github.event_name == 'issues'", job["if"])
+        commands = " ".join(step.get("run", "") for step in job["steps"])
+        self.assertIn("community_lifecycle.py sync-issue ", commands)
+
     def test_review_events_keep_the_trusted_label_sync_bridge(self) -> None:
         events = self.data.get("on", self.data.get(True))
         self.assertEqual(

@@ -158,3 +158,21 @@ jobs:
             /cc
             /uncc'
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The action writes assignees with GITHUB_TOKEN, which suppresses the
+      # issues.assigned and issues.unassigned runs, so reconcile here instead.
+      - name: Check out the repository
+        if: >-
+          !cancelled()
+          && (startsWith(github.event.comment.body, '/assign')
+          || startsWith(github.event.comment.body, '/unassign'))
+        uses: actions/checkout@v4
+
+      - name: Reconcile issue delivery state after the command
+        if: >-
+          !cancelled()
+          && (startsWith(github.event.comment.body, '/assign')
+          || startsWith(github.event.comment.body, '/unassign'))
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/ci/community_lifecycle.py sync-issue-assignment --event "$GITHUB_EVENT_PATH"

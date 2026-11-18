@@ -61,6 +61,9 @@ ISSUE_DELIVERY_STATE_LABELS = frozenset(
     }
 )
 
+ASSIGN_COMMANDS = ("/assign", "/unassign")
+ASSIGNMENT_COMMAND_EVENT = "assignment-command"
+
 PRIORITY_LABELS = ("priority/P0", "priority/P1", "priority/P2")
 PROTECTED_ISSUE_LABELS = {
     ACCEPTED,
@@ -113,6 +116,13 @@ def label_names(item: dict[str, Any]) -> set[str]:
         label["name"] if isinstance(label, dict) else str(label)
         for label in item.get("labels", [])
     }
+
+
+def assignment_command(body: str | None) -> str | None:
+    """Return the assignment command that starts a comment, if any."""
+
+    tokens = (body or "").split()
+    return tokens[0] if tokens and tokens[0] in ASSIGN_COMMANDS else None
 
 
 def parse_form_field(body: str | None, heading: str) -> str | None:
@@ -255,8 +265,16 @@ def normalize_proposed_workgroup(
 
     # A Workgroup selected in the issue form is only the initial proposal. If a
     # Maintainer removes that owner while reclassifying the issue, do not race
-    # the following label addition by restoring the stale form choice.
-    if actor_can_manage and event_action == "unlabeled" and event_label in OWNER_LABELS:
+    # the following label addition by restoring the stale form choice. Assignment
+    # commands reconcile delivery state and must not re-seed ownership either.
+    if (
+        event_action == ASSIGNMENT_COMMAND_EVENT
+        or (
+            actor_can_manage
+            and event_action == "unlabeled"
+            and event_label in OWNER_LABELS
+        )
+    ):
         return workgroups
 
     plan.add_labels.add(form_workgroup)
