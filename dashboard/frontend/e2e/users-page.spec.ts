@@ -201,7 +201,7 @@ test.describe('Users and access', () => {
               resource: 'users/user-2',
               method: 'PATCH',
               path: '/api/admin/users/user-2',
-              ip: '10.0.0.1',
+              ip: '192.0.2.1',
               userAgent: 'console',
               statusCode: 204,
               createdAt: 1_893_456_000,

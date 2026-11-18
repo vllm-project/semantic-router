@@ -17,7 +17,7 @@ const auditLog: AuditLog = {
   resource: 'users/user-b',
   method: 'PATCH',
   path: '/api/admin/users/user-b',
-  ip: '10.0.0.1',
+  ip: '192.0.2.1',
   userAgent: 'console',
   statusCode: 204,
   createdAt: 1_704_153_600,
@@ -140,7 +140,7 @@ describe('users audit log support', () => {
         'PATCH',
         '/api/admin/users/user-b',
         '204',
-        '10.0.0.1',
+        '192.0.2.1',
         '"agent, ""quoted"""',
       ].join(','),
     )

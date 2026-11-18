@@ -205,7 +205,7 @@ func TestModelHealthReportsUnreachableAndSilentBackends(t *testing.T) {
 		{
 			name: "connection refused",
 			client: func(*http.Request) (*http.Response, error) {
-				return nil, errors.New("dial tcp 10.1.2.3:443: connect: connection refused")
+				return nil, errors.New("dial tcp 192.0.2.10:443: connect: connection refused")
 			},
 			reason: "The backend could not be reached.",
 		},
@@ -230,7 +230,7 @@ func TestModelHealthReportsUnreachableAndSilentBackends(t *testing.T) {
 			if entry.Status != ModelHealthStatusDown || entry.Reason != test.reason {
 				t.Fatalf("entry = %+v, want down: %s", entry, test.reason)
 			}
-			if strings.Contains(entry.Reason, "10.1.2.3") {
+			if strings.Contains(entry.Reason, "192.0.2.10") {
 				t.Fatalf("reason leaks the backend address: %q", entry.Reason)
 			}
 		})
