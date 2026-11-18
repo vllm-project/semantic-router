@@ -135,6 +135,39 @@ Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它�
 `verbosity` 字段；Messages 没有对应字段，因此 Router 丢弃这个输出详细程度提示，
 并在 `x-vsr-warnings` 中报告 `text.verbosity`。
 
+### Router 拒绝的 Chat 请求字段 {#chat-request-fields-the-router-refuses}
+
+对于无法传给所有后端的 Chat Completions 字段，Router 会失败关闭：请求得到 `400` 和下表中的错误码，不会到达任何后端。
+如果某个取值请求的内容，后端在没有该字段时也会照做，Router 就接受它：后端收到的请求不带该字段，`x-vsr-warnings`
+会为它报告 `dropped` 诊断。取值为 `null` 视同没有该字段；`logprobs: false` 请求的是默认行为，两者都不会被报告。
+
+| 字段 | 错误码 | 接受的取值 |
+| --- | --- | --- |
+| `audio` | `unsupported_audio` | 无 |
+| `function_call` | `unsupported_function_call` | 无 |
+| `functions` | `unsupported_functions` | 无 |
+| `logprobs` | `unsupported_logprobs` | `false` |
+| `modalities` | `unsupported_modalities` | 恰好为 `["text"]` |
+| `moderation` | `unsupported_moderation` | 无 |
+| `prediction` | `unsupported_prediction` | 无 |
+| `prompt_cache_options` | `unsupported_prompt_cache_options` | 无 |
+| `prompt_cache_retention` | `unsupported_prompt_cache_retention` | 无 |
+| `safety_identifier` | `unsupported_safety_identifier` | 任意字符串：供提供方滥用监控使用的终端用户 ID，后端不会使用它 |
+| `service_tier` | `unsupported_service_tier` | `"auto"` 和 `"default"` |
+| `top_logprobs` | `unsupported_top_logprobs` | 无 |
+| `web_search_options` | `unsupported_web_search_options` | 无 |
+| `messages[].audio`，即回放历史中的输出音频 | `unsupported_output_audio` | 无 |
+| `messages[].function_call`，即历史中的旧版函数调用 | `unsupported_legacy_function_call` | 无 |
+| `messages[].tool_calls[].function.TokenizedArguments` | `unsupported_messages_tool_calls_function_tokenized_arguments` | 无 |
+| 消息角色不能容纳的内容部分，例如 system 消息中的图像 | `unsupported_content` | 无 |
+| `type` 不是 `function` 或 `custom` 的工具 | `unsupported_tool` | 无 |
+| 类型为 `allowed_tools` 的 `tool_choice` | `unsupported_tool_choice` | 无 |
+| `text`、`json_object`、`json_schema` 以外的 `response_format` | `unsupported_output_format` | 无 |
+
+Responses 请求的 `service_tier` 和 `safety_identifier` 遵循同样的规则。它的其他 Router 无法承载的顶层字段，即
+`background`、`context_management`、`max_tool_calls`、`moderation`、`prompt`、`prompt_cache_options`、
+`prompt_cache_retention` 和 `top_logprobs`，会以 `unsupported_<field>` 失败。
+
 ### 后端拒绝的采样控制 {#sampling-controls-a-backend-rejects}
 
 有些后端会拒绝其线路格式定义的采样控制。例如，运行推测解码（speculative
