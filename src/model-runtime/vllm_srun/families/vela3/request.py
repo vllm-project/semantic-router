@@ -1,10 +1,10 @@
-"""A ``/v1/decisions`` request read the way the Vela 3.0 encoder package reads System One.
+"""A ``/v1/decisions`` request read as its Vela encoder package reads System One.
 
 Choice and Noul questions are decisions on the backbone (``ub_d3_common``):
 the whole state is one user part, a string as it is and anything else as
-compact JSON; Noul is the two-option choice ``no`` / ``yes`` (descriptions
-empty, no abstain option), so a Noul that describes ``false`` or ``true`` is
-invalid. A Choice or Set question whose instructions are a
+compact JSON. Vela 3.0 Noul questions use bare ``no`` / ``yes`` options and
+reject descriptions; the fingerprinted render31 contract carries ``false``
+and ``true`` descriptions into those options. A Choice or Set question whose instructions are a
 router text is a router question: it reads the state's typed parts
 (``vela2.request.typed_state``: text is the user part as it is, never decoded
 as JSON, as ``vela3_encoder._parts`` reads it), defaults to the part its
@@ -74,8 +74,9 @@ class Read:
 class Reader:
     """Validates questions against one package's router texts and span routes."""
 
-    def __init__(self, router: Router):
+    def __init__(self, router: Router, *, render31: bool = False):
         self.router = router
+        self.render31 = render31
 
     def read(self, state: Any, questions: dict[str, Any]) -> Read:
         try:
@@ -141,11 +142,20 @@ class Reader:
         overflow = _overflow(question)
         instructions = question.get("instructions")
         if parsed.kind == "noul":
-            if any(value is not None for value in parsed.criteria.values()):
-                raise invalid(
-                    "this model reads only a noul question's instructions; remove the false and true descriptions"
+            if self.render31:
+                options: tuple[tuple[str, str], ...] = tuple(
+                    (name, "" if value is None else text(value))
+                    for name, value in (
+                        ("no", parsed.criteria.get("false")),
+                        ("yes", parsed.criteria.get("true")),
+                    )
                 )
-            options: tuple[tuple[str, str], ...] = NOUL_OPTIONS
+            else:
+                if any(value is not None for value in parsed.criteria.values()):
+                    raise invalid(
+                        "this model reads only a noul question's instructions; remove the false and true descriptions"
+                    )
+                options = NOUL_OPTIONS
         else:
             options = tuple(
                 (name, "" if value is None else text(value))

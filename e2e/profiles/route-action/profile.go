@@ -49,7 +49,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the decision route action end-to-end for detected and benign requests"
+	return "Tests the decision route action end-to-end for detected and benign requests, and response_guard on jailbreak content in model output"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.
@@ -67,6 +67,12 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"route-action-detected",
 		"route-action-benign",
+		// The response-guard recipe, formerly its own profile.
+		"response-jailbreak-window-block",
+		"response-jailbreak-window-warning",
+		"response-jailbreak-streaming-passthrough",
+		"response-jailbreak-streaming-block",
+		"response-jailbreak-streaming-pass",
 	}
 }
 

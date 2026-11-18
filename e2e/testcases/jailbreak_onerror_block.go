@@ -12,6 +12,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("jailbreak-onerror-block", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Test explicit unknown no-match and the fail-closed jailbreak signal against an unreachable deployment",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "prompt-guard"},
 		Fn:          testJailbreakOnErrorBlock,

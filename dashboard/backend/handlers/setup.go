@@ -29,6 +29,12 @@ type SetupStateResponse struct {
 	HasModels    bool   `json:"hasModels"`
 	HasDecisions bool   `json:"hasDecisions"`
 	CanActivate  bool   `json:"canActivate"`
+	// PublicBaseURL is the gateway address clients use, as the deployment
+	// declares it in VLLM_SR_PUBLIC_BASE_URL; omitted when it declares none.
+	PublicBaseURL string `json:"publicBaseUrl,omitempty"`
+	// PublicRequiresKey reports VLLM_SR_PUBLIC_REQUIRES_KEY: clients of the
+	// public address send an API key.
+	PublicRequiresKey bool `json:"publicRequiresKey,omitempty"`
 }
 
 // unreadableConfigReason is used when this handler cannot decode the router
@@ -78,6 +84,7 @@ type setupConfigSummary struct {
 }
 
 func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) http.HandlerFunc {
+	public := publicEndpointFromEnv()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -101,22 +108,26 @@ func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) htt
 				reason = unreadableConfigReason
 			}
 			writeSetupStateResponse(w, SetupStateResponse{
-				SetupMode: resolution.Active,
-				Reason:    reason,
+				SetupMode:         resolution.Active,
+				Reason:            reason,
+				PublicBaseURL:     public.baseURL,
+				PublicRequiresKey: public.requiresKey,
 			})
 			return
 		}
 
 		summary := summarizeSetupConfig(&configFile.CanonicalConfig)
 		resp := SetupStateResponse{
-			SetupMode:    resolution.Active,
-			Reason:       resolution.Reason,
-			ListenerPort: firstListenerPort(configFile),
-			Models:       summary.Models,
-			Decisions:    summary.Decisions,
-			HasModels:    summary.Models > 0,
-			HasDecisions: summary.Decisions > 0,
-			CanActivate:  summary.Models > 0 && summary.Decisions > 0,
+			SetupMode:         resolution.Active,
+			Reason:            resolution.Reason,
+			ListenerPort:      firstListenerPort(configFile),
+			Models:            summary.Models,
+			Decisions:         summary.Decisions,
+			HasModels:         summary.Models > 0,
+			HasDecisions:      summary.Decisions > 0,
+			CanActivate:       summary.Models > 0 && summary.Decisions > 0,
+			PublicBaseURL:     public.baseURL,
+			PublicRequiresKey: public.requiresKey,
 		}
 
 		writeSetupStateResponse(w, resp)
@@ -240,7 +251,7 @@ func SetupActivateHandler(
 			return
 		}
 
-		if auth.RejectRevokedMutation(w, r) {
+		if rejectKeyReferenceRedirect(w, r, previousData, yamlData) || auth.RejectRevokedMutation(w, r) {
 			return
 		}
 		if _, freshErr := checkConfigMapMutationFresh(configPath); freshErr != nil {
@@ -253,8 +264,8 @@ func SetupActivateHandler(
 			return
 		}
 
-		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
-			writeConfigPersistenceError(w, writeErr)
+		if yamlData, _, err = persistConfig(configPath, yamlData); err != nil {
+			writeConfigPersistenceError(w, err)
 			return
 		}
 		if configActivationDeferred() {

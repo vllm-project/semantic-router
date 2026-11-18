@@ -227,6 +227,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 		projectReasoningContinuity(source, target, targetPair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
 	diagnostics = appendDiagnostics(diagnostics,
 		projectReasoningSignature(engine.policy, source, target, targetPair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(diagnostics, projectToolCallNamespaces(source, target, &response), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(target, targetPair.buffered.Capabilities(), llmprotocol.RequiredResponseCapabilities(response)); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -422,9 +423,14 @@ func (engine *Engine) NewStreamWithMutation(
 	if err != nil {
 		return nil, err
 	}
-	if !sourcePair.buffered.Capabilities().Supports(llmprotocol.CapabilityStreaming) ||
-		!targetPair.buffered.Capabilities().Supports(llmprotocol.CapabilityStreaming) {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "streaming_unsupported", "source or target wire format does not support streaming", nil)
+	for _, side := range []struct {
+		format llmprotocol.WireFormat
+		pair   codecPair
+	}{{source, sourcePair}, {target, targetPair}} {
+		if !side.pair.buffered.Capabilities().Supports(llmprotocol.CapabilityStreaming) {
+			return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "streaming_unsupported",
+				fmt.Sprintf("the %s API does not stream", side.format.APIName()), nil)
+		}
 	}
 	context.Source = source
 	context.Target = target
@@ -478,7 +484,7 @@ func (engine *Engine) NewEventStreamEncoder(
 		return nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"streaming_unsupported",
-			"wire format does not support streaming",
+			fmt.Sprintf("the %s API does not stream", format.APIName()),
 			nil,
 		)
 	}
@@ -555,7 +561,7 @@ func (engine *Engine) codec(format llmprotocol.WireFormat) (codecPair, error) {
 	if !ok {
 		return codecPair{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "wire_format_unavailable",
-			fmt.Sprintf("wire format %q is unavailable", format), nil,
+			fmt.Sprintf("the Router does not serve the %s API", format.APIName()), nil,
 		)
 	}
 	return pair, nil
@@ -595,7 +601,7 @@ func positiveProtocolLimits(limits llmprotocol.Limits) bool {
 		limits.ToolDescriptionBytes, limits.IdentifierBytes, limits.SchemaBytes,
 		limits.MetadataBytes, limits.MetadataEntries, limits.MetadataKeyBytes,
 		limits.MetadataValueBytes, limits.ToolArgumentsBytes, limits.ReasoningEffortBytes,
-		limits.StopSequences, limits.StopBytes, limits.TextBytes,
+		limits.StopSequences, limits.StopBytes, limits.LogitBiasEntries, limits.TextBytes,
 		limits.MediaReferenceBytes, limits.MediaDataBytes, limits.SSEFrameBytes,
 		limits.UnfinishedArguments, limits.Events, limits.Diagnostics,
 	}
@@ -710,7 +716,7 @@ func (engine *StreamEngine) prepareEvent(event *llmprotocol.Event) (llmprotocol.
 	if !engine.targetCapabilities.Supports(llmprotocol.CapabilityMatchedStopSequence) {
 		diagnostics = projectMatchedStopSequenceEvent(engine.sourceFormat, engine.targetFormat, event)
 	}
-	if err := projectReasoningContinuityEvent(engine.targetCapabilities, *event); err != nil {
+	if err := projectReasoningContinuityEvent(engine.targetFormat, engine.targetCapabilities, *event); err != nil {
 		if !engine.continuityDropped {
 			engine.continuityDropped = true
 			diagnostics = append(diagnostics, reasoningContinuityDropped(engine.sourceFormat, engine.targetFormat)...)

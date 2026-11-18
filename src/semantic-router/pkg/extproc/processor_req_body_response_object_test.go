@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
 
 func TestSameFormatResponsesBodyPublishesRouterOwnedID(t *testing.T) {
@@ -23,7 +28,7 @@ func TestSameFormatResponsesBodyPublishesRouterOwnedID(t *testing.T) {
 		},
 	}
 	response := router.handleNonStreamingResponseBody(
-		extProcResponseFixture(llmprotocol.OpenAIResponsesV1), ctx, 0,
+		extProcResponseFixture(llmprotocol.OpenAIResponsesV1), ctx, 0, false,
 	)
 	mutation := response.GetResponseBody().GetResponse().GetBodyMutation()
 	if mutation == nil || !bytes.Contains(mutation.GetBody(), []byte(`"id":"resp_router_owned"`)) {
@@ -354,6 +359,65 @@ func TestMaterializeResponseObjectContextPreservesRetainedToolAndReasoningLifecy
 	assertRetainedReasoningLifecycle(t, request.Messages)
 }
 
+func TestStoredCustomToolHistoryCanContinue(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+	}{
+		{"text", "*** Begin Patch\n+hello\n*** End Patch"},
+		{"empty", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, err := responsestore.NewMemoryStore(responsestore.StoreConfig{Enabled: true})
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, store.Close()) })
+			router := &OpenAIRouter{ResponseAPIFilter: NewResponseAPIFilter(store)}
+			inputJSON, err := json.Marshal(tc.input)
+			require.NoError(t, err)
+			body := fmt.Sprintf(`{"model":"m","store":true,"tools":[{"type":"custom","name":"patch"}],"input":[{"role":"user","content":"edit the file"},{"type":"custom_tool_call","id":"ct_0","call_id":"call_0","name":"patch","input":%s},{"type":"custom_tool_call_output","call_id":"call_0","output":"earlier result"}]}`, inputJSON)
+			ctx, _ := prepareCustomHistoryRequest(t, router, []byte(body))
+			provider := fmt.Sprintf(`{"id":"resp_provider","model":"m","status":"completed","output":[{"type":"custom_tool_call","id":"ct_1","call_id":"call_1","name":"patch","input":%s}]}`, inputJSON)
+			reply := router.handleNonStreamingResponseBody([]byte(provider), ctx, 0, false)
+			require.NotNil(t, ctx.SemanticResponse)
+			require.Nil(t, ctx.SemanticResponse.Error)
+
+			continuation := fmt.Sprintf(`{"model":"m","previous_response_id":%q,"tools":[{"type":"custom","name":"patch"}],"input":[{"type":"custom_tool_call_output","call_id":"call_1","output":"latest result"}]}`, ctx.SemanticResponse.ID)
+			_, dispatch := prepareCustomHistoryRequest(t, router, []byte(continuation))
+			resumed, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIResponsesV1, dispatch)
+			require.NoError(t, err)
+			var calls []llmprotocol.ToolCall
+			for _, message := range resumed.Messages {
+				for _, content := range message.Content {
+					if content.ToolCall != nil {
+						calls = append(calls, *content.ToolCall)
+					}
+				}
+			}
+			require.Equal(t, []llmprotocol.ToolCall{
+				{Kind: llmprotocol.ToolKindCustom, ID: "call_0", Name: "patch", Arguments: tc.input},
+				{Kind: llmprotocol.ToolKindCustom, ID: "call_1", Name: "patch", Arguments: tc.input},
+			}, calls)
+			client := reply.GetResponseBody().GetResponse().GetBodyMutation().GetBody()
+			assertStoredResponseMatchesClientOutput(t, router.ResponseAPIFilter, ctx.SemanticResponse.ID, client, false)
+		})
+	}
+}
+
+func prepareCustomHistoryRequest(t *testing.T, router *OpenAIRouter, body []byte) (*RequestContext, []byte) {
+	t.Helper()
+	ctx := &RequestContext{SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1, TraceContext: t.Context(), RequestModel: "m"}
+	request, immediate := router.prepareProtocolRequest(body, ctx)
+	require.Nil(t, immediate)
+	changed, err := router.materializeResponseObjectContext(request, ctx)
+	require.NoError(t, err)
+	if changed {
+		request.Generation++
+	}
+	dispatch, err := router.encodeDispatchRequest(ctx)
+	require.NoError(t, err)
+	return ctx, dispatch
+}
+
 func assertRetainedToolLifecycle(t *testing.T, messages []llmprotocol.Message) {
 	t.Helper()
 	call := messages[1].Content[0].ToolCall
@@ -426,7 +490,7 @@ func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 			dispatchTestTurn(t, router, model, first, `{"model":"`+model+`","instructions":"Old instructions.","input":[`+
 				`{"type":"message","role":"developer","content":"Always answer in French."},`+
 				`{"type":"message","role":"user","content":"What is 2+2?"}]}`)
-			if reply := router.handleNonStreamingResponseBody(extProcResponseFixture(backend), first, 0); reply.GetImmediateResponse() != nil {
+			if reply := router.handleNonStreamingResponseBody(extProcResponseFixture(backend), first, 0, false); reply.GetImmediateResponse() != nil {
 				t.Fatalf("turn 1 reply was replaced: %s", reply.GetImmediateResponse().GetBody())
 			}
 
@@ -446,6 +510,46 @@ func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// With messages[].role listed, a Chat backend receives the instructions that
+// lead the retained conversation as one system message, and the developer
+// item of the current input as user text after the history it follows.
+func TestPreviousResponseSendsTheCurrentDeveloperItemsInPlace(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldSystemMessageRole}
+	router.ResponseAPIFilter = NewResponseAPIFilter(NewMockResponseStore())
+	first := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-1", TraceContext: t.Context()}
+	dispatchTestTurn(t, router, model, first, `{"model":"`+model+`","instructions":"Old instructions.","input":[`+
+		`{"type":"message","role":"developer","content":"Always answer in French."},`+
+		`{"type":"message","role":"user","content":"What is 2+2?"}]}`)
+	if reply := router.handleNonStreamingResponseBody(extProcResponseFixture(llmprotocol.OpenAIChatV1), first, 0, false); reply.GetImmediateResponse() != nil {
+		t.Fatalf("turn 1 reply was replaced: %s", reply.GetImmediateResponse().GetBody())
+	}
+	second := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-2", TraceContext: t.Context()}
+	body := dispatchTestTurn(t, router, model, second, `{"model":"`+model+`","instructions":"Be brief.","previous_response_id":"`+
+		first.ResponseObjectState.GeneratedResponseID+`","input":[{"type":"message","role":"developer","content":"Now answer in digits."},`+
+		`{"type":"message","role":"user","content":"And 3+3?"}]}`)
+	var sent struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("%v: %s", err, body)
+	}
+	var got []string
+	for _, message := range sent.Messages {
+		got = append(got, message.Role+": "+message.Content)
+	}
+	want := []string{
+		"system: Be brief.\n\nAlways answer in French.", "user: What is 2+2?", "assistant: hello",
+		"user: Now answer in digits.", "user: And 3+3?",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("backend conversation = %q, want %q", got, want)
 	}
 }
 

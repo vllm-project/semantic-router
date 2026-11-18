@@ -140,6 +140,9 @@ func builtinDecisionPlugins() []DecisionPluginType {
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRouterReplay, DisplayName: "Router Replay", Description: "Capture bounded request and response replay evidence, and shadow a sampled copy to a secondary model."}, PluginOptions[RouterReplayPluginConfig]{
 			Strict: true,
 			Validate: func(at PluginAt, p *RouterReplayPluginConfig) error {
+				if err := p.ValidatePromptCapture(); err != nil {
+					return at.Errorf("%w", err)
+				}
 				if err := p.Shadow.Validate(); err != nil {
 					return at.Errorf("shadow: %w", err)
 				}

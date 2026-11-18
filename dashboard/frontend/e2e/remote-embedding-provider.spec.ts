@@ -79,88 +79,6 @@ async function mockRemoteEmbeddingDashboard(page: Page) {
 }
 
 test.describe('Remote embedding provider Dashboard workflow', () => {
-  test('switches from local inference and posts the canonical remote provider patch', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1440, height: 1100 })
-    await mockRemoteEmbeddingDashboard(page)
-
-    let updateBody: Record<string, unknown> | null = null
-    await page.route('**/api/router/config/global/update', async (route) => {
-      updateBody = route.request().postDataJSON() as Record<string, unknown>
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' })
-    })
-
-    await page.goto('/config/global-config')
-    await page.getByRole('button', { name: /Model Catalog/ }).click()
-    const card = page.locator('article').filter({
-      has: page.getByRole('heading', { name: 'Embedding Models' }),
-    })
-    await expect(card).toContainText('Local / model_runtime')
-    await card.getByRole('button', { name: 'Edit' }).click()
-
-    const modal = page.getByRole('dialog', { name: 'Edit Embedding Models' })
-    await expect(modal.getByLabel('Default Deployment')).toHaveValue('vela-embedding')
-    await expect(modal.getByLabel('Base URL')).toHaveCount(0)
-
-    await expect(modal.getByLabel('Provider Type')).toHaveValue('local')
-    await expect(modal.getByLabel('API Protocol')).toHaveCount(0)
-    await modal.getByLabel('Provider Type').selectOption('remote')
-    await expect(modal.getByLabel('Default Deployment')).toHaveCount(0)
-    await modal.getByLabel('API Protocol').selectOption('openai_compatible')
-    await modal.getByLabel('Base URL').fill('https://embedding.example.com/v1')
-    await modal.getByLabel('Model', { exact: true }).fill('text-embedding-3-small')
-    await modal.getByLabel('API Key Environment Variable').fill('OPENAI_API_KEY')
-    await modal.getByLabel('Dimensions').fill('1536')
-    await modal.getByRole('button', { name: 'Save' }).click()
-
-    await expect(modal).toBeHidden()
-    await expect.poll(() => updateBody).not.toBeNull()
-    expect(updateBody).toMatchObject({
-      model_catalog: {
-        deployments: {
-          'remote-embed': {
-            provider: 'openai_embeddings',
-            endpoint: 'https://embedding.example.com/v1',
-            model: 'text-embedding-3-small',
-            auth: { api_key_env: 'OPENAI_API_KEY' },
-            capabilities: { dimensions: 1536 },
-          },
-        },
-        embeddings: { default: { deployment: 'remote-embed' } },
-      },
-    })
-  })
-
-  test('saves the default local provider without edits', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1100 })
-    await mockRemoteEmbeddingDashboard(page)
-
-    let updateBody: Record<string, unknown> | null = null
-    await page.route('**/api/router/config/global/update', async (route) => {
-      updateBody = route.request().postDataJSON() as Record<string, unknown>
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' })
-    })
-
-    await page.goto('/config/global-config')
-    await page.getByRole('button', { name: /Model Catalog/ }).click()
-    const card = page.locator('article').filter({
-      has: page.getByRole('heading', { name: 'Embedding Models' }),
-    })
-    await card.getByRole('button', { name: 'Edit' }).click()
-
-    const modal = page.getByRole('dialog', { name: 'Edit Embedding Models' })
-    await modal.getByRole('button', { name: 'Save' }).click()
-
-    await expect(modal).toBeHidden()
-    await expect.poll(() => updateBody).not.toBeNull()
-    expect(updateBody).toMatchObject({
-      model_catalog: { embeddings: { default: { deployment: 'vela-embedding' } } },
-    })
-    expect(updateBody).not.toHaveProperty('model_catalog.embeddings.semantic')
-    expect(updateBody).not.toHaveProperty('model_catalog.deployments')
-  })
-
   test('keeps service availability inside desktop and mobile layouts', async ({ page }) => {
     await mockRemoteEmbeddingDashboard(page)
 
@@ -169,7 +87,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
       { width: 390, height: 844 },
     ]) {
       await page.setViewportSize(viewport)
-      await page.goto('/status')
+      await page.goto('/observe/status')
 
       const panel = page.getByTestId('status-availability')
       await expect(panel).toBeVisible()

@@ -74,15 +74,21 @@ type JailbreakRule struct {
 	// were read: best_effort (the default) decides on those, match matches,
 	// no_match does not, and unknown leaves the rule to OnUnknown.
 	OnUnscanned string `yaml:"on_unscanned,omitempty" jsonschema:"enum=best_effort,enum=match,enum=no_match,enum=unknown"`
+	// MinCoverage is the share of its windows, 0 to 1, best_effort must
+	// have read to decide on them; below it the rule reads as unknown. Zero,
+	// the default, decides on any share.
+	MinCoverage float64 `yaml:"min_coverage,omitempty" jsonschema:"minimum=0,maximum=1"`
 	// OnUnknown is what a request-stage rule reads as when its deployment
 	// gives no answer: match (the default) or no_match.
 	OnUnknown string `yaml:"on_unknown,omitempty" jsonschema:"enum=match,enum=no_match"`
 }
 
-// JailbreakRuleInput adds the earlier user turns to the text a jailbreak rule
-// reads.
+// JailbreakRuleInput adds to the current user turn a jailbreak rule reads: the
+// earlier user turns, and the tool results returned in the current turn, which
+// a rule reads only when asked, as a pii rule does.
 type JailbreakRuleInput struct {
-	History bool `yaml:"history,omitempty"`
+	History     bool `yaml:"history,omitempty"`
+	ToolResults bool `yaml:"tool_results,omitempty"`
 }
 
 // SafetyRule matches harmful content in the request or, at the response
@@ -96,6 +102,10 @@ type SafetyRule struct {
 	Stage       string            `yaml:"stage,omitempty" jsonschema:"enum=request,enum=response"`
 	Deployment  string            `yaml:"deployment,omitempty"`
 	TimeoutMs   int               `yaml:"timeout_ms,omitempty"`
+	// MinCoverage is the share of its windows, 0 to 1, a rule that read
+	// only some of them must have read to decide on them; below it the rule
+	// is unknown. Zero, the default, decides on any share.
+	MinCoverage float64 `yaml:"min_coverage,omitempty" jsonschema:"minimum=0,maximum=1"`
 }
 
 // PIIRule matches personal data the model locates in the request: a span of
@@ -114,6 +124,10 @@ type PIIRule struct {
 	// were read: best_effort (the default) decides on those, match matches,
 	// no_match does not, and unknown leaves the rule to OnUnknown.
 	OnUnscanned string `yaml:"on_unscanned,omitempty" jsonschema:"enum=best_effort,enum=match,enum=no_match,enum=unknown"`
+	// MinCoverage is the share of its windows, 0 to 1, best_effort must
+	// have read to decide on them; below it the rule reads as unknown. Zero,
+	// the default, decides on any share.
+	MinCoverage float64 `yaml:"min_coverage,omitempty" jsonschema:"minimum=0,maximum=1"`
 	// OnUnknown is what the rule reads as when its deployment gives no
 	// answer: match (the default) or no_match.
 	OnUnknown string `yaml:"on_unknown,omitempty" jsonschema:"enum=match,enum=no_match"`

@@ -224,6 +224,7 @@ recipes:
       jailbreak:
         - name: prompt_attack
           deployment: hosted-guard
+          input: {tool_results: true}
     decisions:
       - name: guard
         priority: 1000

@@ -12,8 +12,10 @@ import (
 )
 
 // listenerModelRejection answers a request whose model the listener it
-// arrived on does not accept, before any signal, cache or decision runs. The
-// model is the one request decoding parsed, which routing uses too.
+// arrived on does not accept, before any signal, cache or decision runs: 403
+// model_not_allowed for a model the Router serves elsewhere, and 404
+// model_not_found for one it does not serve at all. The model is the one
+// request decoding parsed, which routing uses too.
 func (r *OpenAIRouter) listenerModelRejection(model string, ctx *RequestContext) *ext_proc.ProcessingResponse {
 	if r.Config != nil && r.Config.IsSystemOneBackend(model) {
 		if _, chat := r.Config.ResolveEntrypoint(config.ChatAPI, model); !chat {
@@ -27,6 +29,9 @@ func (r *OpenAIRouter) listenerModelRejection(model string, ctx *RequestContext)
 	if ctx == nil || ctx.ListenerModels == nil || ctx.ListenerModels.Allows(model) {
 		return nil
 	}
+	if !r.servesModel(model) {
+		return r.unavailableModelResponse(model, ctx)
+	}
 	logging.ComponentDebugEvent("extproc", "listener_model_not_allowed", map[string]interface{}{
 		"request_id": ctx.RequestID,
 		"model":      model,
@@ -34,4 +39,17 @@ func (r *OpenAIRouter) listenerModelRejection(model string, ctx *RequestContext)
 	message := fmt.Sprintf("The model %q is not available on this endpoint.", model)
 	ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorPermission, "model_not_allowed", message, nil)
 	return r.createErrorResponse(http.StatusForbidden, message)
+}
+
+// servesModel reports whether a request naming model reaches anything the
+// Router serves, on any listener: an entrypoint of either API, a model with a
+// backend or one of its LoRA adapters, a model an external gateway serves, or
+// a System One backend.
+func (r *OpenAIRouter) servesModel(model string) bool {
+	if r == nil || r.Config == nil {
+		return false
+	}
+	_, systemOne := r.Config.ResolveEntrypoint(config.SystemOneAPI, model)
+	return systemOne || r.Config.IsEntrypointModelName(model) || r.Config.RoutesModelToBackend(model) ||
+		r.Config.UsesExternalGatewayDispatch(model) || r.Config.IsSystemOneBackend(model)
 }

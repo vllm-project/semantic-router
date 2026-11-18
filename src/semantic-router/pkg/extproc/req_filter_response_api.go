@@ -364,6 +364,7 @@ func (f *ResponseAPIFilter) storedToResponseAPIResponse(stored *responseapi.Stor
 		CreatedAt:          stored.CreatedAt,
 		Model:              stored.Model,
 		Status:             stored.Status,
+		IncompleteDetails:  stored.IncompleteDetails,
 		Output:             stored.Output,
 		OutputText:         stored.OutputText,
 		PreviousResponseID: stored.PreviousResponseID,

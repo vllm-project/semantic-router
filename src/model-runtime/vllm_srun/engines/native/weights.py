@@ -165,14 +165,25 @@ def cast_parameters(module: nn.Module, dtype: torch.dtype) -> None:
 
 
 def lay_out_linears(
-    module: nn.Module, make: Callable[[nn.Linear], nn.Module]
+    module: nn.Module,
+    make: Callable[[nn.Linear], nn.Module],
+    memo: dict[tuple[int, int | None], nn.Module] | None = None,
 ) -> nn.Module:
-    """Every ``nn.Linear`` inside ``module`` replaced in place by ``make(linear)``."""
+    """Every ``nn.Linear`` inside ``module`` replaced in place by ``make(linear)``.
+
+    Linears that hold the same weight and bias (adapter branches over the
+    backbone's tensors) are laid out once when the trees pass one ``memo``, so
+    the laid-out weight is held once, as the tensors were.
+    """
+    memo = {} if memo is None else memo
     for name, child in module.named_children():
         if isinstance(child, nn.Linear):
-            setattr(module, name, make(child))
+            key = (id(child.weight), None if child.bias is None else id(child.bias))
+            if key not in memo:
+                memo[key] = make(child)
+            setattr(module, name, memo[key])
         else:
-            lay_out_linears(child, make)
+            lay_out_linears(child, make, memo)
     return module
 
 

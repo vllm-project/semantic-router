@@ -14,8 +14,6 @@ const valuesFile = "e2e/profiles/routing-strategies/values.yaml"
 var resourceManifests = []string{
 	"deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml",
 	"deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml",
-	// Serves the System One fixture the jailbreak and PII rules ask.
-	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 // Profile implements the Routing Strategies test profile.
@@ -29,8 +27,11 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "routing-strategies",
 			SemanticRouterValuesFile: valuesFile,
-			ResourceManifests:        resourceManifests,
-			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
+			// provider-mocker serves the System One and embedding fixtures,
+			// which the Router prepares as it starts.
+			PrerequisiteManifests: []string{"deploy/kubernetes/hallucination/provider-mocker.yaml"},
+			PrerequisiteWaits:     []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
+			ResourceManifests:     resourceManifests,
 		}),
 	}
 }

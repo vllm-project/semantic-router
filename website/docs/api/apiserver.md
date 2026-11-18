@@ -149,7 +149,39 @@ capability, or quorum. `RequiredDependenciesUnobserved` must not be treated as
 ready. HTTP `200` means the status document was retrieved, not that traffic can
 be served. The existing `/health`, `/ready`, and `/startup-status` contracts are
 unchanged; this endpoint does not replace their deployment probes. Fleet
-aggregation, per-replica persistence/TTL, and probe wiring remain separate work.
+aggregation and probe wiring remain separate work.
+
+### Redis startup persistence
+
+With `global.services.startup_status.store_backend: redis`, the Router publishes
+`vllm-sr:startup-status:<instance_id>` using the same opaque process identity as
+`/api/v1/status`. `/startup-status` includes that identity too. A restart creates
+a new identity, so an old process cannot overwrite its replacement's record.
+
+Records expire after 30 seconds; the publisher refreshes the last observation
+every 10 seconds. Heartbeats preserve `updated_at`, which identifies the last
+startup observation, not the last Redis refresh. They establish process presence,
+not dependency health or request readiness. Shutdown stops the heartbeat, and
+crashed or stopped processes disappear within the remaining TTL.
+
+Redis may be unavailable at startup or lose connectivity later. The publisher
+retains only its latest observation and retries on the next heartbeat. Local
+`/ready` and `/startup-status` continue using in-process state during an outage.
+External readers must treat a missing, expired, or unreadable record as unknown.
+
+Consumers of Redis must select an explicit instance ID and require a positive
+TTL. The Go `startupstatus.LoadFromRedis(client, instanceID)` helper checks both
+the expiry and the payload identity. The former unscoped key
+`vllm-sr:startup-status` is no longer written or read; it may remain from an older
+version and must not be used as a fallback. Existing single-instance Router and
+Dashboard HTTP status clients continue using the same endpoints.
+
+An API server embedded without a runtime registry cannot infer which Redis
+record belongs to it. With Redis configured, that legacy path now returns
+unknown (`503`) instead of substituting shared Redis or file state. Embedders
+must supply a runtime registry. File-only startup status behavior is unchanged.
+This slice does not enumerate replicas, compute fleet readiness, or change
+deployment probes.
 
 ## Inspect signals without an inference call
 
@@ -304,9 +336,26 @@ the exact current `ETag` in `If-Match`. The Router does not accept unguarded
 writes. A mutation response and `GET /api/v1/config/hash` use the same explicit
 runtime identity fields: `source_config_hash`, `generated_runtime_hash`,
 `active_runtime_hash`, and `activation_status`. Config mutations validate,
-keep the replaced document in the configuration history, and trigger reload;
+keep the replaced document in the configuration history, write the config
+file with the mode, owner and group it had, and trigger reload;
 an active config still does not prove that upstream model backends are
 healthy. Check `/ready` and send a representative request after a change.
+
+A mutation stores keys rather than writing them literally. Before it writes
+the document and its history, the Router replaces each literal backend
+`api_key`, and in standalone mode each literal listener `api_keys` entry, with
+a reference to a stored copy: a mode `600` file in `router-keys/` beside the
+config file (`auth.api_key_file`, `api_key_files`), or on a Kubernetes
+ConfigMap target an entry of the chart's key Secret (`auth.api_key_env`, a
+`"${NAME}"` listener key). A value that holds an environment reference the
+Router expands is not literal and stays as written. The response's `ETag` is
+that of the stored document, and a mutation that fails to write the document
+removes the copies it stored. `POST /api/v1/config/plan` reads keys already
+stored the same way, so a plan of a document already applied reports
+`changed: false`. Where the Router has no key store it can write, a ConfigMap
+target without the key Secret or one it may not update, the key stays as
+written and the response lists a `literal_key_kept` entry in `warnings` for
+each, by path and never by value.
 
 `activation_status` is `active`, `pending`, `failed`, or `unknown`. When a
 candidate has been attempted, `activation` includes its document hash, attempt,
@@ -463,6 +512,14 @@ audited invalidation.
 | `POST` | `/api/v1/storage/response-cache/invalidate` | Dry-run or invalidate a scoped partition |
 | `POST` | `/api/v1/storage/response-cache/flush` | Advance a scoped or global cache epoch |
 
+`invalidate` advances the epoch of the partition `selector.partition` names,
+so that partition's entries become misses, and refuses a selector without a
+partition with `400`. `flush` advances a partition's epoch or, without a
+partition, the global epoch, and needs `cache.manage` and
+`"confirm": "flush response cache"`. Neither call deletes or counts the
+entries it reaches, so both report `matched_estimate` and `deleted` as `0`
+with `count_unknown: true`.
+
 Prefer scoped invalidation and a dry run before a destructive cache mutation.
 Bearer roles distinguish read, invalidate, and broader cache-management
 permissions.
@@ -618,6 +675,9 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | `GET` | `/api/v1/observability/replays` | List Router Replay records |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate Router Replay routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
+| `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session over the filtered records, latest activity first |
+| `GET` | `/api/v1/observability/replays/run` | Read one agent run as a tree: its agents and their calls in time order, with each call's route, cost and outcome |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id |
 | `GET` | `/api/v1/observability/replays/dataset` | Export a shadow comparison dataset manifest built from the selected Router Replay records |
 | `GET` | `/api/v1/observability/replays/dataset/judge-tasks` | Build blinded pairwise judge tasks over the shadow comparison dataset |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
@@ -740,5 +800,5 @@ The test bypasses the Router result cache and records real model-runtime request
 latency and server-phase metrics. Requests are limited to 2 MiB, responses to
 4 MiB, and execution to 30 seconds. Discovery requires `config.read`; inference
 requires `classify.invoke`. The Dashboard's
-**Build → System One → Decision Playground** page
+**Models → Decision models → Playground** tab
 uses its own authenticated gateway with `config.read` and `evaluation.run`.

@@ -1,7 +1,7 @@
 ---
 title: "vela3-flash"
 sidebar_label: "vela3-flash"
-sidebar_position: 5
+sidebar_position: 6
 description: "Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the built-in questions and spans."
 custom_edit_url: null
 ---
@@ -37,8 +37,8 @@ Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the built-in
 | `set` | Yes, asked as one `noul` per label |
 | `span` | Yes, on the `router` span head |
 
-Rules that read the turn's images (`input.image`) or videos (`input.video`) can
-resolve to it.
+Rules that read the request's images (`input.image`) or the current turn's
+videos (`input.video`) can resolve to it.
 
 ## Built-in questions
 

@@ -259,10 +259,10 @@ func neutralReasoningDeltaEvents(
 
 func neutralToolCallEvents(started, completed llmprotocol.Event, content llmprotocol.Content) ([]llmprotocol.Event, error) {
 	if content.ToolCall == nil {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_call_missing", "neutral tool call is missing", nil)
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_call_missing", "tool call is missing", nil)
 	}
 	call := *content.ToolCall
-	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name}
+	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name, Namespace: call.Namespace}
 	completed.ToolCall = &call
 	delta := started
 	delta.Type = llmprotocol.EventToolCallDelta

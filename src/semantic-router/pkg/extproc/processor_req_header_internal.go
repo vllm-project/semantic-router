@@ -6,6 +6,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
@@ -38,12 +39,12 @@ func removeHeaderValueCI(ctx *RequestContext, canonical string) {
 }
 
 // providerBoundRemovals are the request headers removed before a request
-// reaches a provider: the Router's own headers a client supplied and every
+// reaches a provider: the Router's own headers a client supplied, every
 // header the registry keeps from providers, such as the Router's control
-// headers.
-func providerBoundRemovals() []string {
+// headers, and the headers identity reads the caller from.
+func providerBoundRemovals(identity config.IdentityConfig) []string {
 	removals := slices.Clone(droppedClientHeaders)
-	for _, name := range headers.KeptFromProviders() {
+	for _, name := range append(headers.KeptFromProviders(), identity.HeaderNames()...) {
 		if !slices.Contains(removals, name) {
 			removals = append(removals, name)
 		}
@@ -51,9 +52,9 @@ func providerBoundRemovals() []string {
 	return removals
 }
 
-func buildLooperInternalHeaderRemovalMutation() *ext_proc.HeaderMutation {
+func buildLooperInternalHeaderRemovalMutation(identity config.IdentityConfig) *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
-		RemoveHeaders: providerBoundRemovals(),
+		RemoveHeaders: providerBoundRemovals(identity),
 	}
 }
 

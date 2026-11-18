@@ -10,7 +10,7 @@ translation:
 
 # sr-bench 1.0
 
-sr-bench 使用相同的冻结题目比较 MoM 入口与单模型。CLI 和 **Dashboard → Evaluation** 共用一个持久化服务、运行 ID、结果与报告。先用小规模开发集改进路由，再用不相交的保留集验收。
+sr-bench 使用相同的冻结题目比较 MoM 入口与单模型。CLI 和控制面板的 **Observe → Evaluations** 页面共用一个持久化服务、运行 ID、结果与报告。先用小规模开发集改进路由，再用不相交的保留集验收。
 
 ## 选择题量
 

@@ -54,15 +54,25 @@ type ProviderProfile struct {
 	ChatPath      string            `yaml:"chat_path,omitempty"`
 	// AuthCredential is the backend's credential mode (auth.credential):
 	// delegated selects the requesting user's delegated credential as this
-	// backend's credential; static keys and per-user provider keys are not
-	// consulted for it.
+	// backend's credential, caller the provider login the client sent; static
+	// keys and per-user provider keys are not consulted for either.
 	AuthCredential string `yaml:"auth_credential,omitempty"`
+	// TLS is how an https backend is verified, its tls block with the default
+	// CA applied; nil keeps the system roots and the endpoint's host. Envoy's
+	// cluster and the Router's own calls use the same settings.
+	TLS *DeploymentTLS `yaml:"tls,omitempty"`
 }
 
 // Delegated reports whether the backend takes the requesting user's
 // delegated credential instead of a key.
 func (p *ProviderProfile) Delegated() bool {
 	return p != nil && p.AuthCredential == CredentialDelegated
+}
+
+// Caller reports whether the backend takes the client's own provider login
+// instead of a key.
+func (p *ProviderProfile) Caller() bool {
+	return p != nil && p.AuthCredential == CredentialCaller
 }
 
 type ModelPricing struct {
@@ -72,6 +82,20 @@ type ModelPricing struct {
 	CachedInputPer1M  float64  `yaml:"cached_input_per_1m,omitempty"`
 	CacheWritePer1M   *float64 `yaml:"cache_write_per_1m,omitempty"`
 	CacheWrite1hPer1M *float64 `yaml:"cache_write_1h_per_1m,omitempty"`
+}
+
+// UnmarshalYAML reads a written pricing block without a currency as USD, as a
+// deployment's is, so a block of zero rates prices a model free instead of
+// leaving it for the catalog's list price.
+func (p *ModelPricing) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain ModelPricing
+	if err := unmarshal((*plain)(p)); err != nil {
+		return err
+	}
+	if p.Currency == "" {
+		p.Currency = "USD"
+	}
+	return nil
 }
 
 type ModelParams struct {
@@ -103,6 +127,28 @@ type ModelParams struct {
 	QualityIndex         string                                         `yaml:"-" json:"-"`
 	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
 	Modalities           modelcatalog.Modalities                        `yaml:"modalities,omitempty"`
+	// UnsupportedCapabilities are the request capabilities the model's
+	// backends lack; the Router leaves their fields out for this model, or
+	// sends its developer messages as system messages.
+	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
+	// Tokenizer counts the model's prompts for the context window check;
+	// empty counts them with the tokenizer of HubRepo, else with the proxy
+	// tokenizer.
+	Tokenizer string `yaml:"tokenizer,omitempty"`
+	// HubRepo is the Hugging Face repo the model comes from: the
+	// open-weights source of its catalog card, else the id a self-hosted
+	// engine serves it under. Empty when it has neither.
+	HubRepo string `yaml:"-" json:"-"`
+}
+
+// EffectiveTokenizer is the tokenizer that counts the model's prompts for
+// the context window check: Tokenizer, else HubRepo; empty leaves them to
+// the proxy tokenizer.
+func (params ModelParams) EffectiveTokenizer() string {
+	if params.Tokenizer != "" {
+		return params.Tokenizer
+	}
+	return params.HubRepo
 }
 
 // EvidenceScore resolves a versioned static model index. Missing, failed, and

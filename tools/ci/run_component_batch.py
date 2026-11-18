@@ -17,7 +17,7 @@ from execution_targets import execution_observation
 from python_test_evidence import summarize
 from verification_catalog import load_catalog
 from worker_process import run_command as run_isolated_command
-from workflow_evidence import go_cases, junit_cases
+from workflow_evidence import go_cases, junit_cases, plugin_test_cases
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -66,6 +66,10 @@ def commands(target: str, output: Path) -> list[list[str]]:
         ]
     if target == "test-e2e-unit":
         return [["make", target, f"E2E_UNIT_REPORT_DIR={output}"]]
+    if target == "agent-plugins-test":
+        return [
+            ["make", target, f"AGENT_PLUGINS_TEST_REPORT={output / 'plugin-tests.log'}"]
+        ]
     if target == "model-runtime-test":
         return [["make", "model-runtime-install"], ["make", target]]
     if target in {
@@ -118,7 +122,15 @@ def contract_evidence(record: dict, output: Path) -> dict:
             "expected_cases": expected,
             "cases": cases,
         }
-    return summarize(output / "python-events.jsonl")
+    evidence = summarize(output / "python-events.jsonl")
+    if record["target"] == "agent-plugins-test":
+        # The plugin engine's own cases count beside the plugins' Python tests.
+        engine = plugin_test_cases(output / "plugin-tests.log")
+        names = [case["id"] for case in engine]
+        evidence["expected_cases"] = [*evidence["expected_cases"], *names]
+        evidence["discovered_cases"] = [*evidence["discovered_cases"], *names]
+        evidence["cases"] = [*evidence["cases"], *engine]
+    return evidence
 
 
 def run_batch(batch: dict, output: Path) -> bool:

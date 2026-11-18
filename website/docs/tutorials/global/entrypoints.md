@@ -81,8 +81,8 @@ backend, the Router rewrites the request to that backend's model name.
 Entrypoints are listed by `/v1/models` with routing metadata. With
 `global.router.list_backend_models: true` the list also names, sorted, every
 model and LoRA name a direct request is served for. Successful routed
-responses expose `x-vsr-selected-recipe`; Router Replay and Insights can also
-filter records by recipe.
+responses expose `x-vsr-selected-recipe`; Router Replay and the Dashboard's
+**Requests** page can also filter records by recipe.
 
 To rename the default entrypoint, give the entrypoint marked `default: true`
 your desired `model_names`. This replaces the built-in `vllm-sr/auto` name, so
@@ -100,6 +100,16 @@ entrypoints:
 ```
 
 ## Naming and validation rules
+
+Set `review_model` on an entrypoint to a model name from another entrypoint in
+the same API namespace. `vllm-sr connect codex` uses it for **Approve for me**
+reviews and hides the review entrypoint in the Codex model picker. Without it,
+Codex reviews with the session model. `memory_model` works the same way for
+Codex's background memory extraction and consolidation, such as on a small
+local model. Each target must exist, cannot be any of the entrypoint’s own
+model names, and cannot have a `review_model` or `memory_model` itself. See the
+complete [Codex review configuration](../../installation/agent-harness#approve-for-me-reviews)
+and [Codex memories configuration](../../installation/agent-harness#codex-memories).
 
 Configuration loading rejects an entrypoint when:
 

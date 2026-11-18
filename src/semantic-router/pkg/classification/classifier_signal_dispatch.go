@@ -23,7 +23,7 @@ func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results
 		results, mu, input.ContextText, input.RequestFacts,
 	)...)
 	dispatchers = append(dispatchers, c.buildPolicySignalDispatchers(
-		results, mu, textForSignal, input.PriorUserMessages, input.ToolResultTexts,
+		results, mu, textForSignal, input.PriorUserMessages, input.ToolResultTexts, input.ToolResultScanIncomplete,
 		input.ConversationFacts, input.RequestFacts, usedSignals,
 	)...)
 	return append(dispatchers, c.buildApplicationSignalDispatchers(input, results, mu, textForSignal, usedSignals)...)
@@ -71,20 +71,23 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 // jailbreak, safety and pii also read what routing_input left out of it, and
 // the earlier user turns as the client sent them, so a client cannot hide
 // content from them; jailbreak reads the role-scoped guard content when the
-// request carries it.
+// request carries it: the user's text of the current turn, with the turn's
+// tool results apart for the rules whose input reads them.
 func (c *Classifier) buildApplicationSignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, usedSignals map[string]bool) []signalDispatch {
 	facts := input.RequestFacts
 	reading := systemOneReading{
 		request: textForSignal(systemOneQuestionText), history: input.PriorUserMessages, turns: facts.Turns,
-		toolResults: input.ToolResultTexts, images: facts.Images, videos: facts.Videos,
+		toolResults: input.ToolResultTexts, toolResultsIncomplete: input.ToolResultScanIncomplete,
+		images: facts.Images, videos: facts.Videos,
 	}
 	guard := reading
 	guard.request = safetyText(reading.request, facts.RoutingInput)
 	guard.history = safetyPriorUserMessages(input.PriorUserMessages, facts.RoutingInput)
 	jailbreak := guard
 	if guardInput := facts.JailbreakInput; guardInput != nil {
-		jailbreak.request = strings.Join(jailbreakInputTexts(guardInput.Current), "\n\n")
-		jailbreak.history = jailbreakInputTexts(guardInput.History)
+		jailbreak.request = strings.Join(jailbreakInputTexts(guardInput.Current, "user"), "\n\n")
+		jailbreak.history = jailbreakInputTexts(guardInput.History, "user")
+		jailbreak.toolResults = jailbreakInputTexts(guardInput.Current, "tool")
 	}
 	dispatch := func(signalType, name string, reading systemOneReading) signalDispatch {
 		return signalDispatch{signalType, name, func(ctx context.Context) {

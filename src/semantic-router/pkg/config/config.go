@@ -95,6 +95,7 @@ type RouterConfig struct {
 	ToolSessions     *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
 	ResponseAPI      ResponseAPIConfig       `yaml:"response_api"`
 	RouterReplay     RouterReplayConfig      `yaml:"router_replay"`
+	MaskingIdentity  MaskingIdentityConfig   `yaml:"-" json:"-"`
 	StartupStatus    StartupStatusConfig     `yaml:"startup_status"`
 	Looper           LooperConfig            `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
@@ -119,6 +120,7 @@ type RouterConfig struct {
 
 	Authz         AuthzConfig         `yaml:"authz,omitempty"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
+	Budgets       BudgetsConfig       `yaml:"budgets,omitempty"`
 	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
 	ConfigBaseDir string `yaml:"-"`
@@ -232,6 +234,11 @@ type Listener struct {
 	// APIKeys are client bearer credentials the listener enforces, in
 	// standalone mode and in the CLI-managed Envoy listener.
 	APIKeys []string `yaml:"api_keys,omitempty"`
+	// APIKeyFiles name owner-only files that each hold one more client key.
+	// The Router reads them at every load, as a backend's auth.api_key_file.
+	APIKeyFiles []string `yaml:"api_key_files,omitempty"`
+	// FileKeys are the keys APIKeyFiles held when the configuration loaded.
+	FileKeys []string `yaml:"-" json:"-"`
 	// APIs, when set, are the only APIs the listener serves, by API name (an
 	// alias reads as its API), each with its schema, models and settings;
 	// other paths answer 404. Omitted, the listener serves chat_completions,
@@ -288,6 +295,8 @@ type RouterOptions struct {
 	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
 	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
 	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
+	ContextWindow          ContextWindowConfig  `yaml:"context_window,omitempty"`
+	DrainTimeoutSeconds    *int                 `yaml:"drain_timeout_seconds,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend
@@ -311,6 +320,7 @@ func (s SkipProcessingConfig) IsEnabled() bool {
 type InlineModels struct {
 	ModelAdmission       map[string]AdmissionConfig `yaml:"model_admission,omitempty"`
 	ModelSignalTimeoutMs int                        `yaml:"model_signal_timeout_ms,omitempty"`
+	ModelSignalOverload  *SignalOverloadPolicy      `yaml:"model_signal_overload,omitempty"`
 	GlobalModelBindings  map[string]ModelBinding    `yaml:"global_model_bindings,omitempty"`
 	ModelDeployments     map[string]ModelDeployment `yaml:"model_deployments,omitempty"`
 	// DecisionModel is global.model_catalog.system.decision_model, resolved
@@ -353,6 +363,9 @@ type BackendModels struct {
 	DefaultQualityIndex string                     `yaml:"-"`
 	VLLMEndpoints       []VLLMEndpoint             `yaml:"vllm_endpoints"`
 	ProviderProfiles    map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
+	// DefaultBackendTLS is providers.defaults.tls, already applied to each
+	// https backend's provider profile.
+	DefaultBackendTLS *ProviderDefaultsTLS `yaml:"-" json:"-"`
 	// ProviderModelOrder lists providers.models aliases in authored order.
 	// VLLMEndpoints are sorted by alias, but the data plane's default route
 	// serves the first authored model that has a backend.
@@ -362,4 +375,8 @@ type BackendModels struct {
 type ReasoningConfig struct {
 	DefaultReasoningEffort string                           `yaml:"default_reasoning_effort,omitempty"`
 	ReasoningFamilies      map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
+	// ReasoningMinOutputTokens is providers.defaults.reasoning_min_output_tokens:
+	// a request that states no reasoning preference and sets a smaller output
+	// limit runs with reasoning off. Zero turns the rule off.
+	ReasoningMinOutputTokens int `yaml:"reasoning_min_output_tokens,omitempty"`
 }

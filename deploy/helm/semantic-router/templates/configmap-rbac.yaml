@@ -14,6 +14,11 @@ rules:
     resources: ["configmaps"]
     resourceNames: [{{ include "semantic-router.configMapName" . | quote }}]
     verbs: ["get", "update", "patch"]
+  # The keys a save moves out of that ConfigMap.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ include "semantic-router.keySecretName" . | quote }}]
+    verbs: ["get", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

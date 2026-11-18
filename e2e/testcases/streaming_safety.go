@@ -13,11 +13,13 @@ import (
 
 func init() {
 	pkgtestcases.Register("streaming-pii-blocked", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify PII requests are blocked by fast_response even when body arrives in streamed chunks",
 		Tags:        []string{"streaming", "security", "pii"},
 		Fn:          testStreamingPIIBlocked,
 	})
 	pkgtestcases.Register("streaming-jailbreak-blocked", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify jailbreak attempts are blocked by fast_response in streamed body mode",
 		Tags:        []string{"streaming", "security", "jailbreak"},
 		Fn:          testStreamingJailbreakBlocked,
