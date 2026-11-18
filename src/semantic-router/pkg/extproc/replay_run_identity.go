@@ -69,7 +69,8 @@ func harnessRunSession(ctx *RequestContext, cfg config.RouterLearningProtectionC
 // harnessRunAgent is the agent of its run a request comes from, as the
 // harness names it: protection's agent, else the one a supported harness
 // sends. Codex names the thread that spawned a thread; a thread its root
-// spawned, and every Claude Code subagent, hangs off the main agent.
+// spawned, and every Claude Code or OpenCode subagent, hangs off the main
+// agent.
 func harnessRunAgent(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) *store.AgentIdentity {
 	agentID, _ := protectionAgentID(ctx, cfg)
 	if agentID == "" {
@@ -123,6 +124,10 @@ func requestHarness(ctx *RequestContext) string {
 		return store.HarnessClaudeCode
 	case headerValueCI(ctx, headers.CodexSessionID) != "" || ctx.AgentTurn.SessionID != "" || ctx.AgentTurn.ThreadID != "":
 		return store.HarnessCodex
+	case isOpenCode(ctx):
+		return store.HarnessOpenCode
+	case isDeepSeekHarness(ctx):
+		return store.HarnessDeepSeekHarness
 	default:
 		return ""
 	}

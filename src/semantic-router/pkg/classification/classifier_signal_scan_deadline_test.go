@@ -697,7 +697,7 @@ func TestTheRunsOfAReplanLeaveOutTheHeadAndTheTail(t *testing.T) {
 // read when that window was, and says why it was not when it was not.
 func TestAWindowReadInPlaceOfOthersCoversThem(t *testing.T) {
 	asked := askedRule{signalType: config.SignalTypeJailbreak, rule: config.SystemOneRule{Name: "prompt_attack"}}
-	answered := modelservice.Response{Answers: map[string]modelservice.Answer{asked.questionID(): {Type: "noul", Noul: 0.1}}}
+	answered := modelservice.Response{Answers: map[string]modelservice.Answer{asked.questionID(): {Type: "noul", Noul: 0.1, InputCoverage: "complete"}}}
 	scan := &guardScan{
 		cut: 4,
 		windows: []scanWindow{

@@ -130,6 +130,9 @@ export const X_GOOG_API_KEY = 'x-goog-api-key'
 /** Kind of child thread Codex sends a request for, `collab_spawn` for a `spawn_agent` child whatever its role and `review` for a review child, which `agent` signal rules match as a type and Router Replay records with the agent; providers receive it. Surface: control. */
 export const X_OPENAI_SUBAGENT = 'x-openai-subagent'
 
+/** Session that spawned an OpenCode subagent's session, which OpenCode sends on every call of the child beside the child's own `x-session-id`; with `identity.headers` unset and no `x-vsr-session-id`, protection and Router Replay key the call by that session and the child as its agent, and the `agent` signal reads it as a subagent's; providers receive it. Surface: control. */
+export const X_PARENT_SESSION_ID = 'x-parent-session-id'
+
 /** Limit of the rate-limit window that rejected the request. Surface: public. */
 export const X_RATELIMIT_LIMIT = 'x-ratelimit-limit'
 
@@ -142,7 +145,7 @@ export const X_RATELIMIT_RESET = 'x-ratelimit-reset'
 /** Request correlation id, forwarded to providers; the native gateway adds one when absent, and the management API echoes it. Surface: public. */
 export const X_REQUEST_ID = 'x-request-id'
 
-/** Client session id `session_id_headers` accepts by default; providers receive it. Surface: control. */
+/** Client session id `session_id_headers` accepts by default, which OpenCode sends on every call; providers receive it. Surface: control. */
 export const X_SESSION_ID = 'x-session-id'
 
 /** On a spend budget refusal, whether a retry may succeed: `false` on `budget_unpriced` and on a `budget_exceeded` no retry before the budget's window starts again can clear, `true` on one only calls in flight cause. OpenAI and Anthropic SDKs, Claude Code and Pi follow it. Surface: public. */
