@@ -51,6 +51,7 @@ import {
   MODEL_HEALTH_META,
   median,
   modelHealthHint,
+  modelHealthIssueText,
   modelHealthTotals,
   visibleP95,
 } from './configPageModelHealthPresentation'
@@ -238,6 +239,8 @@ export default function ConfigPageModelsSection(props: ConfigPageModelsSectionPr
   )
   const unconnected = props.models.length - connected.length
   const healthAvailable = health.phase !== 'unavailable'
+  const healthNotice =
+    health.phase === 'ready' ? undefined : modelHealthIssueText(health.phase, health.issue)
   const lastChecked = checkedAgo(health.checkedAt)
 
   const decisionReferences = useMemo(
@@ -329,11 +332,13 @@ export default function ConfigPageModelsSection(props: ConfigPageModelsSectionPr
             label="Healthy"
             loading={health.phase === 'loading'}
             value={
-              healthAvailable && connected.length ? `${totals.healthy}/${connected.length}` : null
+              health.phase === 'ready' && connected.length
+                ? `${totals.healthy}/${connected.length}`
+                : null
             }
             hint={
-              !healthAvailable
-                ? 'Health checks unavailable'
+              healthNotice
+                ? healthNotice
                 : connected.length
                   ? modelHealthHint(totals)
                   : 'No backend to check'
@@ -347,8 +352,8 @@ export default function ConfigPageModelsSection(props: ConfigPageModelsSectionPr
             loading={health.phase === 'loading'}
             value={medianP95 !== undefined ? formatLatency(medianP95) : null}
             hint={
-              !healthAvailable
-                ? 'Health checks unavailable'
+              healthNotice
+                ? healthNotice
                 : medianP95 !== undefined
                   ? 'Across healthy endpoints'
                   : 'No healthy endpoint yet'
@@ -540,6 +545,7 @@ export default function ConfigPageModelsSection(props: ConfigPageModelsSectionPr
         reasoningFamilies={props.reasoningFamilies}
         health={shown ? health.byModel.get(shown.name) : undefined}
         healthPhase={health.phase}
+        healthIssue={health.issue}
         healthChecking={Boolean(
           shown && (health.checking || health.checkingModels.has(shown.name)),
         )}

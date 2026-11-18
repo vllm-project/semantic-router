@@ -100,6 +100,7 @@ interface ConfigPageModelSheetProps {
   reasoningFamilies: Record<string, ReasoningFamily>
   health?: ModelHealth
   healthPhase: BackendModelHealth['phase']
+  healthIssue?: BackendModelHealth['issue']
   healthChecking: boolean
   healthIntervalSeconds: number
   onCheckHealth: () => void
@@ -176,12 +177,19 @@ function OverviewPanel({
   catalog,
   health,
   healthPhase,
+  healthIssue,
   healthChecking,
   trafficShare,
   liveState,
 }: Pick<
   ConfigPageModelSheetProps,
-  'catalog' | 'health' | 'healthPhase' | 'healthChecking' | 'trafficShare' | 'liveState'
+  | 'catalog'
+  | 'health'
+  | 'healthPhase'
+  | 'healthIssue'
+  | 'healthChecking'
+  | 'trafficShare'
+  | 'liveState'
 > & { model: NormalizedModel }) {
   const price = modelPriceSummary(model.pricing)
   const providers = modelProviderIds(model)
@@ -287,7 +295,12 @@ function OverviewPanel({
           hint={model.context_window_size ? 'tokens' : 'not declared'}
         />
       </div>
-      <ModelHealthSummary health={health} phase={healthPhase} checking={healthChecking} />
+      <ModelHealthSummary
+        health={health}
+        phase={healthPhase}
+        issue={healthIssue}
+        checking={healthChecking}
+      />
       <LiveEvidence state={liveState} />
       <KeyValueGrid items={identity} />
       {metadata.length ? (
@@ -452,6 +465,7 @@ export default function ConfigPageModelSheet(props: ConfigPageModelSheetProps) {
     evaluationGroup,
     health,
     healthPhase,
+    healthIssue,
     healthChecking,
     onCheckHealth,
     liveState,
@@ -621,6 +635,7 @@ export default function ConfigPageModelSheet(props: ConfigPageModelSheetProps) {
               catalog={catalog}
               health={health}
               healthPhase={healthPhase}
+              healthIssue={healthIssue}
               healthChecking={healthChecking}
               trafficShare={props.trafficShare}
               liveState={liveState}

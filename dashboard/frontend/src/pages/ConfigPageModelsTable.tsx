@@ -355,6 +355,7 @@ export default function ConfigPageModelsTable({
           <ModelHealthCell
             health={health.byModel.get(model.name)}
             phase={health.phase}
+            issue={health.issue}
             checking={health.checking || health.checkingModels.has(model.name)}
           />
         ),
