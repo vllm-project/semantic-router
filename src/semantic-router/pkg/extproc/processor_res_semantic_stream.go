@@ -323,6 +323,11 @@ func responseStreamContext(
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
 		streamContext.ResponseID = responseID
 	}
+	// Chat and Responses providers report usage only at the end, after the
+	// message_start a Messages client reads input usage from.
+	if target == llmprotocol.AnthropicMessagesV1 && source != llmprotocol.AnthropicMessagesV1 && ctx.SemanticRequest != nil {
+		streamContext.EstimatedInputTokens = int64(estimateCountTokens(ctx.SemanticRequest))
+	}
 	return streamContext
 }
 
@@ -569,6 +574,11 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 	}
 	semanticResponse, responseErr := ctx.SemanticStreamState.response()
 	if responseErr == nil {
+		if ctx.SourceFormat == llmprotocol.AnthropicMessagesV1 {
+			// The answer the Router keeps carries the identifiers the client read.
+			source, _ := responseWireFormats(ctx)
+			*semanticResponse = protocolcodec.AnthropicReplyIdentifiers(source, *semanticResponse)
+		}
 		ctx.SemanticResponse = semanticResponse
 	} else {
 		ctx.StreamingAborted = true
