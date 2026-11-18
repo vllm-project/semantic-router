@@ -51,7 +51,9 @@
           "type": "string",
           "enum": [
             "claude_code",
-            "codex"
+            "codex",
+            "opencode",
+            "deepseek_harness"
           ]
         },
         "types": {
@@ -928,7 +930,8 @@
             "type": "string",
             "enum": [
               "sampling_min_p",
-              "sampling_logit_bias"
+              "sampling_logit_bias",
+              "developer_role"
             ]
           },
           "type": "array"

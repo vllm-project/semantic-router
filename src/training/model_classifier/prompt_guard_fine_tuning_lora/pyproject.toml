@@ -2,7 +2,7 @@
 name = "prompt-guard-fine-tuning-lora"
 version = "0.0.0"
 description = "Environment for the prompt-guard fine-tuning scripts under src/training/model_classifier/prompt_guard_fine_tuning_lora"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # This folder has no requirements.txt. Bounds match the intent LoRA slice,
     # with datasets starting at 2.19 so the package imports against current pyarrow.

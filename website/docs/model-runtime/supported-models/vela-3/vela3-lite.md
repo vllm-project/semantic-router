@@ -1,7 +1,7 @@
 ---
 title: "vela3-lite"
 sidebar_label: "vela3-lite"
-sidebar_position: 3
+sidebar_position: 4
 description: "Vela 3.0 on d3-lite: trained adapters for the built-in questions, spans, and image input, with lower latency on a small GPU."
 custom_edit_url: null
 ---

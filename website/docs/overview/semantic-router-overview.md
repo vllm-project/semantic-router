@@ -83,6 +83,8 @@ sequenceDiagram
 1. A harness sends a request using OpenAI Chat Completions, OpenAI Responses,
    Anthropic Messages or the OpenAI Images API.
 2. The standalone frontend, or an ExtProc gateway, presents it to the Router.
+   With ExtProc, Envoy forwards the request; without ExtProc, the standalone
+   frontend presents it directly.
 3. The requested model resolves to an entrypoint and its recipe.
 4. The Router evaluates the recipe's signals and computes its projections.
    Heuristic signals run in code; model-judged signals go to the decision

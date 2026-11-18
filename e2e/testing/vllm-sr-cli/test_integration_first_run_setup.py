@@ -102,6 +102,7 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         serve_process = self._start_serve_background(env=os.environ.copy())
         try:
             self._wait_for_setup_mode(serve_process)
+            self._wait_for_serve_waiting(serve_process)
             self.assertEqual(
                 self._explicit_container_status(self.ROUTER_CONTAINER_NAME), "created"
             )
