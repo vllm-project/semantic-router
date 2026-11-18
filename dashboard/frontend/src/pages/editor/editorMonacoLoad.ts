@@ -5,7 +5,7 @@ export type MonacoLoadEvent =
   | { type: 'loaded' }
   | { type: 'error'; error: unknown }
 
-/** A load abandoned because its view unmounted (the loader's `cancelation`) is not a failure. */
+/** A load the loader abandoned because its view unmounted is not a failure. */
 export function isMonacoCancellation(error: unknown): boolean {
   return (error as { type?: unknown } | null)?.type === 'cancelation'
 }

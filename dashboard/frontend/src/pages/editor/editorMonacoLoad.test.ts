@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMonacoLoad, isMonacoCancellation, nextMonacoLoadState } from './editorMonacoLoad'
 
-const cancelation = { type: 'cancelation', msg: 'operation is manually canceled' }
+const abandoned = { type: 'cancelation', msg: 'operation is manually canceled' }
 const chunkError = new TypeError('Failed to fetch dynamically imported module')
 const workerError = { type: 'error' }
 
@@ -21,10 +21,10 @@ describe('nextMonacoLoadState', () => {
   })
 
   it('does not treat a cancelled load as a failure', () => {
-    expect(isMonacoCancellation(cancelation)).toBe(true)
+    expect(isMonacoCancellation(abandoned)).toBe(true)
     expect(isMonacoCancellation(chunkError)).toBe(false)
     expect(isMonacoCancellation(null)).toBe(false)
-    expect(nextMonacoLoadState('loading', { type: 'error', error: cancelation })).toBe('loading')
+    expect(nextMonacoLoadState('loading', { type: 'error', error: abandoned })).toBe('loading')
   })
 
   it('keeps the fallback once it has failed', () => {

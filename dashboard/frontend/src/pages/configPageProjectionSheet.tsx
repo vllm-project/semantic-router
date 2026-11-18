@@ -100,7 +100,7 @@ function KindBadge({ kind, entity }: { kind: ProjectionKind; entity: ProjectionE
   )
 }
 
-function ReadBy({
+function ProjectionReaders({
   rows,
   onOpenDecision,
 }: {
@@ -753,7 +753,7 @@ export default function ConfigPageProjectionSheet({
                   </div>
                 </section>
               ) : null}
-              <ReadBy rows={consumers} onOpenDecision={onOpenDecision} />
+              <ProjectionReaders rows={consumers} onOpenDecision={onOpenDecision} />
             </TabsContent>
             <TabsContent value="try" className="px-5 py-5">
               {original && entrypointModel ? (
