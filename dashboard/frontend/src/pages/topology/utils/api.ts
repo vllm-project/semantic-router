@@ -1,5 +1,7 @@
 // topology/utils/api.ts - API calls for topology
 
+import type { PreviewOptions } from '../previewRequest'
+
 import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData, TestQueryMode } from '../types'
 import { withRoutingView } from '../../configPageCanonicalLayout'
 
@@ -8,6 +10,9 @@ import { withRoutingView } from '../../configPageCanonicalLayout'
  */
 interface TestQueryResponse {
   query: string
+  requestedModel?: string
+  recipe?: string
+  algorithm?: string
   mode: 'simulate' | 'dry-run'
   matchedSignals?: Array<{
     type: string
@@ -55,8 +60,10 @@ interface TestQueryResponse {
 export async function testQueryDryRun(
   query: string,
   model?: string,
+  options: PreviewOptions = {},
+  signal?: AbortSignal,
 ): Promise<TestQueryResult> {
-  return requestTestQuery(query, 'dry-run', model)
+  return requestTestQuery(query, 'dry-run', model, options, signal)
 }
 
 /** Explicit simulation requests never substitute for live verification. */
@@ -71,11 +78,14 @@ async function requestTestQuery(
   query: string,
   mode: TestQueryMode,
   model?: string,
+  options: PreviewOptions = {},
+  signal?: AbortSignal,
 ): Promise<TestQueryResult> {
   const response = await fetch('/api/topology/test-query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, mode, model }),
+    body: JSON.stringify({ ...options, query, mode, model }),
+    signal,
   })
   let data: TestQueryResponse
   try {
@@ -89,6 +99,9 @@ async function requestTestQuery(
 
   return {
     query: data.query,
+    requestedModel: data.requestedModel,
+    recipe: data.recipe,
+    algorithm: data.algorithm,
     mode: data.mode,
     isAccurate: response.ok && data.isAccurate === true,
     matchedSignals: convertSignals(data.matchedSignals),

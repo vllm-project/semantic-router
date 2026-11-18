@@ -36,13 +36,17 @@ const TopologyFlow: React.FC = () => {
     routingScopes.find((scope) => scope.id === selectedScopeId) ?? routingScopes[0]
   const selectedRoutingModel = selectedScope?.entrypointModelNames[0]
   const {
+    requestContext,
+    setRequestContext,
+    disabledReason,
+    hasInput,
     testQuery,
     setTestQuery,
     testResult,
     isLoading: isTestLoading,
     runTest,
     clearResult,
-  } = useTestQuery(data, selectedRoutingModel)
+  } = useTestQuery(data, selectedRoutingModel, selectedScope?.id)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -361,6 +365,10 @@ const TopologyFlow: React.FC = () => {
           {/* Panel Content */}
           <div className={styles.bottomPanelContent}>
             <TestQueryInput
+              requestContext={requestContext}
+              onRequestContextChange={setRequestContext}
+              disabledReason={disabledReason}
+              hasInput={hasInput}
               value={testQuery}
               onChange={setTestQuery}
               onTest={runTest}
