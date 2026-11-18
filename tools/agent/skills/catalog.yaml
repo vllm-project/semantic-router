@@ -15,6 +15,81 @@ skills:
     handoff: Ask before changing an existing stack, exposing ports, or activating traffic.
     support: v0.5 workflow; check the installed CLI schema and current support matrix.
 
+  - id: vllm-sr-serve
+    name: vllm-sr-serve
+    audience: user
+    source: tools/agent/skills/vllm-sr-serve/SKILL.md
+    published: website/static/install/agent/vllm-sr-serve/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-serve/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Start or verify a local Router stack or decision-model Engine mode with vllm-sr serve.
+    prerequisites: Supported Docker or Podman host, CLI, and a complete Router config or model artifact.
+    inputs: Mode, platform, model endpoint or artifact, and stack directory.
+    outputs: Startup receipt and route or System One readiness evidence.
+    handoff: Review an existing stack, config replacement, exposed port, or stop before changing it.
+    support: v0.5 local-image Router and Engine modes; check installed CLI and support matrix.
+
+  - id: vllm-sr-decision-model
+    name: vllm-sr-decision-model
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-decision-model/SKILL.md
+    published: website/static/install/agent/vllm-sr-decision-model/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-decision-model/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Resolve model-backed recipe signals and verify decision-model answers or unknowns.
+    prerequisites: Canonical config, a public entrypoint, a representative request, and read access to Router evidence.
+    inputs: Entry point, recipe, config version, request fixture, and model-runtime access.
+    outputs: Question-to-deployment map, readiness and answer evidence, and a traced routing diagnosis.
+    handoff: Escalate model/runtime faults or propose a reviewed recipe change with fixed probes.
+    support: v0.5 model catalog and maintained recipes; use installed schema and model cards.
+
+  - id: vllm-sr-configure-recipe
+    name: vllm-sr-configure-recipe
+    audience: user
+    source: tools/agent/skills/vllm-sr-configure-recipe/SKILL.md
+    published: website/static/install/agent/vllm-sr-configure-recipe/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Turn workload goals and available backends into a reviewable recipe and entrypoint candidate.
+    prerequisites: Complete canonical config or active Router config, supported CLI, and verified backend facts.
+    inputs: Workload, objectives, constraints, backend capabilities, and baseline config identity.
+    outputs: Candidate YAML, redacted diff, validation and plan receipts, and an apply handoff.
+    handoff: Ask the reviewer to activate the candidate through the existing config workflow.
+    support: v0.5 canonical config and maintained recipe bundles; plan requires a running Router.
+
+  - id: vllm-sr-diagnose-routing
+    name: vllm-sr-diagnose-routing
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-diagnose-routing/SKILL.md
+    published: website/static/install/agent/vllm-sr-diagnose-routing/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-diagnose-routing/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Explain an unexpected route, fallback, or failed routed response from Router evidence.
+    prerequisites: Public entrypoint, bounded request, expected result, and read access to Router preview or probe.
+    inputs: Request fixture, active config identity, management origin, inference listener, and expected route.
+    outputs: Signal/decision trace, selected route, delivery evidence, and first failing boundary.
+    handoff: Give one targeted next check or an evidence-backed issue reproduction.
+    support: v0.5 route preview/probe and public header contract; debug trace requires permission.
+
+  - id: vllm-sr-benchmark
+    name: vllm-sr-benchmark
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-benchmark/SKILL.md
+    published: website/static/install/agent/vllm-sr-benchmark/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-benchmark/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Plan and run a reproducible sr-bench preview, replay, or live evaluation.
+    prerequisites: Prepared dataset, reachable targets, running sr-bench service, and live-call authorization when applicable.
+    inputs: Frozen cases, config hash, target revisions, request settings, judges, prices, and limits.
+    outputs: Frozen plan, run ID, coverage reconciliation, metrics, and provenance report.
+    handoff: Review expected calls and cost before any live run not already authorized.
+    support: sr-bench 1.0; preview and replay do not establish live answer quality.
+
   - id: router-contract-change
     name: router-contract-change
     audience: contributor
