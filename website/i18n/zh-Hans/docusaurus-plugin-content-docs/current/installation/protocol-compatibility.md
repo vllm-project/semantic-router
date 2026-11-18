@@ -101,6 +101,8 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 
 Messages 没有图像 detail 级别，也没有文档文件名。发往 `anthropic` 后端时，`auto` 以外的图像 `detail` 和文件 `filename` 会被省略，`x-vsr-warnings` 会将其分别报告为 `dropped`。
 
+Chat 的 tool 消息只能携带文本。发往 Chat 后端时，工具结果中的图像（例如 Claude Code 用 `Read` 读取的图片、Codex 的 `view_image` 返回的图片）会放进紧跟在回答本轮的 tool 消息之后的一条 user 消息里，开头是 "The tool results above returned these images."；结果只有图像的 tool 消息会注明图像在下一条消息中。`x-vsr-warnings` 以字段 `messages[].content.tool_result.image` 将这一移动报告为 `approximated`。工具结果中的其他媒体（例如文档）仍以 `tool_result_media` 拒绝。
+
 对于使用 Chat Completions 或 Responses 后端的 Anthropic Messages 客户端，
 `thinking.type: adaptive` 使用后端模型的默认推理行为，`output_config.effort` 会保留。
 `thinking.display: omitted` 会从转换后的响应中移除推理内容，包括流式输出。显式设置

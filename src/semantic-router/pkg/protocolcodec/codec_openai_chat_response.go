@@ -33,7 +33,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"provider":                                               wire.Provider != nil,
 		"choices.native_finish_reason":                           chatChoicesHaveNativeFinishReason(wire.Choices),
 		"kv_transfer":                                            wire.hasLegacyKVTransferMetadata(),
-		"metadata":                                               len(wire.Metadata) > 0,
+		"metadata":                                               wire.hasMetadata(),
 		"moderation":                                             len(wire.Moderation) > 0,
 		"x_groq":                                                 len(wire.XGroq) > 0,
 		"usage_breakdown":                                        wire.hasUsageBreakdown(),
