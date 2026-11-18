@@ -27,6 +27,10 @@ before it changes anything outside the stack.
 Once the Router is running, [connect your agent harness](agent-harness).
 For other tasks and contributor workflows, use the
 [skill catalog](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/README.md).
+For a focused local `vllm-sr serve` walkthrough, use the
+[Serve skill](https://vllm-sr.ai/install/agent/vllm-sr-serve/SKILL.md).
+To verify which decision model answers a recipe's signals, use the
+[Decision-model skill](https://vllm-sr.ai/install/agent/vllm-sr-decision-model/SKILL.md).
 
 :::note Release channel
 The Skill follows `main`, as these pages do. It installs the stable release
