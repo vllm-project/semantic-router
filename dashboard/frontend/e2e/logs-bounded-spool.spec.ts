@@ -26,9 +26,9 @@ test('renders centrally redacted bounded-spool logs', async ({ page }) => {
     })
   })
 
-  await page.goto('/logs')
+  await page.goto('/observe/logs')
 
-  await expect(page.getByRole('heading', { name: 'System Logs' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Logs', exact: true, level: 1 })).toBeVisible()
   await expect(page.getByText('Available', { exact: true })).toBeVisible()
   await expect(page.getByText('[router] [INFO] request completed')).toBeVisible()
   await expect(page.getByText('Authorization: [REDACTED]')).toBeVisible()
@@ -57,7 +57,7 @@ test('explains when the deployment has no bounded log spool', async ({ page }) =
     })
   })
 
-  await page.goto('/logs')
+  await page.goto('/observe/logs')
 
   await expect(page.getByText('Unavailable', { exact: true })).toBeVisible()
   await expect(page.getByText('Runtime logs unavailable')).toBeVisible()

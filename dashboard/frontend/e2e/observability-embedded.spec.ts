@@ -20,7 +20,7 @@ test('monitoring opens the provisioned dashboard rather than a short-link redire
       body: '<h1>Routing metrics</h1>',
     }),
   )
-  await page.goto('/monitoring')
+  await page.goto('/observe/metrics')
   const frame = page.getByTitle('Grafana monitoring dashboard')
   await expect(frame).toBeVisible()
   const target = new URL((await frame.getAttribute('src')) ?? '', page.url())
@@ -28,7 +28,7 @@ test('monitoring opens the provisioned dashboard rather than a short-link redire
   await expect(
     page.frameLocator('iframe').getByRole('heading', { name: 'Routing metrics' }),
   ).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Open full view' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Open in Grafana' })).toHaveAttribute(
     'href',
     (await frame.getAttribute('src')) ?? '',
   )
@@ -44,7 +44,7 @@ test('an access failure stays unavailable until a successful retry', async ({ pa
       body: denied ? 'Access denied' : '<h1>Routing metrics</h1>',
     }),
   )
-  await page.goto('/monitoring')
+  await page.goto('/observe/metrics')
   await expect(page.getByRole('alert')).toContainText('Access to Grafana was denied')
   await expect(page.getByText('Connected through dashboard')).toHaveCount(0)
   await expect(page.getByTitle('Grafana monitoring dashboard')).toHaveCount(0)
@@ -62,7 +62,7 @@ test('tracing leaves service and result filters to the trace explorer', async ({
       body: '<h1>Trace search</h1>',
     }),
   )
-  await page.goto('/tracing')
+  await page.goto('/observe/traces')
   const frame = page.getByTitle('Jaeger distributed tracing')
   await expect(frame).toBeVisible()
   const target = new URL((await frame.getAttribute('src')) ?? '', page.url())
@@ -78,7 +78,7 @@ test('a stalled availability probe times out and can be retried', async ({ page 
     if (stalled) return
     await route.fulfill({ contentType: 'text/html', body: '<h1>Routing metrics</h1>' })
   })
-  await page.goto('/monitoring')
+  await page.goto('/observe/metrics')
   await expect(page.getByText('Checking connection')).toBeVisible()
   await page.clock.runFor(12001)
   await expect(page.getByRole('alert')).toContainText('took too long to respond')
@@ -100,7 +100,7 @@ test('services without HEAD support are checked with GET before embedding', asyn
       body: '<h1>Routing metrics</h1>',
     })
   })
-  await page.goto('/monitoring')
+  await page.goto('/observe/metrics')
   await expect(page.getByTitle('Grafana monitoring dashboard')).toBeVisible()
   expect(methods).toContain('HEAD')
   expect(methods).toContain('GET')

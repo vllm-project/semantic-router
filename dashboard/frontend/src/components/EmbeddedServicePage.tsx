@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { AppWindow, ExternalLink, RotateCw, ShieldCheck, type LucideIcon } from 'lucide-react'
 
 import {
@@ -25,6 +25,11 @@ interface EmbeddedServicePageProps {
   iframeTitle: string
   icon?: LucideIcon
   tone?: Tone
+  /** Controls for the embedded view, e.g. a time range; shown in the frame's toolbar. */
+  toolbar?: ReactNode
+  /** Link for the new-tab view when it differs from the embedded `src`. */
+  fullViewHref?: string
+  fullViewLabel?: string
 }
 
 type Availability = 'checking' | 'available' | 'missing' | 'failed'
@@ -45,6 +50,9 @@ export default function EmbeddedServicePage({
   iframeTitle,
   icon = AppWindow,
   tone = 'blue',
+  toolbar,
+  fullViewHref,
+  fullViewLabel = 'Open full view',
 }: EmbeddedServicePageProps) {
   const [availability, setAvailability] = useState<Availability>('checking')
   const [frameKey, setFrameKey] = useState(0)
@@ -152,9 +160,9 @@ export default function EmbeddedServicePage({
                 Reload
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <a href={src} target="_blank" rel="noopener noreferrer">
+                <a href={fullViewHref ?? src} target="_blank" rel="noopener noreferrer">
                   <ExternalLink />
-                  Open full view
+                  {fullViewLabel}
                 </a>
               </Button>
             </>
@@ -187,8 +195,11 @@ export default function EmbeddedServicePage({
           className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs"
           aria-label={`${title} embedded workspace`}
         >
-          <div className="flex h-10 items-center justify-between gap-3 border-b border-border bg-surface-subtle/70 px-4 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground/85">{service.name}</span>
+          <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-border bg-surface-subtle/70 px-4 py-1.5 text-xs text-muted-foreground">
+            <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+              <span className="font-medium text-foreground/85">{service.name}</span>
+              {toolbar}
+            </span>
             <span className="flex items-center gap-1.5">
               <ShieldCheck className="size-3.5 text-success" aria-hidden="true" />
               Secure same-origin proxy
