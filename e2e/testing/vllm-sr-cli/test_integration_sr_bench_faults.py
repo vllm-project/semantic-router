@@ -29,29 +29,25 @@ class TestBenchmarkFaultIntegration(MockUpstreamMixin, ServeSessionMixin, CLITes
         config_path = Path(
             self.write_minimal_canonical_config(
                 model_name="primary",
-                base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
+                endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
                 provider="openai",
+                api_only=True,
             )
         )
         config = yaml.safe_load(config_path.read_text())
         fallback = copy.deepcopy(config["providers"]["models"][0])
         fallback.update(name="fallback", provider_model_id="fallback")
         config["providers"]["models"].append(fallback)
-        config["routing"]["modelCards"].append({"name": "fallback"})
-        config["routing"]["decisions"][0]["modelRefs"].append(
+        config["recipes"][0]["decisions"][0]["modelRefs"].append(
             {"model": "fallback", "use_reasoning": False}
         )
-        config["global"] = {
-            "router": {
-                "fallback": {
-                    "version": 1,
-                    "enabled": True,
-                    "max_attempts": 2,
-                    "total_timeout": "10s",
-                    "per_attempt_timeout": "5s",
-                    "retryable_status_codes": [503],
-                }
-            }
+        config.setdefault("global", {}).setdefault("router", {})["fallback"] = {
+            "version": 1,
+            "enabled": True,
+            "max_attempts": 2,
+            "total_timeout": "10s",
+            "per_attempt_timeout": "5s",
+            "retryable_status_codes": [503],
         }
         config_path.write_text(yaml.safe_dump(config, sort_keys=False))
         process = self._start_serve_background(arguments=("--minimal",))
