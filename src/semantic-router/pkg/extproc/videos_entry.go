@@ -86,6 +86,7 @@ func (r *OpenAIRouter) handleVideosRequestHeaders(
 	// stage is the only place that can declare the format both sides speak.
 	ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIVideosV1, llmprotocol.OpenAIVideosV1
 	ctx.RequestModel, ctx.videosRoute, ctx.videosContent = route, route, content
+	ctx.videosProviderID = providerID
 	mutation := r.buildRequestHeadersMutation(ctx, path)
 	appendRoutingHeaders(&mutation.SetHeaders, route)
 	if content {
@@ -95,6 +96,46 @@ func (r *OpenAIRouter) handleVideosRequestHeaders(
 	}
 	response := newContinueRequestHeadersResponse(mutation)
 	response.GetRequestHeaders().GetResponse().ClearRouteCache = true
+	return response, nil
+}
+
+// videosObjectDispatchResponse sends a status, content or delete call through
+// the same provider boundary as a create: backend resolution, provider
+// credential and profile headers, with the object path restored after the
+// profile's create path.
+func (r *OpenAIRouter) videosObjectDispatchResponse(ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, ctx.videosRoute, "", false, ctx)
+	if err != nil {
+		return nil, err
+	}
+	response := r.buildProviderDispatchResponse(dispatch, ctx)
+	if response.GetImmediateResponse() != nil {
+		return response, nil
+	}
+	common := response.GetRequestBody().GetResponse()
+	if common == nil {
+		return r.createErrorResponse(500, "Failed to build provider dispatch"), nil
+	}
+	if common.HeaderMutation == nil {
+		common.HeaderMutation = &ext_proc.HeaderMutation{}
+	}
+	objectPath := videosCollectionPath + "/" + url.PathEscape(ctx.videosProviderID)
+	if ctx.videosContent {
+		objectPath += "/content"
+	}
+	// Replace the profile's create path in place: one :path option, the object
+	// path, so the wire order between two overwrites never decides.
+	restamped := false
+	for _, option := range common.HeaderMutation.GetSetHeaders() {
+		if option.GetHeader().GetKey() == ":path" {
+			option.Header.RawValue = []byte(objectPath)
+			restamped = true
+			break
+		}
+	}
+	if !restamped {
+		common.HeaderMutation.SetHeaders = append(common.HeaderMutation.SetHeaders, overwriteRequestHeader(":path", objectPath))
+	}
 	return response, nil
 }
 

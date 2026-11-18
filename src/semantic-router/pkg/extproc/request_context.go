@@ -153,9 +153,10 @@ type RequestContext struct {
 	// before any phase reads it.
 	UpstreamResponseGzip bool
 	// Video state is derived only from the public Videos path and its encoded id.
-	videosCreate  bool
-	videosRoute   string
-	videosContent bool
+	videosCreate     bool
+	videosRoute      string
+	videosProviderID string
+	videosContent    bool
 
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string
