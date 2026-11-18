@@ -483,6 +483,35 @@ messages in its one system message
 ([above](#system-messages-a-chat-template-refuses)), and the request reports
 that diagnostic alone.
 
+### Control tokens in user and tool text
+
+A model server such as vLLM renders the chat template to one string and
+tokenizes it with the tokenizer's added tokens recognized, so text that
+spells one of those tokens becomes the token. `<think>` and `</think>` typed
+by a user, or returned inside a tool result, become a Qwen3.5 model's
+reasoning delimiters (its tokenizer does not even mark them special), and a
+typed `<|im_end|>` ends the user's turn.
+
+The Router keeps such text text. For a model whose own tokenizer it has
+(`providers.models[].tokenizer`, or the Hugging Face repo it counts with: see
+[Check prompts against the context window](model-configuration#check-prompts-against-the-context-window)),
+it puts U+2060 WORD JOINER, a character with no width, after the first
+character of every added token's text in user and tool text before the
+request leaves:
+
+- **Every added token, every protocol.** Special or not, as the model
+  server's tokenizer matches them, in Chat, Responses and Messages requests,
+  for the decision's model and for each fallback candidate.
+- **Only user and tool text.** The text of user messages and of tool results
+  is escaped. System and developer instructions, the assistant's turns and
+  tool calls go as the client sent them. A token split across two text parts
+  of one message is broken where the parts meet.
+- **Nothing else changes.** Text without an added token's text reaches the
+  backend byte for byte. A model that repeats escaped text may repeat the
+  word joiner too.
+- **Models without their own tokenizer** (none named, or one that has not
+  loaded) receive the text unchanged.
+
 ### Signed reasoning from Anthropic backends
 
 Reasoning content translated out of an Anthropic backend fails when the
