@@ -79,6 +79,10 @@ log_info "Testing the Router's writable data directory..."
 python3 -m unittest discover -s deploy/helm -p test_data_volume.py -v
 echo ""
 
+log_info "Testing the Router pod's grace period and lifecycle hooks..."
+python3 -m unittest discover -s deploy/helm -p test_shutdown_grace.py -v
+echo ""
+
 # A Dashboard config edit on Kubernetes is saved to a ConfigMap and activated
 # after rollout. The backup history needed for rollback must outlive that pod.
 log_info "Testing default Dashboard backup persistence..."

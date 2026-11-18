@@ -240,7 +240,7 @@ func SetupActivateHandler(
 			return
 		}
 
-		if auth.RejectRevokedMutation(w, r) {
+		if rejectKeyReferenceRedirect(w, r, previousData, yamlData) || auth.RejectRevokedMutation(w, r) {
 			return
 		}
 		if _, freshErr := checkConfigMapMutationFresh(configPath); freshErr != nil {
@@ -253,8 +253,8 @@ func SetupActivateHandler(
 			return
 		}
 
-		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
-			writeConfigPersistenceError(w, writeErr)
+		if yamlData, _, err = persistConfig(configPath, yamlData); err != nil {
+			writeConfigPersistenceError(w, err)
 			return
 		}
 		if configActivationDeferred() {

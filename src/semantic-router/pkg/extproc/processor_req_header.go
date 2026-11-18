@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -20,17 +21,23 @@ import (
 func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_RequestHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	ctx.StartTime = time.Now()
 
-	span := startRequestHeaderSpan(v, ctx)
-
 	// The skip-processing opt-out would bypass a listener's model allow-list,
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
 	r.captureDelegatedCredential(ctx)
+	r.captureCallerCredential(ctx)
 	if r.Config != nil {
 		ctx.sessionIDHeaders = r.Config.Headers.SessionIDHeaderNames()
 		ctx.identity = r.Config.Authz.Identity
 	}
 	r.gateDebugHeaders(ctx)
+	// A request without trace context joins its agent run's trace.
+	run := r.requestTraceRun(ctx)
+	ctx.TraceContext = tracing.WithRunParent(tracing.ExtractTraceContext(ctx.TraceContext, ctx.Headers), run)
+	span := startRequestHeaderSpan(v, ctx)
+	if run.SessionID != "" {
+		span.SetAttributes(run.Attributes()...)
+	}
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil
@@ -119,6 +126,11 @@ func startRequestHeaderSpan(
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	ctx.TraceContext = spanCtx
+	// Internal hops charge auxiliary calls to the inherited parent meter;
+	// their own replay records defer generation costs to that parent too.
+	if ctx.Hop == nil {
+		ctx.TraceContext, ctx.ModelCallMeter = modelservice.WithRequestMeter(spanCtx)
+	}
 	ctx.RequestSpan = span
 	return span
 }

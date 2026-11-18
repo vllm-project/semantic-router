@@ -153,6 +153,7 @@ describe('DSL structured field schemas', () => {
       'assistant_tool_cycle',
       'active_tool_loop',
       'flow_tool_state',
+      'failed_tool_result',
       'last_tool_call',
     ])
     expect(role.options).toContain('non_user')

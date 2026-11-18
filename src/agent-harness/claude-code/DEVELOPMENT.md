@@ -49,7 +49,10 @@ first, so its edges stay straight.
 
 - The root `.claude-plugin/marketplace.json` lists this folder as `vsr`, so users install it with
   `claude plugin marketplace add vllm-project/semantic-router` and `claude plugin install vsr@vllm-sr`.
-- `tools/agent/domains.yaml` (`claude-code-plugin`) names the checks CI runs for this folder.
+- CI's Agent Plugins contract runs `make agent-plugins-test` when this folder or the Codex plugin
+  changes: these tests on the Claude Code release `AGENT_CLAUDE_CODE_VERSION` pins in
+  `tools/make/agent.mk`, plus both plugins' Python tests. Bump the pin with the release the plugin is
+  tested against.
 - The setup installs `vllm-srun` from a pinned commit of this repository (`COMMIT` in
   `skills/setup/scripts/local.py`, with that commit's `requirements-lock.txt` as constraints on Python
   3.12+); bump it with the runtime it was tested against.

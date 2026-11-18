@@ -178,12 +178,28 @@ func (s *supervisor) kill(process *os.Process) {
 	_ = forceKill(process)
 }
 
+// maxLogLine caps a runtime_log line; a longer line is forwarded in pieces of this size.
+const maxLogLine = 1024 * 1024
+
 func (s *supervisor) forwardLogs(reader io.Reader) {
 	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), maxLogLine)
+	scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+		advance, line, err := bufio.ScanLines(data, atEOF)
+		if line == nil && len(data) >= maxLogLine {
+			return len(data), data, nil
+		}
+		return advance, line, err
+	})
 	for scanner.Scan() {
 		logging.ComponentEvent("model_runtime", "runtime_log", map[string]interface{}{
 			"process": s.process, "line": scanner.Text(),
+		})
+	}
+	// Wait closes the pipe once the process exits, which ends a read in progress.
+	if err := scanner.Err(); err != nil && !errors.Is(err, os.ErrClosed) {
+		logging.ComponentWarnEvent("model_runtime", "runtime_log_read_failed", map[string]interface{}{
+			"process": s.process, "deployments": s.deployments, "error": err.Error(),
 		})
 	}
 }

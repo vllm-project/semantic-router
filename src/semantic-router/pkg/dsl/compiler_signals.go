@@ -152,6 +152,26 @@ func (c *Compiler) compileInputModalitySignal(s *SignalDecl) {
 	c.config.InputModalityRules = append(c.config.InputModalityRules, rule)
 }
 
+func (c *Compiler) compileAgentSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode agent signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.AgentRule
+	if err := yaml.UnmarshalStrict(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode agent signal %q: %v", s.Name, err)
+		return
+	}
+	if err := config.ValidateAgentRuleContract(rule); err != nil {
+		c.addError(s.Pos, "agent signal %q: %v", s.Name, err)
+		return
+	}
+	c.config.AgentRules = append(c.config.AgentRules, rule)
+}
+
 func (c *Compiler) compileSystemOneSignal(s *SignalDecl) {
 	payload := fieldsToMap(s.Fields)
 	payload["name"] = s.Name

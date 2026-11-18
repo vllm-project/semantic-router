@@ -51,6 +51,12 @@ func ValidateRequest(request Request, limits Limits) error {
 			return NewError(ErrorInvalidRequest, "context_management_limit", "context management exceeds the configured limit", nil)
 		}
 	}
+	if len(request.Safeguards) > 0 {
+		value := bytes.TrimSpace(request.Safeguards)
+		if !json.Valid(value) || len(value) == 0 || value[0] != '[' {
+			return NewError(ErrorInvalidRequest, "invalid_safeguards", "safeguards must be a JSON array", nil)
+		}
+	}
 	return validateReasoning(request, limits)
 }
 
@@ -271,6 +277,9 @@ func validateRequestTools(tools []Tool, limits Limits) (map[string]struct{}, int
 }
 
 func validateRequestTool(tool Tool, limits Limits) error {
+	if exceeds(tool.Namespace, limits.ToolNameBytes) || exceeds(tool.LocalName, limits.ToolNameBytes) {
+		return NewError(ErrorInvalidRequest, "tool_text_limit", "tool namespace or name exceeds the configured limit", nil)
+	}
 	if tool.Kind == ToolKindCustom {
 		return validateCustomTool(tool, limits)
 	}
@@ -798,7 +807,7 @@ func validateToolCallContent(content Content, limits Limits, truncatable bool) e
 			return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call arguments must be one strict JSON object", err)
 		}
 	}
-	if exceeds(call.ID, limits.IdentifierBytes) || exceeds(call.Name, limits.ToolNameBytes) {
+	if exceeds(call.ID, limits.IdentifierBytes) || exceeds(call.Name, limits.ToolNameBytes) || exceeds(call.Namespace, limits.ToolNameBytes) {
 		return NewError(ErrorInvalidRequest, "tool_call_limit", "tool call ID or name exceeds the configured limit", nil)
 	}
 	if limits.ToolArgumentsBytes > 0 && len(call.Arguments) > limits.ToolArgumentsBytes {

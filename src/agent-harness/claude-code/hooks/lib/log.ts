@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
-import type { App, Calibration, Decision, EffortFrom, Model, Outcome, Risk, Steps, Tag, Tiers } from '../../types'
+import type { App, Calibration, Decision, EffortFrom, Model, Outcome, Reread, Risk, RouteScope, Steps, Tag, Tiers } from '../../types'
 import { isRecord } from './classify'
 import { fileOf } from './env'
 import { appOf } from './apps'
@@ -30,6 +30,12 @@ export type Detail =
       steps: Steps | null
       effortFrom: EffortFrom | null
       escalated: { alone: Model | 'default' } | null
+      // On a decision about one of your turns: `scope` 'turn', the model a route moved from, and for a keep the model
+      // the router would have picked and the re-read that held it.
+      scope?: RouteScope
+      from?: string
+      would?: Model
+      reread?: Reread
     }
   | { feedback: Record<string, number> | null; reask: number | null }
   | { counts: Partial<Record<Tag, number>>; source: string }
@@ -73,6 +79,7 @@ const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }
       steps: d.steps,
       effortFrom: d.effortFrom,
       escalated: d.escalated ?? null,
+      ...(d.scope === 'turn' ? { scope: d.scope, from: d.from } : {}),
     },
   }),
   keep: d => ({
@@ -80,7 +87,17 @@ const lines: { [K in Decision['kind']]: (decision: Extract<Decision, { kind: K }
     score: d.confidence,
     threshold: d.minConfidence,
     subject: d.task,
-    detail: { level: d.level, confidence: d.confidence, model: d.model, effort: null, steps: null, effortFrom: null, escalated: null, reason: d.reason ?? 'unsure' },
+    detail: {
+      level: d.level,
+      confidence: d.confidence,
+      model: d.model,
+      effort: null,
+      steps: null,
+      effortFrom: null,
+      escalated: null,
+      reason: d.reason ?? 'unsure',
+      ...(d.scope === 'turn' ? { scope: d.scope, would: d.would, ...(d.reread ? { reread: d.reread } : {}) } : {}),
+    },
   }),
   escalate: d => ({
     verdict: 'escalated',

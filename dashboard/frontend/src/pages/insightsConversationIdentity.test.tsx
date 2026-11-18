@@ -59,6 +59,16 @@ const trajectory: InsightsTrajectory = {
   ],
 }
 describe('Replay conversation identity', () => {
+  it('counts one request in the singular', () => {
+    const one = { ...trajectory, routes: trajectory.routes?.slice(0, 1) }
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <InsightsSessionRoutes trajectory={one} />
+      </MemoryRouter>,
+    )
+    expect(html).toContain(' · 1 request</span>')
+  })
+
   it('shows boundaries without hiding any same-turn route and exposes full IDs', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>

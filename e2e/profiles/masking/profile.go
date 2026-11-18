@@ -66,6 +66,8 @@ func (p *Profile) GetTestCases() []string {
 		"masking-keeps-echoed-placeholder",
 		"masking-agent-tool-loop",
 		"masking-scan-error-fails-closed",
+		"masking-own-rules",
+		"masking-placeholder-collisions",
 		"agent-session-holds-model",
 	}
 }

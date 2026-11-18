@@ -1,0 +1,1 @@
+global.plugins[0].configuration.capture_personal_data: renamed_field: capture_personal_data: false is deprecated; run `vllm-sr config migrate` (prompt_capture: verified)
