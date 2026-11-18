@@ -49,7 +49,8 @@ test('loads the DSL editor and the deploy diff from the app bundle', async ({ pa
 
   await page.getByRole('radio', { name: 'DSL', exact: true }).click()
   const editor = page.locator('.monaco-editor').first()
-  await expect(editor).toContainText('model-a')
+  // The editor chunk is large, and a cold dev server takes a while to serve it.
+  await expect(editor).toContainText('model-a', { timeout: 30_000 })
   await expect(editor.locator('.view-line [class*="mtk"]').first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Review & deploy' }).click()

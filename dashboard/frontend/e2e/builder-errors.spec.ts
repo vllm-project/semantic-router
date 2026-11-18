@@ -95,7 +95,8 @@ test('shows Format parser errors in the DSL view and clears them after correctio
   await expect(page.getByText('model-a', { exact: true }).first()).toBeVisible()
   await page.getByRole('radio', { name: 'DSL', exact: true }).click()
   const editor = page.getByRole('textbox', { name: 'Editor content', exact: true })
-  await expect(editor).toBeVisible()
+  // The editor chunk is large, and a cold dev server takes a while to serve it.
+  await expect(editor).toBeVisible({ timeout: 30_000 })
   // Monaco uses the emulated browser's platform, while ControlOrMeta uses the host OS.
   const selectAll = await page.evaluate(() =>
     navigator.userAgent.includes('Macintosh') ? 'Meta+A' : 'Control+A',
