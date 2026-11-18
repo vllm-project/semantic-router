@@ -322,9 +322,9 @@ logo, plugin rose, evaluation orange, system slate.
   reads the bounded log spool or, in Kubernetes without one, the Router and
   Dashboard pod logs through the API with the Dashboard's service account, each
   line naming its pod. Metrics charts the Router's Prometheus series natively
-  and Traces lists Jaeger traces with a span waterfall, both through the
-  Dashboard's same-origin proxies; Grafana stays one link away when it is
-  configured.
+  through the Dashboard's Prometheus proxy, and Traces lists summaries the
+  Dashboard builds from Jaeger, then opens one trace at a time in a span
+  waterfall; Grafana stays one link away when it is configured.
 - **Settings** groups router settings, integrations, users and access, and the
   schema reference behind one sub-navigation. Router settings render every
   global field from the generated contract in cards with an on-this-page index:
@@ -379,6 +379,7 @@ field rather than a `[component]` prefix.
 | Router Replay `aggregate` | An optional `interval` with `since` returns `traffic`: the records in contiguous intervals from `since` to now. | Home |
 | Dashboard setup state | `publicBaseUrl` and `publicRequiresKey`, from `VLLM_SR_PUBLIC_BASE_URL` and `VLLM_SR_PUBLIC_REQUIRES_KEY`. | Get started |
 | Dashboard logs | Without a spool, a Dashboard in Kubernetes reads pod logs through the API (pods `list`, pods/log `get`); responses add `components`, `namespace`, `pods` and each line's `pod` and `timestamp`. | Logs |
+| Dashboard `GET /api/observability/traces/summaries` | Searches Jaeger from the Dashboard and returns one small summary per trace (root operation and service, services, spans, errors, start and duration), bounded to 100 traces, 20 seconds and 256 MiB of answer. | Traces |
 
 ## Compatibility
 
