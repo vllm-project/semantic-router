@@ -134,6 +134,55 @@ func TestWalkAssignsRemovedText(t *testing.T) {
 	}
 }
 
+// A walk told the request's user messages routes on the last one with text
+// when routing_input would leave none with routing text, every one skipped
+// or stripped to nothing; it changes nothing while one keeps routing text.
+func TestAWalkRoutesOnTheLastUserMessageWhenRoutingInputLeavesNone(t *testing.T) {
+	selector, err := Compile(config.RoutingInputConfig{
+		SkipUserMessagesMatching: []string{`^Client context:`},
+		StripBlocks:              []config.RoutingInputStripBlock{{Start: "<m>", End: "</m>"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := map[string]struct {
+		messages []UserText
+		routed   []string
+		want     Outcome
+	}{
+		"every user message skipped": {
+			messages: []UserText{{Index: 0, Text: "Client context: a", TextOnly: true}, {Index: 2, Text: "Client context: b", TextOnly: true}},
+			routed:   []string{"", "Client context: b"},
+			want: Outcome{
+				SkippedMessages: 1, Fallback: true, MessageIndex: 2, ExcludedPrior: []string{"Client context: a"},
+			},
+		},
+		"the last message only a block": {
+			messages: []UserText{{Index: 0, Text: "Client context: a", TextOnly: true}, {Index: 1, Text: "<m>memory</m>", TextOnly: true}},
+			routed:   []string{"", "<m>memory</m>"},
+			want:     Outcome{SkippedMessages: 1, Fallback: true, MessageIndex: 1, ExcludedPrior: []string{"Client context: a"}},
+		},
+		"a question before a skipped turn": {
+			messages: []UserText{{Index: 0, Text: "question", TextOnly: true}, {Index: 1, Text: "Client context: b", TextOnly: true}},
+			routed:   []string{"question", ""},
+			want:     Outcome{SkippedMessages: 1, MessageIndex: 0, ExcludedCurrent: []string{"Client context: b"}},
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			walk := selector.Walk(test.messages...)
+			for position, message := range test.messages {
+				if routed, _ := walk.UserMessage(message.Index, message.Text, message.TextOnly); routed != test.routed[position] {
+					t.Fatalf("UserMessage(%q) routes on %q, want %q", message.Text, routed, test.routed[position])
+				}
+			}
+			if got := walk.Outcome(); !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("Outcome() = %+v, want %+v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestStrip(t *testing.T) {
 	memories := config.RoutingInputStripBlock{Start: "<relevant-memories>", End: "</relevant-memories>"}
 	recalled := config.RoutingInputStripBlock{Start: "<recalled-memories>", End: "</recalled-memories>"}

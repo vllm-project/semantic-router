@@ -14,7 +14,7 @@
 | `hooks/view.tsx`, `hooks/lib/draw.tsx`, `hooks/lib/describe.ts` | What each decision shows: rows, the band, the `/vsr` pane. `describe.ts` is the one table of words. |
 | `hooks/lib/classify.ts` | The one way every app asks the runtime, with the offline circuit breaker. |
 | `hooks/*.test.ts(x)`, `hooks/kit.tsx` | Tests, run by `claude plugin test .` against the engine; the kit stubs the runtime. |
-| `skills/setup`, `skills/calibrate` | `/vsr:setup` and `/vsr:calibrate`, with their Python scripts and tests. `skills/setup/scripts/settings.py` reads option types and defaults from `plugin.json`; `framing.py` copies the classifier questions from the hooks, and its test fails when the two drift. |
+| `skills/setup`, `skills/calibrate` | `/vsr:setup` and `/vsr:calibrate`, with their Python scripts and tests. `skills/setup/scripts/settings.py` reads option types and defaults from `plugin.json`; `framing.py` copies the classifier questions from the hooks, and its test fails when the two drift. The model runtime's `tests/test_claude_code_plugin_contract.py` sends each app's framed request to a tiny vela3-lite runtime and fails when the readers find no value. |
 | `types/index.d.ts` | The decision types and the `$.state` contract. |
 | `assets/` | The mark (`mark.png`), its 4-row block art for the demo (`mark.ansi`), the README screenshot. |
 | `tools/mark_art.py` | Draws the mark in characters into `hooks/lib/mark-art.ts`. |
@@ -49,7 +49,10 @@ first, so its edges stay straight.
 
 - The root `.claude-plugin/marketplace.json` lists this folder as `vsr`, so users install it with
   `claude plugin marketplace add vllm-project/semantic-router` and `claude plugin install vsr@vllm-sr`.
-- `tools/agent/domains.yaml` (`claude-code-plugin`) names the checks CI runs for this folder.
+- CI's Agent Plugins contract runs `make agent-plugins-test` when this folder or the Codex plugin
+  changes: these tests on the Claude Code release `AGENT_CLAUDE_CODE_VERSION` pins in
+  `tools/make/agent.mk`, plus both plugins' Python tests. Bump the pin with the release the plugin is
+  tested against.
 - The setup installs `vllm-srun` from a pinned commit of this repository (`COMMIT` in
   `skills/setup/scripts/local.py`, with that commit's `requirements-lock.txt` as constraints on Python
   3.12+); bump it with the runtime it was tested against.

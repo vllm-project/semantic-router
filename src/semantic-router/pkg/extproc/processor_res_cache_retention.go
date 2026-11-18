@@ -1,11 +1,14 @@
 package extproc
 
 import (
+	"context"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 )
 
 // retentionDropReason is the canonical skip-reason value used in metrics, log
@@ -122,6 +125,16 @@ func observeDecisionRetention(ctx *RequestContext) {
 			span.SetAttributes(attribute.Bool("vsr.retention.prefer_prefix_retention", *r.PreferPrefixRetention))
 		}
 	}
+	if ctx.RetentionOutcome != nil {
+		fields["vsr.retention.status"] = string(ctx.RetentionOutcome.Status)
+		fields["vsr.retention.reason"] = ctx.RetentionOutcome.Reason
+		if span.IsRecording() {
+			span.SetAttributes(
+				attribute.String("vsr.retention.status", string(ctx.RetentionOutcome.Status)),
+				attribute.String("vsr.retention.reason", ctx.RetentionOutcome.Reason),
+			)
+		}
+	}
 	logging.ComponentDebugEvent("extproc", "retention_directive_observed", fields)
 }
 
@@ -152,14 +165,23 @@ func applyDecisionRetention(decision *config.Decision, ctx *RequestContext) *con
 	if decision == nil || ctx == nil || decision.Retention == nil {
 		return nil
 	}
-	retention := decision.Retention
+	source := decision.Retention
 	ctx.Retention = &config.DecisionRetention{
-		Drop:                  cloneBoolPtr(retention.Drop),
-		TTLTurns:              cloneIntPtr(retention.TTLTurns),
-		KeepCurrentModel:      cloneBoolPtr(retention.KeepCurrentModel),
-		PreferPrefixRetention: cloneBoolPtr(retention.PreferPrefixRetention),
+		Drop:                  cloneBoolPtr(source.Drop),
+		TTLTurns:              cloneIntPtr(source.TTLTurns),
+		KeepCurrentModel:      cloneBoolPtr(source.KeepCurrentModel),
+		PreferPrefixRetention: cloneBoolPtr(source.PreferPrefixRetention),
 	}
+	outcome := retention.Resolve(contextForRetention(ctx), ctx.Retention, nil)
+	ctx.RetentionOutcome = &outcome
 	return ctx.Retention
+}
+
+func contextForRetention(ctx *RequestContext) context.Context {
+	if ctx == nil || ctx.TraceContext == nil {
+		return context.Background()
+	}
+	return ctx.TraceContext
 }
 
 func cloneBoolPtr(p *bool) *bool {

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"errors"
 	"math"
 	"sort"
@@ -37,13 +38,16 @@ func (filters routerReplayFilters) storageFilters() store.QueryFilters {
 	return store.QueryFilters{
 		Search: filters.search, Recipe: filters.recipe, Decision: filters.decision,
 		Model: filters.model, CacheStatus: filters.cacheStatus, SessionID: filters.sessionID,
+		RequestKind: filters.review.requestKind, ReviewStatus: filters.review.status,
+		ReviewOutcome: filters.review.outcome, ReviewRisk: filters.review.risk,
+		TurnID: filters.turnID, Since: filters.since,
 	}
 }
 
-func (r *OpenAIRouter) queryRouterReplayPage(query routerReplayListQuery) (routerReplayListResponse, error) {
+func (r *OpenAIRouter) queryRouterReplayPage(ctx context.Context, query routerReplayListQuery) (routerReplayListResponse, error) {
 	readers := r.routerReplayReaders()
 	if len(readers) == 1 {
-		page, supported, err := readers[0].QueryPage(query.filters.storageFilters(), query.limit, query.offset, query.showDetails)
+		page, supported, err := readers[0].QueryPage(ctx, query.filters.storageFilters(), query.limit, query.offset, query.showDetails)
 		if err != nil {
 			return routerReplayListResponse{}, err
 		}
@@ -63,7 +67,7 @@ func (r *OpenAIRouter) queryRouterReplayPage(query routerReplayListQuery) (route
 	var sourced []sourcedRecord
 	total := 0
 	for _, reader := range readers {
-		page, supported, err := reader.QueryPage(query.filters.storageFilters(), query.offset+query.limit, 0, false)
+		page, supported, err := reader.QueryPage(ctx, query.filters.storageFilters(), query.offset+query.limit, 0, false)
 		if err != nil {
 			return routerReplayListResponse{}, err
 		}
@@ -133,7 +137,7 @@ func routerReplayPagePayload(page store.RecordPage, query routerReplayListQuery)
 
 // Session detail queries use one database snapshot, rather than independent
 // offset pages that could duplicate or miss turns during concurrent writes.
-func (r *OpenAIRouter) queryRouterReplaySession(sessionID string, recipe *string) ([]routerreplay.RoutingRecord, error) {
+func (r *OpenAIRouter) queryRouterReplaySession(ctx context.Context, sessionID string, recipe *string) ([]routerreplay.RoutingRecord, error) {
 	var records []routerreplay.RoutingRecord
 	filters := store.QueryFilters{SessionID: sessionID}
 	if recipe != nil {
@@ -141,7 +145,7 @@ func (r *OpenAIRouter) queryRouterReplaySession(sessionID string, recipe *string
 		filters.RecipeSet = true
 	}
 	for _, reader := range r.routerReplayReaders() {
-		page, supported, err := reader.QueryPage(filters, math.MaxInt, 0, true)
+		page, supported, err := reader.QueryPage(ctx, filters, math.MaxInt, 0, true)
 		if err != nil {
 			return nil, err
 		}

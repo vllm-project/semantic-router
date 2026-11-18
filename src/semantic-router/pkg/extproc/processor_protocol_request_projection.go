@@ -13,8 +13,9 @@ func (r *OpenAIRouter) projectRequestForBackend(
 	request llmprotocol.Request,
 	model string,
 	target llmprotocol.WireFormat,
+	shadows ...*shadowTarget,
 ) (llmprotocol.Request, error) {
-	projected, _, err := r.projectRequestForBackendWithDiagnostics(request, model, target)
+	projected, _, err := r.projectRequestForBackendWithDiagnostics(request, model, target, shadows...)
 	return projected, err
 }
 
@@ -22,12 +23,42 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	request llmprotocol.Request,
 	model string,
 	target llmprotocol.WireFormat,
+	shadows ...*shadowTarget,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
-	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(request, target)
+	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(request, model, target, shadows...)
+	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
+	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(verbosityDiagnostics, fileDiagnostics, storeDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+}
+
+// projectUnsupportedCapabilities sends a model the request its
+// unsupported_capabilities allow: without the sampling controls it rejects,
+// such as min_p for a vLLM backend that runs speculative decoding, and with
+// developer messages as system messages when it lacks the developer role, as
+// DeepSeek V4 does. Selection, dispatch and every fallback candidate project
+// through here, so another model still receives them.
+func (r *OpenAIRouter) projectUnsupportedCapabilities(
+	request llmprotocol.Request,
+	model string,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics) {
+	if r == nil || r.Config == nil {
+		return request, nil
+	}
+	params, ok := r.Config.ModelConfig[model]
+	if !ok || len(params.UnsupportedCapabilities) == 0 {
+		return request, nil
+	}
+	unsupported, err := llmprotocol.ParseUnsupportedCapabilities(params.UnsupportedCapabilities)
+	if err != nil {
+		return request, nil
+	}
+	projected, samplingDiagnostics := llmprotocol.ProjectUnsupportedSampling(request, unsupported, target)
+	projected, developerDiagnostics := llmprotocol.ProjectUnsupportedDeveloperRole(projected, unsupported, target)
+	return projected, slices.Concat(samplingDiagnostics, developerDiagnostics)
 }
 
 // projectUnstoredRequest sends store: true without it to a backend whose wire

@@ -108,17 +108,35 @@ def observe_unittest() -> None:
 
 
 _PYTEST_IDENTITIES: dict[str, str] = {}
+_PYTEST_ROOT: list[Path] = []
+
+
+def _xdist_worker() -> str | None:
+    return os.environ.get("PYTEST_XDIST_WORKER")
+
+
+def pytest_configure(config) -> None:
+    _PYTEST_ROOT[:] = [Path(config.rootpath)]
 
 
 def pytest_collection_finish(session) -> None:
+    # Under pytest-xdist every worker collects the same tests and the
+    # controller collects none, so the first worker reports the inventory.
+    worker = _xdist_worker()
     for item in session.items:
         identity = str(item.path) + "::" + item.nodeid
         _PYTEST_IDENTITIES[item.nodeid] = identity
-        emit("expected", identity)
+        if worker in (None, "gw0"):
+            emit("expected", identity)
 
 
 def pytest_runtest_logreport(report) -> None:
-    identity = _PYTEST_IDENTITIES[report.nodeid]
+    # The xdist controller reports every outcome once, and the workers do not.
+    if _xdist_worker():
+        return
+    identity = _PYTEST_IDENTITIES.get(report.nodeid) or (
+        str(_PYTEST_ROOT[0] / report.nodeid.split("::", 1)[0]) + "::" + report.nodeid
+    )
     if report.failed:
         emit("case", identity, "failed")
     elif report.skipped:

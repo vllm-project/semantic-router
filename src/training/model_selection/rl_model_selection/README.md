@@ -39,7 +39,7 @@ including `torch-sparse` and `torch-scatter`, are not part of the lock.
 uses its custom training loop. Changing that import is outside this lock.
 
 The lock was created with uv 0.13.0 on macOS 26.7.1 (Darwin arm64) using
-CPython 3.12.15. It covers Python 3.10 and newer. Torch is the default PyPI
+CPython 3.12.15. It covers Python 3.11 and newer. Torch is the default PyPI
 build, with no extra index. On Linux that wheel is the CUDA build: it still
 imports on a machine with no GPU, and `torch.cuda.is_available()` is false
 there. On macOS Apple Silicon the wheel is the CPU/MPS build. A smaller

@@ -31,9 +31,8 @@ describe('session candidate inventory', () => {
     const sections = buildRoutingExplanationSections(record)
     const fields = sections.find((section) => section.title === 'Session Routing')?.fields
     expect(fields?.find((field) => field.label === 'Conversation')?.value).toBe('conversation-two')
-    expect(fields?.find((field) => field.label === 'Eligible models')?.value).toBe(
-      'current, proposal, unscored',
-    )
+    const eligible = fields?.find((field) => field.label === 'Eligible models')?.value
+    expect(renderToStaticMarkup(<>{eligible}</>)).toBe('current, proposal, unscored')
     const scores = sections.find((section) => section.title === 'Protection Candidate Scores')
     const html = renderToStaticMarkup(<>{scores?.fields[0].value}</>)
     expect(html).toContain('<td>unscored</td><td>—</td><td>—</td>')

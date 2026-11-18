@@ -122,9 +122,6 @@ export function mark(elements: Elements, logo: Logo, rows: MarkRows) {
   return <Box flexDirection="column">{MARK_ART[set][rows].map(cells => artRow(elements, cells))}</Box>
 }
 
-// The rows the pane's logo takes, its gap below included.
-export const wordmarkHeight = (logo: Logo) => (logo.kind === 'off' ? 0 : WORDMARK_ROWS + 1)
-
 // The top of the pane: the mark, and the name beside it in the terminal's own text color.
 // The short name as a capsule: v white, S in the mark's yellow, R in its blue, on a dark ground every theme shows.
 // BRAND is its text, for measuring; square ends, since rounded ones need a patched font.

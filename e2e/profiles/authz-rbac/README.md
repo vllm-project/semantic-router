@@ -9,7 +9,6 @@ those headers directly.
 The current profile runs:
 
 - `chat-completions-request` for the base inference path;
-- `chat-completions-request-authz` for the stripped-header path;
 - `authz-header-spoofing` for the explicit anti-spoofing assertion.
 
 ## What it does not prove

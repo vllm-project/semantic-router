@@ -8,7 +8,7 @@
                   {% endif %}
                   {% if r.retry_count | default(0) > 0 or r.per_try_timeout %}
                   retry_policy:
-                    retry_on: {{ r.retry_on | default('connect-failure,refused-stream') }}
+                    retry_on: {{ r.retry_on | default('connect-failure,refused-stream', true) }}
                     num_retries: {{ r.retry_count | default(0) }}
                     {% if r.per_try_timeout %}
                     per_try_timeout: {{ r.per_try_timeout }}
@@ -358,6 +358,16 @@ static_resources:
       http_health_check:
         path: {{ model.reliability.health_check_path | tojson }}
     {% endif %}
+    # Close an idle connection before the backend does: uvicorn (vLLM's server)
+    # and Node close theirs after 5s, and a call sent while that close is on its
+    # way gets no response. The standalone gateway uses the same 4s.
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        common_http_protocol_options:
+          idle_timeout: 4s
+        explicit_http_config:
+          http_protocol_options: {}
     load_assignment:
       cluster_name: {{ model.cluster_name }}_cluster
       endpoints:
@@ -404,5 +414,9 @@ layered_runtime:
   layers:
   - name: static_layer
     static_layer:
+      # A listener's served path regex grows with its APIs: chat completions,
+      # responses and messages with the model listing compile to about 200
+      # RE2 instructions, over Envoy's default limit of 100.
+      re2.max_program_size.error_level: 1000
       overload:
         global_downstream_max_connections: 50000

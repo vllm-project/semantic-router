@@ -49,6 +49,10 @@ func NewVectorStoreClientWithTimeout(baseURL string, apiKey string, maxResponseB
 				MaxIdleConnsPerHost: 10,
 				IdleConnTimeout:     90 * time.Second,
 			},
+			// The base URL is configured by the operator: a redirect would
+			// replay the API key to another origin and on a same-site hop with
+			// the header the standard client keeps.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 		baseURL:                strings.TrimRight(strings.TrimSuffix(strings.TrimRight(baseURL, "/"), "/v1"), "/"),
 		apiKey:                 apiKey,

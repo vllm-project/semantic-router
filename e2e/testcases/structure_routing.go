@@ -10,7 +10,7 @@ import (
 
 // targetStructureDecision is one of the decisions configured to route on the
 // request shape: keyword rules that count questions or find numbered steps
-// (see e2e/profiles/structure-routing/values.yaml). It is used only to
+// (see the structure recipe in e2e/profiles/signal-routing/values.yaml). It is used only to
 // confirm the negative case doesn't accidentally land on it; no keyword
 // signal in the trace is what actually proves neither rule matched.
 const targetStructureDecision = "many_questions_routing"
@@ -30,5 +30,6 @@ func testStructureRouting(ctx context.Context, client *kubernetes.Clientset, opt
 		TargetDecision: targetStructureDecision,
 		ResultsTitle:   "STRUCTURE ROUTING TEST RESULTS",
 		LogLabel:       "Structure",
+		Entrypoint:     "vllm-sr/structure",
 	})
 }

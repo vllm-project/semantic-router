@@ -4,8 +4,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
-	complexityrouting "github.com/vllm-project/semantic-router/e2e/profiles/complexity-routing"
-	conversationrouting "github.com/vllm-project/semantic-router/e2e/profiles/conversation-routing"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
 	delegatedcredential "github.com/vllm-project/semantic-router/e2e/profiles/delegated-credential"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
@@ -13,7 +11,6 @@ import (
 	hallucination "github.com/vllm-project/semantic-router/e2e/profiles/hallucination"
 	imagerouting "github.com/vllm-project/semantic-router/e2e/profiles/image-routing"
 	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
-	longcontextrouting "github.com/vllm-project/semantic-router/e2e/profiles/long-context-routing"
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	masking "github.com/vllm-project/semantic-router/e2e/profiles/masking"
 	modelruntime "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime"
@@ -21,7 +18,6 @@ import (
 	modelruntimevela3 "github.com/vllm-project/semantic-router/e2e/profiles/model-runtime-vela3"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
-	preferencerouting "github.com/vllm-project/semantic-router/e2e/profiles/preference-routing"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	progressgate "github.com/vllm-project/semantic-router/e2e/profiles/progress-gate"
 	providerprotocols "github.com/vllm-project/semantic-router/e2e/profiles/provider-protocols"
@@ -30,14 +26,12 @@ import (
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
 	responseapiredis "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis"
 	responseapirediscluster "github.com/vllm-project/semantic-router/e2e/profiles/response-api-redis-cluster"
-	responsejailbreak "github.com/vllm-project/semantic-router/e2e/profiles/response-jailbreak"
 	routeaction "github.com/vllm-project/semantic-router/e2e/profiles/route-action"
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
-	routingerrors "github.com/vllm-project/semantic-router/e2e/profiles/routing-errors"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	signalrouting "github.com/vllm-project/semantic-router/e2e/profiles/signal-routing"
 	standalone "github.com/vllm-project/semantic-router/e2e/profiles/standalone"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
-	structurerouting "github.com/vllm-project/semantic-router/e2e/profiles/structure-routing"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
 )
 
@@ -100,12 +94,6 @@ func init() {
 	register("model-runtime", func() framework.Profile { return modelruntime.NewProfile() }, framework.ProfileCapabilities{LocalImages: modelRuntimeLocalImages})
 	register("model-runtime-real", func() framework.Profile { return modelruntimereal.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("model-runtime-vela3", func() framework.Profile { return modelruntimevela3.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("conversation-routing", func() framework.Profile { return conversationrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("complexity-routing", func() framework.Profile { return complexityrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("routing-errors", func() framework.Profile { return routingerrors.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("long-context-routing", func() framework.Profile { return longcontextrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
-	register("preference-routing", func() framework.Profile { return preferencerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },
@@ -158,11 +146,6 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register(
-		"response-jailbreak",
-		func() framework.Profile { return responsejailbreak.NewProfile() },
-		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
-	)
-	register(
 		"progress-gate",
 		func() framework.Profile { return progressgate.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
@@ -174,6 +157,7 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("signal-routing", func() framework.Profile { return signalrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("standalone", func() framework.Profile { return standalone.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(

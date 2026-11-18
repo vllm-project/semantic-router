@@ -267,12 +267,12 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                         "source": "built-in-latest",
                         "shard": f"built-in-latest-mom-v1-{index}",
                         "recipes": "mom-v1",
-                        "probe_shard": f"{index}/16",
+                        "probe_shard": f"{index}/8",
                         "variants": 0,
                         "recipes_root": "config/recipes/built-in/latest",
                         "report_dir": "built-in/latest",
                     }
-                    for index in range(16)
+                    for index in range(8)
                 ],
             )
             self.assertEqual(sum(row["variants"] for row in built_in), 366)
@@ -340,7 +340,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
             sharded = [row for row in matrix if row["probe_shard"]]
             self.assertEqual(
                 [row["shard"] for row in sharded],
-                [f"built-in-latest-mom-v1-{index}" for index in range(16)],
+                [f"built-in-latest-mom-v1-{index}" for index in range(8)],
             )
             self.assertEqual(
                 sum(row["variants"] for row in sharded),

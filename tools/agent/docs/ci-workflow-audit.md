@@ -174,7 +174,7 @@ teardown failure stops the remaining profiles in that worker instead of reusing
 an untrusted cluster. Ordinary independent failures still preserve successful
 sibling evidence. This shares setup, not a live cluster across profiles.
 
-Recipe grouping uses three balanced standalone shards and 16 built-in
+Recipe grouping uses three balanced standalone shards and 8 built-in
 `mom-v1` probe shards. Current standalone variant weights are 129, 91, and 103;
 the built-in recipe has 366 probes, split by estimated read cost. Inventory and result aggregation remain separate jobs.
 The report adapter reconstructs the same source-aware matrix and rejects a
@@ -226,7 +226,7 @@ or complete nightly/explicit publication qualification.
 
 | Workflow | Jobs | Actual value | Decision and execution time |
 | --- | --- | --- | --- |
-| [build-artifacts.yml](../../../.github/workflows/build-artifacts.yml) | `image` matrix, `published` | Builds/seals OCI candidates once, or acquires the qualified provider fixture by digest. Artifacts carry source and build identity. | Retain the producer boundary. Gate expensive affected PR images on approval and stop routine Main image publication. Keep per-image build caches and exact artifact handoff; cache hits are not qualification evidence. |
+| [build-artifacts.yml](../../../.github/workflows/build-artifacts.yml) | `image` matrix, `published` | Builds/seals OCI candidates once, or acquires the qualified provider fixture by digest. Artifacts carry source and build identity. | Retain the producer boundary. Gate expensive affected PR images on approval and stop routine Main image publication. Keep the exact artifact handoff. Build without a layer cache: in 58 sampled Main and Nightly builds (2026-11-13) the Actions cache never made a build faster, while its export took 20 to 74 minutes of each ROCm build and up to 37 minutes of each CUDA build. |
 | [docker-publish.yml](../../../.github/workflows/docker-publish.yml) | `publish` matrix | Promotes the already-built OCI candidate with `skopeo`; checks published Dashboard images outside release mode. | Retain only as a gated publisher for Main publication, nightly, and release. This is already promotion without rebuilding, so deleting it would not remove a second compilation. |
 | [helm-publish.yml](../../../.github/workflows/helm-publish.yml) | `package`, `publish` | Versions/packages/renders a chart and promotes an existing package when supplied. | Retain publication/build-only modes. A validated Helm package and deployed Kubernetes behavior answer different questions. |
 | [pypi-publish.yml](../../../.github/workflows/pypi-publish.yml) | `build`, `testpypi`, `pypi` | Builds when needed, verifies promoted distribution identity, and publishes to the selected package channel. | Retain explicit TestPyPI dispatch, gated development publication, and tag release publication. Reuse the qualified wheel/sdist; do not create a second unchecked development build. |

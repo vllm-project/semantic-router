@@ -9,6 +9,7 @@
 - Caps expensive parameters (`max_tokens`, `n`) per route.
 - Blocks sensitive parameters such as `logprobs` / `top_logprobs` for tiers that should not expose token distributions.
 - Can remove a client `prompt_cache_key` with `blocked_params: [prompt_cache_key]` before backend dispatch.
+- Can remove `min_p` and `logit_bias` with `blocked_params: [min_p, logit_bias]` when every backend of a route rejects them, as vLLM does with speculative decoding. To remove them for one model only, list them in [its `unsupported_capabilities`](../../installation/protocol-compatibility#sampling-controls-a-backend-rejects).
 
 ## What Problem Does It Solve?
 

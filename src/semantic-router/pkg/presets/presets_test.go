@@ -1,6 +1,7 @@
 package presets
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -109,5 +110,52 @@ func TestCalibratedThresholdsArePresetsOfTheCatalog(t *testing.T) {
 	}
 	if _, ok := Threshold("vllm-sr/vela3-lite", Domain, StageRequest); ok {
 		t.Fatal("vela3-lite has no calibrated thresholds")
+	}
+}
+
+// The vela3_d3 sizes answer the jailbreak preset and the request-stage harm
+// preset with their base; vela3-fast keeps its trained forms of them, and the
+// vela3_d3 sizes keep their other trained forms.
+func TestTheVela3D3SizesAnswerTheGuardsWithTheirBase(t *testing.T) {
+	for _, guard := range []struct{ preset, stage string }{{Jailbreak, StageRequest}, {Jailbreak, StageResponse}, {Harm, StageRequest}} {
+		if _, trained := Trained(FamilyVela3D3, guard.preset, guard.stage); trained || !BaseOnly(FamilyVela3D3, guard.preset, guard.stage) {
+			t.Fatalf("vela3_d3 %s/%s: trained %v, base only %v", guard.preset, guard.stage, trained, BaseOnly(FamilyVela3D3, guard.preset, guard.stage))
+		}
+		if binding, trained := Trained(FamilyVela3, guard.preset, guard.stage); !trained || binding.ID == "" || BaseOnly(FamilyVela3, guard.preset, guard.stage) {
+			t.Fatalf("vela3 %s/%s: %+v %v", guard.preset, guard.stage, binding, trained)
+		}
+	}
+	for preset, id := range map[string]string{Domain: "domain", FactCheck: "factcheck", Feedback: "feedback"} {
+		if binding, trained := Trained(FamilyVela3D3, preset, StageRequest); !trained || binding.ID != id {
+			t.Fatalf("vela3_d3 %s: %+v %v", preset, binding, trained)
+		}
+	}
+	if binding, trained := Trained(FamilyVela3D3, Harm, StageResponse); !trained || binding.ID != "r_harm" {
+		t.Fatalf("vela3_d3 answer harm: %+v %v", binding, trained)
+	}
+}
+
+// The Vela 3.1 picos were trained on vela3-fast's router questions, so every
+// preset a pico answers in a trained form is vela3-fast's form; nothing is
+// base-only, and a pico has no calibrated thresholds yet.
+func TestThePicosAreAskedInVela3FastsTrainedForms(t *testing.T) {
+	presets := []string{Domain, FactCheck, Feedback, Jailbreak, Harm, HarmCategories, PII, Hallucination, Refusal, Modality, TurnRelation, Complexity}
+	for _, preset := range presets {
+		for _, stage := range []string{StageRequest, StageResponse} {
+			fast, fastTrained := Trained(FamilyVela3, preset, stage)
+			pico, picoTrained := Trained(FamilyVela3Pico, preset, stage)
+			if fastTrained != picoTrained || !reflect.DeepEqual(fast, pico) {
+				t.Fatalf("%s/%s: pico %+v %v, vela3-fast %+v %v", preset, stage, pico, picoTrained, fast, fastTrained)
+			}
+			if BaseOnly(FamilyVela3Pico, preset, stage) {
+				t.Fatalf("%s/%s is base-only on a pico", preset, stage)
+			}
+		}
+	}
+	if binding, trained := Trained(FamilyVela3Pico, Jailbreak, StageRequest); !trained || binding.ID != "attack" {
+		t.Fatalf("pico jailbreak: %+v %v", binding, trained)
+	}
+	if _, ok := Threshold("vllm-sr/vela3.1-pico-380m", Jailbreak, StageRequest); ok {
+		t.Fatal("the picos have no calibrated thresholds")
 	}
 }

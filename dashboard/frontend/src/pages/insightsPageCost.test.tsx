@@ -9,7 +9,7 @@ import {
   hasCompleteCostData,
 } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
-import { formatInsightsCost } from '../utils/insightsCost'
+import { formatInsightsCompactCount, formatInsightsCost } from '../utils/insightsCost'
 import InsightsRecordSection from './InsightsRecordSection'
 
 const complete: InsightsRecord = {
@@ -53,6 +53,21 @@ describe('Insights configured-rate estimates', () => {
     expect(formatInsightsCost(0, 'USD')).toBe('$0.0000')
     expect(formatInsightsCost(undefined, 'USD')).toBe('N/A')
     expect(formatInsightsCost(Number.NaN, 'USD')).toBe('N/A')
+  })
+
+  it('rounds totals to cents, names no currency for XXX, and leaves a named column bare', () => {
+    expect(formatInsightsCost(1740.2211, 'USD', { total: true })).toBe('$1,740.22')
+    expect(formatInsightsCost(0.0405, 'USD', { total: true })).toBe('$0.04')
+    expect(formatInsightsCost(0.004, 'USD', { total: true })).toBe('$0.0040')
+    expect(formatInsightsCost(0, 'USD', { total: true })).toBe('$0.00')
+    expect(formatInsightsCost(579.0035, 'XXX', { total: true })).toBe('579.00')
+    expect(formatInsightsCost(0.0405, 'XXX')).toBe('0.0405')
+    expect(formatInsightsCost(0.000001, 'XXX')).toBe('<0.0001')
+    expect(formatInsightsCost(-0.00035, 'USD', { total: true, bare: true })).toBe('-0.0004')
+    expect(formatInsightsCost(12, 'credits', { total: true })).toBe('12.00 credits')
+    expect(formatInsightsCompactCount(7011358023)).toBe('7.0B')
+    expect(formatInsightsCompactCount(412345678)).toBe('412.3M')
+    expect(formatInsightsCompactCount(950)).toBe('950')
   })
 
   it('preserves tiny amounts in record cells and details', () => {

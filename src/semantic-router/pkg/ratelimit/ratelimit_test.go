@@ -520,6 +520,36 @@ func TestLocalLimiterWindowReset(t *testing.T) {
 	}
 }
 
+// A bucket whose window ended carries nothing into its next window, so the
+// limiter drops it instead of keeping one per user and model it ever saw. A
+// live window survives the sweep.
+func TestLocalLimiterDropsExpiredBuckets(t *testing.T) {
+	limiter := NewLocalLimiter([]Rule{
+		{Name: "short", RequestsPerUnit: 1, Unit: 20 * time.Millisecond},
+		{Name: "hourly", Match: RuleMatch{User: "alice"}, RequestsPerUnit: 1, Unit: time.Hour},
+	})
+	alice := Context{UserID: "alice", Model: "m"}
+	if d, _ := limiter.Check(alice); !d.Allowed {
+		t.Fatal("first request should be allowed")
+	}
+	for i := range 100 {
+		_, _ = limiter.Check(Context{UserID: fmt.Sprint(i), Model: "m"})
+	}
+	time.Sleep(30 * time.Millisecond)
+	if d, _ := limiter.Check(alice); d.Allowed {
+		t.Fatal("the live hourly window was dropped with the expired ones")
+	}
+	buckets := 0
+	limiter.buckets.Range(func(_, _ any) bool {
+		buckets++
+		return true
+	})
+	// alice's hourly bucket and her new short window
+	if buckets != 2 {
+		t.Fatalf("buckets = %d, want 2", buckets)
+	}
+}
+
 // ── LocalLimiter — no rules matches all ──
 
 func TestLocalLimiterNoRules(t *testing.T) {

@@ -113,11 +113,7 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 			request.Generation++
 		}
 	case !modeNone:
-		filtered := filterToolsByPolicy(request.Tools, policy)
-		if len(filtered) != len(request.Tools) {
-			request.Generation++
-		}
-		request.Tools = filtered
+		applyToolsPolicy(request, policy)
 	}
 	clearSemanticToolChoiceWhenNoTools(request)
 	// A forced choice naming a tool narrowing removed would fail protocol
@@ -131,18 +127,53 @@ func (r *OpenAIRouter) applyTrustedFactsGate(request *llmprotocol.Request, ctx *
 	return true
 }
 
-// looperToolStageGate judges each tool-bearing Looper model attempt at its own
-// trusted-facts stage, so a policy that authorizes only final never sends tools
-// on a candidate or verifier call, and one that authorizes candidate does not
-// widen the final stage. An attempt that names no stage matches no role, so an
-// authoritative policy denies it rather than guessing. Each stage's outcome is
-// evaluated and recorded once, then reused by concurrent attempts. It returns
-// nil when the decision does not opt in.
+// looperToolStageGate judges each tool-bearing Looper model attempt by the
+// decision's tools policy, then by its trusted facts. It returns nil when the
+// decision neither restricts tools nor opts in to trusted facts.
 func (r *OpenAIRouter) looperToolStageGate(request *llmprotocol.Request, decision *config.Decision, reqCtx *RequestContext) looper.ToolStageGate {
 	if request == nil || decision == nil {
 		return nil
 	}
 	toolsCfg := decision.GetToolsConfig()
+	policy := looperToolPolicyGate(toolsCfg.ActivePolicy())
+	trusted := r.looperTrustedFactsGate(request, toolsCfg, reqCtx)
+	switch {
+	case trusted == nil:
+		return policy
+	case policy == nil:
+		return trusted
+	}
+	return func(stage llmprotocol.TrustedStage, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
+		return trusted(stage, policy(stage, req))
+	}
+}
+
+// looperToolPolicyGate holds each attempt to the decision's tools policy. A
+// fresh request was narrowed before Looper ran; a paused workflow resumes
+// from the requests it stored, which the policy in force now may narrow
+// further.
+func looperToolPolicyGate(policy *config.ToolsPolicyConfig) looper.ToolStageGate {
+	switch policy.EffectiveMode() {
+	case config.ToolsPolicyModeNone:
+		return func(_ llmprotocol.TrustedStage, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
+			return looper.WithoutToolUse(req)
+		}
+	case config.ToolsPolicyModeFiltered:
+		return func(_ llmprotocol.TrustedStage, req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
+			return looper.NarrowToolUse(req, policy.AllowTools, policy.BlockTools)
+		}
+	}
+	return nil
+}
+
+// looperTrustedFactsGate judges each attempt at its own trusted-facts stage,
+// so a policy that authorizes only final never sends tools on a candidate or
+// verifier call, and one that authorizes candidate does not widen the final
+// stage. An attempt that names no stage matches no role, so an authoritative
+// policy denies it rather than guessing. Each stage's outcome is evaluated
+// and recorded once, then reused by concurrent attempts. It returns nil when
+// the decision does not opt in.
+func (r *OpenAIRouter) looperTrustedFactsGate(request *llmprotocol.Request, toolsCfg *config.ToolsPluginConfig, reqCtx *RequestContext) looper.ToolStageGate {
 	if !toolsCfg.TrustedFactsEnabled() {
 		return nil
 	}

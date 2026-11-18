@@ -220,15 +220,6 @@ config:
               - who
               - where
               - when
-        domains:
-          - name: code
-            description: Programming, debugging, and software engineering tasks
-            labels: ["computer science"]
-          - name: general
-            description: General knowledge, conversation, and miscellaneous topics
-            labels: [other]
-          - name: other
-            description: Catch-all for unclassified queries
         jailbreak:
           - name: jailbreak_dev
             description: Relaxed jailbreak detection for dev environment
