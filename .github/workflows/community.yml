@@ -73,6 +73,11 @@ jobs:
       && !(github.event.action == 'edited'
       && github.event.changes.title != null
       && github.event.changes.body == null)
+    # Manual assignment events share the issue-state queue with command syncs.
+    concurrency:
+      group: community-issue-state-${{ github.event.issue.number }}
+      cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -136,12 +141,18 @@ jobs:
       && github.event.comment.body != '/netlify'
       && !startsWith(github.event.comment.body, '/ci ')
       && github.event.comment.body != '/ci'
-    # Prow reads commands from every comment line. Serialize the command and its
-    # reconciliation per issue so an older assignee snapshot cannot land after a
-    # newer command has already been applied.
+    # Prow reads commands from every comment line. Assignment commands on issues
+    # share one per-issue queue with manual assignment syncs; other PR commands
+    # keep their own scheduling by using a run-unique group.
     concurrency:
-      group: community-issue-commands-${{ github.event.issue.number }}
+      group: >-
+        ${{ (github.event.issue.pull_request == null
+             && (contains(github.event.comment.body, '/assign')
+             || contains(github.event.comment.body, '/unassign')))
+            && format('community-issue-state-{0}', github.event.issue.number)
+            || format('community-issue-command-{0}', github.run_id) }}
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -170,6 +181,7 @@ jobs:
       - name: Check out the repository
         if: >-
           !cancelled()
+          && github.event.issue.pull_request == null
           && (contains(github.event.comment.body, '/assign')
           || contains(github.event.comment.body, '/unassign'))
         uses: actions/checkout@v4
@@ -177,6 +189,7 @@ jobs:
       - name: Reconcile issue delivery state after the command
         if: >-
           !cancelled()
+          && github.event.issue.pull_request == null
           && (contains(github.event.comment.body, '/assign')
           || contains(github.event.comment.body, '/unassign'))
         env:

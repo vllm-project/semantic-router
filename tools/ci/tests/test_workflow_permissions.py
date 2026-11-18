@@ -179,7 +179,7 @@ class CommunityValidationTests(unittest.TestCase):
         jobs = self.data["jobs"]
         self.assertEqual(
             {name for name, job in jobs.items() if "concurrency" in job},
-            {"title-format", "linked-issue", "issue-manager"},
+            {"title-format", "linked-issue", "issue-manager", "issue-lifecycle"},
         )
         for name in ("title-format", "linked-issue"):
             with self.subTest(job=name):
@@ -194,7 +194,11 @@ class CommunityValidationTests(unittest.TestCase):
                 self.assertTrue(
                     all(value == "read" for value in job["permissions"].values())
                 )
-        self.assertFalse(jobs["issue-manager"]["concurrency"]["cancel-in-progress"])
+        for name in ("issue-manager", "issue-lifecycle"):
+            with self.subTest(job=name):
+                concurrency = jobs[name]["concurrency"]
+                self.assertFalse(concurrency["cancel-in-progress"])
+                self.assertEqual(concurrency["queue"], "max")
         self.assertIn(
             "github.event.issue.number", jobs["title-format"]["concurrency"]["group"]
         )
@@ -225,6 +229,7 @@ class CommunityValidationTests(unittest.TestCase):
         condition = " ".join(sync["if"].split())
 
         self.assertIn("!cancelled()", condition)
+        self.assertIn("github.event.issue.pull_request == null", condition)
         self.assertIn("contains(github.event.comment.body, '/assign')", condition)
         self.assertIn("contains(github.event.comment.body, '/unassign')", condition)
         self.assertIn("GH_TOKEN", sync["env"])
@@ -234,13 +239,45 @@ class CommunityValidationTests(unittest.TestCase):
             )
         )
 
-    def test_assignment_command_runs_serialize_per_issue(self) -> None:
+    def test_three_assignment_jobs_queue_without_replacing_pending_work(self) -> None:
+        concurrency = self.data["jobs"]["issue-manager"]["concurrency"]
+        group = " ".join(concurrency["group"].split())
+
+        self.assertEqual(concurrency["queue"], "max")
+        self.assertFalse(concurrency["cancel-in-progress"])
+        self.assertIn("github.event.issue.pull_request == null", group)
+        self.assertIn("contains(github.event.comment.body, '/assign')", group)
+        self.assertIn("contains(github.event.comment.body, '/unassign')", group)
+        # /assign and /unassign select the shared state group, while /cc falls
+        # through to the run-unique group and cannot replace a pending command.
+        self.assertIn(
+            "format('community-issue-state-{0}', github.event.issue.number)", group
+        )
+        self.assertIn("format('community-issue-command-{0}', github.run_id)", group)
+
+    def test_pr_commands_keep_their_own_scheduling(self) -> None:
+        group = " ".join(
+            self.data["jobs"]["issue-manager"]["concurrency"]["group"].split()
+        )
+
+        self.assertIn("github.event.issue.pull_request == null", group)
+        self.assertIn("format('community-issue-command-{0}', github.run_id)", group)
+
+    def test_manual_assignment_joins_the_issue_command_queue(self) -> None:
+        lifecycle = self.data["jobs"]["issue-lifecycle"]["concurrency"]
+        manager = self.data["jobs"]["issue-manager"]["concurrency"]
+
         self.assertEqual(
-            self.data["jobs"]["issue-manager"]["concurrency"],
+            lifecycle,
             {
-                "group": "community-issue-commands-${{ github.event.issue.number }}",
+                "group": "community-issue-state-${{ github.event.issue.number }}",
                 "cancel-in-progress": False,
+                "queue": "max",
             },
+        )
+        self.assertIn(
+            "format('community-issue-state-{0}', github.event.issue.number)",
+            " ".join(manager["group"].split()),
         )
 
     def test_manual_assignment_events_keep_their_lifecycle_sync(self) -> None:

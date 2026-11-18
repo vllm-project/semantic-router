@@ -389,6 +389,37 @@ class AssignmentCommandReconciliationTests(unittest.TestCase):
         )
         self.assertEqual(client.fetched, [7])
 
+    def test_manual_assignment_then_unassign_of_another_user_keeps_in_progress(
+        self,
+    ) -> None:
+        client = FakeAssignmentApi(
+            [
+                issue(
+                    labels=labels("accepted", "in-progress", "wg/mom-routing"),
+                    assignees=assignees("alice", "bob"),
+                )
+            ],
+            permissions={"maintainer": "write"},
+        )
+
+        # The manual assignment sync runs first, then the queued /unassign.
+        community_lifecycle_github.sync_issue_event(
+            client,
+            {
+                "repository": {"full_name": REPO},
+                "issue": {"number": 7},
+                "action": "assigned",
+                "sender": {"login": "maintainer"},
+            },
+        )
+        self.assertIn("in-progress", client.label_set())
+
+        client.issues[7]["assignees"] = assignees("bob")
+        self.sync(client, "/cc\n/unassign")
+
+        self.assertEqual(client.assignee_set(), {"bob"})
+        self.assertIn("in-progress", client.label_set())
+
     def test_pull_request_comments_are_not_issue_claims(self) -> None:
         client = FakeAssignmentApi([issue(labels=labels("accepted", "wg/mom-routing"))])
 
