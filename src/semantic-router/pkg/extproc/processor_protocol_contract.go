@@ -91,7 +91,7 @@ func authoritativeZeroUsage() llmprotocol.Usage {
 }
 
 func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
-	return r.protocolEngineForVendor("")
+	return r.protocolEngineForReply("", nil)
 }
 
 // protocolEngineFor serves callers that hold only the registry and the
@@ -105,8 +105,10 @@ func protocolEngineFor(registry *protocolcodec.Registry, allowedLossyFields []st
 	return protocolcodec.NewEngine(registry, policy)
 }
 
-// protocolEngineForVendor creates an engine with the specified response vendor policy.
-func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor) (*protocolcodec.Engine, error) {
+// protocolEngineForReply decodes a backend's reply to request, the request as
+// the backend received it: vendor selects the backend's failure envelope, and
+// the request's output limit is the one a tool-call stop may have reached.
+func (r *OpenAIRouter) protocolEngineForReply(vendor llmprotocol.ResponseVendor, request *llmprotocol.Request) (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
@@ -116,6 +118,9 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 	}
 	policy := llmprotocol.DefaultPolicy()
 	policy.ResponseVendor = vendor
+	if request != nil && request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens > 0 {
+		policy.RequestOutputLimit = *request.Sampling.MaxOutputTokens
+	}
 	if r.Config != nil {
 		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
 	}
@@ -125,10 +130,11 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 // protocolEngineForBackend permits extensions only for live provider responses.
 func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
 	var vendor llmprotocol.ResponseVendor
+	var request *llmprotocol.Request
 	if ctx != nil {
-		vendor = ctx.ResponseVendor
+		vendor, request = ctx.ResponseVendor, ctx.SemanticRequest
 	}
-	return r.protocolEngineForVendor(vendor)
+	return r.protocolEngineForReply(vendor, request)
 }
 
 // prepareProtocolRequest decodes every public wire format exactly once. The

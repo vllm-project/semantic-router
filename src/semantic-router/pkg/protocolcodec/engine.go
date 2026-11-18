@@ -203,6 +203,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	if translateResponseErr != nil {
 		return ResponseResult{Diagnostics: diagnostics}, translateResponseErr
 	}
+	diagnostics = appendDiagnostics(diagnostics, engine.stopAtRequestOutputLimit(source, &response, &envelope), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -587,6 +588,9 @@ func validatePolicy(policy llmprotocol.Policy) error {
 	}
 	if !positiveProtocolLimits(policy.Limits) {
 		return fmt.Errorf("protocol limits must be positive")
+	}
+	if policy.RequestOutputLimit < 0 {
+		return fmt.Errorf("request output limit must not be negative")
 	}
 	return nil
 }

@@ -351,9 +351,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	}
 	ctx.ProtocolResponseStream = stream
 	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
-			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
-		)
+		ctx.PublicChatUsageFilter = engine.NewChatPublicStreamFilter(streamUsageRequestedByClient(ctx))
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
