@@ -1,0 +1,5 @@
+# actionlint 1.7.12 predates GitHub's queue: max concurrency option.
+paths:
+  .github/workflows/community.yml:
+    ignore:
+      - 'unexpected key "queue" for "concurrency" section'
