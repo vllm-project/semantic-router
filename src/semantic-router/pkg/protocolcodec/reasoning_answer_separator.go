@@ -131,7 +131,7 @@ func trimDecodedAnswerSeparator(
 	}
 	if trimmer, ok := codec.(replayAnswerSeparatorTrimmer); ok && replayable && len(envelope.Response) > 0 {
 		if patched, patchedOK := trimmer.trimReplayAnswerSeparator(envelope.Response); patchedOK {
-			envelope.Response, envelope.ResponseReplayAmended = patched, true
+			envelope.Response = patched
 			return
 		}
 	}

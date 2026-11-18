@@ -219,7 +219,6 @@ type Envelope struct {
 	Request                  []byte
 	Response                 []byte
 	ResponseReencodeRequired bool // Provider decorations must not be replayed to a same-format client.
-	ResponseReplayAmended    bool // Response holds the provider body without the answer separator, and a same-format client receives it instead.
 	SourceStop               string
 	ResponseRender           ResponseRenderContext
 	// OutputLimitField is the member a Chat request set its output limit with,

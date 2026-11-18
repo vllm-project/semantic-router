@@ -32,8 +32,7 @@ func separatorBufferedReply(t *testing.T, reasoning, content string) []byte {
 		message["reasoning"] = reasoning
 	}
 	body, err := json.Marshal(map[string]any{
-		"id": "chatcmpl-separator", "object": "chat.completion", "created": 1794416301,
-		"model": "qwen/qwen3.8-27b", "system_fingerprint": separatorTestFingerprint,
+		"id": "chatcmpl-separator", "object": "chat.completion", "created": 1794416301, "model": "qwen/qwen3.8-27b",
 		"choices": []any{map[string]any{"index": 0, "message": message, "logprobs": nil, "finish_reason": "stop"}},
 		"usage":   map[string]any{"prompt_tokens": 20, "completion_tokens": 12, "total_tokens": 32},
 	})
@@ -234,20 +233,23 @@ func TestBufferedReasoningReplyDropsTheAnswerSeparator(t *testing.T) {
 	}
 }
 
-// A Chat client of a Chat backend keeps every other member the provider sent.
+// A Chat client of a Chat backend loses the model server's own members and the
+// separator, and keeps every other member the provider sent.
 func TestBufferedReasoningReplyKeepsTheRestOfAChatBody(t *testing.T) {
-	body := separatorBufferedReply(t, separatorTestThought, "\n\nRed")
+	var original, forwarded map[string]any
+	require.NoError(t, json.Unmarshal(separatorBufferedReply(t, separatorTestThought, "\n\nRed"), &original))
+	original["system_fingerprint"] = separatorTestFingerprint
+	body, err := json.Marshal(original)
+	require.NoError(t, err)
 	reply := (&OpenAIRouter{}).handleNonStreamingResponseBody(body, separatorContext(t, llmprotocol.OpenAIChatV1, false), 0, false)
 	received := clientBodyOf(reply, body)
-	var original, forwarded map[string]any
-	require.NoError(t, json.Unmarshal(body, &original))
 	require.NoError(t, json.Unmarshal(received, &forwarded), string(received))
 	choice := func(object map[string]any) map[string]any { return object["choices"].([]any)[0].(map[string]any) }
 	message := func(object map[string]any) map[string]any { return choice(object)["message"].(map[string]any) }
 	require.Equal(t, "Red", message(forwarded)["content"])
 	message(original)["content"], message(forwarded)["content"] = nil, nil
-	require.Equal(t, original, forwarded, "only the answer text may change")
-	require.Equal(t, separatorTestFingerprint, forwarded["system_fingerprint"])
+	delete(original, "system_fingerprint")
+	require.Equal(t, original, forwarded, "only the answer text and the server's own members may change")
 }
 
 func TestBufferedReplyWithoutTheSeparatorIsUntouched(t *testing.T) {

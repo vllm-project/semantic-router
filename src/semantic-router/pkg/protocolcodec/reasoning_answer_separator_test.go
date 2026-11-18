@@ -27,9 +27,8 @@ func separatorChatReply(t *testing.T, reasoning, content string, decorate func(m
 	}
 	reply := map[string]any{
 		"id": "chatcmpl-separator", "object": "chat.completion", "created": 1794416301, "model": "m",
-		"system_fingerprint": "vllm-0.31.0-1c103593",
-		"choices":            []any{map[string]any{"index": 0, "message": message, "logprobs": nil, "finish_reason": "stop"}},
-		"usage":              map[string]any{"prompt_tokens": 20, "completion_tokens": 12, "total_tokens": 32},
+		"choices": []any{map[string]any{"index": 0, "message": message, "logprobs": nil, "finish_reason": "stop"}},
+		"usage":   map[string]any{"prompt_tokens": 20, "completion_tokens": 12, "total_tokens": 32},
 	}
 	if decorate != nil {
 		decorate(message, reply)
@@ -120,9 +119,11 @@ func TestTranslateResponseDropsTheAnswerSeparatorAfterReasoning(t *testing.T) {
 	}
 }
 
-// A Chat client of a Chat backend keeps every other member the provider sent.
+// A Chat client of a Chat backend loses the model server's own members and the
+// separator, and keeps every other member the provider sent.
 func TestChatReplayKeepsTheProviderBodyBesidesTheAnswer(t *testing.T) {
 	body := separatorChatReply(t, separatorThought, "\n\nRed", func(message, reply map[string]any) {
+		reply["system_fingerprint"] = "vllm-0.31.0-1c103593"
 		reply["kv_transfer_params"] = map[string]any{"remote_engine_id": "engine-1"}
 		reply["prompt_token_ids"] = []int{1, 2, 3}
 		choice := reply["choices"].([]any)[0].(map[string]any)
@@ -140,12 +141,17 @@ func TestChatReplayKeepsTheProviderBodyBesidesTheAnswer(t *testing.T) {
 	var original, forwarded map[string]any
 	require.NoError(t, json.Unmarshal(body, &original))
 	require.NoError(t, json.Unmarshal(result.Body, &forwarded))
-	message := func(object map[string]any) map[string]any {
-		return object["choices"].([]any)[0].(map[string]any)["message"].(map[string]any)
+	choice := func(object map[string]any) map[string]any {
+		return object["choices"].([]any)[0].(map[string]any)
 	}
+	message := func(object map[string]any) map[string]any { return choice(object)["message"].(map[string]any) }
 	require.Equal(t, "Red", message(forwarded)["content"])
 	message(original)["content"], message(forwarded)["content"] = nil, nil
-	require.Equal(t, original, forwarded, "only the answer text may change")
+	for _, member := range []string{"system_fingerprint", "kv_transfer_params", "prompt_token_ids"} {
+		delete(original, member)
+	}
+	delete(choice(original), "token_ids")
+	require.Equal(t, original, forwarded, "only the answer text and the server's own members may change")
 }
 
 func TestTranslateResponseLeavesOtherRepliesAlone(t *testing.T) {
@@ -570,7 +576,7 @@ func separatorFrames(deltas ...string) []string {
 			finish = `"stop"`
 		}
 		frames = append(frames, `data: {"id":"chatcmpl-2","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":`+
-			delta+`,"logprobs":null,"finish_reason":`+finish+`,"token_ids":[271]}]}`+"\n\n")
+			delta+`,"logprobs":null,"finish_reason":`+finish+`}]}`+"\n\n")
 	}
 	return append(frames, "data: [DONE]\n\n")
 }
@@ -596,9 +602,26 @@ func TestChatPublicStreamFilterDropsTheAnswerSeparator(t *testing.T) {
 			require.Equal(t, want, answer, out)
 			require.Equal(t, "thought more", reasoning, out)
 			require.Equal(t, strings.Count(strings.Join(frames, ""), "data:"), strings.Count(out, "data:"), "every chunk is still sent")
-			require.Equal(t, len(frames)-1, strings.Count(out, `"token_ids":[271]`), "the provider's other members stay")
+			require.Equal(t, len(frames)-1, strings.Count(out, `"logprobs":null`), "the provider's other members stay")
 		})
 	}
+}
+
+// The filter also drops the model server's own members from the chunks whose
+// separator it trims, and keeps the chunk's other members.
+func TestChatPublicStreamFilterTrimsChunksThatCarryServerMembers(t *testing.T) {
+	chunk := func(delta, finish string) string {
+		return `data: {"id":"chatcmpl-3","object":"chat.completion.chunk","created":1,"model":"m","system_fingerprint":"vllm-0.31.0-1c103593",` +
+			`"choices":[{"index":0,"delta":` + delta + `,"logprobs":null,"finish_reason":` + finish + `,"token_ids":[271]}]}` + "\n\n"
+	}
+	out := filterSeparatorStream(t,
+		chunk(`{"reasoning":"thought"}`, "null"), chunk(`{"content":"\n\nRed"}`, `"stop"`), "data: [DONE]\n\n")
+	answer, reasoning := clientStreamText(t, llmprotocol.OpenAIChatV1, out)
+	require.Equal(t, "Red", answer, out)
+	require.Equal(t, "thought", reasoning, out)
+	require.NotContains(t, out, "system_fingerprint")
+	require.NotContains(t, out, "token_ids")
+	require.Equal(t, 2, strings.Count(out, `"logprobs":null`), "the provider's other members stay")
 }
 
 func TestChatPublicStreamFilterLeavesOtherStreamsAlone(t *testing.T) {

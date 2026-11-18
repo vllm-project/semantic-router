@@ -44,20 +44,22 @@ func TestAnswerSeparatorRule(t *testing.T) {
 	})
 }
 
-// A same-format Chat reply is patched where it stands. Any other reply is
-// encoded again, since its provider bytes still hold the separator.
+// A same-format Chat reply is patched where it stands, so its replay differs
+// from the provider bytes. Any other reply is encoded again, since its provider
+// bytes still hold the separator.
 func TestAnswerSeparatorEnvelope(t *testing.T) {
 	engine := NewBuiltinEngine()
-	chat := func(reasoning, content string) llmprotocol.Envelope {
-		result, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, separatorChatReply(t, reasoning, content, nil), nil)
+	chat := func(reasoning, content string) ([]byte, llmprotocol.Envelope) {
+		provider := separatorChatReply(t, reasoning, content, nil)
+		result, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, provider, nil)
 		require.NoError(t, err)
-		return result.Envelope
+		return provider, result.Envelope
 	}
-	patched := chat(separatorThought, "\n\nRed")
-	require.True(t, patched.ResponseReplayAmended)
+	provider, patched := chat(separatorThought, "\n\nRed")
+	require.NotEqual(t, string(provider), string(patched.Response), "the replay holds the patched body")
 	require.False(t, patched.ResponseReencodeRequired)
-	untouched := chat(separatorThought, "Red")
-	require.False(t, untouched.ResponseReplayAmended)
+	provider, untouched := chat(separatorThought, "Red")
+	require.Equal(t, string(provider), string(untouched.Response), "a reply without the separator is replayed as sent")
 	require.False(t, untouched.ResponseReencodeRequired)
 
 	messages := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[` +
@@ -65,7 +67,6 @@ func TestAnswerSeparatorEnvelope(t *testing.T) {
 		`"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":2}}`)
 	result, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, messages, nil)
 	require.NoError(t, err)
-	require.False(t, result.Envelope.ResponseReplayAmended)
 	require.True(t, result.Envelope.ResponseReencodeRequired)
 	require.False(t, result.Envelope.CanReplay(llmprotocol.AnthropicMessagesV1, result.Response.Generation, llmprotocol.DefaultPolicy(), true))
 }
