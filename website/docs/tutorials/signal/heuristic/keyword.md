@@ -110,17 +110,23 @@ recipes:
           density: {gt: 16}
 ```
 
-A literal keyword counts each occurrence that stands as a word of its own.
-Keywords in scripts written without spaces between words (CJK, Thai, Lao, Khmer
-and Myanmar), and keywords with no letters or digits such as `?`, count every
-occurrence. With `method: regex`, each pattern counts its non-overlapping
-matches. BM25, n-gram, and fuzzy matching score similarity rather than locate
-occurrences, so a rule that counts uses literal keywords or `method: regex`.
+A literal keyword counts each occurrence that stands as a word of its own. CJK
+keywords, and keywords with no letters or digits such as `?`, count every
+occurrence. Thai, Lao, Khmer, and Myanmar keywords count the occurrences that
+the edge rules below accept. With `method: regex`, each pattern counts its
+non-overlapping matches. BM25, n-gram, and fuzzy matching score similarity
+rather than locate occurrences, so a rule that counts uses literal keywords or
+`method: regex`.
 
-A literal keyword in one of these unspaced scripts matches inside running text,
-the way a CJK keyword does, and a Latin keyword matches next to it. Such a match
-does not split a syllable: it does not end before a combining mark, or start
-after a preposed vowel or a stacking sign that belongs to the next consonant.
+A literal keyword in Thai, Lao, Khmer, or Myanmar, scripts written without
+spaces between words, matches inside running text the way a CJK keyword does,
+and a Latin keyword matches next to their letters. Such a match does not count
+when a combining mark comes right after it (`ไม` in `ไม่`), or when a Thai or
+Lao preposed vowel, a Khmer coeng, or a Myanmar virama comes right before it
+(`ขา` in `เขา`). An edge that is a Thai or Lao letter also does not count before
+a following vowel such as `า` (`เก` in `เกาหลี`). A Latin or digit edge of a
+mixed keyword stays a word edge: `รุ่น 15` matches in `รุ่น 15 ราคา`, not in
+`รุ่น 150`.
 
 The rule publishes the number as its value whether or not its predicate holds:
 a decision condition can apply its own `predicate` to `keyword:<rule>`, and a
@@ -142,3 +148,9 @@ and test false positives across supported languages. See complete examples for
 [`nlp.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/keyword/nlp.yaml)
 and
 [`regex.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/keyword/regex.yaml).
+
+Thai, Lao, Khmer, and Myanmar keywords match inside running text without word
+segmentation, so a short keyword can still match inside a longer word, such as
+`ตา` ("eye") inside `ตาม` ("follow") or `มา` ("come") inside `หมา` ("dog").
+Prefer keywords of more than one syllable in these scripts, or use
+`method: regex` for exact control.
