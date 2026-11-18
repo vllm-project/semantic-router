@@ -381,7 +381,9 @@ global:
   request waits; with `HF_HUB_OFFLINE=1` it downloads nothing. The Router
   carries `o200k_base` and `cl100k_base`, and reads byte-level BPE
   `tokenizer.json` files, the kind DeepSeek, Qwen, GLM, MiniMax and gpt-oss
-  publish.
+  publish. A `tokenizer.json` also lists the model's added tokens, whose text
+  the Router escapes in user and tool text
+  ([Control tokens in user and tool text](protocol-compatibility#control-tokens-in-user-and-tool-text)).
 - **Until a tokenizer loads.** While a model's tokenizer downloads, or when
   it cannot load (no Hugging Face access, a gated repo without `HF_TOKEN`, a
   SentencePiece tokenizer), the proxy tokenizer counts for it, with its wider
