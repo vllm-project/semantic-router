@@ -174,4 +174,25 @@ describe('Codex turns in Insights', () => {
     }
     expect(render(<InsightsSessionRoutes trajectory={legacy} />)).not.toContain('Codex turn')
   })
+
+  it("pages a long session's history from the page that holds the request on screen", () => {
+    const long: InsightsTrajectory = {
+      ...trajectory,
+      routes: Array.from({ length: 60 }, (_, index) =>
+        route(`call-${index + 1}`, new Date(Date.UTC(2026, 10, 15, 9, index)).toISOString(), {
+          turn_id: index < 30 ? TURN : NEXT_TURN,
+          turn_index: index,
+        }),
+      ),
+    }
+    const html = render(<InsightsSessionRoutes trajectory={long} current="call-40" />)
+    expect(html).toContain('26–50 of 60 requests')
+    expect(html).toContain('data-current="true"')
+    expect(html).not.toContain('data-record-id="call-25"')
+    expect(html).toContain('data-record-id="call-26"')
+    // the page opens under the turn its first row belongs to, with the turn's whole count
+    expect(html).toContain('Codex turn 0199a1b2…0000000a</a> · 30 calls')
+    expect(html).toMatch(/href="\/observe\/requests\/call-26"[^>]*>26</)
+    expect(render(<InsightsSessionRoutes trajectory={long} />)).toContain('1–25 of 60 requests')
+  })
 })

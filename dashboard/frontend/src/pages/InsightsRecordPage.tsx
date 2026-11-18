@@ -56,7 +56,6 @@ import {
 import { HarnessName } from './InsightsHarness'
 import { InsightsDataProviders, modelLabel, useModelLabels } from './insightsModelLabelSupport'
 import {
-  fetchInsightsJSON,
   fetchInsightsRecord,
   fetchInsightsSessionReviews,
   fetchInsightsTrajectory,
@@ -74,8 +73,8 @@ import InsightsRecordSection from './InsightsRecordSection'
 import InsightsRecordTrace from './InsightsRecordTrace'
 import InsightsRoutingTrace from './InsightsRoutingTrace'
 import InsightsSessionRoutes, { InsightsSessionPosition } from './InsightsSessionRoutes'
+import { useSessionRun } from './insightsRunsData'
 import { getRunPath } from './insightsRunSupport'
-import type { RunResponse } from './insightsRunTypes'
 
 // One record, its models read by their labels.
 export default function InsightsRecordPage() {
@@ -147,7 +146,8 @@ function RecordInsight() {
   const { agentRules } = useInsightsConfig()
   const [record, setRecord] = useState<InsightsRecord | null>(null)
   const [trajectory, setTrajectory] = useState<InsightsTrajectory | null>(null)
-  const [run, setRun] = useState<RunResponse | null>(null)
+  // The run's summary names the record's agent and the session's title; without it they stay unnamed.
+  const run = useSessionRun(record?.session_id)
   const [sessionReviews, setSessionReviews] =
     useState<Awaited<ReturnType<typeof fetchInsightsSessionReviews>>>()
   const [traceError, setTraceError] = useState<string | null>(null)
@@ -174,7 +174,6 @@ function RecordInsight() {
       setNotFound(false)
       setUnavailable(undefined)
       setTrajectory(null)
-      setRun(null)
       setSessionReviews(undefined)
       if (nextRecord.session_id) {
         const session = nextRecord.session_id
@@ -182,13 +181,6 @@ function RecordInsight() {
         void fetchInsightsSessionReviews(session)
           .then(setSessionReviews)
           .catch(() => setSessionReviews(undefined))
-        // The run names the record's agent and the session's title; without it they stay unnamed.
-        void fetchInsightsJSON<RunResponse>(
-          `/api/router/api/v1/observability/replays/run?${new URLSearchParams({ session_id: session })}`,
-          'agent run',
-        )
-          .then(setRun)
-          .catch(() => setRun(null))
         try {
           setTrajectory(await fetchInsightsTrajectory(session, nextRecord.recipe || ''))
         } catch (traceCause) {
@@ -456,7 +448,7 @@ function RecordInsight() {
         <div className="min-w-0 xl:col-start-2 xl:row-start-1">
           <InsightsAgentContext
             record={record}
-            run={run?.run}
+            run={run}
             turnCount={trajectory?.turn_count}
             rules={agentRules}
           />

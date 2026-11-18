@@ -150,6 +150,9 @@ test("a record's Codex turn opens the list filtered to that turn until the filte
   await expect(chip).toContainText('0199a1b2…0000000a')
   await expect.poll(() => lists.some((query) => query.get('turn_id') === TURN)).toBe(true)
   expect(aggregates.at(-1)?.get('turn_id')).toBe(TURN)
+  // a turn reads in full, with no time bound
+  await expect(page.getByRole('radio', { name: 'All' })).toHaveAttribute('data-state', 'on')
+  expect(lists.find((query) => query.get('turn_id') === TURN)?.has('since')).toBe(false)
   await expect(page.getByRole('row').filter({ hasText: 'codex-auto-review' })).toHaveCount(1)
   await page.screenshot({ path: info.outputPath('insights-turn-list.png'), fullPage: true })
 
@@ -157,5 +160,8 @@ test("a record's Codex turn opens the list filtered to that turn until the filte
   await expect(page).toHaveURL(/\/observe\/requests$/)
   await expect(chip).toHaveCount(0)
   await expect.poll(() => lists.at(-1)?.has('turn_id')).toBe(false)
+  // without the turn the list returns to the last day
+  await expect(page.getByRole('radio', { name: '24h' })).toHaveAttribute('data-state', 'on')
+  expect(lists.at(-1)?.has('since')).toBe(true)
   await expect(page.getByRole('row').filter({ hasText: 'codex-auto-review' })).toHaveCount(0)
 })

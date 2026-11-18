@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
   REQUEST_CLASSES,
@@ -7,9 +7,16 @@ import {
   type RequestClass,
 } from './insightsAgentIdentity'
 import { recordHarnessId } from './insightsHarness'
-import { insightsUnavailableReason, type InsightsUnavailableReason } from './insightsPageApi'
+import {
+  DEFAULT_PAGE_SIZE,
+  useLivePolling,
+  useReplayRead,
+  useReplayWindow,
+  useWindowQuery,
+} from './insightsListData'
+import type { InsightsUnavailableReason } from './insightsPageApi'
 import { buildReplayQueryString } from './insightsPageFilters'
-import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
+import { fetchAbortableInsightsJSON } from './insightsPageRequestSupport'
 import type {
   InsightsAggregateResponse,
   InsightsFilterType,
@@ -32,11 +39,12 @@ export function readInsightsTab(params: URLSearchParams): InsightsTab {
   return value === 'runs' || value === 'reviews' ? value : 'requests'
 }
 
-export const REQUESTS_PAGE_SIZE = 25
+export const REQUESTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
 /** Records the client-side filters and their counts read: the newest under the server filters. */
 export const REQUEST_WINDOW_SIZE = 300
-const WINDOW_PAGE = 100
 const LIVE_INTERVAL_MS = 5_000
+/** The aggregate scans every record the filters select, so a live list reads it once a minute. */
+const AGGREGATE_INTERVAL_MS = 60_000
 const WINDOW_INTERVAL_MS = 60_000
 const REPLAYS = '/api/router/api/v1/observability/replays'
 
@@ -45,6 +53,34 @@ const RANGE_MS: Record<Exclude<RequestRange, 'all'>, number> = {
   '1h': 3_600_000,
   '24h': 86_400_000,
   '7d': 604_800_000,
+}
+
+/** The ranges a list offers, shortest first. */
+export const REQUEST_RANGES: { value: RequestRange; label: string }[] = [
+  { value: '1h', label: '1h' },
+  { value: '24h', label: '24h' },
+  { value: '7d', label: '7d' },
+  { value: 'all', label: 'All' },
+]
+
+/** A range as a sentence reads it: "in the last 24 hours". */
+export const RANGE_TEXT: Record<RequestRange, string> = {
+  '1h': 'in the last hour',
+  '24h': 'in the last 24 hours',
+  '7d': 'in the last 7 days',
+  all: 'in all time',
+}
+
+export function isRequestRange(value: string | null): value is RequestRange {
+  return value === 'all' || value === '1h' || value === '24h' || value === '7d'
+}
+
+/**
+ * The range a list opens with: a session or a Codex turn reads in full, since
+ * either is already narrow; anything else reads its last day.
+ */
+export function defaultRequestRange(scope: { session?: string; turn?: string }): RequestRange {
+  return scope.session || scope.turn ? 'all' : '24h'
 }
 
 /** The request list's filters, as the page URL keeps them. */
@@ -71,15 +107,17 @@ const list = (value: string | null) =>
 export function readRequestFilters(params: URLSearchParams): RequestFilters {
   const cache = params.get('cache')
   const range = params.get('range')
+  const session = params.get('session') ?? ''
+  const turn = params.get('turn') ?? ''
   return {
     search: params.get('q') ?? '',
     recipe: params.get('recipe') ?? '',
     decision: params.get('decision') ?? '',
     model: params.get('model') ?? '',
     cache: cache === 'cached' || cache === 'streamed' ? cache : 'all',
-    session: params.get('session') ?? '',
-    turn: params.get('turn') ?? '',
-    range: range === '1h' || range === '24h' || range === '7d' ? range : 'all',
+    session,
+    turn,
+    range: isRequestRange(range) ? range : defaultRequestRange({ session, turn }),
     harness: list(params.get('harness')),
     classes: list(params.get('class')).filter((value): value is RequestClass =>
       (REQUEST_CLASSES as readonly string[]).includes(value),
@@ -102,7 +140,10 @@ const PARAM_OF: Record<keyof RequestFilters, string> = {
   hideHousekeeping: 'housekeeping',
 }
 
-/** The URL with some filters changed; a change returns the list to its first page. */
+/**
+ * The URL with some filters changed; a change returns the list to its first
+ * page, and a range equal to the default for the other filters stays out of it.
+ */
 export function writeRequestFilters(
   params: URLSearchParams,
   patch: Partial<RequestFilters>,
@@ -117,8 +158,17 @@ export function writeRequestFilters(
           ? 'hide'
           : ''
         : String(value ?? '')
-    if (!text || text === 'all') next.delete(name)
+    if (!text || (key !== 'range' && text === 'all')) next.delete(name)
     else next.set(name, text)
+  }
+  const range = next.get('range')
+  if (
+    range !== null &&
+    (!isRequestRange(range) ||
+      range ===
+        defaultRequestRange({ session: next.get('session') ?? '', turn: next.get('turn') ?? '' }))
+  ) {
+    next.delete('range')
   }
   next.delete('page')
   return next
@@ -128,6 +178,7 @@ export function hasClientFilters(filters: RequestFilters): boolean {
   return filters.harness.length > 0 || filters.classes.length > 0 || filters.hideHousekeeping
 }
 
+/** Whether any filter but the time range narrows the list. */
 export function hasAnyFilter(filters: RequestFilters): boolean {
   return Boolean(
     filters.search ||
@@ -137,7 +188,6 @@ export function hasAnyFilter(filters: RequestFilters): boolean {
       filters.cache !== 'all' ||
       filters.session ||
       filters.turn ||
-      filters.range !== 'all' ||
       hasClientFilters(filters),
   )
 }
@@ -165,7 +215,7 @@ export function matchesClientFilters(
 const MINUTE = 60_000
 
 /** The start of a range, to the minute, so a live list keeps one query a minute. */
-function rangeSince(range: RequestRange, minute: number): string | undefined {
+export function requestRangeSince(range: RequestRange, minute: number): string | undefined {
   return range === 'all' ? undefined : new Date(minute * MINUTE - RANGE_MS[range]).toISOString()
 }
 
@@ -205,216 +255,179 @@ export interface RequestsData {
   /** The newest records under the server filters, which the client filters and counts read. */
   window: InsightsRecord[]
   windowTotal: number
+  /** The window holds the newest records of the current filters. */
+  windowLoaded: boolean
+  windowLoading: boolean
+  /** The first rows of the current filters have not arrived. */
   loading: boolean
+  /** The rows shown answer the filters before the last change while the new ones load. */
+  stale: boolean
+  aggregateLoading: boolean
+  /** The list's error, else the aggregate's. */
   error: string | null
+  listError: string | null
+  aggregateError: string | null
   unavailable?: InsightsUnavailableReason
   refresh: () => void
 }
 
-interface PageState {
-  rows: InsightsRecord[]
-  total: number
-  aggregate: InsightsAggregateResponse | null
-  loading: boolean
-  error: string | null
-  unavailable?: InsightsUnavailableReason
-}
+const recordId = (record: InsightsRecord) => record.id
 
 /**
- * The request list: one server page and the aggregate of every record the
- * server filters select, polled while live; and a bounded window of the newest
- * records, refreshed less often, for the harness and request-class filters and
- * counts the replay API does not answer.
+ * The request list, each part loaded on its own so the rows never wait: one
+ * server page, polled while live; the aggregate of every record the server
+ * filters select, read again once a minute; and, when withWindow or a client
+ * filter asks for it, a window of the newest records for the harness and
+ * request-class filters and counts the replay API does not answer. Only a
+ * client filter keeps the window live; for counts alone it loads once per
+ * set of filters.
  */
 export function useRequestsData({
   filters,
   page,
+  pageSize = REQUESTS_PAGE_SIZE,
   live,
   held,
   rules,
   interval,
+  withWindow = true,
 }: {
   filters: RequestFilters
   page: number
+  pageSize?: number
   live: boolean
   held: boolean
   rules?: AgentRuleIndex
   /** With a range, asks the aggregate for its traffic in intervals of this length, such as 1h. */
   interval?: string
+  withWindow?: boolean
 }): RequestsData {
   const [minute, setMinute] = useState(() => Math.floor(Date.now() / MINUTE))
-  const baseQuery = serverQuery(filters, rangeSince(filters.range, minute))
+  const baseQuery = serverQuery(filters, requestRangeSince(filters.range, minute))
+  const scope = `${serverQuery(filters, undefined)}|${filters.range}`
   const clientMode = hasClientFilters(filters)
-  const pageQuery = withPage(baseQuery, REQUESTS_PAGE_SIZE, (page - 1) * REQUESTS_PAGE_SIZE)
-  const aggregateQuery = withInterval(baseQuery, filters.range === 'all' ? undefined : interval)
 
-  const [state, setState] = useState<PageState>({
-    rows: [],
-    total: 0,
-    aggregate: null,
-    loading: true,
-    error: null,
-  })
-  const [windowState, setWindowState] = useState<{ records: InsightsRecord[]; total: number }>({
-    records: [],
-    total: 0,
-  })
-  const pageAbort = useRef<AbortController | null>(null)
-  const windowAbort = useRef<AbortController | null>(null)
-  const sequence = useRef(0)
-
-  const loadPage = useCallback(async () => {
-    const current = ++sequence.current
-    pageAbort.current?.abort()
-    const abort = new AbortController()
-    pageAbort.current = abort
-    setState((previous) => ({ ...previous, loading: true }))
-    try {
-      const [listResponse, aggregate] = await Promise.all([
-        clientMode
-          ? Promise.resolve(null)
-          : fetchAbortableInsightsJSON<InsightsListResponse>(
-              `${REPLAYS}${pageQuery}`,
-              'insight records',
-              abort.signal,
-            ),
-        fetchAbortableInsightsJSON<InsightsAggregateResponse>(
-          `${REPLAYS}/aggregate${aggregateQuery}`,
-          'insight aggregates',
-          abort.signal,
-        ),
-      ])
-      if (current !== sequence.current) return
-      setState({
-        rows: listResponse?.data ?? [],
-        total: listResponse
-          ? typeof listResponse.total === 'number'
-            ? listResponse.total
-            : listResponse.count
-          : 0,
-        aggregate,
-        loading: false,
-        error: null,
-      })
-    } catch (error) {
-      if (isAbortError(error) || current !== sequence.current) return
-      const unavailable = insightsUnavailableReason(error)
-      setState({
-        rows: [],
-        total: 0,
-        aggregate: null,
-        loading: false,
-        error: unavailable ? null : error instanceof Error ? error.message : 'Unknown error',
-        unavailable,
-      })
-    }
-  }, [aggregateQuery, clientMode, pageQuery])
-
-  const loadWindow = useCallback(async () => {
-    windowAbort.current?.abort()
-    const abort = new AbortController()
-    windowAbort.current = abort
-    const records: InsightsRecord[] = []
-    let total = 0
-    try {
-      for (let offset = 0; offset < REQUEST_WINDOW_SIZE; offset += WINDOW_PAGE) {
-        const response = await fetchAbortableInsightsJSON<InsightsListResponse>(
-          `${REPLAYS}${withPage(baseQuery, WINDOW_PAGE, offset)}`,
-          'recent records',
-          abort.signal,
-        )
-        const data = response.data ?? []
-        records.push(...data)
-        total = typeof response.total === 'number' ? response.total : records.length
-        if (!response.has_more || data.length === 0) break
-      }
-      // a record written while paging shifts the newest-first pages; the id keeps each once
-      const seen = new Set<string>()
-      setWindowState({
-        records: records.filter((record) => !seen.has(record.id) && Boolean(seen.add(record.id))),
-        total,
-      })
-    } catch (error) {
-      if (!isAbortError(error)) setWindowState({ records: [], total: 0 })
-    }
-  }, [baseQuery])
-
-  useEffect(() => {
-    void loadPage()
-  }, [loadPage])
-
-  useEffect(() => {
-    void loadWindow()
-  }, [loadWindow])
-
-  useEffect(
-    () => () => {
-      sequence.current += 1
-      pageAbort.current?.abort()
-      windowAbort.current?.abort()
-    },
-    [],
+  const listRead = useReplayRead<InsightsListResponse>(
+    clientMode ? null : `${REPLAYS}${withPage(baseQuery, pageSize, (page - 1) * pageSize)}`,
+    'insight records',
+    `${scope}|${page}|${pageSize}`,
+  )
+  const aggregateRead = useReplayRead<InsightsAggregateResponse>(
+    `${REPLAYS}/aggregate${withInterval(baseQuery, filters.range === 'all' ? undefined : interval)}`,
+    'insight aggregates',
+    `${scope}|${interval ?? ''}`,
   )
 
-  const polling = live && !held
-  useEffect(() => {
-    if (!polling) return undefined
-    let ticks = 0
-    const interval = window.setInterval(() => {
-      if (document.hidden) return
-      ticks += 1
-      const current = Math.floor(Date.now() / MINUTE)
-      if (filters.range !== 'all' && current !== minute) {
-        setMinute(current)
-        return
-      }
-      void loadPage()
-      if (ticks % Math.round(WINDOW_INTERVAL_MS / LIVE_INTERVAL_MS) === 0) void loadWindow()
-    }, LIVE_INTERVAL_MS)
-    return () => window.clearInterval(interval)
-  }, [filters.range, loadPage, loadWindow, minute, polling])
+  const [windowQuery, releaseWindow] = useWindowQuery(
+    clientMode ? 'live' : withWindow ? 'counts' : 'off',
+    scope,
+    baseQuery,
+  )
+  const windowUrl = useMemo(
+    () =>
+      windowQuery === null
+        ? null
+        : (limit: number, offset: number) => `${REPLAYS}${withPage(windowQuery, limit, offset)}`,
+    [windowQuery],
+  )
+  const windowRead = useReplayWindow<InsightsRecord>(
+    windowUrl,
+    'recent records',
+    REQUEST_WINDOW_SIZE,
+    recordId,
+    scope,
+  )
 
+  const nextMinute = () => {
+    const current = Math.floor(Date.now() / MINUTE)
+    if (filters.range === 'all' || current === minute) return false
+    setMinute(current)
+    return true
+  }
+
+  useLivePolling(live && !held, LIVE_INTERVAL_MS, () => {
+    // a new minute moves the range, and every part reads again with it
+    if (nextMinute()) return
+    const now = Date.now()
+    if (!clientMode) listRead.reload()
+    if (now - aggregateRead.requestedAt >= AGGREGATE_INTERVAL_MS) aggregateRead.reload()
+    if (clientMode && now - windowRead.requestedAt >= WINDOW_INTERVAL_MS) windowRead.reload()
+  })
+
+  const { reload: reloadList } = listRead
+  const { reload: reloadAggregate } = aggregateRead
+  const { reload: reloadWindow } = windowRead
   const refresh = useCallback(() => {
     const current = Math.floor(Date.now() / MINUTE)
     if (filters.range !== 'all' && current !== minute) {
+      releaseWindow(true)
       setMinute(current)
       return
     }
-    void loadPage()
-    void loadWindow()
-  }, [filters.range, loadPage, loadWindow, minute])
+    reloadList()
+    reloadAggregate()
+    if (!releaseWindow()) reloadWindow()
+  }, [filters.range, minute, releaseWindow, reloadAggregate, reloadList, reloadWindow])
 
   const filtered = useMemo(
     () =>
       clientMode
-        ? windowState.records.filter((record) => matchesClientFilters(record, filters, rules))
+        ? windowRead.rows.filter((record) => matchesClientFilters(record, filters, rules))
         : [],
-    [clientMode, filters, rules, windowState.records],
+    [clientMode, filters, rules, windowRead.rows],
   )
 
+  const listResponse = listRead.data
+  const listError = clientMode ? windowRead.error : listRead.error
+  const aggregateError = aggregateRead.error
   return {
     rows: clientMode
-      ? filtered.slice((page - 1) * REQUESTS_PAGE_SIZE, page * REQUESTS_PAGE_SIZE)
-      : state.rows,
-    total: clientMode ? filtered.length : state.total,
-    aggregate: state.aggregate,
-    window: windowState.records,
-    windowTotal: windowState.total,
-    loading: state.loading,
-    error: state.error,
-    unavailable: state.unavailable,
+      ? filtered.slice((page - 1) * pageSize, page * pageSize)
+      : (listResponse?.data ?? []),
+    total: clientMode
+      ? filtered.length
+      : listResponse
+        ? typeof listResponse.total === 'number'
+          ? listResponse.total
+          : listResponse.count
+        : 0,
+    aggregate: aggregateRead.stale ? null : aggregateRead.data,
+    window: windowRead.rows,
+    windowTotal: windowRead.total,
+    windowLoaded: windowRead.loaded,
+    windowLoading: windowRead.loading,
+    loading: clientMode
+      ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
+      : listRead.loading && (listResponse === null || listRead.stale),
+    stale: clientMode ? false : listRead.stale && listResponse !== null,
+    aggregateLoading: aggregateRead.loading,
+    error: listError ?? aggregateError,
+    listError,
+    aggregateError,
+    unavailable:
+      (clientMode ? windowRead.unavailable : listRead.unavailable) ?? aggregateRead.unavailable,
     refresh,
   }
 }
 
-/** The recent runs by session: their titles and harnesses label the rows of their requests. */
-export function useRecentRuns(enabled: boolean, refreshKey: string): Map<string, RunSummary> {
+/**
+ * The recent runs by session: their titles and harnesses label the rows of
+ * their requests. since bounds the runs to those with calls after it, which
+ * spares the router a scan of its whole history.
+ */
+export function useRecentRuns(
+  enabled: boolean,
+  refreshKey: string,
+  since?: string,
+): Map<string, RunSummary> {
   const [runs, setRuns] = useState<Map<string, RunSummary>>(new Map())
   useEffect(() => {
     if (!enabled) return undefined
     const abort = new AbortController()
+    const query = new URLSearchParams({ limit: '100', offset: '0' })
+    if (since) query.set('since', since)
     fetchAbortableInsightsJSON<RunListResponse>(
-      `${REPLAYS}/runs?limit=100&offset=0`,
+      `${REPLAYS}/runs?${query.toString()}`,
       'agent runs',
       abort.signal,
     )
@@ -423,8 +436,31 @@ export function useRecentRuns(enabled: boolean, refreshKey: string): Map<string,
       )
       .catch(() => undefined)
     return () => abort.abort()
-  }, [enabled, refreshKey])
+  }, [enabled, refreshKey, since])
   return runs
+}
+
+/**
+ * Whether Replay holds any record, asked only when enabled: when a range is
+ * quiet it tells a router that never recorded anything from a quiet day.
+ */
+export function useAnyRecord(enabled: boolean): boolean | undefined {
+  const [any, setAny] = useState<boolean>()
+  useEffect(() => {
+    if (!enabled) return undefined
+    const abort = new AbortController()
+    fetchAbortableInsightsJSON<InsightsListResponse>(
+      `${REPLAYS}?limit=1&offset=0&showDetails=false`,
+      'insight records',
+      abort.signal,
+    )
+      .then((response) =>
+        setAny((typeof response.total === 'number' ? response.total : response.count) > 0),
+      )
+      .catch(() => undefined)
+    return () => abort.abort()
+  }, [enabled])
+  return any
 }
 
 /** How many records of the window each value of a facet holds, most first. */

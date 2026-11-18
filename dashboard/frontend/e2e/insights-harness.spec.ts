@@ -166,9 +166,11 @@ const aggregate = {
 
 async function setup(page: Page) {
   await mockAuthenticatedAppShell(page)
+  const seen = { lists: [] as URLSearchParams[], runs: [] as URLSearchParams[] }
   const replays = '**/api/router/api/v1/observability/replays'
   await page.route(/\/api\/router\/api\/v1\/observability\/replays(\?|$)/, (route) => {
     const query = new URL(route.request().url()).searchParams
+    seen.lists.push(query)
     const session = query.get('session_id')
     const kind = query.get('request_kind')
     const data = records.filter(
@@ -189,8 +191,9 @@ async function setup(page: Page) {
   await page.route(`${replays}/models`, (route) =>
     route.fulfill({ json: { object: 'list', data: [] } }),
   )
-  await page.route(`${replays}/runs*`, (route) =>
-    route.fulfill({
+  await page.route(`${replays}/runs*`, (route) => {
+    seen.runs.push(new URL(route.request().url()).searchParams)
+    return route.fulfill({
       json: {
         object: 'list',
         count: runs.length,
@@ -200,8 +203,8 @@ async function setup(page: Page) {
         has_more: false,
         data: runs,
       },
-    }),
-  )
+    })
+  })
   await page.route(`${replays}/run?*`, (route) =>
     route.fulfill({
       json: {
@@ -243,12 +246,13 @@ async function setup(page: Page) {
     }),
   )
   await page.route(`${replays}/claude-subagent`, (route) => route.fulfill({ json: records[3] }))
+  return seen
 }
 
 test('lists each request with its harness logo and agent, filters by harness and hides housekeeping', async ({
   page,
 }, info) => {
-  await setup(page)
+  const seen = await setup(page)
   await page.goto('/observe/requests')
   const rows = page.getByRole('row')
   const row = (text: string) => rows.filter({ hasText: text })
@@ -273,15 +277,28 @@ test('lists each request with its harness logo and agent, filters by harness and
   await expect(page.getByText('key_3fa9c2:', { exact: false })).toHaveCount(0)
   await page.screenshot({ path: info.outputPath('requests-harness-list.png'), fullPage: true })
 
+  // The list opens on the last day and renders from one page: no run list and
+  // no window of the newest records until a filter needs them.
+  await expect(page.getByRole('radio', { name: '24h' })).toHaveAttribute('data-state', 'on')
+  expect(seen.runs).toEqual([])
+  expect(seen.lists.length).toBeGreaterThan(0)
+  expect(seen.lists.every((query) => query.get('limit') === '25' && query.has('since'))).toBe(true)
+
   await page.getByRole('button', { name: 'Client' }).click()
   const opencode = page.getByRole('menuitemcheckbox', { name: /OpenCode/ })
   await expect(opencode).toContainText('1')
   await expect(opencode.getByRole('img', { name: 'OpenCode' })).toBeVisible()
+  expect(seen.lists.some((query) => query.get('limit') === '100')).toBe(true)
   await opencode.click()
   await page.keyboard.press('Escape')
   await expect(page).toHaveURL(/harness=opencode/)
   await expect(rows.filter({ hasText: 'Codex' })).toHaveCount(0)
   await expect(housekeeping).toHaveCount(1)
+  await expect(
+    page.getByText(
+      'Client and class filters run in your browser over all 5 requests in the last 24 hours.',
+    ),
+  ).toBeVisible()
 
   await page.getByLabel('Hide housekeeping').click()
   await expect(page).toHaveURL(/housekeeping=hide/)
@@ -289,18 +306,24 @@ test('lists each request with its harness logo and agent, filters by harness and
 })
 
 test("a session is a pivot: its requests, then its run's agent tree", async ({ page }) => {
-  await setup(page)
+  const seen = await setup(page)
   await page.goto('/observe/requests')
   await page
     .getByRole('row')
     .filter({ hasText: 'Codex' })
-    .getByRole('button', { name: 'Add a histogram for selection latency' })
+    .getByRole('button', { name: '01a1ea71…9e9851' })
     .click()
   await expect(page).toHaveURL(/session=key_3fa9c2%3A01a1ea71/)
   const chip = page.getByRole('button', { name: 'Clear session filter' }).locator('..')
   await expect(chip).toContainText('Add a histogram for selection latency')
   await expect(chip.getByRole('button', { name: 'Open run' })).toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: 'OpenCode' })).toHaveCount(0)
+  // a session reads in full, and only its own run is looked up for its title
+  await expect(page.getByRole('radio', { name: 'All' })).toHaveAttribute('data-state', 'on')
+  await expect.poll(() => seen.lists.at(-1)?.get('session_id')).toBe(CODEX)
+  expect(seen.lists.at(-1)?.has('since')).toBe(false)
+  expect(seen.runs.length).toBeGreaterThan(0)
+  expect(seen.runs.every((query) => query.get('session_id') === CODEX)).toBe(true)
 
   await page.goto('/observe/requests?tab=runs')
   const run = page.getByRole('row').filter({ hasText: 'Explain the retry loop in replay_store.go' })
@@ -311,9 +334,16 @@ test("a session is a pivot: its requests, then its run's agent tree", async ({ p
       .filter({ hasText: 'Sum the numbers in data.csv' })
       .getByRole('img', { name: 'DeepSeek Harness' }),
   ).toBeVisible()
+  // the runs load when their tab opens, a page at a time, bounded by the range
+  expect(seen.runs.some((query) => query.get('limit') === '25' && query.has('since'))).toBe(true)
+  await expect(page.getByText('1–4 of 4 runs')).toBeVisible()
   await run.click()
   await expect(page).toHaveURL(/\/observe\/runs\?session=/)
-  const agents = page.getByRole('list', { name: 'Agents' })
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Explain the retry loop in replay_store.go',
+  )
+  await page.getByRole('tab', { name: /Agents/ }).click()
+  const agents = page.getByRole('tabpanel', { name: /Agents/ })
   await expect(agents).toContainText('main')
   await expect(agents).toContainText('subagent 1')
   await expect(agents).toContainText('Spawned by main')
@@ -336,4 +366,120 @@ test('a record names its harness, its agent, the tools it used and how session r
     /\/observe\/runs\?session=/,
   )
   await page.screenshot({ path: info.outputPath('record-agent.png'), fullPage: true })
+})
+
+// A real session at scale: no harness title, a product-listing prompt for a
+// task, 300 calls with a subagent, and an hour away halfway through.
+const LONG = 'key_3a49ef2c4cf96fcc:63c213fd-bb15-414a-a28f-2205d7d8575d'
+const LISTING = [
+  '<listing_a> Title: AMD Ryzen 9 9950X3D Dual Edition Desktop Processor Brand: AMD Model: (unknown)',
+  'Category: Computer Components Seller: potakait.com Price: (unknown)',
+  ...Array.from(
+    { length: 30 },
+    (_, index) =>
+      `Specification ${index + 1}: Base Frequency 2200 MHz, L1 Cache 1280 KB, 16 cores, 32 threads, 200W TDP.`,
+  ),
+  'Why Buy the AMD Ryzen 9 9950X3D Dual Edition Processor from Potaka IT? </listing_a>',
+].join('\n')
+
+test('a long run reads at a glance: a one-line title, its task in a sheet, its calls a window and a page at a time', async ({
+  page,
+}, info) => {
+  await mockAuthenticatedAppShell(page)
+  const replays = '**/api/router/api/v1/observability/replays'
+  const start = Date.parse('2026-11-17T16:00:00Z')
+  const calls = Array.from({ length: 300 }, (_, index) => ({
+    record_id: `call-${index + 1}`,
+    agent: index % 10 === 3 ? 'subagent 1' : 'main',
+    timestamp: new Date(start + index * 6_000 + (index >= 150 ? 3_600_000 : 0)).toISOString(),
+    duration_ms: 4_000,
+    model: index % 50 === 49 ? 'qwen/qwen3.8-27b' : 'deepseek/deepseek-v4.1-flash',
+    lifecycle_state: index === 120 ? 'failed' : 'completed',
+    response_status: index === 120 ? 502 : 200,
+    markers: index === 120 ? ['failure'] : undefined,
+  }))
+  const ended = start + 299 * 6_000 + 3_600_000 + 4_000
+  const run = {
+    session_id: LONG,
+    harness: 'claude_code',
+    prompt: LISTING,
+    started_at: new Date(start).toISOString(),
+    ended_at: new Date(ended).toISOString(),
+    duration_ms: ended - start,
+    calls: 300,
+    agents: [
+      agent('main', { calls: 270 }),
+      agent('subagent 1', { calls: 30, id: '7c1d9e04aa31', parent: 'main' }),
+    ],
+    models: [
+      { name: 'deepseek/deepseek-v4.1-flash', value: 294 },
+      { name: 'qwen/qwen3.8-27b', value: 6 },
+    ],
+    outcome: {
+      status: 'answered',
+      final_answer_record_id: 'call-300',
+      tool_results: 140,
+      tool_failures: 2,
+      reported: [
+        {
+          record_id: 'call-121',
+          outcome: { source: 'eval', target: 'model', verdict: 'failed', reason: 'Upstream 502' },
+        },
+        {
+          record_id: 'call-300',
+          outcome: { source: 'user', target: 'model', verdict: 'good_fit' },
+        },
+      ],
+    },
+    cost,
+    events: { failure: 1 },
+  }
+  await page.route(`${replays}/models`, (route) =>
+    route.fulfill({ json: { object: 'list', data: [] } }),
+  )
+  await page.route(`${replays}/run?*`, (route) =>
+    route.fulfill({ json: { object: 'router_replay.run', run, calls } }),
+  )
+  await page.goto(`/observe/runs?session=${encodeURIComponent(LONG)}`)
+
+  const title = page.getByRole('heading', { level: 1 })
+  await expect(title).toContainText('<listing_a> Title: AMD Ryzen 9 9950X3D')
+  expect((await title.boundingBox())!.height).toBeLessThan(40)
+  await expect(title).not.toContainText('Why Buy')
+  await page.getByRole('button', { name: 'Read the task' }).click()
+  const sheet = page.getByRole('dialog')
+  await expect(sheet).toContainText('Why Buy the AMD Ryzen 9 9950X3D Dual Edition Processor')
+  await page.keyboard.press('Escape')
+  await expect(sheet).toHaveCount(0)
+
+  const figures = page.getByRole('group', { name: 'Run figures' })
+  for (const label of ['Duration', 'Calls', 'Agents', 'Models', 'Cost', 'Tokens']) {
+    await expect(figures.getByText(label, { exact: true })).toBeVisible()
+  }
+
+  const timeline = page.getByRole('list', { name: 'Run timeline' })
+  await expect(page.getByText('Calls 1–100 of 300')).toBeVisible()
+  await expect(timeline.getByRole('listitem')).toHaveCount(2)
+  await page.getByRole('button', { name: 'Later calls' }).click()
+  await expect(page.getByText('Calls 101–200 of 300')).toBeVisible()
+  await expect(timeline.locator('[data-marker="failure"]')).toHaveCount(1)
+  // the hour away folds to a narrow mark that says how long it lasted
+  await expect(timeline).toContainText('1h 0m idle')
+  await page.screenshot({ path: info.outputPath('run-long.png'), fullPage: true })
+
+  await expect(page.getByText('1–25 of 300 calls')).toBeVisible()
+  await page.getByRole('button', { name: 'Next page' }).click()
+  await expect(page.getByText('26–50 of 300 calls')).toBeVisible()
+
+  await page.getByRole('tab', { name: /Outcomes/ }).click()
+  const outcomes = page.getByRole('tabpanel', { name: /Outcomes/ })
+  await expect(outcomes).toContainText('Final answer on call #300')
+  await expect(outcomes).toContainText('1 good fit · 1 failed')
+  await expect(outcomes.getByRole('row').filter({ hasText: 'Upstream 502' })).toContainText(
+    'Failed',
+  )
+  await page.screenshot({ path: info.outputPath('run-long-outcomes.png'), fullPage: true })
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
+    .toBe(true)
 })

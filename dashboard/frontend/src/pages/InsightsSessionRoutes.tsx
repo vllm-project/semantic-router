@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Lock } from 'lucide-react'
@@ -12,6 +12,8 @@ import {
 } from './insightsAgentIdentity'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { buildConversationLabels } from './insightsConversationIdentity'
+import { Pager } from './InsightsDisplay'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageHolding, pageOf } from './insightsListData'
 import { ModelName } from './insightsModelLabelSupport'
 import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
@@ -454,6 +456,8 @@ function HistoryRow({
   )
 }
 
+// A session's requests in time order under its summary, a page at a time,
+// opening on the page that holds the request on screen.
 export default function InsightsSessionRoutes({
   trajectory,
   current,
@@ -466,6 +470,8 @@ export default function InsightsSessionRoutes({
   reviewsTruncated?: boolean
 }) {
   const routes = trajectory?.routes ?? []
+  const [size, setSize] = useState(DEFAULT_PAGE_SIZE)
+  const [page, setPage] = useState<number>()
   if (routes.length === 0) return null
   const marks = assignReviewsToRoutes(routes, reviews)
   const ownReview = new Map(reviews.map((review) => [review.id, [review]]))
@@ -474,6 +480,16 @@ export default function InsightsSessionRoutes({
   const agentIndex = new Map([...agents.keys()].map((agent, index) => [agent, index]))
   const turnCalls = new Map<string, number>()
   for (const route of routes) turnCalls.set(turnOf(route), (turnCalls.get(turnOf(route)) ?? 0) + 1)
+  const shown = pageOf(
+    routes,
+    page ??
+      pageHolding(
+        routes.findIndex((route) => route.record_id === current),
+        size,
+      ),
+    size,
+  )
+  const offset = (shown.page - 1) * size
   return (
     <section
       id="session-history"
@@ -514,19 +530,19 @@ export default function InsightsSessionRoutes({
             </tr>
           </thead>
           <tbody>
-            {routes.map((route, index) => {
+            {shown.rows.map((route, position) => {
               const agent = agentKey(route)
               return (
                 <Fragment key={route.record_id}>
                   <GroupRows
                     route={route}
-                    previous={routes[index - 1]}
+                    previous={position > 0 ? shown.rows[position - 1] : undefined}
                     labels={labels}
                     turnCalls={turnCalls}
                   />
                   <HistoryRow
                     route={route}
-                    number={index + 1}
+                    number={offset + position + 1}
                     current={current}
                     agentName={agents.get(agent)}
                     hue={agentHue(agent, agentIndex.get(agent) ?? 0)}
@@ -538,6 +554,20 @@ export default function InsightsSessionRoutes({
           </tbody>
         </table>
       </div>
+      {routes.length > PAGE_SIZES[0] ? (
+        <Pager
+          className="mt-0 border-t border-border px-5 py-2.5"
+          page={shown.page}
+          pageSize={size}
+          total={routes.length}
+          noun="request"
+          onPage={setPage}
+          onPageSize={(next) => {
+            setSize(next)
+            setPage(1)
+          }}
+        />
+      ) : null}
     </section>
   )
 }

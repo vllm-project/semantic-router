@@ -93,7 +93,11 @@ export default function InsightsAgentContext({
           {session ? (
             <Row label="Session">
               <span className="flex min-w-0 flex-col gap-1">
-                {title ? <span className="font-medium">{title}</span> : null}
+                {title ? (
+                  <span className="line-clamp-2 break-words font-medium" title={title}>
+                    {title}
+                  </span>
+                ) : null}
                 <span className="flex min-w-0 items-center gap-1">
                   <span
                     className="truncate font-mono text-[12px] text-muted-foreground"

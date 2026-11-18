@@ -157,6 +157,8 @@ test('the reviews view summarizes reviews, filters them and opens a review', asy
 
   const summary = page.getByRole('region', { name: 'Review summary' })
   await expect(summary).toContainText('50.0%')
+  // reviews stay live as the request list does
+  await expect(page.getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
   await expect(summary).toContainText('1 allowed of 2 verdicts')
   await expect(summary).toContainText('1 of 2 requests priced')
   const rows = page.getByRole('row')

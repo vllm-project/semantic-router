@@ -3,71 +3,93 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Bot,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
   Clock,
-  CornerDownRight,
+  Copy,
+  FileText,
+  Link2,
   ListTree,
+  MessagesSquare,
   MoreHorizontal,
   SearchX,
   ShieldCheck,
-  User,
+  Timer,
+  Zap,
 } from 'lucide-react'
 
 import {
-  Badge,
   Button,
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
   CopyButton,
-  DataTable,
+  DetailSheet,
+  DetailSheetBody,
+  DetailSheetHeader,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   EmptyState,
-  IconTile,
   MetaItem,
-  MiniBar,
-  MiniStat,
   PageContainer,
   PageHeader,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
-  cn,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   toast,
-  type Column,
 } from '../ui'
 import { formatDateTime } from '../utils/dateTime'
-import { formatInsightsCost } from '../utils/insightsCost'
 
-import { displaySessionId, subagentKindLabel } from './insightsAgentIdentity'
-import InsightsDecisionBadge from './InsightsDecisionBadge'
-import { formatLatency, formatTokenCount } from './insightsDisplayFormat'
-import { InsightsLoadError, InsightsUnavailable, RefreshButton } from './InsightsDisplay'
-import { HarnessName } from './InsightsHarness'
-import { InsightsDataProviders, ModelChip } from './insightsModelLabelSupport'
+import { compactIdentifier, displaySessionId } from './insightsAgentIdentity'
+import { formatTokenCount } from './insightsDisplayFormat'
+import {
+  InsightsLoadError,
+  InsightsUnavailable,
+  RefreshButton,
+  SummaryStrip,
+  SummaryTile,
+} from './InsightsDisplay'
+import { HarnessLogo, HarnessName } from './InsightsHarness'
+import { DEFAULT_PAGE_SIZE, pageHolding } from './insightsListData'
+import { InsightsDataProviders, modelLabel, useModelLabels } from './insightsModelLabelSupport'
 import {
   fetchInsightsJSON,
   InsightsRequestError,
   insightsUnavailableReason,
   type InsightsUnavailableReason,
 } from './insightsPageApi'
-import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
 import { getReviewsPath, getSessionRequestsPath } from './insightsReviewSupport'
-import { RunCallDetails, RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
+import { RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
+import { RunAgentsPanel, RunCallsPanel, RunOutcomesPanel } from './InsightsRunPanels'
 import { RunEvents, RunStatus } from './InsightsRunsView'
 import {
-  buildRunLanes,
   countText,
-  describeCallStatus,
+  filterRunCalls,
   formatRunCost,
-  RUN_MARKER_GLYPHS,
-  RUN_MARKER_LABELS,
-  runTitle,
-  type RunLane,
-  type RunSegment,
+  formatRunDuration,
+  runHeadline,
+  type CallsView,
 } from './insightsRunSupport'
+import {
+  buildRunTimeline,
+  TIMELINE_SIZE,
+  TIMELINE_SIZES,
+  type TimelineBlock,
+} from './insightsRunTimeline'
 import type { RunCall, RunResponse } from './insightsRunTypes'
 
 const RUNS_TAB = '/observe/requests?tab=runs'
@@ -96,13 +118,14 @@ function useRun(sessionId: string) {
     } catch (error) {
       const reason = insightsUnavailableReason(error)
       const notFound = error instanceof InsightsRequestError && error.status === 404
-      setState({
-        response: null,
+      setState((current) => ({
+        // a failed refresh keeps the run on screen under its error
+        response: notFound ? null : current.response,
         error: reason ? null : error instanceof Error ? error.message : 'Unknown error',
         unavailable: notFound ? undefined : reason,
         notFound,
         loading: false,
-      })
+      }))
     }
   }, [sessionId])
   useEffect(() => {
@@ -132,150 +155,146 @@ function BackLink() {
   )
 }
 
-/** The run's agents as a tree: the main agent, then each subagent under the agent that spawned it. */
-function AgentTree({
-  lanes,
-  active,
-  onSelect,
-}: {
-  lanes: RunLane[]
-  active?: string
-  onSelect: (label?: string) => void
-}) {
-  const most = Math.max(1, ...lanes.map((lane) => lane.agent.calls))
-  return (
-    <ul className="flex flex-col" aria-label="Agents">
-      {lanes.map(({ agent, depth }) => {
-        const main = depth === 0 && agent.label === 'main'
-        const selected = active === agent.label
-        const kind = subagentKindLabel(agent.kind)
-        return (
-          <li key={agent.label}>
-            <button
-              type="button"
-              aria-pressed={selected}
-              onClick={() => onSelect(selected ? undefined : agent.label)}
-              className={cn(
-                'flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40',
-                selected && 'bg-primary-soft/60 hover:bg-primary-soft/70',
-              )}
-              style={{ paddingLeft: `${0.625 + depth * 1.1}rem` }}
-            >
-              <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md border border-border bg-surface text-subtle-foreground">
-                {main ? <User className="size-3.5" /> : <CornerDownRight className="size-3.5" />}
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate font-mono text-[12.5px] font-medium">
-                    {agent.label}
-                  </span>
-                  {kind ? (
-                    <Badge tone="outline" size="sm">
-                      {kind}
-                    </Badge>
-                  ) : null}
-                  <span className="ml-auto shrink-0 font-mono text-[11.5px] text-muted-foreground tabular">
-                    {countText(agent.calls, 'call')}
-                  </span>
-                </span>
-                <span className="flex min-w-0 items-center gap-1.5 text-xs text-subtle-foreground">
-                  <span className="truncate">
-                    {main ? 'Main agent' : `Spawned by ${agent.parent || 'main'}`}
-                    {agent.id
-                      ? ` · #${agent.id.slice(0, 8)}`
-                      : agent.id === ''
-                        ? ' · id hidden'
-                        : ''}
-                  </span>
-                  <span className="ml-auto shrink-0 font-mono tabular">
-                    {formatRunCost(agent.cost)}
-                  </span>
-                </span>
-                {agent.models?.length ? (
-                  <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                    {agent.models.map((model) => (
-                      <ModelChip key={model} name={model} size={12} />
-                    ))}
-                  </span>
-                ) : null}
-                <MiniBar
-                  value={agent.calls}
-                  max={most}
-                  tone={main ? 'blue' : 'violet'}
-                  className="mt-0.5 h-1"
-                />
-              </span>
-            </button>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
-function CallMarkers({ markers }: { markers?: string[] }) {
-  if (!markers?.length) return <span className="text-xs text-subtle-foreground">—</span>
-  return (
-    <span className="inline-flex gap-1.5 text-xs">
-      {markers.map((marker) => (
-        <span key={marker} title={RUN_MARKER_LABELS[marker] ?? marker} data-marker={marker}>
-          {RUN_MARKER_GLYPHS[marker] ?? '•'}
-        </span>
-      ))}
-    </span>
-  )
-}
-
 function RunSkeleton() {
   return (
     <div className="flex flex-col gap-4" role="status" aria-label="Loading the run">
-      <Skeleton className="h-11 w-80" />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {Array.from({ length: 6 }, (_, index) => (
-          <Skeleton key={index} className="h-[68px] rounded-lg" />
-        ))}
+      <div className="flex items-start gap-3.5">
+        <Skeleton className="size-[38px] rounded-lg" />
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-6 w-80" />
+          <Skeleton className="h-4 w-96" />
+        </div>
       </div>
+      <Skeleton className="h-[86px] rounded-xl" />
       <Skeleton className="h-64 rounded-xl" />
+      <Skeleton className="h-72 rounded-xl" />
     </div>
   )
 }
 
-// One agent run: its agents as a tree and as lanes on a time axis, a step's
-// details on click, and every call in a table.
+/** The task a run was given, in full, beside the page. */
+function TaskSheet({
+  open,
+  onOpenChange,
+  title,
+  task,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  task: string
+}) {
+  return (
+    <DetailSheet open={open} onOpenChange={onOpenChange} size="lg">
+      <DetailSheetHeader
+        title="Task"
+        description={
+          <>
+            <span className="min-w-0 truncate">{title}</span>
+            <span aria-hidden>·</span>
+            <span className="shrink-0">{task.length.toLocaleString()} characters</span>
+          </>
+        }
+        actions={<CopyButton value={task} label="Copy the task" />}
+      />
+      <DetailSheetBody className="px-5 py-4">
+        <p className="mb-2 text-xs text-subtle-foreground">
+          The first prompt the main agent was given, as Replay kept it.
+        </p>
+        <div className="whitespace-pre-wrap break-words rounded-lg border border-border bg-surface-subtle px-4 py-3 text-[13px] leading-relaxed text-foreground">
+          {task}
+        </div>
+      </DetailSheetBody>
+    </DetailSheet>
+  )
+}
+
+const SIZE_ALL = 'all'
+
+// One agent run: a compact header, its figures, its calls as lanes on a time
+// axis that pages through long runs and folds idle time, and its calls,
+// agents and outcomes as tables a page at a time.
 function AgentRun() {
   const navigate = useNavigate()
+  const labels = useModelLabels()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session') ?? ''
+  const step = searchParams.get('step') ?? undefined
   const { response, error, unavailable, notFound, loading, load } = useRun(sessionId)
-  const lanes = useMemo(() => (response ? buildRunLanes(response) : []), [response])
-  const [segmentKey, setSegmentKey] = useState<string>()
-  const [callId, setCallId] = useState<string | undefined>(searchParams.get('step') ?? undefined)
-  const [agent, setAgent] = useState<string>()
+  const calls = useMemo(() => response?.calls ?? [], [response])
+  const total = calls.length
+  const numbers = useMemo(
+    () => new Map(calls.map((entry, index) => [entry.record_id, index + 1])),
+    [calls],
+  )
 
-  const segments = useMemo(() => lanes.flatMap((lane) => lane.segments), [lanes])
-  const segment =
-    segments.find((entry) => entry.key === segmentKey) ??
-    segments.find((entry) => entry.calls.some((call) => call.record_id === callId))
+  const [taskOpen, setTaskOpen] = useState(false)
+  const [tab, setTab] = useState('calls')
+  const [blockKey, setBlockKey] = useState<string>()
+  const [callId, setCallId] = useState<string | undefined>(step)
+  const [windowSize, setWindowSize] = useState<number>()
+  const [windowPage, setWindowPage] = useState<number>()
+  const [view, setView] = useState<Omit<CallsView, 'page'> & { page?: number }>({
+    agents: [],
+    markers: [],
+    size: DEFAULT_PAGE_SIZE,
+  })
+
+  // The timeline opens on the window that holds the step a link names, else the first.
+  const size = Math.min(windowSize ?? (total > TIMELINE_SIZE ? TIMELINE_SIZE : total), total) || 1
+  const pages = Math.max(1, Math.ceil(total / size))
+  const stepIndex = step ? (numbers.get(step) ?? 0) - 1 : -1
+  const windowAt = Math.min(windowPage ?? pageHolding(stepIndex, size), pages)
+  const from = (windowAt - 1) * size
+  const to = Math.min(total, from + size)
+  const timeline = useMemo(
+    () => (response ? buildRunTimeline(response, from, to) : null),
+    [from, response, to],
+  )
+  const blocks = useMemo(() => timeline?.lanes.flatMap((lane) => lane.blocks) ?? [], [timeline])
+  const block =
+    blocks.find((entry) => entry.key === blockKey) ??
+    blocks.find((entry) => entry.calls.some((one) => one.record_id === callId))
   const call =
-    segment?.calls.find((entry) => entry.record_id === callId) ??
-    (segment?.calls.length === 1 ? segment.calls[0] : undefined)
-  const selectSegment = (next: RunSegment) => {
-    setSegmentKey(next.key)
+    block?.calls.find((entry) => entry.record_id === callId) ??
+    (block?.calls.length === 1 ? block.calls[0] : undefined)
+
+  // The calls table opens on the page that holds the step a link names.
+  const filtered = useMemo(() => filterRunCalls(calls, view), [calls, view])
+  const callsPage =
+    view.page ??
+    pageHolding(
+      filtered.findIndex((entry) => entry.record_id === step),
+      view.size,
+    )
+
+  const selectBlock = (next: TimelineBlock) => {
+    setBlockKey(next.key)
     setCallId(next.calls.length === 1 ? next.calls[0].record_id : undefined)
   }
   const selectCall = (next: RunCall) => {
-    setSegmentKey(segments.find((entry) => entry.calls.includes(next))?.key)
+    setBlockKey(blocks.find((entry) => entry.calls.includes(next))?.key)
     setCallId(next.record_id)
   }
-
-  const calls = useMemo(
-    () => (response?.calls ?? []).filter((entry) => !agent || entry.agent === agent),
-    [agent, response],
-  )
-  const callIndex = useMemo(
-    () => new Map((response?.calls ?? []).map((entry, index) => [entry.record_id, index + 1])),
-    [response],
-  )
+  const showInTimeline = (next: RunCall) => {
+    const index = (numbers.get(next.record_id) ?? 1) - 1
+    setWindowPage(pageHolding(index, size))
+    setBlockKey(undefined)
+    setCallId(next.record_id)
+    document.getElementById('run-timeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const toggleAgent = (label: string) =>
+    setView((current) => ({
+      ...current,
+      page: 1,
+      agents: current.agents.includes(label)
+        ? current.agents.filter((agent) => agent !== label)
+        : [...current.agents, label],
+    }))
+  const followAgent = (label: string) => {
+    setView((current) => ({ ...current, page: 1, agents: [label] }))
+    setTab('calls')
+  }
 
   if (!sessionId || notFound) {
     return (
@@ -309,7 +328,7 @@ function AgentRun() {
     )
   }
 
-  if (!response) {
+  if (!response || !timeline) {
     return (
       <PageContainer>
         <BackLink />
@@ -326,157 +345,30 @@ function AgentRun() {
   }
 
   const run = response.run
+  const headline = runHeadline(run)
+  const task = run.prompt?.trim() ?? ''
   const subagents = run.agents.filter((entry) => entry.label !== 'main').length
+  const topModel = run.models[0]
+  const failures = (run.events?.failure ?? 0) + (run.events?.block ?? 0)
   const shownSession = displaySessionId(run.session_id)
-  const columns: Column<RunCall>[] = [
-    {
-      id: 'index',
-      header: '#',
-      width: '44px',
-      cell: (entry) => (
-        <span className="font-mono text-xs text-subtle-foreground tabular">
-          {callIndex.get(entry.record_id)}
-        </span>
-      ),
-    },
-    {
-      id: 'time',
-      header: 'Time',
-      width: '96px',
-      sortValue: (entry) => Date.parse(entry.timestamp),
-      cell: (entry) => (
-        <span
-          className="font-mono text-xs text-muted-foreground tabular"
-          title={formatDateTime(entry.timestamp)}
-        >
-          {new Date(entry.timestamp).toLocaleTimeString()}
-        </span>
-      ),
-    },
-    {
-      id: 'agent',
-      header: 'Agent',
-      cell: (entry) => (
-        <span className="inline-flex items-center gap-1.5 font-mono text-[12px]">
-          {entry.agent === 'main' ? (
-            <User className="size-3 text-subtle-foreground" />
-          ) : (
-            <CornerDownRight className="size-3 text-subtle-foreground" />
-          )}
-          {entry.agent}
-        </span>
-      ),
-    },
-    {
-      id: 'decision',
-      header: 'Decision',
-      hideBelow: 'lg',
-      cell: (entry) =>
-        entry.decision ? (
-          <InsightsDecisionBadge
-            decision={entry.decision}
-            label={formatInsightsDecisionName(entry.decision)}
-          />
-        ) : (
-          <span className="text-xs text-subtle-foreground">
-            {entry.request_kind ? entry.request_kind.replace(/_/g, ' ') : '—'}
-          </span>
-        ),
-    },
-    {
-      id: 'model',
-      header: 'Model',
-      className: 'max-w-0 w-full',
-      cell: (entry) => (
-        <span className="flex min-w-0 items-center gap-1.5">
-          <ModelChip name={entry.model} fallback="No model" className="text-[13px]" />
-          {entry.previous_model ? (
-            <span
-              className="truncate text-[11px] text-subtle-foreground"
-              title={`Switched from ${entry.previous_model}`}
-            >
-              from {entry.previous_model}
-            </span>
-          ) : null}
-          {entry.hops?.length ? (
-            <Badge tone="outline" size="sm" title="Looper hops this call made">
-              {countText(entry.hops.length, 'hop')}
-            </Badge>
-          ) : null}
-        </span>
-      ),
-    },
-    {
-      id: 'status',
-      header: 'Status',
-      cell: (entry) => (
-        <span
-          className={cn(
-            'font-mono text-xs',
-            entry.lifecycle_state === 'failed' || (entry.response_status ?? 0) >= 400
-              ? 'text-destructive-foreground'
-              : 'text-muted-foreground',
-          )}
-        >
-          {describeCallStatus(entry)}
-        </span>
-      ),
-    },
-    {
-      id: 'latency',
-      header: 'Latency',
-      align: 'right',
-      hideBelow: 'md',
-      sortValue: (entry) => entry.duration_ms,
-      cell: (entry) => (
-        <span className="font-mono text-xs tabular">{formatLatency(entry.duration_ms)}</span>
-      ),
-    },
-    {
-      id: 'tokens',
-      header: 'Tokens',
-      align: 'right',
-      hideBelow: 'lg',
-      cell: (entry) => (
-        <span className="font-mono text-xs tabular">
-          {formatTokenCount(entry.prompt_tokens)}
-          <span className="text-subtle-foreground"> / </span>
-          {formatTokenCount(entry.completion_tokens)}
-        </span>
-      ),
-    },
-    {
-      id: 'cost',
-      header: 'Cost',
-      align: 'right',
-      hideBelow: 'md',
-      sortValue: (entry) => entry.cost ?? -1,
-      cell: (entry) => (
-        <span className="font-mono text-xs tabular">
-          {entry.cost !== undefined ? formatInsightsCost(entry.cost, entry.currency) : '—'}
-        </span>
-      ),
-    },
-    {
-      id: 'events',
-      header: 'Events',
-      width: '72px',
-      cell: (entry) => <CallMarkers markers={entry.markers} />,
-    },
-  ]
+  const reportedCount = run.outcome.reported?.length ?? 0
 
   return (
     <PageContainer key={run.session_id}>
       <BackLink />
       <PageHeader
-        icon={<IconTile icon={Bot} tone="blue" size="lg" />}
+        className="mb-5"
+        icon={<HarnessLogo harness={run.harness} size={24} framed className="mt-0.5" />}
         title={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <span title={run.prompt}>{runTitle(run)}</span>
-            <RunStatus run={run} />
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="min-w-0 truncate" title={run.session_name || undefined}>
+              {headline}
+            </span>
+            <span className="shrink-0 text-[13px] font-normal tracking-normal">
+              <RunStatus run={run} />
+            </span>
           </span>
         }
-        description={`${countText(run.calls, 'call')} by ${subagents === 0 ? 'the main agent' : `the main agent and ${countText(subagents, 'subagent')}`}, over ${formatLatency(run.duration_ms)}.`}
         meta={
           <>
             <MetaItem>
@@ -485,13 +377,24 @@ function AgentRun() {
             <MetaItem label="Session">
               <span className="inline-flex items-center gap-1">
                 <span className="font-mono" title={run.session_id}>
-                  {shownSession}
+                  {compactIdentifier(shownSession, 10, 8)}
                 </span>
                 <CopyButton value={run.session_id} label="Copy session ID" className="size-6" />
               </span>
             </MetaItem>
             <MetaItem icon={<Clock />}>{formatDateTime(run.started_at)}</MetaItem>
             {run.events ? <RunEvents events={run.events} /> : null}
+            {task ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                className="-ml-1.5 h-6 text-muted-foreground"
+                onClick={() => setTaskOpen(true)}
+              >
+                <FileText />
+                Read the task
+              </Button>
+            ) : null}
           </>
         }
         actions={
@@ -515,20 +418,33 @@ function AgentRun() {
                   <ShieldCheck />
                   Approval reviews
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={() => {
                     void navigator.clipboard?.writeText(window.location.href).catch(() => undefined)
                     toast.success('Link copied')
                   }}
                 >
-                  <ListTree />
+                  <Link2 />
                   Copy link
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    void navigator.clipboard?.writeText(run.session_id).catch(() => undefined)
+                    toast.success('Session ID copied', { description: run.session_id })
+                  }}
+                >
+                  <Copy />
+                  Copy session ID
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </>
         }
       />
+      {task ? (
+        <TaskSheet open={taskOpen} onOpenChange={setTaskOpen} title={headline} task={task} />
+      ) : null}
       {error ? (
         <InsightsLoadError
           title="The run could not refresh"
@@ -537,130 +453,181 @@ function AgentRun() {
         />
       ) : null}
 
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <MiniStat label="Model calls" value={run.calls} />
-        <MiniStat
-          label="Agents"
-          value={run.agents.length}
-          hint={subagents ? countText(subagents, 'subagent') : 'Main agent only'}
+      <SummaryStrip label="Run figures" className="mb-5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        <SummaryTile
+          label="Duration"
+          icon={<Timer className="text-chart-1" />}
+          value={formatRunDuration(run.duration_ms)}
+          hint="First call to last"
         />
-        <MiniStat label="Duration" value={formatLatency(run.duration_ms)} />
-        <MiniStat
+        <SummaryTile
+          label="Calls"
+          icon={<Zap className="text-chart-2" />}
+          value={run.calls.toLocaleString()}
+          hint={failures ? `${failures.toLocaleString()} failed or blocked` : 'None failed'}
+          tone={failures ? 'negative' : undefined}
+        />
+        <SummaryTile
+          label="Agents"
+          icon={<Bot className="text-chart-3" />}
+          value={run.agents.length.toLocaleString()}
+          hint={subagents ? `Main and ${countText(subagents, 'subagent')}` : 'Main agent only'}
+        />
+        <SummaryTile
+          label="Models"
+          icon={<MessagesSquare className="text-chart-4" />}
+          value={run.models.length.toLocaleString()}
+          hint={
+            topModel
+              ? `Mostly ${modelLabel(labels, topModel.name) || topModel.name}`
+              : 'No model answered'
+          }
+        />
+        <SummaryTile
           label="Cost"
+          icon={<CircleDollarSign className="text-chart-6" />}
           value={formatRunCost(run.cost)}
           hint={
             run.cost.by_currency?.some((entry) => entry.router_call_spend > 0)
               ? 'Router calls included'
-              : undefined
+              : 'Configured-rate estimate'
           }
         />
-        <MiniStat
+        <SummaryTile
           label="Tokens"
-          value={
-            <span>
-              {formatTokenCount(run.cost.prompt_tokens)}
-              <span className="text-subtle-foreground"> / </span>
-              {formatTokenCount(run.cost.completion_tokens)}
-            </span>
-          }
+          icon={<MessagesSquare className="text-chart-5" />}
+          value={`${formatTokenCount(run.cost.prompt_tokens)} / ${formatTokenCount(run.cost.completion_tokens)}`}
           hint="Input / output"
         />
-        <MiniStat
-          label="Tool results"
-          value={run.outcome.tool_results}
-          hint={run.outcome.tool_failures ? `${run.outcome.tool_failures} failed` : 'None failed'}
-        />
-      </div>
+      </SummaryStrip>
 
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Timeline</CardTitle>
-            <CardDescription>
-              One lane per agent; a block is a stretch of calls on one model. Click one for its
-              calls.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <RunDiagram
-              run={run}
-              lanes={lanes}
-              selected={segment?.key}
-              activeAgent={agent}
-              onSelect={selectSegment}
-            />
-            <RunLegend run={run} />
-            {segment || call ? (
-              <div className="border-t border-border pt-4">
-                {segment ? (
-                  <RunSegmentPanel segment={segment} call={call} onSelectCall={selectCall} />
-                ) : call ? (
-                  <RunCallDetails call={call} />
-                ) : null}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-        <div className="flex min-w-0 flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Agents</CardTitle>
-              <CardDescription>Click an agent to follow its calls</CardDescription>
-            </CardHeader>
-            <CardContent className="px-2.5 pt-2">
-              <AgentTree lanes={lanes} active={agent} onSelect={setAgent} />
-            </CardContent>
-          </Card>
-          {run.outcome.reported?.length ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Reported outcomes</CardTitle>
-                <CardDescription>
-                  Outcomes clients reported for the run&apos;s calls
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-1.5 pt-3 text-[13px]">
-                {run.outcome.reported.map(({ record_id: recordId, outcome }, index) => (
-                  <Link
-                    key={`${recordId}-${index}`}
-                    to={getInsightsRecordPath(recordId)}
-                    className="flex items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-surface-subtle"
-                  >
-                    <span className="truncate">{outcome.source}</span>
-                    <Badge tone="neutral" size="sm">
-                      {outcome.verdict}
-                    </Badge>
-                  </Link>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
-        </div>
-        <section aria-label="Calls" className="flex min-w-0 flex-col gap-2 xl:col-span-2">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-[15px] font-semibold tracking-[-0.012em]">Calls</h2>
-              <p className="text-[13px] text-muted-foreground">
-                {agent
-                  ? `${countText(calls.length, 'call')} by ${agent}`
-                  : 'Every routed call of the run, in time order'}
-              </p>
-            </div>
-            {agent ? (
-              <Button variant="ghost" size="sm" onClick={() => setAgent(undefined)}>
-                Show every agent
+      <Card id="run-timeline" className="mb-5 scroll-mt-6">
+        <CardHeader>
+          <CardTitle>Timeline</CardTitle>
+          <CardDescription>
+            One lane per agent; a block is a stretch of calls on one model. Click a block for its
+            calls, an agent to follow its calls below.
+          </CardDescription>
+          {total > TIMELINE_SIZES[0] ? (
+            <CardAction className="gap-2 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start">
+              <span className="whitespace-nowrap text-xs text-subtle-foreground tabular">
+                Calls {(from + 1).toLocaleString()}–{to.toLocaleString()} of{' '}
+                {total.toLocaleString()}
+              </span>
+              <Button
+                variant="outline"
+                size="icon-xs"
+                aria-label="Earlier calls"
+                disabled={windowAt <= 1}
+                onClick={() => setWindowPage(windowAt - 1)}
+              >
+                <ChevronLeft />
               </Button>
-            ) : null}
-          </div>
-          <DataTable
-            data={calls}
-            columns={columns}
-            getRowId={(entry) => entry.record_id}
-            activeRowId={call?.record_id}
-            onRowClick={(entry) => navigate(getInsightsRecordPath(entry.record_id))}
+              <Button
+                variant="outline"
+                size="icon-xs"
+                aria-label="Later calls"
+                disabled={windowAt >= pages}
+                onClick={() => setWindowPage(windowAt + 1)}
+              >
+                <ChevronRight />
+              </Button>
+              <Select
+                value={size >= total ? SIZE_ALL : String(size)}
+                onValueChange={(value) => {
+                  const next = value === SIZE_ALL ? total : Number(value)
+                  setWindowSize(next)
+                  setWindowPage(pageHolding(from, next))
+                }}
+              >
+                <SelectTrigger size="sm" aria-label="Calls in view" className="h-7 px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {TIMELINE_SIZES.filter((option) => option < total).map((option) => (
+                    <SelectItem key={option} value={String(option)}>
+                      {option} calls
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={SIZE_ALL}>All {total.toLocaleString()} calls</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardAction>
+          ) : null}
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <RunDiagram
+            run={run}
+            timeline={timeline}
+            selected={block?.key}
+            agents={view.agents}
+            onSelect={selectBlock}
+            onAgent={toggleAgent}
           />
-        </section>
-      </div>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+            <RunLegend run={run} />
+            <span className="text-xs text-subtle-foreground tabular">
+              {formatRunDuration(timeline.activeMs)} of activity in view
+              {timeline.breaks.length === 1 ? ' · 1 idle stretch folded' : ''}
+              {timeline.breaks.length > 1
+                ? ` · ${timeline.breaks.length} idle stretches folded`
+                : ''}
+            </span>
+          </div>
+          {block ? (
+            <div className="border-t border-border pt-4">
+              <RunSegmentPanel
+                segment={block}
+                call={call}
+                numbers={numbers}
+                onSelectCall={selectCall}
+              />
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Tabs value={tab} onValueChange={setTab} variant="line">
+        <TabsList aria-label="Run details">
+          <TabsTrigger value="calls">
+            Calls
+            <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] text-muted-foreground">
+              {total.toLocaleString()}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="agents">
+            Agents
+            <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] text-muted-foreground">
+              {run.agents.length.toLocaleString()}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="outcomes">
+            Outcomes
+            {reportedCount ? (
+              <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] text-muted-foreground">
+                {reportedCount.toLocaleString()}
+              </span>
+            ) : null}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="calls">
+          <RunCallsPanel
+            run={run}
+            calls={calls}
+            numbers={numbers}
+            view={{ ...view, page: callsPage }}
+            onView={(patch) => setView((current) => ({ ...current, page: callsPage, ...patch }))}
+            activeId={call?.record_id ?? step}
+            onShow={showInTimeline}
+          />
+        </TabsContent>
+        <TabsContent value="agents">
+          <RunAgentsPanel run={run} onFollow={followAgent} />
+        </TabsContent>
+        <TabsContent value="outcomes">
+          <RunOutcomesPanel run={run} calls={calls} numbers={numbers} />
+        </TabsContent>
+      </Tabs>
     </PageContainer>
   )
 }

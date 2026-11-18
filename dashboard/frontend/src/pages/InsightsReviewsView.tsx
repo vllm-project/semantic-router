@@ -1,15 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 
 import { Card, Skeleton } from '../ui'
 
 import { InsightsLoadError, InsightsUnavailable, LiveToggle, Pager } from './InsightsDisplay'
-import { insightsUnavailableReason, type InsightsUnavailableReason } from './insightsPageApi'
-import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
-import type {
-  InsightsAggregateResponse,
-  InsightsListResponse,
-  InsightsRecord,
-} from './insightsPageTypes'
+import { DEFAULT_PAGE_SIZE, useLivePolling, useReplayRead } from './insightsListData'
+import type { InsightsAggregateResponse, InsightsListResponse } from './insightsPageTypes'
 import {
   buildReviewQueryString,
   EMPTY_REVIEW_FILTERS,
@@ -17,80 +12,53 @@ import {
 } from './insightsReviewSupport'
 import InsightsReviewsTable from './InsightsReviewsTable'
 
-const reviewPageSize = 25
 const sessionDebounceMs = 300
+const LIVE_INTERVAL_MS = 5_000
+const SUMMARY_INTERVAL_MS = 60_000
+const REPLAYS = '/api/router/api/v1/observability/replays'
 const InsightsReviewCharts = lazy(() => import('../components/InsightsReviewCharts'))
 
-interface ReviewData {
-  records: InsightsRecord[]
-  total: number
-  aggregate: InsightsAggregateResponse | null
-  error: string | null
-  unavailable?: InsightsUnavailableReason
-  loading: boolean
-}
-
-// Loads one page of reviews and the summary of every review the filters
-// select, dropping answers to superseded requests.
-function useReviewData(filters: ReviewFilters, page: number, autoRefresh: boolean) {
-  const [data, setData] = useState<ReviewData>({
-    records: [],
-    total: 0,
-    aggregate: null,
-    error: null,
-    loading: true,
+// One page of reviews and the summary of every review the filters select,
+// each loaded on its own; while live the page refreshes every few seconds and
+// the summary once a minute.
+function useReviewData(
+  filters: ReviewFilters,
+  page: number,
+  pageSize: number,
+  live: boolean,
+  held: boolean,
+) {
+  const scope = buildReviewQueryString(filters)
+  const list = useReplayRead<InsightsListResponse>(
+    `${REPLAYS}${buildReviewQueryString(filters, { limit: pageSize, offset: (page - 1) * pageSize })}`,
+    'approval reviews',
+    `${scope}|${page}|${pageSize}`,
+  )
+  const summary = useReplayRead<InsightsAggregateResponse>(
+    `${REPLAYS}/aggregate${scope}`,
+    'review summary',
+    scope,
+  )
+  useLivePolling(live && !held, LIVE_INTERVAL_MS, () => {
+    list.reload()
+    if (Date.now() - summary.requestedAt >= SUMMARY_INTERVAL_MS) summary.reload()
   })
-  const abortRef = useRef<AbortController | null>(null)
-  const refresh = useCallback(async () => {
-    abortRef.current?.abort()
-    const abort = new AbortController()
-    abortRef.current = abort
-    setData((current) => ({ ...current, loading: true }))
-    const base = '/api/router/api/v1/observability/replays'
-    try {
-      const [list, aggregate] = await Promise.all([
-        fetchAbortableInsightsJSON<InsightsListResponse>(
-          `${base}${buildReviewQueryString(filters, { limit: reviewPageSize, offset: (page - 1) * reviewPageSize })}`,
-          'approval reviews',
-          abort.signal,
-        ),
-        fetchAbortableInsightsJSON<InsightsAggregateResponse>(
-          `${base}/aggregate${buildReviewQueryString(filters)}`,
-          'review summary',
-          abort.signal,
-        ),
-      ])
-      setData({
-        records: list.data || [],
-        total: typeof list.total === 'number' ? list.total : list.count,
-        aggregate,
-        error: null,
-        loading: false,
-      })
-    } catch (err) {
-      if (isAbortError(err)) return
-      const unavailable = insightsUnavailableReason(err)
-      setData({
-        records: [],
-        total: 0,
-        aggregate: null,
-        error: unavailable ? null : err instanceof Error ? err.message : 'Unknown error',
-        unavailable,
-        loading: false,
-      })
-    }
-  }, [filters, page])
-
-  useEffect(() => {
-    void refresh()
-    const interval = autoRefresh ? window.setInterval(() => void refresh(), 5000) : undefined
-    return () => {
-      window.clearInterval(interval)
-      abortRef.current?.abort()
-    }
-  }, [autoRefresh, refresh])
-
-  return { ...data, refresh }
+  const { reload: reloadList } = list
+  const { reload: reloadSummary } = summary
+  const refresh = useCallback(() => {
+    reloadList()
+    reloadSummary()
+  }, [reloadList, reloadSummary])
+  const data = list.data
+  return {
+    records: data?.data ?? [],
+    total: data ? (typeof data.total === 'number' ? data.total : data.count) : 0,
+    aggregate: summary.stale ? null : summary.data,
+    error: list.error ?? summary.error,
+    unavailable: list.unavailable ?? summary.unavailable,
+    loading: list.loading && (data === null || list.stale),
+    refresh,
+  }
 }
 
 export default function InsightsReviewsView({ initialSession = '' }: { initialSession?: string }) {
@@ -100,11 +68,15 @@ export default function InsightsReviewsView({ initialSession = '' }: { initialSe
   })
   const [sessionInput, setSessionInput] = useState(initialSession)
   const [page, setPage] = useState(1)
-  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
+  const [live, setLive] = useState(true)
+  const [held, setHeld] = useState(false)
   const { records, total, aggregate, error, unavailable, loading, refresh } = useReviewData(
     filters,
     page,
-    autoRefresh,
+    pageSize,
+    live,
+    held,
   )
 
   useEffect(() => {
@@ -125,7 +97,7 @@ export default function InsightsReviewsView({ initialSession = '' }: { initialSe
   if (unavailable) {
     return (
       <Card className="border-dashed shadow-none">
-        <InsightsUnavailable reason={unavailable} noun="reviews" onRetry={() => void refresh()} />
+        <InsightsUnavailable reason={unavailable} noun="reviews" onRetry={refresh} />
       </Card>
     )
   }
@@ -133,40 +105,47 @@ export default function InsightsReviewsView({ initialSession = '' }: { initialSe
   return (
     <>
       {error ? (
-        <InsightsLoadError
-          title="Reviews could not load"
-          message={error}
-          onRetry={() => void refresh()}
-        />
+        <InsightsLoadError title="Reviews could not load" message={error} onRetry={refresh} />
       ) : null}
       {aggregate?.reviews ? (
         <Suspense fallback={<Skeleton className="mb-4 h-40 w-full rounded-xl" />}>
           <InsightsReviewCharts reviews={aggregate.reviews} />
         </Suspense>
       ) : null}
-      <InsightsReviewsTable
-        records={records}
-        total={total}
-        filters={filters}
-        sessionInput={sessionInput}
-        modelOptions={aggregate?.available_review_models ?? []}
-        hasReviews={total > 0 || Boolean(aggregate?.available_review_models?.length) || loading}
-        loading={loading}
-        onSessionInput={setSessionInput}
-        onFilterChange={onFilterChange}
-        actions={
-          <>
+      <div onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)}>
+        <InsightsReviewsTable
+          records={records}
+          total={total}
+          filters={filters}
+          sessionInput={sessionInput}
+          modelOptions={aggregate?.available_review_models ?? []}
+          hasReviews={total > 0 || Boolean(aggregate?.available_review_models?.length) || loading}
+          loading={loading}
+          onSessionInput={setSessionInput}
+          onFilterChange={onFilterChange}
+          actions={
             <LiveToggle
-              live={autoRefresh}
+              live={live}
+              held={held}
               onLiveChange={(next) => {
-                setAutoRefresh(next)
-                if (next) void refresh()
+                setLive(next)
+                if (next) refresh()
               }}
             />
-          </>
-        }
+          }
+        />
+      </div>
+      <Pager
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        noun="review"
+        onPage={setPage}
+        onPageSize={(next) => {
+          setPageSize(next)
+          setPage(1)
+        }}
       />
-      <Pager page={page} pageSize={reviewPageSize} total={total} noun="review" onPage={setPage} />
     </>
   )
 }

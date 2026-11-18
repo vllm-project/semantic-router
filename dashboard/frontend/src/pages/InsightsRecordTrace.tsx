@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { CheckCircle2, ChevronDown, OctagonAlert, Wrench } from 'lucide-react'
 
 import MarkdownRenderer from '../components/MarkdownRenderer'
@@ -14,7 +14,9 @@ import {
 } from '../ui'
 
 import { buildConversationLabels } from './insightsConversationIdentity'
+import { Pager } from './InsightsDisplay'
 import { CHEVRON, DETAIL, RAW } from './insightsEvidenceStyles'
+import { pageHolding, pageOf } from './insightsListData'
 import type {
   InsightsRecord,
   InsightsTrajectory,
@@ -37,6 +39,10 @@ interface TraceTurn {
 
 const NOTE = 'text-[11px] text-subtle-foreground'
 
+// The turns a page of the conversation shows; a long session pages through
+// them from the page that holds the record's own turn.
+const TURNS_PAGE = 20
+
 export default function InsightsRecordTrace({
   record,
   trajectory,
@@ -48,6 +54,21 @@ export default function InsightsRecordTrace({
     [record, trajectory],
   )
   const turns = useMemo(() => groupTraceTurns(messages), [messages])
+  const [page, setPage] = useState<number>()
+  const shown = pageOf(
+    turns,
+    page ??
+      pageHolding(
+        turns.findIndex(
+          (turn) =>
+            turn.index === record.turn_index &&
+            turn.conversationId === (record.conversation_id ?? ''),
+        ),
+        TURNS_PAGE,
+      ),
+    TURNS_PAGE,
+  )
+  const offset = (shown.page - 1) * TURNS_PAGE
   const conversationLabels = useMemo(
     () => buildConversationLabels([...(trajectory?.routes ?? []), ...messages]),
     [trajectory, messages],
@@ -84,7 +105,8 @@ export default function InsightsRecordTrace({
         ) : null}
 
         {!loading && !error && turns.length > 0
-          ? turns.map((turn, turnPosition) => {
+          ? shown.rows.map((turn, position) => {
+              const turnPosition = offset + position
               const turnToolCount = turn.messages.reduce(
                 (count, message) => count + (message.tool_calls?.length ?? 0),
                 0,
@@ -127,6 +149,16 @@ export default function InsightsRecordTrace({
               )
             })
           : null}
+        {!loading && !error && turns.length > TURNS_PAGE ? (
+          <Pager
+            className="mt-1"
+            page={shown.page}
+            pageSize={TURNS_PAGE}
+            total={turns.length}
+            noun="turn"
+            onPage={setPage}
+          />
+        ) : null}
       </CardContent>
     </Card>
   )

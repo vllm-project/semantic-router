@@ -17,10 +17,12 @@ import {
   Copy,
   Filter,
   GitBranch,
+  Info,
   ListTree,
   MessagesSquare,
   PanelRightOpen,
   PiggyBank,
+  RefreshCw,
   Workflow,
   X,
   Zap,
@@ -77,10 +79,13 @@ import {
   LiveToggle,
   Pager,
   RelativeTime,
+  SummaryStrip,
+  SummaryTile,
 } from './InsightsDisplay'
 import { moreCurrenciesLabel, spendSummary } from './homeSupport'
 import { HarnessLogo, ToolChips } from './InsightsHarness'
-import { API_CLIENT_LABEL, harnessInfo, sortHarnessIds } from './insightsHarness'
+import { API_CLIENT_LABEL, harnessInfo, PRIMARY_HARNESSES, sortHarnessIds } from './insightsHarness'
+import { readPage, readPageSize, writePage } from './insightsListData'
 import { ModelChip, modelText, useModelLabels } from './insightsModelLabelSupport'
 import {
   formatInsightsDecisionName,
@@ -94,18 +99,19 @@ import {
   countFacet,
   hasAnyFilter,
   hasClientFilters,
+  RANGE_TEXT,
   readRequestFilters,
   recordClientFilterValue,
-  REQUESTS_PAGE_SIZE,
-  useRecentRuns,
+  REQUEST_RANGES,
+  REQUEST_WINDOW_SIZE,
+  useAnyRecord,
   useRequestsData,
   writeRequestFilters,
   type RequestFilters,
-  type RequestRange,
 } from './insightsRequestsData'
 import { compactID } from './insightsReviewSupport'
-import { countText, getRunPath } from './insightsRunSupport'
-import type { RunSummary } from './insightsRunTypes'
+import { useSessionRun } from './insightsRunsData'
+import { getRunPath, oneLine, runHeadline } from './insightsRunSupport'
 
 const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
 
@@ -126,37 +132,7 @@ function copyText(value: string, label: string) {
 
 // ---------------------------------------------------------------- summary
 
-function SummaryTile({
-  label,
-  icon,
-  value,
-  hint,
-  tone,
-}: {
-  label: string
-  icon: ReactNode
-  value: ReactNode
-  hint?: ReactNode
-  tone?: 'negative'
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5 px-4 py-3">
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
-        {icon}
-        {label}
-      </span>
-      <span
-        className={cn(
-          'truncate text-lg font-semibold leading-none tracking-[-0.02em] tabular',
-          tone === 'negative' && 'text-destructive-foreground',
-        )}
-      >
-        {value}
-      </span>
-      {hint ? <span className="truncate text-[11.5px] text-subtle-foreground">{hint}</span> : null}
-    </div>
-  )
-}
+const SUMMARY_GRID = 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto]'
 
 function spendOf(aggregate: InsightsAggregateResponse) {
   const lead = spendSummary(aggregate)
@@ -173,30 +149,64 @@ function spendOf(aggregate: InsightsAggregateResponse) {
   }
 }
 
+function SummarySkeleton() {
+  return (
+    <SummaryStrip label="Loading the totals" className={SUMMARY_GRID}>
+      {Array.from({ length: 5 }, (_, index) => (
+        <div key={index} className="flex flex-col gap-1.5 px-4 py-3">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-[18px] w-24" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+      ))}
+      <span aria-hidden className="max-xl:hidden" />
+    </SummaryStrip>
+  )
+}
+
+// The totals of every request the server filters select, loaded on their own:
+// the list never waits for them.
 function RequestsSummary({
   aggregate,
   loading,
+  error,
+  onRetry,
   breakdown,
   onBreakdown,
   clientFiltered,
 }: {
   aggregate: InsightsAggregateResponse | null
   loading: boolean
+  error: string | null
+  onRetry: () => void
   breakdown: boolean
   onBreakdown: (open: boolean) => void
   clientFiltered: boolean
 }) {
   if (!aggregate) {
+    if (error && !loading) {
+      return (
+        <section aria-label="Requests summary" className="mb-4">
+          <Card className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 shadow-none">
+            <span className="flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
+              <AlertTriangle className="size-4 shrink-0 text-warning" />
+              <span className="min-w-0 truncate" title={error}>
+                The totals could not load: {error}
+              </span>
+            </span>
+            <Button size="xs" variant="outline" onClick={onRetry}>
+              <RefreshCw />
+              Retry
+            </Button>
+          </Card>
+        </section>
+      )
+    }
     if (!loading) return null
     return (
-      <Card className="mb-4 grid grid-cols-2 gap-px overflow-hidden sm:grid-cols-3 lg:grid-cols-5">
-        {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className="flex flex-col gap-2 px-4 py-3">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-5 w-24" />
-          </div>
-        ))}
-      </Card>
+      <section aria-label="Requests summary" aria-busy className="mb-4">
+        <SummarySkeleton />
+      </section>
     )
   }
   const lifecycle = aggregate.lifecycle
@@ -205,7 +215,7 @@ function RequestsSummary({
   const tokens = aggregate.token_volume
   return (
     <section aria-label="Requests summary" className="mb-4">
-      <Card className="grid grid-cols-2 gap-px overflow-hidden bg-border sm:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto] [&>*]:bg-card">
+      <SummaryStrip label="Totals" className={SUMMARY_GRID}>
         <SummaryTile
           label="Requests"
           icon={<Zap className="text-chart-1" />}
@@ -256,7 +266,7 @@ function RequestsSummary({
             Breakdown
           </Button>
         </div>
-      </Card>
+      </SummaryStrip>
       {clientFiltered ? (
         <p className="mt-1.5 text-[11.5px] text-subtle-foreground">
           Totals cover every client and request class the other filters select.
@@ -340,13 +350,13 @@ function ClientCell({
   )
 }
 
+// A session reads by the name its harness gave it when this record carries
+// one, else by its id; the run page holds the rest.
 function SessionCell({
   record,
-  run,
   onFilter,
 }: {
   record: InsightsRecord
-  run?: RunSummary
   onFilter: (session: string) => void
 }) {
   const session = record.session_id
@@ -365,7 +375,7 @@ function SessionCell({
       </div>
     )
   }
-  const title = run?.session_name || record.session_name
+  const title = record.session_name ? oneLine(record.session_name) : ''
   const shown = displaySessionId(session)
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
@@ -432,13 +442,6 @@ function single(selected: string[], current: string): string {
   return selected.filter((value) => value !== current).pop() ?? ''
 }
 
-const RANGE_OPTIONS: { value: RequestRange; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: '1h', label: '1h' },
-  { value: '24h', label: '24h' },
-  { value: '7d', label: '7d' },
-]
-
 function ActiveChip({
   label,
   value,
@@ -454,22 +457,39 @@ function ActiveChip({
 }) {
   return (
     <span
-      className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border border-border bg-surface pl-2 pr-1 text-xs shadow-xs"
+      className="inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-md border border-border bg-surface pl-2 pr-1 text-xs shadow-xs"
       title={title}
     >
-      <span className="text-subtle-foreground">{label}</span>
-      <span className="truncate font-medium text-foreground">{value}</span>
+      <span className="shrink-0 text-subtle-foreground">{label}</span>
+      <span className="min-w-0 max-w-[420px] truncate font-medium text-foreground">{value}</span>
       {action}
       <button
         type="button"
         aria-label={`Clear ${label.toLowerCase()} filter`}
         onClick={onClear}
-        className="grid size-5 place-items-center rounded text-subtle-foreground hover:bg-accent hover:text-foreground"
+        className="grid size-5 shrink-0 place-items-center rounded text-subtle-foreground hover:bg-accent hover:text-foreground"
       >
         <X className="size-3.5" />
       </button>
     </span>
   )
+}
+
+/** What the client and class filters read, said whenever one is on. */
+function windowNote(data: {
+  windowLoaded: boolean
+  window: InsightsRecord[]
+  windowTotal: number
+  range: RequestFilters['range']
+}): string {
+  const range = RANGE_TEXT[data.range]
+  if (!data.windowLoaded) {
+    return `Client and class filters run in your browser over the newest ${REQUEST_WINDOW_SIZE} requests ${range}.`
+  }
+  if (data.windowTotal > data.window.length) {
+    return `Client and class filters run in your browser over the newest ${formatInsightsCount(data.window.length)} of ${formatInsightsCount(data.windowTotal)} requests ${range}. Narrow the time range or add a filter to cover them all.`
+  }
+  return `Client and class filters run in your browser over all ${formatInsightsCount(data.windowTotal)} requests ${range}.`
 }
 
 // ---------------------------------------------------------------- view
@@ -478,23 +498,35 @@ export default function InsightsRequestsView() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const filters = useMemo(() => readRequestFilters(params), [params])
-  const page = Math.max(1, Number(params.get('page')) || 1)
+  const page = readPage(params)
+  const pageSize = readPageSize(params)
   const { agentRules, modelProviders } = useInsightsConfig()
   const labels = useModelLabels()
   const [live, setLive] = useState(true)
   const [held, setHeld] = useState(false)
+  // the newest records load for the client and class counts once a filter control is reached for
+  const [facets, setFacets] = useState(false)
   const [breakdown, setBreakdown] = useState(readBreakdown)
   const [searchDraft, setSearchDraft] = useState(filters.search)
-  const [runsKey, setRunsKey] = useState(0)
   const now = useNow(live ? 5_000 : 30_000)
 
-  const data = useRequestsData({ filters, page, live, held, rules: agentRules })
-  // new requests can open sessions, so the run titles follow the window
-  const runs = useRecentRuns(
-    data.window.some((record) => record.session_id),
-    `${runsKey}:${data.window[0]?.id ?? ''}`,
-  )
+  const data = useRequestsData({
+    filters,
+    page,
+    pageSize,
+    live,
+    held,
+    rules: agentRules,
+    withWindow: facets,
+  })
   const clientMode = hasClientFilters(filters)
+  const narrowed = hasAnyFilter(filters)
+  const sessionRun = useSessionRun(filters.session || undefined)
+  const quiet =
+    !data.loading && !narrowed && data.total === 0 && !data.listError && !data.unavailable
+  const anyRecord = useAnyRecord(quiet && filters.range !== 'all')
+  const onboarding = quiet && (filters.range === 'all' || anyRecord === false)
+  const wantFacets = () => setFacets(true)
 
   const update = useCallback(
     (patch: Partial<RequestFilters>) =>
@@ -514,6 +546,14 @@ export default function InsightsRequestsView() {
     searchTimer.current = window.setTimeout(() => update({ search: value.trim() }), 300)
   }
 
+  // a page past the end, as when the records it held expired, goes to the last one
+  const pages = Math.max(1, Math.ceil(data.total / pageSize))
+  useEffect(() => {
+    if (!data.loading && !data.stale && data.total > 0 && page > pages) {
+      setParams((current) => writePage(current, pages), { replace: true })
+    }
+  }, [data.loading, data.stale, data.total, page, pages, setParams])
+
   const setBreakdownOpen = (open: boolean) => {
     setBreakdown(open)
     try {
@@ -521,11 +561,6 @@ export default function InsightsRequestsView() {
     } catch {
       // the choice lasts for this page only
     }
-  }
-
-  const refresh = () => {
-    data.refresh()
-    setRunsKey((key) => key + 1)
   }
 
   const harnessCounts = useMemo(
@@ -536,32 +571,35 @@ export default function InsightsRequestsView() {
     () => countFacet(data.window, (record) => requestClassOf(record, agentRules)),
     [agentRules, data.window],
   )
+  const counted = data.windowLoaded
+  // Before the newest records load, every harness the Router identifies is offered.
   const harnessOptions: FilterOption[] = useMemo(() => {
-    const ids = sortHarnessIds(
-      [...harnessCounts.keys(), ...filters.harness].filter((id) => id !== API_CLIENT_FILTER),
-    )
-    const options = ids.map((id) => ({
+    const seen = counted ? [...harnessCounts.keys()] : [...PRIMARY_HARNESSES, API_CLIENT_FILTER]
+    const shown = new Set([...seen, ...filters.harness])
+    const options: FilterOption[] = sortHarnessIds(
+      [...shown].filter((id) => id !== API_CLIENT_FILTER),
+    ).map((id) => ({
       value: id,
       label: harnessInfo(id)?.label ?? id,
       icon: <HarnessLogo harness={id} size={14} />,
-      count: harnessCounts.get(id) ?? 0,
+      count: counted ? (harnessCounts.get(id) ?? 0) : undefined,
     }))
-    if (harnessCounts.has(API_CLIENT_FILTER) || filters.harness.includes(API_CLIENT_FILTER)) {
+    if (shown.has(API_CLIENT_FILTER)) {
       options.push({
         value: API_CLIENT_FILTER,
         label: API_CLIENT_LABEL,
         icon: <HarnessLogo harness={undefined} size={14} />,
-        count: harnessCounts.get(API_CLIENT_FILTER) ?? 0,
+        count: counted ? (harnessCounts.get(API_CLIENT_FILTER) ?? 0) : undefined,
       })
     }
     return options
-  }, [filters.harness, harnessCounts])
+  }, [counted, filters.harness, harnessCounts])
   const classOptions: FilterOption[] = REQUEST_CLASSES.filter(
-    (value) => classCounts.has(value) || filters.classes.includes(value),
+    (value) => !counted || classCounts.has(value) || filters.classes.includes(value),
   ).map((value) => ({
     value,
     label: REQUEST_CLASS_LABELS[value],
-    count: classCounts.get(value) ?? 0,
+    count: counted ? (classCounts.get(value) ?? 0) : undefined,
   }))
 
   const aggregate = data.aggregate
@@ -602,11 +640,7 @@ export default function InsightsRequestsView() {
       className: 'w-full max-w-0 min-w-[180px]',
       cell: (row) => (
         <Dim on={requestClassOf(row, agentRules) === 'housekeeping'}>
-          <SessionCell
-            record={row}
-            run={row.session_id ? runs.get(row.session_id) : undefined}
-            onFilter={(session) => update({ session })}
-          />
+          <SessionCell record={row} onFilter={(session) => update({ session })} />
         </Dim>
       ),
     },
@@ -710,55 +744,65 @@ export default function InsightsRequestsView() {
     },
   ]
 
-  const unfilteredEmpty =
-    !data.loading && !hasAnyFilter(filters) && data.total === 0 && !data.unavailable && !data.error
-  const windowNote =
-    clientMode && data.windowTotal > data.window.length
-      ? `Client and class filters read the newest ${formatInsightsCount(data.window.length)} of ${formatInsightsCount(data.windowTotal)} matching requests.`
-      : undefined
-
   if (data.unavailable) {
     return (
       <Card className="border-dashed shadow-none">
-        <InsightsUnavailable reason={data.unavailable} onRetry={refresh} />
+        <InsightsUnavailable reason={data.unavailable} onRetry={data.refresh} />
       </Card>
     )
   }
 
-  const sessionRun = filters.session ? runs.get(filters.session) : undefined
+  const clearFilters = () => {
+    setSearchDraft('')
+    setParams({}, { replace: true })
+  }
 
   return (
     <>
-      {data.error ? (
-        <InsightsLoadError title="Requests could not load" message={data.error} onRetry={refresh} />
+      {data.listError ? (
+        <InsightsLoadError
+          title="Requests could not load"
+          message={data.listError}
+          onRetry={data.refresh}
+        />
       ) : null}
-      <RequestsSummary
-        aggregate={
-          aggregate && (aggregate.record_count > 0 || hasAnyFilter(filters)) ? aggregate : null
-        }
-        loading={data.loading}
-        breakdown={breakdown}
-        onBreakdown={setBreakdownOpen}
-        clientFiltered={clientMode}
-      />
+      {onboarding ? null : (
+        <RequestsSummary
+          aggregate={aggregate}
+          loading={data.aggregateLoading}
+          error={data.aggregateError}
+          onRetry={data.refresh}
+          breakdown={breakdown}
+          onBreakdown={setBreakdownOpen}
+          clientFiltered={clientMode}
+        />
+      )}
       <DataToolbar
         search={searchDraft}
         onSearchChange={onSearch}
         placeholder="Search request, recipe or session id…"
         filters={
           <>
-            <FilterPill
-              label="Client"
-              options={harnessOptions}
-              selected={filters.harness}
-              onChange={(harness) => update({ harness })}
-            />
-            <FilterPill
-              label="Class"
-              options={classOptions}
-              selected={filters.classes}
-              onChange={(classes) => update({ classes: classes as RequestClass[] })}
-            />
+            <div
+              role="group"
+              aria-label="Client and class filters"
+              className="flex items-center gap-2"
+              onPointerOver={wantFacets}
+              onFocus={wantFacets}
+            >
+              <FilterPill
+                label="Client"
+                options={harnessOptions}
+                selected={filters.harness}
+                onChange={(harness) => update({ harness })}
+              />
+              <FilterPill
+                label="Class"
+                options={classOptions}
+                selected={filters.classes}
+                onChange={(classes) => update({ classes: classes as RequestClass[] })}
+              />
+            </div>
             <FilterPill
               label="Decision"
               options={(aggregate?.available_decisions ?? []).map((value) => ({
@@ -811,14 +855,14 @@ export default function InsightsRequestsView() {
               aria-label="Time range"
               value={filters.range}
               onValueChange={(range) => update({ range })}
-              options={RANGE_OPTIONS}
+              options={REQUEST_RANGES}
             />
             <LiveToggle
               live={live}
               held={held}
               onLiveChange={(next) => {
                 setLive(next)
-                if (next) refresh()
+                if (next) data.refresh()
               }}
             />
           </>
@@ -828,14 +872,14 @@ export default function InsightsRequestsView() {
         {filters.session ? (
           <ActiveChip
             label="Session"
-            value={sessionRun?.session_name || compactSessionId(filters.session)}
+            value={sessionRun ? runHeadline(sessionRun) : compactSessionId(filters.session)}
             title={displaySessionId(filters.session)}
             onClear={() => update({ session: '' })}
             action={
               <Button
                 variant="ghost"
                 size="xs"
-                className="h-5 px-1.5"
+                className="h-5 shrink-0 px-1.5"
                 onClick={() => navigate(getRunPath(filters.session))}
               >
                 <Bot />
@@ -852,15 +896,18 @@ export default function InsightsRequestsView() {
             onClear={() => update({ turn: '' })}
           />
         ) : null}
-        {!filters.session && !filters.turn && data.window.length > 0 ? (
-          <span className="text-xs text-subtle-foreground tabular">
-            {countText(
-              new Set(data.window.map((record) => record.session_id).filter(Boolean)).size,
-              'session',
-            )}{' '}
-            from {countText(harnessCounts.size, 'client')} in the newest{' '}
-            {formatInsightsCount(data.window.length)} requests
-          </span>
+        {clientMode ? (
+          <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <Info className="size-3.5 shrink-0 text-subtle-foreground" />
+            <span className="min-w-0">
+              {windowNote({
+                windowLoaded: data.windowLoaded,
+                window: data.window,
+                windowTotal: data.windowTotal,
+                range: filters.range,
+              })}
+            </span>
+          </p>
         ) : null}
         <span className="ml-auto flex items-center gap-2">
           <Switch
@@ -874,7 +921,7 @@ export default function InsightsRequestsView() {
             className="whitespace-nowrap text-[13px] font-normal text-muted-foreground"
           >
             Hide housekeeping
-            {classCounts.get('housekeeping') ? (
+            {counted && classCounts.get('housekeeping') ? (
               <span className="ml-1 font-mono text-[11px] text-subtle-foreground">
                 {classCounts.get('housekeeping')}
               </span>
@@ -882,7 +929,12 @@ export default function InsightsRequestsView() {
           </Label>
         </span>
       </div>
-      <div onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)}>
+      <div
+        onPointerEnter={() => setHeld(true)}
+        onPointerLeave={() => setHeld(false)}
+        aria-busy={data.stale || undefined}
+        className={cn('transition-opacity duration-200', data.stale && 'opacity-60')}
+      >
         <DataTable
           data={data.rows}
           columns={columns}
@@ -923,7 +975,7 @@ export default function InsightsRequestsView() {
             </>
           )}
           empty={
-            unfilteredEmpty ? (
+            onboarding ? (
               <EmptyState
                 compact
                 icon={ListTree}
@@ -936,22 +988,40 @@ export default function InsightsRequestsView() {
                   </Button>
                 }
               />
+            ) : quiet ? (
+              <EmptyState
+                compact
+                icon={ListTree}
+                tone="blue"
+                title={`No requests ${RANGE_TEXT[filters.range]}`}
+                description="Older requests are under a longer range; new ones appear here as soon as the router records them."
+                actions={
+                  <Button size="sm" variant="outline" onClick={() => update({ range: 'all' })}>
+                    Show all time
+                  </Button>
+                }
+              />
+            ) : data.listError ? (
+              <EmptyState
+                compact
+                icon={ListTree}
+                tone="slate"
+                title="No requests to show"
+                description="The list could not load. Retry above, or check the router on the Status page."
+              />
             ) : (
               <EmptyState
                 compact
                 icon={ListTree}
                 tone="blue"
                 title="No requests match"
-                description="Widen the time range or clear the filters. New requests appear as soon as the router records them."
+                description={
+                  clientMode
+                    ? 'None of the newest requests match the client and class filters. Widen the time range or clear the filters.'
+                    : 'Widen the time range or clear the filters. New requests appear as soon as the router records them.'
+                }
                 actions={
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setSearchDraft('')
-                      setParams({}, { replace: true })
-                    }}
-                  >
+                  <Button size="sm" variant="outline" onClick={clearFilters}>
                     Clear filters
                   </Button>
                 }
@@ -961,19 +1031,12 @@ export default function InsightsRequestsView() {
         />
       </div>
       <Pager
-        page={page}
-        pageSize={REQUESTS_PAGE_SIZE}
+        page={Math.min(page, pages)}
+        pageSize={pageSize}
         total={data.total}
         noun="request"
-        note={windowNote}
-        onPage={(next) =>
-          setParams((current) => {
-            const nextParams = new URLSearchParams(current)
-            if (next <= 1) nextParams.delete('page')
-            else nextParams.set('page', String(next))
-            return nextParams
-          })
-        }
+        onPage={(next) => setParams((current) => writePage(current, next))}
+        onPageSize={(size) => setParams((current) => writePage(current, 1, size))}
       />
     </>
   )

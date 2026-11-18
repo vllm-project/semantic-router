@@ -13,11 +13,12 @@ import {
   formatRunCost,
   formatRunDuration,
   modelHue,
+  outcomeWord,
   RUN_MARKER_GLYPHS,
   RUN_MARKER_LABELS,
-  type RunLane,
-  type RunSegment,
+  verdictLabel,
 } from './insightsRunSupport'
+import type { RunTimeline, TimelineBlock } from './insightsRunTimeline'
 import type { RunCall, RunSummary } from './insightsRunTypes'
 
 const MARKER_TONE: Record<string, string> = {
@@ -44,86 +45,141 @@ function Markers({ markers }: { markers?: string[] }) {
   )
 }
 
-interface RunDiagramProps {
-  run: RunSummary
-  lanes: RunLane[]
-  selected?: string
-  activeAgent?: string
-  onSelect: (segment: RunSegment) => void
-}
-
 // A model's label with its configured name, for a tooltip.
 function modelTitle(labels: Record<string, string>, model: string): string {
   return model ? modelText(labels, model) : 'no model'
 }
 
-// A lane per agent, in tree order, with its calls as segments on one time axis.
-export function RunDiagram({ run, lanes, selected, activeAgent, onSelect }: RunDiagramProps) {
+const clock = (time: number) =>
+  new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
+const LANE_GRID = 'grid grid-cols-[minmax(0,180px)_minmax(0,1fr)] items-center gap-3'
+
+interface RunDiagramProps {
+  run: RunSummary
+  timeline: RunTimeline
+  selected?: string
+  /** The agents the calls table follows; the other lanes dim. */
+  agents?: string[]
+  onSelect: (block: TimelineBlock) => void
+  onAgent?: (label: string) => void
+}
+
+// A lane per agent that made a call in view, in tree order, its calls as
+// blocks on one axis; idle stretches fold to a hatched mark with their length.
+export function RunDiagram({
+  run,
+  timeline,
+  selected,
+  agents = [],
+  onSelect,
+  onAgent,
+}: RunDiagramProps) {
   const labels = useModelLabels()
   return (
     <div className="flex flex-col gap-1.5" role="list" aria-label="Run timeline">
-      {lanes.map((lane) => (
-        <div
-          key={lane.agent.label}
-          role="listitem"
-          className={cn(
-            'grid grid-cols-[minmax(0,170px)_minmax(0,1fr)] items-center gap-3 rounded-md transition-opacity',
-            activeAgent && activeAgent !== lane.agent.label && 'opacity-45',
-          )}
-        >
-          <div className="flex min-w-0 flex-col" style={{ paddingLeft: `${lane.depth * 0.9}rem` }}>
-            <strong className="truncate font-mono text-[12px] font-medium">
-              {lane.depth > 0 ? `↳ ${lane.agent.label}` : lane.agent.label}
-            </strong>
-            <span className="truncate text-[11px] text-subtle-foreground">
-              {[
-                lane.agent.kind,
-                countText(lane.agent.calls, 'call'),
-                formatRunCost(lane.agent.cost),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
-          </div>
-          <div className="relative h-7 rounded-md bg-surface-subtle ring-1 ring-inset ring-border">
-            {lane.spawnAt !== undefined ? (
-              <span
-                className="absolute inset-y-0 w-px border-l border-dashed border-chart-3"
-                style={{ left: `${lane.spawnAt}%` }}
-                title={`Spawned by ${lane.agent.parent ?? 'main'}`}
-              />
-            ) : null}
-            {lane.segments.map((segment) => (
+      {timeline.lanes.map((lane) => {
+        const followed = agents.includes(lane.agent.label)
+        const detail = [
+          lane.agent.kind,
+          countText(lane.agent.calls, 'call'),
+          formatRunCost(lane.agent.cost),
+        ]
+          .filter(Boolean)
+          .join(' · ')
+        const name = lane.depth > 0 ? `↳ ${lane.agent.label}` : lane.agent.label
+        return (
+          <div
+            key={lane.agent.label}
+            role="listitem"
+            className={cn(
+              LANE_GRID,
+              'rounded-md transition-opacity',
+              agents.length > 0 && !followed && 'opacity-45',
+            )}
+          >
+            {onAgent ? (
               <button
-                key={segment.key}
                 type="button"
-                data-selected={segment.key === selected}
-                className="absolute inset-y-1 flex min-w-1.5 items-center justify-center gap-0.5 overflow-hidden rounded-[5px] px-0.5 text-[10px] text-primary-foreground shadow-xs outline-none transition-[box-shadow,filter] hover:brightness-110 focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[selected=true]:ring-2 data-[selected=true]:ring-foreground"
-                style={{
-                  left: `${segment.left}%`,
-                  width: `${segment.width}%`,
-                  background: modelHue(run.models, segment.model),
-                }}
-                title={`${modelTitle(labels, segment.model)} · ${countText(segment.calls.length, 'call')}`}
-                onClick={() => onSelect(segment)}
+                aria-pressed={followed}
+                title={`Follow ${lane.agent.label}'s calls`}
+                onClick={() => onAgent(lane.agent.label)}
+                className={cn(
+                  'flex min-w-0 flex-col rounded-md px-1.5 py-0.5 text-left transition-colors hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                  followed && 'bg-primary-soft/60 hover:bg-primary-soft/70',
+                )}
+                style={{ paddingLeft: `${0.375 + lane.depth * 0.8}rem` }}
               >
-                {segment.calls.length > 1 ? (
-                  <span className="font-mono font-semibold tabular">{segment.calls.length}</span>
-                ) : null}
-                <span className="rounded-sm bg-surface/85 px-0.5 empty:hidden">
-                  <Markers markers={segment.markers} />
-                </span>
+                <strong className="truncate font-mono text-[12px] font-medium">{name}</strong>
+                <span className="truncate text-[11px] text-subtle-foreground">{detail}</span>
               </button>
-            ))}
+            ) : (
+              <div
+                className="flex min-w-0 flex-col px-1.5"
+                style={{ paddingLeft: `${0.375 + lane.depth * 0.8}rem` }}
+              >
+                <strong className="truncate font-mono text-[12px] font-medium">{name}</strong>
+                <span className="truncate text-[11px] text-subtle-foreground">{detail}</span>
+              </div>
+            )}
+            <div className="relative h-7 overflow-hidden rounded-md bg-surface-subtle ring-1 ring-inset ring-border">
+              {timeline.breaks.map((gap) => (
+                <span
+                  key={gap.left}
+                  aria-hidden
+                  className="absolute inset-y-0 border-x border-dashed border-border-strong/70 bg-[repeating-linear-gradient(135deg,var(--border)_0_1px,transparent_1px_5px)]"
+                  style={{ left: `${gap.left}%`, width: `${gap.width}%` }}
+                />
+              ))}
+              {lane.spawnAt !== undefined ? (
+                <span
+                  className="absolute inset-y-0 w-px border-l border-dashed border-chart-3"
+                  style={{ left: `${lane.spawnAt}%` }}
+                  title={`Spawned by ${lane.agent.parent ?? 'main'}`}
+                />
+              ) : null}
+              {lane.blocks.map((block) => (
+                <button
+                  key={block.key}
+                  type="button"
+                  data-selected={block.key === selected}
+                  className="absolute inset-y-1 flex min-w-1.5 items-center justify-center gap-0.5 overflow-hidden rounded-[5px] px-0.5 text-[10px] text-primary-foreground shadow-xs outline-none transition-[box-shadow,filter] hover:brightness-110 focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[selected=true]:ring-2 data-[selected=true]:ring-foreground"
+                  style={{
+                    left: `${Math.min(block.left, 99.4)}%`,
+                    width: `${block.width}%`,
+                    background: modelHue(run.models, block.model),
+                  }}
+                  title={`${modelTitle(labels, block.model)} · ${countText(block.calls.length, 'call')}`}
+                  onClick={() => onSelect(block)}
+                >
+                  {block.calls.length > 1 ? (
+                    <span className="font-mono font-semibold tabular">{block.calls.length}</span>
+                  ) : null}
+                  <span className="rounded-sm bg-surface/85 px-0.5 empty:hidden">
+                    <Markers markers={block.markers} />
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-      <div className="grid grid-cols-[minmax(0,170px)_minmax(0,1fr)] gap-3">
+        )
+      })}
+      <div className={LANE_GRID}>
         <span aria-hidden />
-        <div className="flex justify-between font-mono text-[10.5px] text-subtle-foreground tabular">
-          <span>0s</span>
-          <span>{formatRunDuration(Math.round(run.duration_ms / 2))}</span>
-          <span>{formatRunDuration(run.duration_ms)}</span>
+        <div className="relative h-4 font-mono text-[10.5px] text-subtle-foreground tabular">
+          <span className="absolute left-0">{clock(timeline.begin)}</span>
+          {timeline.breaks.map((gap) =>
+            gap.left > 12 && gap.left < 80 ? (
+              <span
+                key={gap.left}
+                className="absolute -translate-x-1/2 whitespace-nowrap"
+                style={{ left: `${gap.left + gap.width / 2}%` }}
+              >
+                {formatRunDuration(gap.ms)} idle
+              </span>
+            ) : null,
+          )}
+          <span className="absolute right-0">{clock(timeline.end)}</span>
         </div>
       </div>
     </div>
@@ -220,7 +276,9 @@ export function RunCallDetails({ call }: { call: RunCall }) {
       ) : null}
       {call.outcomes?.length ? (
         <Field label="Outcome">
-          {call.outcomes.map((outcome) => `${outcome.source}: ${outcome.verdict}`).join(', ')}
+          {call.outcomes
+            .map((outcome) => `${outcomeWord(outcome.source)}: ${verdictLabel(outcome.verdict)}`)
+            .join(', ')}
         </Field>
       ) : null}
       <Field label="Markers">
@@ -246,13 +304,15 @@ export function RunCallDetails({ call }: { call: RunCall }) {
 }
 
 interface RunSegmentPanelProps {
-  segment: RunSegment
+  segment: Pick<TimelineBlock, 'agent' | 'model' | 'calls'>
   call?: RunCall
+  /** The run-wide number of each call, by record id. */
+  numbers?: Map<string, number>
   onSelectCall: (call: RunCall) => void
 }
 
-// A segment's calls, one per row, and the details of the one picked.
-export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanelProps) {
+// A block's calls, one per row, and the details of the one picked.
+export function RunSegmentPanel({ segment, call, numbers, onSelectCall }: RunSegmentPanelProps) {
   const labels = useModelLabels()
   return (
     <aside className="flex flex-col gap-3" aria-label="Step details">
@@ -264,7 +324,7 @@ export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanel
           {segment.agent} · {modelLabel(labels, segment.model) || 'no model'}
         </strong>
         <span className="shrink-0 text-xs text-subtle-foreground">
-          {segment.calls.length} call{segment.calls.length === 1 ? '' : 's'}
+          {countText(segment.calls.length, 'call')}
         </span>
       </header>
       {segment.calls.length > 1 ? (
@@ -275,8 +335,11 @@ export function RunSegmentPanel({ segment, call, onSelectCall }: RunSegmentPanel
                 type="button"
                 data-selected={entry.record_id === call?.record_id}
                 onClick={() => onSelectCall(entry)}
-                className="grid w-full grid-cols-[72px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-surface-subtle data-[selected=true]:bg-primary-soft/60"
+                className="grid w-full grid-cols-[40px_72px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-surface-subtle data-[selected=true]:bg-primary-soft/60"
               >
+                <span className="font-mono tabular text-subtle-foreground">
+                  {numbers?.get(entry.record_id) ? `#${numbers.get(entry.record_id)}` : ''}
+                </span>
                 <span className="font-mono tabular text-subtle-foreground">
                   {new Date(entry.timestamp).toLocaleTimeString()}
                 </span>

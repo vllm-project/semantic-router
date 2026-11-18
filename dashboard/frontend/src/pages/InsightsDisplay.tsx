@@ -2,10 +2,26 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, ListTree, Lock, RefreshCw, ServerOff } from 'lucide-react'
 
-import { Alert, Badge, Button, EmptyState, StatusDot, Tooltip, cn, type Tone } from '../ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  StatusDot,
+  Tooltip,
+  cn,
+  type Tone,
+} from '../ui'
 import { formatDateTime } from '../utils/dateTime'
 
 import { requestStatusText, timeAgo } from './insightsDisplayFormat'
+import { PAGE_SIZES } from './insightsListData'
 import type { InsightsUnavailableReason } from './insightsPageApi'
 import { getInsightsLifecyclePresentation } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
@@ -65,10 +81,13 @@ export function LiveToggle({
   live,
   onLiveChange,
   held = false,
+  every = 'every 5 seconds',
 }: {
   live: boolean
   onLiveChange: (live: boolean) => void
   held?: boolean
+  /** How often a live view refreshes, as the tooltip says it. */
+  every?: string
 }) {
   return (
     <Tooltip
@@ -76,8 +95,8 @@ export function LiveToggle({
         live
           ? held
             ? 'Paused while your pointer is over the list'
-            : 'Refreshing every 5 seconds · click to stop'
-          : 'Refresh every 5 seconds'
+            : `Refreshing ${every} · click to stop`
+          : `Refresh ${every}`
       }
     >
       <button
@@ -142,59 +161,149 @@ export function ScoreBar({
   )
 }
 
-/** Previous and next page under a server-paged table. */
+/**
+ * The rows a paged table shows out of its total, the rows per page, and the
+ * previous and next page.
+ */
 export function Pager({
   page,
   pageSize,
   total,
   noun,
   onPage,
+  onPageSize,
   note,
+  className,
 }: {
   page: number
   pageSize: number
   total: number
   noun: string
   onPage: (page: number) => void
+  /** Offers the page sizes when given and the total fills more than the smallest page. */
+  onPageSize?: (size: number) => void
   note?: ReactNode
+  className?: string
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize))
-  const first = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const first = total === 0 ? 0 : Math.min(total, (page - 1) * pageSize + 1)
   const last = Math.min(total, page * pageSize)
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-subtle-foreground">
-      <span className="tabular">
+    <div
+      className={cn(
+        'mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-subtle-foreground',
+        className,
+      )}
+    >
+      <span className="min-w-0 tabular">
         {total === 0
           ? `No ${noun}s`
           : `${first.toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()} ${noun}${total === 1 ? '' : 's'}`}
         {note ? <span className="ml-2">{note}</span> : null}
       </span>
-      {pages > 1 ? (
-        <span className="flex items-center gap-1.5">
-          <span className="tabular">
-            Page {page} of {pages}
+      <span className="flex items-center gap-4">
+        {onPageSize && total > PAGE_SIZES[0] ? (
+          <span className="flex items-center gap-1.5">
+            Rows
+            <Select value={String(pageSize)} onValueChange={(value) => onPageSize(Number(value))}>
+              <SelectTrigger
+                size="sm"
+                aria-label="Rows per page"
+                className="h-7 gap-1 px-2 text-xs"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {PAGE_SIZES.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </span>
-          <Button
-            variant="outline"
-            size="icon-xs"
-            aria-label="Previous page"
-            disabled={page <= 1}
-            onClick={() => onPage(page - 1)}
-          >
-            <ChevronLeft />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-xs"
-            aria-label="Next page"
-            disabled={page >= pages}
-            onClick={() => onPage(page + 1)}
-          >
-            <ChevronRight />
-          </Button>
-        </span>
-      ) : null}
+        ) : null}
+        {pages > 1 ? (
+          <span className="flex items-center gap-1.5">
+            <span className="tabular">
+              Page {page.toLocaleString()} of {pages.toLocaleString()}
+            </span>
+            <Button
+              variant="outline"
+              size="icon-xs"
+              aria-label="Previous page"
+              disabled={page <= 1}
+              onClick={() => onPage(page - 1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-xs"
+              aria-label="Next page"
+              disabled={page >= pages}
+              onClick={() => onPage(page + 1)}
+            >
+              <ChevronRight />
+            </Button>
+          </span>
+        ) : null}
+      </span>
     </div>
+  )
+}
+
+/** One figure of a summary strip: its label and icon, the value, and a line under it. */
+export function SummaryTile({
+  label,
+  icon,
+  value,
+  hint,
+  tone,
+}: {
+  label: string
+  icon?: ReactNode
+  value: ReactNode
+  hint?: ReactNode
+  tone?: 'negative'
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 px-4 py-3">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
+        {icon}
+        {label}
+      </span>
+      <span
+        className={cn(
+          'truncate text-lg font-semibold leading-none tracking-[-0.02em] tabular',
+          tone === 'negative' && 'text-destructive-foreground',
+        )}
+      >
+        {value}
+      </span>
+      {hint ? <span className="truncate text-[11.5px] text-subtle-foreground">{hint}</span> : null}
+    </div>
+  )
+}
+
+/** Summary tiles in one card, divided by hairlines; className sets the grid columns. */
+export function SummaryStrip({
+  label,
+  className,
+  children,
+}: {
+  label: string
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <Card
+      role="group"
+      aria-label={label}
+      className={cn('grid gap-px overflow-hidden bg-border [&>*]:bg-card', className)}
+    >
+      {children}
+    </Card>
   )
 }
 
