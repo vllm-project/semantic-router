@@ -223,7 +223,7 @@ export default function PrepareDialog({
           )}
         >
           {benchmark ? (
-            <div className="flex min-h-0 min-w-0 flex-col border-b border-border bg-surface-subtle/40 md:border-b-0 md:border-r">
+            <div className="flex min-w-0 flex-col border-b border-border bg-surface-subtle/40 md:min-h-0 md:border-b-0 md:border-r">
               <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2 pt-4">
                 <SectionLabel>Benchmarks</SectionLabel>
                 <span className="text-[11px] text-subtle-foreground tabular-nums">

@@ -135,6 +135,14 @@ describe('logs page support', () => {
         following: true,
       }),
     ).toBeNull()
+    // Lines already received stay on screen when a later read fails; the inline note says why.
+    expect(
+      describeEmptyLogs({
+        response: answer({ logs: [{ line: 'x' }] }),
+        requestError: 'The Dashboard answered HTTP 503.',
+        following: true,
+      }),
+    ).toBeNull()
 
     const forbidden = describeEmptyLogs({
       response: answer({

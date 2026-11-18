@@ -212,11 +212,12 @@ export function describeEmptyLogs({
   requestError: string | null
   following: boolean
 }): LogsNotice | null {
+  if (response && response.logs.length > 0) return null
   const retry = following ? ' Follow retries every 5 seconds.' : ''
   if (requestError) {
     return { kind: 'error', title: 'Logs could not be read', description: requestError + retry }
   }
-  if (!response || response.logs.length > 0) return null
+  if (!response) return null
   const source = logSourceOf(response.deployment_type)
   if (!response.supported) {
     return {
