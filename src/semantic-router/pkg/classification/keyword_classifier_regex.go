@@ -19,7 +19,7 @@ type preppedKeywordRule struct {
 	CompiledRegexpsCS []*regexp.Regexp // Compiled regex for case-sensitive
 	CompiledRegexpsCI []*regexp.Regexp // Compiled regex for case-insensitive
 	LiteralBoundaries []bool           // Check neighboring runes for literal spaced-script words
-	SyllableChecks    []bool           // Reject syllable-splitting matches for unspaced syllabic scripts
+	SyllableChecks    []bool           // Check each edge by its script for unspaced syllabic scripts
 
 	FuzzyMatch        bool     // Enable approximate matching with Levenshtein distance
 	FuzzyThreshold    int      // Maximum edit distance for fuzzy matching (default: 2)
@@ -127,8 +127,9 @@ func keywordPlaces(text string, rule preppedKeywordRule, index int, pattern *reg
 }
 
 // matchAccept selects how a literal keyword's matches are approved: a
-// syllabic-script keyword rejects syllable-splitting matches, a spaced-script
-// word rejects joined neighbors, and anything else is a plain substring.
+// syllabic-script keyword checks each edge by its script (see
+// keywordSyllableMatch), a spaced-script word rejects joined neighbors, and
+// anything else is a plain substring.
 func matchAccept(rule preppedKeywordRule, index int) func(string, int, int) bool {
 	switch {
 	case rule.SyllableChecks[index]:

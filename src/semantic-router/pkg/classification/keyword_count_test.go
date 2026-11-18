@@ -24,8 +24,9 @@ func countingKeywordClassifier(t testing.TB, rules ...config.KeywordRule) *Keywo
 
 func bound(value float64) *float64 { return &value }
 
-// A literal keyword counts where it is a word of its own: a letter or digit
-// of a non-CJK script joins it to a longer word, a CJK neighbor does not.
+// A literal keyword counts where it is a word of its own: a letter of a spaced
+// script, or a digit, joins it to a longer word; a CJK, Thai, Lao, Khmer or
+// Myanmar letter does not.
 func TestKeywordCountHonorsLiteralBoundaries(t *testing.T) {
 	classifier := countingKeywordClassifier(t, config.KeywordRule{
 		Name: "must", Operator: "OR", Keywords: []string{"must"}, Count: &config.NumericPredicate{GTE: bound(0)},
