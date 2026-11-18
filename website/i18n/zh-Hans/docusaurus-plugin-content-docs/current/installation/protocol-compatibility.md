@@ -177,6 +177,28 @@ providers:
 `backend_refs`，因此只要其中任何一个拒绝某个控制，就应列出它。若要为决策路由到的每个模型移除某个控制，请改为在该决策的
 [`request_params`](../tutorials/plugin/request-params) `blocked_params` 中列出它。
 
+### 聊天模板拒绝的 system 消息 {#system-messages-a-chat-template-refuses}
+
+一个请求可以携带多条 system 和 developer 消息：Chat Completions 客户端可能为每条指令单独发送一条 system 消息，
+Responses 请求有 `instructions` 和 developer 输入项，编码代理还会在对话中间插入 system 消息。许多开源模型的聊天模板
+只接受一条位于开头的 system 消息：Qwen3.5 及之后的模板会以 "System message must be at the beginning." 拒绝请求，
+gpt-oss 则丢弃这段文本。同一个请求因此会随决策选中的模型而成功或失败。
+
+对使用这类模板的后端，在 `global.router.allow_lossy_translation` 中加入 `messages[].role`（参见下文的“校验和失败行为”）：
+
+```yaml
+global:
+  router:
+    allow_lossy_translation: ["messages[].role"]
+```
+
+- **开头只有一条 system 消息。** Chat 后端把对话开头的 system 和 developer 消息合并为一条 system 消息收到，各段文本按原顺序排列，之间以空行分隔：Chat 请求开头的 system 和 developer 消息，或 Responses 请求的 `instructions` 及开头的 developer 和 system 输入项。`cache_control` 边界保留在设置它的文本末尾。只有一条开头 system 消息的请求原样到达后端。
+- **后续消息作为用户文本。** 对话中间的 system 或 developer 消息在原位置以用户文本到达 Chat 后端：并入紧邻其前的用户轮次；位于 assistant 轮次或工具结果之后时，则成为单独的用户轮次。Messages 请求 `messages` 中的 system 消息以同样方式到达 Responses 后端。
+- **会报告。** `x-vsr-warnings` 会为 `messages[].role` 报告一条 `approximated` 诊断。
+- **其他后端不受影响。** Messages 后端按原样收到这些消息；Responses 后端收到的 Chat 或 Responses 客户端的 system 和 developer 消息保持各自的角色。
+
+不启用该选项时，每条 system 和 developer 消息都以其原有角色到达后端。
+
 ### 后端丢弃的 developer 消息 {#developer-messages-a-backend-drops}
 
 OpenAI 把 `developer` 消息和 `system` 消息一样当作指令。Chat Completions 客户端用 `developer` 角色发送指令，
@@ -199,6 +221,8 @@ providers:
 - **对该模型以 system 发送。** 发给该模型的请求，无论它是决策的选择还是回退候选，其中所有 developer 指令和消息到达时都是 `system` 角色。
 - **会报告。** `x-vsr-warnings` 会为 `messages[].role` 报告 `approximated` 诊断。
 - **其他模型不受影响。** 同一决策的其他模型仍会收到 `developer` 角色。
+
+列出 `messages[].role` 后，Chat 后端会在那一条 system 消息中收到开头的 developer 消息（[见上文](#system-messages-a-chat-template-refuses)），请求只报告这一条诊断。
 
 ## 配置后端格式
 

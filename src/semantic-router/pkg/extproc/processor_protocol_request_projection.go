@@ -25,9 +25,10 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	target llmprotocol.WireFormat,
 	shadows ...*shadowTarget,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
+	projected, systemDiagnostics := r.projectSystemMessages(request, target)
 	// An OpenAI-hosted Responses target leaves out unsigned thinking, so the
 	// signatures go before that projection runs.
-	projected, signatureDiagnostics, err := r.projectReasoningSignatures(request, target)
+	projected, signatureDiagnostics, err := r.projectReasoningSignatures(projected, target)
 	if err != nil {
 		return request, nil, err
 	}
@@ -37,7 +38,7 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
 }
 
 // projectReasoningSignatures sends signed thinking in the history to a backend
@@ -56,6 +57,21 @@ func (r *OpenAIRouter) projectReasoningSignatures(
 	}
 	projected, diagnostics := llmprotocol.ProjectReasoningSignatures(request, target)
 	return projected, diagnostics, nil
+}
+
+// projectSystemMessages sends a Chat backend one system message, first, and
+// the system and developer messages inside the conversation as user text, once
+// the operator accepts that loss. It runs first, while the instructions'
+// positions still describe the conversation, and before the developer-role
+// projection, which then finds no developer message to report.
+func (r *OpenAIRouter) projectSystemMessages(
+	request llmprotocol.Request,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics) {
+	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldSystemMessageRole) {
+		return request, nil
+	}
+	return llmprotocol.ProjectSystemMessages(request, target)
 }
 
 // projectUnsupportedCapabilities sends a model the request its
