@@ -1,15 +1,20 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { DataTable } from '../components/DataTable'
 import TableHeader from '../components/TableHeader'
-import ProductLoadingState from '../components/ProductLoadingState'
+import ProductIcon from '../components/ProductIcon'
 
 import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
 import InsightsEmptyState from './InsightsEmptyState'
+import InsightsSkeleton from './InsightsSkeleton'
+import InsightsReviewsView from './InsightsReviewsView'
+import InsightsRunsView from './InsightsRunsView'
+import { ModelLabelsProvider, modelText, useModelLabels } from './insightsModelLabelSupport'
 import { isInsightsReplayUnavailableError } from './insightsPageApi'
+import { buildReplayQueryString } from './insightsPageFilters'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import {
   createInsightsTableColumns,
@@ -22,54 +27,76 @@ import type {
   InsightsListResponse,
   InsightsRecord,
 } from './insightsPageTypes'
+import { compactID } from './insightsReviewSupport'
 
 const insightsPageSize = 25
 const insightsSearchDebounceMs = 300
 const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
 
-interface ReplayQueryFilters {
-  searchTerm: string
-  filter: InsightsFilterType
-  recipeFilter: string
-  decisionFilter: string
-  modelFilter: string
+type InsightsView = 'requests' | 'runs' | 'reviews'
+
+// All requests, the agent runs they make up, or the approval reviews among
+// them, kept in the URL so a reviewed session's link opens its reviews.
+function InsightsViewSwitch({ view }: { view: InsightsView }) {
+  const [, setSearchParams] = useSearchParams()
+  const views: { label: string; active: boolean; params: Record<string, string> }[] = [
+    { label: 'All requests', active: view === 'requests', params: {} },
+    { label: 'Runs', active: view === 'runs', params: { view: 'runs' } },
+    { label: 'Reviews', active: view === 'reviews', params: { view: 'reviews' } },
+  ]
+  return (
+    <div className={styles.viewSwitch} role="group" aria-label="Insights view">
+      {views.map((view) => (
+        <button
+          key={view.label}
+          type="button"
+          aria-pressed={view.active}
+          className={styles.viewSwitchButton}
+          onClick={() => setSearchParams(view.params)}
+        >
+          {view.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
-function buildReplayQueryString(
-  filters: ReplayQueryFilters,
-  pagination?: { limit: number; offset: number },
-) {
-  const params = new URLSearchParams()
-
-  if (pagination) {
-    params.set('limit', String(pagination.limit))
-    params.set('offset', String(pagination.offset))
-    params.set('showDetails', 'false')
-  }
-
-  const search = filters.searchTerm.trim()
-  if (search) {
-    params.set('search', search)
-  }
-  if (filters.filter !== 'all') {
-    params.set('cache_status', filters.filter)
-  }
-  if (filters.recipeFilter !== 'all') {
-    params.set('recipe', filters.recipeFilter)
-  }
-  if (filters.decisionFilter !== 'all') {
-    params.set('decision', filters.decisionFilter)
-  }
-  if (filters.modelFilter !== 'all') {
-    params.set('model', filters.modelFilter)
-  }
-
-  const query = params.toString()
-  return query ? `?${query}` : ''
+// The Codex turn the list is filtered to, from a record's turn link, until cleared.
+export function InsightsTurnFilter() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const turn = searchParams.get('turn')
+  if (!turn) return null
+  const clear = () =>
+    setSearchParams((params) => {
+      params.delete('turn')
+      return params
+    })
+  return (
+    <span className={styles.filterChip} title={turn}>
+      Codex turn {compactID(turn)}
+      <button type="button" aria-label="Clear turn filter" onClick={clear}>
+        <ProductIcon name="close" width={13} height={13} />
+      </button>
+    </span>
+  )
 }
 
+// Insights, its models read by their labels.
 export default function InsightsPage() {
+  return (
+    <ModelLabelsProvider>
+      <InsightsViews />
+    </ModelLabelsProvider>
+  )
+}
+
+function InsightsViews() {
   const navigate = useNavigate()
+  const modelLabels = useModelLabels()
+  const [searchParams] = useSearchParams()
+  const reviewsView = searchParams.get('view') === 'reviews'
+  const runsView = searchParams.get('view') === 'runs'
+  const turn = searchParams.get('turn') ?? ''
   const [records, setRecords] = useState<InsightsRecord[]>([])
   const [aggregate, setAggregate] = useState<InsightsAggregateResponse | null>(null)
   const [totalRecords, setTotalRecords] = useState(0)
@@ -86,7 +113,7 @@ export default function InsightsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const requestSequenceRef = useRef(0)
   const requestAbortControllerRef = useRef<AbortController | null>(null)
-  const tableColumns = useMemo(() => createInsightsTableColumns(), [])
+  const tableColumns = useMemo(() => createInsightsTableColumns(modelLabels), [modelLabels])
 
   const activeFilters = useMemo(
     () => ({
@@ -95,8 +122,9 @@ export default function InsightsPage() {
       recipeFilter,
       decisionFilter,
       modelFilter,
+      turn,
     }),
-    [debouncedSearchTerm, filter, recipeFilter, decisionFilter, modelFilter],
+    [debouncedSearchTerm, filter, recipeFilter, decisionFilter, modelFilter, turn],
   )
 
   const totalPages = Math.max(1, Math.ceil(totalRecords / insightsPageSize))
@@ -175,6 +203,10 @@ export default function InsightsPage() {
     return () => window.clearTimeout(debounceTimer)
   }, [searchTerm])
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [turn])
+
   useEffect(
     () => () => {
       requestSequenceRef.current += 1
@@ -184,6 +216,9 @@ export default function InsightsPage() {
   )
 
   useEffect(() => {
+    if (reviewsView || runsView) {
+      return undefined
+    }
     void fetchRecords()
 
     if (!autoRefresh) {
@@ -195,7 +230,7 @@ export default function InsightsPage() {
     }, 5000)
 
     return () => window.clearInterval(interval)
-  }, [autoRefresh, fetchRecords])
+  }, [autoRefresh, fetchRecords, reviewsView, runsView])
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -244,16 +279,43 @@ export default function InsightsPage() {
     [navigate],
   )
 
+  const layout = {
+    eyebrow: 'Insights',
+    title: 'Insights',
+    description: 'See what the router picked, what signals fired, and how much it saved.',
+  }
+  if (runsView) {
+    return (
+      <ConfigPageManagerLayout {...layout}>
+        <InsightsViewSwitch view="runs" />
+        <InsightsRunsView />
+      </ConfigPageManagerLayout>
+    )
+  }
+  if (reviewsView) {
+    return (
+      <ConfigPageManagerLayout {...layout}>
+        <InsightsViewSwitch view="reviews" />
+        <InsightsReviewsView
+          key={searchParams.get('session') ?? ''}
+          initialSession={searchParams.get('session') ?? ''}
+        />
+      </ConfigPageManagerLayout>
+    )
+  }
+
   if (loading && !hasReplayData && records.length === 0) {
-    return <ProductLoadingState label="Loading insights" />
+    return (
+      <ConfigPageManagerLayout {...layout}>
+        <InsightsViewSwitch view="requests" />
+        <InsightsSkeleton />
+      </ConfigPageManagerLayout>
+    )
   }
 
   return (
-    <ConfigPageManagerLayout
-      eyebrow="Insights"
-      title="Insights"
-      description="See what the router picked, what signals fired, and how much it saved."
-    >
+    <ConfigPageManagerLayout {...layout}>
+      <InsightsViewSwitch view="requests" />
       {error ? (
         <div className={styles.error}>
           <span>{error}</span>
@@ -261,7 +323,7 @@ export default function InsightsPage() {
       ) : null}
 
       {aggregate ? (
-        <Suspense fallback={null}>
+        <Suspense fallback={<InsightsSkeleton />}>
           <InsightsCharts aggregate={aggregate} />
         </Suspense>
       ) : null}
@@ -297,13 +359,14 @@ export default function InsightsPage() {
           <TableHeader
             title="Routing Insights"
             count={totalRecords}
-            searchPlaceholder="Search by Request ID..."
+            searchPlaceholder="Search by request, recipe or session ID..."
             searchValue={searchTerm}
             onSearchChange={handleSearchChange}
             variant="embedded"
           />
 
           <div className={styles.filterRow}>
+            <InsightsTurnFilter />
             <select
               className={styles.filterSelect}
               value={recipeFilter}
@@ -341,7 +404,7 @@ export default function InsightsPage() {
               <option value="all">All Models</option>
               {availableModels.map((model) => (
                 <option key={model} value={model}>
-                  {model}
+                  {modelText(modelLabels, model)}
                 </option>
               ))}
             </select>

@@ -435,6 +435,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				if event.ToolCall.Name != "" {
 					item.toolCall.Name = event.ToolCall.Name
 				}
+				if event.ToolCall.Namespace != "" {
+					item.toolCall.Namespace = event.ToolCall.Namespace
+				}
 				item.toolCall.Arguments += event.ToolCall.Arguments
 			}
 		case llmprotocol.EventOutputItemCompleted:
@@ -469,12 +472,18 @@ func (state *semanticResponseStreamState) item(index int) *semanticStreamItem {
 	return item
 }
 
+// delivered reports whether the stream reached its terminal event without a
+// failure, which makes it a whole answer for its client.
+func (state *semanticResponseStreamState) delivered() bool {
+	return state != nil && state.failed == nil && state.terminal
+}
+
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
 	if state != nil && state.failed != nil {
 		return nil, fmt.Errorf("semantic stream did not complete successfully: %w", state.failed)
 	}
-	if state == nil || !state.terminal {
+	if !state.delivered() {
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
 	indices := append([]int(nil), state.order...)
@@ -535,9 +544,11 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 }
 
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
+	clean := streamErr == nil && !ctx.StreamingAborted
 	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
 		r.commitStreamedAnswer(ctx, semanticResponse)
 	}
+	r.endStreamRouterReplay(ctx, clean)
 }
 
 // completeSemanticStream settles a stream once it ended: its latency, usage
@@ -568,12 +579,19 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 	ctx.InflightToken = 0
 
 	usage := r.takeNeutralResponseUsage(ctx)
-	// Decoded stream events carry the client-facing model, not the provider's.
-	observeUpstreamResponse(ctx, "", usage)
+	// The buffered path records the response's model; the stream reconstructs
+	// the same answer, so the span names the model it observed too. A stream
+	// that never initialised (unsupported source format) still settles here.
+	responseModel := ""
+	if state := ctx.SemanticStreamState; state != nil {
+		responseModel = state.model
+	}
+	observeUpstreamResponse(ctx, responseModel, usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
 	if responseErr != nil {
+		observeStreamedApprovalReviewFailure(ctx)
 		fields := map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"error":      responseErr.Error(),
@@ -596,6 +614,8 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 // Router Replay only.
 func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
+	observeApprovalReviewVerdict(ctx, semanticResponse)
+	observeSessionTitle(ctx, semanticResponse)
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	if ctx.ResponseGuard != nil {
 		ctx.ResponseGuard.live = true
@@ -669,6 +689,7 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
+	r.settleRequestSpend(ctx, &replayUsage)
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
 	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, usage, replayUsage)
 }

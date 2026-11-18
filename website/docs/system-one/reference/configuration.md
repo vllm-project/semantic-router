@@ -20,6 +20,7 @@ when to use them; this page lists them.
 | `recipes[].model_bindings.<type>` | The same, for one recipe |
 | `global.model_catalog.deployments.<name>` | A deployment: `provider: model_runtime` (local or attached) or `provider: systemone` (a remote API) |
 | `global.model_catalog.signal_timeout_ms` | The deadline of all of a request's signals |
+| `global.model_catalog.on_signal_overload` | `{action, wait_ms, retry_after_seconds}`: with `action: retry`, every call an overloaded decision model refuses is asked again for up to `wait_ms`. A request that rules it still could not read would refuse then gets an error the client retries. See [when the decision model is overloaded](../deploy/performance.md#when-the-decision-model-is-overloaded) |
 
 A `systemone` deployment takes `endpoint`, `model`, `auth` (`api_key_env` or
 `api_key_file`, or `credential: delegated`; `header`, `prefix`), `headers`,

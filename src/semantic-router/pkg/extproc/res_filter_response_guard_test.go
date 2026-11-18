@@ -35,11 +35,11 @@ func assertBlockedWith(t *testing.T, plan *responsePolicyPlan, message string) {
 	if immediate == nil {
 		t.Fatalf("the answer was not blocked: %+v", plan)
 	}
-	if code := int(immediate.GetStatus().GetCode()); code != 403 {
-		t.Fatalf("status = %d, want 403", code)
+	if code := int(immediate.GetStatus().GetCode()); code != 400 {
+		t.Fatalf("status = %d, want 400", code)
 	}
 	if !strings.Contains(string(immediate.GetBody()), message) {
-		t.Fatalf("403 body = %s, want it to say %q", immediate.GetBody(), message)
+		t.Fatalf("400 body = %s, want it to say %q", immediate.GetBody(), message)
 	}
 }
 

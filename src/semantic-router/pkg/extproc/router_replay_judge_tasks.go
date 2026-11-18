@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -25,10 +26,11 @@ var storedResponseFormats = []llmprotocol.WireFormat{
 // manifest the dataset export does and hands out blinded pairwise tasks over
 // it. The tasks carry captured text, so the route needs replay.detail.
 func (r *OpenAIRouter) handleRouterReplayJudgeTasksAPI(
+	ctx context.Context,
 	method string,
 	rawQuery string,
 ) *ext_proc.ProcessingResponse {
-	values, manifest, records, failure := r.buildRouterReplayDataset(method, rawQuery)
+	values, manifest, records, failure := r.buildRouterReplayDataset(ctx, method, rawQuery)
 	if failure != nil {
 		return failure
 	}

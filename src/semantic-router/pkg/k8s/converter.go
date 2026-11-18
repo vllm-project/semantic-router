@@ -18,6 +18,7 @@ package k8s
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -225,7 +226,7 @@ func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalPr
 		}
 		if model.Pricing != nil {
 			providerModel.Pricing = config.ModelPricing{
-				Currency:        model.Pricing.Currency,
+				Currency:        cmp.Or(model.Pricing.Currency, "USD"),
 				PromptPer1M:     model.Pricing.InputTokenPrice * 1000000,
 				CompletionPer1M: model.Pricing.OutputTokenPrice * 1000000,
 			}
@@ -408,6 +409,9 @@ func validateRouterReplayPluginConfig(rawConfig []byte) error {
 	}
 	if cfg.MaxBodyBytes < 0 {
 		return fmt.Errorf("router_replay max_body_bytes cannot be negative")
+	}
+	if err := cfg.ValidatePromptCapture(); err != nil {
+		return fmt.Errorf("router_replay %w", err)
 	}
 	if err := cfg.Shadow.Validate(); err != nil {
 		return fmt.Errorf("router_replay shadow %w", err)

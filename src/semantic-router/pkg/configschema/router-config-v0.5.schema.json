@@ -32,6 +32,53 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AgentRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "main",
+            "subagent"
+          ]
+        },
+        "harness": {
+          "type": "string",
+          "enum": [
+            "claude_code",
+            "codex",
+            "opencode",
+            "deepseek_harness"
+          ]
+        },
+        "types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "request_classes": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "main",
+              "subagent",
+              "workflow",
+              "compaction",
+              "auxiliary"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AlgorithmBudget": {
       "properties": {
         "deadline": {
@@ -341,6 +388,65 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "BudgetMatch": {
+      "properties": {
+        "user": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BudgetsConfig": {
+      "properties": {
+        "currency": {
+          "type": "string"
+        },
+        "unpriced": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "allow"
+          ]
+        },
+        "output_reserve_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "run": {
+          "$ref": "#/$defs/RunBudget"
+        },
+        "users": {
+          "items": {
+            "$ref": "#/$defs/UserBudget"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CacheEconomicsTuning": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cache_ttl_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 1
+        },
+        "default_remaining_turns": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CalibrationArtifact": {
       "properties": {
         "name": {
@@ -487,6 +593,12 @@
         },
         "default": {
           "type": "boolean"
+        },
+        "review_model": {
+          "type": "string"
+        },
+        "memory_model": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -709,6 +821,9 @@
         },
         "signal_timeout_ms": {
           "type": "integer"
+        },
+        "on_signal_overload": {
+          "$ref": "#/$defs/SignalOverloadPolicy"
         }
       },
       "additionalProperties": false,
@@ -1108,6 +1223,7 @@
               "tool_result.is_error",
               "messages[].role",
               "content.file",
+              "tools.defer_loading",
               "reasoning.signature",
               "store"
             ]
@@ -1122,6 +1238,11 @@
         },
         "context_window": {
           "$ref": "#/$defs/ContextWindowConfig"
+        },
+        "drain_timeout_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -1138,11 +1259,17 @@
         "observability": {
           "$ref": "#/$defs/ObservabilityConfig"
         },
+        "masking_identity": {
+          "$ref": "#/$defs/MaskingIdentityConfig"
+        },
         "authz": {
           "$ref": "#/$defs/AuthzConfig"
         },
         "ratelimit": {
           "$ref": "#/$defs/RateLimitConfig"
+        },
+        "budgets": {
+          "$ref": "#/$defs/BudgetsConfig"
         },
         "management_api": {
           "$ref": "#/$defs/ManagementAPIConfig"
@@ -1264,6 +1391,12 @@
         "input_modality": {
           "items": {
             "$ref": "#/$defs/InputModalityRule"
+          },
+          "type": "array"
+        },
+        "agent": {
+          "items": {
+            "$ref": "#/$defs/AgentRule"
           },
           "type": "array"
         },
@@ -2747,6 +2880,9 @@
         },
         "message": {
           "type": "string"
+        },
+        "block": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3307,6 +3443,12 @@
           },
           "type": "array"
         },
+        "api_key_files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "apis": {
           "$ref": "#/$defs/ListenerAPIs",
           "propertyNames": {
@@ -3349,6 +3491,9 @@
         "max_deadline_ms": {
           "type": "integer",
           "minimum": 1
+        },
+        "vsr": {
+          "$ref": "#/$defs/VSRProfile"
         }
       },
       "additionalProperties": false,
@@ -3498,6 +3643,42 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "MaskingIdentityConfig": {
+      "properties": {
+        "namespaces": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MaskingIdentityNamespace"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MaskingIdentityNamespace": {
+      "properties": {
+        "key_file": {
+          "type": "string"
+        },
+        "key_env": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "principal_or_installation"
+          ]
+        },
+        "session_scope": {
+          "type": "boolean"
+        },
+        "registry": {
+          "$ref": "#/$defs/MaskingRegistryConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "MaskingPluginConfig": {
       "properties": {
         "enabled": {
@@ -3505,6 +3686,12 @@
         },
         "signal": {
           "type": "string"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/SignalRef"
+          },
+          "type": "array"
         },
         "entity_types": {
           "items": {
@@ -3517,6 +3704,35 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "index": {
+          "type": "string",
+          "enum": [
+            "registry",
+            "sequence"
+          ]
+        },
+        "identity_namespace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MaskingRegistryConfig": {
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": [
+            "file",
+            "postgres"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "postgres": {
+          "$ref": "#/$defs/RouterReplayPostgresConfig"
         }
       },
       "additionalProperties": false,
@@ -4091,6 +4307,9 @@
     },
     "ModelDeployment": {
       "properties": {
+        "pricing": {
+          "$ref": "#/$defs/ModelPricing"
+        },
         "artifact": {
           "type": "string"
         },
@@ -5668,6 +5887,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "agent",
             "authz",
             "complexity",
             "context",
@@ -5933,6 +6153,9 @@
         },
         "progress_gate": {
           "$ref": "#/$defs/ProgressGateTuning"
+        },
+        "cache_economics": {
+          "$ref": "#/$defs/CacheEconomicsTuning"
         }
       },
       "additionalProperties": false,
@@ -6058,11 +6281,17 @@
     },
     "RouterReplayPluginConfig": {
       "properties": {
-        "capture_personal_data": {
-          "type": "boolean"
-        },
         "enabled": {
           "type": "boolean"
+        },
+        "prompt_capture": {
+          "type": "string",
+          "enum": [
+            "none",
+            "raw",
+            "verified"
+          ],
+          "description": "What a record keeps besides routing data: none (the default) keeps no request or response text; raw keeps the text the capture switches allow, unverified; verified keeps the prompt alone, once the pii rules read it whole and find it clean."
         },
         "max_records": {
           "type": "integer"
@@ -6079,14 +6308,30 @@
         "max_body_bytes": {
           "type": "integer"
         },
+        "max_prompt_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
         "max_tool_trace_bytes": {
           "type": "integer"
+        },
+        "max_tool_trace_total_bytes": {
+          "type": "integer",
+          "minimum": 0
         },
         "max_tool_trace_steps": {
           "type": "integer"
         },
+        "cost_baseline_model": {
+          "type": "string"
+        },
         "shadow": {
           "$ref": "#/$defs/RouterReplayShadowConfig"
+        },
+        "capture_personal_data": {
+          "type": "boolean",
+          "description": "Deprecated: write prompt_capture. false loads as prompt_capture: verified and true as prompt_capture: raw.",
+          "deprecated": true
         }
       },
       "additionalProperties": false,
@@ -6283,6 +6528,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "agent",
             "authz",
             "complexity",
             "context",
@@ -6336,6 +6582,23 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "RunBudget": {
+      "properties": {
+        "limit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "idle_timeout_seconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "limit"
+      ]
+    },
     "SafetyRule": {
       "properties": {
         "name": {
@@ -6374,6 +6637,50 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "SignalOverloadPolicy": {
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "retry"
+          ]
+        },
+        "wait_ms": {
+          "type": "integer",
+          "maximum": 60000,
+          "minimum": 0
+        },
+        "retry_after_seconds": {
+          "type": "integer",
+          "maximum": 60,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SignalRef": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "systemone"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "name"
+      ]
     },
     "SkipProcessingConfig": {
       "properties": {
@@ -6894,6 +7201,36 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "UserBudget": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "match": {
+          "$ref": "#/$defs/BudgetMatch"
+        },
+        "limit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "window": {
+          "type": "string",
+          "enum": [
+            "hour",
+            "day",
+            "week",
+            "month"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "limit",
+        "window"
+      ]
+    },
     "UserFeedbackRule": {
       "properties": {
         "name": {
@@ -6920,6 +7257,97 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "VSRProfile": {
+      "properties": {
+        "router": {
+          "type": "boolean"
+        },
+        "router_turns": {
+          "type": "boolean"
+        },
+        "router_goal": {
+          "type": "string",
+          "enum": [
+            "quality",
+            "balanced",
+            "save"
+          ]
+        },
+        "escalate": {
+          "type": "boolean"
+        },
+        "redact": {
+          "type": "boolean"
+        },
+        "shield": {
+          "type": "boolean"
+        },
+        "guard": {
+          "type": "boolean"
+        },
+        "check": {
+          "type": "boolean"
+        },
+        "rules": {
+          "$ref": "#/$defs/VSRRules"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "VSRRule": {
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "systemone"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "enforce": {
+          "type": "string",
+          "enum": [
+            "required",
+            "advisory"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "name"
+      ]
+    },
+    "VSRRules": {
+      "properties": {
+        "recipe": {
+          "type": "string",
+          "minLength": 1
+        },
+        "guard": {
+          "items": {
+            "$ref": "#/$defs/VSRRule"
+          },
+          "type": "array"
+        },
+        "redact": {
+          "items": {
+            "$ref": "#/$defs/VSRRule"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "recipe"
+      ]
     },
     "ValkeyConfig": {
       "properties": {
@@ -7541,6 +7969,14 @@
         "schema_ref": "#/$defs/InputModalityRule"
       },
       {
+        "type": "agent",
+        "display_name": "Agent",
+        "collection": "agent",
+        "observation_key": "agent",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/AgentRule"
+      },
+      {
         "type": "systemone",
         "display_name": "System One",
         "collection": "systemone",
@@ -7799,6 +8235,15 @@
         ]
       },
       {
+        "key": "masking_identity",
+        "layer": "services",
+        "display_name": "Masking Identity",
+        "path": [
+          "services",
+          "masking_identity"
+        ]
+      },
+      {
         "key": "authz",
         "layer": "services",
         "display_name": "Authz",
@@ -7814,6 +8259,15 @@
         "path": [
           "services",
           "ratelimit"
+        ]
+      },
+      {
+        "key": "budgets",
+        "layer": "services",
+        "display_name": "Budgets",
+        "path": [
+          "services",
+          "budgets"
         ]
       },
       {
@@ -7949,6 +8403,15 @@
         "path": [
           "model_catalog",
           "signal_timeout_ms"
+        ]
+      },
+      {
+        "key": "on_signal_overload",
+        "layer": "model_catalog",
+        "display_name": "On Signal Overload",
+        "path": [
+          "model_catalog",
+          "on_signal_overload"
         ]
       },
       {

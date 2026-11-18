@@ -168,7 +168,7 @@ func (r *OpenAIRouter) recordLooperFailure(
 
 	r.startRouterReplay(ctx, originalModel, "", decisionName)
 	if len(executionEvidence) > 0 {
-		r.updateLooperReplayUsage(ctx, executionEvidence[0].usage)
+		r.updateLooperReplayUsage(ctx, executionEvidence[0].usage, executionEvidence[0].iterations)
 	}
 	r.updateRouterReplayStatus(ctx, statusCode, false)
 	if immediate := response.GetImmediateResponse(); immediate != nil {

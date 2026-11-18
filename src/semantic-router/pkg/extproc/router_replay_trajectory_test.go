@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func newTrajectoryTestRouter(t *testing.T) (*OpenAIRouter, string) {
 func TestHandleRouterReplayTrajectoryConvertsToolTraceToOpenAIMessages(t *testing.T) {
 	router, sessionID := newTrajectoryTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate trajectory response")
 	}
@@ -128,7 +129,7 @@ func TestHandleRouterReplayTrajectoryCoalescesConsecutiveToolCalls(t *testing.T)
 		ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder},
 	}
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate trajectory response")
 	}
@@ -189,7 +190,7 @@ func TestHandleRouterReplayTrajectoryDoesNotReparseStoredWireBodies(t *testing.T
 		ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder},
 	}
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate trajectory response")
 	}
@@ -234,7 +235,7 @@ func TestHandleRouterReplayTrajectoryCollapsesCumulativeToolLoopRecords(t *testi
 	}
 
 	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder}}
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
 	assertIntField(t, body, "record_count", 2)
 	assertIntField(t, body, "turn_count", 1)
@@ -251,7 +252,7 @@ func TestHandleRouterReplayTrajectoryCollapsesCumulativeToolLoopRecords(t *testi
 func TestHandleRouterReplayTrajectoryReturnsEmptyMessagesForUnknownSession(t *testing.T) {
 	router, _ := newTrajectoryTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory?session_id=unknown")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory?session_id=unknown")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate trajectory response")
 	}
@@ -269,7 +270,7 @@ func TestHandleRouterReplayTrajectoryReturnsEmptyMessagesForUnknownSession(t *te
 func TestHandleRouterReplayTrajectoryMethodNotAllowed(t *testing.T) {
 	router, sessionID := newTrajectoryTestRouter(t)
 
-	response := router.handleRouterReplayAPI("POST", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
+	response := router.handleRouterReplayAPI(context.Background(), "POST", "/api/v1/observability/replays/trajectory?session_id="+sessionID)
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}
@@ -281,7 +282,7 @@ func TestHandleRouterReplayTrajectoryMethodNotAllowed(t *testing.T) {
 func TestHandleRouterReplayTrajectoryMissingSessionID(t *testing.T) {
 	router, _ := newTrajectoryTestRouter(t)
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/trajectory")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/trajectory")
 	if response == nil || response.GetImmediateResponse() == nil {
 		t.Fatal("expected immediate error response")
 	}
@@ -342,4 +343,43 @@ func mustTrajectoryFunction(t *testing.T, toolCall map[string]interface{}) map[s
 		t.Fatalf("expected function object, got %#v", toolCall["function"])
 	}
 	return fn
+}
+
+// A subagent's call carries its harness's agent identity; the session's routes
+// name it so the Dashboard can tell the subagents apart, and leave the main
+// conversation's calls without one.
+func TestBuildTrajectoryRoutesNamesTheSubagent(t *testing.T) {
+	withAgent := routerreplay.RoutingRecord{ID: "sub", SessionPolicy: map[string]interface{}{
+		"identity": map[string]interface{}{"agent": map[string]interface{}{"status": "present", "hash": "9f2c1a"}},
+	}}
+	main := routerreplay.RoutingRecord{ID: "main", SessionPolicy: map[string]interface{}{
+		"identity": map[string]interface{}{"agent": map[string]interface{}{"status": "not_required"}},
+	}}
+	// Codex names its root thread with the session's id, so that agent is the main conversation.
+	root := routerreplay.RoutingRecord{ID: "root", SessionPolicy: map[string]interface{}{
+		"identity": map[string]interface{}{
+			"session": map[string]interface{}{"status": "present", "hash": "26cb8e"},
+			"agent":   map[string]interface{}{"status": "present", "hash": "26cb8e"},
+		},
+	}}
+	routes := buildTrajectoryRoutes([]routerreplay.RoutingRecord{main, withAgent, {ID: "unrecorded"}, root})
+	if routes[0].Agent != "" || routes[1].Agent != "9f2c1a" || routes[2].Agent != "" || routes[3].Agent != "" {
+		t.Fatalf("agents = %q, %q, %q, %q", routes[0].Agent, routes[1].Agent, routes[2].Agent, routes[3].Agent)
+	}
+}
+
+// A route keeps its record's Codex turn ids, so the Dashboard can show a
+// turn's calls, its reviews and its subagents' calls as one unit.
+func TestBuildTrajectoryRoutesKeepsTheAgentTurn(t *testing.T) {
+	routes := buildTrajectoryRoutes([]routerreplay.RoutingRecord{
+		{ID: "main", TurnID: "turn-1"},
+		{ID: "sub", TurnID: "child-turn", ParentTurnID: "turn-1"},
+		{ID: "plain"},
+	})
+	want := [][2]string{{"turn-1", ""}, {"child-turn", "turn-1"}, {"", ""}}
+	for index, route := range routes {
+		if got := [2]string{route.TurnID, route.ParentTurnID}; got != want[index] {
+			t.Fatalf("route %d turns = %v, want %v", index, got, want[index])
+		}
+	}
 }

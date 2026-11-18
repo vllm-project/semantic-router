@@ -21,6 +21,7 @@ func TestUpstreamContextErrorSurvivesResponsePipelineAndReplay(t *testing.T) {
 				r := &OpenAIRouter{ReplayRecorder: recorder}
 				replayConfig := config.DefaultRouterReplayPluginConfig()
 				replayConfig.Enabled = true
+				replayConfig.PromptCapture = config.PromptCaptureRaw
 				replayConfig.CaptureResponseBody = true
 				ctx := &RequestContext{RequestID: "context-request", RequestModel: "public", SourceFormat: format, TargetFormat: llmprotocol.OpenAIChatV1, SemanticRequest: testNeutralRequest("public", "long context"), RouterReplayPluginConfig: &replayConfig, ExpectStreamingResponse: stream}
 				r.startRouterReplay(ctx, "public", "backend", "decision")

@@ -96,10 +96,14 @@ func TestPostgresProviderCacheIntegration(t *testing.T) {
 		NoCacheCost:   &noCache,
 		CacheSavings:  &savings,
 	}
-	if err = postgres.UpdateUsageCost(ctx, record.ID, UsageCost{ProviderCache: complete}); err != nil {
+	accounting := costAccountingFixture()
+	if err = postgres.UpdateUsageCost(ctx, record.ID, UsageCost{ProviderCache: complete, CostAccounting: accounting}); err != nil {
 		t.Fatal(err)
 	}
 	assertStored(record.ID, complete)
+	if got, _, getErr := postgres.Get(ctx, record.ID); getErr != nil || !reflect.DeepEqual(got.CostAccounting, accounting) {
+		t.Fatalf("cost accounting changed in PostgreSQL: %+v (%v)", got.CostAccounting, getErr)
+	}
 
 	page, err := postgres.QueryPage(ctx, QueryFilters{SessionID: record.SessionID}, 10, 0, false)
 	if err != nil {
@@ -118,12 +122,15 @@ func TestPostgresProviderCacheIntegration(t *testing.T) {
 		t.Fatalf("summary list returned the record %d times", listed)
 	}
 	scanned := 0
-	if err = postgres.ScanMetadata(ctx, func(metadata Record) error {
+	if err = postgres.ScanMetadata(ctx, QueryFilters{}, func(metadata Record) error {
 		switch metadata.RequestID {
 		case record.RequestID:
 			scanned++
 			if !reflect.DeepEqual(metadata.ProviderCache, complete) {
 				t.Errorf("metadata scan lost provider cache accounting: %+v", metadata.ProviderCache)
+			}
+			if !reflect.DeepEqual(metadata.CostAccounting, accounting) {
+				t.Errorf("metadata scan lost cost accounting: %+v", metadata.CostAccounting)
 			}
 		default:
 			if metadata.ProviderCache != nil {
@@ -139,4 +146,7 @@ func TestPostgresProviderCacheIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertStored(record.ID, nil)
+	if got, _, _ := postgres.Get(ctx, record.ID); got.CostAccounting != nil {
+		t.Fatalf("a usage update without cost accounting kept the old one: %+v", got.CostAccounting)
+	}
 }

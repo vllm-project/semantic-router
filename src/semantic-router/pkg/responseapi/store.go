@@ -20,6 +20,9 @@ type StoredResponse struct {
 	// Status of the response
 	Status string `json:"status"`
 
+	// IncompleteDetails explains why the response is incomplete.
+	IncompleteDetails *IncompleteDetails `json:"incomplete_details,omitempty"`
+
 	// Input items for this response
 	Input []InputItem `json:"input"`
 
