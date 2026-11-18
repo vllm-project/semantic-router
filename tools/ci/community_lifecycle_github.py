@@ -21,6 +21,7 @@ from community_lifecycle_policy import (
     PR_STATE_LABELS,
     RELEASE_BLOCKER,
     WORKGROUP_LABELS,
+    WORKGROUP_OPTIONS,
     evaluate_issue_acceptance,
     evaluate_pull_request,
     extract_related_issue_numbers,
@@ -28,6 +29,11 @@ from community_lifecycle_policy import (
     plan_issue,
     plan_issue_kind,
     title_format_error,
+)
+from community_reviewers import (
+    DEFAULT_REVIEWERS,
+    desired_workgroup_reviewer,
+    workgroup_reviewers,
 )
 
 # gh prints "message (HTTP 502)" for a JSON error and a bare "HTTP 502" otherwise.
@@ -66,6 +72,7 @@ class GitHubClient:
         method: str = "GET",
         payload: dict[str, Any] | None = None,
         ignore_not_found: bool = False,
+        ignore_unprocessable: bool = False,
     ) -> Any:
         command = ["gh", "api", endpoint, "--method", method, "--include"]
         if payload is not None:
@@ -91,6 +98,9 @@ class GitHubClient:
             if result.returncode == 0:
                 return json.loads(body) if body.strip() else None
             if ignore_not_found and "HTTP 404" in result.stderr:
+                return None
+            if ignore_unprocessable and "HTTP 422" in result.stderr:
+                sys.stderr.write(result.stderr)
                 return None
             server_error = SERVER_ERROR.search(result.stderr[-256:])
             delay = next(delays, None)
@@ -633,6 +643,10 @@ PULL_REQUEST_QUERY = """
       pullRequest(number: $number) {
         reviewDecision
         mergeStateStatus
+        reviewRequests(first: 100) {
+          nodes { requestedReviewer { ... on User { login } } }
+        }
+        latestReviews(first: 100) { nodes { author { login } } }
         closingIssuesReferences(first: 20) { nodes { number } }
         commits(last: 1) {
           nodes { commit { statusCheckRollup { state } } }
@@ -761,6 +775,144 @@ def sync_pull_request(
             method="PATCH",
             payload={"milestone": evaluation.milestone_number},
         )
+
+    if (
+        pull_request.get("state") == "open"
+        and not pull_request.get("draft")
+        and evaluation.valid
+    ):
+        request_workgroup_review(
+            client,
+            repo,
+            pull_request,
+            graph,
+            evaluation.owner_label,
+            current_workgroups,
+        )
+
+
+WORKGROUP_REVIEW_MARKER = "<!-- community-lifecycle:workgroup-review -->"
+WORKGROUP_NAMES = {label: name for name, label in WORKGROUP_OPTIONS.items()}
+
+
+def workgroup_review_comment(
+    owner_label: str, reviewer: str, alternates: list[str]
+) -> str:
+    """Name the requested Lead; code spans keep the alternates un-notified."""
+
+    advice = "To speed up the review, mention them in a reply."
+    if alternates:
+        handles = " or ".join(f"`@{login}`" for login in alternates)
+        advice += f" No response? Ask another Lead: {handles}."
+    return (
+        f"{WORKGROUP_REVIEW_MARKER}\n"
+        f"**Reviewer:** @{reviewer}, {WORKGROUP_NAMES[owner_label]} Lead\n\n"
+        f"{advice}"
+    )
+
+
+def announce_workgroup_review(
+    client: GitHubClient, repo: str, number: int, body: str
+) -> None:
+    """Keep one review comment per PR, editing it when the Lead changes."""
+
+    comments = (
+        client.request(f"repos/{repo}/issues/{number}/comments?per_page=100") or []
+    )
+    existing = next(
+        (
+            comment
+            for comment in comments
+            if WORKGROUP_REVIEW_MARKER in (comment.get("body") or "")
+        ),
+        None,
+    )
+    if existing is None:
+        client.request(
+            f"repos/{repo}/issues/{number}/comments",
+            method="POST",
+            payload={"body": body},
+        )
+    elif existing.get("body") != body:
+        client.request(
+            f"repos/{repo}/issues/comments/{existing['id']}",
+            method="PATCH",
+            payload={"body": body},
+        )
+
+
+def request_workgroup_review(
+    client: GitHubClient,
+    repo: str,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any],
+    owner_label: str | None,
+    previous_workgroups: set[str],
+) -> None:
+    """Request one Lead of the owning group unless one is already engaged."""
+
+    number = int(pull_request["number"])
+    author = (pull_request.get("user") or {}).get("login") or ""
+    reviewers = workgroup_reviewers(owner_label, author)
+    leads = {login.casefold() for login in reviewers}
+    keep = leads | {login.casefold() for login in DEFAULT_REVIEWERS}
+    requested_logins = {
+        requested_user["login"].casefold()
+        for node in (graph.get("reviewRequests") or {}).get("nodes") or []
+        if (requested_user := node.get("requestedReviewer"))
+        and requested_user.get("login")
+    }
+    for previous_owner in previous_workgroups - {owner_label}:
+        previous_reviewer = desired_workgroup_reviewer(previous_owner, number, author)
+        if (
+            previous_reviewer
+            and previous_reviewer.casefold() in requested_logins
+            and previous_reviewer.casefold() not in keep
+        ):
+            client.request(
+                f"repos/{repo}/pulls/{number}/requested_reviewers",
+                method="DELETE",
+                payload={"reviewers": [previous_reviewer]},
+            )
+
+    reviewed_logins = {
+        review_author["login"].casefold()
+        for node in (graph.get("latestReviews") or {}).get("nodes") or []
+        if (review_author := node.get("author")) and review_author.get("login")
+    }
+    if not reviewers or leads & (requested_logins | reviewed_logins):
+        return
+
+    # GitHub refuses a Lead who is not yet a collaborator, such as one with a
+    # pending invitation; the next Lead in the rotation takes the request.
+    start = number % len(reviewers)
+    ordered = reviewers[start:] + reviewers[:start]
+    for index, reviewer in enumerate(ordered):
+        if (
+            client.request(
+                f"repos/{repo}/pulls/{number}/requested_reviewers",
+                method="POST",
+                payload={"reviewers": [reviewer]},
+                ignore_unprocessable=True,
+            )
+            is not None
+        ):
+            print(
+                f"::notice title=Review requested on #{number}::"
+                f"Requested {reviewer} for {owner_label}."
+            )
+            alternates = list(ordered[index + 1 : index + 3])
+            announce_workgroup_review(
+                client,
+                repo,
+                number,
+                workgroup_review_comment(owner_label, reviewer, alternates),
+            )
+            return
+    print(
+        f"::warning title=No review requested on #{number}::"
+        f"GitHub refused every {owner_label} Lead."
+    )
 
 
 def sync_pull_request_event(client: GitHubClient, event: dict[str, Any]) -> None:
