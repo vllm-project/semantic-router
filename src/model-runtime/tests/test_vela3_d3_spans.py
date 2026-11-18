@@ -264,6 +264,35 @@ def test_span_answers_follow_the_contract(runtime) -> None:
     assert body["answers"]["all"]["noul"] == body["answers"]["none"]["noul"] > 0
 
 
+def test_personal_data_outside_the_last_part_is_read(runtime) -> None:
+    # A span question without over reads the user part of a state without an answer, not its last part: a name and
+    # an e-mail in "user" beside a "channel" were missed with a 200 when the last part was read.
+    user = "Hi, this is Maria Gonzalez, write to maria.gonzalez@example.com about the refund."
+    question = {"type": "span", "criteria": ["PERSON"], "threshold": 0.0}
+    status, body = call(
+        runtime,
+        {"state": {"user": user, "channel": "phone"}, "questions": {"pii": question}},
+    )
+    assert status == 200
+    (whole,) = body["spans"]["pii"]
+    assert (whole["start"], whole["end"], whole["text"]) == (0, len(user), user)
+    # Several parts and neither an answer nor a user part: the question fails alone, naming the parts.
+    other = {"type": "noul", "instructions": "Is this hard?"}
+    status, body = call(
+        runtime,
+        {
+            "state": {"notes": user, "channel": "phone"},
+            "questions": {"pii": question, "x": other},
+        },
+    )
+    assert status == 200
+    answer = body["answers"]["pii"]
+    assert answer["error"] == "invalid_question"
+    assert "name the part with over" in answer["message"]
+    assert "pii" not in body.get("spans", {})
+    assert body["answers"]["x"]["type"] == "noul"
+
+
 def test_a_span_question_that_requires_its_full_input_reads_it_completely(
     runtime,
 ) -> None:
