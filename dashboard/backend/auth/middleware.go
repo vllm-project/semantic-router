@@ -257,7 +257,7 @@ func routerPermission(method, path string) (string, bool) {
 		return policy.Permissions[0], true
 	}
 	switch {
-	case path == "/api/models/catalog":
+	case path == "/api/models/catalog", path == "/api/models/health":
 		return PermConfigRead, true
 	case path == "/api/models/discover":
 		return PermConfigWrite, true

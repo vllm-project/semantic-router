@@ -191,6 +191,7 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/setup/activate", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/setup/import-remote", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/models/catalog", expected: PermConfigRead},
+		{method: http.MethodGet, path: "/api/models/health", expected: PermConfigRead},
 		{method: http.MethodPost, path: "/api/models/discover", expected: PermConfigWrite},
 		{method: http.MethodPost, path: "/api/models/verify", expected: PermEvalRun},
 		{method: http.MethodGet, path: "/api/models/verify", expected: PermEvalRun},

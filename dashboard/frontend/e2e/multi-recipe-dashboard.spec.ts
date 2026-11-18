@@ -159,20 +159,24 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('creates a Mixture-of-Models without clipped aliases or assignments', async ({ page }) => {
+test('creates a public model without clipped aliases or assignments', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/config/entrypoints-recipes')
+  await page.goto('/routing/recipes')
 
-  await expect(page.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true')
-  await page.getByRole('button', { name: 'Create model' }).click()
+  await expect(page.getByRole('tab', { name: /Public models/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await page.getByRole('button', { name: 'New public model', exact: true }).click()
 
-  const dialog = page.getByRole('dialog', { name: 'Create model' })
+  const dialog = page.getByRole('dialog', { name: 'New public model' })
   await expect(dialog).toBeVisible()
   await dialog.getByLabel('Model name').fill('vllm-sr/new-mixture')
 
-  const aliasInput = dialog.getByPlaceholder('Add an alias')
+  const aliasInput = dialog.getByLabel('Aliases')
+  await expect(aliasInput).toHaveAttribute('placeholder', 'Add an alias')
   await aliasInput.fill('new-mixture')
-  await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+  await aliasInput.press('Enter')
   await expect(dialog.getByText('new-mixture', { exact: true })).toBeVisible()
 
   const assignment = dialog.getByText('balanced-route', { exact: true }).first()
@@ -191,7 +195,7 @@ test('creates a Mixture-of-Models without clipped aliases or assignments', async
   await expect(assignmentPanel).toContainText('1 selected')
 
   await expect(assignmentPanel.getByRole('checkbox')).toBeChecked()
-  await dialog.getByRole('button', { name: 'Create model' }).click()
+  await dialog.getByRole('button', { name: 'Create public model' }).click()
   await expect(dialog).toBeHidden()
 
   await expect.poll(() => savedConfig).toBeDefined()
@@ -225,15 +229,19 @@ test('publishes a built-in recipe from the config the packaged CLI composes', as
       }),
     })
   })
-  await page.goto('/config/entrypoints-recipes')
-  await page.getByRole('tab', { name: 'Recipes' }).click()
-  await page.getByRole('button', { name: 'Create a model from built-in recipe vault' }).click()
+  await page.goto('/routing/recipes')
+  await page.getByRole('tab', { name: /^Recipes/ }).click()
+  await page.getByRole('button', { name: 'Actions for vault', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Create public model' }).click()
 
-  const dialog = page.getByRole('dialog', { name: 'Create model' })
-  await expect(dialog.getByLabel('Recipe').locator('option:checked')).toHaveText('vault')
+  const dialog = page.getByRole('dialog', { name: 'New public model' })
+  await expect(dialog.getByLabel('Recipe', { exact: true }).locator('option:checked')).toHaveText(
+    'vault',
+  )
   await dialog.getByLabel('Model name').fill('acme/vault')
-  await dialog.getByPlaceholder('Add an alias').fill('vault')
-  await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+  const aliasInput = dialog.getByLabel('Aliases')
+  await aliasInput.fill('vault')
+  await aliasInput.press('Enter')
   await expect(dialog.getByRole('tabpanel', { name: 'guard model assignment' })).toContainText(
     'No model needed',
   )
@@ -242,7 +250,7 @@ test('publishes a built-in recipe from the config the packaged CLI composes', as
     .getByRole('tabpanel', { name: 'private model assignment' })
     .getByText('model-a', { exact: true })
     .click()
-  await dialog.getByRole('button', { name: 'Create model' }).click()
+  await dialog.getByRole('button', { name: 'Create public model' }).click()
   await expect(dialog).toBeHidden()
 
   expect(composeRequest).toEqual({
@@ -262,15 +270,17 @@ test('publishes a built-in recipe from the config the packaged CLI composes', as
 test('dashboard and managers expose recipe-owned routing state', async ({ page }) => {
   await page.goto('/dashboard')
 
-  await expect(page.getByRole('button').filter({ hasText: 'Decisions' }).first()).toContainText('2')
-  await expect(page.getByRole('button').filter({ hasText: 'Signals' }).first()).toContainText('2')
-  await expect(page.getByText('balanced-route')).toBeVisible()
-  await expect(page.getByText('private-route')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Routing objectives' })).toBeVisible()
-  await expect(page.getByText('3 profiles')).toBeVisible()
+  await expect(page.getByTestId('home-count-decisions')).toContainText('2')
+  await expect(page.getByTestId('home-count-signals')).toContainText('2')
+  const routingMix = page.getByTestId('home-routing-mix')
+  await expect(routingMix.getByText('balanced-route')).toBeVisible()
+  await expect(routingMix.getByText('private-route')).toBeVisible()
+  const publicModels = page.getByTestId('home-public-models')
+  await expect(publicModels.getByRole('heading', { name: 'Public models' })).toBeVisible()
+  await expect(publicModels).toContainText('3 recipes')
   await expect(page.getByRole('button', { name: 'View Default routing topology' })).toBeVisible()
   await page.getByRole('button', { name: 'View privacy topology' }).click()
-  await expect(page).toHaveURL(/\/topology\?scope=privacy$/)
+  await expect(page).toHaveURL(/\/routing\/topology\?scope=privacy$/)
 
   await page.goto('/routing/signals')
   const signalScope = page.getByLabel('Recipe', { exact: true })
@@ -302,23 +312,30 @@ test('topology switches the complete graph and test model by entrypoint recipe',
 }) => {
   await page.goto('/topology')
 
-  const scope = page.getByLabel('Entrypoint / recipe')
+  const scope = page.getByLabel('Recipe', { exact: true })
   await expect(scope).toHaveValue('default')
-  await expect(scope.locator('option:checked')).toHaveText('Default routing · vllm-sr/auto')
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
   await expect(page.getByTestId('rf__node-decision-private-route')).toHaveCount(0)
   await scope.selectOption('balanced')
   await expect(scope).toHaveValue('balanced')
+  await expect(page).toHaveURL(/\/routing\/topology\?scope=balanced$/)
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toBeVisible()
-  await expect(
-    page.getByTestId('rf__node-signal-group-keyword').getByText('balanced-keyword'),
-  ).toBeVisible()
-  await expect(
-    page.getByTestId('rf__node-projection-group-balanced-map').getByText('balanced-standard'),
-  ).toBeVisible()
+  await expect(page.getByTestId('rf__node-signal-group-keyword')).toContainText('balanced-keyword')
+  await expect(page.getByTestId('rf__node-projection-group-balanced-map')).toContainText(
+    'balanced-standard',
+  )
+
+  // The Router preview tests a prompt against the recipe's public model.
+  const preview = page.waitForRequest('**/api/topology/test-query')
+  await page.getByRole('textbox', { name: 'Test a prompt' }).fill('balanced answers please')
+  await page.getByRole('button', { name: 'Run', exact: true }).click()
+  expect((await preview).postDataJSON()).toMatchObject({
+    query: 'balanced answers please',
+    model: 'vllm-sr/balanced',
+  })
 
   await scope.selectOption('privacy')
   await expect(page.getByTestId('rf__node-decision-private-route')).toBeVisible()
-  await expect(page.getByTestId('rf__node-signal-group-pii').getByText('private-pii')).toBeVisible()
+  await expect(page.getByTestId('rf__node-signal-group-pii')).toContainText('private-pii')
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
 })

@@ -1,3 +1,4 @@
+import { ROUTER_CONFIG_SCHEMA } from '../generated/routerConfigContract'
 import { concreteRouterConfigSchema, type JSONSchemaNode } from './routerConfigSchema'
 
 // Renders configuration fragments the way the Dashboard backend writes them:
@@ -6,10 +7,20 @@ import { concreteRouterConfigSchema, type JSONSchemaNode } from './routerConfigS
 
 type Schema = JSONSchemaNode | string | undefined
 
+/** The schema of a whole Router configuration document, for YAML that starts at its root. */
+export const ROUTER_CONFIG_DOCUMENT_SCHEMA = ROUTER_CONFIG_SCHEMA as unknown as JSONSchemaNode
+
 const RESERVED_SCALAR = /^(?:true|false|yes|no|on|off|y|n|null|~)$/i
 const NUMERIC_SCALAR =
   /^[-+]?(?:\d[\d_]*(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$|^0x[0-9a-fA-F]+$|^0o[0-7]+$|^[-+]?\.inf$|^\.nan$/i
 const INDICATOR_START = /^[-?:,[\]{}#&*!|>'"%@`]/
+
+/** One line of rendered YAML. */
+export interface ConfigYamlLine {
+  text: string
+  /** Keys and list indexes from the document root to the value the line writes. */
+  path: string[]
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -86,49 +97,80 @@ function childSchema(schema: JSONSchemaNode | undefined, name: string): JSONSche
   return typeof schema.additionalProperties === 'object' ? schema.additionalProperties : undefined
 }
 
-function emitValue(prefix: string, value: unknown, schema: Schema, indent: number): string[] {
+function emitValue(
+  prefix: string,
+  value: unknown,
+  schema: Schema,
+  indent: number,
+  path: string[],
+): ConfigYamlLine[] {
+  const line = (text: string): ConfigYamlLine => ({ text, path })
   if (Array.isArray(value)) {
     return value.length === 0
-      ? [`${prefix} []`]
-      : [prefix, ...emitSequence(value, concrete(schema)?.items, indent)]
+      ? [line(`${prefix} []`)]
+      : [line(prefix), ...emitSequence(value, concrete(schema)?.items, indent, path)]
   }
   if (isRecord(value)) {
     return Object.keys(value).some((name) => value[name] !== undefined)
-      ? [prefix, ...emitMapping(value, schema, indent)]
-      : [`${prefix} {}`]
+      ? [line(prefix), ...emitMapping(value, schema, indent, path)]
+      : [line(`${prefix} {}`)]
   }
   if (typeof value === 'string') {
     const block = blockLiteral(value, indent)
-    if (block) return [`${prefix} ${block[0]}`, ...block.slice(1)]
+    if (block) return [line(`${prefix} ${block[0]}`), ...block.slice(1).map(line)]
   }
-  return [`${prefix} ${scalar(value)}`]
+  return [line(`${prefix} ${scalar(value)}`)]
 }
 
-function emitMapping(value: Record<string, unknown>, schema: Schema, indent: number): string[] {
+function emitMapping(
+  value: Record<string, unknown>,
+  schema: Schema,
+  indent: number,
+  path: string[],
+): ConfigYamlLine[] {
   const resolved = concrete(schema)
   const pad = ' '.repeat(indent)
   return orderedKeys(value, resolved).flatMap((name) =>
-    emitValue(`${pad}${key(name)}:`, value[name], childSchema(resolved, name), indent + 2),
+    emitValue(`${pad}${key(name)}:`, value[name], childSchema(resolved, name), indent + 2, [
+      ...path,
+      name,
+    ]),
   )
 }
 
-function emitSequence(items: unknown[], schema: Schema, indent: number): string[] {
+function emitSequence(
+  items: unknown[],
+  schema: Schema,
+  indent: number,
+  path: string[],
+): ConfigYamlLine[] {
   const pad = ' '.repeat(indent)
-  return items.flatMap((item) => {
+  return items.flatMap((item, index) => {
+    const itemPath = [...path, String(index)]
     if (isRecord(item) && Object.keys(item).some((name) => item[name] !== undefined)) {
-      const lines = emitMapping(item, schema, indent + 2)
-      return [`${pad}- ${lines[0].trimStart()}`, ...lines.slice(1)]
+      const [first, ...rest] = emitMapping(item, schema, indent + 2, itemPath)
+      return [{ ...first, text: `${pad}- ${first.text.trimStart()}` }, ...rest]
     }
     if (Array.isArray(item) && item.length > 0) {
-      return [`${pad}-`, ...emitSequence(item, concrete(schema)?.items, indent + 2)]
+      return [
+        { text: `${pad}-`, path: itemPath },
+        ...emitSequence(item, concrete(schema)?.items, indent + 2, itemPath),
+      ]
     }
-    return emitValue(`${pad}-`, item, schema, indent + 2)
+    return emitValue(`${pad}-`, item, schema, indent + 2, itemPath)
   })
+}
+
+/** YAML lines for a mapping, each with the path of the value it writes. */
+export function configYamlLines(value: Record<string, unknown>, schema?: Schema): ConfigYamlLine[] {
+  return emitMapping(value, schema, 0, [])
 }
 
 /** YAML for a mapping, ordered by the Router schema when one is given. */
 export function configYaml(value: Record<string, unknown>, schema?: Schema): string {
-  return `${emitMapping(value, schema, 0).join('\n')}\n`
+  return `${configYamlLines(value, schema)
+    .map((line) => line.text)
+    .join('\n')}\n`
 }
 
 /**
@@ -141,7 +183,8 @@ export function configCollectionItemYaml(
   itemSchema?: Schema,
 ): string {
   const lines = path.map((segment, index) => `${' '.repeat(index * 2)}${key(segment)}:`)
-  return `${[...lines, ...emitSequence([item], itemSchema, path.length * 2)].join('\n')}\n`
+  const entry = emitSequence([item], itemSchema, path.length * 2, [...path])
+  return `${[...lines, ...entry.map((line) => line.text)].join('\n')}\n`
 }
 
 export interface LineChange {
@@ -149,36 +192,140 @@ export interface LineChange {
   text: string
 }
 
+interface DiffStep {
+  kind: LineChange['kind']
+  /** Index in the first document, or -1 for an added line. */
+  before: number
+  /** Index in the second document, or -1 for a removed line. */
+  after: number
+}
+
+// A longest-common-subsequence diff. Lines both documents start or end with
+// are matched first, so an edit to a long document only compares the middle.
+function diffSteps(a: readonly string[], b: readonly string[]): DiffStep[] {
+  let start = 0
+  while (start < a.length && start < b.length && a[start] === b[start]) start += 1
+  let endA = a.length
+  let endB = b.length
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    endA -= 1
+    endB -= 1
+  }
+  const rows = endA - start
+  const width = endB - start + 1
+  const lengths = new Uint32Array((rows + 1) * width)
+  for (let i = rows - 1; i >= 0; i -= 1) {
+    for (let j = width - 2; j >= 0; j -= 1) {
+      lengths[i * width + j] =
+        a[start + i] === b[start + j]
+          ? lengths[(i + 1) * width + j + 1] + 1
+          : Math.max(lengths[(i + 1) * width + j], lengths[i * width + j + 1])
+    }
+  }
+
+  const steps: DiffStep[] = []
+  for (let index = 0; index < start; index += 1) {
+    steps.push({ kind: 'same', before: index, after: index })
+  }
+  let i = 0
+  let j = 0
+  while (i < rows && j < width - 1) {
+    if (a[start + i] === b[start + j]) {
+      steps.push({ kind: 'same', before: start + i, after: start + j })
+      i += 1
+      j += 1
+    } else if (lengths[(i + 1) * width + j] >= lengths[i * width + j + 1]) {
+      steps.push({ kind: 'remove', before: start + i, after: -1 })
+      i += 1
+    } else {
+      steps.push({ kind: 'add', before: -1, after: start + j })
+      j += 1
+    }
+  }
+  while (i < rows) steps.push({ kind: 'remove', before: start + i++, after: -1 })
+  while (j < width - 1) steps.push({ kind: 'add', before: -1, after: start + j++ })
+  for (let offset = 0; endA + offset < a.length; offset += 1) {
+    steps.push({ kind: 'same', before: endA + offset, after: endB + offset })
+  }
+  return steps
+}
+
 /** A line diff between two short documents, in reading order. */
 export function diffLines(before: string, after: string): LineChange[] {
   const a = before.replace(/\n$/, '').split('\n')
   const b = after.replace(/\n$/, '').split('\n')
-  const lengths = Array.from({ length: a.length + 1 }, () =>
-    new Array<number>(b.length + 1).fill(0),
-  )
-  for (let i = a.length - 1; i >= 0; i -= 1) {
-    for (let j = b.length - 1; j >= 0; j -= 1) {
-      lengths[i][j] =
-        a[i] === b[j] ? lengths[i + 1][j + 1] + 1 : Math.max(lengths[i + 1][j], lengths[i][j + 1])
+  return diffSteps(a, b).map((step) => ({
+    kind: step.kind,
+    text: step.kind === 'add' ? b[step.after] : a[step.before],
+  }))
+}
+
+/** A changed or context line of a YAML diff. */
+export interface ConfigYamlChange extends LineChange {
+  path: string[]
+  /** The line's number before the change, for same and removed lines. */
+  oldNumber?: number
+  /** The line's number after the change, for same and added lines. */
+  newNumber?: number
+}
+
+export interface ConfigYamlHunk {
+  /** Dotted path of the mapping the hunk's first change is in; empty at the document root. */
+  header: string
+  lines: ConfigYamlChange[]
+  /** Unchanged lines left out since the previous hunk, or since the start. */
+  skippedBefore: number
+}
+
+/**
+ * The line diff of two documents rendered as YAML, cut into hunks with
+ * `context` unchanged lines around each change. `Infinity` keeps one hunk
+ * with every line.
+ */
+export function configYamlDiff(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  { schema, context = 2 }: { schema?: Schema; context?: number } = {},
+): ConfigYamlHunk[] {
+  const a = configYamlLines(before, schema)
+  const b = configYamlLines(after, schema)
+  const changes: ConfigYamlChange[] = diffSteps(
+    a.map((line) => line.text),
+    b.map((line) => line.text),
+  ).map((step) => {
+    const line = step.kind === 'remove' ? a[step.before] : b[step.after]
+    return {
+      kind: step.kind,
+      text: line.text,
+      path: line.path,
+      oldNumber: step.before >= 0 ? step.before + 1 : undefined,
+      newNumber: step.after >= 0 ? step.after + 1 : undefined,
     }
-  }
-  const changes: LineChange[] = []
-  let i = 0
-  let j = 0
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) {
-      changes.push({ kind: 'same', text: a[i] })
-      i += 1
-      j += 1
-    } else if (lengths[i + 1][j] >= lengths[i][j + 1]) {
-      changes.push({ kind: 'remove', text: a[i] })
-      i += 1
-    } else {
-      changes.push({ kind: 'add', text: b[j] })
-      j += 1
+  })
+
+  const ranges: Array<[number, number]> = []
+  changes.forEach((change, index) => {
+    if (change.kind === 'same') return
+    const start = Math.max(0, index - context)
+    const end = Math.min(changes.length - 1, index + context)
+    const last = ranges[ranges.length - 1]
+    if (last && start <= last[1] + 1) last[1] = Math.max(last[1], end)
+    else ranges.push([start, end])
+  })
+
+  let previousEnd = -1
+  return ranges.map(([start, end]) => {
+    const lines = changes.slice(start, end + 1)
+    const firstChange = lines.find((line) => line.kind !== 'same') ?? lines[0]
+    const hunk: ConfigYamlHunk = {
+      header: firstChange.path
+        .slice(0, -1)
+        .filter((segment) => !/^\d+$/.test(segment))
+        .join('.'),
+      lines,
+      skippedBefore: start - previousEnd - 1,
     }
-  }
-  while (i < a.length) changes.push({ kind: 'remove', text: a[i++] })
-  while (j < b.length) changes.push({ kind: 'add', text: b[j++] })
-  return changes
+    previousEnd = end
+    return hunk
+  })
 }

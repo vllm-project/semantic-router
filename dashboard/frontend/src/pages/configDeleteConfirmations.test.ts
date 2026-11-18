@@ -6,7 +6,7 @@ const readSource = (name: string) => readFileSync(new URL(name, import.meta.url)
 describe('configuration delete confirmation contracts', () => {
   it.each([
     ['./ConfigPageDecisionsSection.tsx', 'decisionDeletePending', 'decisionDeleteError'],
-    ['./ConfigPageMoMRoutingPanel.tsx', 'entrypointPendingDelete', 'deleteError'],
+    ['./ConfigPageEntrypointsRecipesSection.tsx', 'entrypointPendingDelete', 'deleteError'],
     ['./ConfigPageProjectionsSection.tsx', 'projectionDeletePending', 'projectionDeleteError'],
   ])('uses the shared confirmation flow in %s', (path, pendingState, errorState) => {
     const source = readSource(path)
@@ -36,15 +36,16 @@ describe('configuration delete confirmation contracts', () => {
     expect(source).toContain('confirmDeleteProjection')
   })
 
-  it.each([
-    ['./ConfigPageSignalsSection.tsx', 'signalsPendingDelete', 'confirmDeleteSignals'],
-  ])('removes native browser confirmation from %s', (path, targetState, confirmAction) => {
-    const source = readSource(path)
+  it.each([['./ConfigPageSignalsSection.tsx', 'signalsPendingDelete', 'confirmDeleteSignals']])(
+    'removes native browser confirmation from %s',
+    (path, targetState, confirmAction) => {
+      const source = readSource(path)
 
-    expect(source).toContain('<ConfirmDialog')
-    expect(source).toContain(targetState)
-    expect(source).toContain(confirmAction)
-    expect(source).not.toMatch(/\b(?:window\.)?confirm\s*\(/)
-    expect(source).not.toMatch(/\b(?:window\.)?alert\s*\(/)
-  })
+      expect(source).toContain('<ConfirmDialog')
+      expect(source).toContain(targetState)
+      expect(source).toContain(confirmAction)
+      expect(source).not.toMatch(/\b(?:window\.)?confirm\s*\(/)
+      expect(source).not.toMatch(/\b(?:window\.)?alert\s*\(/)
+    },
+  )
 })
