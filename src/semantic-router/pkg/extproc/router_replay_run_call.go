@@ -76,7 +76,8 @@ func replayRunCallMarkers(record routerreplay.RoutingRecord) []string {
 	guard := record.JailbreakDetected || record.PIIDetected || record.HallucinationDetected
 	// A guard decision that answers with its fast response refuses with a
 	// 200 and calls no model.
-	refused := (record.JailbreakDetected || record.PIIDetected) && record.SelectionMethod == "fast_response"
+	refused := (record.JailbreakDetected || record.PIIDetected) &&
+		(record.SelectionMethod == "fast_response" || record.SelectedModel == "")
 	block := record.PIIBlocked || refused || (guard && record.ResponseStatus >= 400 && record.ResponseStatus < 500)
 	failed := !block && (record.LifecycleState == routerreplay.LifecycleFailed || record.ResponseStatus >= 400)
 	requestClass := ""

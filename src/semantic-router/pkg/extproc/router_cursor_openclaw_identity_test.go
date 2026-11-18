@@ -186,6 +186,8 @@ func TestRunCallsMarkSharedAgentEvents(t *testing.T) {
 		"an image":                {record: routerreplay.RoutingRecord{ImageCount: 1}, marker: routerreplay.RunMarkerImage},
 		"a guard's fast response": {record: routerreplay.RoutingRecord{JailbreakDetected: true, SelectionMethod: "fast_response", ResponseStatus: 200}, marker: routerreplay.RunMarkerBlock},
 		"a plain fast response":   {record: routerreplay.RoutingRecord{SelectionMethod: "fast_response", ResponseStatus: 200}, marker: routerreplay.RunMarkerBlock, absent: true},
+		"a guard with no model":   {record: routerreplay.RoutingRecord{JailbreakDetected: true, ResponseStatus: 200}, marker: routerreplay.RunMarkerBlock},
+		"a flagged call answered": {record: routerreplay.RoutingRecord{JailbreakDetected: true, SelectedModel: "a", ResponseStatus: 200}, marker: routerreplay.RunMarkerBlock, absent: true},
 		"a main call":             {record: routerreplay.RoutingRecord{Agent: agent(config.AgentRequestClassMain)}, marker: routerreplay.RunMarkerCompaction, absent: true},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -215,4 +217,39 @@ func TestRunMarksASubagentsFirstCallWithItsType(t *testing.T) {
 	require.NotContains(t, second.Markers, routerreplay.RunMarkerSubagentStart)
 	agents := lanes.agents(nil, []routerreplay.RunCall{main, first, second})
 	require.Equal(t, "Explore", agents[1].Type)
+}
+
+// OpenCode 1.19 opens its compaction with other instructions than earlier
+// releases did; both read as a compaction.
+func TestOpenCodeCompactionInstructionsOfBothReleases(t *testing.T) {
+	for _, instruction := range []string{
+		"You are an anchored context summarization assistant for coding sessions.",
+		"You are a context summarization agent. You are given a conversation between a user and an agent.",
+	} {
+		request := &llmprotocol.Request{Instructions: []llmprotocol.InstructionBlock{
+			{Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: instruction}}},
+		}}
+		require.Equal(t, config.AgentRequestClassCompaction, openCodeRequestClass(request, false))
+	}
+}
+
+// OpenClaw names its session in prompt_cache_key when its model entry turns
+// cache keys on: the agent turns of one compaction generation and the
+// compaction itself share it. Without a key the Router derives one.
+func TestOpenClawSessionFromItsPromptCacheKey(t *testing.T) {
+	request := func(key string) *llmprotocol.Request {
+		return &llmprotocol.Request{PromptCacheKey: key, Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: openClawTestSystem}}},
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Run the tests."}}},
+		}}
+	}
+	session := func(key string) string {
+		ctx := &RequestContext{Headers: map[string]string{headers.UserAgent: openClawTestUserAgent}, SemanticRequest: request(key)}
+		return harnessRunSession(ctx, config.RouterLearningProtectionConfig{})
+	}
+	require.Equal(t, "openclaw-3b1d9a4e", session("3b1d9a4e:0"))
+	require.Equal(t, "openclaw-3b1d9a4e", session("3b1d9a4e:1"))
+	require.Equal(t, "openclaw-3b1d9a4e", session("3b1d9a4e"))
+	require.True(t, strings.HasPrefix(session(""), "openclaw-start-"))
+	require.True(t, strings.HasPrefix(session(strings.Repeat("k", maxOpenClawSessionBytes+1)), "openclaw-start-"))
 }

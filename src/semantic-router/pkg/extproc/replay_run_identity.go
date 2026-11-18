@@ -57,7 +57,8 @@ func applyReplayRunParent(record *store.Record, parent *replayRunParent) {
 // harnessRunSession is the session the harness names for a request's agent
 // run: the one protection reads, else the one a supported harness sends,
 // pinned or Codex's session-id, else for Cursor and OpenClaw, which send
-// none, the conversation id the Router derives. A run keeps it whichever
+// no session header, the session OpenClaw names in prompt_cache_key or the
+// conversation id the Router derives. A run keeps it whichever
 // identity headers protection is configured with and whether protection can
 // key the call.
 func harnessRunSession(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) string {
@@ -68,7 +69,12 @@ func harnessRunSession(ctx *RequestContext, cfg config.RouterLearningProtectionC
 		return sessionID
 	}
 	switch harness := requestHarness(ctx); harness {
-	case store.HarnessCursor, store.HarnessOpenClaw:
+	case store.HarnessOpenClaw:
+		if session := openClawSession(ctx); session != "" {
+			return session
+		}
+		return derivedConversationID(ctx, harness)
+	case store.HarnessCursor:
 		return derivedConversationID(ctx, harness)
 	}
 	return ""

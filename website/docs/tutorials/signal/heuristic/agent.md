@@ -99,7 +99,8 @@ spawned it, with the child as the agent, unless the request pins a session in
 default, so a run has one level. OpenCode marks no request class, so its two
 side requests are known by the instructions they open with: `You are a title
 generator.` for a session title and `You are an anchored context summarization
-assistant` for a summary of the session. A project that replaces those prompts
+assistant` (OpenCode 1.19: `You are a context summarization agent.`) for a
+summary of the session. A project that replaces those prompts
 sends calls that read as `main`. This was checked with OpenCode 1.18.10.
 
 DeepSeek Harness is known by its User-Agent, `deepseek-harness/<version>`. It

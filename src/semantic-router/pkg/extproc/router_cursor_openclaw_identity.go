@@ -31,6 +31,25 @@ func isOpenClaw(ctx *RequestContext) bool {
 	return strings.HasPrefix(strings.ToLower(leadingInstructionText(ctx.SemanticRequest)), openClawInstructionPrefix)
 }
 
+// maxOpenClawSessionBytes bounds the session OpenClaw names in its
+// prompt_cache_key.
+const maxOpenClawSessionBytes = 128
+
+// openClawSession is the session OpenClaw names in prompt_cache_key when its
+// model entry turns prompt cache keys on: <session>:<compaction generation>
+// on an agent turn, the bare session on a compaction. Empty for any other
+// request, or a key too long to be a session id.
+func openClawSession(ctx *RequestContext) string {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return ""
+	}
+	session, _, _ := strings.Cut(strings.TrimSpace(ctx.SemanticRequest.PromptCacheKey), ":")
+	if session == "" || len(session) > maxOpenClawSessionBytes {
+		return ""
+	}
+	return "openclaw-" + session
+}
+
 // derivedConversationID is the session Router Replay files a call of a
 // harness that names none under. The conversation-start fingerprint reads
 // only the first characters of the first user message, and Cursor opens that

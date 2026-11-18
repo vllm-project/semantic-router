@@ -73,8 +73,11 @@ configured, because protection reads what they send:
   and Cursor opens that message with the same workspace preamble in every
   conversation, so its conversations would share one fingerprint. Replay
   therefore files a Cursor or OpenClaw call that pins no session under
-  `cursor-start-<hash>` or `openclaw-start-<hash>`: a hash of the whole first
-  user message, the first 512 characters of the system instructions, the
+  `cursor-start-<hash>` or `openclaw-start-<hash>`. OpenClaw names its session
+  in `prompt_cache_key` when its model entry sets
+  `compat.supportsPromptCacheKey: true`; the part before `:` is then the
+  session, `openclaw-<session>`, kept across its compactions. The hash covers
+  the whole first user message, the first 512 characters of the system instructions, the
   request's `user` field and the authenticated tenant, keyed with
   `USER_SCOPE_NAMESPACE_SECRET` as the fingerprint is. Every call of one
   conversation resends them, and only the hash is kept. Replay and tracing
