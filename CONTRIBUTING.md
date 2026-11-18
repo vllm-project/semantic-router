@@ -66,12 +66,15 @@ the Community check enforces this contract.
 The Community title and linked-issue checks run when a non-draft PR is opened,
 reopened, edited, or marked ready for review. They do not run on every push,
 so pushing new commits does not refresh them. Draft and bot PRs skip these
-checks. After each Community run and check-suite completion, and once an hour,
-Community Label Sync runs trusted `main` code that reads the PR's current
-linked issues and updates its `pr/*` state, `wg/*` owner, and milestone. If a
-linked issue is no longer accepted or no longer resolves to exactly one owner,
-the PR moves to `pr/blocked` even though an earlier Community check passed; if
-the issue's single owner changes, the PR follows the new owner.
+checks. Community Label Sync runs trusted `main` code that reads the PR's
+current linked issues and updates its `pr/*` state, `wg/*` owner, and
+milestone. It runs when a Community run triggered by a PR or review event
+completes, when a completed check suite identifies a PR, and in an hourly
+sweep over open PRs. Admission requires at least one linked accepted issue,
+and the accepted linked issues must together resolve to exactly one recognized
+Workgroup owner. If the PR no longer meets these conditions, it moves to
+`pr/blocked` even though an earlier Community check passed; if that single
+owner changes, the PR follows the new owner.
 
 A green Community check therefore records the result of one event. It does not
 prove that the PR's admission metadata is still valid or that later commits
