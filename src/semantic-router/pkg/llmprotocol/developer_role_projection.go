@@ -1,8 +1,8 @@
 package llmprotocol
 
 // DeveloperRoleSentAsSystem is the reason of the diagnostic a model that lacks
-// the developer role reports.
-const DeveloperRoleSentAsSystem = "the selected model does not support the developer role; developer messages were sent as system messages"
+// the developer role reports. It is also a metric label, so it names no count.
+const DeveloperRoleSentAsSystem = "the selected model does not support the developer role; developer messages were sent in the system role"
 
 // ProjectUnsupportedDeveloperRole sends every developer instruction and message
 // as a system one to a model that declares the developer role unsupported, and
