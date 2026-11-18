@@ -19665,6 +19665,14 @@
             }
           },
           {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "since",
             "in": "query",
             "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
@@ -22340,6 +22348,13 @@
                         ]
                       }
                     },
+                    "harness_counts": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    },
                     "has_more": {
                       "type": "boolean"
                     },
@@ -22367,6 +22382,7 @@
                     "limit",
                     "offset",
                     "has_more",
+                    "harness_counts",
                     "data"
                   ]
                 }
@@ -22672,6 +22688,14 @@
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -23762,6 +23786,14 @@
             }
           },
           {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "since",
             "in": "query",
             "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
@@ -24371,6 +24403,14 @@
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -25965,6 +26005,14 @@
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }

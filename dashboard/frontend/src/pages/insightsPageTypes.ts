@@ -292,6 +292,8 @@ export interface InsightsListResponse {
   offset?: number
   has_more?: boolean
   next_offset?: number
+  /** Records by harness under every filter but harness: a harness id, or api_client for none. */
+  harness_counts?: Record<string, number> | null
   data: InsightsRecord[]
 }
 
