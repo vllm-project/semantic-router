@@ -210,6 +210,17 @@ class CommunityValidationTests(unittest.TestCase):
         self.assertIn("community_lifecycle.py accept-issue ", commands)
         self.assertNotIn("accept-issues", commands)
 
+    def test_assignment_commands_reconcile_the_issue_after_prow(self) -> None:
+        job = self.data["jobs"]["issue-assignment"]
+        commands = " ".join(step.get("run", "") for step in job["steps"])
+
+        self.assertEqual(job["needs"], "issue-manager")
+        self.assertIn("github.event.issue.pull_request == null", job["if"])
+        self.assertIn("contains(github.event.comment.body, '/assign')", job["if"])
+        self.assertIn("contains(github.event.comment.body, '/unassign')", job["if"])
+        self.assertEqual(job["permissions"], {"contents": "read", "issues": "write"})
+        self.assertIn("community_lifecycle.py sync-issue ", commands)
+
     def test_review_events_keep_the_trusted_label_sync_bridge(self) -> None:
         events = self.data.get("on", self.data.get(True))
         self.assertEqual(

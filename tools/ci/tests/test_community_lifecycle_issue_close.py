@@ -4,6 +4,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 from urllib.parse import quote, unquote
 
 SCRIPT = Path(__file__).resolve().parents[1] / "community_lifecycle.py"
@@ -123,6 +124,63 @@ class IssueReconciliationTests(unittest.TestCase):
 
         self.assertEqual(client.removed, {"needs-acceptance"})
         self.assertEqual(client.added, set())
+
+    def test_assignment_commands_reconcile_from_current_assignees(self) -> None:
+        delivery = {"in-progress", "ready-for-dev", "good first issue"}
+        cases = (
+            (
+                "assign",
+                "/assign",
+                ("ready-for-dev", "good first issue"),
+                ["a"],
+                {"in-progress"},
+            ),
+            ("unassign last", "/unassign", ("in-progress",), [], set()),
+            (
+                "unassign one of two",
+                "/unassign",
+                ("in-progress",),
+                ["b"],
+                {"in-progress"},
+            ),
+            (
+                "rejected assign",
+                "/assign @c",
+                ("ready-for-dev",),
+                [],
+                {"ready-for-dev"},
+            ),
+            ("repeated assign", "/assign", ("in-progress",), ["a"], {"in-progress"}),
+            ("manual assignment", None, ("ready-for-dev",), ["a"], {"in-progress"}),
+        )
+        for name, body, current, assignees, expected in cases:
+            with self.subTest(case=name):
+                issue = {
+                    "number": 20,
+                    "title": "[Bug] Sync labels",
+                    "state": "open",
+                    "labels": labels("accepted", "wg/mom-routing", *current),
+                    "assignees": [{"login": login} for login in assignees],
+                    "milestone": None,
+                }
+                client = FakeIssueApi([issue])
+                event = {
+                    "action": "created" if body else "assigned",
+                    "repository": {"full_name": self.REPO},
+                    "issue": {"number": 20, "labels": [], "assignees": []},
+                    "sender": {"login": "a"},
+                }
+                if body:
+                    event["comment"] = {"body": body}
+
+                with mock.patch.object(
+                    community_lifecycle_github, "actor_can_manage", return_value=False
+                ):
+                    community_lifecycle_github.sync_issue_event(client, event)
+
+                result = (set(current) - client.removed) | client.added
+                self.assertEqual(client.fetched, [20])
+                self.assertEqual(result & delivery, expected)
 
     def closed_listing(self, label: str, page: int = 1) -> str:
         return (

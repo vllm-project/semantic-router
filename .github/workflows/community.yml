@@ -158,3 +158,23 @@ jobs:
             /cc
             /uncc'
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  issue-assignment:
+    name: Reconcile assignment commands
+    needs: issue-manager
+    if: >-
+      github.event.issue.pull_request == null
+      && (contains(github.event.comment.body, '/assign')
+      || contains(github.event.comment.body, '/unassign'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Synchronize delivery labels with the current assignees
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/ci/community_lifecycle.py sync-issue --event "$GITHUB_EVENT_PATH"
