@@ -7,7 +7,6 @@ import {
 } from 'radix-ui'
 import { Check, ChevronRight, X } from 'lucide-react'
 import { cn } from '../lib/cn'
-import { escapeBelongsToNestedPopup } from './overlayEscape'
 
 /* Dialog ------------------------------------------------------------------ */
 
@@ -24,16 +23,12 @@ export const DialogContent = React.forwardRef<
     size?: 'sm' | 'md' | 'lg' | 'xl'
     hideClose?: boolean
   }
->(({ className, children, size = 'md', hideClose, onEscapeKeyDown, ...props }, ref) => (
+>(({ className, children, size = 'md', hideClose, ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className={overlayClass} />
     <DialogPrimitive.Content
       ref={ref}
       data-slot="dialog-content"
-      onEscapeKeyDown={(event) => {
-        if (escapeBelongsToNestedPopup(event)) event.preventDefault()
-        else onEscapeKeyDown?.(event)
-      }}
       className={cn(
         // A column, not a grid: an auto grid track widens to its widest unbreakable child, such as a long link.
         'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl outline-none',
@@ -116,16 +111,12 @@ export const SheetContent = React.forwardRef<
     side?: 'right' | 'left'
     size?: 'sm' | 'md' | 'lg' | 'xl'
   }
->(({ className, children, side = 'right', size = 'md', onEscapeKeyDown, ...props }, ref) => (
+>(({ className, children, side = 'right', size = 'md', ...props }, ref) => (
   <DialogPrimitive.Portal>
     <DialogPrimitive.Overlay className={cn(overlayClass, 'backdrop-blur-[1px]')} />
     <DialogPrimitive.Content
       ref={ref}
       data-slot="sheet-content"
-      onEscapeKeyDown={(event) => {
-        if (escapeBelongsToNestedPopup(event)) event.preventDefault()
-        else onEscapeKeyDown?.(event)
-      }}
       className={cn(
         'fixed inset-y-2 z-50 flex flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl outline-none',
         'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:duration-300 data-[state=open]:ease-[cubic-bezier(0.16,1,0.3,1)]',
