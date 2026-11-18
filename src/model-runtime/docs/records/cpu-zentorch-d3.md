@@ -143,6 +143,23 @@ The 1,200 decisions are 600 Choice and 600 Noul. Batching changes no answer
 with either kernel set: each answers bit for bit the same alone and at
 concurrency 8. zentorch's two rounds differ by 8% in p50.
 
+Its routed paths: `tools/vela3_parity.py`'s generated requests (seed 0, 200
+requests: router adapters, Choice, Set and Noul questions, and spans of every
+route, over text, multi-part and JSON states, CJK text and parts long enough to
+be read in windows), each alone through the runtime at `--dtype auto`. The
+package carries no Vela 3.0 reference runtime, so the current kernels' answers
+are the baseline:
+
+| Kernels | Requests | Questions changed | Span sets changed | max \|Δp\| | Span max \|Δp\| | p50 per request |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Current | 200 | | | 0 | 0 | 1,220 ms (1.00x) |
+| **zentorch linear** | 200 | **0 of 664** | **0 of 251** | 2.9e-6 | 3.2e-6 | 720 ms (**1.69x**) |
+
+The questions are 483 Choice, 143 Noul and 38 Set. Every applied threshold and
+every input-token count is identical. On 11 requests longer than the model
+accepts, both kernel sets refuse the same 17 questions with
+`max_length_exceeded`.
+
 ## The larger sizes
 
 d3-flash, d3, d3-turbo, d3-ultra, vela3-flash and vela3-turbo, current
