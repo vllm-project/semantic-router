@@ -53,7 +53,9 @@
             "claude_code",
             "codex",
             "opencode",
-            "deepseek_harness"
+            "deepseek_harness",
+            "cursor",
+            "openclaw"
           ]
         },
         "types": {
@@ -3503,6 +3505,9 @@
         },
         "vsr": {
           "$ref": "#/$defs/VSRProfile"
+        },
+        "unserved_models": {
+          "$ref": "#/$defs/UnservedModels"
         }
       },
       "additionalProperties": false,
@@ -7205,6 +7210,22 @@
       "properties": {
         "previous_turns": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "UnservedModels": {
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "reject",
+            "route"
+          ]
+        },
+        "route_to": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

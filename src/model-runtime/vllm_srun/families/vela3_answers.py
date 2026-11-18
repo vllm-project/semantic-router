@@ -133,20 +133,24 @@ class Answerer:
         assert span is not None
         role = cast(str, question.over)
         text = state.text(role)
-        threshold, temperature = self.router.span_threshold(route, raw.tokens[role])
-        if question.threshold is not None:
-            threshold = question.threshold
+        own, temperature = self.router.span_threshold(route, raw.tokens[role])
+        threshold = own if question.threshold is None else question.threshold
+        # A threshold above the package's keeps the package's spans that reach it, whole: decoding words at it
+        # would split an entity at its weaker words.
+        words = min(own, threshold)
         probabilities = sigmoid(span.logits / temperature)
         if not np.all(np.isfinite(probabilities)):
             raise ValueError("nonfinite span logits")
         decoded = (
-            decode_spans(probabilities, span.offsets, span.labels, text, threshold)
+            decode_spans(probabilities, span.offsets, span.labels, text, words)
             if len(span.offsets)
             else []
         )
         low, high = question.span_range or (0, len(text))
         spans = []
         for entry in decoded:
+            if words < threshold and entry["probability"] < threshold:
+                continue
             start, end = entry["start"], entry["end"]
             if question.span_range is not None:
                 start, end = trim(text, max(start, low), min(end, high))

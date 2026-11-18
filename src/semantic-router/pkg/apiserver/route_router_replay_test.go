@@ -348,7 +348,7 @@ func TestRouterReplayListFiltersByHarnessThroughManagementAPI(t *testing.T) {
 		t.Fatalf("harness counts = %v, want %v", page.HarnessCounts, want)
 	}
 
-	invalid := serveReplayManagementRequest(mux, "/api/v1/observability/replays?harness=cursor", viewerAccessFixture)
+	invalid := serveReplayManagementRequest(mux, "/api/v1/observability/replays?harness=gemini_cli", viewerAccessFixture)
 	assertReplayStatus(t, invalid, http.StatusBadRequest, "viewer")
 	if !bytes.Contains(invalid.Body.Bytes(), []byte("harness must list one or more of")) {
 		t.Fatalf("invalid harness body = %s", invalid.Body.String())

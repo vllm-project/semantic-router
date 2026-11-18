@@ -119,7 +119,8 @@ func (VLLMSR40Codec) DecodeReply(plan Plan, call WireCall, reply WireReply) ([]I
 }
 
 // NativeProblem reads a native error body,
-// {error: {code, message, reason, limit, question, state, question_error}}.
+// {error: {code, message, reason, limit, question, state, question_error}};
+// a media refusal takes its public code (PublicCode).
 func NativeProblem(status int, body []byte) *systemoneprotocol.Problem {
 	problem := &systemoneprotocol.Problem{Status: status, Kind: problemKind(status)}
 	var answer struct {
@@ -138,7 +139,7 @@ func NativeProblem(status int, body []byte) *systemoneprotocol.Problem {
 		return problem
 	}
 	fields := answer.Error
-	problem.Code, problem.Detail, problem.Reason, problem.Limit = fields.Code, fields.Message, fields.Reason, fields.Limit
+	problem.Code, problem.Detail, problem.Reason, problem.Limit = PublicCode(fields.Code, fields.Reason), fields.Message, fields.Reason, fields.Limit
 	switch {
 	case fields.Question == "":
 	case fields.Code == "question_failed":
