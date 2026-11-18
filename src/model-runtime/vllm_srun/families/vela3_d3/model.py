@@ -415,6 +415,10 @@ class TurboDecisions(Vela3D3Model, StateOnceModel):
     """
 
     replay_gated = True
+    # Its replay passes are row-count-bounded (``BATCH_SIZE`` per pass), not
+    # token-bounded, so the batcher must not hand it packed over-budget rows:
+    # the base's branched forwards may split them, its replays cannot.
+    splits_forwards: ClassVar[bool] = False
 
     def _decisions(
         self, state: Any, questions: dict[str, Any], scan: int | None
