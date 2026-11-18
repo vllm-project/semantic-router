@@ -147,7 +147,7 @@ describe('signals by harness', () => {
     expect(claude.cells.housekeeping).toEqual({ state: 'unseen' })
     expect(cursor.cells.session).toEqual({ state: 'derived', count: 1 })
     expect(cursor.cells.subagents).toEqual({ state: 'never' })
-    expect(cursor.cells.tool_loops).toEqual({ state: 'seen', count: 1 })
+    expect(Object.keys(cursor.cells)).not.toContain('tool_loops')
   })
 
   it('names Cursor and OpenClaw among the identified harnesses', () => {
