@@ -165,7 +165,7 @@ It then reports three checks, each on its own line:
   it, and the check runs only after the basic reply passed.
 
 Both requests carry `x-vsr-probe: connect`, so Router Replay records them with
-`request_kind: probe` and Insights lists no run for them.
+`request_kind: probe` and **Requests** lists no agent run for them.
 
 On a failure the line says what failed in words: a key the gateway refused, no
 connection at that address, or no answer in time. Only the listener's own
@@ -226,7 +226,7 @@ variable whose name says it holds a secret, and bearer tokens. Each step gets a
 line, and a failed one fails the command.
 
 The run sends `x-vsr-probe: connect`, so Router Replay records it as a check
-and Insights lists no run for it: Claude Code through `ANTHROPIC_CUSTOM_HEADERS`
+and **Requests** lists no agent run for it: Claude Code through `ANTHROPIC_CUSTOM_HEADERS`
 in a private copy of its settings, beside the custom headers it already sends,
 and Codex through a `-c model_providers.vllm-sr.http_headers` override. The
 settings connect writes for normal use carry neither. Pi takes headers only from
@@ -399,7 +399,7 @@ listed but never offered for removal, since that launch did not make the
 worktree. Without git on `PATH`, as for a launch with no `--worktree`, each
 session is listed with its state unknown and no cleanup step, since both come
 from git. The record stays after the cleanup, so the list keeps the session id
-to look up in Insights.
+to look up in the Dashboard's **Requests** page.
 
 ### Fetch the key with a command
 
@@ -635,7 +635,8 @@ describes. An `anthropic` backend receives those as sent.
 Protection reads the session and subagent ids Claude Code sends,
 `x-claude-code-session-id` and `x-claude-code-agent-id`, with no identity
 headers configured, so each session and each subagent keeps its own model.
-Insights then names each subagent in a session's routing history.
+The Dashboard's **Requests** page then names each subagent in a session's
+routing history.
 
 For every harness, `connect` leaves protection out of what it asks for only
 when the entrypoint reaches exactly one model, which leaves no model to keep.
@@ -669,8 +670,9 @@ models the entrypoint reaches; without it Claude Code does not know
 exports replaces the login, and it does not probe the gateway, which answers
 only on that login.
 
-The Router then routes each call among Claude models on that login, and
-Insights shows the session's calls with the model each decision picked. A
+The Router then routes each call among Claude models on that login, and the
+Dashboard's **Requests** page shows the session's calls with the model each
+decision picked. A
 cost is the tokens at the API's list price, not what the plan charges. A model
 without `pricing` takes its list price from the built-in catalog, through its
 `catalog` card or through the `provider_model_id` its `anthropic` backend calls,
@@ -954,9 +956,10 @@ Each review's record holds the planned action, the verdict with its risk and
 rationale, the reviewed session, the review model, latency, tokens and cost.
 A failed or interrupted review is recorded as failed or cancelled, never as a
 deny. The command and the rationale are request and response text, so they are
-kept only with `prompt_capture: raw` and body capture on. Open **Insights** and
-switch to **Reviews** for the approval rate, reviews over time, cost by review
-model and a table of reviews; a session's routing history marks the turns
+kept only with `prompt_capture: raw` and body capture on. Open
+**Observe → Requests** and select the **Reviews** tab for the approval rate,
+reviews over time, cost by review model and a table of reviews; a session's
+routing history marks the turns
 whose actions were reviewed. See
 [Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
 for the fields and the API filters.
@@ -1180,7 +1183,7 @@ nothing, so it leaves vSR alone.
 
 The listener can also set which of vSR's apps run, for every plugin pointed at
 it, under `systemone.vsr`; the Dashboard shows each field as Default, On or Off
-under Config › Global Config › vSR agent plugins, where Default leaves the field
+under Settings › Router settings › vSR agent plugins, where Default leaves the field
 out. Each field set there wins over the plugin's own option, so turning
 `redact` off here turns it off in every session that uses this listener, from
 its next prompt a minute or more later. A choice a person makes in Claude Code
@@ -1247,7 +1250,7 @@ rules of a reachable recipe only.
               - {type: keyword, name: employee_id, enforce: required}
 ```
 
-In the Dashboard, Config › Global Config › vSR agent plugins › Rules of your
+In the Dashboard, Settings › Router settings › vSR agent plugins › Rules of your
 own picks the recipe and lists its rules that fit each app, each Off, Advisory
 or Required. Once an app binds a rule, the rules left Off fold behind a
 "Show N more rules" button. Try it under each app sends a sample command or output through
@@ -1343,12 +1346,12 @@ of the models the entrypoint reaches when that is lower, since a model refuses
 a request for more. `CLAUDE_CODE_GATEWAY_HINT_HEADERS` has Claude Code send
 each request's class and each subagent's type, which Claude Code leaves out for
 a custom base URL otherwise; the
-[agent signal](../tutorials/signal/heuristic/agent) routes on them, and Insights
-names a session's run with the title Claude Code shows for it
-([Session names](../tutorials/plugin/router-replay#session-names)). The Codex
-terminal UI's title thread carries the first prompt, which ties it to its run,
-so a Codex run reads by its title too; a headless `codex exec` or `claude -p`
-run reads by its first prompt.
+[agent signal](../tutorials/signal/heuristic/agent) routes on them, and the
+Dashboard's **Requests** page names a session's run with the title Claude Code
+shows for it ([Session names](../tutorials/plugin/router-replay#session-names)).
+The Codex terminal UI's title thread carries the first prompt, which ties it to
+its run, so a Codex run reads by its title too; a headless `codex exec` or
+`claude -p` run reads by its first prompt.
 
 Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
 `codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider
@@ -1827,7 +1830,7 @@ line for each request it refused. The messages are those of Claude Code
 | The request is larger than the context window. Claude Code: `Prompt is too long`. Codex: `This model's maximum context length is`, in an error with code `context_length_exceeded`. VS Code: `The gateway answered 400: This model's maximum context length is`. `pi -p` prints nothing and exits with status 0, and `pi --mode json` shows the error in `errorMessage`. | When the Router refuses it on its own count, it logs `context_window_exceeded` with the window and the count. `vllm-sr connect status` shows the `context window` the harness was given. | Give the harness the smallest window of the models the entrypoint reaches: run connect again after those models change, or pass `--context-window`. In VS Code, set `vllm-sr.maxInputTokens` ([Set budgets](#set-budgets-before-running-a-task)). |
 | `vllm-sr connect codex --check` shows `not observed` on its `Approval review` line. | The Router logs a `routing_decision` line with `"original_model":"vllm-sr/review"` for a review that reached it. If `GET /api/v1/observability/replays?model=vllm-sr/review` on the management API then lists nothing, replay is off for the review recipe. Without that log line, the model ran the command without asking for approval. | Remove `enabled: false` from the `router_replay` plugin of the review recipe to record reviews. A model that runs the command without asking does not fail the check. |
 | Approve for me reviews go to the session model after you set a `review_model`. | `vllm-sr connect status` shows `the session model` as the review model. | Run connect again after you set or change `review_model` ([Approve for me reviews](#approve-for-me-reviews)). |
-| Insights shows no requests, although the harness gets answers. | `GET /api/v1/observability/replays` on the management API answers 404 with `router replay is disabled or unavailable`. | Replay is on by default. Remove `enabled: false` from the `router_replay` plugin in `global.plugins`, or set it to `true`, and restart the Router. |
-| Insights lost the requests from before the Router restarted. | The list answers `"count":0` right after a restart, and either `global.services.router_replay.store_backend` is `memory` or the Router logged at startup that its records `stay in memory`. | Remove `store_backend: memory` so the default `file` store keeps them, make the configuration's directory writable, or configure Postgres or Redis ([Keep records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts)). |
+| The Dashboard's **Requests** page shows no requests, although the harness gets answers. | `GET /api/v1/observability/replays` on the management API answers 404 with `router replay is disabled or unavailable`. | Replay is on by default. Remove `enabled: false` from the `router_replay` plugin in `global.plugins`, or set it to `true`, and restart the Router. |
+| The **Requests** page lost the requests from before the Router restarted. | The list answers `"count":0` right after a restart, and either `global.services.router_replay.store_backend` is `memory` or the Router logged at startup that its records `stay in memory`. | Remove `store_backend: memory` so the default `file` store keeps them, make the configuration's directory writable, or configure Postgres or Redis ([Keep records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts)). |
 | `vllm-sr connect` stops before writing anything, with `so every call would be refused`, for a gateway that presents each client's own login. | The configuration's `auth: {credential: caller}` backends name `openai` while Claude Code sends an `anthropic` login, or the reverse for Codex. For Pi the message names the provider it has no login for, such as `Pi holds no anthropic login`. | Point Claude Code at a gateway whose caller backends name `anthropic`, and Codex at one whose caller backends name `openai`. Sign Pi in with `pi auth login anthropic` or `pi auth login openai-codex`, and run connect again. |
 | `claude -p` prints `[claude-code:unrecognized_model] {"model":"vllm-sr/auto","query_source":"sdk"}` before the answer. | The answer follows. | Nothing to fix: Claude Code does not know the entrypoint's name. |

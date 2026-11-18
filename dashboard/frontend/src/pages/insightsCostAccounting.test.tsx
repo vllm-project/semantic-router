@@ -2,13 +2,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import InsightsCharts from '../components/InsightsCharts'
-import { ModelLabelsContext, modelText } from './insightsModelLabelSupport'
-import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
+import { ModelLabelsContext, modelText, type ModelLabels } from './insightsModelLabelSupport'
+import { buildInsightsRecordSections, renderInsightsSavingsCell } from './insightsPageSupport'
 import type {
   InsightsAggregateCostCoverage,
   InsightsAggregateResponse,
   InsightsRecord,
 } from './insightsPageTypes'
+
+const savingsColumn = (labels: ModelLabels = {}) => ({
+  render: (record: InsightsRecord) => renderInsightsSavingsCell(record, labels),
+})
 
 const priced: InsightsRecord = {
   id: 'priced',
@@ -49,10 +53,10 @@ describe('Insights cost accounting labels', () => {
     expect(field(priced, 'Baseline basis')).toContain(
       'a negative saving means the baseline was cheaper',
     )
-    const savings = createInsightsTableColumns().find((column) => column.key === 'cost_savings')!
-    const html = renderToStaticMarkup(<>{savings.render!(priced)}</>)
+    const savings = savingsColumn()
+    const html = renderToStaticMarkup(<>{savings.render(priced)}</>)
     expect(html).toContain('-$0.0030')
-    expect(html).not.toContain('costValuePositive')
+    expect(html).not.toContain('text-success-foreground')
   })
 
   it('explains a missing price, a missing baseline and a Looper request', () => {
@@ -130,12 +134,14 @@ describe('Insights cost text names models by their labels', () => {
     expect(field(priced, 'Baseline basis', labels)).toContain(
       'the configured baseline model, qwen36 (small).',
     )
-    expect(field(unpriced, 'Router calls', labels)).toContain('2 Decision model calls on qwen36 (qwen-chat)')
-    const savings = createInsightsTableColumns(labels).find(
-      (column) => column.key === 'cost_savings',
-    )!
+    expect(field(unpriced, 'Router calls', labels)).toContain(
+      '2 Decision model calls on qwen36 (qwen-chat)',
+    )
+    const savings = savingsColumn(labels)
     const html = renderToStaticMarkup(
-      <ModelLabelsContext.Provider value={labels}>{savings.render!(priced)}</ModelLabelsContext.Provider>,
+      <ModelLabelsContext.Provider value={labels}>
+        {savings.render(priced)}
+      </ModelLabelsContext.Provider>,
     )
     expect(html).toContain('Baseline (configured rates): <span')
     expect(html).toContain('title="Configured as small">qwen36</span>')
@@ -194,7 +200,7 @@ describe('Insights cost coverage', () => {
     expect(html).toContain('4 Looper hop records not counted')
     expect(html).toContain('Estimated Router Calls')
     expect(html).toContain('$3.50')
-    expect(html).toContain('summaryValueNegative')
+    expect(html).toContain('text-destructive-foreground')
     expect(html).not.toContain('No cost is shown')
   })
 
@@ -330,11 +336,9 @@ describe('Router decision costs', () => {
     expect(field(record, 'Estimated savings before its Router calls')).toBe('-$0.0030')
     expect(field(record, 'Estimated savings')).toBeUndefined()
     expect(field(priced, 'Estimated savings')).toBeDefined()
-    const savings = createInsightsTableColumns().find((column) => column.key === 'cost_savings')!
-    expect(renderToStaticMarkup(<>{savings.render!(record)}</>)).toContain(
-      'Before its Router calls',
-    )
-    expect(renderToStaticMarkup(<>{savings.render!(priced)}</>)).not.toContain('Router calls')
+    const savings = savingsColumn()
+    expect(renderToStaticMarkup(<>{savings.render(record)}</>)).toContain('Before its Router calls')
+    expect(renderToStaticMarkup(<>{savings.render(priced)}</>)).not.toContain('Router calls')
   })
 })
 
@@ -384,7 +388,9 @@ describe('spend budget on a record', () => {
         budget: { scope: 'run', currency: 'USD', limit: 0.03, remaining: 0, estimate: 0 },
       },
     }
-    expect(field(exhausted, 'Spend budget')).toBe('run: $0.0000 of $0.03 left; refused: nothing was left')
+    expect(field(exhausted, 'Spend budget')).toBe(
+      'run: $0.0000 of $0.03 left; refused: nothing was left',
+    )
     expect(field({ ...priced }, 'Spend budget')).toBeUndefined()
   })
 })

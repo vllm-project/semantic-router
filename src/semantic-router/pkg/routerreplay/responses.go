@@ -33,6 +33,8 @@ type AggregateResponse struct {
 	Reviews *ReviewAggregate `json:"reviews,omitempty"`
 	// AvailableReviewModels lists the models that answered any review.
 	AvailableReviewModels []string `json:"available_review_models,omitempty"`
+	// Traffic is present when the query asked for it with an interval.
+	Traffic *TrafficSeries `json:"traffic,omitempty"`
 }
 
 type LifecycleSummary struct {

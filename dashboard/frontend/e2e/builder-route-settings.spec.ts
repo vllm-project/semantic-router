@@ -1,5 +1,4 @@
 import { expect } from '@playwright/test'
-import path from 'node:path'
 
 import { mockAuthenticatedAppShell, test } from './support/compiler'
 
@@ -57,21 +56,13 @@ recipes:
 
 test('keeps route settings outside the form when a Builder route is saved', async ({ page }) => {
   await mockAuthenticatedAppShell(page)
-  // Serve the pinned editor dependency locally so DSL mode works without a CDN.
-  await page.route('https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/**', async (route) => {
-    const asset = new URL(route.request().url()).pathname.split('/min/vs/')[1]
-    await route.fulfill({
-      path: path.join(process.cwd(), 'node_modules/monaco-editor/min/vs', asset),
-    })
-  })
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: config }))
   await page.goto('/builder')
 
-  await page.getByRole('button', { name: /^Guard\b/ }).click()
+  await page.getByRole('button', { name: /^guard_route\b/ }).click()
   await page.getByRole('button', { name: 'Save', exact: true }).click()
 
-  await page.getByRole('button', { name: 'DSL', exact: true }).first().click()
-  await page.getByRole('button', { name: 'Compile', exact: true }).click()
+  await page.getByRole('radio', { name: 'YAML', exact: true }).click()
   const compiled = page.locator('pre').filter({ hasText: 'name: guard_route' })
   for (const setting of [
     'tier: 2',

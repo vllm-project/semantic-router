@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 
 import { formatInsightsCost } from '../utils/insightsCost'
 
-import { countText, formatRunCost, formatRunDuration } from './insightsRunSupport'
+import {
+  callSpan,
+  countText,
+  formatRunCost,
+  formatRunDuration,
+  orderRunAgents,
+} from './insightsRunSupport'
 import type { RunAgent, RunCall, RunResponse, RunToolCall } from './insightsRunTypes'
 
 // A gap with no call in flight that is longer than this shows as idle.
@@ -67,36 +73,6 @@ export type RunCallsRow = RunTurnRow | RunSideRow
 export interface RunSequence {
   columns: RunColumn[]
   rows: RunRow[]
-}
-
-// A call's start and end, its Looper hops included: a Looper call's record
-// starts once its hops are done.
-export function callSpan(call: RunCall): [number, number] {
-  let begin = Date.parse(call.timestamp)
-  let end = begin + call.duration_ms
-  for (const hop of call.hops ?? []) {
-    const [hopBegin, hopEnd] = callSpan(hop)
-    begin = Math.min(begin, hopBegin)
-    end = Math.max(end, hopEnd)
-  }
-  return [begin, end]
-}
-
-// The run's agents in tree order, each after the agent that spawned it.
-function orderAgents(agents: RunAgent[]): RunColumn[] {
-  const labels = new Set(agents.map((agent) => agent.label))
-  const ordered: RunColumn[] = []
-  const visit = (parent: string | undefined, depth: number) => {
-    for (const agent of agents) {
-      const root = !agent.parent || !labels.has(agent.parent)
-      if ((parent === undefined && root) || (parent !== undefined && agent.parent === parent)) {
-        ordered.push({ agent, depth })
-        visit(agent.label, depth + 1)
-      }
-    }
-  }
-  visit(undefined, 0)
-  return ordered
 }
 
 function addMarkers(row: { markers: string[] }, call: RunCall) {
@@ -182,7 +158,7 @@ function returnArrows(columns: RunColumn[], column: Map<string, number>) {
 // subagent starts and one where its result comes back, and a divider
 // wherever the run sat idle.
 export function buildRunSequence(response: RunResponse): RunSequence {
-  const columns = orderAgents(response.run.agents)
+  const columns = orderRunAgents(response.run.agents)
   const column = new Map(columns.map((entry, index) => [entry.agent.label, index]))
   const returns = returnArrows(columns, column)
   const rows: RunRow[] = []

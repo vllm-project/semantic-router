@@ -447,6 +447,13 @@ const sidebars: SidebarsConfig = {
             'proposals/nvidia-dynamo-integration',
           ],
         },
+        {
+          type: 'category',
+          label: 'Dashboard & Operator Experience',
+          items: [
+            'proposals/dashboard-ux-redesign',
+          ],
+        },
       ],
     },
     {

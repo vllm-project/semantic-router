@@ -1,5 +1,5 @@
+import { StatusLabel } from '../ui'
 import type { ModelRuntimeDeployment } from './decisionModelManagement'
-import styles from './DecisionReplicaPanel.module.css'
 
 export default function DecisionReplicaStatus({
   deployment,
@@ -7,33 +7,39 @@ export default function DecisionReplicaStatus({
   deployment?: ModelRuntimeDeployment
 }) {
   if (!deployment?.replicas?.length)
-    return <p className={styles.hint}>Replica observations are not available yet.</p>
+    return (
+      <p className="text-xs text-subtle-foreground">Replica observations are not available yet.</p>
+    )
   return (
-    <div className={styles.workers}>
+    <ul className="overflow-hidden rounded-lg border border-border">
       {deployment.replicas.map((replica) => (
-        <div className={styles.worker} key={replica.id}>
-          <div className={styles.workerHeading}>
-            <strong>
+        <li
+          key={replica.id}
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 border-b border-border px-3 py-2.5 last:border-0 sm:grid-cols-[minmax(0,1fr)_7rem_5rem_5rem]"
+        >
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate font-mono text-[12.5px] font-medium">
               {replica.device || (replica.managed ? 'Managed worker' : 'Attached worker')}
-            </strong>
-            <span className={styles.state} data-ready={replica.ready}>
-              {replica.state}
             </span>
+            <span
+              className="truncate font-mono text-[11px] text-subtle-foreground"
+              title={replica.id}
+            >
+              {replica.id}
+            </span>
+            {replica.reason ? (
+              <span className="text-xs text-muted-foreground">{replica.reason}</span>
+            ) : null}
           </div>
-          <dl>
-            <div>
-              <dt>In flight</dt>
-              <dd>{replica.inflight}</dd>
-            </div>
-            <div>
-              <dt>Restarts</dt>
-              <dd>{replica.restarts}</dd>
-            </div>
-          </dl>
-          <small title={replica.id}>{replica.id}</small>
-          {replica.reason && <p className={styles.hint}>{replica.reason}</p>}
-        </div>
+          <StatusLabel tone={replica.ready ? 'success' : 'warning'}>{replica.state}</StatusLabel>
+          <span className="text-xs text-muted-foreground max-sm:hidden">
+            In flight <span className="font-mono tabular text-foreground">{replica.inflight}</span>
+          </span>
+          <span className="text-xs text-muted-foreground max-sm:hidden">
+            Restarts <span className="font-mono tabular text-foreground">{replica.restarts}</span>
+          </span>
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }

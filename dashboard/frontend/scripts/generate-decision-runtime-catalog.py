@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 RUNTIME = ROOT / "src/model-runtime/vllm_srun"
+EDITORIAL = ROOT / "tools/docs/supported_models.yaml"
 OUTPUT = ROOT / "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json"
 BACKEND_OUTPUT = ROOT / "src/semantic-router/pkg/config/decision_catalog.generated.json"
 RELEASE_OUTPUT = RUNTIME / "registry/releases.generated.json"
@@ -32,8 +33,9 @@ def release_literal(node, bindings):
     return ast.literal_eval(node)
 
 
-def release_projection():
-    """Project literal identities and factory arguments without importing runtime code."""
+def registry_releases():
+    """Every pinned release's literal facts, from literal identities and factory
+    arguments, without importing runtime code."""
     organization = assignment(RUNTIME / "registry/tables/common.py", "ORG")
     releases = {}
     for path in sorted((RUNTIME / "registry/tables").glob("*.py")):
@@ -51,9 +53,19 @@ def release_projection():
             constructor = model
             if model.func.id != "BuiltinModel":
                 factory = factories[model.func.id]
+                parameters = factory.args.args
+                defaults = factory.args.defaults
                 bindings.update(
                     (arg.arg, value)
-                    for arg, value in zip(factory.args.args, model.args, strict=False)
+                    for arg, value in zip(
+                        parameters[len(parameters) - len(defaults) :],
+                        defaults,
+                        strict=True,
+                    )
+                )
+                bindings.update(
+                    (arg.arg, value)
+                    for arg, value in zip(parameters, model.args, strict=False)
                 )
                 bindings.update((item.arg, item.value) for item in model.keywords)
                 constructor = next(
@@ -61,11 +73,24 @@ def release_projection():
                 )
             fields = {item.arg: item.value for item in constructor.keywords}
             repo = release_literal(fields["repo_id"], bindings)
-            revision = release_literal(fields["revision"], bindings)
             if repo in releases:
                 raise ValueError(f"duplicate release: {repo}")
-            releases[repo] = revision
+            releases[repo] = {
+                field: release_literal(fields[source], bindings)
+                for field, source in (
+                    ("revision", "revision"),
+                    ("family", "family"),
+                    ("backbone", "backbone"),
+                    ("minMemoryGiB", "min_device_memory_gib"),
+                    ("parameters", "loaded_parameters"),
+                )
+            }
     return dict(sorted(releases.items()))
+
+
+def release_projection():
+    """The pinned revision of every release."""
+    return {repo: facts["revision"] for repo, facts in registry_releases().items()}
 
 
 def assignment(path, name):
@@ -296,13 +321,85 @@ def backend_projection(data):
     return {"models": models}
 
 
+# The Supported models YAML indents a family or model by two spaces and its
+# fields by four.
+EDITORIAL_ENTRY_INDENT = 2
+EDITORIAL_FIELD_INDENT = 4
+
+
+def editorial():
+    """The family labels and model summaries of the Supported models pages
+    (tools/docs/supported_models.yaml). Read without a YAML library: its
+    two-level block mappings hold plain scalars and folded (>-) summaries."""
+    sections = {"families": {}, "models": {}}
+    section = entry = folded = None
+    for line in EDITORIAL.read_text().splitlines():
+        text = line.strip()
+        if not text or text.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0:
+            section = sections.get(text.removesuffix(":"))
+            entry = folded = None
+        elif section is None:
+            continue
+        elif indent == EDITORIAL_ENTRY_INDENT:
+            entry = section.setdefault(text.removesuffix(":"), {})
+            folded = None
+        elif indent == EDITORIAL_FIELD_INDENT and entry is not None:
+            key, _, value = text.partition(":")
+            value = value.strip()
+            folded = key if value in {">", ">-"} else None
+            entry[key] = "" if folded else value
+        elif folded and indent > EDITORIAL_FIELD_INDENT:
+            entry[folded] = f"{entry[folded]} {text}".strip()
+    return sections["families"], sections["models"]
+
+
+def dashboard_projection(data, backend):
+    """Every release of a family the Router's decision catalog serves: what the
+    catalog says it answers and reads (nothing for a release it leaves out,
+    such as vela3-fast-vision), the registry's facts and the editorial text."""
+    families, summaries = editorial()
+    served = {model["id"]: model for model in backend["models"]}
+    served_families = {model["family"] for model in backend["models"]}
+    models = []
+    for repo, facts in registry_releases().items():
+        if facts["family"] not in served_families:
+            continue
+        answers = served.get(repo, {})
+        editorial_entry = summaries.get(repo, {})
+        organization, _, name = repo.partition("/")
+        models.append(
+            {
+                "id": repo,
+                "name": name,
+                "provider": organization,
+                "family": facts["family"],
+                "familyLabel": editorial_entry.get("family_label")
+                or families.get(facts["family"], {}).get("label", ""),
+                "revision": facts.get("revision", ""),
+                "backbone": facts["backbone"],
+                "minMemoryGiB": facts["minMemoryGiB"],
+                "parameters": facts["parameters"],
+                "questionTypes": answers.get("question_types", []),
+                "modalities": answers.get("modalities", []),
+                "spanHeads": answers.get("span_heads", []),
+                "summary": editorial_entry.get("summary", ""),
+            }
+        )
+    models.sort(key=lambda model: model["id"])
+    return {"questionTypes": data["questionTypes"], "models": models}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     data = projection()
-    content = json.dumps(data, indent=2) + "\n"
-    backend = json.dumps(backend_projection(data), indent=2) + "\n"
+    backend_data = backend_projection(data)
+    content = json.dumps(dashboard_projection(data, backend_data), indent=2) + "\n"
+    backend = json.dumps(backend_data, indent=2) + "\n"
     releases = json.dumps(release_projection(), indent=2) + "\n"
     if args.check:
         if (

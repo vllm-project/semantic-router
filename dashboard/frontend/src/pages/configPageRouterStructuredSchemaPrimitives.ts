@@ -9,6 +9,8 @@ export type RouterStructuredKind =
   | 'string-map'
   | 'object'
   | 'object-list'
+  /** A mapping of user-named entries that share one object schema. */
+  | 'object-map'
   | 'json'
 
 export interface RouterStructuredSchema {

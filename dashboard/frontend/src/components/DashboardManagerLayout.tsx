@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
-
-import DashboardSurfaceHero, { type DashboardSurfaceHeroMeta } from './DashboardSurfaceHero'
-import styles from './DashboardManagerLayout.module.css'
+import { MetaItem, PageContainer, PageHeader } from '../ui'
+import type { DashboardSurfaceHeroMeta } from './DashboardSurfaceHero'
 
 interface DashboardManagerLayoutProps {
   compactHero?: boolean
@@ -9,27 +8,38 @@ interface DashboardManagerLayoutProps {
   title: string
   description: string
   meta?: DashboardSurfaceHeroMeta[]
+  icon?: ReactNode
+  actions?: ReactNode
   children: ReactNode
 }
 
+/** Page frame with a compact header; `meta` renders as a quiet facts row. */
 export default function DashboardManagerLayout({
-  compactHero = false,
-  eyebrow,
   title,
   description,
   meta,
+  icon,
+  actions,
   children,
 }: DashboardManagerLayoutProps) {
   return (
-    <section className={styles.page}>
-      <DashboardSurfaceHero
-        compact={compactHero}
-        eyebrow={eyebrow}
+    <PageContainer>
+      <PageHeader
         title={title}
         description={description}
-        meta={meta}
+        icon={icon}
+        actions={actions}
+        meta={
+          meta && meta.length > 0
+            ? meta.map((item) => (
+                <MetaItem key={item.label} label={item.label}>
+                  {item.value}
+                </MetaItem>
+              ))
+            : undefined
+        }
       />
-      <div className={styles.body}>{children}</div>
-    </section>
+      {children}
+    </PageContainer>
   )
 }

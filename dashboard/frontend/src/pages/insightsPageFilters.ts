@@ -9,9 +9,12 @@ interface InsightsFilterState {
 }
 
 // The list's filters as the replay API reads them. turn is the Codex turn from the
-// page URL, which the API matches on turn_id or parent_turn_id.
+// page URL, which the API matches on turn_id or parent_turn_id; since is an RFC 3339
+// lower bound on the record time.
 export interface ReplayQueryFilters extends InsightsFilterState {
   turn: string
+  session?: string
+  since?: string
 }
 
 export function buildReplayQueryString(
@@ -44,6 +47,12 @@ export function buildReplayQueryString(
   }
   if (filters.turn) {
     params.set('turn_id', filters.turn)
+  }
+  if (filters.session) {
+    params.set('session_id', filters.session)
+  }
+  if (filters.since) {
+    params.set('since', filters.since)
   }
 
   const query = params.toString()

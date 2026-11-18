@@ -1,159 +1,160 @@
-import RouterModelInventory from '../components/RouterModelInventory'
-import { formatRouterModelLabel } from '../components/routerModelPresentation'
+import { ArrowRight, BrainCircuit } from 'lucide-react'
+
 import {
-  getLoadedModelCount,
-  getTotalKnownModelCount,
-  type RouterModelInfo,
-  type RouterModelsInfo,
-} from '../utils/routerRuntime'
+  Button,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  IconTile,
+  Skeleton,
+  StatusLabel,
+} from '../ui'
+import { formatRouterModelLabel } from '../components/routerModelPresentation'
+import type { RouterModelsInfo } from '../utils/routerRuntime'
 import type { RouterConfig } from './dashboardPageTypes'
 import {
   buildIntelligenceRoutingScopes,
-  getDecisionRuntimeSummary,
+  decisionModelHealth,
 } from './dashboardRouterIntelligenceSupport'
-import styles from './DashboardRouterIntelligence.module.css'
+import type { ModelRuntimeInventory } from './decisionModelManagement'
 
 interface DashboardRouterIntelligenceProps {
   config: RouterConfig | null
-  modelsInfo?: RouterModelsInfo | null
+  /** Still loading the configuration, as opposed to having failed to. */
+  loading: boolean
+  inventory?: ModelRuntimeInventory | null
+  routerModels?: RouterModelsInfo | null
   onConfigure: () => void
-  onOpenStatus: () => void
-  onSelectModel: (model: RouterModelInfo) => void
+  className?: string
 }
 
-const runtimeLabels = {
-  ready: 'Shared runtime ready',
-  attention: 'Runtime needs attention',
-  unreported: 'Runtime not reported',
+function Chips({ items }: { items: Array<{ name: string; kind?: string }> }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map(({ name, kind }) => (
+        <span
+          key={`${kind ?? ''}:${name}`}
+          className="inline-flex h-6 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs"
+        >
+          <span className="font-medium text-foreground">{name}</span>
+          {kind ? <span className="text-subtle-foreground">{kind}</span> : null}
+        </span>
+      ))}
+    </div>
+  )
 }
 
+/** The decision model with its deployment state, and what each recipe asks it. */
 export default function DashboardRouterIntelligence({
   config,
-  modelsInfo,
+  loading,
+  inventory,
+  routerModels,
   onConfigure,
-  onOpenStatus,
-  onSelectModel,
+  className,
 }: DashboardRouterIntelligenceProps) {
-  const runtime = config ? getDecisionRuntimeSummary(config, modelsInfo) : null
+  const health = config ? decisionModelHealth(config, inventory, routerModels) : null
   const scopes = config ? buildIntelligenceRoutingScopes(config) : []
-  const knownModels = getTotalKnownModelCount(modelsInfo)
 
   return (
-    <section className={styles.card} aria-labelledby="router-intelligence-title">
-      <div className={styles.header}>
-        <h2 id="router-intelligence-title">Router Intelligence</h2>
-        <button type="button" className={styles.action} onClick={onConfigure}>
-          Manage decision model &rsaquo;
-        </button>
-      </div>
-
-      {runtime ? (
-        <div className={styles.model} data-testid="decision-model-overview">
-          <div>
-            <span className={styles.eyebrow}>Configured decision model</span>
-            <h3>{runtime.model}</h3>
-            <p>Default model for learned signals, custom questions and decision selectors.</p>
+    <Card aria-labelledby="router-intelligence-title" role="region" className={className}>
+      <CardHeader>
+        <CardTitle id="router-intelligence-title">Router intelligence</CardTitle>
+        <CardDescription>The decision model and what each recipe asks it.</CardDescription>
+        <CardAction>
+          <Button variant="ghost" size="xs" onClick={onConfigure}>
+            Manage decision model
+            <ArrowRight />
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5 pt-3">
+        {health ? (
+          <div
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-surface-subtle/60 px-3.5 py-3"
+            data-testid="decision-model-overview"
+          >
+            <IconTile icon={BrainCircuit} tone="violet" size="md" />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="text-xs text-subtle-foreground">Decision model</span>
+              <h3 className="truncate font-mono text-[13.5px] font-semibold">{health.model}</h3>
+              <p className="text-xs text-muted-foreground">
+                Answers learned signals, custom questions and decision selectors.
+              </p>
+            </div>
+            <div className="flex min-w-0 flex-col items-start gap-1 sm:items-end">
+              <StatusLabel tone={health.tone}>{health.label}</StatusLabel>
+              <span className="text-xs text-muted-foreground">{health.detail}</span>
+            </div>
           </div>
-          <div className={styles.runtime}>
-            <span className={runtime.state === 'ready' ? styles.ready : styles.pending}>
-              {runtimeLabels[runtime.state]}
-            </span>
-            {runtime.bindings > 0 && (
-              <span>
-                {runtime.resources} runtime{runtime.resources === 1 ? '' : 's'} · {runtime.bindings}{' '}
-                reported binding{runtime.bindings === 1 ? '' : 's'}
-              </span>
-            )}
-          </div>
-        </div>
-      ) : (
-        <p className={styles.unavailable}>Decision model configuration is unavailable.</p>
-      )}
-
-      {scopes.length > 0 && (
-        <div className={styles.scopes}>
-          <h3 className={styles.subheading}>Configured routing</h3>
-          {scopes.map((scope) => {
-            const signalCount = scope.signals.reduce(
-              (total, group) => total + group.names.length,
-              0,
-            )
-            return (
-              <details key={scope.id} className={styles.scope}>
-                <summary>
-                  <span className={styles.scopeIdentity}>
-                    <strong>{scope.label}</strong>
-                    {scope.entrypoints.length > 0 && <span>{scope.entrypoints.join(', ')}</span>}
-                  </span>
-                  <span className={styles.counts}>
-                    {scope.questions.length} questions · {signalCount} other signals ·{' '}
-                    {scope.projections.length} projections
-                  </span>
-                </summary>
-                <div className={styles.scopeContent}>
-                  {scope.questions.length > 0 && (
-                    <div className={styles.group}>
-                      <h4>Custom questions</h4>
-                      <div className={styles.chips}>
-                        {scope.questions.map(({ name, kind }) => (
-                          <span key={name}>
-                            <strong>{name}</strong>
-                            <span>{kind}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {scope.signals.map(({ type, names }) => (
-                    <div className={styles.group} key={type}>
-                      <h4>{formatRouterModelLabel(type)} signals</h4>
-                      <div className={styles.chips}>
-                        {names.map((name) => (
-                          <span key={name}>{name}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  {scope.projections.length > 0 && (
-                    <div className={styles.group}>
-                      <h4>Projections</h4>
-                      <div className={styles.chips}>
-                        {scope.projections.map(({ name, kind }) => (
-                          <span key={`${kind}:${name}`}>
-                            <strong>{name}</strong>
-                            <span>{kind}</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {!scope.questions.length && !signalCount && !scope.projections.length && (
-                    <p>No signals or projections configured.</p>
-                  )}
-                </div>
-              </details>
-            )
-          })}
-        </div>
-      )}
-
-      <div className={styles.inventoryHeader}>
-        <h3 className={styles.subheading}>Runtime inventory</h3>
-        {knownModels > 0 && (
-          <span>
-            {getLoadedModelCount(modelsInfo)}/{knownModels} runtimes ready
-          </span>
+        ) : loading ? (
+          <Skeleton className="h-[74px] w-full rounded-lg" />
+        ) : (
+          <p className="text-[13px] text-muted-foreground">The configuration did not load.</p>
         )}
-        <button type="button" className={styles.action} onClick={onOpenStatus}>
-          Status &rsaquo;
-        </button>
-      </div>
-      <RouterModelInventory
-        mode="preview"
-        modelsInfo={modelsInfo}
-        emptyMessage="No runtime inventory reported yet."
-        onSelectModel={onSelectModel}
-      />
-    </section>
+
+        {scopes.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <h3 className="text-xs font-medium text-subtle-foreground">Configured routing</h3>
+            <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
+              {scopes.map((scope) => {
+                const signalCount = scope.signals.reduce(
+                  (total, group) => total + group.names.length,
+                  0,
+                )
+                return (
+                  <details key={scope.id} className="group/scope">
+                    <summary className="flex cursor-pointer list-none items-center gap-3 px-3.5 py-2.5 outline-none transition-colors before:size-1.5 before:shrink-0 before:-rotate-45 before:border-b-[1.5px] before:border-r-[1.5px] before:border-subtle-foreground before:transition-transform before:content-[''] hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/40 group-open/scope:before:rotate-45 [&::-webkit-details-marker]:hidden">
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <strong className="truncate text-[13px] font-medium">{scope.label}</strong>
+                        {scope.entrypoints.length > 0 ? (
+                          <span className="truncate font-mono text-[11.5px] text-subtle-foreground">
+                            {scope.entrypoints.join(', ')}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular">
+                        {scope.questions.length} questions · {signalCount} other signals ·{' '}
+                        {scope.projections.length} projections
+                      </span>
+                    </summary>
+                    <div className="flex flex-col gap-3 border-t border-border bg-surface-subtle/40 px-3.5 py-3">
+                      {scope.questions.length > 0 ? (
+                        <div className="flex flex-col gap-1.5">
+                          <h4 className="text-xs text-subtle-foreground">Custom questions</h4>
+                          <Chips items={scope.questions} />
+                        </div>
+                      ) : null}
+                      {scope.signals.map(({ type, names }) => (
+                        <div className="flex flex-col gap-1.5" key={type}>
+                          <h4 className="text-xs text-subtle-foreground">
+                            {formatRouterModelLabel(type)} signals
+                          </h4>
+                          <Chips items={names.map((name) => ({ name }))} />
+                        </div>
+                      ))}
+                      {scope.projections.length > 0 ? (
+                        <div className="flex flex-col gap-1.5">
+                          <h4 className="text-xs text-subtle-foreground">Projections</h4>
+                          <Chips items={scope.projections} />
+                        </div>
+                      ) : null}
+                      {!scope.questions.length && !signalCount && !scope.projections.length ? (
+                        <p className="text-[13px] text-muted-foreground">
+                          No signals or projections configured.
+                        </p>
+                      ) : null}
+                    </div>
+                  </details>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   )
 }

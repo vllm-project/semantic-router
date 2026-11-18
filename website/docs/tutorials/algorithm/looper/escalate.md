@@ -364,12 +364,12 @@ for the response fields and error contract.
 
 To try it in Dashboard:
 
-1. Open **System One → Decision Playground**, and choose `vllm-sr/auto` under
-   **Automatic routes**.
+1. Open **Models → Decision models**, select the **Playground** tab, and choose
+   `vllm-sr/auto` under **Automatic routes**.
 2. Load an example your recipe supports, or enter your own questions, then
    select **Run**. Dashboard uses your signed-in management permissions, so no
    public API key is needed.
-3. Open **Decision Monitoring** for stage outcomes, request rates and latency.
+3. Open the **Monitoring** tab for stage outcomes, request rates and latency.
 
 These views describe live execution; evaluate labeled requests separately to
 measure accuracy.

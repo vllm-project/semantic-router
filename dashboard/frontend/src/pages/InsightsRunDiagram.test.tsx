@@ -126,7 +126,15 @@ const response: RunResponse = {
   ],
 }
 
-function render(props: { expanded?: string; call?: RunCall; narrow?: boolean } = {}) {
+function render(
+  props: {
+    expanded?: string
+    call?: RunCall
+    narrow?: boolean
+    agents?: string[]
+    onAgent?: (label: string) => void
+  } = {},
+) {
   return renderToStaticMarkup(
     <MemoryRouter>
       <RunSequence
@@ -143,11 +151,11 @@ function render(props: { expanded?: string; call?: RunCall; narrow?: boolean } =
 describe('run sequence', () => {
   it('heads a lifeline per agent with the models it used, and a side column', () => {
     const html = render()
-    expect(html).toContain('<strong>main</strong>')
-    expect(html).toContain('<strong>↳ subagent 1</strong>')
+    expect(html).toContain('>main</strong>')
+    expect(html).toContain('>↳ subagent 1</strong>')
     expect(html).toContain('collab_spawn · 1 call · no price')
-    expect(html).toContain('<strong>side</strong><span>2 side requests</span>')
-    expect(html.match(/class="[^"]*lifeline/g)?.length).toBeGreaterThan(0)
+    expect(html).toMatch(/>side<\/strong><span[^>]*>2 side requests<\/span>/)
+    expect(html.match(/data-lifeline/g)?.length).toBeGreaterThan(0)
   })
 
   it("collapses an agent's consecutive turns into one row with the model, count and time", () => {
@@ -180,7 +188,9 @@ describe('run sequence', () => {
     const html = render()
     expect(html).toContain('2 side requests</span>')
     expect(html).toContain('session_title, auxiliary')
-    expect(html).toMatch(/data-side="true" aria-expanded="false" style="grid-column:3"/)
+    expect(html).toMatch(
+      /data-side="true" aria-expanded="false" class="[^"]*" style="grid-column:3"/,
+    )
   })
 
   it('draws a solid spawn arrow right and a dashed return arrow left, with an idle divider', () => {
@@ -191,8 +201,8 @@ describe('run sequence', () => {
     expect(html).toContain(
       'data-kind="return" data-direction="left" data-failed="true" data-call="rec-4" title="subagent 1 returned to main: failed · 1 call · no price"',
     )
-    expect(html).toContain('grid-column:1 / 3;--span:2;--arrow:#7aa7e8')
-    expect(html).toContain('<span>Explore · Find callers</span>')
+    expect(html).toContain('grid-column:1 / 3;color:var(--chart-1)')
+    expect(html).toMatch(/>Explore · Find callers<\/span>/)
     expect(html.indexOf('data-kind="return"')).toBeLessThan(html.indexOf('$0.012 list price'))
     expect(html).toContain('· 1m 4s idle')
   })
@@ -210,7 +220,7 @@ describe('run sequence', () => {
 
   it('lists the tools an agent was offered and marks where that changed', () => {
     const html = render()
-    expect(html).toContain('<summary>2 tools offered</summary><span>Bash, Read</span>')
+    expect(html).toMatch(/>2 tools offered<\/summary><span[^>]*>Bash, Read<\/span>/)
     expect(html).toContain('title="mcp__docs__search">+1 tool offered</span>')
   })
 
@@ -224,9 +234,9 @@ describe('run sequence', () => {
     expect(html).toContain('Open the replay record')
     // The whole tool list of the row, with what was kept of the arguments.
     expect(html).toContain('aria-label="Tool calls"')
-    expect(html).toContain('<strong>Edit</strong><code>calc.py</code><span></span><span>ok</span>')
-    expect(html).toContain(
-      '<strong>Bash</strong><code>arguments not kept</code><span></span><span>failed</span>',
+    expect(html).toMatch(/>Edit<\/strong><code[^>]*>calc.py<\/code><span><\/span><span>ok<\/span>/)
+    expect(html).toMatch(
+      />Bash<\/strong><code[^>]*>arguments not kept<\/code><span><\/span><span>failed<\/span>/,
     )
     // The details sit in the row, under its card.
     expect(html.indexOf('aria-label="Step details"')).toBeGreaterThan(
@@ -237,12 +247,23 @@ describe('run sequence', () => {
   it('turns the lifelines into one indented list with agent tags when narrow', () => {
     const html = render({ narrow: true })
     expect(html).toContain('data-narrow="true"')
-    expect(html).not.toMatch(/class="[^"]*lifeline/)
+    expect(html).not.toContain('data-lifeline')
     expect(html).toContain('subagent 1</span>')
     expect(html).toContain('side · main</span>')
     expect(html).toContain('↳ main spawns subagent 1: Explore · Find callers')
     expect(html).toContain('↩ subagent 1 failed · 1 call · no price')
-    expect(html).toContain('--depth:1')
+    expect(html).toContain('margin-left:0.9rem')
+  })
+
+  it("lets an agent's head be followed, and dims the other agents' rows", () => {
+    const html = render({ agents: ['subagent 1'], onAgent: () => undefined })
+    expect(html).toContain('aria-pressed="true"')
+    expect(html).toContain('aria-pressed="false"')
+    expect(html).toContain('title="Follow subagent 1&#x27;s calls"')
+    // every main row, side and spawn row dims; the subagent's turn and return stay
+    expect(html.match(/opacity-45/g)?.length).toBeGreaterThan(1)
+    expect(html).not.toMatch(/class="[^"]*opacity-45[^"]*" data-kind="return"/)
+    expect(html).not.toMatch(/id="run-row-rec-fail" class="[^"]*opacity-45/)
   })
 })
 
@@ -257,7 +278,7 @@ describe('run call details', () => {
     expect(html).toContain('high')
     expect(html).toContain('failed 502')
     expect(html).toContain('Hidden from this viewer')
-    expect(html).toContain('href="/insights/rec-fail"')
+    expect(html).toContain('href="/observe/requests/rec-fail"')
   })
 
   it('shows each model by its label and keeps the configured name beside it', () => {
