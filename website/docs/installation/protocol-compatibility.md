@@ -251,6 +251,45 @@ blocks are omitted:
 | Non-empty text, including whitespace | The same text |
 | A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
 
+### Chat request fields the Router refuses
+
+The Router fails closed on a Chat Completions field it can't carry to every
+backend: the request gets `400` with the code below and reaches no backend. A
+value that asks for nothing a backend wouldn't do without the field is
+accepted instead. The backend receives the request without the field, and
+`x-vsr-warnings` reports a `dropped` diagnostic for it. A `null` value counts
+as no field, and `logprobs: false` asks for the default, so neither is
+reported.
+
+| Field | Code | Accepted |
+| --- | --- | --- |
+| `audio` | `unsupported_audio` | None |
+| `function_call` | `unsupported_function_call` | None |
+| `functions` | `unsupported_functions` | None |
+| `logprobs` | `unsupported_logprobs` | `false` |
+| `modalities` | `unsupported_modalities` | Exactly `["text"]` |
+| `moderation` | `unsupported_moderation` | None |
+| `prediction` | `unsupported_prediction` | None |
+| `prompt_cache_options` | `unsupported_prompt_cache_options` | None |
+| `prompt_cache_retention` | `unsupported_prompt_cache_retention` | None |
+| `safety_identifier` | `unsupported_safety_identifier` | Any string: an end-user ID for the provider's abuse monitoring, which a backend doesn't use |
+| `service_tier` | `unsupported_service_tier` | `"auto"` and `"default"` |
+| `top_logprobs` | `unsupported_top_logprobs` | None |
+| `web_search_options` | `unsupported_web_search_options` | None |
+| `messages[].audio`, output audio in replayed history | `unsupported_output_audio` | None |
+| `messages[].function_call`, a legacy function call in history | `unsupported_legacy_function_call` | None |
+| `messages[].tool_calls[].function.TokenizedArguments` | `unsupported_messages_tool_calls_function_tokenized_arguments` | None |
+| A content part the message's role can't hold, such as an image in a system message | `unsupported_content` | None |
+| A tool whose `type` is not `function` or `custom` | `unsupported_tool` | None |
+| `tool_choice` of type `allowed_tools` | `unsupported_tool_choice` | None |
+| A `response_format` other than `text`, `json_object` or `json_schema` | `unsupported_output_format` | None |
+
+A Responses request's `service_tier` and `safety_identifier` follow the same
+rule. Its other top-level fields the Router can't carry, `background`,
+`context_management`, `max_tool_calls`, `moderation`, `prompt`,
+`prompt_cache_options`, `prompt_cache_retention` and `top_logprobs`, fail with
+`unsupported_<field>`.
+
 ### Anthropic Messages clients on other backends
 
 For an Anthropic Messages client using a Chat Completions or Responses
