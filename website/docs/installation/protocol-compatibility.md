@@ -637,14 +637,27 @@ tools or error translation.
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
 - vLLM's serving metadata never fails a reply, whatever its value:
-  `prompt_logprobs`, `prompt_text`, `prompt_routed_experts`,
-  `kv_transfer_params`, `ec_transfer_params` and `metrics` at the top level of
-  a reply or stream chunk, and `routed_experts` and `weight_versions` in its
-  choices. Chat clients receive them unchanged; a value other than null or
-  empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
+  `prompt_logprobs`, `prompt_token_ids`, `prompt_text`,
+  `prompt_routed_experts`, `kv_transfer_params`, `ec_transfer_params` and
+  `metrics` at the top level of a reply or stream chunk, and `token_ids`,
+  `routed_experts` and `weight_versions` in its choices. No client receives
+  them, nor the server's `system_fingerprint`, which names vLLM's version,
+  commit and parallel layout; the Router has no stable fingerprint of its own
+  to send instead, and `x-vsr-config-version` names the configuration that
+  served. A Chat client of a Chat backend receives the rest of the reply as
+  the backend sent it, buffered and streamed. A metadata value other than null
+  or empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
   `modality` is not `text` fails with `unsupported_upstream_audio` (or
   `unsupported_upstream_modality`), because its `delta.content` carries
   encoded media, not answer text.
+- A request whose `tool_choice` is `none` reaches a Chat Completions backend
+  without its `tools`, `tool_choice` and `parallel_tool_calls`, and
+  `x-vsr-warnings` reports `tools` as `dropped`. Model servers such as vLLM
+  render declared tools into the prompt whatever the choice, so a model could
+  start a call the server then drops, leaving only the sentence before it.
+  Messages backends receive the tools, which they require while the history
+  holds `tool_use` blocks, and Responses backends receive them with
+  `tool_choice: "none"`, which the Responses API enforces.
 - A Chat provider ends a forced named tool call with `finish_reason: "stop"`.
   Anthropic Messages clients receive `stop_reason: "tool_use"` for a turn that
   ends that way and carries `tool_use` blocks. A turn that ends at the output

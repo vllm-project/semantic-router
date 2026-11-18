@@ -154,7 +154,10 @@ func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenF
 	if raw, failed := object["error"]; failed && !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil, false, true, false, errChatUpstreamErrorFrame
 	}
-	changed := false
+	changed, err := deleteChatServerMembers(object)
+	if err != nil {
+		return nil, false, true, false, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_chat_stream", "Chat stream choices are invalid", err)
+	}
 	if _, present := object["provider"]; present {
 		delete(object, "provider")
 		changed = true
