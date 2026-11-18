@@ -113,11 +113,27 @@ Chat 的 tool 消息只能携带文本。发往 Chat 后端时，工具结果中
 提示词和工具结果仍会派发，`x-vsr-warnings` 会为 `cache_control` 报告
 `dropped` 诊断。
 
+在所有后端上，`max_tokens` 都同时覆盖思考和回答。没有 `thinking` 且决策开启推理的
+请求，可能把较小的 `max_tokens` 用于思考而返回不了文本。设置
+`providers.defaults.reasoning_min_output_tokens` 后，`max_tokens` 低于该值的这类请求
+会以模型推理关闭的方式发往后端；参见[模型推理](model-reasoning#turn-reasoning-off-for-small-output-limits)。
+
 从 Anthropic 后端转换推理内容时，如果后端附带推理签名，转换会失败；其 thinking
 响应默认携带签名。Chat Completions 或 Responses 客户端的缓冲请求会收到类型化的
 `unsupported_capability` 错误；流式请求则会在流中途、响应头和可能的早期增量已经
 发送后失败，因为签名随推理增量才到达编码器。同格式流量不受影响，包括 Messages
-客户端读取 Anthropic 后端的情况。
+客户端读取 Anthropic 后端的情况。在 `global.router.allow_lossy_translation` 中列出
+`reasoning.signature` 后，这些响应可以通过：Router 丢弃签名、保留推理文本，并将该
+损失报告为 `approximated`。
+
+Messages 客户端在之后的每一轮都会把这些 thinking 连同签名一起发回。当由 `anthropic`
+后端回答过的会话转到 Chat Completions 或 Responses 后端时，请求会在路由前以
+`unsupported_capability` 失败，错误消息指出第一个带签名的块，例如
+`messages[1].content[0].signature: the selected model cannot accept signed thinking`。
+同一设置也允许这类请求通过：这些后端收到每个 thinking 块的文本，但不带签名；
+`x-vsr-warnings` 为 `reasoning.signature` 报告 `approximated` 诊断；`anthropic`
+后端（无论是决策的选择还是回退候选）仍会收到签名。签名为空（`"signature": ""`）的
+thinking 块不携带签名，无需该设置即可发往任何后端。
 
 Chat Completions 客户端可以用 `store: true` 要求提供方保存补全，而 Messages 后端
 不保存补全。`store: false` 不要求这类后端做任何额外的事，因此请求去掉该字段后照常
@@ -161,6 +177,28 @@ providers:
 `backend_refs`，因此只要其中任何一个拒绝某个控制，就应列出它。若要为决策路由到的每个模型移除某个控制，请改为在该决策的
 [`request_params`](../tutorials/plugin/request-params) `blocked_params` 中列出它。
 
+### 聊天模板拒绝的 system 消息 {#system-messages-a-chat-template-refuses}
+
+一个请求可以携带多条 system 和 developer 消息：Chat Completions 客户端可能为每条指令单独发送一条 system 消息，
+Responses 请求有 `instructions` 和 developer 输入项，编码代理还会在对话中间插入 system 消息。许多开源模型的聊天模板
+只接受一条位于开头的 system 消息：Qwen3.5 及之后的模板会以 "System message must be at the beginning." 拒绝请求，
+gpt-oss 则丢弃这段文本。同一个请求因此会随决策选中的模型而成功或失败。
+
+对使用这类模板的后端，在 `global.router.allow_lossy_translation` 中加入 `messages[].role`（参见下文的“校验和失败行为”）：
+
+```yaml
+global:
+  router:
+    allow_lossy_translation: ["messages[].role"]
+```
+
+- **开头只有一条 system 消息。** Chat 后端把对话开头的 system 和 developer 消息合并为一条 system 消息收到，各段文本按原顺序排列，之间以空行分隔：Chat 请求开头的 system 和 developer 消息，或 Responses 请求的 `instructions` 及开头的 developer 和 system 输入项。`cache_control` 边界保留在设置它的文本末尾。只有一条开头 system 消息的请求原样到达后端。
+- **后续消息作为用户文本。** 对话中间的 system 或 developer 消息在原位置以用户文本到达 Chat 后端：并入紧邻其前的用户轮次；位于 assistant 轮次或工具结果之后时，则成为单独的用户轮次。Messages 请求 `messages` 中的 system 消息以同样方式到达 Responses 后端。
+- **会报告。** `x-vsr-warnings` 会为 `messages[].role` 报告一条 `approximated` 诊断。
+- **其他后端不受影响。** Messages 后端按原样收到这些消息；Responses 后端收到的 Chat 或 Responses 客户端的 system 和 developer 消息保持各自的角色。
+
+不启用该选项时，每条 system 和 developer 消息都以其原有角色到达后端。
+
 ### 后端丢弃的 developer 消息 {#developer-messages-a-backend-drops}
 
 OpenAI 把 `developer` 消息和 `system` 消息一样当作指令。Chat Completions 客户端用 `developer` 角色发送指令，
@@ -183,6 +221,8 @@ providers:
 - **对该模型以 system 发送。** 发给该模型的请求，无论它是决策的选择还是回退候选，其中所有 developer 指令和消息到达时都是 `system` 角色。
 - **会报告。** `x-vsr-warnings` 会为 `messages[].role` 报告 `approximated` 诊断。
 - **其他模型不受影响。** 同一决策的其他模型仍会收到 `developer` 角色。
+
+列出 `messages[].role` 后，Chat 后端会在那一条 system 消息中收到开头的 developer 消息（[见上文](#system-messages-a-chat-template-refuses)），请求只报告这一条诊断。
 
 ## 配置后端格式
 
@@ -210,9 +250,21 @@ providers:
 
 ## 校验和失败行为
 
-- 即使客户端和后端格式匹配，公共请求也会被解码为中立契约。未知或不支持的请求字段会失败关闭。
+- 即使客户端和后端格式匹配，公共请求也会被解码为中立契约。未知或不支持的请求字段会以 `400` `invalid_request_error`
+  失败关闭，并像 OpenAI 那样给出字段：
+
+  | 请求 | 错误码 | 消息 |
+  | --- | --- | --- |
+  | API 未定义的成员 | `unknown_parameter`，`param` 为该成员的路径 | `Unrecognized request argument supplied: new_field`；位于消息内时为 `messages[].new_field` |
+  | 合法 JSON，但值的类型错误 | `invalid_type`，`param` 为该成员的路径 | `Invalid type for 'max_tokens': expected an integer, but got a decimal number instead.` |
+  | 不是 JSON 的请求体 | `invalid_json` | `request JSON is invalid` |
+  | Router 认识但无法承载的成员 | `unsupported_<field>` | 给出该字段 |
+
+  Anthropic Messages 客户端在 Anthropic 的 `invalid_request_error` 中收到相同的消息，该信封没有 code 字段。
+- 后端的 `4xx` 错误以客户端的错误格式到达客户端，使用 Router 的错误码和客户端发送的字段名；见[请求预算错误](../api/router#request-budget-errors)。
 - Chat 请求接受但不转发客户端库在回放 assistant 消息时添加的字段：LiteLLM 的 `provider_specific_fields`（存放其消息类型没有的回复字段），以及 openai SDK 自己的解析结果 `parsed` 和 `tool_calls[].function.parsed_arguments`。取值不为 null 的字段报告为 `dropped`。与其他 Responses 输入项一样，reasoning 项可以带有 `status`，openai SDK 的流式辅助方法会设置它。
-- 跨协议请求保留共享语义。无法表示的目标特定功能会返回类型化协议错误。对于运维人员可以接受的损失（例如 `tool_result.is_error`），`lossy_translation` 错误会指出接受该损失的 `global.router.allow_lossy_translation` 设置；`unsupported_capability` 错误不会指出。
+- 函数工具的 `parameters` 为 `null` 时（OpenAI 的类型化客户端会为不带参数的工具这样发送），Router 将其视为没有 `parameters` 的工具，Responses 的 `tools[]` 和 Chat 的 `tools[].function` 均是如此：每种后端收到的都是 schema `{"type":"object"}`，而不是 `null`。
+- 跨协议请求保留共享语义。无法表示的目标特定功能会返回类型化协议错误。对于运维人员可以接受的损失（例如 `tool_result.is_error`），`lossy_translation` 错误会指出接受该损失的 `global.router.allow_lossy_translation` 设置，请求中带签名 thinking 的 `unsupported_capability` 错误也会指出；其他 `unsupported_capability` 错误不会指出。
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。

@@ -61,7 +61,7 @@ curl -sS -i http://localhost:8899/v1/chat/completions \
 
 ### Harness 自行选择的模型名 {#model-names-the-harness-picks-itself}
 
-Harness 可能请求你没有配置的模型。例如，Claude Code 启动 Explore 子代理时，会请求它自己的 Haiku 模型 ID。Router 对未发布的模型回答“the requested model is not available”，于是该子代理失败。请把 harness 的每一个模型设置都指向某个入口（对 Claude Code 而言是 `ANTHROPIC_MODEL` 和 `ANTHROPIC_DEFAULT_*_MODEL` 变量），或者把它发送的 ID 列入入口的 `model_names`：
+Harness 可能请求你没有配置的模型。例如，Claude Code 启动 Explore 子代理时，会请求它自己的 Haiku 模型 ID。Router 对未发布的模型回答 404 `model_not_found`，即“The model ... does not exist or you do not have access to it.”，于是该子代理失败。请把 harness 的每一个模型设置都指向某个入口（对 Claude Code 而言是 `ANTHROPIC_MODEL` 和 `ANTHROPIC_DEFAULT_*_MODEL` 变量），或者把它发送的 ID 列入入口的 `model_names`：
 
 ```yaml
 entrypoints:

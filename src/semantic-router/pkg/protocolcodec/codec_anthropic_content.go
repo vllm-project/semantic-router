@@ -241,7 +241,7 @@ func anthropicResponseContentType(body json.RawMessage) (string, error) {
 
 func validateAnthropicContentExtensions(block anthropicContentWire, providerOutput bool) error {
 	if citations := bytes.TrimSpace(block.Citations); len(citations) > 0 && !bytes.Equal(citations, []byte("null")) {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "Anthropic citations are not supported by the neutral contract", nil)
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "the Router does not support Anthropic citations", nil)
 	}
 	if err := validateAnthropicToolCaller(block.Caller, providerOutput); err != nil {
 		return err
@@ -272,7 +272,7 @@ func validateAnthropicToolCaller(raw json.RawMessage, providerOutput bool) error
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_content_caller",
-			"Anthropic programmatic tool callers are not supported by the neutral contract",
+			"the Router does not support Anthropic programmatic tool callers",
 			nil,
 		)
 	}
@@ -374,7 +374,7 @@ func validateAnthropicMediaSource(typeName string, source *anthropicMediaSourceW
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_document_source",
-			"Anthropic document source cannot be represented by the neutral protocol",
+			"the Router does not support this Anthropic document source",
 			nil,
 		)
 	case "":

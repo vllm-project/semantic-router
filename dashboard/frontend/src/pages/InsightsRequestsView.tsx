@@ -84,7 +84,7 @@ import {
 } from './InsightsDisplay'
 import { moreCurrenciesLabel, spendSummary } from './homeSupport'
 import { HarnessLogo, ToolChips } from './InsightsHarness'
-import { API_CLIENT_LABEL, harnessInfo, PRIMARY_HARNESSES, sortHarnessIds } from './insightsHarness'
+import { API_CLIENT_LABEL, harnessInfo } from './insightsHarness'
 import { readPage, readPageSize, writePage } from './insightsListData'
 import { ModelChip, modelText, useModelLabels } from './insightsModelLabelSupport'
 import {
@@ -97,11 +97,11 @@ import type { InsightsAggregateResponse, InsightsRecord } from './insightsPageTy
 import {
   API_CLIENT_FILTER,
   countFacet,
+  harnessFilterValues,
   hasAnyFilter,
   hasClientFilters,
   RANGE_TEXT,
   readRequestFilters,
-  recordClientFilterValue,
   REQUEST_RANGES,
   REQUEST_WINDOW_SIZE,
   useAnyRecord,
@@ -269,7 +269,7 @@ function RequestsSummary({
       </SummaryStrip>
       {clientFiltered ? (
         <p className="mt-1.5 text-[11.5px] text-subtle-foreground">
-          Totals cover every client and request class the other filters select.
+          Totals cover every request class the other filters select.
         </p>
       ) : null}
       {breakdown ? (
@@ -475,7 +475,7 @@ function ActiveChip({
   )
 }
 
-/** What the client and class filters read, said whenever one is on. */
+/** What the class filters read, said whenever one is on. */
 function windowNote(data: {
   windowLoaded: boolean
   window: InsightsRecord[]
@@ -484,12 +484,12 @@ function windowNote(data: {
 }): string {
   const range = RANGE_TEXT[data.range]
   if (!data.windowLoaded) {
-    return `Client and class filters run in your browser over the newest ${REQUEST_WINDOW_SIZE} requests ${range}.`
+    return `Class filters run in your browser over the newest ${REQUEST_WINDOW_SIZE} requests ${range}.`
   }
   if (data.windowTotal > data.window.length) {
-    return `Client and class filters run in your browser over the newest ${formatInsightsCount(data.window.length)} of ${formatInsightsCount(data.windowTotal)} requests ${range}. Narrow the time range or add a filter to cover them all.`
+    return `Class filters run in your browser over the newest ${formatInsightsCount(data.window.length)} of ${formatInsightsCount(data.windowTotal)} requests ${range}. Narrow the time range or add a filter to cover them all.`
   }
-  return `Client and class filters run in your browser over all ${formatInsightsCount(data.windowTotal)} requests ${range}.`
+  return `Class filters run in your browser over all ${formatInsightsCount(data.windowTotal)} requests ${range}.`
 }
 
 // ---------------------------------------------------------------- view
@@ -504,7 +504,7 @@ export default function InsightsRequestsView() {
   const labels = useModelLabels()
   const [live, setLive] = useState(true)
   const [held, setHeld] = useState(false)
-  // the newest records load for the client and class counts once a filter control is reached for
+  // the client and class counts load once a filter control is reached for
   const [facets, setFacets] = useState(false)
   const [breakdown, setBreakdown] = useState(readBreakdown)
   const [searchDraft, setSearchDraft] = useState(filters.search)
@@ -517,7 +517,7 @@ export default function InsightsRequestsView() {
     live,
     held,
     rules: agentRules,
-    withWindow: facets,
+    withFacets: facets,
   })
   const clientMode = hasClientFilters(filters)
   const narrowed = hasAnyFilter(filters)
@@ -563,37 +563,25 @@ export default function InsightsRequestsView() {
     }
   }
 
-  const harnessCounts = useMemo(
-    () => countFacet(data.window, recordClientFilterValue),
-    [data.window],
-  )
   const classCounts = useMemo(
     () => countFacet(data.window, (record) => requestClassOf(record, agentRules)),
     [agentRules, data.window],
   )
   const counted = data.windowLoaded
-  // Before the newest records load, every harness the Router identifies is offered.
-  const harnessOptions: FilterOption[] = useMemo(() => {
-    const seen = counted ? [...harnessCounts.keys()] : [...PRIMARY_HARNESSES, API_CLIENT_FILTER]
-    const shown = new Set([...seen, ...filters.harness])
-    const options: FilterOption[] = sortHarnessIds(
-      [...shown].filter((id) => id !== API_CLIENT_FILTER),
-    ).map((id) => ({
-      value: id,
-      label: harnessInfo(id)?.label ?? id,
-      icon: <HarnessLogo harness={id} size={14} />,
-      count: counted ? (harnessCounts.get(id) ?? 0) : undefined,
-    }))
-    if (shown.has(API_CLIENT_FILTER)) {
-      options.push({
-        value: API_CLIENT_FILTER,
-        label: API_CLIENT_LABEL,
-        icon: <HarnessLogo harness={undefined} size={14} />,
-        count: counted ? (harnessCounts.get(API_CLIENT_FILTER) ?? 0) : undefined,
-      })
-    }
-    return options
-  }, [counted, filters.harness, harnessCounts])
+  // The Router counts the harnesses over every request the other filters select.
+  const harnessOptions: FilterOption[] = useMemo(
+    () =>
+      harnessFilterValues(data.harnessCounts, filters.harness).map(({ value, count }) => {
+        const harness = value === API_CLIENT_FILTER ? undefined : value
+        return {
+          value,
+          label: harnessInfo(harness)?.label ?? API_CLIENT_LABEL,
+          icon: <HarnessLogo harness={harness} size={14} />,
+          count,
+        }
+      }),
+    [data.harnessCounts, filters.harness],
+  )
   const classOptions: FilterOption[] = REQUEST_CLASSES.filter(
     (value) => !counted || classCounts.has(value) || filters.classes.includes(value),
   ).map((value) => ({
@@ -1017,7 +1005,7 @@ export default function InsightsRequestsView() {
                 title="No requests match"
                 description={
                   clientMode
-                    ? 'None of the newest requests match the client and class filters. Widen the time range or clear the filters.'
+                    ? 'None of the newest requests match the class filters. Widen the time range or clear the filters.'
                     : 'Widen the time range or clear the filters. New requests appear as soon as the router records them.'
                 }
                 actions={

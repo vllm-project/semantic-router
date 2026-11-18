@@ -375,4 +375,8 @@ type BackendModels struct {
 type ReasoningConfig struct {
 	DefaultReasoningEffort string                           `yaml:"default_reasoning_effort,omitempty"`
 	ReasoningFamilies      map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
+	// ReasoningMinOutputTokens is providers.defaults.reasoning_min_output_tokens:
+	// a request that states no reasoning preference and sets a smaller output
+	// limit runs with reasoning off. Zero turns the rule off.
+	ReasoningMinOutputTokens int `yaml:"reasoning_min_output_tokens,omitempty"`
 }
