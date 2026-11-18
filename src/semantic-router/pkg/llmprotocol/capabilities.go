@@ -60,6 +60,10 @@ const (
 	CapabilityTextVerbosity
 	CapabilityReasoningContinuity
 	CapabilitySamplingLogitBias
+	// CapabilityDeveloperRole is a backend reading a developer message as an
+	// instruction, the way OpenAI reads it. Models only declare it
+	// unsupported; no request requires it.
+	CapabilityDeveloperRole
 	// CapabilityServerTools covers tools the provider runs or defines itself
 	// and the blocks they leave in a reply, such as Anthropic's web search.
 	CapabilityServerTools
@@ -152,6 +156,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
 		{CapabilityReasoningContinuity, "reasoning_continuity"},
+		{CapabilityDeveloperRole, "developer_role"},
 		{CapabilityServerTools, "server_tools"},
 	}
 	names := make([]string, 0, len(known))
@@ -535,6 +540,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
 		"reasoning_continuity":  CapabilityReasoningContinuity,
+		"developer_role":        CapabilityDeveloperRole,
 		"server_tools":          CapabilityServerTools,
 	}
 	var set CapabilitySet

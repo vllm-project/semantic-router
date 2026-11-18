@@ -953,6 +953,7 @@ points protection at:
 | --- | --- | --- | --- |
 | Claude Code | `x-claude-code-session-id` | `x-claude-code-agent-id`, sent on subagent calls only | none: every subagent hangs off the main agent |
 | Codex | `session-id`, the root session on every thread | `thread-id`; the root thread, equal to `session-id`, is the main agent | `x-codex-parent-thread-id`, unless it is the root thread |
+| OpenCode | `x-session-id`; a subagent's calls are filed under the session that spawned it, its `x-parent-session-id` | on a subagent's calls, its own session in `x-session-id` | none: every subagent hangs off the main agent |
 | Others | the pinned session, `x-vsr-session-id` or a `session_id_headers` header, or the one `identity.headers.session` names | the header `identity.headers.agent` names | none |
 
 A call protection cannot key is filed under its run all the same, not under a
@@ -963,7 +964,7 @@ not send, is filed under its `session-id`. Each record keeps its agent in
 
 | Field | Holds |
 | --- | --- |
-| `harness` | `claude_code` or `codex`, when the request carries their identity headers. |
+| `harness` | `claude_code` or `codex` when the request carries their identity headers, `opencode` or `deepseek_harness` when its User-Agent names OpenCode or DeepSeek Harness. |
 | `id` | The short SHA-256 hash of the agent id, empty for the main agent. |
 | `parent_id` | The hash of the agent that spawned it, empty when the main agent did. |
 | `kind` | The subagent kind Codex sends in `x-openai-subagent`, such as `collab_spawn` or `review`. |
@@ -1032,13 +1033,15 @@ For a complete decision fragment, see
 
 A run reads by the name its harness shows for the session, where the gateway
 can see that name. Each harness names a session with a side request of its own,
-which Replay recognises by what the harness marks, never by its prompt, and
-records with `request_kind: session_title`:
+which Replay recognises by what the harness marks, and records with
+`request_kind: session_title`. OpenCode marks nothing, so its title request is
+the one recognised by its prompt:
 
 | Harness | How it names the session | What Replay records |
 | --- | --- | --- |
 | Claude Code 2.1.273 and later | After the first prompt, an `x-claude-code-request-class: auxiliary` request asking for a JSON object of one `title` field. `/rename` sends nothing; the next request carries the command and its output in its history. | The title the answer gives on the title request's record, and the name a `/rename` gave on the record of each request whose history shows it. The latest names the run. |
 | Codex CLI 0.166.0 | Its terminal UI starts a thread of its own whose turn metadata says `thread_source: thread_title`, under a new `session-id`. No field of that request names the thread it titles, and `/rename` sends nothing. `codex exec` names no thread. | Neither name. A session holding only title requests is no run and is left out of the list. |
+| OpenCode 1.18.10 | At the start of a session, a call without tools, under the session's own `x-session-id`, whose instructions open with `You are a title generator.` | The first line of the answer on the title request's record, which names the run. |
 
 Claude Code marks its request class only with `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1`,
 which `vllm-sr connect claude-code` sets. The title is response text and a rename

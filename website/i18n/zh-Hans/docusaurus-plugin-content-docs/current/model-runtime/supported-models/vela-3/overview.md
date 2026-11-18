@@ -27,10 +27,13 @@ global:
 | 模型 | 参数量 | 回答的问题类型 | Span | 输入 | 显存 |
 | --- | --- | --- | --- | --- | --- |
 | [vela3-fast](./vela3-fast) | 1.52B | choice, noul, span | router | text | 12 GiB |
+| [vela3.1-fast](./vela3-1-fast) | 1.93B | choice, noul, span | router | text | 15 GiB |
 | [vela3-lite](./vela3-lite) | 0.903B | choice, noul, score, span | router | text, image, video | 4 GiB |
 | [vela3-mini](./vela3-mini) | 4.79B | choice, noul, score, span | router | text, image, video | 16 GiB |
 | [vela3-flash](./vela3-flash) | 8.83B | choice, noul, score, span | router | text, image, video | 32 GiB |
 | [vela3-turbo](./vela3-turbo) | 27.6B | choice, noul, score, span | router | text, image, video | 72 GiB |
+| [vela3.1-pico-150m](./vela3-1-pico-150m) | 0.153B | choice, noul, span | router | text | 2 GiB |
+| [vela3.1-pico-380m](./vela3-1-pico-380m) | 0.381B | choice, noul, span | router | text | 3 GiB |
 
 <!-- END GENERATED MODEL TABLE -->
 

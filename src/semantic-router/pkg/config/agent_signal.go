@@ -10,13 +10,18 @@ const SignalTypeAgent = "agent"
 
 // The agent roles and harnesses an AgentRule may name.
 const (
-	AgentRoleMain          = "main"
-	AgentRoleSubagent      = "subagent"
-	AgentHarnessClaudeCode = "claude_code"
-	AgentHarnessCodex      = "codex"
+	AgentRoleMain               = "main"
+	AgentRoleSubagent           = "subagent"
+	AgentHarnessClaudeCode      = "claude_code"
+	AgentHarnessCodex           = "codex"
+	AgentHarnessOpenCode        = "opencode"
+	AgentHarnessDeepSeekHarness = "deepseek_harness"
 )
 
 // The request classes Claude Code documents for x-claude-code-request-class.
+// OpenCode sends none; the Router gives its session-title and compaction
+// calls the auxiliary and compaction classes and every other call main or
+// subagent.
 const (
 	AgentRequestClassMain       = "main"
 	AgentRequestClassSubagent   = "subagent"
@@ -27,9 +32,9 @@ const (
 
 // AgentRule matches the agent a request belongs to, as its harness's headers
 // name it: the main agent or a subagent, the harness, the type the harness
-// gives a subagent, and the class Claude Code gives the request, such as a
-// compaction. Every field set must match. The headers are caller-controlled
-// routing hints, never an authorization.
+// gives a subagent, and the request's class, such as a compaction. Every
+// field set must match. The headers are caller-controlled routing hints,
+// never an authorization.
 type AgentRule struct {
 	Name           string   `yaml:"name"`
 	Description    string   `yaml:"description,omitempty"`
@@ -44,7 +49,7 @@ func SupportedAgentRoles() []string { return []string{AgentRoleMain, AgentRoleSu
 
 // SupportedAgentHarnesses lists the harnesses an AgentRule may name.
 func SupportedAgentHarnesses() []string {
-	return []string{AgentHarnessClaudeCode, AgentHarnessCodex}
+	return []string{AgentHarnessClaudeCode, AgentHarnessCodex, AgentHarnessOpenCode, AgentHarnessDeepSeekHarness}
 }
 
 // SupportedAgentRequestClasses lists the request classes an AgentRule may name.
@@ -102,8 +107,13 @@ func ValidateAgentRuleContract(rule AgentRule) error {
 }
 
 func validateAgentRequestClasses(rule AgentRule) error {
-	if len(rule.RequestClasses) > 0 && rule.Harness == AgentHarnessCodex {
-		return fmt.Errorf("only Claude Code sends a request class, so request_classes cannot go with harness codex")
+	if len(rule.RequestClasses) > 0 {
+		switch rule.Harness {
+		case AgentHarnessCodex:
+			return fmt.Errorf("request_classes cannot go with harness codex: Codex calls carry no request class")
+		case AgentHarnessDeepSeekHarness:
+			return fmt.Errorf("request_classes cannot go with harness deepseek_harness: DeepSeek Harness calls carry no request class")
+		}
 	}
 	for i, class := range rule.RequestClasses {
 		if !slices.Contains(SupportedAgentRequestClasses(), class) {

@@ -4,9 +4,9 @@
 
 `agent` matches the agent a request belongs to: the main agent or a subagent,
 the harness that sent it, the type the harness gives the subagent, and the
-class Claude Code gives the request, such as a compaction. It reads the
-identity headers Claude Code and Codex send, with no model inference. Define
-these rules under `recipes[].signals.agent`.
+request's class, such as a compaction. It reads the identity headers Claude
+Code, Codex and OpenCode send, with no model inference. Define these rules
+under `recipes[].signals.agent`.
 
 ## Key Advantages
 
@@ -34,7 +34,8 @@ Use `agent` when:
 
 - subagents of different kinds need different models or efforts;
 - a policy applies only to subagents, or only to the main agent;
-- Claude Code and Codex traffic share a recipe but need different routes.
+- Claude Code, Codex and OpenCode traffic share a recipe but need different
+  routes.
 
 ## Configuration
 
@@ -54,16 +55,16 @@ recipes:
         - name: any_subagent
           role: subagent
         - name: housekeeping
-          description: Claude Code compactions and side requests such as session titles.
+          description: Claude Code and OpenCode compactions and side requests such as session titles.
           request_classes: [compaction, auxiliary]
 ```
 
 | Field | Meaning |
 | --- | --- |
 | `role` | `main` or `subagent`. |
-| `harness` | `claude_code` or `codex`. |
+| `harness` | `claude_code`, `codex`, `opencode` or `deepseek_harness`. |
 | `types` | Subagent types, any of which matches. The comparison ignores case. A rule with `types` matches subagents only, so `role: main` is refused with it. |
-| `request_classes` | Claude Code request classes, any of which matches: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`. Only Claude Code sends one, so `harness: codex` is refused with it. |
+| `request_classes` | Request classes, any of which matches: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`. Claude Code sends the class and OpenCode calls get one as the table below shows; Codex calls carry none, so `harness: codex` is refused with it. |
 
 A rule matches when every field it sets matches, and must set at least one.
 Rule names are unique within a recipe.
@@ -79,6 +80,7 @@ decides the role.
 | --- | --- | --- | --- | --- |
 | Claude Code | `x-claude-code-session-id` and no agent id | `x-claude-code-agent-id` | `x-claude-code-agent-type`: a built-in agent's name, such as `Explore`, `Plan` or `general-purpose`, or `custom` for every custom agent, `teammate` for an agent team member and `fork` for a fork | `x-claude-code-request-class`: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`, on every request |
 | Codex CLI | `thread-id` equal to `session-id` | `thread-id` not equal to `session-id` | `x-openai-subagent`: `collab_spawn` for a `spawn_agent` child, whatever its role, and `review` for a review child | none |
+| OpenCode | `x-session-id` and no `x-parent-session-id` | `x-parent-session-id`: the session that spawned the subagent, whose own session is in `x-session-id` | none | none sent: a call without tools that opens with OpenCode's built-in title instructions is `auxiliary`, one that opens with its summary instructions is `compaction`, and every other call is `main` or `subagent` |
 
 Claude Code sends the type and the class only when
 `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1` is set in its environment, as
@@ -89,6 +91,21 @@ and a rule with `types` or `request_classes` does not. The type comes only with
 a subagent's own turns: a subagent's compaction or side request keeps its
 agent id, so its role, and carries its class but no type. These headers were
 checked with Claude Code 2.1.325 and Codex CLI 0.166.0.
+
+OpenCode is known by its User-Agent, `opencode/<version>`. A subagent runs in a
+child session of its own, so the Router files its calls under the session that
+spawned it, with the child as the agent, unless the request pins a session in
+`x-vsr-session-id`; its subagents cannot start subagents of their own by
+default, so a run has one level. OpenCode marks no request class, so its two
+side requests are known by the instructions they open with: `You are a title
+generator.` for a session title and `You are an anchored context summarization
+assistant` for a summary of the session. A project that replaces those prompts
+sends calls that read as `main`. This was checked with OpenCode 1.18.10.
+
+DeepSeek Harness is known by its User-Agent, `deepseek-harness/<version>`. It
+names no session, subagent or request class, so `request_classes` cannot go
+with `harness: deepseek_harness`, and its calls take the `main` role only when
+the request pins a session in `x-vsr-session-id`.
 
 ## Decision Usage
 
@@ -226,8 +243,9 @@ under `signals` for a caller allowed to see it.
 
 ## Dependencies and Limitations
 
-The headers are sent by the client, so a caller can claim any role or type.
-Use the signal to choose models, not to grant access. The classify and routing
+The headers are sent by the client, so a caller can claim any role or type,
+and any client can name itself OpenCode in its User-Agent. Use the signal to
+choose models, not to grant access. The classify and routing
 preview APIs receive no harness headers, so agent rules never match there.
 A native System One recipe cannot read the signal.
 See a complete example:

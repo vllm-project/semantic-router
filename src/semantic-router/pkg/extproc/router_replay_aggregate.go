@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"net/url"
 	"sort"
 
@@ -25,6 +26,7 @@ type routerReplayAggregateTokenBuckets = routerreplay.AggregateTokenBuckets
 type routerReplayAggregateTokenEntry = routerreplay.AggregateTokenEntry
 
 func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
+	ctx context.Context,
 	method string,
 	rawQuery string,
 ) *ext_proc.ProcessingResponse {
@@ -41,7 +43,9 @@ func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 		return r.createErrorResponse(400, err.Error())
 	}
 
-	payload, err := r.queryRouterReplayAggregate(filters)
+	payload, err := r.replayAggregates.get(ctx, filters.cacheKey(), func(ctx context.Context) (routerReplayAggregateResponse, error) {
+		return r.queryRouterReplayAggregate(ctx, filters)
+	})
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
@@ -74,20 +78,30 @@ func buildRouterReplayLifecycleSummary(
 ) routerReplayLifecycleSummary {
 	summary := routerReplayLifecycleSummary{}
 	for _, record := range records {
-		switch record.LifecycleState {
-		case routerreplay.LifecycleCompleted:
-			summary.Completed++
-		case routerreplay.LifecycleFailed:
-			summary.Failed++
-		case routerreplay.LifecycleAborted:
-			summary.Aborted++
-		case routerreplay.LifecycleInProgress:
-			summary.InProgress++
-		default:
-			summary.Unknown++
-		}
+		countRouterReplayLifecycle(&summary, record.LifecycleState)
 	}
 	return summary
+}
+
+// countRouterReplayLifecycle counts one record's lifecycle state.
+func countRouterReplayLifecycle(summary *routerReplayLifecycleSummary, state string) {
+	switch state {
+	case routerreplay.LifecycleCompleted:
+		summary.Completed++
+	case routerreplay.LifecycleFailed:
+		summary.Failed++
+	case routerreplay.LifecycleAborted:
+		summary.Aborted++
+	case routerreplay.LifecycleInProgress:
+		summary.InProgress++
+	default:
+		summary.Unknown++
+	}
+}
+
+// routerReplayDecisionName is the recipe-scoped decision a record counts under.
+func routerReplayDecisionName(record routerreplay.RoutingRecord) string {
+	return routerReplayFallbackName(config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision))
 }
 
 func buildRouterReplayModelSelection(
@@ -95,11 +109,7 @@ func buildRouterReplayModelSelection(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		name := record.SelectedModel
-		if name == "" {
-			name = "Unknown"
-		}
-		counts[name]++
+		counts[routerReplayFallbackName(record.SelectedModel)]++
 	}
 	return sortRouterReplayAggregateValues(counts, 10)
 }
@@ -109,11 +119,7 @@ func buildRouterReplayDecisionDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		name := config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)
-		if name == "" {
-			name = "Unknown"
-		}
-		counts[name]++
+		counts[routerReplayDecisionName(record)]++
 	}
 	return sortRouterReplayAggregateValues(counts, 0)
 }
@@ -123,13 +129,18 @@ func buildRouterReplaySignalDistribution(
 ) []routerReplayAggregateValue {
 	counts := make(map[string]int)
 	for _, record := range records {
-		for name, matched := range replaySignalGroups(record.Signals) {
-			if len(matched) > 0 {
-				counts[name] += len(matched)
-			}
-		}
+		countRouterReplaySignals(counts, record.Signals)
 	}
 	return sortRouterReplayAggregateValues(counts, 0)
+}
+
+// countRouterReplaySignals counts one record's matched signals by type.
+func countRouterReplaySignals(counts map[string]int, signals routerreplay.Signal) {
+	for _, family := range replaySignalFamilies(signals) {
+		if len(family.matched) > 0 {
+			counts[family.name] += len(family.matched)
+		}
+	}
 }
 
 func buildRouterReplayTokenVolume(
@@ -168,7 +179,7 @@ func buildRouterReplayTokenBreakdown(
 
 		accumulateRouterReplayTokenEntry(
 			decisionBuckets,
-			routerReplayFallbackName(config.RoutingDecisionKey(config.RecipeName(record.Recipe), record.Decision)),
+			routerReplayDecisionName(record),
 			promptTokens,
 			completionTokens,
 			totalTokens,

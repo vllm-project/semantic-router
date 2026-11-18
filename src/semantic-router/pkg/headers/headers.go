@@ -58,6 +58,14 @@ const (
 	// thread.
 	XCodexParentThreadID = "x-codex-parent-thread-id"
 
+	// XParentSessionID names the session that spawned an OpenCode subagent's
+	// session. OpenCode sends it on every call of the child session, whose
+	// own id travels in x-session-id.
+	XParentSessionID = "x-parent-session-id"
+
+	// UserAgent names the client; OpenCode sends opencode/<version>.
+	UserAgent = "user-agent"
+
 	// XConversationID is the default header Router Learning protection reads a
 	// stable conversation identifier from.
 	XConversationID = "x-conversation-id"
