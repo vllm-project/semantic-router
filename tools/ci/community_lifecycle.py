@@ -43,8 +43,8 @@ from community_lifecycle_policy import (
 )
 
 __all__ = [
-    "ASSIGN_COMMANDS",
     "ASSIGNMENT_COMMAND_EVENT",
+    "ASSIGN_COMMANDS",
     "EPIC",
     "ISSUE_DELIVERY_STATE_LABELS",
     "MAINTAINER_OWNER",
