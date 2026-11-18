@@ -61,7 +61,7 @@ func (engine *Engine) DecodeResponseStream(
 		return llmprotocol.Response{}, nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"streaming_unsupported",
-			"wire format does not support streaming",
+			fmt.Sprintf("the %s API does not stream", format.APIName()),
 			nil,
 		)
 	}
@@ -150,7 +150,7 @@ func (accumulator *responseAccumulator) applyEvent(event llmprotocol.Event) erro
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"opaque_stream_event",
-			"provider-opaque stream events cannot enter the neutral response contract",
+			"the model service streamed an event the Router cannot translate",
 			nil,
 		)
 	default:

@@ -244,6 +244,7 @@ type RequestContext struct {
 	VSRSelectedDecisionConfidence       float64                                     // Confidence score from DecisionEngine evaluation
 	VSRSelectedDecisionConfidenceScored bool                                        // False for structural and error-policy matches without model scores
 	VSRReasoningMode                    string                                      // "on" or "off" - whether reasoning mode was determined to be used
+	VSRReasoningReason                  string                                      // Why VSRReasoningMode is not the decision's choice, such as "output_budget"
 	VSRSelectedModel                    string                                      // The model selected by VSR
 	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "static", "systemone", "escalate")
 	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
@@ -538,6 +539,10 @@ type RequestContext struct {
 	// RequestAutoStore snapshots the client's memory persistence override before
 	// provider preparation removes router controls. Nil uses configured defaults.
 	RequestAutoStore *bool
+	// unstatedReasoningOutputLimit snapshots the output limit of a client
+	// request that states no reasoning preference, before dispatch sets the
+	// reasoning controls; see outputBudgetTurnsReasoningOff.
+	unstatedReasoningOutputLimit *int64
 
 	ContextCompressionTargetTokens *int
 	ContextCompressionRecoveryKeys []string

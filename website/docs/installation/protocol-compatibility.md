@@ -251,6 +251,45 @@ blocks are omitted:
 | Non-empty text, including whitespace | The same text |
 | A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
 
+### Chat request fields the Router refuses
+
+The Router fails closed on a Chat Completions field it can't carry to every
+backend: the request gets `400` with the code below and reaches no backend. A
+value that asks for nothing a backend wouldn't do without the field is
+accepted instead. The backend receives the request without the field, and
+`x-vsr-warnings` reports a `dropped` diagnostic for it. A `null` value counts
+as no field, and `logprobs: false` asks for the default, so neither is
+reported.
+
+| Field | Code | Accepted |
+| --- | --- | --- |
+| `audio` | `unsupported_audio` | None |
+| `function_call` | `unsupported_function_call` | None |
+| `functions` | `unsupported_functions` | None |
+| `logprobs` | `unsupported_logprobs` | `false` |
+| `modalities` | `unsupported_modalities` | Exactly `["text"]` |
+| `moderation` | `unsupported_moderation` | None |
+| `prediction` | `unsupported_prediction` | None |
+| `prompt_cache_options` | `unsupported_prompt_cache_options` | None |
+| `prompt_cache_retention` | `unsupported_prompt_cache_retention` | None |
+| `safety_identifier` | `unsupported_safety_identifier` | Any string: an end-user ID for the provider's abuse monitoring, which a backend doesn't use |
+| `service_tier` | `unsupported_service_tier` | `"auto"` and `"default"` |
+| `top_logprobs` | `unsupported_top_logprobs` | None |
+| `web_search_options` | `unsupported_web_search_options` | None |
+| `messages[].audio`, output audio in replayed history | `unsupported_output_audio` | None |
+| `messages[].function_call`, a legacy function call in history | `unsupported_legacy_function_call` | None |
+| `messages[].tool_calls[].function.TokenizedArguments` | `unsupported_messages_tool_calls_function_tokenized_arguments` | None |
+| A content part the message's role can't hold, such as an image in a system message | `unsupported_content` | None |
+| A tool whose `type` is not `function` or `custom` | `unsupported_tool` | None |
+| `tool_choice` of type `allowed_tools` | `unsupported_tool_choice` | None |
+| A `response_format` other than `text`, `json_object` or `json_schema` | `unsupported_output_format` | None |
+
+A Responses request's `service_tier` and `safety_identifier` follow the same
+rule. Its other top-level fields the Router can't carry, `background`,
+`context_management`, `max_tool_calls`, `moderation`, `prompt`,
+`prompt_cache_options`, `prompt_cache_retention` and `top_logprobs`, fail with
+`unsupported_<field>`.
+
 ### The answer after reasoning
 
 A reasoning parser, such as vLLM's `qwen3` parser, splits a model's output at
@@ -280,21 +319,20 @@ backend:
 
 Other unsupported controls fail with a typed request error.
 
+On every backend, `max_tokens` covers thinking as well as the answer. A
+request without `thinking` whose decision turns reasoning on can spend a small
+`max_tokens` on thinking and come back without text. With
+`providers.defaults.reasoning_min_output_tokens` set, such a request below that
+limit reaches the backend with the model's reasoning off; see
+[Model reasoning](model-reasoning#turn-reasoning-off-for-small-output-limits).
+
 A `system` message inside `messages`, such as the environment section and the
 file-change notices Claude Code inserts during a session, reaches these
-backends as a system message in the same place. Many open-model chat
-templates accept a system message only first: Qwen3.5 and later reject the
-request, and gpt-oss drops the text.
-
-For backends served with such a template, add `messages[].role` to
-`global.router.allow_lossy_translation` (see
-[Validation and failure behavior](#validation-and-failure-behavior)):
-
-- The text joins the user turn right before it, or becomes a user turn of its
-  own after a tool result.
-- `x-vsr-warnings` reports an `approximated` diagnostic for
-  `messages[].role`.
-- Messages backends receive the message in place either way.
+backends as a system message in the same place. Listing `messages[].role`
+sends it as user text in that place instead, for chat templates that accept a
+system message only first; see
+[System messages a chat template refuses](#system-messages-a-chat-template-refuses).
+Messages backends receive the message in place either way.
 
 ### Files a model can't read
 
@@ -380,6 +418,48 @@ control for every model a decision routes to, list it in the decision's
 [`request_params`](../tutorials/plugin/request-params) `blocked_params`
 instead.
 
+### System messages a chat template refuses
+
+A request can carry several system and developer messages. A Chat
+Completions client may give each instruction its own system message, a
+Responses request has its `instructions` and developer items, and coding
+agents insert system messages inside the conversation. Many open-model chat
+templates accept one system message, only first: Qwen3.5 and later reject the
+request with "System message must be at the beginning.", and gpt-oss drops
+the text. The same request then passes or fails with the model the decision
+picks.
+
+For backends served with such a template, add `messages[].role` to
+`global.router.allow_lossy_translation` (see
+[Validation and failure behavior](#validation-and-failure-behavior)):
+
+```yaml
+global:
+  router:
+    allow_lossy_translation: ["messages[].role"]
+```
+
+- **One system message, first.** A Chat backend receives the system and
+  developer messages that lead the conversation as one system message, their
+  texts in order with a blank line between them: a Chat request's leading
+  system and developer messages, or a Responses request's `instructions` and
+  leading developer and system items. A `cache_control` boundary stays at the
+  end of the text that set it. A request with one leading system message
+  reaches the backend unchanged.
+- **Later messages as user text.** A system or developer message inside the
+  conversation reaches a Chat backend as user text in the same place: it joins
+  the user turn right before it, or becomes a user turn of its own after an
+  assistant turn or a tool result. A Messages request's system messages inside
+  `messages` reach Responses backends the same way.
+- **Reported.** `x-vsr-warnings` reports one `approximated` diagnostic for
+  `messages[].role`.
+- **Other backends are unaffected.** Messages backends receive the messages
+  as sent, and Responses backends receive a Chat or Responses client's system
+  and developer messages in their own roles.
+
+Without the opt-in, every system and developer message reaches the backend in
+its own role.
+
 ### Developer messages a backend drops
 
 OpenAI reads a `developer` message as an instruction, like a `system` one. Chat
@@ -411,6 +491,11 @@ providers:
 - **Other models are unaffected.** Another model of the same decision still
   receives the `developer` role.
 
+With `messages[].role` listed, a Chat backend receives the leading developer
+messages in its one system message
+([above](#system-messages-a-chat-template-refuses)), and the request reports
+that diagnostic alone.
+
 ### Signed reasoning from Anthropic backends
 
 Reasoning content translated out of an Anthropic backend fails when the
@@ -428,6 +513,27 @@ Listing `reasoning.signature` in `global.router.allow_lossy_translation` lets
 these responses through: the Router drops the signature, keeps the reasoning
 text and reports the loss as `approximated`. The signature can't come back on
 later turns, so use this only with backends that don't need it, such as vLLM.
+
+A Messages client sends that thinking back, signature included, on every
+later turn. When a session an `anthropic` backend answered moves to a Chat
+Completions or Responses backend, the request fails before routing with
+`unsupported_capability`, and the message names the first signed block:
+
+```text
+messages[1].content[0].signature: the selected model cannot accept signed thinking; an operator can accept this loss by listing reasoning.signature in global.router.allow_lossy_translation
+```
+
+The same setting lets these requests through:
+
+- **Text kept.** Such a backend receives each thinking block's text without
+  its signature.
+- **Reported.** `x-vsr-warnings` reports an `approximated` diagnostic for
+  `reasoning.signature`.
+- **Anthropic backends are unaffected.** An `anthropic` backend, as the
+  decision's choice or as a fallback candidate, still receives the signature.
+
+A thinking block whose signature is empty, `"signature": ""`, carries none, so
+it reaches every backend without the setting.
 
 ### Stored completions
 
@@ -506,9 +612,21 @@ tools or error translation.
 ## Validation and failure behavior
 
 - Public requests are decoded into the neutral contract even when client and
-  backend formats match. Unknown or unsupported request fields fail closed,
-  and the error names an unknown field, such as
-  `request JSON contains a non-canonical field: unknown field "new_field"`.
+  backend formats match. Unknown or unsupported request fields fail closed
+  with `400` `invalid_request_error`, naming the field as OpenAI does:
+
+  | Request | Code | Message |
+  | --- | --- | --- |
+  | A member the API does not define | `unknown_parameter`, `param` the member's path | `Unrecognized request argument supplied: new_field`; inside a message, `messages[].new_field` |
+  | Valid JSON with a value of the wrong type | `invalid_type`, `param` the member's path | `Invalid type for 'max_tokens': expected an integer, but got a decimal number instead.` |
+  | A body that is not JSON | `invalid_json` | `request JSON is invalid` |
+  | A member the Router knows but cannot carry | `unsupported_<field>` | Names the field |
+
+  Anthropic Messages clients get the same message in Anthropic's
+  `invalid_request_error`, which has no code field.
+- A backend's `4xx` error reaches the client in the client's error format,
+  with the Router's codes and the field names the client sent; see
+  [request budget errors](../api/router#request-budget-errors).
 - Chat requests accept and don't forward the fields that client libraries add
   to the assistant messages they replay: LiteLLM's `provider_specific_fields`,
   which holds the reply fields its message type lacks, and `parsed` and
@@ -516,6 +634,11 @@ tools or error translation.
   results. One that carries a value is reported as `dropped`. Like the other
   Responses input items, a reasoning item may carry `status`, which the openai
   SDK's stream helper sets.
+- A function tool whose `parameters` is `null`, which typed OpenAI clients
+  send for a tool that takes no arguments, is read like a tool without
+  `parameters`, in Responses `tools[]` and Chat `tools[].function` alike:
+  every backend receives the schema `{"type":"object"}` in place of the
+  `null`.
 - Backend replies are decoded into the same contract. A reply field that its
   `api_format` does not define is dropped and reported instead of failing the
   reply; see
@@ -524,10 +647,11 @@ tools or error translation.
   that cannot be represented return a typed protocol error. A
   `lossy_translation` error for a loss an operator may accept, such as
   `tool_result.is_error`, names the `global.router.allow_lossy_translation`
-  setting that accepts it, and so does the `unsupported_tools_defer_loading`
-  error. The `unsupported_capability` errors for files,
-  signed reasoning and stored completions don't; their sections above name
-  the setting.
+  setting that accepts it, and so do the `unsupported_tools_defer_loading`
+  error and the `unsupported_capability` error for signed thinking in a
+  request. The `unsupported_capability` errors for files, signed reasoning in
+  a response and stored completions don't; their sections above name the
+  setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
   Responses requests. By default the Router rejects this translation with
   `lossy_translation`, while a false or absent flag remains supported and
@@ -545,12 +669,12 @@ tools or error translation.
   The Router then omits the flag, leaves the tool-result content unchanged,
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
-  also accepts `messages[].role` for system messages inside the conversation
-  and `content.file` for files a model cannot read and `tools.defer_loading`
+  also accepts `messages[].role` for system and developer messages a chat
+  template refuses and `content.file` for files a model cannot read and `tools.defer_loading`
   for deferred tool loading, all described above,
-  `reasoning.signature` (see the signed thinking note above), `store` (see
-  stored completions above), and every other lossy translation still fails
-  closed.
+  `reasoning.signature` for signed thinking in a response or in a Messages
+  request's history (see signed reasoning above), `store` (see stored
+  completions above), and every other lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.

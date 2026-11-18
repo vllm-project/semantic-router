@@ -548,11 +548,21 @@ func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, resp
 			continue
 		}
 		answer, ok := response.Answers[asked.questionID()]
-		if !ok || answer.Error != "" {
+		// A full-coverage rule reads its whole input, and only an answer that
+		// attests complete coverage proves it did. The card-backed path
+		// derives that requirement in ExecuteQuestions, but a direct decider
+		// can return a plausible answer without covering the input, so its
+		// answer is unread here. A window call has its own coverage check: it
+		// reads one window and applyScan merges what the windows read.
+		uncovered := ok && call.scan == nil && asked.unread == "" && answer.Error == "" && rule.FullCoverage() && answer.InputCoverage != "complete"
+		if !ok || answer.Error != "" || uncovered {
 			c.recordGuardRead(results, asked, false)
 			reason := answer.Error
-			if !ok {
+			switch {
+			case !ok:
 				reason = "missing_answer"
+			case uncovered:
+				reason = "input_coverage_unknown"
 			}
 			if ok && rule.FullCoverage() && unscanned(reason) {
 				switch rule.EffectiveOnUnscanned() {

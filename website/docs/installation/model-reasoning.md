@@ -149,3 +149,39 @@ In the Dashboard decision editor, select the Model first. The UI derives the
 mode and effort choices from its effective family and disables controls that
 the Model or Provider cannot support. A custom Model without a family stays a
 pass-through model and has no Dashboard reasoning controls.
+
+## Turn reasoning off for small output limits
+
+A backend counts reasoning against the request's output limit. When a decision
+turns reasoning on, a request with a small limit can spend all of it thinking
+and end with no answer: a Messages response holds only a thinking block, a
+Chat response has `content: null`, and a Responses response holds only a
+reasoning item. Set the smallest limit that keeps the decision's reasoning:
+
+```yaml
+providers:
+  defaults:
+    reasoning_min_output_tokens: 512
+```
+
+- **No preference and a small limit: reasoning off.** A request that states no
+  reasoning preference and sets an output limit below the threshold runs with
+  the model's reasoning off. The limit is Messages `max_tokens`, Chat
+  `max_tokens` or `max_completion_tokens`, or Responses `max_output_tokens`.
+- **What states a preference.** Messages `thinking` of any type; a Chat
+  `reasoning_effort` (`none` and `minimal` included), `reasoning_budget_tokens`,
+  or an `enable_thinking`, `thinking` or `reasoning_effort` member of
+  `chat_template_kwargs`; a Responses `reasoning.effort` or
+  `reasoning.summary`. A Messages `output_config.effort` alone does not, since
+  it sets the effort of the whole answer. A request that states a preference
+  is routed as before, whatever its limit.
+- **Off through the model's own control.** The backend receives the
+  reasoning-off control of the model's family, as with `use_reasoning: false`.
+  A model whose family has none, such as an always-on family, keeps its
+  reasoning. A fallback candidate follows the same rule.
+- **Unchanged otherwise.** A request without an output limit, or with a limit
+  at or above the threshold, keeps the decision's reasoning, and its thinking
+  is returned as before. Unset or `0`, the default, turns the rule off.
+- **Reported.** The `reasoning` member of `x-vsr-trace` reads
+  `off;reason=output_budget`, and Router Replay records the reasoning mode as
+  `off`.

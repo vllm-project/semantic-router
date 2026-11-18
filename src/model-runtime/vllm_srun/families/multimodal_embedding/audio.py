@@ -8,7 +8,9 @@ window, reflect-centred frames, a float64 FFT stored as complex64, Slaney mel
 filters (a bundle's exported filters, or the same filters computed from the
 published preprocessor configs) and the Whisper or CLAP log readout. WAV
 decoding accepts exactly what the router accepts: integer PCM (8, 16, 24, 32
-bit) and IEEE float32, up to eight channels and 30 seconds.
+bit) and IEEE float32, up to eight channels and 30 seconds. A rate whose
+reduced ratio to 16 or 48 kHz would need a sinc kernel above
+``MAX_KERNEL_ELEMENTS`` is refused as an unsupported rate.
 """
 
 from __future__ import annotations
@@ -35,6 +37,11 @@ MAX_RATE = 384_000
 MAX_WAV_BYTES = 32 << 20
 LOWPASS_WIDTH = 6
 ROLLOFF = 0.99
+# A resample kernel is ``[original + 2 * width, new]`` float64 for the reduced rate
+# pair. Every standard rate (8 kHz to 384 kHz against 16 and 48 kHz) reduces to
+# under 300K elements; a rate that shares no factor with the target does not
+# reduce at all, and 8,001 Hz would need 128M elements (0.96 GiB) per target.
+MAX_KERNEL_ELEMENTS = 4_000_000
 _EXTENSIBLE = 0xFFFE
 _SUBFORMAT_TAIL = b"\x00\x00\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71"
 _PCM, _FLOAT = 1, 3
@@ -334,6 +341,23 @@ def decode_wav(data: bytes) -> PCM:
     return PCM(pcm, rate)
 
 
+def _reduced(source: int, target: int) -> tuple[int, int]:
+    """The coprime ``(original, new)`` pair of a resampling from ``source`` to ``target`` Hz."""
+    divisor = math.gcd(source, target)
+    return source // divisor, target // divisor
+
+
+def _width(original: int, new: int) -> int:
+    """Taps on each side of a phase: ``LOWPASS_WIDTH`` cycles of the lower rate, rolled off."""
+    return math.ceil(LOWPASS_WIDTH * original / (min(original, new) * ROLLOFF))
+
+
+def kernel_shape(source: int, target: int) -> tuple[int, int]:
+    """``(taps, phases)`` of the kernel ``resample`` builds from ``source`` to ``target`` Hz."""
+    original, new = _reduced(source, target)
+    return 2 * _width(original, new) + original, new
+
+
 @functools.lru_cache(maxsize=32)
 def _kernel(original: int, new: int) -> tuple[NDArray[np.float64], int]:
     """torchaudio's Hann sinc kernel for coprime rates, transposed (``[2 * width + original, new]``, float64).
@@ -341,7 +365,7 @@ def _kernel(original: int, new: int) -> tuple[NDArray[np.float64], int]:
     It depends only on the rates, so each pair is built once (read-only).
     """
     base = min(original, new) * ROLLOFF
-    width = math.ceil(LOWPASS_WIDTH * original / base)
+    width = _width(original, new)
     # The phase is divided in float32 (torch.arange's default dtype), the rest in float64.
     phase = (-np.arange(new, dtype=np.float32) / np.float32(new)).astype(np.float64)
     offsets = np.arange(-width, width + original, dtype=np.float64) / original
@@ -363,8 +387,7 @@ def resample(
     """One channel from ``source`` Hz to ``target`` Hz; the output has ``ceil(n * target / source)`` samples."""
     if source == target:
         return signal.astype(np.float32, copy=True)
-    divisor = math.gcd(source, target)
-    original, new = source // divisor, target // divisor
+    original, new = _reduced(source, target)
     kernel, width = _kernel(original, new)
     taps = kernel.shape[0]
     length = -(-len(signal) * new // original)
@@ -432,9 +455,14 @@ def features(wave: NDArray[np.float32], spec: Spectrum) -> NDArray[np.float32]:
 
 
 def validate(pcm: PCM, sample_rates: tuple[int, ...], max_sample_rate: int) -> None:
-    """The bundle's input contract: an allowed rate, 1-8 finite channels, at most 30 seconds."""
+    """The bundle's input contract: an allowed rate the resampler can serve, 1-8 finite channels, at most 30 seconds."""
     if not 0 < pcm.rate <= max_sample_rate or (
         sample_rates and pcm.rate not in sample_rates
+    ):
+        raise AudioError("unsupported original audio sampling rate")
+    if any(
+        math.prod(kernel_shape(pcm.rate, target)) > MAX_KERNEL_ELEMENTS
+        for target in (WHISPER_RATE, CLAP_RATE)
     ):
         raise AudioError("unsupported original audio sampling rate")
     if not 1 <= pcm.channels <= MAX_CHANNELS or pcm.samples.shape[1] == 0:
