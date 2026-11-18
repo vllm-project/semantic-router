@@ -10,7 +10,9 @@ import ReactFlow, {
   NodeToolbar,
   Position,
   ReactFlowProvider,
+  useNodesInitialized,
   useReactFlow,
+  useUpdateNodeInternals,
   type Node,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
@@ -242,6 +244,26 @@ function TopologyCanvas() {
     },
     [graph, panelOpen, setViewport, size],
   )
+
+  // React Flow hides a node until it has measured it. A node mounted while the
+  // page could not lay out, such as in a background tab, is measured again
+  // instead of staying hidden until a reload.
+  const nodesInitialized = useNodesInitialized()
+  const updateNodeInternals = useUpdateNodeInternals()
+  React.useEffect(() => {
+    if (!flowReady || !graph || nodesInitialized) return
+    const ids = graph.nodes.map((node) => node.id)
+    const remeasure = () => updateNodeInternals(ids)
+    const timer = window.setTimeout(remeasure, 600)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') remeasure()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [flowReady, graph, nodesInitialized, updateNodeInternals])
 
   const pathKey = pathResult
     ? `${pathResult.matchedDecision}:${pathResult.selectedModel}:${pathResult.matchedSignals.map((signal) => `${signal.type}.${signal.name}`).join('|')}`
