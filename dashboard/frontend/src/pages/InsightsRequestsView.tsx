@@ -76,9 +76,9 @@ import {
   LifecycleStatus,
   LiveToggle,
   Pager,
-  RefreshButton,
   RelativeTime,
 } from './InsightsDisplay'
+import { moreCurrenciesLabel, spendSummary } from './homeSupport'
 import { HarnessLogo, ToolChips } from './InsightsHarness'
 import { API_CLIENT_LABEL, harnessInfo, sortHarnessIds } from './insightsHarness'
 import { ModelChip, modelText, useModelLabels } from './insightsModelLabelSupport'
@@ -159,26 +159,17 @@ function SummaryTile({
 }
 
 function spendOf(aggregate: InsightsAggregateResponse) {
-  const summary = aggregate.summary
-  const groups = summary.by_currency?.length ? summary.by_currency : [summary]
-  const lead = groups[0]
+  const lead = spendSummary(aggregate)
+  const compared = lead.saved !== undefined
   return {
-    spend: formatInsightsCost(lead.total_spend ?? lead.actual_spend, lead.currency, {
-      total: true,
-    }),
-    saved:
-      lead.cost_record_count > 0
-        ? formatInsightsCost(lead.total_saved, lead.currency, { total: true })
-        : 'N/A',
+    spend: formatInsightsCost(lead.spend, lead.currency, { total: true }),
+    saved: compared ? formatInsightsCost(lead.saved, lead.currency, { total: true }) : 'N/A',
     savedShare:
-      lead.cost_record_count > 0 && lead.baseline_spend > 0
-        ? `${formatInsightsShare(lead.total_saved, lead.baseline_spend)} of the baseline`
+      compared && (lead.baseline ?? 0) > 0
+        ? `${formatInsightsShare(lead.saved ?? 0, lead.baseline ?? 0)} of the baseline`
         : 'No priced baseline yet',
-    negative: lead.cost_record_count > 0 && lead.total_saved < 0,
-    more:
-      groups.length > 1
-        ? `+${groups.length - 1} more currenc${groups.length > 2 ? 'ies' : 'y'}`
-        : undefined,
+    negative: compared && (lead.saved ?? 0) < 0,
+    more: moreCurrenciesLabel(lead.otherCurrencies),
   }
 }
 
@@ -490,7 +481,7 @@ export default function InsightsRequestsView() {
   const page = Math.max(1, Number(params.get('page')) || 1)
   const { agentRules, modelProviders } = useInsightsConfig()
   const labels = useModelLabels()
-  const [live, setLive] = useState(false)
+  const [live, setLive] = useState(true)
   const [held, setHeld] = useState(false)
   const [breakdown, setBreakdown] = useState(readBreakdown)
   const [searchDraft, setSearchDraft] = useState(filters.search)
@@ -822,8 +813,14 @@ export default function InsightsRequestsView() {
               onValueChange={(range) => update({ range })}
               options={RANGE_OPTIONS}
             />
-            <LiveToggle live={live} onLiveChange={setLive} held={held} />
-            <RefreshButton onClick={refresh} loading={data.loading && data.rows.length > 0} />
+            <LiveToggle
+              live={live}
+              held={held}
+              onLiveChange={(next) => {
+                setLive(next)
+                if (next) refresh()
+              }}
+            />
           </>
         }
       />

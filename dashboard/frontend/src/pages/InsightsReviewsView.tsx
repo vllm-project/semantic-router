@@ -2,13 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { Card, Skeleton } from '../ui'
 
-import {
-  InsightsLoadError,
-  InsightsUnavailable,
-  LiveToggle,
-  Pager,
-  RefreshButton,
-} from './InsightsDisplay'
+import { InsightsLoadError, InsightsUnavailable, LiveToggle, Pager } from './InsightsDisplay'
 import { insightsUnavailableReason, type InsightsUnavailableReason } from './insightsPageApi'
 import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
 import type {
@@ -162,8 +156,13 @@ export default function InsightsReviewsView({ initialSession = '' }: { initialSe
         onFilterChange={onFilterChange}
         actions={
           <>
-            <LiveToggle live={autoRefresh} onLiveChange={setAutoRefresh} />
-            <RefreshButton onClick={() => void refresh()} loading={loading && records.length > 0} />
+            <LiveToggle
+              live={autoRefresh}
+              onLiveChange={(next) => {
+                setAutoRefresh(next)
+                if (next) void refresh()
+              }}
+            />
           </>
         }
       />

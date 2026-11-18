@@ -64,6 +64,7 @@ import type { RunSummary } from './insightsRunTypes'
 import {
   carriedP95,
   HOME_RANGE_LABEL,
+  moreCurrenciesLabel,
   spendSummary,
   TRAFFIC_UNAVAILABLE,
   type HomeRange,
@@ -172,11 +173,7 @@ export function HomeKpis({
           icon={<CircleDollarSign className="size-4 text-chart-6" />}
           value={money.spend}
           format={(value) => formatInsightsCost(value, money.currency, { total: true })}
-          hint={
-            money.otherCurrencies > 0
-              ? `+${money.otherCurrencies} more currenc${money.otherCurrencies > 1 ? 'ies' : 'y'}`
-              : perThousand
-          }
+          hint={moreCurrenciesLabel(money.otherCurrencies) ?? perThousand}
           spark={series?.map((point) => point.cost)}
           sparkColor="var(--chart-6)"
         />

@@ -344,26 +344,34 @@ export interface SpendSummary {
   /** Net savings against the baseline; undefined when no request was compared. */
   saved?: number
   baseline?: number
-  /** Further currencies the totals leave out of the lead one. */
+  /** Further currencies with spend that the lead one leaves out. */
   otherCurrencies: number
 }
 
-/** The lead currency's spend and savings, as the Requests summary reads them. */
+type SpendGroup = Pick<
+  InsightsAggregateCurrencySummary,
+  'total_saved' | 'baseline_spend' | 'actual_spend' | 'total_spend' | 'cost_record_count'
+> & { currency?: string }
+
+const groupSpend = (group: SpendGroup) => Math.abs(group.total_spend ?? group.actual_spend ?? 0)
+
+/** The currency that carries the most spend leads; currencies without spend are not counted. */
 export function spendSummary(aggregate: InsightsAggregateResponse): SpendSummary {
   const summary = aggregate.summary
-  const groups: Array<InsightsAggregateCurrencySummary | typeof summary> = summary.by_currency
-    ?.length
-    ? summary.by_currency
-    : [summary]
-  const lead = groups[0]
+  const groups: SpendGroup[] = summary.by_currency?.length ? summary.by_currency : [summary]
+  const lead = groups.reduce((best, group) => (groupSpend(group) > groupSpend(best) ? group : best))
   const compared = lead.cost_record_count > 0
   return {
     currency: lead.currency,
     spend: lead.total_spend ?? lead.actual_spend,
     saved: compared ? lead.total_saved : undefined,
     baseline: compared ? lead.baseline_spend : undefined,
-    otherCurrencies: groups.length - 1,
+    otherCurrencies: groups.filter((group) => group !== lead && groupSpend(group) > 0).length,
   }
+}
+
+export function moreCurrenciesLabel(count: number): string | undefined {
+  return count > 0 ? `+${count} more currenc${count > 1 ? 'ies' : 'y'}` : undefined
 }
 
 export function greeting(hour: number): string {

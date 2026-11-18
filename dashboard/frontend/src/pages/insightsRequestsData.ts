@@ -37,7 +37,7 @@ export const REQUESTS_PAGE_SIZE = 25
 export const REQUEST_WINDOW_SIZE = 300
 const WINDOW_PAGE = 100
 const LIVE_INTERVAL_MS = 5_000
-const WINDOW_INTERVAL_MS = 30_000
+const WINDOW_INTERVAL_MS = 60_000
 const REPLAYS = '/api/router/api/v1/observability/replays'
 
 export type RequestRange = 'all' | '1h' | '24h' | '7d'
@@ -361,6 +361,7 @@ export function useRequestsData({
     if (!polling) return undefined
     let ticks = 0
     const interval = window.setInterval(() => {
+      if (document.hidden) return
       ticks += 1
       const current = Math.floor(Date.now() / MINUTE)
       if (filters.range !== 'all' && current !== minute) {

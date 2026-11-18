@@ -40,7 +40,7 @@ export const RUN_OUTCOME_LABELS: Record<string, string> = {
   failed: 'Failed',
   aborted: 'Abandoned',
   in_progress: 'Running',
-  unknown: 'No final answer',
+  unknown: 'Ended',
 }
 
 // One color per model, in the order the run used them most.
@@ -65,7 +65,9 @@ export function getRunPath(sessionId: string, step?: string) {
 }
 
 export function formatRunCost(cost: RunCost): string {
-  const amounts = (cost.by_currency ?? []).map((entry) =>
+  const entries = cost.by_currency ?? []
+  const charged = entries.filter((entry) => entry.total !== 0)
+  const amounts = (charged.length > 0 ? charged : entries.slice(0, 1)).map((entry) =>
     formatInsightsCost(entry.total, entry.currency),
   )
   if (amounts.length === 0) return 'no price'

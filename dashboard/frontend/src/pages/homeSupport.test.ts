@@ -5,6 +5,7 @@ import {
   formatUpdatedAgo,
   greeting,
   latencyStats,
+  moreCurrenciesLabel,
   percentile,
   readHomeRange,
   spendSummary,
@@ -170,6 +171,31 @@ describe('home traffic helpers', () => {
         summary: { ...aggregate.summary, cost_record_count: 0, total_spend: undefined },
       } as InsightsAggregateResponse),
     ).toMatchObject({ spend: 2.5, saved: undefined, baseline: undefined })
+  })
+
+  it('leads with the currency that carries the spend and counts only charged ones', () => {
+    const group = (currency: string, spend: number) => ({
+      currency,
+      total_saved: 0,
+      baseline_spend: 0,
+      actual_spend: spend,
+      total_spend: spend,
+      cost_record_count: spend > 0 ? 1 : 0,
+    })
+    const aggregate = (...groups: ReturnType<typeof group>[]) =>
+      ({
+        summary: { ...groups[0], excluded_record_count: 0, by_currency: groups },
+      }) as InsightsAggregateResponse
+    expect(spendSummary(aggregate(group('USD', 0), group('XXX', 0.29)))).toMatchObject({
+      currency: 'XXX',
+      spend: 0.29,
+      otherCurrencies: 0,
+    })
+    expect(
+      spendSummary(aggregate(group('USD', 1), group('EUR', 3), group('XXX', 0))),
+    ).toMatchObject({ currency: 'EUR', otherCurrencies: 1 })
+    expect(moreCurrenciesLabel(0)).toBeUndefined()
+    expect(moreCurrenciesLabel(2)).toBe('+2 more currencies')
   })
 
   it('ranks a distribution with each entry’s share', () => {

@@ -11,8 +11,7 @@
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test:unit": "vitest run src",
-    "test:e2e:evaluation": "playwright test e2e/evaluation",
-    "design:preview": "vite --config vite.preview.config.ts"
+    "test:e2e:evaluation": "playwright test e2e/evaluation"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

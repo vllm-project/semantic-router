@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, ListTree, Lock, RefreshCw, ServerOff } from 
 import { Alert, Badge, Button, EmptyState, StatusDot, Tooltip, cn, type Tone } from '../ui'
 import { formatDateTime } from '../utils/dateTime'
 
-import { timeAgo } from './insightsDisplayFormat'
+import { requestStatusText, timeAgo } from './insightsDisplayFormat'
 import type { InsightsUnavailableReason } from './insightsPageApi'
 import { getInsightsLifecyclePresentation } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
@@ -47,12 +47,15 @@ export function LifecycleStatus({
     )
   }
   const tone = lifecycle.successful ? 'success' : lifecycle.errored ? 'danger' : 'neutral'
-  const text = record.response_status
-    ? String(record.response_status)
-    : lifecycle.state.replace('_', ' ')
+  const status = requestStatusText(record.response_status, lifecycle)
   return (
-    <Badge tone={tone} size={size} title={title} className="font-mono tabular">
-      {text}
+    <Badge
+      tone={tone}
+      size={size}
+      title={status.hiddenStatus ? `${title} · HTTP ${status.hiddenStatus}` : title}
+      className={status.code ? 'font-mono tabular' : undefined}
+    >
+      {status.text}
     </Badge>
   )
 }

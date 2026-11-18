@@ -37,3 +37,30 @@ export function formatTokenCount(value?: number): string {
   if (Math.abs(value) < 1000) return String(value)
   return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`
 }
+
+export interface RequestStatusText {
+  text: string
+  /** The text is an HTTP status code. */
+  code: boolean
+  /** A success status the request still failed after, for the tooltip. */
+  hiddenStatus?: number
+}
+
+/**
+ * A request's status badge: its HTTP status, unless the request failed after a
+ * success status went out (a broken stream, an abort); then its lifecycle.
+ */
+export function requestStatusText(
+  status: number | undefined,
+  lifecycle: { successful: boolean; state: string },
+): RequestStatusText {
+  const code = status ?? 0
+  const failedAfterSuccess = !lifecycle.successful && code > 0 && code < 400
+  if (code > 0 && !failedAfterSuccess) return { text: String(code), code: true }
+  const state = lifecycle.state.replace('_', ' ')
+  return {
+    text: state.charAt(0).toUpperCase() + state.slice(1),
+    code: false,
+    hiddenStatus: failedAfterSuccess ? code : undefined,
+  }
+}

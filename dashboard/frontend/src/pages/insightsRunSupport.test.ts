@@ -112,6 +112,20 @@ describe('run labels', () => {
     expect(formatRunCost({ ...cost, unpriced_records: 2 })).toBe('no price')
   })
 
+  it('leaves a currency the run spent nothing in out of a mixed total', () => {
+    const mixed = (usd: number, units: number) =>
+      formatRunCost({
+        ...cost,
+        by_currency: [
+          { currency: 'USD', total: usd, router_call_spend: 0 },
+          { currency: 'XXX', total: units, router_call_spend: 0 },
+        ],
+      })
+    expect(mixed(0, 0.2882)).toBe('0.2882')
+    expect(mixed(0.5, 0.2882)).toBe('$0.50 + 0.2882')
+    expect(mixed(0, 0)).toBe('$0.0000')
+  })
+
   it('names a run by its session name, else its task, else its session', () => {
     const summary = run([]).run
     expect(runTitle({ ...summary, session_name: 'Average helper', prompt: 'fix average' })).toBe(
