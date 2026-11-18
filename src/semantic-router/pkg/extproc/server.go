@@ -380,6 +380,8 @@ type routerGeneration struct {
 	router *OpenAIRouter
 	// snapshot is nil for routers installed without the lifecycle.
 	snapshot *configsnapshot.Snapshot
+	// service serves the generation, and later the ones that replace it.
+	service *RouterService
 
 	mu      sync.Mutex
 	refs    sync.WaitGroup
@@ -404,7 +406,9 @@ func NewRouterServiceForSnapshot(r *OpenAIRouter, snapshot *configsnapshot.Snaps
 
 func newRouterServiceWithSnapshot(r *OpenAIRouter, snapshot *configsnapshot.Snapshot) *RouterService {
 	rs := &RouterService{}
-	rs.current.Store(newRouterGeneration(r, snapshot))
+	generation := newRouterGeneration(r, snapshot)
+	generation.service = rs
+	rs.current.Store(generation)
 	return rs
 }
 
@@ -484,6 +488,7 @@ func (rs *RouterService) swapSnapshot(r *OpenAIRouter, snapshot *configsnapshot.
 		return errors.New("router service is shutting down")
 	}
 	generation := newRouterGeneration(r, snapshot)
+	generation.service = rs
 	old := rs.current.Swap(generation)
 	if publish != nil {
 		publish(generation.acquire)
@@ -555,6 +560,7 @@ func (rs *RouterService) lease() (*OpenAIRouter, func(), error) {
 type Lease struct {
 	Router   *OpenAIRouter
 	Snapshot *configsnapshot.Snapshot
+	service  *RouterService
 	release  func()
 }
 
@@ -574,7 +580,7 @@ func (rs *RouterService) Pin() (*Lease, error) {
 	if !acquired {
 		return nil, errors.New("router is shutting down")
 	}
-	return &Lease{Router: generation.router, Snapshot: generation.snapshot, release: release}, nil
+	return &Lease{Router: generation.router, Snapshot: generation.snapshot, service: rs, release: release}, nil
 }
 
 func (rs *RouterService) Close() error {

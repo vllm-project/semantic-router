@@ -72,7 +72,7 @@ func wireHandler(t *testing.T, sink *forwarded) http.HandlerFunc {
 			response = `{"model":"private","answers":{"q":{"type":"noul","noul":0.5}},"usage":{"input_tokens":1,"output_tokens":0}}`
 		}
 		return status, []byte(response), nil
-	})
+	}, ClientAuth{})
 }
 
 func send(handler http.HandlerFunc, path string, body []byte, headers map[string]string) (int, map[string]string) {
