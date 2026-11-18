@@ -78,6 +78,7 @@ from ...systemone import (
     score_confidence,
     valid_state,
 )
+from ...text import bounds
 from . import cache as mc
 from . import images as img
 from . import package as pkg
@@ -733,18 +734,15 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                 continue
             rendered.append((question_id, kind, keys, descriptions, text))
         temperature = self.request_temperature(len(rendered))
-        # One call for all questions: the tokenizer releases the GIL for a batch, not for a single text.
-        encodings = self.tokenizer.encode_batch(
-            [entry[-1] for entry in rendered], add_special_tokens=False
-        )
-        for (question_id, kind, keys, descriptions, _), encoding in zip(
-            rendered, encodings, strict=True
+        # A prompt holds one placeholder token for each image and video, where
+        # its length counts their visual tokens.
+        room = self.question_cap()[0] - visual + images + videos
+        prompts = self._prompt_ids([entry[-1] for entry in rendered], room)
+        for (question_id, kind, keys, descriptions, _), ids in zip(
+            rendered, prompts, strict=True
         ):
-            ids = encoding.ids
-            length = len(ids) - images - videos + visual
-            refused = self.length_error(length)
-            if refused is not None:
-                errors[question_id] = question_error(kind, refused)
+            if ids is None:
+                errors[question_id] = question_error(kind, self.over_cap())
                 continue
             if media:
                 ids = self._expand(ids, media)
@@ -782,11 +780,36 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             return self.validated, True
         return self.limit, False
 
-    def length_error(self, length: int) -> QuestionError | None:
-        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+    def _prompt_ids(self, texts: list[str], room: int) -> list[list[int] | None]:
+        """Each prompt's token IDs, or None for a prompt of more than ``room`` tokens.
+
+        Decision 3.0 never truncates, so ``room + 1`` tokens decide a prompt:
+        it is read only that far, and not at all when it is certainly longer
+        (``bounds``). A prompt within ``room`` is read whole.
+        """
+        undecided = [
+            index
+            for index, text in enumerate(texts)
+            if not bounds.surely_over(self.tokenizer, text, room)
+        ]
+        # One call for the prompts short enough to read whole: the tokenizer
+        # releases the GIL for a batch, not for a single text.
+        reads = bounds.read_batch(
+            self.tokenizer, [texts[index] for index in undecided], room + 1
+        )
+        out: list[list[int] | None] = [None] * len(texts)
+        for index, read in zip(undecided, reads, strict=True):
+            if read.tokens <= room:
+                out[index] = read.encoding.ids
+        return out
+
+    def over_cap(self, length: int | None = None) -> QuestionError:
+        """Why a question prompt over ``question_cap`` is refused.
+
+        ``length`` is its token count. None is a prompt that was not tokenized
+        to its end, so its count is not known and the message names none.
+        """
         limit, capped = self.question_cap()
-        if length <= limit:
-            return None
         hint = (
             f"the length this model was validated at; long context "
             f"(options.long_context) reads up to "
@@ -794,12 +817,22 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             if capped
             else "the maximum context length"
         )
+        size = (
+            f"more than {limit} tokens"
+            if length is None
+            else f"{length} tokens, over {limit} tokens"
+        )
         return QuestionError(
             MAX_LENGTH_EXCEEDED,
-            f"the question prompt has {length} tokens, over {limit} tokens, {hint}; "
-            "nothing was truncated",
+            f"the question prompt has {size}, {hint}; nothing was truncated",
             "question_tokens",
         )
+
+    def length_error(self, length: int) -> QuestionError | None:
+        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+        if length <= self.question_cap()[0]:
+            return None
+        return self.over_cap(length)
 
     def _expand(self, ids: list[int], media: RequestMedia) -> list[int]:
         """Each image placeholder repeated once per input token of its image, and each video placeholder as its
