@@ -11,7 +11,7 @@ import {
   type StatusTone,
   type Tone,
 } from '../ui'
-import { embedRedirectTarget } from './embeddedServiceSupport'
+import { embedRedirectTarget, frameStayedOnEmbed } from './embeddedServiceSupport'
 import ProductLoadingState from './ProductLoadingState'
 import ServiceNotConfigured, { type ServiceConfig } from './ServiceNotConfigured'
 
@@ -40,6 +40,14 @@ const availabilityStatus: Record<Availability, { tone: StatusTone; label: string
   available: { tone: 'success', label: 'Connected through dashboard' },
   missing: { tone: 'neutral', label: 'Not configured' },
   failed: { tone: 'danger', label: 'Connection unavailable' },
+}
+
+function readFramePath(frame: HTMLIFrameElement): string | null {
+  try {
+    return frame.contentWindow?.location.pathname ?? null
+  } catch {
+    return null
+  }
 }
 
 export default function EmbeddedServicePage({
@@ -234,9 +242,16 @@ export default function EmbeddedServicePage({
                 title={iframeTitle}
                 allowFullScreen
                 referrerPolicy="same-origin"
-                onLoad={() => {
+                onLoad={(event) => {
                   setFrameLoading(false)
                   setFrameSlow(false)
+                  if (!frameStayedOnEmbed(readFramePath(event.currentTarget), availabilityUrl)) {
+                    setAvailability('failed')
+                    setError(
+                      `${service.name} sent its page somewhere else instead of loading, so it cannot be shown here. Check the ${service.name} address the Dashboard proxies to, or open the full view.`,
+                    )
+                    return
+                  }
                   setError(null)
                 }}
                 onError={() => {

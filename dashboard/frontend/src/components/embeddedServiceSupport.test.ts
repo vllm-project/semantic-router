@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { embedRedirectTarget } from './embeddedServiceSupport'
+import { embedRedirectTarget, frameStayedOnEmbed } from './embeddedServiceSupport'
 
 const origin = 'https://dashboard.example.test'
 
@@ -33,5 +33,18 @@ describe('embedRedirectTarget', () => {
         origin,
       ),
     ).toBe('https://grafana.example.test')
+  })
+})
+
+describe('frameStayedOnEmbed', () => {
+  it('accepts a frame on the proxy path', () => {
+    expect(frameStayedOnEmbed('/embedded/grafana/d/router', '/embedded/grafana/')).toBe(true)
+    expect(frameStayedOnEmbed('/embedded/jaeger/search', '/embedded/jaeger/')).toBe(true)
+  })
+
+  it('rejects a frame that left the proxy path or shows the browser error page', () => {
+    expect(frameStayedOnEmbed('/', '/embedded/grafana/')).toBe(false)
+    expect(frameStayedOnEmbed('/login', '/embedded/jaeger/')).toBe(false)
+    expect(frameStayedOnEmbed(null, '/embedded/grafana/')).toBe(false)
   })
 })
