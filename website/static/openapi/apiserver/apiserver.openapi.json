@@ -21351,6 +21351,9 @@
                           "request_kind": {
                             "type": "string"
                           },
+                          "requested_model": {
+                            "type": "string"
+                          },
                           "response_body": {
                             "type": "string"
                           },
@@ -29059,6 +29062,9 @@
                       "type": "string"
                     },
                     "request_kind": {
+                      "type": "string"
+                    },
+                    "requested_model": {
                       "type": "string"
                     },
                     "response_body": {
