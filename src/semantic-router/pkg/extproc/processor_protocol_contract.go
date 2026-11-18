@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -301,7 +302,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
-	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
+	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired || len(decoded.Envelope.Response) > 0 && !bytes.Equal(decoded.Envelope.Response, body)
 	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
