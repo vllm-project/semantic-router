@@ -1,12 +1,14 @@
-import type { CSSProperties } from 'react'
-
 import type {
   InsightsAggregateProviderCache,
   InsightsProviderCacheCurrencyTotal,
   InsightsProviderCacheSpendEntry,
 } from '../pages/insightsPageTypes'
-import styles from './InsightsCharts.module.css'
-import { InsightsStatGrid, InsightsUnitsBadge, type InsightsStat } from './InsightsStats'
+import {
+  INSIGHTS_DETAILS,
+  InsightsStatGrid,
+  InsightsUnitsBadge,
+  type InsightsStat,
+} from './InsightsStats'
 import {
   formatInsightsCost,
   formatInsightsCount,
@@ -59,13 +61,11 @@ function SpendTable({ title, nameLabel, entries }: SpendTableProps) {
   const amount = (value: number, currency: string) =>
     formatInsightsCost(value, currency, { total: true, bare: shared })
   const peak = Math.max(0, ...entries.map((entry) => Math.abs(entry.net_savings)))
-  const bar = (value: number) =>
-    ({ '--share': peak > 0 ? Math.abs(value) / peak : 0 }) as CSSProperties
   return (
-    <div className={styles.chartSection}>
-      <h4 className={styles.chartTitle}>{title}</h4>
-      <div className={styles.tableScroll}>
-        <table className={styles.spendTable}>
+    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface px-3.5 py-3">
+      <h4 className="text-[13px] font-semibold">{title}</h4>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-[13px] [&_td]:py-1.5 [&_td]:pl-3 [&_td]:text-right [&_td]:font-mono [&_td]:text-xs [&_td]:tabular [&_th]:py-1.5 [&_th]:text-left [&_th]:font-normal [&_thead_th]:pl-3 [&_thead_th]:text-xs [&_thead_th]:text-subtle-foreground [&_thead_th:not(:first-child)]:text-right [&_tbody_tr]:border-t [&_tbody_tr]:border-border">
           <thead>
             <tr>
               <th scope="col">{nameLabel}</th>
@@ -83,12 +83,10 @@ function SpendTable({ title, nameLabel, entries }: SpendTableProps) {
                 <td>{amount(entry.no_cache_spend, entry.currency)}</td>
                 <td>{amount(entry.actual_spend, entry.currency)}</td>
                 <td
-                  className={
-                    entry.net_savings < 0
-                      ? `${styles.spendNegative} ${styles.spendBarNegative}`
-                      : styles.spendBar
-                  }
-                  style={bar(entry.net_savings)}
+                  className={entry.net_savings < 0 ? 'text-destructive-foreground' : undefined}
+                  style={{
+                    backgroundImage: `linear-gradient(to left, ${entry.net_savings < 0 ? 'var(--destructive-soft)' : 'var(--success-soft)'} ${peak > 0 ? (Math.abs(entry.net_savings) / peak) * 100 : 0}%, transparent 0)`,
+                  }}
                 >
                   {amount(entry.net_savings, entry.currency)}
                 </td>
@@ -121,18 +119,21 @@ export default function InsightsProviderCacheSummary({
       ]
 
   return (
-    <section className={styles.block} aria-label="Provider prompt cache">
-      <header className={styles.blockHeader}>
-        <h3 className={styles.blockTitle}>Provider Prompt Cache</h3>
+    <section
+      className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-4 shadow-xs"
+      aria-label="Provider prompt cache"
+    >
+      <header className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold tracking-[-0.01em]">Provider prompt cache</h3>
         <InsightsUnitsBadge currencies={groups.map((group) => group.currency)} />
       </header>
-      <div className={styles.estimateContext}>
-        <p className={styles.summaryHint}>
+      <div className="flex flex-col gap-1.5 text-xs leading-relaxed text-muted-foreground">
+        <p>
           Net saving over {formatInsightsCount(summary.priced_records)} settled request
           {summary.priced_records === 1 ? '' : 's'}: what the same model would have cost without
           prompt caching, minus what the provider cache actually cost.
         </p>
-        <details className={styles.estimateDetails}>
+        <details className={INSIGHTS_DETAILS}>
           <summary>How the net saving works</summary>
           <p>
             Each request is compared with the same model, all input priced at its standard input
@@ -143,28 +144,28 @@ export default function InsightsProviderCacheSummary({
         </details>
       </div>
       {groups.map((group) => (
-        <div key={group.currency || 'unavailable'} className={styles.group}>
+        <div key={group.currency || 'unavailable'} className="flex flex-col gap-2">
           {groups.length > 1 ? (
-            <h4 className={styles.chartTitle}>
+            <h4 className="text-xs font-medium text-muted-foreground">
               {insightsCurrencyLabel(group.currency) || 'Price unit'} provider cache
             </h4>
           ) : null}
           <InsightsStatGrid stats={providerCacheStats(group)} />
           {group.net_savings < 0 ? (
-            <p className={styles.summaryHint}>
+            <p className="text-xs text-warning-foreground">
               Cache writes cost more than cache reads saved across these requests.
             </p>
           ) : null}
         </div>
       ))}
       {summary.excluded_records > 0 ? (
-        <p className={styles.summaryHint}>
+        <p className="text-xs text-muted-foreground">
           {formatInsightsCount(summary.excluded_records)} filtered record
           {summary.excluded_records === 1 ? '' : 's'} excluded: not completed, served from the
           Router cache, or without complete provider usage and prices.
         </p>
       ) : null}
-      <div className={styles.tokenBreakdownRow}>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <SpendTable
           title="Net Saving by Decision"
           nameLabel="Decision"

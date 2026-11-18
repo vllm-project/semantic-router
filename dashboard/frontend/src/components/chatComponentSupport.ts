@@ -11,7 +11,6 @@ export interface ChatComponentProps {
   endpoint?: string
   feedbackInsightsBasePath?: string
   invocation?: PlaygroundInvocation | null
-  isFullscreenMode?: boolean
   onInvocationConsumed?: () => void
 }
 
@@ -64,6 +63,35 @@ export const buildConversationPreviews = (
         preview,
       }
     })
+
+const DAY = 86_400_000
+
+function startOfDay(time: number): number {
+  const date = new Date(time)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
+/** Conversations under Today, Yesterday, Previous 7 days and Older, newest first. */
+export function groupConversations(
+  previews: readonly ConversationPreview[],
+  now = Date.now(),
+): { label: string; items: ConversationPreview[] }[] {
+  const today = startOfDay(now)
+  const buckets: { label: string; from: number; items: ConversationPreview[] }[] = [
+    { label: 'Today', from: today, items: [] },
+    { label: 'Yesterday', from: today - DAY, items: [] },
+    { label: 'Previous 7 days', from: today - 7 * DAY, items: [] },
+    { label: 'Older', from: Number.NEGATIVE_INFINITY, items: [] },
+  ]
+  for (const preview of previews) {
+    const bucket = buckets.find((candidate) => preview.updatedAt >= candidate.from)
+    bucket?.items.push(preview)
+  }
+  return buckets
+    .filter((bucket) => bucket.items.length > 0)
+    .map(({ label, items }) => ({ label, items }))
+}
 
 export const getLiveThinkingProcess = (messages: readonly Message[]): string =>
   messages.reduceRight(

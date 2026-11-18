@@ -1,6 +1,13 @@
 // topology/utils/api.ts - API calls for topology
 
-import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData, TestQueryMode } from '../types'
+import {
+  TestQueryResult,
+  MatchedSignal,
+  SignalType,
+  EvaluatedRule,
+  ConfigData,
+  TestQueryMode,
+} from '../types'
 import { withRoutingView } from '../../configPageCanonicalLayout'
 
 /**
@@ -47,23 +54,17 @@ interface TestQueryResponse {
   selectionReason?: string
   routingLatency?: number
   warning?: string
-  isFallbackDecision?: boolean  // True if matched decision is a system fallback
-  fallbackReason?: string       // Reason for fallback
+  isFallbackDecision?: boolean // True if matched decision is a system fallback
+  fallbackReason?: string // Reason for fallback
 }
 
 /** Call the live router; failed previews remain failed previews. */
-export async function testQueryDryRun(
-  query: string,
-  model?: string,
-): Promise<TestQueryResult> {
+export async function testQueryDryRun(query: string, model?: string): Promise<TestQueryResult> {
   return requestTestQuery(query, 'dry-run', model)
 }
 
 /** Explicit simulation requests never substitute for live verification. */
-export async function testQuerySimulate(
-  query: string,
-  model?: string,
-): Promise<TestQueryResult> {
+export async function testQuerySimulate(query: string, model?: string): Promise<TestQueryResult> {
   return requestTestQuery(query, 'simulate', model)
 }
 
@@ -109,7 +110,9 @@ async function requestTestQuery(
     selectionMethod: data.selectionMethod,
     selectionReason: data.selectionReason,
     routingLatency: data.routingLatency,
-    warning: data.warning || (!response.ok ? `Router preview failed (HTTP ${response.status})` : undefined),
+    warning:
+      data.warning ||
+      (!response.ok ? `Router preview failed (HTTP ${response.status})` : undefined),
     isFallbackDecision: data.isFallbackDecision,
     fallbackReason: data.fallbackReason,
   }
@@ -119,7 +122,7 @@ async function requestTestQuery(
  * Convert backend signal format to frontend format
  */
 function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSignal[] {
-  return (signals ?? []).map(s => ({
+  return (signals ?? []).map((s) => ({
     type: s.type as SignalType,
     name: s.name,
     matched: true, // Backend only returns matched signals
@@ -135,10 +138,12 @@ function convertSignals(signals: TestQueryResponse['matchedSignals']): MatchedSi
 /**
  * Convert backend evaluated rules to frontend format
  */
-function convertEvaluatedRules(rules?: TestQueryResponse['evaluatedRules']): EvaluatedRule[] | undefined {
+function convertEvaluatedRules(
+  rules?: TestQueryResponse['evaluatedRules'],
+): EvaluatedRule[] | undefined {
   if (!rules) return undefined
 
-  return rules.map(r => {
+  return rules.map((r) => {
     const conditions = r.conditions ?? []
     return {
       decisionName: r.decisionName,
@@ -166,13 +171,13 @@ export async function fetchTopologyConfig() {
     throw new Error(`Failed to fetch config: ${configResponse.statusText}`)
   }
 
-  const config = withRoutingView(await configResponse.json() as ConfigData)
+  const config = withRoutingView((await configResponse.json()) as ConfigData)
 
   if (!globalResponse.ok) {
     return config
   }
 
-  const effectiveGlobal = await globalResponse.json() as ConfigData['global']
+  const effectiveGlobal = (await globalResponse.json()) as ConfigData['global']
   return {
     ...config,
     global: effectiveGlobal,

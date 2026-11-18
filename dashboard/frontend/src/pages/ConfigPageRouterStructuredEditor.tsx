@@ -38,9 +38,15 @@ function scalarValue(value: unknown): string | number {
 }
 
 function isCompound(schema: RouterStructuredSchema): boolean {
-  return ['object', 'object-list', 'string-list', 'number-list', 'string-map', 'json'].includes(
-    schema.kind,
-  )
+  return [
+    'object',
+    'object-list',
+    'object-map',
+    'string-list',
+    'number-list',
+    'string-map',
+    'json',
+  ].includes(schema.kind)
 }
 
 function ReadOnlyScalar({ schema, value }: { schema: RouterStructuredSchema; value: unknown }) {
@@ -284,7 +290,7 @@ export default function ConfigPageRouterStructuredEditor({
       />
     )
   }
-  if (schema.kind === 'json') {
+  if (schema.kind === 'json' || schema.kind === 'object-map') {
     if (readOnly) {
       return <pre className={styles.readonlyJson}>{JSON.stringify(value, null, 2)}</pre>
     }

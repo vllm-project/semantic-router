@@ -7,7 +7,7 @@ import { DECISION_SIGNAL_TYPES, ROUTER_CONFIG_EXTENSION } from '@/generated/rout
 import type { FieldSchema } from '@/lib/dslMutations'
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
-import styles from './BuilderPage.module.css'
+import styles from './builderPageFieldControls.module.css'
 import {
   normalizeStructuredObject,
   normalizeStructuredObjectList,

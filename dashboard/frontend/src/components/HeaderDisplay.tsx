@@ -18,8 +18,9 @@ import {
   X_VSR_SELECTED_RECIPE,
   X_VSR_WARNINGS,
 } from '../generated/vsrHeaders'
-import styles from './HeaderDisplay.module.css'
-import ProductIcon from './ProductIcon'
+import { ChevronDown, Split } from 'lucide-react'
+import { ProviderLogo, cn } from '../ui'
+import { modelProviderId, useInsightsConfig } from '../pages/insightsConfigFacts'
 import {
   formatLearningHeaderValue,
   isLearningHeader,
@@ -123,122 +124,103 @@ const HEADER_INFO: Record<string, { label: string; type: HeaderType }> = {
   [traceKey(TRACE_TRUNCATED)]: { label: 'Trace Truncated', type: 'warning' },
 }
 
-function shouldSummarizeHeaderValue(key: string, values: string[]): boolean {
-  return values.length > 1 && (key.startsWith(MATCHED_SIGNAL_KEY_PREFIX) || key === LOOPER_MODELS)
-}
-
-function summarizeHeaderValue(key: string, rawValue: string): string {
+function formatHeaderValue(key: string, rawValue: string): string {
   if (isLearningHeader(key)) {
     return formatLearningHeaderValue(key, rawValue)
   }
-
-  const values = rawValue
+  return rawValue
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean)
     .map((value) => formatRoutingMetadataValue(key, value))
-
-  if (!shouldSummarizeHeaderValue(key, values)) {
-    return values.join(', ')
-  }
-
-  return `${values[0]} +${values.length - 1}`
+    .join(', ')
 }
 
-function routingHeaderPriority(key: string): number {
-  if (key.startsWith(MATCHED_SIGNAL_KEY_PREFIX)) return 0
-  if (key === X_VSR_SELECTED_DECISION) return 1
-  if (key === ALGORITHM || key === LOOPER_ALGORITHM) return 2
-  if (key === X_VSR_SELECTED_MODEL || key === LOOPER_MODEL || key === LOOPER_MODELS) return 3
-  if (key === X_VSR_RESPONSE_PATH) return 4
-  return 5
+const PERFORMANCE_KEYS = [
+  ROUTING_LATENCY_MS,
+  PLAYGROUND_LATENCY_MS,
+  PLAYGROUND_TTFT_MS,
+  LOOPER_LATENCY_MS,
+]
+
+// The route first, then its timings, the signals that matched it, and the rest.
+function displayRank(key: string): number {
+  if (key === X_VSR_SELECTED_DECISION) return 0
+  if (key === ALGORITHM || key === LOOPER_ALGORITHM) return 1
+  if (key === X_VSR_SELECTED_MODEL || key === LOOPER_MODEL) return 2
+  if (PERFORMANCE_KEYS.includes(key)) return 3
+  if (key.startsWith(MATCHED_SIGNAL_KEY_PREFIX)) return 4
+  if (key === LOOPER_MODELS) return 5
+  if (key === X_VSR_RESPONSE_PATH) return 6
+  return 7
 }
 
+const TYPE_TEXT: Record<HeaderType, string> = {
+  info: 'text-foreground',
+  success: 'text-success-foreground',
+  warning: 'text-warning-foreground',
+  danger: 'text-destructive-foreground',
+}
+
+/** Every routing entry an answer carries, labelled, behind one "Response details" disclosure. */
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
-  // Filter to only show headers that exist
+  const { modelProviders } = useInsightsConfig()
   const hasSelectedAlgorithm = Boolean(headers[ALGORITHM])
-  const displayHeaders = Object.entries(headers)
+  const entries = Object.entries(headers)
     .filter(([key]) => key in HEADER_INFO && !(hasSelectedAlgorithm && key === LOOPER_ALGORITHM))
-    .sort(
-      ([leftKey], [rightKey]) => routingHeaderPriority(leftKey) - routingHeaderPriority(rightKey),
-    )
+    .sort(([leftKey], [rightKey]) => displayRank(leftKey) - displayRank(rightKey))
 
-  if (displayHeaders.length === 0) {
+  if (entries.length === 0) {
     return null
   }
 
-  const primaryKeys = [
-    X_VSR_SELECTED_DECISION,
-    ALGORITHM,
-    LOOPER_ALGORITHM,
-    X_VSR_SELECTED_MODEL,
-    LOOPER_MODEL,
-  ]
-  const performanceKeys = [
-    ROUTING_LATENCY_MS,
-    PLAYGROUND_LATENCY_MS,
-    PLAYGROUND_TTFT_MS,
-    LOOPER_LATENCY_MS,
-  ]
-  const primaryHeaders = displayHeaders.filter(([key]) => primaryKeys.includes(key))
-  const performanceHeaders = displayHeaders.filter(([key]) => performanceKeys.includes(key))
-  const detailHeaders = displayHeaders.filter(
-    ([key]) => !primaryKeys.includes(key) && !performanceKeys.includes(key),
-  )
-
-  const renderHeader = ([key, value]: [string, string]) => {
-    const info = HEADER_INFO[key]
-    const displayValue = summarizeHeaderValue(key, value)
-    const unit = key.endsWith('-ms') || key.endsWith('_ms') ? ' ms' : ''
-    return (
-      <div
-        key={key}
-        className={`${styles.header} ${styles[info.type]}`}
-        title={`${info.label}: ${displayValue}${unit}`}
-      >
-        <span className={styles.label}>{info.label}</span>
-        <span className={styles.value}>
-          {displayValue}
-          {unit}
-        </span>
-      </div>
-    )
-  }
-
-  const renderPerformance = ([key, value]: [string, string]) => {
-    const info = HEADER_INFO[key]
-    const displayValue = summarizeHeaderValue(key, value)
-    return (
-      <div
-        key={key}
-        className={styles.performanceMetric}
-        title={`${info.label}: ${displayValue} ms`}
-      >
-        <span>{info.label}</span>
-        <strong>{displayValue}</strong>
-        <small>ms</small>
-      </div>
-    )
-  }
-
   return (
-    <div className={styles.container}>
-      <div className={styles.headers}>
-        {primaryHeaders.map(renderHeader)}
-        {performanceHeaders.length > 0 ? (
-          <div className={styles.performance}>{performanceHeaders.map(renderPerformance)}</div>
-        ) : null}
-      </div>
-      {detailHeaders.length > 0 ? (
-        <details className={styles.details}>
-          <summary className={styles.detailsToggle} aria-label="Show response details">
-            <span>Response details</span>
-            <ProductIcon name="chevron-down" width={13} height={13} />
-          </summary>
-          <div className={styles.detailsPanel}>{detailHeaders.map(renderHeader)}</div>
-        </details>
-      ) : null}
-    </div>
+    <details className="group/details w-full">
+      <summary
+        className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden"
+        aria-label="Show response details"
+      >
+        <span>Response details</span>
+        <span className="font-mono font-medium normal-case tracking-normal tabular">
+          {entries.length}
+        </span>
+        <ChevronDown className="ml-auto size-3.5 transition-transform group-open/details:rotate-180" />
+      </summary>
+      <dl className="mt-2 flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+        {entries.map(([key, value]) => {
+          const info = HEADER_INFO[key]
+          const displayValue = formatHeaderValue(key, value)
+          const unit = key.endsWith('-ms') || key.endsWith('_ms') ? ' ms' : ''
+          const isModel = key === X_VSR_SELECTED_MODEL || key === LOOPER_MODEL
+          const provider = isModel ? modelProviderId(value, modelProviders) : undefined
+          return (
+            <div
+              key={key}
+              data-header-type={info.type}
+              title={`${info.label}: ${displayValue}${unit}`}
+              className="flex min-w-0 items-baseline justify-between gap-3 px-3 py-1.5 text-xs"
+            >
+              <dt className="shrink-0 text-subtle-foreground">{info.label}</dt>
+              <dd
+                className={cn(
+                  'flex min-w-0 items-center gap-1.5 text-right font-mono',
+                  key === X_VSR_SELECTED_DECISION ? 'text-chart-3' : TYPE_TEXT[info.type],
+                )}
+              >
+                {key === X_VSR_SELECTED_DECISION ? (
+                  <Split className="size-3 shrink-0" aria-hidden />
+                ) : null}
+                {provider ? <ProviderLogo provider={provider} size={12} /> : null}
+                <span className="min-w-0 truncate">
+                  {displayValue}
+                  {unit}
+                </span>
+              </dd>
+            </div>
+          )
+        })}
+      </dl>
+    </details>
   )
 }
 

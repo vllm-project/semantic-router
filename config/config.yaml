@@ -583,8 +583,14 @@ recipes:
           description: Detect common prompt-injection or jailbreak attempts.
           predicate:
             gte: 0.8
+          # The rule reads the user's text of the current turn. history adds
+          # the earlier user turns; tool_results (off by default) adds the tool
+          # results returned in this turn, where a fetched page or file can
+          # carry instructions, and makes a tool result the Router cannot read
+          # as text, such as a screenshot, resolve as on_unscanned says.
           input:
             history: true
+            tool_results: false
           deployment: primary
           timeout_ms: 300
           # A long input is read in windows. When the time runs out before

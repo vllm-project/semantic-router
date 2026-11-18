@@ -36,7 +36,7 @@ func apiRouterReplayRoutes() []apiRoute {
 				Path:        apiObservabilityReplaysPath + "/aggregate",
 				Method:      "GET",
 				Description: "Aggregate Router Replay routing and cost metadata",
-				Parameters:  routerReplayFilterParameters(),
+				Parameters:  routerReplayAggregateParameters(),
 			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
@@ -156,6 +156,12 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 		queryParameter("review_outcome", "Filter completed approval reviews by verdict.", "string", "all", "allow", "deny"),
 		queryParameter("review_risk", "Filter completed approval reviews by reported risk.", "string", "all", "low", "medium", "high", "critical"),
 	}
+}
+
+func routerReplayAggregateParameters() []OpenAPIParameter {
+	return append(routerReplayFilterParameters(),
+		queryParameter("interval", "With since, also return traffic: the records in contiguous intervals of this length from since to now, such as 5m or 1h; at least 1m and at most 1000 intervals.", "string"),
+	)
 }
 
 func routerReplayDatasetParameters() []OpenAPIParameter {

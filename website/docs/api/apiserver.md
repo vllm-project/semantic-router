@@ -833,5 +833,5 @@ The test bypasses the Router result cache and records real model-runtime request
 latency and server-phase metrics. Requests are limited to 2 MiB, responses to
 4 MiB, and execution to 30 seconds. Discovery requires `config.read`; inference
 requires `classify.invoke`. The Dashboard's
-**Build → System One → Decision Playground** page
+**Models → Decision models → Playground** tab
 uses its own authenticated gateway with `config.read` and `evaluation.run`.

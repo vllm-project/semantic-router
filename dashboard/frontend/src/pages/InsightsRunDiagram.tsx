@@ -1,18 +1,29 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { ArrowUpRight } from 'lucide-react'
 
+import { cn } from '../ui'
 import { formatInsightsCost } from '../utils/insightsCost'
 
-import styles from './InsightsRun.module.css'
 import { ModelName, modelLabel, modelText, useModelLabels } from './insightsModelLabelSupport'
 import { getInsightsRecordPath } from './insightsPageSupport'
 import {
   describeCallStatus,
   modelHue,
+  outcomeWord,
   RUN_MARKER_GLYPHS,
   RUN_MARKER_LABELS,
+  verdictLabel,
 } from './insightsRunSupport'
 import { toolStatusText, toolTimeSource, toolTimeText } from './insightsRunSequence'
 import type { RunCall, RunSummary, RunToolCall } from './insightsRunTypes'
+
+const MARKER_TONE: Record<string, string> = {
+  failure: 'text-destructive-foreground',
+  block: 'text-destructive-foreground',
+  tool_failure: 'text-warning-foreground',
+  guard: 'text-warning-foreground',
+}
 
 export function Markers({ markers }: { markers?: string[] }) {
   return (
@@ -20,9 +31,9 @@ export function Markers({ markers }: { markers?: string[] }) {
       {(markers ?? []).map((marker) => (
         <span
           key={marker}
-          className={styles.marker}
           data-marker={marker}
           title={RUN_MARKER_LABELS[marker] ?? marker}
+          className={cn('font-semibold leading-none', MARKER_TONE[marker] ?? 'text-foreground/80')}
         >
           {RUN_MARKER_GLYPHS[marker] ?? '•'}
         </span>
@@ -38,27 +49,32 @@ function modelTitle(labels: Record<string, string>, model: string): string {
 
 export function RunLegend({ run }: { run: RunSummary }) {
   return (
-    <div className={styles.legend}>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
       {run.models.map((model) => (
-        <span key={model.name}>
-          <i style={{ background: modelHue(run.models, model.name) }} />
+        <span key={model.name} className="inline-flex items-center gap-1.5">
+          <i
+            className="size-2 rounded-[3px]"
+            style={{ background: modelHue(run.models, model.name) }}
+          />
           <ModelName name={model.name} />
         </span>
       ))}
-      {Object.entries(RUN_MARKER_LABELS).map(([marker, label]) => (
-        <span key={marker}>
-          <Markers markers={[marker]} /> {label}
-        </span>
-      ))}
+      {Object.entries(RUN_MARKER_LABELS)
+        .filter(([marker]) => run.events?.[marker])
+        .map(([marker, label]) => (
+          <span key={marker} className="inline-flex items-center gap-1">
+            <Markers markers={[marker]} /> {label}
+          </span>
+        ))}
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className={styles.field}>
-      <dt>{label}</dt>
-      <dd>{children}</dd>
+    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-3 py-1.5">
+      <dt className="text-xs text-subtle-foreground">{label}</dt>
+      <dd className="min-w-0 break-words text-[13px]">{children}</dd>
     </div>
   )
 }
@@ -82,7 +98,7 @@ export function RunCallDetails({ call }: { call: RunCall }) {
   const labels = useModelLabels()
   const tokens = `${call.prompt_tokens ?? '-'} in / ${call.completion_tokens ?? '-'} out`
   return (
-    <dl className={styles.details}>
+    <dl className="divide-y divide-border">
       <Field label="Decision">{call.decision || '-'}</Field>
       <Field label="Signals">{call.signals?.join(', ') || 'none matched'}</Field>
       <Field label="Model">
@@ -123,14 +139,28 @@ export function RunCallDetails({ call }: { call: RunCall }) {
       ) : null}
       {call.outcomes?.length ? (
         <Field label="Outcome">
-          {call.outcomes.map((outcome) => `${outcome.source}: ${outcome.verdict}`).join(', ')}
+          {call.outcomes
+            .map((outcome) => `${outcomeWord(outcome.source)}: ${verdictLabel(outcome.verdict)}`)
+            .join(', ')}
         </Field>
       ) : null}
       <Field label="Markers">
-        {call.markers?.length ? <Markers markers={call.markers} /> : 'none'}
+        {call.markers?.length ? (
+          <span className="inline-flex gap-1.5">
+            <Markers markers={call.markers} />
+          </span>
+        ) : (
+          'none'
+        )}
       </Field>
       <Field label="Record">
-        <Link to={getInsightsRecordPath(call.record_id)}>Open the replay record</Link>
+        <Link
+          to={getInsightsRecordPath(call.record_id)}
+          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+        >
+          Open the replay record
+          <ArrowUpRight className="size-3.5" />
+        </Link>
       </Field>
     </dl>
   )
@@ -139,6 +169,8 @@ export function RunCallDetails({ call }: { call: RunCall }) {
 interface RunRowDetailsProps {
   calls: RunCall[]
   call?: RunCall
+  /** The run-wide number of each call, by record id. */
+  numbers?: Map<string, number>
   onSelectCall: (call: RunCall) => void
 }
 
@@ -160,11 +192,18 @@ function RunToolList({ calls }: { calls: RunCall[] }) {
   )
   if (rows.length === 0) return null
   return (
-    <ol className={styles.toolList} aria-label="Tool calls">
+    <ol
+      className="m-0 grid list-none grid-cols-[minmax(0,max-content)_minmax(0,1fr)_auto_auto] gap-x-2 gap-y-1 p-0"
+      aria-label="Tool calls"
+    >
       {rows.map(({ entry, tool, index }) => (
-        <li key={`${entry.record_id}-${tool.id || index}`} data-status={tool.status}>
-          <strong>{tool.name}</strong>
-          <code>{tool.arguments || tool.summary || 'arguments not kept'}</code>
+        <li
+          key={`${entry.record_id}-${tool.id || index}`}
+          data-status={tool.status}
+          className="col-span-full grid grid-cols-subgrid items-baseline text-xs text-muted-foreground data-[status=failed]:[&>span]:text-destructive-foreground"
+        >
+          <strong className="truncate font-mono font-semibold text-foreground">{tool.name}</strong>
+          <code className="truncate">{tool.arguments || tool.summary || 'arguments not kept'}</code>
           <ToolDuration tool={tool} />
           <span>{toolStatusText(tool.status)}</span>
         </li>
@@ -175,23 +214,34 @@ function RunToolList({ calls }: { calls: RunCall[] }) {
 
 // A row's tool calls, its calls one per line when there are several, and the
 // details of the one picked.
-export function RunRowDetails({ calls, call, onSelectCall }: RunRowDetailsProps) {
+export function RunRowDetails({ calls, call, numbers, onSelectCall }: RunRowDetailsProps) {
   return (
-    <div className={styles.panel} aria-label="Step details">
+    <div
+      className="flex flex-col gap-3 rounded-lg border border-border bg-surface-subtle p-3"
+      aria-label="Step details"
+    >
       <RunToolList calls={calls} />
       {calls.length > 1 ? (
-        <ol className={styles.steps}>
+        <ol className="flex max-h-56 flex-col overflow-y-auto rounded-lg border border-border bg-surface">
           {calls.map((entry) => (
-            <li key={entry.record_id}>
+            <li key={entry.record_id} className="border-b border-border last:border-0">
               <button
                 type="button"
                 data-selected={entry.record_id === call?.record_id}
                 onClick={() => onSelectCall(entry)}
+                className="grid w-full grid-cols-[40px_72px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-surface-subtle data-[selected=true]:bg-primary-soft/60"
               >
-                <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                <span>{entry.request_kind || entry.decision || '-'}</span>
-                <span>{describeCallStatus(entry)}</span>
-                <Markers markers={entry.markers} />
+                <span className="font-mono tabular text-subtle-foreground">
+                  {numbers?.get(entry.record_id) ? `#${numbers.get(entry.record_id)}` : ''}
+                </span>
+                <span className="font-mono tabular text-subtle-foreground">
+                  {new Date(entry.timestamp).toLocaleTimeString()}
+                </span>
+                <span className="truncate">{entry.request_kind || entry.decision || '-'}</span>
+                <span className="text-muted-foreground">{describeCallStatus(entry)}</span>
+                <span className="inline-flex gap-1">
+                  <Markers markers={entry.markers} />
+                </span>
               </button>
             </li>
           ))}
@@ -200,7 +250,7 @@ export function RunRowDetails({ calls, call, onSelectCall }: RunRowDetailsProps)
       {call ? (
         <RunCallDetails call={call} />
       ) : (
-        <p className={styles.muted}>Pick a call for its details.</p>
+        <p className="text-[13px] text-muted-foreground">Pick a call for its details.</p>
       )}
     </div>
   )

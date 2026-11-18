@@ -15,6 +15,8 @@ type AuditLogPageResponse struct {
 	Total int        `json:"total"`
 	Page  int        `json:"page"`
 	Limit int        `json:"limit"`
+	// Facets is present when the request asks for it with facets=1.
+	Facets *AuditLogFacets `json:"facets,omitempty"`
 }
 
 // usesLegacyAuditLogResponse identifies the query surface supported before the
@@ -22,7 +24,7 @@ type AuditLogPageResponse struct {
 // array response while enterprise filters opt into the paginated envelope.
 func usesLegacyAuditLogResponse(r *http.Request) bool {
 	query := r.URL.Query()
-	for _, key := range []string{"page", "q", "user", "status", "from", "to", "sort", "order"} {
+	for _, key := range []string{"page", "q", "user", "status", "from", "to", "sort", "order", "facets"} {
 		if query.Has(key) {
 			return false
 		}

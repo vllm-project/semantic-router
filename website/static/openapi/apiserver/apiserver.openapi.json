@@ -22935,6 +22935,14 @@
                 "critical"
               ]
             }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "description": "With since, also return traffic: the records in contiguous intervals of this length from since to now, such as 5m or 1h; at least 1m and at most 1000 intervals.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "security": [
@@ -23626,6 +23634,116 @@
                         "output_tokens",
                         "total_tokens",
                         "excluded_record_count"
+                      ]
+                    },
+                    "traffic": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "buckets": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "cached": {
+                                "type": "integer"
+                              },
+                              "cost": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "actual_spend": {
+                                      "type": "number"
+                                    },
+                                    "baseline_spend": {
+                                      "type": "number"
+                                    },
+                                    "cost_record_count": {
+                                      "type": "integer"
+                                    },
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "gross_saved": {
+                                      "type": "number"
+                                    },
+                                    "netted_router_call_spend": {
+                                      "type": "number"
+                                    },
+                                    "router_call_spend": {
+                                      "type": "number"
+                                    },
+                                    "total_saved": {
+                                      "type": "number"
+                                    },
+                                    "total_spend": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "currency",
+                                    "total_saved",
+                                    "gross_saved",
+                                    "netted_router_call_spend",
+                                    "baseline_spend",
+                                    "actual_spend",
+                                    "router_call_spend",
+                                    "total_spend",
+                                    "cost_record_count"
+                                  ]
+                                }
+                              },
+                              "failed": {
+                                "type": "integer"
+                              },
+                              "latency_p50_ms": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
+                              "latency_p95_ms": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
+                              "requests": {
+                                "type": "integer"
+                              },
+                              "start": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "start",
+                              "requests",
+                              "cached",
+                              "failed",
+                              "cost"
+                            ]
+                          }
+                        },
+                        "interval_seconds": {
+                          "type": "integer"
+                        },
+                        "latency_p50_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "latency_p95_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "since": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "since",
+                        "interval_seconds",
+                        "buckets"
                       ]
                     }
                   },
