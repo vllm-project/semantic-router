@@ -280,6 +280,9 @@ type systemOneCall struct {
 	// window it reads again answered its questions, so its failure leaves
 	// none of them unknown.
 	reread bool
+	// verdict keys the window's answers in windowVerdicts; nil for a call
+	// whose answers are not kept.
+	verdict *windowVerdictKey
 }
 
 // systemOneCalls groups rules by the deployment that answers them and the

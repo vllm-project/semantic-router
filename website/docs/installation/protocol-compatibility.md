@@ -300,7 +300,7 @@ backend:
 | `thinking.type: adaptive` | The backend model's default reasoning behavior applies; `output_config.effort` is kept. |
 | `thinking.display: omitted` | Reasoning is removed from the translated response, including streaming output. An answer whose output limit went to reasoning comes back with no content blocks and the `max_tokens` stop reason, buffered or streamed. |
 | `thinking.display: summarized` or `updates` (Claude Code sends these) | The backend's reasoning comes back as thinking, as it does with no display, since the Router can't summarize it. `x-vsr-warnings` reports an `approximated` diagnostic for `thinking.display` when the model has a reasoning family and the decision doesn't turn reasoning off. |
-| `thinking.type: disabled` | Needs a configured reasoning family and an effective backend reasoning-off control. |
+| `thinking.type: disabled` | Needs a configured reasoning family and an effective backend reasoning-off control. The backend runs with reasoning off whatever the decision chose, and the `reasoning` member of `x-vsr-trace` reads `off`. |
 | A `context_management` edit `clear_thinking_20251015` with `keep: all` | Omitted, since it has no effect. Edits that would change history are rejected. |
 | `cache_control` boundaries, toward a Responses backend | Omitted, since Responses can't represent them. The prompt and tool result still dispatch, and `x-vsr-warnings` reports a `dropped` diagnostic for `cache_control`. |
 
@@ -320,6 +320,20 @@ sends it as user text in that place instead, for chat templates that accept a
 system message only first; see
 [System messages a chat template refuses](#system-messages-a-chat-template-refuses).
 Messages backends receive the message in place either way.
+
+Replies reach these clients in the shape an `anthropic` backend gives them:
+
+- **Thinking signatures.** Every thinking block carries a `signature`, empty
+  when the backend gave none. A stream sends it on `content_block_start` and
+  ends the block with an empty `signature_delta`. When a later turn sends such
+  a block back, the Router accepts it whatever the backend's format.
+- **Identifiers.** The message id starts with `msg_` and each tool call id
+  with `toolu_`. Both are derived from the backend's ids, so a buffered and a
+  streamed reply carry the same ones, and the `tool_result` blocks the client
+  sends back pair with their calls.
+- **Input usage on `message_start`.** These backends report usage only when
+  the answer ends, so a stream's `message_start` reports the Router's estimate
+  of the input tokens. The final `message_delta` reports the backend's count.
 
 ### Files a model can't read
 

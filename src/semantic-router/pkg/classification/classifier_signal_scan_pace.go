@@ -80,7 +80,7 @@ func (scan *guardScan) markWaited(answered bool) {
 	}
 	scan.pace.resumed, scan.pace.readAtResume = time.Now(), 0
 	for index := range scan.cut {
-		if scan.done[index] && scan.errs[index] == nil {
+		if scan.done[index] && scan.errs[index] == nil && !scan.reused[index] {
 			scan.pace.readAtResume++
 		}
 	}
@@ -215,7 +215,7 @@ func (c *Classifier) replanRuns(scan *guardScan) int {
 		switch {
 		case !scan.done[index]:
 			left++
-		case scan.errs[index] == nil:
+		case scan.errs[index] == nil && !scan.reused[index]:
 			read++
 		}
 	}
@@ -337,7 +337,7 @@ func (c *Classifier) observePace(scan *guardScan, cause error) {
 			continue
 		}
 		switch err := scan.errs[index]; {
-		case err == nil && scan.done[index]:
+		case err == nil && scan.done[index] && !scan.reused[index]:
 			read++
 		case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
 			cut++

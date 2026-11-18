@@ -69,7 +69,9 @@ func TestBufferedToolCallCutByTheOutputLimitTranslates(t *testing.T) {
 			for _, block := range message.Content {
 				inputs[block.ID] = string(block.Input)
 			}
-			if inputs["call_1"] != `{"city":"Paris"}` || inputs["call_2"] != test.input {
+			first := anthropicReplyID(llmprotocol.OpenAIChatV1, anthropicToolUseIDPrefix, "call_1")
+			second := anthropicReplyID(llmprotocol.OpenAIChatV1, anthropicToolUseIDPrefix, "call_2")
+			if inputs[first] != `{"city":"Paris"}` || inputs[second] != test.input {
 				t.Fatalf("tool_use inputs = %v, want call_1 whole and call_2 %s", inputs, test.input)
 			}
 		})
