@@ -308,8 +308,10 @@ with least recently used session eviction.
 Use arrows and Enter in native dialogs, Escape to dismiss. Composer counts and
 the panel show metadata, reasons, coverage, partial/withheld/unverified states,
 planned/observed models and confirmed feedback. While the panel has focus,
-`↑`/`↓` pick a decision and `1`-`3` answer it; a mouse press on an answer does
-the same. Answers are offered only for the decisions the snapshot lists in
+`↑`/`↓` pick a decision, `Enter` opens its card (a dialog drawn from the
+snapshot, so an answer fills in at once) and `1`-`3` answer it; a mouse press
+on an answer answers, and on a decision, in the panel or the sidebar, opens its
+card. Answers are offered only for the decisions the snapshot lists in
 `answerable` (those in the calibration log). The 2.2.0 SDK has no per-tool
 activity annotation slot: the panel associates decisions by tool-call, turn or
 message identity instead. Rendering never classifies or generates; only explicit

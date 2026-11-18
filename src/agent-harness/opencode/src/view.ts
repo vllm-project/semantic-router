@@ -576,6 +576,91 @@ export function brief(
   if (decision.model) return `→ ${modelName(decision.model)}`;
   return gauge(decision)?.words ?? "";
 }
+// Why a decision went the way it did, in a few words: the reason when it was not the score's call, then what the
+// score or the change was. The sidebar shows it under a decision that needs a look or went through in part.
+export function why(decision: Decision): string {
+  return [
+    decision.reason && decision.reason !== "selected"
+      ? decision.reason.replaceAll("-", " ")
+      : "",
+    brief(decision),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+// Everything the view keeps of a decision, one labelled row each, for its detail card under its score bar. Rows with
+// nothing to say are left out.
+export function details(
+  decision: Decision,
+  context: { sessionID: string; feedback?: Feedback; answerable: boolean },
+): { label: string; value: string }[] {
+  const usage = decision.usage;
+  const counts = Object.entries(decision.counts ?? {});
+  const rows: [string, string | undefined][] = [
+    ["about", subjectLine(decision)],
+    [
+      "scores",
+      decision.app === "escalate" && decision.features?.length === 2
+        ? `pushback ${decision.features[0]!.toFixed(2)} · repeat ${decision.features[1]!.toFixed(2)}`
+        : undefined,
+    ],
+    ["confidence", decision.confidence?.toFixed(2)],
+    [
+      "reason",
+      decision.reason && decision.reason !== "selected"
+        ? decision.reason.replaceAll("-", " ")
+        : undefined,
+    ],
+    [
+      "model",
+      decision.model &&
+        modelName(decision.model) +
+          (!decision.observedModel
+            ? " · pending"
+            : modelName(decision.observedModel) === modelName(decision.model)
+              ? " · ran"
+              : ` · ran ${modelName(decision.observedModel)}`),
+    ],
+    ["hid", counts.map(([label, count]) => `${label} ×${count}`).join(" · ")],
+    ["found", decision.labels?.join(" · ")],
+    [
+      "checked",
+      decision.coverage &&
+        `${decision.coverage.checked} of ${decision.coverage.total} characters`,
+    ],
+    [
+      "tokens",
+      usage &&
+        `${tokenCount(usage.input)} in · ${tokenCount(usage.output)} out · ${tokenCount(usage.cachedInput)} cached` +
+          (decision.costKnown ? ` · ~$${usage.cost.toFixed(4)}` : ""),
+    ],
+    ["subagent", decision.childOutcome],
+    [
+      "session",
+      decision.sessionID === context.sessionID
+        ? "this session"
+        : `a subagent's, ${decision.sessionID}`,
+    ],
+    [
+      "when",
+      new Date(decision.at).toLocaleTimeString() +
+        (decision.elapsedMs === undefined
+          ? ""
+          : ` · took ${decision.elapsedMs} ms`),
+    ],
+    [
+      "answer",
+      context.feedback
+        ? context.feedback.replaceAll("-", " ")
+        : context.answerable
+          ? "none yet"
+          : "none: a rule or a skipped call decided this, so calibration does not learn from it",
+    ],
+  ];
+  return rows
+    .filter((row): row is [string, string] => Boolean(row[1]))
+    .map(([label, value]) => ({ label, value }));
+}
 // A subject for a narrow line: each path down to its last part, so the file a step touched stays in view.
 export const shortSubject = (decision: Decision): string =>
   subjectLine(decision).replace(

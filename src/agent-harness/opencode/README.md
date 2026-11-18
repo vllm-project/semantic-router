@@ -92,7 +92,9 @@ it sits under the step it was made on:
 It names what redact hid, the model the router picked, or the score against its
 threshold, and counts in red the decisions to look at. The sidebar (OpenCode's
 "Show sidebar", `<leader>b`) lists the session's decisions in order, one line
-each. A held command is OpenCode's own permission prompt, with the reason vSR
+each: what let things be in gray, and under one that needs a look or went
+through only in part, why (`↳ unsupported · 0.01 < 0.90`), as a Claude Code
+card says. Click one there for its card. A held command is OpenCode's own permission prompt, with the reason vSR
 held it. OpenCode draws its transcript itself, so vSR cannot add lines under
 each step there.
 
@@ -138,6 +140,9 @@ The decisions panel, `/vsr`, is for looking back:
   Click one, or pick the decision with `↑` `↓` and press its number. The
   answer you gave is filled in. A decision a rule made, or one that was
   skipped, has none.
+- Click a decision, or pick it and press `Enter`, for its card: everything vSR
+  keeps of it (the full subject, score bar, reason, model, what was hidden,
+  tokens, which session and when) and its answers. `Esc` closes the card.
 
 Every control is a command; type `/vsr` to list them. The panel takes the
 keyboard when it opens, and `Esc` closes it. To keep the panel open and type,

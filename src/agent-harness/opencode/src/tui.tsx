@@ -14,6 +14,7 @@ import {
   emptyView,
   brief,
   clip,
+  details,
   gauge,
   modelName,
   report,
@@ -24,6 +25,7 @@ import {
   THEME_TOKENS,
   tokenCount,
   toneOf,
+  why,
 } from "./view.ts";
 import type {
   CalibrationQuestion,
@@ -398,6 +400,14 @@ export default Plugin.define({
           bind: "escape",
           run: () => ctx.ui.panel.close(),
         },
+        {
+          title: "vSR decision details",
+          bind: "return",
+          run: () => {
+            const id = picked();
+            if (id) showDetails(id);
+          },
+        },
         { title: "Previous vSR decision", bind: "up", run: () => move(-1) },
         { title: "Next vSR decision", bind: "down", run: () => move(1) },
         ...[1, 2, 3].map((key) => ({
@@ -462,6 +472,93 @@ export default Plugin.define({
         )}
       </Show>
     );
+    // The answers calibration learns from, as buttons; the one given is filled in.
+    const Answers = (props: { decision: Decision }) => (
+      <box flexDirection="row">
+        {answersOf(props.decision).map((choice, index) => (
+          <text
+            marginRight={1}
+            onMouseUp={(event: { stopPropagation(): void }) => {
+              event.stopPropagation();
+              pick(props.decision.id);
+              answer(props.decision, index);
+            }}
+          >
+            {current()?.feedback[props.decision.id] === choice.value ? (
+              <Span bg={tone("info")} fg={tone("background")}>
+                {` ${index + 1} ${choice.title} `}
+              </Span>
+            ) : (
+              <Span
+                fg={tone(picked() === props.decision.id ? "info" : "muted")}
+              >
+                {`[${index + 1} ${choice.title}]`}
+              </Span>
+            )}
+          </text>
+        ))}
+      </box>
+    );
+    // A decision's card: everything the view keeps of it, with its bar and answers. It follows the snapshot, so an
+    // answer given here fills in at once. Clicks act on release: a card opened on the press would get the release
+    // outside it, which OpenCode reads as a click away and closes it.
+    const DetailCard = (props: { id: string }) => (
+      <Show
+        when={current()?.decisions.find((item) => item.id === props.id)}
+        fallback={<text fg={tone("muted")}>This decision is gone.</text>}
+      >
+        {(decision) => (
+          <box flexDirection="column" paddingLeft={2} paddingRight={2}>
+            <text>
+              <Span bg={tone(toneOf(decision()))} fg={tone("background")}>
+                {` ${decision().outcome.toUpperCase()} `}
+              </Span>
+              <Span fg={tone(APP_LOOK[decision().app].tone)}>
+                {` ${APP_LOOK[decision().app].glyph} ${names[decision().app]}`}
+              </Span>
+              <Span fg={tone("muted")}> · </Span>
+              <Brand />
+            </text>
+            <box marginTop={1}>
+              <Gauge decision={decision()} />
+            </box>
+            <box flexDirection="column" marginTop={1}>
+              <For
+                each={details(decision(), {
+                  sessionID: current()!.sessionID,
+                  feedback: current()!.feedback[decision().id],
+                  answerable: answerable(decision()),
+                })}
+              >
+                {(row) => (
+                  <box flexDirection="row">
+                    <text width={11} flexShrink={0} fg={tone("muted")}>
+                      {row.label}
+                    </text>
+                    <text flexGrow={1}>{row.value}</text>
+                  </box>
+                )}
+              </For>
+            </box>
+            <Show when={answerable(decision())}>
+              <box marginTop={1}>
+                <Answers decision={decision()} />
+              </box>
+            </Show>
+            <text marginTop={1} marginBottom={1} fg={tone("muted")}>
+              Esc close
+            </text>
+          </box>
+        )}
+      </Show>
+    );
+    function showDetails(id: string) {
+      if (!current()?.decisions.some((decision) => decision.id === id)) return;
+      // A hand's click drags a little and selects text, and OpenCode's dialog spends the first Esc on clearing a
+      // selection, so the card would take two.
+      ctx.renderer.clearSelection();
+      ctx.ui.dialog.show(() => <DetailCard id={id} />);
+    }
     const latest = () => current()?.decisions.at(-1);
     // Above the prompt, the newest decision as it is made, under the step it was made on.
     const offComposer = ctx.ui.slot({
@@ -527,15 +624,41 @@ export default Plugin.define({
             </Show>
             <For each={current()!.decisions.slice(-SIDEBAR_ROWS)}>
               {(decision) => (
-                <text>
-                  <Span fg={tone(APP_LOOK[decision.app].tone)}>
-                    {`${APP_LOOK[decision.app].glyph} `}
-                  </Span>
-                  <Span fg={tone(toneOf(decision))}>
-                    {decision.outcome.padEnd(10)}
-                  </Span>
-                  {clip(shortSubject(decision), 24)}
-                </text>
+                <box
+                  flexDirection="column"
+                  onMouseUp={() => showDetails(decision.id)}
+                >
+                  <text>
+                    <Span
+                      fg={tone(
+                        toneOf(decision) === "muted"
+                          ? "muted"
+                          : APP_LOOK[decision.app].tone,
+                      )}
+                    >
+                      {`${APP_LOOK[decision.app].glyph} `}
+                    </Span>
+                    <Span fg={tone(toneOf(decision))}>
+                      {decision.outcome.padEnd(10)}
+                    </Span>
+                    <Span
+                      fg={tone(toneOf(decision) === "muted" ? "muted" : "text")}
+                    >
+                      {clip(shortSubject(decision), 24)}
+                    </Span>
+                  </text>
+                  {/* What needs a look, or went through only in part, says why, as a Claude Code card does. */}
+                  <Show
+                    when={
+                      ["error", "warning"].includes(toneOf(decision)) &&
+                      why(decision)
+                    }
+                  >
+                    <text fg={tone(toneOf(decision))}>
+                      {`  ↳ ${clip(why(decision), 32)}`}
+                    </text>
+                  </Show>
+                </box>
               )}
             </For>
           </box>
@@ -690,7 +813,10 @@ export default Plugin.define({
                               picked() === decision.id ? "focus" : "background",
                             )}
                             paddingLeft={1}
-                            onMouseDown={() => pick(decision.id)}
+                            onMouseUp={() => {
+                              pick(decision.id);
+                              showDetails(decision.id);
+                            }}
                           >
                             <text>
                               <Span
@@ -785,41 +911,7 @@ export default Plugin.define({
                                 </Show>
                               }
                             >
-                              {/* The answers calibration learns from; the chosen one is filled in. */}
-                              <box flexDirection="row">
-                                {answersOf(decision).map((choice, index) => (
-                                  <text
-                                    marginRight={1}
-                                    onMouseDown={(event: {
-                                      stopPropagation(): void;
-                                    }) => {
-                                      event.stopPropagation();
-                                      pick(decision.id);
-                                      answer(decision, index);
-                                    }}
-                                  >
-                                    {snapshot().feedback[decision.id] ===
-                                    choice.value ? (
-                                      <Span
-                                        bg={tone("info")}
-                                        fg={tone("background")}
-                                      >
-                                        {` ${index + 1} ${choice.title} `}
-                                      </Span>
-                                    ) : (
-                                      <Span
-                                        fg={tone(
-                                          picked() === decision.id
-                                            ? "info"
-                                            : "muted",
-                                        )}
-                                      >
-                                        {`[${index + 1} ${choice.title}]`}
-                                      </Span>
-                                    )}
-                                  </text>
-                                ))}
-                              </box>
+                              <Answers decision={decision} />
                             </Show>
                           </box>
                         )}
@@ -830,8 +922,8 @@ export default Plugin.define({
               </Show>
               <text flexShrink={0} fg={tone("muted")}>
                 {panel.focused
-                  ? "↑↓ pick · 1-3 answer · Esc close · ctrl+x ← prompt"
-                  : "click a decision to answer it · /vsr-apps · /vsr-check"}
+                  ? "↑↓ pick · Enter details · 1-3 answer · Esc close · ctrl+x ← prompt"
+                  : "click a decision for details · /vsr-apps · /vsr-check"}
               </text>
             </box>
           );

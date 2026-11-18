@@ -14,6 +14,8 @@ import {
   tokenCount,
   toneOf,
   answersOf,
+  details,
+  why,
 } from "../src/view.ts";
 import type { ViewSnapshot, ViewState, ViewService } from "../src/view.ts";
 import { parseSettings } from "../src/settings.ts";
@@ -369,4 +371,48 @@ test("the panel draws models and token counts compactly", () => {
   assert.equal(modelName("fixture"), "fixture");
   assert.equal(tokenCount(297), "297");
   assert.equal(tokenCount(36956), "37.0k");
+});
+test("a decision's card lists what the view keeps of it, and the sidebar line says why", () => {
+  const base = {
+    id: "d",
+    sessionID: "child",
+    app: "shield" as const,
+    outcome: "partial" as const,
+    reason: "unsupported" as const,
+    at: 0,
+    score: 0.01,
+    thresholds: [0.9],
+    subject: "read /tmp/fixture.png",
+    elapsedMs: 3,
+  };
+  assert.equal(why(base), "unsupported · 0.01 < 0.90");
+  assert.equal(why({ ...base, reason: "selected" }), "0.01 < 0.90");
+  const rows = (context = { sessionID: "main", answerable: true }) =>
+    Object.fromEntries(
+      details(base, context).map((row) => [row.label, row.value]),
+    );
+  const card = rows();
+  assert.equal(card.about, "read /tmp/fixture.png");
+  assert.equal(card.reason, "unsupported");
+  assert.equal(card.session, "a subagent's, child");
+  assert.equal(card.answer, "none yet");
+  assert.match(card.when!, /took 3 ms$/);
+  assert.equal(card.model, undefined, "rows with nothing to say are left out");
+  assert.equal(
+    rows({ sessionID: "child", answerable: false }).session,
+    "this session",
+  );
+  assert.match(
+    rows({ sessionID: "child", answerable: false }).answer!,
+    /^none: a rule/,
+  );
+  assert.equal(
+    Object.fromEntries(
+      details(
+        { ...base, app: "escalate", features: [0.82, 0.1] },
+        { sessionID: "child", feedback: "wrong", answerable: true },
+      ).map((row) => [row.label, row.value]),
+    ).scores,
+    "pushback 0.82 · repeat 0.10",
+  );
 });

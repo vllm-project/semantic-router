@@ -271,10 +271,19 @@ test(
     );
     // An SGR mouse press and release on the first decision's "wrong call".
     const at = `${lines[row]!.indexOf("[2 wrong call]") + 4};${row + 1}`;
-    await native.terminal(
+    const answered = await native.terminal(
       run.sessionID,
-      [...open, { at: 3500, keys: `\u001b[<0;${at}M\u001b[<0;${at}m` }],
+      [
+        ...open,
+        { at: 3500, keys: `\u001b[<0;${at}M` },
+        { at: 3800, keys: `\u001b[<0;${at}m` },
+      ],
       5,
+    );
+    assert.doesNotMatch(
+      answered.last,
+      /answer {3,}\S/,
+      "an answer does not open the decision's card: " + answered.last,
     );
     const snapshot = (await native.rpc("snapshot", {
       sessionID: run.sessionID,
@@ -282,5 +291,82 @@ test(
     const newest = snapshot.decisions.at(-1)!;
     assert.notEqual(newest.sessionID, run.sessionID);
     assert.deepEqual(snapshot.feedback, { [newest.id]: "wrong" });
+  },
+);
+
+test(
+  "a click or Enter opens a decision's card, Esc closes only the card, and the sidebar says why a decision needs a look",
+  { timeout: 90000 },
+  async (t) => {
+    const native = await fixture(t);
+    const run = await native.run("OUTPUT_CASE SUBAGENT");
+    const open = [
+      { at: 2000, keys: "/vsr" },
+      { at: 2500, keys: "\r" },
+    ];
+    const plain = await native.terminal(run.sessionID, open, 4);
+    const lines = plain.last.split("\n");
+    const row = lines.findIndex((line) => line.includes("REDACTED"));
+    assert.ok(row >= 0, plain.last);
+    // The end of the decision's subject, right of where the card opens, so the release lands outside the card.
+    const at = `${lines[row + 1]!.indexOf("fixture.txt") + 8};${row + 2}`;
+    // A press, then a release a moment later, as a hand clicks: the card must still be open after the release.
+    const clicked = await native.terminal(
+      run.sessionID,
+      [
+        ...open,
+        { at: 3500, keys: `\u001b[<0;${at}M` },
+        { at: 3800, keys: `\u001b[<0;${at}m` },
+      ],
+      5,
+    );
+    assert.match(clicked.last, /hid +secret ×1 · email ×1/, clicked.last);
+    assert.match(clicked.last, /session +a subagent's, ses_/, clicked.last);
+    // A hand's click drags a little and selects text; one Esc must still close the card.
+    const [column, line] = at.split(";").map(Number);
+    const dragged = await native.terminal(
+      run.sessionID,
+      [
+        ...open,
+        { at: 3500, keys: `\u001b[<0;${at}M` },
+        { at: 3600, keys: `\u001b[<32;${column! + 3};${line}M` },
+        { at: 3800, keys: `\u001b[<0;${column! + 3};${line}m` },
+        { at: 4600, keys: "\u001b" },
+      ],
+      6,
+    );
+    assert.match(dragged.text, /hid {3,}secret/, dragged.text.slice(-8000));
+    assert.doesNotMatch(dragged.last, /hid {3,}secret/, dragged.last);
+    assert.ok(dragged.last.includes("↑↓ pick"), "the panel stays open");
+    const closed = await native.terminal(
+      run.sessionID,
+      [
+        ...open,
+        { at: 3200, keys: "\u001b[B" }, // The newest, shield's.
+        { at: 3700, keys: "\r" },
+        { at: 4500, keys: "\u001b" },
+      ],
+      6,
+    );
+    assert.match(closed.text, /answer +none yet/, closed.text.slice(-8000));
+    assert.doesNotMatch(closed.last, /answer +none yet/, closed.last);
+    assert.ok(closed.last.includes("↑↓ pick"), "the panel stays open");
+
+    const image = await native.run("OUTPUT_CASE IMAGE");
+    const sidebar = await native.terminal(
+      image.sessionID,
+      [
+        { at: 2500, keys: "\u0010" }, // ctrl+p: the command palette.
+        { at: 3200, keys: "Show sidebar" },
+        { at: 4000, keys: "\r" },
+        { at: 4500, keys: "\u001b" },
+      ],
+      6,
+    );
+    assert.match(
+      sidebar.last,
+      /◆ partial +read …\/fixture\.png\s+↳ unsupported · 0\.01 < 0\.90/,
+      sidebar.last,
+    );
   },
 );
