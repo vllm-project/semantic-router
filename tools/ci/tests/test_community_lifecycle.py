@@ -693,10 +693,10 @@ class FakePullRequestApi:
     def graphql(self, payload):
         if "number" not in payload["variables"]:
             nodes = {}
-            for alias, number in re.findall(
+            for alias, number_text in re.findall(
                 r"\b(pr\d+): pullRequest\(number: (\d+)\)", payload["query"]
             ):
-                number = int(number)
+                number = int(number_text)
                 if number not in self.pull_requests:
                     nodes[alias] = None
                     continue
@@ -1341,22 +1341,31 @@ class PullRequestReconciliationTests(unittest.TestCase):
 
     @mock.patch.object(community_lifecycle_github, "API_PAGE_SIZE", 10)
     def test_pr_sweep_reduces_reads_and_preserves_mutations(self) -> None:
+        first_open_number = 100
+        first_unchanged_number = 103
+        first_draft_number = 115
         open_prs = [
             self.pull_request(
                 number=number,
                 state="open",
-                draft=number >= 115,
-                closes=[5, 6] if number == 100 else [5],
+                draft=number >= first_draft_number,
+                closes=[5, 6] if number == first_open_number else [5],
                 labels=labels(
                     "wg/mom-routing",
-                    "pr/needs-author" if number >= 115 else "pr/needs-rebase",
+                    (
+                        "pr/needs-author"
+                        if number >= first_draft_number
+                        else "pr/needs-rebase"
+                    ),
                 ),
                 signals={
                     "review_decision": "REVIEW_REQUIRED",
-                    "merge_state": "CLEAN" if number < 103 else "DIRTY",
+                    "merge_state": (
+                        "CLEAN" if number < first_unchanged_number else "DIRTY"
+                    ),
                 },
             )
-            for number in range(100, 129)
+            for number in range(first_open_number, 129)
         ]
         closed_prs = [self.pull_request(number=number) for number in range(129, 133)]
         open_listings = {
@@ -1377,7 +1386,10 @@ class PullRequestReconciliationTests(unittest.TestCase):
         optimized = FakePullRequestApi(open_prs + closed_prs, issues, listings)
         for client in (legacy, optimized):
             lead = community_reviewers.WORKGROUP_REVIEWERS["wg/mom-routing"][0]
-            client.requested_reviewers = {number: {lead} for number in range(101, 115)}
+            client.requested_reviewers = {
+                number: {lead}
+                for number in range(first_open_number + 1, first_draft_number)
+            }
 
         for endpoint in open_listings:
             for pr in legacy.request(endpoint):
@@ -1392,7 +1404,12 @@ class PullRequestReconciliationTests(unittest.TestCase):
         self.assertEqual(optimized.writes, legacy.writes)
         self.assertTrue(legacy.review_posts)
         self.assertIn(
-            ("PATCH", f"repos/{self.REPO}/issues/100", {"milestone": 9}), legacy.writes
+            (
+                "PATCH",
+                f"repos/{self.REPO}/issues/{first_open_number}",
+                {"milestone": 9},
+            ),
+            legacy.writes,
         )
 
         def reads(client):
