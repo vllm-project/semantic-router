@@ -340,10 +340,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	if limit <= 0 {
 		limit = 5
 	}
-	threshold := opts.Threshold
-	if threshold <= 0 {
-		threshold = float32(s.config.DefaultSimilarityThreshold)
-	}
+	threshold := opts.minSimilarity(float32(s.config.DefaultSimilarityThreshold))
 	queryLimit, scoreThreshold := qdrantRetrieveQuery(limit, threshold, opts)
 
 	must := []*qdrant.Condition{

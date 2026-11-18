@@ -37,10 +37,10 @@ providers:
           protocol: http
 ```
 
-In the Dashboard, open **Build → Routing → Models → Add Model**, select the Provider, and
-choose **Advanced settings → Reasoning family**. The **Built-in Reasoning
-Families** table on the Models page shows the available IDs and their native
-parameters.
+In the Dashboard, open **Models → Backend models**, choose **Connect model**,
+select the Provider, and choose **Advanced settings → Reasoning family**. The
+**Reasoning families** tab on the Backend models page shows the available IDs
+and their native parameters.
 
 ## Define a custom family inline
 
@@ -67,13 +67,13 @@ providers:
           protocol: http
 ```
 
-Canonical v0.3 has no user-authored global family registry. The legacy
+Canonical v0.5 has no user-authored global family registry. The legacy
 `providers.defaults.reasoning_families` plus per-model `reasoning_family`
 combination migrates to `providers.models[].reasoning`: built-in IDs become a
 `family` reference, while custom definitions are copied inline onto each custom
 Model that uses them.
 
-Use **Manual setup** in the Dashboard to author an inline family. Leave
+Use **Add manually** in the Dashboard to author an inline family. Leave
 **Built-in Catalog Model** and **Reasoning Family** empty, then fill the
 **Inline Reasoning** fields.
 
@@ -108,7 +108,8 @@ recipes:
           operator: AND
           conditions:
             - type: complexity
-              name: needs_reasoning:hard
+              name: needs_reasoning
+              label: hard
         modelRefs:
           - model: private-reasoner
             use_reasoning: true
@@ -119,7 +120,9 @@ recipes:
 The effort must be listed by the family and allowed by every Provider binding
 for that Model. `reasoning_mode` must agree with `use_reasoning`. Omit an effort
 to use the family default, or set `providers.defaults.reasoning_effort` when
-one valid deployment-wide default should take precedence.
+one valid deployment-wide default should take precedence. The default applies
+to every Model whose family lists it, so those Models' Provider bindings must
+allow it too; a Model whose family does not list it keeps the family default.
 
 A `modelRefs` entry without `use_reasoning` counts as `use_reasoning: false`.
 For a Model with a family, the decision's choice replaces the client's: the
@@ -134,7 +137,8 @@ providers: the Responses request has no field for a named mode, so behind a
 provider with any other transport the Router removes the client's reasoning
 fields, sends no control, and the backend runs the model's default mode
 whatever `use_reasoning` says. A pass-through Model keeps the client's
-reasoning fields as sent.
+reasoning fields as sent, and the routing log, metrics and trace report no
+effort for it: its `routing_decision` log line says `reasoning_projected: false`.
 
 On an `api_format: anthropic` backend, `enabled` thinking needs a
 `budget_tokens` value. When the client sent none, an `enabled` mode reaches the

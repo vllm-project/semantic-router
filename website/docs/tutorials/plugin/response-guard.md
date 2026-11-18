@@ -71,21 +71,29 @@ recipes:
 | Field | Meaning |
 |---|---|
 | `rules[].when` | A condition tree over named signals, as in `decisions[].rules`. Jailbreak, safety and `systemone` rules with `stage: response`, and every hallucination and refusal rule, read the answer; every other signal reads the request. `on_error` and `on_unknown` are not accepted on its nodes: the guard's `on_unknown` decides. |
-| `rules[].action` | `block` refuses the answer with HTTP 403, or with the stream's error event for a streamed answer; `annotate` delivers it with the rule's warning codes in `x-vsr-warnings`; `none` only records the outcome. |
+| `rules[].action` | `block` refuses the answer with HTTP 400, an `invalid_request_error` with code `response_blocked` in the client's protocol, or with the stream's error event for a streamed answer; `annotate` delivers it with the rule's warning codes in `x-vsr-warnings`; `none` only records the outcome. |
 | `rules[].details` | With `annotate`, also writes a note at the head of the answer. The hallucination note names the unsupported spans. |
 | `on_unknown` | What a rule does when a response-stage signal it reads could not be read: the detector failed or timed out, the answer had no text, or there was no grounding context to check it against. `block`, `annotate` (the default) or `none`. |
+| `enabled` | `false` turns off the guard a decision inherits from `global.plugins` or its recipe's plugins; `rules` is then not required. |
 
 Rules are read in order, and the first rule that blocks ends the read. A
 response-stage signal is evaluated only when a rule reaches it, and once per
-answer however many rules read it.
+answer however many rules read it. A request for a concrete model bypasses the
+recipe's signals, so it runs no guard, not even one in `global.plugins`.
 
 The warning codes a rule adds are `hallucination` (`unverified_factual` when
 the answer could not be checked), `response_jailbreak`, and `response_guard`
-for any other rule. A blocked answer is replaced with a message that names what
-was found, never that a check failed.
+for any other rule, one for each response-stage signal among the conditions
+that matched, or among all of them when the rule could not be decided. A
+blocked answer is replaced with a message that names what was found, never
+that a check failed. The refusal is a `400`, as a provider's content filter
+answers and as a [blocking `fast_response`](./fast-response#block-a-request)
+refuses a request: Claude Code re-runs its `apiKeyHelper` and retries a `401`
+or `403` up to ten times, and shows a `403` as a failed login.
 
-The grounding context is the documents the [context plugin](./context.md) retrieved and
-the request's own tool results.
+The grounding context is the documents and memories the
+[context plugin](./context.md) injected, in either injection mode, and the
+request's own tool results.
 
 `POST /api/v1/plugins/response_guard/preview` reads an active binding's guard
 over a supplied question, context and answer; `mode: probe` asks the
@@ -113,9 +121,11 @@ receives one of:
   included, with the guard's codes in `x-vsr-warnings`;
 - the answer's events with the guard's note at its head, for a rule with
   `details`;
-- the refusal a buffered answer's 403 carries, as the protocol's stream
+- the refusal a buffered answer's 400 carries, as the protocol's stream
   error: a Chat `error` chunk, a Responses `response.failed` event or a
-  Messages `error` event.
+  Messages `error` event. When a deployment the guard asks takes the
+  delegated credential and the request carries none, a buffered answer is
+  refused with `401`, and the stream error carries that refusal instead.
 
 Behind Envoy the Router asks for the response body buffered for these
 requests only; standalone, it buffers the body itself. The cost is time to

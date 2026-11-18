@@ -43,7 +43,7 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 	if again.Decisions[0].GetRequestParamsConfig().DefaultMaxTokens.Value != 4096 {
 		t.Fatal("canonical export lost output default")
 	}
-	legacy, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, "strip_unknown: true")))
+	legacy, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, "max_n: 1")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,5 +87,20 @@ func TestRequestParamsRejectsNonPositiveLimits(t *testing.T) {
 		if _, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, field))); err != nil {
 			t.Errorf("rejected a positive limit %s: %v", field, err)
 		}
+	}
+}
+
+func TestRequestParamsRefusesToBlockStream(t *testing.T) {
+	_, err := ParseRoutingYAMLBytes([]byte(`recipes:
+  - name: default
+    decisions:
+      - name: bounded
+        plugins:
+          - type: request_params
+            configuration:
+              blocked_params: [temperature, " stream "]
+`))
+	if err == nil || !strings.Contains(err.Error(), "blocked_params cannot include stream") {
+		t.Fatalf("blocked_params [stream] loaded: err=%v", err)
 	}
 }

@@ -62,6 +62,7 @@ global:
     deployments:
       hosted-d3:
         provider: systemone
+        schema: vllm-sr/4.0
         endpoint: API/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: REMOTE_DECISION_TEST_KEY}
@@ -161,25 +162,32 @@ func (a *moduleSystemOneAPI) answered() [][]string {
 	return slices.Clone(a.calls)
 }
 
-func moduleSystemOneRouterConfig(t *testing.T, raw string) (*config.RouterConfig, *moduleSystemOneAPI) {
+func moduleSystemOneRouterConfig(t *testing.T, raw string, api http.Handler) *config.RouterConfig {
 	t.Helper()
-	api := &moduleSystemOneAPI{}
+	cfg, err := moduleSystemOneRouterConfigTry(t, raw, api)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+// moduleSystemOneRouterConfigTry is moduleSystemOneRouterConfig for tests
+// that expect a refusal: it returns the load error instead of failing.
+func moduleSystemOneRouterConfigTry(t *testing.T, raw string, api http.Handler) (*config.RouterConfig, error) {
+	t.Helper()
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	t.Cleanup(backend.Close)
 	t.Setenv("REMOTE_DECISION_TEST_KEY", "fake-decision-key")
-	cfg, err := config.ParseYAMLBytes([]byte(strings.NewReplacer(
+	return config.ParseYAMLBytes([]byte(strings.NewReplacer(
 		"BACKEND", strings.TrimPrefix(backend.URL, "http://"), "API", server.URL,
 	).Replace(raw)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg, api
 }
 
 func TestBuiltInSignalsAskASystemOneDecisionModelInOneCallPerStage(t *testing.T) {
-	cfg, api := moduleSystemOneRouterConfig(t, moduleSystemOneConfig)
+	api := &moduleSystemOneAPI{}
+	cfg := moduleSystemOneRouterConfig(t, moduleSystemOneConfig, api)
 	later := counterValue(t, "vsr_model_runtime_stage_decision_calls_total", map[string]string{"deployment": "hosted-d3", "round": "later"})
 	router := newLooperRouter(t, cfg)
 	prepared := len(api.answered())

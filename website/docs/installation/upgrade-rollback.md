@@ -15,7 +15,7 @@ the vLLM Semantic Router in a production environment.
 |---------|-------------|------------|----------|
 | **Versioned** | `v0.4.0` / `0.4.0` | Tagged releases only | Production release identifier; verify and pin a digest where immutability is required |
 | **Nightly** | `nightly-YYYYMMDD` | Daily, from the newest `main` commit that passes full qualification | Pre-release testing |
-| **Latest** | `latest` | Explicit `main` publications + releases | Development only |
+| **Latest** | `latest` | `main` merges (the newest, when several land together) + releases | Development only |
 
 :::tip Recommendation
 Use a **versioned** release in production, then record the resolved artifact
@@ -91,25 +91,32 @@ From a source checkout, `make helm-upgrade-version CHART_VERSION=0.4.0`
 uses the same versioned chart with the configured cluster context.
 
 :::caution Review values before every chart upgrade
-`--reuse-values` skips new chart defaults and can break when a release adds
-required values. `--reset-then-reuse-values` (Helm ≥ 3.14) starts from the new
-defaults, but it cannot migrate renamed, removed, or incompatible values. Read
-the release notes and render or diff the proposed manifests before applying
-them. If you are on Helm < 3.14, supply a reviewed values file explicitly with
-`-f your-values.yaml`.
+
+- `--reuse-values` skips new chart defaults, and can break when a release adds
+  required values.
+- `--reset-then-reuse-values` (Helm ≥ 3.14) starts from the new defaults, but
+  can't migrate renamed, removed or incompatible values.
+- On Helm < 3.14, supply a reviewed values file explicitly with
+  `-f your-values.yaml`.
+
+Either way, read the release notes and render or diff the proposed manifests
+before applying them.
 :::
 
 :::warning The chart serves standalone mode by default
 From the first release with standalone mode
 ([#4623](https://github.com/vllm-project/semantic-router/issues/4623)), the
 chart sets `gateway.mode: standalone`: the Router serves the OpenAI-compatible
-API on its own listeners and no longer serves ext_proc on port 50051. If Envoy
-Gateway, Agent Router, Istio, KServe, llm-d or another gateway calls the Router
-over ext_proc, add `--set gateway.mode=extproc` (or `gateway: {mode: extproc}`
-in your values file) to the upgrade. An upgrade whose live config still has the
-old default listeners `grpc-50051` and `http-8080` fails to render in
-standalone mode, before anything changes. `helm rollback` restores the previous
-release and its mode.
+API on its own listeners and no longer serves ext_proc on port 50051.
+
+- **Gateways that call ext_proc.** If Envoy Gateway, Agent Router, Istio,
+  KServe, llm-d or another gateway calls the Router over ext_proc, add
+  `--set gateway.mode=extproc` (or `gateway: {mode: extproc}` in your values
+  file) to the upgrade.
+- **The old default listeners.** An upgrade whose live config still has the
+  old default listeners `grpc-50051` and `http-8080` fails to render in
+  standalone mode, before anything changes.
+- **Rollback.** `helm rollback` restores the previous release and its mode.
 :::
 
 Verify after upgrade:
@@ -287,16 +294,20 @@ helm upgrade semantic-router \
 
 ## 5. Nightly Builds
 
-Nightly images use `nightly-YYYYMMDD`; nightly chart versions use
-`0.0.0-nightly.YYYYMMDD`. Every day at 02:00 UTC the newest `main` commit is
-qualified with the complete CPU suite and, if it passes, published under that
-day's date. A day without new commits, or whose commit fails qualification,
-publishes no new date. A published date never changes: another qualification on
-the same date publishes nothing, and its commit appears under a later date, so
-the images and chart you pinned stay the ones you tested. They are intended for
-pre-release testing only, and
-older dates may no longer be retained. Discover an available date before
-pinning it:
+Nightly images use `nightly-YYYYMMDD`, and nightly chart versions use
+`0.0.0-nightly.YYYYMMDD`:
+
+- **Daily qualification.** Every day at 02:00 UTC, the newest `main` commit is
+  qualified with the complete CPU suite and, if it passes, published under
+  that day's date. A day without new commits, or whose commit fails, publishes
+  no new date.
+- **A published date never changes.** Another qualification on the same date
+  publishes nothing, and its commit appears under a later date, so the images
+  and chart you pinned stay the ones you tested.
+- **Pre-release only.** Nightlies are for pre-release testing, and older
+  dates may no longer be kept.
+
+Discover an available date before pinning it:
 
 ```bash
 # Requires the oras CLI. Inspect both repositories because image and chart

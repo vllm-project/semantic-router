@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"bytes"
+	"net/http"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -29,6 +31,21 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	return response, nil
 }
 
+// answerInPlaceOfUpstream answers with status in place of the upstream
+// response. No later phase sees that answer, so the replay record ends here
+// with what the client got, for reason.
+func (r *OpenAIRouter) answerInPlaceOfUpstream(ctx *RequestContext, status int, message, reason string) *ext_proc.ProcessingResponse {
+	response := r.createErrorResponse(status, message)
+	r.failAnsweredRouterReplay(ctx, status, response.GetImmediateResponse().GetBody(), reason)
+	return response
+}
+
+// invalidUpstreamResponse answers with 502 for an upstream response the Router
+// cannot pass on.
+func (r *OpenAIRouter) invalidUpstreamResponse(ctx *RequestContext, message string) *ext_proc.ProcessingResponse {
+	return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, message, "upstream_invalid_response")
+}
+
 // handleDecodedResponseBody runs the response phases on the upstream body as
 // the router reads it, after any content coding is removed.
 func (r *OpenAIRouter) handleDecodedResponseBody(
@@ -48,6 +65,10 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 	if ctx.IsStreamingResponse {
 		return r.handleSemanticStreamingResponseBody(responseBody, endOfStream, ctx)
 	}
+	// Recovery and redaction replace this slice before the pipeline copies
+	// it. Compare with the decoded upstream body so same-format Chat still
+	// emits BodyMutation. Gzip replacement stays in deliverUpstreamResponseBody.
+	incomingBody := responseBody
 	recoveredBody, recoveryErr := r.handleContextRecoveryFollowup(
 		ctx.TraceContext,
 		responseBody,
@@ -58,22 +79,27 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 			"request_id": ctx.RequestID,
 			"error":      recoveryErr.Error(),
 		})
-		if contextRecoveryFailClosed(ctx) {
-			return r.createErrorResponse(502, "Context recovery followup failed")
+		if contextRecoveryFailClosed(r.Config, ctx) {
+			return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, "Context recovery followup failed", "request_processing_failed")
 		}
 		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {
 		responseBody = recoveredBody
 	}
 
-	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency)
+	return r.handleNonStreamingResponseBody(
+		responseBody,
+		ctx,
+		completionLatency,
+		!bytes.Equal(responseBody, incomingBody),
+	)
 }
 
-func contextRecoveryFailClosed(ctx *RequestContext) bool {
+func contextRecoveryFailClosed(cfg *config.RouterConfig, ctx *RequestContext) bool {
 	if ctx == nil {
 		return false
 	}
-	plugin := contextCompression(ctx.VSRSelectedDecision)
+	plugin := contextCompression(requestPlugins(cfg, ctx))
 	return plugin != nil &&
 		plugin.Compress.EffectiveFailureMode() == config.ContextCompressionFailureClosed
 }

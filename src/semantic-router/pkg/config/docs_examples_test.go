@@ -20,10 +20,10 @@ var routerCheckedDocPages = slices.Concat([]string{
 	repoRel("website", "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", "installation", "storage-overview.md"),
 	repoRel("website", "docs", "training", "router-embeddings-huggingface.md"),
 }, bothLocales(
-	repoRel("system-one", "overview.md"),
-	repoRel("system-one", "deployments.md"),
-	repoRel("system-one", "router.md"),
-	repoRel("system-one", "custom-questions.md"),
+	repoRel("system-one", "get-started", "overview.md"),
+	repoRel("system-one", "deploy", "deployments.md"),
+	repoRel("system-one", "use", "router.md"),
+	repoRel("system-one", "use", "custom-questions.md"),
 	repoRel("tutorials", "signal", "overview.md"),
 	repoRel("tutorials", "signal", "systemone.md"),
 	repoRel("tutorials", "signal", "application", "complexity.md"),
@@ -38,7 +38,7 @@ var routerCheckedDocPages = slices.Concat([]string{
 	repoRel("tutorials", "signal", "application", "turn-relation.md"),
 	repoRel("tutorials", "signal", "application", "user-feedback.md"),
 	repoRel("installation", "migrate-to-v0-5.md"),
-	repoRel("installation", "runtime", "external.md"),
+	repoRel("model-runtime", "deploy", "remote-services.md"),
 ))
 
 // bothLocales is each English docs page and its zh-Hans translation.

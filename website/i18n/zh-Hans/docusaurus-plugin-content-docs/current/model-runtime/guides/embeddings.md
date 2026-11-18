@@ -1,5 +1,6 @@
 ---
 title: 嵌入
+sidebar_position: 1
 description: 用于召回的嵌入：响应缓存、记忆、RAG 和向量库。
 translation:
   source_commit: "439c22531380dfd51abf2ce33ce6dc4db87b1fb7"
@@ -19,7 +20,7 @@ is_mtpe: true
 
 ## 打开它 {#turn-it-on}
 
-启用一个做召回的功能就够了：Vela Embedding 由 router 跑在 CPU 上。`global.model_catalog.embeddings.default` 指定做嵌入的部署，写法和 `system.decision_model` 指定决策模型的部署一样；不改的话就是预先声明的 `vela-embedding`。只有响应缓存、记忆或向量库用它召回时它才启动；没有召回的配置从不启动它。没有任何决策读取嵌入：要按图片内容路由，向决策模型提出一个读取图片的问题（[媒体输入](../../system-one/concepts#media-inputs)）。
+启用一个做召回的功能就够了：Vela Embedding 由 router 跑在 CPU 上。`global.model_catalog.embeddings.default` 指定做嵌入的部署，写法和 `system.decision_model` 指定决策模型的部署一样；不改的话就是预先声明的 `vela-embedding`。只有响应缓存、记忆或向量库用它召回时它才启动；没有召回的配置从不启动它。没有任何决策读取嵌入：要按图片内容路由，向决策模型提出一个读取图片的问题（[媒体输入](../../system-one/get-started/concepts#media-inputs)）。
 
 ## 选它跑在哪 {#choose-where-it-runs}
 
@@ -103,4 +104,4 @@ curl -s localhost:8100/v1/embeddings -H 'content-type: application/json' \
 
 ## 换模型别混向量 {#change-the-model-without-mixing-vectors}
 
-不同模型、不同层、不同大小的向量，从来不互相比。改其中任何一样之后，向量库要重建索引，需要的记忆要重新加，语义缓存也得等着重新攒。见[嵌入模型换了要重新嵌入](model-runtime/migrate.md#re-embed-when-the-embedding-model-changes)。
+不同模型、不同层、不同大小的向量，从来不互相比。改其中任何一样之后，向量库要重建索引，需要的记忆要重新加，语义缓存也得等着重新攒。见[嵌入模型换了要重新嵌入](../deploy/migrate.md#re-embed-when-the-embedding-model-changes)。

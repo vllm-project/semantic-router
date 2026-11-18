@@ -39,11 +39,30 @@ class Health:
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def set(self, state: str, reason: str | None = None) -> None:
+        self.exchange(state, reason)
+
+    def exchange(self, state: str, reason: str | None = None) -> tuple[str, str | None]:
+        """Set the state; the state and reason it replaced."""
         if state not in STATES:
             raise ValueError(f"unknown runtime state {state!r}")
         with self._lock:
+            replaced = self.state, self.reason
             self.state = state
             self.reason = reason
+        return replaced
+
+    def set_if(
+        self, expected: tuple[str, str | None], state: str, reason: str | None = None
+    ) -> bool:
+        """Set the state only while it is still ``expected`` (state, reason); whether it did."""
+        if state not in STATES:
+            raise ValueError(f"unknown runtime state {state!r}")
+        with self._lock:
+            if (self.state, self.reason) != expected:
+                return False
+            self.state = state
+            self.reason = reason
+        return True
 
     @property
     def ready(self) -> bool:
@@ -126,6 +145,16 @@ def drift(a: Any, b: Any) -> float | None:
     return max(numbers, default=0.0)
 
 
+def qualified(key: str, dtype: str = "auto") -> str:
+    """The key of a device-class or hardware reference recorded at ``--dtype dtype``.
+
+    References recorded at ``auto`` keep the plain key; those recorded at
+    another dtype carry it (``cpu@bfloat16``), and only a model served at
+    that dtype is checked against them.
+    """
+    return key if dtype == "auto" else f"{key}@{dtype}"
+
+
 def golden_check(
     run: Callable[[str, dict[str, Any]], dict[str, Any]],
     compare: Callable[
@@ -134,6 +163,7 @@ def golden_check(
     goldens: list[dict[str, Any]],
     device_class: str,
     reference_key: str | None = None,
+    dtype: str = "auto",
 ) -> GoldenResult:
     """Run each golden request twice; require determinism, well-formed answers and the reference when known.
 
@@ -141,7 +171,8 @@ def golden_check(
     the response's comparable values (``LoadedModel.golden_values``) and
     ``compare(surface, values, reference, tolerance)`` checks them against the
     reference recorded for this device class (``LoadedModel.golden_compare``).
-    Prefer ``reference_key`` when recorded, otherwise the device-class reference.
+    Prefer ``reference_key`` when recorded, otherwise the device-class
+    reference, both as recorded at the ``dtype`` the model runs (``qualified``).
     The device class still selects the tolerance: ``CPU_TOLERANCE`` on CPUs
     and ``GPU_TOLERANCE`` on GPUs. Never try another reference after a mismatch.
     Both runs are validated against the reference; on classes other than NPU,
@@ -168,11 +199,9 @@ def golden_check(
                 status="failed", detail="golden answers are not deterministic"
             )
         expected = golden.get("expected") or {}
-        selected = (
-            reference_key
-            if reference_key is not None and reference_key in expected
-            else device_class
-        )
+        selected = qualified(device_class, dtype)
+        if reference_key is not None and qualified(reference_key, dtype) in expected:
+            selected = qualified(reference_key, dtype)
         reference = expected.get(selected)
         # The npu class's two runs drift independently, so both are checked
         # against the reference; on the other classes the second run equals

@@ -2,8 +2,10 @@ config:
   version: v0.5
   listeners: []
   providers:
-    defaults:
-      model: base-model
+    # No provider default, so the e2e-no-route recipe below gets a real
+    # no_route rather than a fallback model. null removes the chart's own
+    # placeholder default, which config: merges in otherwise.
+    defaults: null
     models:
       - name: base-model
         provider_model_id: base-model
@@ -12,7 +14,15 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
+  entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: default
+      default: true
+    - model_names: [e2e-no-route]
+      recipe: no-route
   recipes:
+    - name: no-route
+      decisions: []
     - name: default
       signals:
         systemone:
@@ -79,6 +89,7 @@ config:
           provider: systemone
           endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
           model: e2e/fake-systemone
+          schema: vllm-sr/4.0
           timeout_ms: 5000
           capabilities:
             question_types: [choice, noul, span]

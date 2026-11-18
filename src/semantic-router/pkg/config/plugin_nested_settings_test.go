@@ -99,9 +99,10 @@ func TestDecisionPluginsReadNestedSettings(t *testing.T) {
 	}
 }
 
-// Decision plugin configurations are decoded from JSON, so every field,
-// nested ones included, must accept its YAML key as a JSON key.
-func TestDecisionPluginFieldsAcceptYAMLKeysAsJSON(t *testing.T) {
+// Decision plugin configurations, and the RAG backend configurations their
+// context sources hold, are decoded from JSON and, from the DSL, encoded to it,
+// so every field, nested ones included, must use its YAML key as its JSON key.
+func TestDecisionPluginFieldsUseYAMLKeysAsJSONKeys(t *testing.T) {
 	seen := map[reflect.Type]bool{}
 	var check func(path string, typ reflect.Type)
 	check = func(path string, typ reflect.Type) {
@@ -114,22 +115,28 @@ func TestDecisionPluginFieldsAcceptYAMLKeysAsJSON(t *testing.T) {
 		seen[typ] = true
 		for i := 0; i < typ.NumField(); i++ {
 			field := typ.Field(i)
-			yamlKey := strings.Split(field.Tag.Get("yaml"), ",")[0]
+			yamlKey, yamlOptions, _ := strings.Cut(field.Tag.Get("yaml"), ",")
 			if yamlKey == "" || yamlKey == "-" {
 				continue
 			}
-			jsonKey := strings.Split(field.Tag.Get("json"), ",")[0]
+			jsonKey, jsonOptions, _ := strings.Cut(field.Tag.Get("json"), ",")
 			if jsonKey == "" {
 				jsonKey = field.Name
 			}
-			// encoding/json matches object keys case-insensitively.
-			if !strings.EqualFold(jsonKey, yamlKey) {
-				t.Errorf("%s.%s: field %s.%s has JSON key %q", path, yamlKey, typ.Name(), field.Name, jsonKey)
+			// An unset field the YAML omits must not be written as null.
+			if jsonKey != yamlKey || strings.Contains(yamlOptions, "omitempty") != strings.Contains(jsonOptions, "omitempty") {
+				t.Errorf("%s.%s: field %s.%s has JSON tag %q", path, yamlKey, typ.Name(), field.Name, field.Tag.Get("json"))
 			}
 			check(path+"."+yamlKey, field.Type)
 		}
 	}
 	for pluginType, payload := range DecisionPluginSchemaSamples() {
 		check(pluginType, reflect.TypeOf(payload))
+	}
+	for backend, payload := range map[string]interface{}{
+		"milvus": MilvusRAGConfig{}, "qdrant": QdrantRAGConfig{}, "external_api": ExternalAPIRAGConfig{}, "mcp": MCPRAGConfig{},
+		"openai": OpenAIRAGConfig{}, "vectorstore": VectorStoreRAGConfig{}, "hybrid": HybridRAGConfig{},
+	} {
+		check("context.sources.backend_config("+backend+")", reflect.TypeOf(payload))
 	}
 }

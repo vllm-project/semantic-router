@@ -31,9 +31,11 @@ type ProgramJSON struct {
 
 // EntrypointDeclJSON is the JSON form of a request-facing recipe binding.
 type EntrypointDeclJSON struct {
-	ModelNames []string `json:"modelNames"`
-	Recipe     string   `json:"recipe"`
-	Pos        Position `json:"pos"`
+	ReviewModel string   `json:"reviewModel,omitempty"`
+	MemoryModel string   `json:"memoryModel,omitempty"`
+	ModelNames  []string `json:"modelNames"`
+	Recipe      string   `json:"recipe"`
+	Pos         Position `json:"pos"`
 }
 
 // RecipeDeclJSON is the JSON form of one isolated recipe program.
@@ -64,12 +66,12 @@ type ProjectionScoreDeclJSON struct {
 
 // ProjectionScoreInputJSON is the JSON form of ProjectionScoreInputDecl.
 type ProjectionScoreInputJSON struct {
-	SignalType  string  `json:"signalType"`
-	SignalName  string  `json:"signalName"`
-	Weight      float64 `json:"weight"`
-	ValueSource string  `json:"valueSource,omitempty"`
-	Match       float64 `json:"match,omitempty"`
-	Miss        float64 `json:"miss,omitempty"`
+	SignalType  string   `json:"signalType"`
+	SignalName  string   `json:"signalName"`
+	Weight      float64  `json:"weight"`
+	ValueSource string   `json:"valueSource,omitempty"`
+	Match       *float64 `json:"match,omitempty"`
+	Miss        float64  `json:"miss,omitempty"`
 }
 
 // ProjectionMappingDeclJSON is the JSON form of ProjectionMappingDecl.
@@ -256,9 +258,11 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	}
 	for _, entrypoint := range prog.Entrypoints {
 		result.Entrypoints = append(result.Entrypoints, &EntrypointDeclJSON{
-			ModelNames: append([]string(nil), entrypoint.ModelNames...),
-			Recipe:     entrypoint.Recipe,
-			Pos:        entrypoint.Pos,
+			ModelNames:  append([]string(nil), entrypoint.ModelNames...),
+			Recipe:      entrypoint.Recipe,
+			ReviewModel: entrypoint.ReviewModel,
+			MemoryModel: entrypoint.MemoryModel,
+			Pos:         entrypoint.Pos,
 		})
 	}
 	for _, recipe := range prog.Recipes {

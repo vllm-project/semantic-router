@@ -21,4 +21,5 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}

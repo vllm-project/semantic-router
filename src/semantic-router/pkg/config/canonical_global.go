@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -44,6 +46,13 @@ type CanonicalRouterGlobal struct {
 	// Headers governs the optional response headers, such as who may turn on
 	// the debug headers.
 	Headers RouterHeadersConfig `yaml:"headers,omitempty"`
+	// ContextWindow governs the check of a prompt against the context
+	// windows of the models that can serve it.
+	ContextWindow ContextWindowConfig `yaml:"context_window,omitempty"`
+	// DrainTimeoutSeconds bounds how long the standalone gateway lets the
+	// requests in flight finish once the Router begins to shut down. Nil
+	// keeps DefaultDrainTimeout, and 0 is no drain.
+	DrainTimeoutSeconds *int `yaml:"drain_timeout_seconds,omitempty" json:"drain_timeout_seconds,omitempty" jsonschema:"minimum=0,maximum=86400"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -55,14 +64,16 @@ type CanonicalStreamedBody struct {
 
 // CanonicalServiceGlobal groups shared runtime services exposed by the router.
 type CanonicalServiceGlobal struct {
-	API           APIConfig           `yaml:"api"`
-	ResponseAPI   ResponseAPIConfig   `yaml:"response_api"`
-	Observability ObservabilityConfig `yaml:"observability"`
-	Authz         AuthzConfig         `yaml:"authz"`
-	RateLimit     RateLimitConfig     `yaml:"ratelimit"`
-	ManagementAPI ManagementAPIConfig `yaml:"management_api"`
-	RouterReplay  RouterReplayConfig  `yaml:"router_replay"`
-	StartupStatus StartupStatusConfig `yaml:"startup_status"`
+	API             APIConfig             `yaml:"api"`
+	ResponseAPI     ResponseAPIConfig     `yaml:"response_api"`
+	Observability   ObservabilityConfig   `yaml:"observability"`
+	MaskingIdentity MaskingIdentityConfig `yaml:"masking_identity,omitempty"`
+	Authz           AuthzConfig           `yaml:"authz"`
+	RateLimit       RateLimitConfig       `yaml:"ratelimit"`
+	Budgets         BudgetsConfig         `yaml:"budgets,omitempty"`
+	ManagementAPI   ManagementAPIConfig   `yaml:"management_api"`
+	RouterReplay    RouterReplayConfig    `yaml:"router_replay"`
+	StartupStatus   StartupStatusConfig   `yaml:"startup_status"`
 }
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
@@ -94,6 +105,9 @@ type CanonicalModelCatalog struct {
 	// SignalTimeoutMs is the deadline of a request's model-runtime signals,
 	// below the request's; 0 derives it from the request's deadline.
 	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
+	// OnSignalOverload is what a request gets when a rule that fails closed
+	// could not be read because the decision runtime was overloaded.
+	OnSignalOverload *SignalOverloadPolicy `yaml:"on_signal_overload,omitempty"`
 }
 
 // CanonicalEmbeddingModels names the embedding deployment recall uses, the
@@ -158,6 +172,46 @@ func mergeCanonicalGlobalOverride(
 	return resolved, nil
 }
 
+// refuseEmptyGlobalValue refuses an empty value in global or its mappings.
+// Merged onto the defaults, it would replace them with zero values.
+func refuseEmptyGlobalValue(global interface{}) error {
+	data, err := yaml.Marshal(DefaultCanonicalGlobal())
+	if err != nil {
+		return err
+	}
+	defaults, err := parseRawConfigMap(data)
+	if err != nil {
+		return err
+	}
+	path, replaced := emptyMappingValue(global, defaults, "global")
+	switch {
+	case path == "":
+		return nil
+	case len(nestedStringMap(replaced)) > 0:
+		return fmt.Errorf("%s is empty: remove it to keep its defaults, or give it fields", path)
+	default:
+		return fmt.Errorf("%s is empty: remove it to keep its default, or give it a value", path)
+	}
+}
+
+// emptyMappingValue returns the path of the first empty value in value or its
+// mappings, or "", and the default it replaces. Lists are replaced whole, so
+// their items are not checked.
+func emptyMappingValue(value, defaults interface{}, path string) (string, interface{}) {
+	switch value.(type) {
+	case nil:
+		return path, defaults
+	case map[string]interface{}, map[interface{}]interface{}:
+		fields, defaultFields := nestedStringMap(value), nestedStringMap(defaults)
+		for _, key := range slices.Sorted(maps.Keys(fields)) {
+			if empty, replaced := emptyMappingValue(fields[key], defaultFields[key], path+"."+key); empty != "" {
+				return empty, replaced
+			}
+		}
+	}
+	return "", nil
+}
+
 func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	if global == nil {
 		return nil
@@ -188,14 +242,18 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.AllowLossyTranslation = router.AllowLossyTranslation
 	cfg.RoutingInput = router.RoutingInput
 	cfg.Headers = router.Headers
+	cfg.ContextWindow = router.ContextWindow
+	cfg.DrainTimeoutSeconds = router.DrainTimeoutSeconds
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
 	cfg.API = services.API
-	cfg.ResponseAPI = services.ResponseAPI
+	cfg.ResponseAPI = services.ResponseAPI.withDefaultStoreBackend()
 	cfg.Observability = services.Observability
+	cfg.MaskingIdentity = services.MaskingIdentity
 	cfg.Authz = services.Authz
 	cfg.RateLimit = services.RateLimit
+	cfg.Budgets = services.Budgets
 	cfg.ManagementAPI = services.ManagementAPI
 	cfg.RouterReplay = services.RouterReplay
 	cfg.StartupStatus = services.StartupStatus
@@ -220,6 +278,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs
+	cfg.ModelSignalOverload = cloneSignalOverloadPolicy(modelCatalog.OnSignalOverload)
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {

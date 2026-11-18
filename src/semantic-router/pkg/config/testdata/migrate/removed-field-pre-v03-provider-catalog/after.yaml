@@ -38,3 +38,6 @@ global:
     strategy: priority
   services:
     response_api: {enabled: false}
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`turn_relation` 询问决策模型，当前用户轮次与之前的对话是什么关系。它提出 `turn_relation` [预设](../../../system-one/reference#preset-catalog)问题：该轮次 `continue`（延续当前话题）、`reask`（重新询问之前某轮问过的内容）、`shift`（转向无关话题）或 `return`（回到之前的话题）。它取代了 `reasks` 和 `topic_continuity` 信号。
+`turn_relation` 询问决策模型，当前用户轮次与之前的对话是什么关系。它提出 `turn_relation` [预设](../../../system-one/reference/presets#preset-catalog)问题：该轮次 `continue`（延续当前话题）、`reask`（重新询问之前某轮问过的内容）、`shift`（转向无关话题）或 `return`（回到之前的话题）。它取代了 `reasks` 和 `topic_continuity` 信号。
 
 ## 主要优势 {#key-advantages}
 

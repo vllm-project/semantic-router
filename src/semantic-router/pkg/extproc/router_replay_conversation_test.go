@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -78,6 +79,7 @@ func TestReplayIdentityFallbackAndSessionScope(t *testing.T) {
 
 func TestReplayTrajectorySeparatesConversationTurns(t *testing.T) {
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recorder.SetCapturePolicy(true, true, 0)
 	r := &OpenAIRouter{ReplayRecorder: recorder, ReplayStoreShared: true}
 	first := []routerreplay.ToolTraceStep{
 		{Type: replayToolStepUserInput, Text: "First task"},
@@ -98,7 +100,7 @@ func TestReplayTrajectorySeparatesConversationTurns(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	response := r.handleRouterReplayTrajectoryAPI("GET", "session_id=shared-session&recipe=same-recipe").GetImmediateResponse()
+	response := r.handleRouterReplayTrajectoryAPI(context.Background(), "GET", "session_id=shared-session&recipe=same-recipe").GetImmediateResponse()
 	if int(response.Status.Code) != 200 {
 		t.Fatal("trajectory failed")
 	}

@@ -68,6 +68,8 @@ interface RouterSectionContext {
   config: ConfigData | null
   routerConfig: RouterConfigSectionData
   routerDefaults: CanonicalGlobalConfig | null
+  /** Build only these curated cards, and none of the generated ones. */
+  only?: readonly RouterSystemKey[]
 }
 
 export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; description: string }> = {
@@ -240,7 +242,6 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
       ]
     case 'router_replay':
       return [
-        { label: 'Enabled', value: stringOrFallback(section?.enabled, 'Disabled') },
         { label: 'Store backend', value: stringOrFallback(section?.store_backend) },
         { label: 'Retention', value: section?.ttl_seconds ? `${section.ttl_seconds}s` : 'Not set' },
         { label: 'Async writes', value: stringOrFallback(section?.async_writes, 'Disabled') },
@@ -263,6 +264,8 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
           value: `${(asArray(section?.providers) || []).flatMap((provider) => asArray(provider.rules) || []).length}`,
         },
       ]
+    case 'budgets':
+      return budgetsSummary(section)
     case 'management_api':
       return [
         { label: 'Bind address', value: stringOrFallback(section?.bind_address) },
@@ -274,6 +277,17 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
         { label: 'Store backend', value: stringOrFallback(section?.store_backend) },
         { label: 'Redis', value: asObject(section?.redis) ? 'Configured' : 'Not configured' },
       ]
+    case 'masking_identity': {
+      const namespaces = Object.values(asObject(section?.namespaces) || {}).map(asObject)
+      const backends = namespaces.map((namespace) => asObject(namespace?.registry)?.backend)
+      return [
+        { label: 'Namespaces', value: `${namespaces.length}` },
+        {
+          label: 'Registries',
+          value: stringOrFallback([...new Set(backends)].filter(Boolean).join(', ')),
+        },
+      ]
+    }
     case 'memory':
       return [
         { label: 'Milvus address', value: stringOrFallback(asObject(section?.milvus)?.address) },
@@ -345,6 +359,38 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
   return [{ label: 'Fields', value: `${keys}` }]
 }
 
+function budgetsSummary(section: Record<string, unknown> | undefined): RouterSectionSummaryItem[] {
+  const currency = stringOrFallback(section?.currency, 'USD')
+  const run = asObject(section?.run)
+  return [
+    { label: 'Run limit', value: run?.limit ? `${run.limit} ${currency}` : 'Not set' },
+    { label: 'User budgets', value: `${(asArray(section?.users) || []).length}` },
+    { label: 'Unpriced calls', value: stringOrFallback(section?.unpriced, 'refuse') },
+  ]
+}
+
+function budgetsFields(): FieldConfig[] {
+  return [
+    { name: 'currency', label: 'Currency', type: 'text', placeholder: 'USD' },
+    {
+      name: 'unpriced',
+      label: 'Unpriced Calls',
+      type: 'select',
+      options: ['refuse', 'allow'],
+      description: 'Refuse a call to a model with no price, or admit it at zero and count it.',
+    },
+    {
+      name: 'output_reserve_tokens',
+      label: 'Output Reserve Tokens',
+      type: 'number',
+      placeholder: '4096',
+      description: 'Output a call reserves when neither its request nor its model sets a limit.',
+    },
+    routerStructuredField('budgets', 'run'),
+    routerStructuredField('budgets', 'users'),
+  ]
+}
+
 function badgesForKey(key: RouterSystemKey, data: unknown): RouterSectionBadge[] {
   const badges: RouterSectionBadge[] = []
 
@@ -371,7 +417,8 @@ function statusForKey(data: unknown): RouterSectionBadge {
   return enabledBadge(typeof section?.enabled === 'boolean' ? section.enabled : undefined)
 }
 
-function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
+/** The hand-tuned labels, hints and options of a legacy card's top-level fields. */
+export function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
   switch (key) {
     case 'router_core':
       return [
@@ -417,30 +464,16 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '86400' },
         { name: 'max_responses', label: 'Max Responses', type: 'number', placeholder: '1000' },
       ]
+    // The switches and capture settings of Replay, memory and the response
+    // cache are the router_replay, context and response_cache plugins of
+    // global.plugins in v0.5; these cards edit only the stores.
     case 'router_replay':
       return [
-        { name: 'enabled', label: 'Enable Router Replay', type: 'boolean' },
-        { name: 'capture_request_body', label: 'Capture request bodies', type: 'boolean' },
-        { name: 'capture_response_body', label: 'Capture response bodies', type: 'boolean' },
-        {
-          name: 'capture_personal_data',
-          label: 'Capture personal data',
-          type: 'boolean',
-          description:
-            'When off, Replay keeps route metadata but omits content when PII is detected or detection is unavailable. A decision can override this default.',
-        },
-        {
-          name: 'capture_tool_results',
-          label: 'Capture tool results',
-          type: 'boolean',
-          description:
-            'Stores client tool-result text in records, each result bounded by max_tool_trace_bytes. Requires personal data capture; callers without replay detail access still see results redacted. Intended for development and audit.',
-        },
         {
           name: 'store_backend',
           label: 'Store Backend',
           type: 'select',
-          options: ['memory', 'redis', 'postgres', 'milvus'],
+          options: ['file', 'memory', 'redis', 'postgres', 'milvus'],
           required: true,
         },
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '2592000' },
@@ -457,9 +490,10 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'fail_open', label: 'Fail Open', type: 'boolean' },
         routerStructuredField(key, 'providers'),
       ]
+    case 'budgets':
+      return budgetsFields()
     case 'memory':
       return [
-        { name: 'enabled', label: 'Enable Memory', type: 'boolean' },
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
         routerStructuredField(key, 'milvus'),
         routerStructuredField(key, 'embedding'),
@@ -482,19 +516,12 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
       ]
     case 'response_cache':
       return [
-        { name: 'enabled', label: 'Enable Response Cache', type: 'boolean' },
         {
           name: 'backend_type',
           label: 'Backend Type',
           type: 'select',
           options: ['memory', 'milvus', 'redis'],
           required: true,
-        },
-        {
-          name: 'similarity_threshold',
-          label: 'Similarity Threshold',
-          type: 'percentage',
-          placeholder: '80',
         },
         { name: 'max_entries', label: 'Max Entries', type: 'number', placeholder: '1000' },
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '3600' },
@@ -658,7 +685,9 @@ export function buildEffectiveRouterConfig(
 }
 
 export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectionCard[] {
-  const orderedKeys = Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]
+  const orderedKeys = (Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]).filter(
+    (key) => !ctx.only || ctx.only.includes(key),
+  )
   const decisionBindings = decisionBindingsState(
     ctx.routerConfig.system_models,
     ctx.config,
@@ -709,6 +738,8 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
   const curatedPaths = new Set(
     Object.values(CURATED_ROUTER_SECTIONS).map(({ path }) => path.join('.')),
   )
+  if (ctx.only) return curatedCards
+
   const generatedCards: RouterSectionCard[] = ROUTER_CONFIG_EXTENSION.global_sections
     // KB management is not a Dashboard surface; the canonical schema and raw editor retain it.
     .filter((surface) => surface.path.join('.') !== 'model_catalog.kbs')
@@ -761,4 +792,35 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
     })
 
   return [...curatedCards, ...generatedCards]
+}
+
+function changedSettingsValue(shown: unknown, next: unknown): unknown {
+  const shownObject = asObject(shown)
+  const nextObject = asObject(next)
+  if (shownObject && nextObject) {
+    const changed: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(nextObject)) {
+      const changedValue = changedSettingsValue(shownObject[key], value)
+      if (changedValue !== undefined) changed[key] = changedValue
+    }
+    return Object.keys(changed).length > 0 ? changed : undefined
+  }
+  return JSON.stringify(shown) === JSON.stringify(next) ? undefined : next
+}
+
+// Cards show effective values (Router defaults plus overrides), so only fields
+// the user changed may become overrides. Undefined means nothing changed.
+export function editedRouterSectionPatch(
+  card: RouterSectionCard,
+  data: EditFormData,
+): Partial<ConfigData> | undefined {
+  const next = card.save(data)
+  let shown: Partial<ConfigData>
+  try {
+    shown = card.save(card.editData)
+  } catch {
+    // Shown values the form rejects cannot serve as a baseline.
+    return next
+  }
+  return changedSettingsValue(shown, next) as Partial<ConfigData> | undefined
 }

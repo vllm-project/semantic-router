@@ -16,7 +16,7 @@ translation:
 
 - 按路由限制昂贵参数（`max_tokens`、`n`）。
 - 对不应暴露 token 分布的层级阻止敏感参数，例如 `logprobs` / `top_logprobs`。
-- 可选剥离未知的顶层 JSON 字段，以减少意外透传。
+- 当一条路由的所有后端都拒绝 `min_p` 和 `logit_bias` 时（例如运行推测解码的 vLLM），可以用 `blocked_params: [min_p, logit_bias]` 移除它们。若只对某个模型移除，请在[该模型的 `unsupported_capabilities`](../../installation/protocol-compatibility#sampling-controls-a-backend-rejects) 中列出。
 
 ## 解决什么问题？
 
@@ -26,7 +26,6 @@ translation:
 
 - 某个层级或路由不得请求 logprobs 或多次补全
 - 需要对 `max_tokens` 或 `n` 设置与客户端输入无关的硬上限
-- 未知 JSON 字段不应转发给后端
 
 ## 配置
 
@@ -41,7 +40,6 @@ plugins:
         - top_logprobs
       max_tokens_limit: 500
       max_n: 1
-      strip_unknown: true
 ```
 
 在 DSL 中，同一插件可以写成：
@@ -51,9 +49,12 @@ PLUGIN request_params {
   blocked_params: ["logprobs", "top_logprobs"]
   max_tokens_limit: 500
   max_n: 1
-  strip_unknown: true
 }
 ```
 
-该插件强制一组有界的 OpenAI Chat Completions 字段。它不是通用 JSON schema 防火墙，也不授权调用方。在启用 `strip_unknown` 之前，请针对会添加提供商专用字段的客户端进行测试。完整示例见：
+`max_tokens_limit` 限制的是全部输出，思考也算在内。当它把 `max_tokens` 降到 Anthropic `thinking.budget_tokens` 或更低时，预算会降到比上限少一个 token。Anthropic 要求预算至少为 1024，因此上限为 1024 或更低的 Anthropic 路由仍会拒绝思考预算。
+
+`blocked_params` 不能包含 `stream`。客户端请求流式时，路由器才以流式返回答案，因此列出它的配置会在加载时失败。
+
+该插件强制一组有界的 OpenAI Chat Completions 字段。它不是通用 JSON schema 防火墙，也不授权调用方。路由器已经会拒绝客户端线路格式未声明的请求字段，因此该插件没有 `strip_unknown`：仍设置它的配置会在加载时以一行提示失败，`vllm-sr config migrate` 会删除它。完整示例见：
 [`config/fragments/plugin/request-params/budget-tier.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/request-params/budget-tier.yaml)。

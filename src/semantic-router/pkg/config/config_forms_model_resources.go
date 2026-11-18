@@ -114,6 +114,18 @@ var modelResourceForms = []ConfigForm{
 		Migrate: migrateExternalModel,
 	},
 	{
+		Code:    CodeRemovedSection,
+		Paths:   []string{"global.model_catalog.external"},
+		Match:   func(node *yaml.Node, _ string) bool { return node.Kind != yaml.ScalarNode && len(node.Content) == 0 },
+		What:    "external models are removed",
+		Becomes: "drop it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			m.Delete(at.Parent, at.Key)
+			deleteEmpty(m.Root(), "global", "model_catalog")
+			return nil
+		},
+	},
+	{
 		Code:     CodeRemovedField,
 		Paths:    []string{"providers.models[].backend_refs[]"},
 		Match:    func(node *yaml.Node, _ string) bool { return len(legacyConnectionFields(node)) > 0 },

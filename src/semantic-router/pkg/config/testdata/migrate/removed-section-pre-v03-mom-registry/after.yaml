@@ -11,3 +11,8 @@ providers:
 global:
   router:
     strategy: priority
+recipes:
+  - name: default
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

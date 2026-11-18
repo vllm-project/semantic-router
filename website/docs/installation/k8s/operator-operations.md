@@ -35,12 +35,14 @@ kubectl logs -n semantic-router-operator-system \
   deployment/semantic-router-operator-controller-manager
 ```
 
-Enabled startup and readiness probes use HTTP `/ready` in standalone mode and
-gRPC health on port `50051` in plaintext `extproc` mode. The gRPC check waits
-for an active serving configuration; extproc liveness remains a TCP check. When
-`spec.args` enables `--secure`, the Operator retains TCP probes because the
-supported Kubernetes probe API cannot check TLS gRPC listeners. Those TCP
-checks confirm connectivity only, not serving readiness.
+Enabled startup and readiness probes depend on the mode:
+
+- **Standalone** uses HTTP `/ready`.
+- **Plaintext `extproc`** uses gRPC health on port `50051`, which waits for an
+  active serving configuration; liveness stays a TCP check.
+- **`extproc` with `--secure`** in `spec.args` keeps TCP probes, because the
+  supported Kubernetes probe API can't check TLS gRPC listeners. Those confirm
+  connectivity only, not serving readiness.
 
 ## Update safely
 
@@ -107,17 +109,20 @@ kubectl describe inferenceservice <name> -n <backend-namespace>
 
 ### Gateway mode has no route
 
-The Operator does not create an `HTTPRoute`. For ordinary Gateway HTTP
-forwarding, omit `spec.gateway.existingRef` and route `/v1` directly to the
-standalone Router Service's `http-8801` port **8801**. No Envoy sidecar is
-created. Check that the
-Gateway allows routes from the Router namespace and that the route reports
-`Accepted=True` and `ResolvedRefs=True`.
+The Operator doesn't create an `HTTPRoute`. The route you need depends on
+the mode:
 
-If `spec.gateway.existingRef` is set, the Router serves ExtProc instead. Verify your
-Gateway-specific ExtProc policy targets the Router Service's gRPC port
-(default **50051**) and its model routes target the real backend Services.
-The Router `api` port (default **8080**) is a management endpoint and cannot
+- **Ordinary Gateway HTTP forwarding.** Omit `spec.gateway.existingRef`, and
+  route `/v1` directly to the standalone Router Service's `http-8801` port
+  **8801**; no Envoy sidecar is created. Check that the Gateway allows routes
+  from the Router namespace, and that the route reports `Accepted=True` and
+  `ResolvedRefs=True`.
+- **ExtProc.** If `spec.gateway.existingRef` is set, the Router serves ExtProc
+  instead. Check that your Gateway-specific ExtProc policy targets the Router
+  Service's gRPC port (default **50051**), and that its model routes target
+  the real backend Services.
+
+The Router `api` port (default **8080**) is a management endpoint, and can't
 serve inference completions. See the two
 [existing Gateway deployment paths](operator#existing-gateway).
 

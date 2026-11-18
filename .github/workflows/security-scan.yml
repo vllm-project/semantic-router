@@ -82,9 +82,18 @@ jobs:
       - name: Set Up Helm
         uses: azure/setup-helm@v4
 
+      - name: Cache Helm Dependency Charts
+        id: helm-dependencies
+        uses: actions/cache@v4
+        with:
+          path: pr-code/deploy/helm/semantic-router/charts/*.tgz
+          key: helm-dependencies-${{ hashFiles('pr-code/deploy/helm/semantic-router/Chart.lock') }}
+
       - name: Render Maintained Helm Resources
         working-directory: pr-code
         shell: bash
+        env:
+          HELM_DEPENDENCIES_CACHED: ${{ steps.helm-dependencies.outputs.cache-hit }}
         run: |
           mkdir -p .agent-harness/security/iac
           make helm-ci-setup HELM_REPO_UPDATE=true

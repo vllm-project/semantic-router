@@ -30,7 +30,7 @@ choice is about cost, latency or load.
 
 Without a `deployment`, the Router's decision model chooses
 (`global.model_catalog.system.decision_model`, Vela 3.0 vela3-fast unless you
-[choose a size](../../../model-runtime/choose-a-model.md#choose-a-size)). It is the
+[choose a size](../../../model-runtime/get-started/choose-a-model.md#choose-a-size)). It is the
 model that already answers the request's built-in signals and its `systemone`
 questions that name no deployment, so choosing the model needs no second copy
 of it:
@@ -143,7 +143,7 @@ recipes:
 ```
 
 A named deployment must use `provider: model_runtime`, or `provider: systemone`
-for a [remote System One API](../../../system-one/deployments#remote-system-one-apis);
+for a [remote System One API](../../../system-one/deploy/deployments#remote-system-one-apis);
 a selector without its own `timeout_ms` then takes the deployment's. The
 decision needs 2–255
 different `modelRefs`, and `candidates` may describe only those models; a
@@ -154,5 +154,5 @@ model is reported in the `x-vsr-selected-model` response header. Routing
 Preview asks the System One model the same question and reports its choice as
 the selected model, without calling a backend.
 
-See [Choose a deployment](../../../system-one/deployments) to choose a model
+See [Choose a deployment](../../../system-one/deploy/deployments) to choose a model
 and where it runs.

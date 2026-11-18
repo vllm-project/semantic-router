@@ -37,8 +37,10 @@ const postgresInsertQueryTemplate = `
 			prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 			actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 			session_id, turn_index, previous_response_id, conversation_id,
-			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68)
+			cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache,
+			prompt_original_bytes, prompt_original_sha256, request_kind, review, review_status, review_outcome, review_risk,
+			thread_id, turn_id, parent_turn_id, cost_accounting
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68, $69, $70, $71, $72, $73, $74, $75, $76, $77, $78, $79)
 	`
 
 const postgresCreateTableQueryTemplate = `
@@ -99,6 +101,9 @@ const postgresCreateTableQueryTemplate = `
 			completion_tokens INTEGER,
 			total_tokens INTEGER,
 			provider_cache JSONB,
+			cost_accounting JSONB,
+			prompt_original_bytes INTEGER DEFAULT 0,
+			prompt_original_sha256 TEXT DEFAULT '',
 			actual_cost DOUBLE PRECISION,
 			baseline_cost DOUBLE PRECISION,
 			cost_savings DOUBLE PRECISION,
@@ -110,6 +115,9 @@ const postgresCreateTableQueryTemplate = `
  ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS safety_evidence JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS routing_metadata JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS provider_cache JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS cost_accounting JSONB;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt_original_bytes INTEGER DEFAULT 0;
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS prompt_original_sha256 TEXT DEFAULT '';
 		ALTER TABLE {{table}} ALTER COLUMN recipe TYPE TEXT;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_tier INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS decision_priority INTEGER DEFAULT 0;
@@ -149,12 +157,17 @@ const postgresCreateTableQueryTemplate = `
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS context_token_count INTEGER DEFAULT 0;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS hallucination_span_details JSONB;
 		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS recipe VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS thread_id VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS turn_id VARCHAR(255);
+		ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS parent_turn_id VARCHAR(255);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_timestamp ON {{table}} (timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_created_at ON {{table}} (created_at);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_request_id ON {{table}} (request_id);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_decision_timestamp ON {{table}} (decision, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_selected_model_timestamp ON {{table}} (selected_model, timestamp DESC);
 		CREATE INDEX IF NOT EXISTS idx_{{table}}_session_timestamp ON {{table}} (session_id, timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_turn_timestamp ON {{table}} (turn_id, timestamp DESC);
+		CREATE INDEX IF NOT EXISTS idx_{{table}}_parent_turn_timestamp ON {{table}} (parent_turn_id, timestamp DESC);
 	`
 
 // PostgresStore implements Storage using PostgreSQL as the backend.
@@ -220,7 +233,7 @@ func (p *PostgresStore) createTable(ctx context.Context) error {
 }
 
 func postgresCreateTableQuery(tableName string) string {
-	return strings.ReplaceAll(postgresCreateTableQueryTemplate, "{{table}}", tableName)
+	return strings.ReplaceAll(postgresCreateTableQueryTemplate+postgresReviewColumnsTemplate, "{{table}}", tableName)
 }
 
 // asyncWriter processes async write operations.
@@ -491,23 +504,25 @@ func (p *PostgresStore) AttachResponse(ctx context.Context, id string, body stri
 }
 
 // AttachPrompt stores the prompt of a record written without it.
-func (p *PostgresStore) AttachPrompt(ctx context.Context, id string, prompt string, truncated bool) error {
+func (p *PostgresStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
 	release, err := p.lifecycle.beginMutation()
 	if err != nil {
 		return err
 	}
 	defer release()
-	prompt = sanitizePostgresText(prompt)
+	text := sanitizePostgresText(prompt.Text)
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET prompt = $2,
-		    prompt_truncated = $3
+		    prompt_truncated = $3,
+		    prompt_original_bytes = $4,
+		    prompt_original_sha256 = $5
 		WHERE id = $1
 	`, p.tableName)
 
 	fn := func() error {
-		result, err := p.db.ExecContext(ctx, query, id, prompt, truncated)
+		result, err := p.db.ExecContext(ctx, query, id, text, prompt.Truncated, prompt.OriginalBytes, prompt.OriginalSHA256)
 		if err != nil {
 			return fmt.Errorf("failed to update prompt: %w", err)
 		}
@@ -636,9 +651,9 @@ func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage Us
 		return err
 	}
 	defer release()
-	providerCacheJSON, err := json.Marshal(usage.ProviderCache)
+	providerCacheJSON, costAccountingJSON, err := marshalPostgresUsageCostJSON(usage)
 	if err != nil {
-		return fmt.Errorf("marshal provider cache accounting: %w", err)
+		return err
 	}
 	//nolint:gosec // tableName is validated during store creation
 	query := fmt.Sprintf(`
@@ -653,7 +668,8 @@ func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage Us
 		    cost_savings = $9,
 		    currency = $10,
 		    baseline_model = $11,
-		    provider_cache = $12
+		    provider_cache = $12,
+		    cost_accounting = $13
 		WHERE id = $1
 	`, p.tableName)
 
@@ -673,6 +689,7 @@ func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage Us
 			nullableStringArg(usage.Currency),
 			nullableStringArg(usage.BaselineModel),
 			providerCacheJSON,
+			costAccountingJSON,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update usage cost: %w", err)

@@ -1,6 +1,6 @@
 {
   "version.label": {
-    "message": "最新版（未发布）",
+    "message": "最新版（main）",
     "description": "The label for version next"
   },
   "sidebar.tutorialSidebar.category.Overview": {
@@ -146,6 +146,70 @@
   "sidebar.tutorialSidebar.category.Model Runtime": {
     "message": "模型运行时",
     "description": "The label for category Model Runtime in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.system-one-get-started": {
+    "message": "入门",
+    "description": "The label for category 'Get started' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.system-one-use": {
+    "message": "使用",
+    "description": "The label for category 'Use it' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.system-one-deploy": {
+    "message": "部署",
+    "description": "The label for category 'Deploy' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.system-one-reference": {
+    "message": "参考",
+    "description": "The label for category 'Reference' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.model-runtime-get-started": {
+    "message": "入门",
+    "description": "The label for category 'Get started' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.model-runtime-supported-models": {
+    "message": "支持的模型",
+    "description": "The label for category 'Supported models' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.supported-models-decision-3": {
+    "message": "Decision 3.0",
+    "description": "The label for category 'Decision 3.0' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.supported-models-decision-2": {
+    "message": "Decision 2.0",
+    "description": "The label for category 'Decision 2.0' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.supported-models-decision-1": {
+    "message": "Decision 1.0",
+    "description": "The label for category 'Decision 1.0' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.supported-models-vela-3": {
+    "message": "Vela 3.0",
+    "description": "The label for category 'Vela 3.0' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.supported-models-vela-2": {
+    "message": "Vela 2.0",
+    "description": "The label for category 'Vela 2.0' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.model-runtime-quantization": {
+    "message": "量化",
+    "description": "The label for category 'Quantization' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.model-runtime-deploy": {
+    "message": "部署与运维",
+    "description": "The label for category 'Deploy and operate' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.model-runtime-embeddings": {
+    "message": "嵌入",
+    "description": "The label for category 'Embeddings' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.model-runtime-extend": {
+    "message": "扩展",
+    "description": "The label for category 'Extend' in sidebar 'tutorialSidebar'"
+  },
+  "sidebar.tutorialSidebar.category.model-runtime-reference": {
+    "message": "参考",
+    "description": "The label for category 'Reference' in sidebar 'tutorialSidebar'"
   },
   "sidebar.tutorialSidebar.category.Proposals": {
     "message": "提案",

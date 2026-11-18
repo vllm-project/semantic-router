@@ -2,30 +2,29 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // generatedFile is a checked-in file rendered from the header registry.
 type generatedFile struct {
 	// path is relative to the repository root.
-	path string
-	// render returns the file's content given its current content.
-	render func(current []byte) ([]byte, error)
+	path   string
+	render func() ([]byte, error)
 }
 
-// generatedFiles are the reference table of the headers page in each locale,
-// and the Dashboard's constants.
+// generatedFiles are the reference the header API reference page is rendered
+// from, and the Dashboard's constants.
 var generatedFiles = []generatedFile{
-	{path: "website/docs/troubleshooting/vsr-headers.md", render: headers.EmbedReference},
-	{path: "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/troubleshooting/vsr-headers.md", render: headers.EmbedReference},
-	{path: "dashboard/frontend/src/generated/vsrHeaders.ts", render: func([]byte) ([]byte, error) {
+	{path: "src/semantic-router/pkg/headers/reference.generated.json", render: func() ([]byte, error) {
+		return headers.NewReference(config.SupportedDebugHeadersModes()).JSON()
+	}},
+	{path: "dashboard/frontend/src/generated/vsrHeaders.ts", render: func() ([]byte, error) {
 		return []byte(headers.TypeScriptConstants()), nil
 	}},
 }
@@ -41,15 +40,15 @@ func main() {
 	}
 	for _, file := range generatedFiles {
 		path := filepath.Join(root, filepath.FromSlash(file.path))
-		current, err := os.ReadFile(path)
-		if err != nil && (!errors.Is(err, fs.ErrNotExist) || *check) {
-			fatalf("read %s: %v", path, err)
-		}
-		payload, err := file.render(current)
+		payload, err := file.render()
 		if err != nil {
 			fatalf("render %s: %v", path, err)
 		}
 		if *check {
+			current, err := os.ReadFile(path)
+			if err != nil {
+				fatalf("read %s: %v", path, err)
+			}
 			if !bytes.Equal(current, payload) {
 				fatalf("generated header reference is stale: %s; run make headers-generate", path)
 			}

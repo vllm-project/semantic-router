@@ -92,6 +92,7 @@ config:
           provider: systemone
           endpoint: http://127.0.0.1:1/v1/systemone
           model: unreachable-guardrail
+          schema: vllm-sr/4.0
           timeout_ms: 5000
       bindings:
         jailbreak: unreachable-guardrail

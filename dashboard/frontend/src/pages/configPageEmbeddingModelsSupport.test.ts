@@ -140,6 +140,46 @@ describe('embedding models config support', () => {
     expect(saved.embeddings).not.toHaveProperty('__deployments')
   })
 
+  // The save is a merge patch. TestEmbeddingCardAuthPatchesLoad in the
+  // dashboard backend merges each of these auth patches into the saved auth
+  // and loads the result with the Router.
+  it.each([
+    [
+      'removes a cleared key with its header',
+      { api_key_env: 'EMBEDDING_API_KEY', header: 'X-Api-Key' },
+      null,
+    ],
+    [
+      'keeps a delegated credential',
+      { credential: 'delegated', header: 'Authorization' },
+      { api_key_env: null },
+    ],
+    [
+      'keeps a key file',
+      { api_key_file: '/run/secrets/embedding', header: 'X-Api-Key' },
+      { api_key_env: null },
+    ],
+  ])('with the API key cleared, %s', (_, auth, patch) => {
+    const view = embeddingModelsView(
+      { default: { deployment: 'bge' } },
+      {
+        bge: {
+          provider: 'openai_embeddings',
+          endpoint: 'https://embedding.example.com/v1',
+          model: 'BAAI/bge-m3',
+          auth,
+        },
+      },
+    )
+    const editData = embeddingModelsEditData(view)
+    const saved = save({
+      ...editData,
+      endpoint: { ...(editData.endpoint as Record<string, unknown>), api_key_env: '' },
+    })
+
+    expect(saved.deployments?.bge.auth).toEqual(patch)
+  })
+
   it('switches back to local inference and keeps the remote deployment for reuse', () => {
     const remote = save({
       ...embeddingModelsEditData(localCatalog),

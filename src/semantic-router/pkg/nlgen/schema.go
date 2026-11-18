@@ -53,7 +53,7 @@ Detects unsafe content; labels name harm categories.
 ### pii
 Detects personally identifiable information.
   Fields: description (string), predicate: { gte (float) }, ignore_labels (string[]),
-          input: { history (bool), tool_results (bool) }
+          input: { history (bool), tool_results (bool), request (bool: false leaves the current user turn out and reads only the history or tool results it names) }
 
 ### hallucination
 Checks the answer against its grounding context (response stage).

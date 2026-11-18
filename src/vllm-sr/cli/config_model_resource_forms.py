@@ -143,6 +143,15 @@ def removed_model_resource_forms(data: dict[str, Any]) -> list[str]:
                 "deployment global.stores.memory.query_rewrite names",
             )
         )
+    if catalog.get("external") in ([], {}):
+        lines.append(
+            _line(
+                "global.model_catalog.external",
+                "removed_section",
+                "external models are removed",
+                "drop it",
+            )
+        )
     providers = data.get("providers")
     models = providers.get("models") if isinstance(providers, dict) else None
     for model_index, model in enumerate(_items(models)):

@@ -480,7 +480,9 @@ def test_environment_reference_is_deferred_to_the_router(value):
     assert ContextRule(name="deferred", min_tokens=value).max_tokens is None
 
 
-@pytest.mark.parametrize("value", ["$$5", "5$", "${CTX", "$", "$-5"])
+@pytest.mark.parametrize(
+    "value", ["$$5", "5$", "${CTX", "$", "$-5", "$5", "$ctx_min", "${ctx_min:-8K}"]
+)
 def test_escaped_or_broken_dollar_is_a_literal_on_both_sides(value):
     assert not references_environment(value)
     with pytest.raises(ValidationError, match="min_tokens: invalid token count format"):

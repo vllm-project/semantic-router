@@ -9,12 +9,7 @@ from vllm_srun.plugins.base import BackboneSpec, DeviceInfo, DtypePolicy, ModelS
 
 POLICIES = [
     pytest.param(
-        DtypePolicy(
-            autocast=None,
-            bf16_resident=False,
-            gpu_weights="bfloat16",
-            cpu_weights="bfloat16",
-        ),
+        DtypePolicy(autocast=None, bf16_resident=False, gpu_weights="bfloat16"),
         True,
         id="decision3-bf16-weights-without-autocast",
     ),

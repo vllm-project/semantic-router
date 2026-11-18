@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`user_feedbacks` 读取当前用户轮次对上一个答案的反馈。它提出 `feedback` [预设](../../../system-one/reference#preset-catalog)问题：“What feedback does this user turn give about the previous answer?”，有五个选项：`SAT`、`NEED_CLARIFICATION`、`WRONG_ANSWER`、`WANT_DIFFERENT` 和 `NO_FEEDBACK`。
+`user_feedbacks` 读取当前用户轮次对上一个答案的反馈。它提出 `feedback` [预设](../../../system-one/reference/presets#preset-catalog)问题：“What feedback does this user turn give about the previous answer?”，有五个选项：`SAT`、`NEED_CLARIFICATION`、`WRONG_ANSWER`、`WANT_DIFFERENT` 和 `NO_FEEDBACK`。
 
 ## 主要优势 {#key-advantages}
 
@@ -68,6 +68,6 @@ Router 只在一个有文本、且紧跟在助手答案之后的用户轮次上�
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `user_feedback` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有反馈规则；见[选择部署](../../../system-one/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 有该问题的训练形式。
+除非 `user_feedback` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有反馈规则；见[选择部署](../../../system-one/deploy/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 有该问题的训练形式。
 
 完整示例见 [`config/fragments/signal/user-feedback/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/user-feedback/escalation.yaml)。

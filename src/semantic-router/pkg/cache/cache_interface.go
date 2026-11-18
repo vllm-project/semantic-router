@@ -40,6 +40,7 @@ type LookupResult struct {
 	Age           time.Duration
 	AgeKnown      bool
 	NegationGuard NegationGuardOutcome // semantic hits only
+	RequestID     string               // the request that wrote a semantic hit's entry
 }
 
 // lookupResultFromTimestamps constructs a successful LookupResult and calculates Age / AgeKnown.

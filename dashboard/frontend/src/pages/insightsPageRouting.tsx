@@ -1,10 +1,13 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 
-import type { ViewSection } from '../components/ViewPanel'
+import type { ViewField, ViewSection } from '../components/ViewPanel'
 import type { InsightsRecord } from './insightsPageTypes'
 import type { ReplaySessionPolicy } from './insightsPageRoutingTypes'
+import { ModelName } from './insightsModelLabelSupport'
+import { getTurnPath } from './insightsReviewSupport'
 import InsightsSelectionTrace from './InsightsSelectionTrace'
-import styles from './InsightsPage.module.css'
+import { TABLE, TABLE_WRAP } from './insightsEvidenceStyles'
 
 function metric(value: number | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(4) : '—'
@@ -12,8 +15,8 @@ function metric(value: number | undefined) {
 
 function diagnosticTable(headers: string[], rows: Array<{ key: string; cells: ReactNode[] }>) {
   return (
-    <div className={styles.projectionTraceWrap}>
-      <table className={styles.projectionTraceTable}>
+    <div className={TABLE_WRAP}>
+      <table className={TABLE}>
         <thead>
           <tr>
             {headers.map((header) => (
@@ -70,7 +73,7 @@ function protectionCandidates(policy: ReplaySessionPolicy): ViewSection[] {
               return {
                 key: model,
                 cells: [
-                  model,
+                  <ModelName key="model" name={model} compact />,
                   metric(policy.base_scores?.[model] ?? trace?.base_score),
                   metric(policy.final_scores?.[model] ?? trace?.final_score),
                   metric(trace?.quality_gap),
@@ -87,6 +90,26 @@ function protectionCandidates(policy: ReplaySessionPolicy): ViewSection[] {
       ],
     },
   ]
+}
+
+// The Codex ids a request carries, when it has them; each turn opens the list of that
+// turn's calls, reviews and subagents' calls.
+function codexTurnFields(record: InsightsRecord): ViewField[] {
+  const turnLink = (turn: string) => (
+    <Link
+      className="break-all font-mono text-[12.5px] text-primary hover:underline"
+      to={getTurnPath(turn)}
+    >
+      {turn}
+    </Link>
+  )
+  const fields: ViewField[] = []
+  if (record.thread_id) fields.push({ label: 'Codex thread', value: record.thread_id })
+  if (record.turn_id) fields.push({ label: 'Codex turn', value: turnLink(record.turn_id) })
+  if (record.parent_turn_id) {
+    fields.push({ label: 'Parent turn', value: turnLink(record.parent_turn_id) })
+  }
+  return fields
 }
 
 export function buildRoutingExplanationSections(record: InsightsRecord): ViewSection[] {
@@ -111,21 +134,41 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
   }
   const policy =
     record.learning?.protection ?? record.session_policy ?? record.learning?.protection_preflight
-  if (record.session_id || policy) {
+  const codexFields = codexTurnFields(record)
+  if (record.session_id || policy || codexFields.length > 0) {
     sections.push({
       title: 'Session Routing',
       fields: [
         { label: 'Session', value: record.session_id || 'Not recorded' },
         { label: 'Conversation', value: record.conversation_id || 'Not recorded' },
         { label: 'Turn', value: record.turn_index + 1 },
+        ...codexFields,
         {
           label: 'Previous model',
-          value: diagnostics?.previous_model || policy?.current_model || 'Not recorded',
+          value: (
+            <ModelName
+              name={diagnostics?.previous_model || policy?.current_model}
+              fallback="Not recorded"
+            />
+          ),
         },
-        { label: 'Actual selected model', value: record.selected_model || 'No backend selected' },
+        {
+          label: 'Actual selected model',
+          value: <ModelName name={record.selected_model} fallback="No backend selected" />,
+        },
         { label: 'Protection mode', value: policy?.mode || 'Not applied' },
         { label: 'Protection scope', value: policy?.scope || 'Not recorded' },
-        { label: 'Eligible models', value: policy?.candidate_models?.join(', ') || 'Not recorded' },
+        {
+          label: 'Eligible models',
+          value: policy?.candidate_models?.length
+            ? policy.candidate_models.map((model, index) => (
+                <Fragment key={model}>
+                  {index > 0 ? ', ' : null}
+                  <ModelName name={model} compact />
+                </Fragment>
+              ))
+            : 'Not recorded',
+        },
         {
           label: 'Session identity header',
           value: policy?.identity?.headers?.session || 'Not recorded',
@@ -156,7 +199,7 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
           ? [
               {
                 label: policy.mode === 'observe' ? 'Observed model suggestion' : 'Protected model',
-                value: policy.selected_model || 'Not recorded',
+                value: <ModelName name={policy.selected_model} fallback="Not recorded" />,
               },
               {
                 label: policy.mode === 'observe' ? 'Observed hold reason' : 'Hold reason',
@@ -205,7 +248,7 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
               .map(([model, score]) => ({
                 key: model,
                 cells: [
-                  model,
+                  <ModelName key="model" name={model} compact />,
                   metric(score.score),
                   metric(score.predicted_quality),
                   metric(score.cost_penalty),
@@ -240,7 +283,7 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
               key: String(index),
               cells: [
                 demand.stage,
-                demand.model || 'Unselected',
+                demand.model ? <ModelName key="model" name={demand.model} compact /> : 'Unselected',
                 demand.prompt_tokens,
                 demand.reserved_output_tokens,
                 demand.total_demand_known ? demand.total_demand_tokens : 'Unknown',

@@ -16,6 +16,9 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateInputModalityContracts(cfg); err != nil {
 		return err
 	}
+	if err := validateAgentContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateSystemOneContracts(cfg); err != nil {
 		return err
 	}
@@ -329,7 +332,8 @@ func validateGlobalPluginContracts(cfg *RouterConfig) error {
 
 // validateDefaultPluginContracts checks the plugins a request that matches no
 // decision runs, global.plugins layered with its recipe's, as a decision's
-// plugins are checked.
+// plugins are checked, with the automatic output they run on the default
+// model.
 func validateDefaultPluginContracts(cfg *RouterConfig) error {
 	recipes := cfg.Recipes
 	if len(recipes) == 0 {
@@ -341,6 +345,13 @@ func validateDefaultPluginContracts(cfg *RouterConfig) error {
 			return fmt.Sprintf("%s[%s].configuration", owner, NormalizeDecisionPluginType(pluginType))
 		}
 		if err := validatePluginContracts(cfg, owner, recipes[i].Profile.DefaultPlugins, configuration); err != nil {
+			return err
+		}
+		unmatched := Decision{Name: owner, Plugins: recipes[i].Profile.DefaultPlugins, ModelRefs: []ModelRef{{Model: cfg.DefaultModel}}}
+		if err := validateDecisionAutomaticOutput(unmatched); err != nil {
+			return err
+		}
+		if err := validateDecisionAutomaticOutputCandidates(cfg, unmatched); err != nil {
 			return err
 		}
 	}
@@ -416,6 +427,8 @@ func validatePluginContracts(
 			err = validateContextPlugin(cfg, path, typed)
 		case *ResponseCachePluginConfig:
 			err = validateMatch(cfg, path+".semantic.match", typed.SemanticMatch(), MatchResponseCache)
+		case *RouterReplayPluginConfig:
+			err = validateRouterReplayCostBaseline(cfg, path, typed)
 		}
 		if err != nil {
 			return err

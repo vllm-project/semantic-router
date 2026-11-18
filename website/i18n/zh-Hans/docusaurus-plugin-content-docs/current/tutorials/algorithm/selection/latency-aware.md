@@ -38,7 +38,7 @@ algorithm:
     latency_percentile: 90
 ```
 
-`latency_percentile` 选择比较每个候选时使用的观测延迟百分位。默认情况下，`multi_factor` 比较每个输出 token 的时间（TPOT）；当某个候选没有 TPOT 样本时，比较其首 token 时间（TTFT）。设置 `latency_metric: ttft` 或 `tpot` 可只比较一种测量值。延迟观测值只在单个 Router 进程内有效；它不是集群级的调度器。SLO 上限和其他因素见 [Multi Factor](./multi-factor)。
+`latency_percentile` 选择比较每个候选时使用的观测延迟百分位。默认情况下，`multi_factor` 比较每个输出 token 的时间（TPOT）；当某个候选没有 TPOT 样本时，比较其首 token 时间（TTFT）。设置 `latency_metric: ttft` 或 `tpot` 可只比较一种测量值。延迟只在成功响应上观测，因此快速失败的模型不会显得更快。延迟观测值只在单个 Router 进程内有效；它不是集群级的调度器。SLO 上限和其他因素见 [Multi Factor](./multi-factor)。
 
 ### 从 latency_aware 迁移
 

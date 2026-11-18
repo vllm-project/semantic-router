@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 import type { FieldSchema } from '../lib/dslSchemas'
 import { routerConfigFieldAtPath } from '../lib/routerConfigSchema'
+import { DEFAULT_SECTIONS } from './configPageRouterDefaultsCatalog'
 import { buildRouterSectionCards } from './configPageRouterDefaultsSupport'
 import { getRouterStructuredFieldDefinition } from './configPageRouterStructuredFields'
 import {
@@ -38,34 +39,42 @@ function expectGeneratedChildrenRendered(generated: FieldSchema, rendered: Route
 }
 
 describe('router defaults structured schemas', () => {
-  it('edits global Replay capture defaults without losing explicit false or zero values', () => {
-    const replay = {
-      enabled: true,
-      store_backend: 'memory',
-      capture_request_body: false,
-      capture_response_body: true,
-      capture_personal_data: false,
-      capture_tool_results: false,
-      max_body_bytes: 0,
-      max_tool_trace_steps: 0,
-    }
+  it('offers no Replay, memory or response cache switch, which v0.5 reads from global.plugins', () => {
+    const replay = { store_backend: 'memory', ttl_seconds: 3600, async_writes: false }
     const cards = buildRouterSectionCards({
       config: null,
       routerConfig: { router_replay: replay },
       routerDefaults: null,
     })
+    const fields = (key: string) =>
+      cards.find((item) => item.key === key)!.editFields.map((field) => field.name)
+    for (const [key, removed] of [
+      ['router_replay', 'enabled'],
+      ['router_replay', 'capture_request_body'],
+      ['router_replay', 'capture_response_body'],
+      ['router_replay', 'prompt_capture'],
+      ['router_replay', 'capture_personal_data'],
+      ['router_replay', 'capture_tool_results'],
+      ['router_replay', 'max_prompt_bytes'],
+      ['router_replay', 'max_tool_trace_total_bytes'],
+      ['memory', 'enabled'],
+      ['response_cache', 'enabled'],
+      ['response_cache', 'similarity_threshold'],
+    ]) {
+      expect(fields(key), `${key}.${removed}`).not.toContain(removed)
+    }
     const card = cards.find((item) => item.key === 'router_replay')!
-    expect(card.editFields.map((field) => field.name)).toEqual(
-      expect.arrayContaining([
-        'capture_request_body',
-        'capture_response_body',
-        'capture_personal_data',
-        'capture_tool_results',
-      ]),
-    )
     expect(card.save(card.editData)).toMatchObject({
       services: { router_replay: replay },
     })
+  })
+
+  it('offers the file store Replay keeps its records in by default', () => {
+    const card = buildRouterSectionCards({ config: null, routerConfig: {}, routerDefaults: null }).find(
+      (item) => item.key === 'router_replay',
+    )!
+    expect(card.editFields.find((field) => field.name === 'store_backend')?.options).toContain('file')
+    expect((DEFAULT_SECTIONS.router_replay as { store_backend?: string }).store_backend).toBe('file')
   })
 
   it('normalizes typed lists and objects while preserving advanced keys', () => {
@@ -230,6 +239,49 @@ describe('router defaults structured schemas', () => {
     expect(embeddingPatch.model_catalog?.embeddings).not.toHaveProperty('semantic')
   })
 
+  it('edits spend budgets as their own services card', () => {
+    const cards = buildRouterSectionCards({
+      config: null,
+      routerConfig: {
+        budgets: {
+          run: { limit: 2 },
+          users: [{ name: 'daily', match: { group: 'eng' }, limit: 10, window: 'day' }],
+        },
+      },
+      routerDefaults: null,
+    })
+    const budgets = cards.find((card) => card.key === 'budgets')
+    expect(budgets?.title).toBe('Spend Budgets')
+    expect(budgets?.layer).toBe('services')
+    expect(budgets?.summary).toEqual(
+      expect.arrayContaining([
+        { label: 'Run limit', value: '2 USD' },
+        { label: 'User budgets', value: '1' },
+        { label: 'Unpriced calls', value: 'refuse' },
+      ]),
+    )
+    expect(budgets?.editFields.map((field) => field.name)).toEqual(
+      expect.arrayContaining(['currency', 'unpriced', 'output_reserve_tokens', 'run', 'users']),
+    )
+    const window = ROUTER_STRUCTURED_FIELDS.budgets?.users.schema.item?.fields?.window
+    expect(window?.options).toEqual(['hour', 'day', 'week', 'month'])
+    expect(
+      budgets?.save({
+        unpriced: 'allow',
+        run: { limit: 5, idle_timeout_seconds: 3600 },
+        users: [{ name: 'daily', match: { user: '*' }, limit: 10, window: 'day' }],
+      }),
+    ).toEqual({
+      services: {
+        budgets: {
+          unpriced: 'allow',
+          run: { limit: 5, idle_timeout_seconds: 3600 },
+          users: [{ name: 'daily', match: { user: '*' }, limit: 10, window: 'day' }],
+        },
+      },
+    })
+  })
+
   it('surfaces canonical global capabilities while leaving KBs to the raw config', () => {
     const cards = buildRouterSectionCards({
       config: null,
@@ -265,6 +317,30 @@ describe('router defaults structured schemas', () => {
       if (['model_catalog.kbs', 'model_catalog.bindings'].includes(section.path.join('.'))) continue
       expect(renderedPaths).toContain(section.path.join('.'))
     }
+  })
+
+  it('edits the protection cache economics with their bounds', () => {
+    const economics =
+      ROUTER_STRUCTURED_FIELDS.learning?.protection.schema.fields?.tuning.fields?.cache_economics
+    expect(economics?.label).toBe('Cache Economics')
+    expect(Object.keys(economics?.fields ?? {})).toEqual([
+      'enabled',
+      'cache_ttl_seconds',
+      'default_remaining_turns',
+    ])
+    expect(
+      normalizeRouterStructuredValue(economics!, {
+        enabled: true,
+        cache_ttl_seconds: 3600,
+        default_remaining_turns: 5,
+      }),
+    ).toEqual({ enabled: true, cache_ttl_seconds: 3600, default_remaining_turns: 5 })
+    expect(() => normalizeRouterStructuredValue(economics!, { cache_ttl_seconds: 0 })).toThrow(
+      /at least 1/i,
+    )
+    expect(() => normalizeRouterStructuredValue(economics!, { default_remaining_turns: 0 })).toThrow(
+      /at least 1/i,
+    )
   })
 
   it('recursively augments specialized controls with every generated nested field', () => {

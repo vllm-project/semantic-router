@@ -7,6 +7,8 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount/tokenizerspec"
 )
 
 // CanonicalConfigVersion identifies the steady-state public configuration
@@ -95,6 +97,7 @@ type CanonicalSignals struct {
 	Conversation  []ConversationRule  `yaml:"conversation,omitempty"`
 	Metadata      []MetadataRule      `yaml:"metadata,omitempty"`
 	InputModality []InputModalityRule `yaml:"input_modality,omitempty"`
+	Agent         []AgentRule         `yaml:"agent,omitempty"`
 	SystemOne     []SystemOneRule     `yaml:"systemone,omitempty"`
 }
 
@@ -142,7 +145,7 @@ func isCanonicalConfig(raw map[string]interface{}) bool {
 	return hasGlobal || hasRecipes || hasEntrypoints
 }
 
-func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error) {
+func normalizeCanonicalConfig(canonical *CanonicalConfig, skipExternalAssets bool) (*RouterConfig, error) {
 	if err := validateCanonicalContract(canonical); err != nil {
 		return nil, err
 	}
@@ -172,11 +175,18 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	cfg := DefaultGlobalConfig()
+	cfg.SkipExternalAssetValidation = skipExternalAssets
 	if applyErr := applyCanonicalGlobal(&cfg, &global); applyErr != nil {
 		return nil, applyErr
 	}
 
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
+	if err := normalizeListenerAPIs(cfg.Listeners); err != nil {
+		return nil, err
+	}
+	if err := readListenerKeyFiles(cfg.Listeners, skipExternalAssets); err != nil {
+		return nil, err
+	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 	cfg.GlobalPlugins = copyDecisionPlugins(global.Plugins)
 	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {
@@ -185,6 +195,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := applyEffectiveModelRegistry(&cfg, effective, canonical.Providers.Models); err != nil {
 		return nil, err
 	}
+	cfg.DefaultBackendTLS = cloneProviderDefaultsTLS(canonical.Providers.Defaults.TLS)
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -390,6 +401,14 @@ func validateCanonicalProviderModelMetadata(model CanonicalProviderModel) error 
 	if err := validateProviderReliability(model.Name, model.Reliability); err != nil {
 		return err
 	}
+	if _, err := llmprotocol.ParseUnsupportedCapabilities(model.UnsupportedCapabilities); err != nil {
+		return fmt.Errorf("providers.models[%s].unsupported_capabilities: %w", model.Name, err)
+	}
+	if model.Tokenizer != "" {
+		if _, err := tokenizerspec.Parse(model.Tokenizer); err != nil {
+			return fmt.Errorf("providers.models[%s].tokenizer: %w", model.Name, err)
+		}
+	}
 	return validateModelPricing(model.Name, model.Pricing)
 }
 
@@ -454,14 +473,29 @@ func validateCanonicalDecisions(path string, decisions []Decision, aliases map[s
 	return nil
 }
 
+// validateCanonicalDecisionModelRefs checks the models a decision names: its
+// modelRefs and its candidate iterations' models.
 func validateCanonicalDecisionModelRefs(path string, decision Decision, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel) error {
-	for _, modelRef := range decision.ModelRefs {
+	at := fmt.Sprintf("%s.decisions[%s]", path, decision.Name)
+	if err := validateCanonicalModelRefs(at+".modelRefs", decision.ModelRefs, aliases, cards); err != nil {
+		return err
+	}
+	for i, iteration := range decision.CandidateIterations {
+		if err := validateCanonicalModelRefs(fmt.Sprintf("%s.candidateIterations[%d].models", at, i), iteration.Models, aliases, cards); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateCanonicalModelRefs(path string, refs []ModelRef, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel) error {
+	for _, modelRef := range refs {
 		if modelRef.Model == "" {
 			continue
 		}
 		if len(aliases) > 0 {
 			if _, ok := aliases[modelRef.Model]; !ok && !aliasLoRAExists(modelRef.Model, aliases, cards) {
-				return fmt.Errorf("%s.decisions[%s].modelRefs[%s] references unknown model %q", path, decision.Name, modelRef.Model, modelRef.Model)
+				return fmt.Errorf("%s[%s] references unknown model %q", path, modelRef.Model, modelRef.Model)
 			}
 		}
 		if modelRef.LoRAName == "" {
@@ -480,7 +514,7 @@ func validateCanonicalDecisionModelRefs(path string, decision Decision, aliases 
 			continue
 		}
 		if !routingModelHasLoRA(card, modelRef.LoRAName) {
-			return fmt.Errorf("%s.decisions[%s].modelRefs[%s].lora_name %q not found in the loras of model card %q", path, decision.Name, modelRef.Model, modelRef.LoRAName, cardID)
+			return fmt.Errorf("%s[%s].lora_name %q not found in the loras of model card %q", path, modelRef.Model, modelRef.LoRAName, cardID)
 		}
 	}
 
@@ -520,6 +554,7 @@ func normalizeSignals(signals CanonicalSignals) Signals {
 		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
+		AgentRules:         append([]AgentRule(nil), signals.Agent...),
 		SystemOneRules:     append([]SystemOneRule(nil), signals.SystemOne...),
 	}
 }

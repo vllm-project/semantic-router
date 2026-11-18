@@ -107,6 +107,19 @@ func TestValidateStickyToolSelectionPhaseSupport_NoStickyDecisions_OK(t *testing
 	}
 }
 
+// global.plugins reach a request that matches no decision, so sticky
+// selection there needs the phase support and the secret a decision's does.
+func TestStickyToolSelectionOfTheDefaultPluginsIsChecked(t *testing.T) {
+	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
+	cfg := &config.RouterConfig{GlobalPlugins: stickyEnabledDecision(t, "unused").Plugins}
+	if err := validateStickyToolSelectionPhaseSupport(cfg); !errors.Is(err, config.ErrToolSelectionStickyUnsupported) {
+		t.Fatalf("sticky selection in global.plugins: phase support = %v, want ErrToolSelectionStickyUnsupported", err)
+	}
+	if err := validateStickyToolSelectionSecret(cfg); err == nil {
+		t.Fatal("sticky selection in global.plugins passed without USER_SCOPE_NAMESPACE_SECRET")
+	}
+}
+
 func TestValidateStickyToolSelectionSecret_NilConfig_OK(t *testing.T) {
 	t.Setenv("USER_SCOPE_NAMESPACE_SECRET", "")
 	if err := validateStickyToolSelectionSecret(nil); err != nil {

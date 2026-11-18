@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -29,7 +30,9 @@ func TestContextPluginValidation(t *testing.T) {
 			Injection: &ContextInjectionConfig{Mode: ContextInjectionSystemPrompt},
 		}
 	}
-	if err := validateContextPlugin(matchConfig(), "p", full()); err != nil {
+	cfg := matchConfig()
+	cfg.VectorStore = &VectorStoreConfig{Enabled: true, BackendType: "milvus"}
+	if err := validateContextPlugin(cfg, "p", full()); err != nil {
 		t.Fatalf("a complete plugin is refused: %v", err)
 	}
 	cases := map[string]struct {
@@ -77,7 +80,7 @@ func TestContextPluginValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			plugin := full()
 			tc.edit(plugin)
-			err := validateContextPlugin(matchConfig(), "p", plugin)
+			err := validateContextPlugin(cfg, "p", plugin)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error %v, want %q", err, tc.want)
 			}
@@ -85,7 +88,7 @@ func TestContextPluginValidation(t *testing.T) {
 	}
 	disabled := full()
 	disabled.Enabled, disabled.Sources[0].Backend = false, "mcp"
-	if err := validateContextPlugin(matchConfig(), "p", disabled); err != nil {
+	if err := validateContextPlugin(cfg, "p", disabled); err != nil {
 		t.Fatalf("a disabled plugin is not checked: %v", err)
 	}
 }
@@ -153,5 +156,45 @@ func TestContextPluginMatchJudges(t *testing.T) {
 	decision.Plugins[0].Configuration = MustStructuredPayload(plugin)
 	if judges := decision.MatchJudges(); len(judges) != 0 {
 		t.Fatalf("a disabled plugin judges nothing: %+v", judges)
+	}
+}
+
+// A vectorstore source, or a hybrid source with a vectorstore backend,
+// searches the Router's vector store, so it loads only where
+// global.stores.vector_store is enabled.
+func TestVectorStoreRAGSourceNeedsAnEnabledVectorStore(t *testing.T) {
+	const plugin = `
+global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: rag
+            match: {recall: {method: embedding, top_k: 3}}
+%s
+`
+	const vectorstore = `            backend: vectorstore
+            backend_config: {vector_store_id: vs_docs}`
+	const hybrid = `            backend: hybrid
+            backend_config: {primary: milvus, primary_config: {collection: docs}, fallback: vectorstore, fallback_config: {vector_store_id: vs_docs}}`
+	const enabled = `
+  stores:
+    vector_store: {enabled: true, backend_type: memory}`
+	for name, tc := range map[string]struct {
+		source, stores string
+		loads          bool
+	}{
+		"no vector store":       {source: vectorstore},
+		"disabled vector store": {source: vectorstore, stores: "\n  stores:\n    vector_store: {enabled: false, backend_type: memory}"},
+		"hybrid fallback":       {source: hybrid},
+		"enabled vector store":  {source: vectorstore, stores: enabled, loads: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + fmt.Sprintf(plugin, tc.source) + tc.stores))
+			if tc.loads != (err == nil) || (err != nil && !strings.Contains(err.Error(), "global.stores.vector_store.enabled")) {
+				t.Fatalf("loads=%v, error %v", tc.loads, err)
+			}
+		})
 	}
 }

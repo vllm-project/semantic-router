@@ -12,9 +12,11 @@ import (
 	"sync"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -32,6 +34,7 @@ type Runner struct {
 	cluster             *cluster.KindCluster
 	builder             *docker.Builder
 	restConfig          *rest.Config
+	kubeConfig          string
 	reporter            *ReportGenerator
 }
 
@@ -139,7 +142,7 @@ func (r *Runner) restartLocalImageDeployments(ctx context.Context, client *kuber
 	}
 	for _, image := range r.profileCapabilities.LocalImages {
 		for _, target := range image.RolloutRestarts {
-			_, err := client.AppsV1().Deployments(target.Namespace).Get(
+			deployment, err := client.AppsV1().Deployments(target.Namespace).Get(
 				ctx, target.Deployment, metav1.GetOptions{})
 			if skipMissingLocalImageDeployment(err) {
 				r.log("Skipping restart of %s/%s: deployment not found",
@@ -150,12 +153,51 @@ func (r *Runner) restartLocalImageDeployments(ctx context.Context, client *kuber
 				return fmt.Errorf("check deployment %s/%s: %w",
 					target.Namespace, target.Deployment, err)
 			}
+			replaced, err := deploymentPods(ctx, client, deployment)
+			if err != nil {
+				return err
+			}
 			if err := r.rolloutRestartDeployment(ctx, target.Namespace, target.Deployment); err != nil {
 				return err
+			}
+			if err := waitForPodsDeleted(ctx, client, replaced); err != nil {
+				return fmt.Errorf("wait for replaced pods of %s/%s: %w",
+					target.Namespace, target.Deployment, err)
 			}
 		}
 	}
 	return nil
+}
+
+func deploymentPods(ctx context.Context, client *kubernetes.Clientset, deployment *appsv1.Deployment) ([]corev1.Pod, error) {
+	selector, err := metav1.LabelSelectorAsSelector(deployment.Spec.Selector)
+	if err != nil {
+		return nil, err
+	}
+	pods, err := client.CoreV1().Pods(deployment.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
+	if err != nil {
+		return nil, err
+	}
+	return pods.Items, nil
+}
+
+// waitForPodsDeleted returns once every given pod is gone. Rollout status
+// returns while a replaced pod is still terminating, and the gateway keeps
+// sending it requests it no longer accepts until it leaves the endpoints.
+func waitForPodsDeleted(ctx context.Context, client *kubernetes.Clientset, pods []corev1.Pod) error {
+	return wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 2*time.Minute, true,
+		func(ctx context.Context) (bool, error) {
+			for _, pod := range pods {
+				_, err := client.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
+				if err == nil {
+					return false, nil
+				}
+				if !apierrors.IsNotFound(err) {
+					return false, err
+				}
+			}
+			return true, nil
+		})
 }
 
 func skipMissingLocalImageDeployment(err error) bool {
@@ -202,39 +244,13 @@ func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset)
 		}
 	}
 
-	// Get test cases to run
-	var testCasesToRun []testcases.TestCase
-	var err error
-
-	if len(r.opts.TestCases) > 0 {
-		// Run specific test cases
-		r.log("Requested test cases: %v", r.opts.TestCases)
-		testCasesToRun, err = testcases.ListByNames(r.opts.TestCases...)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Run all test cases for the profile
-		profileTestCases := r.profile.GetTestCases()
-		if r.opts.Profile == "envoy-ai-gateway" {
-			profileTestCases, err = testmatrix.BaselineCases(r.opts.BaselineSuite)
-			if err != nil {
-				return nil, err
-			}
-		}
-		r.log("Profile test cases: %v", profileTestCases)
-		testCasesToRun, err = testcases.ListByNames(profileTestCases...)
-		if err != nil {
-			return nil, err
-		}
+	testCasesToRun, err := r.selectTestCases()
+	if err != nil {
+		return nil, err
 	}
-
 	inventory := make([]string, 0, len(testCasesToRun))
 	for _, tc := range testCasesToRun {
 		inventory = append(inventory, tc.Name)
-	}
-	if err := validateCaseInventory(inventory); err != nil {
-		return nil, err
 	}
 	r.reporter.report.ExpectedCases = inventory
 	r.log("Running %d test cases", len(testCasesToRun))
@@ -267,6 +283,61 @@ func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset)
 	return results, nil
 }
 
+// selectTestCases is the run's cases: the requested ones, or the profile's
+// cases in the run's scope. Run calls it before any setup, so a scope that
+// leaves a profile nothing to run stops before the cluster is built.
+func (r *Runner) selectTestCases() ([]testcases.TestCase, error) {
+	var cases []testcases.TestCase
+	var err error
+	if len(r.opts.TestCases) > 0 {
+		r.log("Requested test cases: %v", r.opts.TestCases)
+		cases, err = testcases.ListByNames(r.opts.TestCases...)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		profileTestCases := r.profile.GetTestCases()
+		if r.opts.Profile == "envoy-ai-gateway" {
+			profileTestCases = testmatrix.BaselineCases()
+		}
+		r.log("Profile test cases: %v", profileTestCases)
+		cases, err = testcases.ListByNames(profileTestCases...)
+		if err != nil {
+			return nil, err
+		}
+		cases, err = casesInScope(cases, r.opts.BaselineSuite)
+		if err != nil {
+			return nil, err
+		}
+		if len(cases) == 0 {
+			return nil, fmt.Errorf("profile %s has no case in scope %q", r.profile.Name(), r.opts.BaselineSuite)
+		}
+	}
+	inventory := make([]string, 0, len(cases))
+	for _, tc := range cases {
+		inventory = append(inventory, tc.Name)
+	}
+	if err := validateCaseInventory(inventory); err != nil {
+		return nil, err
+	}
+	return cases, nil
+}
+
+// casesInScope keeps the cases a scope runs, by each case's priority.
+func casesInScope(cases []testcases.TestCase, scope string) ([]testcases.TestCase, error) {
+	kept := make([]testcases.TestCase, 0, len(cases))
+	for _, tc := range cases {
+		in, err := testcases.InScope(tc, scope)
+		if err != nil {
+			return nil, err
+		}
+		if in {
+			kept = append(kept, tc)
+		}
+	}
+	return kept, nil
+}
+
 func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clientset, tc testcases.TestCase) TestResult {
 	r.log("Running test: %s", tc.Name)
 
@@ -277,8 +348,9 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 
 	// Create result to capture details
 	result := TestResult{
-		Name:    tc.Name,
-		Details: make(map[string]interface{}),
+		Name:     tc.Name,
+		Priority: string(tc.EffectivePriority()),
+		Details:  make(map[string]interface{}),
 	}
 
 	opts := testcases.TestCaseOptions{
@@ -287,6 +359,7 @@ func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clien
 		Namespace:     "default",
 		Timeout:       "5m",
 		RestConfig:    r.restConfig,
+		KubeConfig:    r.kubeConfig,
 		ServiceConfig: svcConfig,
 		SetDetails: func(details map[string]interface{}) {
 			result.Details = details
@@ -365,6 +438,9 @@ func (r *Runner) printResults(results []TestResult) {
 		}
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
+		}
+		if !result.Passed && os.Getenv("GITHUB_ACTIONS") == "true" {
+			fmt.Println(failureAnnotation(r.profile.Name(), result))
 		}
 	}
 
@@ -580,4 +656,17 @@ func prebuiltFixtureImage(dockerfile string) string {
 	default:
 		return ""
 	}
+}
+
+// failureAnnotation is a GitHub Actions error line for a failed case, so it
+// shows in the check run with its profile and case name instead of only in
+// the job log.
+func failureAnnotation(profile string, result TestResult) string {
+	message := "failed"
+	if result.Error != nil {
+		message = result.Error.Error()
+	}
+	escape := strings.NewReplacer("%", "%25", "\r", "%0D", "\n", "%0A").Replace
+	title := strings.NewReplacer(",", "%2C", ":", "%3A").Replace(escape(profile + " / " + result.Name))
+	return fmt.Sprintf("::error title=E2E %s::%s", title, escape(message))
 }

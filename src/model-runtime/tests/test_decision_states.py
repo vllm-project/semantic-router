@@ -16,7 +16,7 @@ from vllm_srun.runtime import Runtime
 from vllm_srun.testing.fixtures import write_fixture
 from vllm_srun.text import bounds
 
-from .conftest import QUESTIONS, STATE
+from .conftest import QUESTIONS, STATE, start_runtime
 from .test_api_contract import check
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -165,8 +165,34 @@ def test_a_bundle_task_carries_a_batch(runtimes):
     assert set(direct["states"]) == {"1", "2"}
 
 
+def test_an_idle_runtime_answers_a_batch_of_more_entries_than_its_queue(
+    qwen3_package,
+):
+    # Each entry is a job of its own, so a batch, alone or in a bundle task,
+    # can hold more than --max-queue: with nothing else queued it runs.
+    runtime = start_runtime(qwen3_package, max_queue=2)
+    try:
+        client = TestClient(create_app(runtime))
+        questions = {"reasoning": QUESTIONS["reasoning"]}
+        body = {
+            "states": {
+                str(i): {"state": f"Request {i}", "questions": questions}
+                for i in range(3)
+            }
+        }
+        response = client.post("/v1/decisions", json=body)
+        assert response.status_code == 200, response.text
+        assert set(response.json()["states"]) == {"0", "1", "2"}
+        bundle = client.post(
+            "/v1/bundle", json={"tasks": [{"id": "a", "decisions": body}]}
+        )
+        assert bundle.json()["results"][0]["status"] == 200, bundle.text
+    finally:
+        runtime.stop()
+
+
 def test_an_entry_whose_questions_are_invalid_answers_them_so(runtimes):
-    client = TestClient(create_app(runtimes["vela2"]))
+    client = TestClient(create_app(runtimes["vela2"], systemone_schema="vllm-sr/4.0"))
     invalid = {"q": {"type": "choice", "instructions": "Which?", "criteria": {}}}
     valid = {
         "state": "What is the capital of France?",
@@ -211,7 +237,7 @@ def test_an_entry_whose_questions_are_invalid_answers_them_so(runtimes):
     ],
 )
 def test_a_batch_with_a_standard_requests_fields_is_refused(runtimes, path, mixed):
-    client = TestClient(create_app(runtimes["vela2"]))
+    client = TestClient(create_app(runtimes["vela2"], systemone_schema="vllm-sr/4.0"))
     entry = {
         "state": "Translate hello to French.",
         "questions": vela2_questions("domain"),

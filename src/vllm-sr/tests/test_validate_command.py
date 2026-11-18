@@ -484,16 +484,6 @@ recipes:
         ),
         (
             """
-    - name: frontier
-      catalog: openai/gpt-5.4
-      api_format: bogus
-      backend_refs:
-        - provider: openai
-""",
-            "api_format 'bogus' is unsupported",
-        ),
-        (
-            """
     - name: private-deployment
       provider_model_id: deployment-name
       api_format: openai
@@ -527,6 +517,35 @@ recipes:
     assert result.exit_code == 1
     assert "Configuration validation failed" in result.output
     assert expected_error in result.output
+
+
+def test_validate_command_names_the_apis_an_api_format_may_name(tmp_path):
+    config_path = _write_config(
+        tmp_path,
+        """
+version: v0.5
+listeners: []
+providers:
+  models:
+    - name: frontier
+      catalog: openai/gpt-5.4
+      api_format: bogus
+      backend_refs:
+        - provider: openai
+recipes:
+  - name: default
+""",
+    )
+
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path)]
+    )
+
+    assert result.exit_code == 1
+    assert (
+        "api_format: 'bogus' is not one of ['chat_completions', 'responses', 'messages'"
+        in " ".join(result.output.split())
+    )
 
 
 @pytest.mark.parametrize(

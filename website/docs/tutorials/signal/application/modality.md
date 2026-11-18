@@ -4,7 +4,7 @@
 
 `modality` reads which output the request asks for: text, an image, text with an image, speech, audio or video.
 It asks the `modality`
-[preset](../../../system-one/reference#preset-catalog), "What kind of output
+[preset](../../../system-one/reference/presets#preset-catalog), "What kind of output
 does this request ask for?", over eight options: `text`, `image`,
 `text_image`, `image_edit`, `speech`, `audio`, `video` and `video_edit`.
 
@@ -75,7 +75,7 @@ load with `output_not_executable`.
 
 The decision model answers every modality rule, unless the `modality`
 binding or the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). vela3-fast and the
+[Choose a deployment](../../../system-one/deploy/deployments). vela3-fast and the
 Vela 3.0 d3 sizes were trained on three of the options, `text`, `image` and
 `text_image` (asked in the trained form as `AR`, `DIFFUSION` and `BOTH`, and
 mapped back); a question that needs another option is asked zero-shot. It

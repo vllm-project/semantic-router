@@ -13,7 +13,7 @@ runtime downloads it at an immutable revision when the Router starts.
 Embeddings come from the `vela-embedding` deployment that
 `global.model_catalog.embeddings.default` names.
 Model upgrades preserve the bounded input policies; see
-[Choose a deployment](../../website/docs/system-one/deployments.md) before
+[Choose a deployment](../../website/docs/system-one/deploy/deployments.md) before
 changing the decision model.
 
 New deployments request a 20 GiB model volume for the native and ONNX runtime

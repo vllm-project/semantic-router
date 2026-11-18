@@ -64,6 +64,8 @@
             "x-user-vertex-ai-key",
             "x-vsr-bench-expected-config-hash",
             "x-vsr-bench-max-inference-calls",
+            "x-vsr-budget-remaining",
+            "x-vsr-budget-scope",
             "x-vsr-cache-control",
             "x-vsr-compression-control",
             "x-vsr-config-hash",
@@ -131,7 +133,13 @@
             }
           ],
           "remove": [
+            "api-key",
+            "api-subscription-key",
+            "chatgpt-account-id",
             "content-length",
+            "ocp-apim-subscription-key",
+            "x-api-key",
+            "x-goog-api-key",
             "x-user-anthropic-key",
             "x-user-azure-openai-key",
             "x-user-bedrock-key",
@@ -187,6 +195,10 @@
             {
               "name": "x-vsr-selected-model",
               "value": "general-large"
+            },
+            {
+              "name": "x-vsr-replay-id",
+              "value": "<volatile>"
             }
           ],
           "remove": [
@@ -325,6 +337,10 @@
       {
         "name": "x-vsr-selected-model",
         "value": "general-large"
+      },
+      {
+        "name": "x-vsr-replay-id",
+        "value": "<volatile>"
       }
     ],
     "chunks": [

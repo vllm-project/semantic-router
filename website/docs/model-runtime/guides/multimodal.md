@@ -1,6 +1,7 @@
 ---
 title: Images and audio
 description: Serve the Vela Omni embedding models, which embed text, images and audio, on the model runtime.
+sidebar_position: 2
 ---
 
 # Images and audio

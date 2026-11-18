@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
+import { ArrowLeft, Search } from 'lucide-react'
+import { Button, InputGroup } from '../../ui'
 import { benchApi } from './api'
 import BenchPagination from './BenchPagination'
 import CallDetail from './CallDetail'
 import { money, number, seconds } from './model'
 import type { CallRecord, Manifest, PageState } from './types'
 import { targetName } from './targetPresentation'
-import styles from './SrBench.module.css'
-import ProductIcon from '../ProductIcon'
-import ProductLoadingState from '../ProductLoadingState'
+import { BenchLoading, Notice, TableFrame } from './benchUi'
+import { benchTable, benchText, linkButtonClass } from './benchStyles'
 
 export default function CallEvidence({
   id,
@@ -52,25 +53,26 @@ export default function CallEvidence({
     return () => controller.abort()
   }, [id, selected])
   return (
-    <section>
+    <section className="min-w-0">
       <div hidden={!!selected}>
-        <div className={styles.sectionHeading}>
-          <h3>Call records</h3>
-          <label className={styles.inlineLabel}>
-            Filter loaded calls
-            <input
-              type="search"
-              value={filter}
-              placeholder="Call, case, target or status"
-              onChange={(event) => {
-                setFilter(event.target.value)
-                setListPage(0)
-              }}
-            />
-          </label>
+        <div className="mb-1 flex flex-wrap items-end justify-between gap-3">
+          <h3 className={benchText.h3}>Call records</h3>
+          <InputGroup
+            type="search"
+            aria-label="Filter loaded calls"
+            value={filter}
+            placeholder="Call, case, target or status"
+            leading={<Search aria-hidden="true" />}
+            containerClassName="w-full sm:w-72"
+            className="h-8"
+            onChange={(event) => {
+              setFilter(event.target.value)
+              setListPage(0)
+            }}
+          />
         </div>
         {page.total !== null && (
-          <p className={styles.muted}>
+          <p className={benchText.muted}>
             Loaded {number(calls.length)} of {number(page.total)} persisted call summaries.
             Filtering applies to loaded calls. Prompts and responses load only when you inspect a
             call. These pages are snapshots; refresh evidence to reload current statuses. Aggregate
@@ -78,24 +80,24 @@ export default function CallEvidence({
           </p>
         )}
         {page.loading && page.total === null && (
-          <ProductLoadingState compact label="Loading persisted call records…" />
+          <BenchLoading label="Loading persisted call records…" lines={3} />
         )}
         {!page.loading && !page.error && page.total === 0 && (
-          <p className={styles.muted}>No persisted call records yet.</p>
+          <p className={`${benchText.muted} mt-2`}>No persisted call records yet.</p>
         )}
         {accountingReconciled && (
-          <p className={styles.muted}>
+          <p className={`${benchText.muted} mt-1`}>
             Original receipt accounting; see the report for reconciled totals. Saved usage and costs
             below remain unchanged.
           </p>
         )}
-        <div
-          className={`${styles.tableScroll} ${styles.callTableScroll}`}
+        <TableFrame
+          className="max-h-[min(28rem,60vh)] overscroll-contain [scrollbar-gutter:stable] [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-[1]"
           role="region"
           aria-label="Persisted call records"
           tabIndex={0}
         >
-          <table>
+          <table className={benchTable}>
             <thead>
               <tr>
                 <th>Call</th>
@@ -110,7 +112,10 @@ export default function CallEvidence({
               {visible.slice(currentPage * 25, currentPage * 25 + 25).map((call) => (
                 <tr key={call.id}>
                   <td>
-                    <button className={styles.linkButton} onClick={() => setSelected(call.id)}>
+                    <button
+                      className={`${linkButtonClass} font-mono text-xs`}
+                      onClick={() => setSelected(call.id)}
+                    >
                       {call.id}
                     </button>
                   </td>
@@ -127,9 +132,9 @@ export default function CallEvidence({
               ))}
             </tbody>
           </table>
-        </div>
+        </TableFrame>
         {!visible.length && calls.length > 0 && (
-          <p className={styles.muted}>No loaded calls match this filter.</p>
+          <p className={benchText.muted}>No loaded calls match this filter.</p>
         )}
         <BenchPagination
           label="Calls"
@@ -139,38 +144,45 @@ export default function CallEvidence({
           onChange={setListPage}
         />
         {page.error && (
-          <p role="alert" className={styles.error}>
+          <Notice tone="danger" as="p" role="alert">
             {page.error}
-          </p>
+          </Notice>
         )}
         {page.nextCursor !== null && (
-          <button disabled={page.loading} onClick={() => void loadMore()}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page.loading}
+            onClick={() => void loadMore()}
+          >
             {page.loading ? 'Loading call records…' : 'Load more call records'}
-          </button>
+          </Button>
         )}
       </div>
       {selected && (
-        <div className={styles.recordDetail}>
-          <div className={styles.sectionHeading}>
-            <h4>Call evidence: {selected}</h4>
-            <button onClick={() => setSelected(null)}>
-              <ProductIcon name="arrow-left" />
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h4 className={`${benchText.h3} break-all`}>
+              Call evidence: <span className="font-mono text-[12.5px]">{selected}</span>
+            </h4>
+            <Button variant="outline" size="sm" onClick={() => setSelected(null)}>
+              <ArrowLeft aria-hidden="true" />
               Back to calls
-            </button>
+            </Button>
           </div>
           {accountingReconciled && (
-            <p className={styles.muted}>
+            <p className={benchText.muted}>
               Original receipt accounting; see the report for reconciled totals.
             </p>
           )}
           {error ? (
-            <p role="alert" className={styles.error}>
+            <Notice tone="danger" as="p" role="alert">
               {error}
-            </p>
+            </Notice>
           ) : detail ? (
             <CallDetail key={detail.id} call={detail} />
           ) : (
-            <ProductLoadingState compact label="Loading call evidence…" />
+            <BenchLoading label="Loading call evidence…" lines={4} />
           )}
         </div>
       )}

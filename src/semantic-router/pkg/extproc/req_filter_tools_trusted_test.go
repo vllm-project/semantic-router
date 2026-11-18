@@ -481,3 +481,21 @@ func requireTrustedFactsReplayOutcome(t *testing.T, recorder *routerreplay.Recor
 	require.Equal(t, []string{string(want)}, verdicts, "trusted_facts outcomes on the Replay record")
 	require.Empty(t, ctx.pendingToolsOutcomes, "retained outcomes must be appended exactly once")
 }
+
+// A narrowed request keeps a hosted tool only when the filtered policy
+// allows it by its type, as the policy does without trusted facts.
+func TestHandleToolSelectionTrustedFactsNarrowFiltersHostedTools(t *testing.T) {
+	cfg := trustedFactsTestConfig(t, &config.TrustedFactsConfig{
+		Enabled:      true,
+		Enforcement:  config.TrustedEnforcementAuthoritative,
+		TrustSources: []string{config.TrustedSourceOperatorPolicy},
+		StageRoles:   []string{config.TrustedStageCandidate},
+	})
+	cfg.Policy.Mode, cfg.Policy.AllowTools = config.ToolsPolicyModeFiltered, []string{"search"}
+	req := trustedFactsTestRequest()
+	req.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
+	trustedFactsRouter(nil).applyToolsPlugin(req, &ext_proc.ProcessingResponse{}, trustedFactsTestContext(t, cfg))
+	if req.ImageGeneration != nil || len(req.Tools) != 1 || req.Tools[0].Name != "search" {
+		t.Fatalf("narrow kept image_generation=%v tools=%v", req.ImageGeneration != nil, req.Tools)
+	}
+}

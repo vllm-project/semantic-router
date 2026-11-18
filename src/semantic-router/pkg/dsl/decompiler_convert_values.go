@@ -92,8 +92,8 @@ func formatProjectionScoreInputs(inputs []config.ProjectionScoreInput) string {
 		if input.ValueSource != "" {
 			fields = append(fields, fmt.Sprintf("value_source: %q", input.ValueSource))
 		}
-		if input.Match != 0 {
-			fields = append(fields, fmt.Sprintf("match: %g", input.Match))
+		if input.Match != nil {
+			fields = append(fields, fmt.Sprintf("match: %g", *input.Match))
 		}
 		if input.Miss != 0 {
 			fields = append(fields, fmt.Sprintf("miss: %g", input.Miss))

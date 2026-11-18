@@ -46,7 +46,7 @@ The Router rebuilds only what a change reaches:
 - In standalone mode the Router binds its listeners at startup. Adding or
   removing a listener, or changing a listener's `address`, `port`, `timeout` or
   `tls`, is rejected with `restart_required`; restart the Router to apply it.
-  Listener `api_keys` change without a restart.
+  A listener's `api_keys`, `apis` and `identity` change without a restart.
 
 ## Change a local stack
 
@@ -58,6 +58,16 @@ watches. Editing `config.yaml` afterwards changes nothing until you apply it:
 vllm-sr config plan --config config.yaml    # check the change against the running Router
 vllm-sr config apply --config config.yaml   # activate it
 ```
+
+`apply` sends the file as it is and never rewrites it. The Router moves any
+literal provider key, and in standalone mode any literal listener key, out of
+the document before it writes it and its history, and stores a reference to
+each key instead (see
+[Keys saved from the Dashboard or the management API](security-hardening#keys-saved-from-the-dashboard-or-the-management-api)).
+A `plan` of the same file afterwards reads the stored keys the same way and
+reports no change. When the change needs a restart, `apply` instead saves your
+file for the next `vllm-sr serve` as `serve` copies it, keys included; see
+[Your own file, copied as written](security-hardening#keys-saved-from-the-dashboard-or-the-management-api).
 
 `vllm-sr config apply` waits up to 120 seconds for the change to activate,
 which covers loading another model; pass `--timeout` to wait longer. A timeout

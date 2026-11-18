@@ -110,12 +110,16 @@ func validateToolsSelectModeFields(path string, spec *ToolsSelectConfig) error {
 	return nil
 }
 
-// validateToolsSelectMatch checks the judge that ranks the candidates. The
-// selection's own on_error and timeout_ms govern its one call, which also
-// asks tool_need on the judge's deployment.
+// validateToolsSelectMatch checks the judge that ranks the candidates, which
+// a written block must have: recall only narrows them. The selection's own
+// on_error and timeout_ms govern its one call, which also asks tool_need on
+// the judge's deployment.
 func validateToolsSelectMatch(cfg *RouterConfig, path string, block *MatchConfig) error {
 	if err := validateMatch(cfg, path, block, MatchToolsSelect); err != nil {
 		return err
+	}
+	if block != nil && block.Judge == nil {
+		return fmt.Errorf("%s: tool selection keeps the tools its judge ranks; add a judge, such as judge: {preset: %s}", path, presets.ToolRank)
 	}
 	judge := *MatchToolsSelect.Effective(block).Judge
 	switch {

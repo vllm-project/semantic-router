@@ -134,3 +134,25 @@ func TestDistinctDecisionNamesAccepted(t *testing.T) {
 		t.Fatalf("distinct decision names should be accepted, got: %v", err)
 	}
 }
+
+// A candidate iteration's models are checked as modelRefs are: an unknown
+// model or an undeclared LoRA is refused at load in either place.
+func TestCandidateIterationModelsAreCheckedLikeModelRefs(t *testing.T) {
+	for _, ref := range []string{
+		"{model: ghost-model, use_reasoning: false}",
+		"{model: m1, lora_name: undeclared, use_reasoning: false}",
+	} {
+		for _, decision := range []string{
+			"        modelRefs: [" + ref + "]\n",
+			"        modelRefs: [{model: m1, use_reasoning: false}]\n" +
+				"        candidateIterations:\n" +
+				"          - {variable: candidate, source: models, models: [" + ref + "], outputs: [{type: model, value: candidate}]}\n",
+		} {
+			cfg := strings.Replace(string(buildDecisionRefConfig("      - name: d1\n        priority: 1\n"+decision)),
+				"          api_key: secret\n", "          api_key: secret\n      loras: [{name: declared}]\n", 1)
+			if _, err := ParseYAMLBytes([]byte(cfg)); err == nil {
+				t.Errorf("accepted %s in\n%s", ref, decision)
+			}
+		}
+	}
+}

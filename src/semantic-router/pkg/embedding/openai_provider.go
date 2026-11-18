@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
@@ -72,6 +74,9 @@ type embeddingsRequest struct {
 }
 
 type embeddingsResponse struct {
+	Usage *struct {
+		PromptTokens int `json:"prompt_tokens"`
+	} `json:"usage"`
 	Data  []embeddingDatum `json:"data"`
 	Error *providerError   `json:"error,omitempty"`
 }
@@ -237,30 +242,42 @@ func (p *OpenAICompatibleProvider) Backend() string {
 }
 
 func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []string, apiKey string) ([][]float32, error) {
+	call := modelservice.ModelCall{Kind: "embeddings", Model: p.model}
+	defer func() { modelservice.RecordModelCall(ctx, call) }()
 	body, err := json.Marshal(embeddingsRequest{Model: p.model, Input: texts, Dimensions: p.dimensions})
 	if err != nil {
 		return nil, err
 	}
 
 	if p.connector != nil {
-		response, callErr := p.connector.Do(ctx, connector.Operation{Name: "embedding.v1", Method: http.MethodPost, RetrySafe: true}, body)
-		if callErr != nil {
-			var transport *connector.Error
-			if errors.As(callErr, &transport) && (transport.StatusCode == http.StatusUnauthorized || transport.StatusCode == http.StatusForbidden) {
-				return nil, fmt.Errorf("embedding provider authentication failed: %w", callErr)
-			}
-			return nil, callErr
-		}
-		decoded, decodeErr := decodeEmbeddingResponse(bytes.NewReader(response), p.maxResponseBytes)
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
-		if decoded.Error != nil && decoded.Error.Message != "" {
-			return nil, fmt.Errorf("embedding provider error: %s", decoded.Error.Message)
-		}
-		return p.parseEmbeddings(decoded.Data, len(texts))
+		return p.embeddingConnectorOnce(ctx, body, texts, &call)
 	}
+	return p.embeddingHTTPOnce(ctx, body, texts, apiKey, &call)
+}
 
+func (p *OpenAICompatibleProvider) embeddingConnectorOnce(ctx context.Context, body []byte, texts []string, call *modelservice.ModelCall) ([][]float32, error) {
+	response, callErr := p.connector.Do(ctx, connector.Operation{Name: "embedding.v1", Method: http.MethodPost, RetrySafe: true}, body)
+	if callErr != nil {
+		var transport *connector.Error
+		if errors.As(callErr, &transport) && (transport.StatusCode == http.StatusUnauthorized || transport.StatusCode == http.StatusForbidden) {
+			return nil, fmt.Errorf("embedding provider authentication failed: %w", callErr)
+		}
+		return nil, callErr
+	}
+	decoded, decodeErr := decodeEmbeddingResponse(bytes.NewReader(response), p.maxResponseBytes)
+	if decoded.Usage != nil {
+		call.HasUsage, call.InputTokens = true, decoded.Usage.PromptTokens
+	}
+	if decodeErr != nil {
+		return nil, decodeErr
+	}
+	if decoded.Error != nil && decoded.Error.Message != "" {
+		return nil, fmt.Errorf("embedding provider error: %s", decoded.Error.Message)
+	}
+	return p.parseEmbeddings(decoded.Data, len(texts))
+}
+
+func (p *OpenAICompatibleProvider) embeddingHTTPOnce(ctx context.Context, body []byte, texts []string, apiKey string, call *modelservice.ModelCall) ([][]float32, error) {
 	attemptCtx := ctx
 	var cancel context.CancelFunc
 	if p.timeout > 0 {
@@ -270,22 +287,7 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		defer cancel()
 	}
 
-	req, err := http.NewRequestWithContext(attemptCtx, http.MethodPost, p.endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-
-	// The normal connector path accounts for its own calls. Only this
-	// mutually exclusive injected-client path needs a reservation here.
-	if budgetErr := budget.Consume(attemptCtx); budgetErr != nil {
-		_ = req.Body.Close()
-		return nil, budgetErr
-	}
-	resp, err := p.client.Do(req)
+	resp, err := p.sendEmbeddingHTTP(attemptCtx, body, apiKey)
 	if err != nil {
 		return nil, err
 	}
@@ -296,6 +298,9 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 	}
 
 	decoded, err := decodeEmbeddingResponse(resp.Body, p.maxResponseBytes)
+	if decoded.Usage != nil {
+		call.HasUsage, call.InputTokens = true, decoded.Usage.PromptTokens
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -305,17 +310,49 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 	return p.parseEmbeddings(decoded.Data, len(texts))
 }
 
+func (p *OpenAICompatibleProvider) sendEmbeddingHTTP(ctx context.Context, body []byte, apiKey string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	// The normal connector path accounts for its own calls. Only this
+	// mutually exclusive injected-client path needs a reservation here.
+	if budgetErr := budget.Consume(ctx); budgetErr != nil {
+		_ = req.Body.Close()
+		return nil, budgetErr
+	}
+	return p.client.Do(req)
+}
+
 func decodeEmbeddingResponse(body io.Reader, maxResponseBytes int64) (embeddingsResponse, error) {
 	responseBody, err := httputil.ReadLimitedBody(body, maxResponseBytes)
 	if err != nil {
 		return embeddingsResponse{}, fmt.Errorf("read embedding response: %w", err)
 	}
 
+	decoder := json.NewDecoder(bytes.NewReader(responseBody))
 	var decoded embeddingsResponse
-	if err := json.NewDecoder(bytes.NewReader(responseBody)).Decode(&decoded); err != nil {
+	if err = decoder.Decode(&decoded); err != nil {
 		return embeddingsResponse{}, fmt.Errorf("decode embedding response: %w", err)
 	}
-	return decoded, nil
+	// Decode consumes only the first JSON value, so a response body that
+	// continues after the embeddings object would otherwise be accepted as
+	// long as that first value parsed. Require the stream to end here.
+	var trailing json.RawMessage
+	err = decoder.Decode(&trailing)
+	switch {
+	case err == nil:
+		return embeddingsResponse{}, fmt.Errorf("decode embedding response: unexpected second JSON value after embeddings object")
+	case errors.Is(err, io.EOF):
+		return decoded, nil
+	default:
+		return embeddingsResponse{}, fmt.Errorf("decode embedding response: unexpected trailing data after embeddings object: %w", err)
+	}
 }
 
 func (p *OpenAICompatibleProvider) parseEmbeddings(data []embeddingDatum, expectedCount int) ([][]float32, error) {
@@ -376,7 +413,14 @@ func (p *OpenAICompatibleProvider) convertEmbedding(values []float64) ([]float32
 	}
 	embedding := make([]float32, len(values))
 	for i, value := range values {
-		embedding[i] = float32(value)
+		converted := float32(value)
+		// A float64 that is finite in its own range can still overflow to
+		// infinity when rounded to float32, so validate the converted value
+		// instead of the decoded one.
+		if math.IsInf(float64(converted), 0) {
+			return nil, fmt.Errorf("component %d value %v overflows float32", i, value)
+		}
+		embedding[i] = converted
 	}
 	return embedding, nil
 }

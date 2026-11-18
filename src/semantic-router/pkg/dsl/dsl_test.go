@@ -1645,7 +1645,7 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		{
 			name:       "request_params",
 			pluginType: "request_params",
-			body:       `blocked_params: ["logprobs", "top_logprobs"] max_tokens_limit: 500 max_n: 1 strip_unknown: true`,
+			body:       `blocked_params: ["logprobs", "top_logprobs"] max_tokens_limit: 500 max_n: 1`,
 			verifyType: "request_params",
 		},
 	}
@@ -3378,6 +3378,10 @@ SIGNAL conversation conv {
   feature: { type: "count", source: { type: "message", role: "user" } }
   predicate: { gte: 2 }
 }
+SIGNAL conversation failing_tools {
+  feature: { type: "count", source: { type: "failed_tool_result" } }
+  predicate: { gte: 2 }
+}
 SIGNAL complexity comp { labels: ["hard"] }
 SIGNAL modality mod { description: "image" labels: ["image"] }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
@@ -3406,6 +3410,7 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 		"SIGNAL jailbreak jb", "SIGNAL safety unsafe", "SIGNAL pii pii_rule", "SIGNAL hallucination halu",
 		"SIGNAL refusal declined", "SIGNAL input_modality pictures",
 		`threshold: 0.6`, `previous_turns: 2`, `model_scores:`, `count: { gte: 1 }`, `modality: "image"`,
+		`type: "failed_tool_result"`,
 	} {
 		if !strings.Contains(dslText, want) {
 			t.Errorf("decompiled DSL missing %q:\n%s", want, dslText)

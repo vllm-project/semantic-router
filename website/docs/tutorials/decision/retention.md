@@ -72,13 +72,26 @@ ROUTE sensitive-turn {
 | Field | Effect | Important limit |
 |---|---|---|
 | `drop: true` | Skips the response-cache write for the matched decision | It does not prevent a cache read earlier in the same request |
-| `ttl_turns` | Overrides the response-cache entry lifetime using the Router's turn-to-time mapping | It is a cache TTL hint, not durable conversation retention |
+| `ttl_turns` | Shortens the response-cache entry lifetime to at most `ttl_turns` turns, using the Router's turn-to-time mapping; a shorter `ttl_seconds` (the plugin's, else the store's) or caller `ttl` still applies, and a `0` from either still stores nothing | It is a cache TTL hint, not durable conversation retention |
 | `keep_current_model: true` | Forces the model-switch gate to stay on the known current model | It has no effect when session/current-model identity is unavailable |
 | `prefer_prefix_retention: true` | Reported as `prefer_prefix` in the `retention` member of `x-vsr-trace` | The Router does not itself manage a provider's KV-cache eviction |
 
 `drop: true` and a positive `ttl_turns` cannot be set together. A decision can
 emit only one retention directive. Explicit values are reported in the
 `retention` member of `x-vsr-trace` and in routing diagnostics.
+
+## Backend Acknowledgement
+
+The Router records a versioned, provider-neutral retention receipt in Replay
+diagnostics and telemetry. The receipt keeps the requested directive separate
+from the adapter lifecycle: `translated`, `acknowledged`, and `observed` mean
+that the corresponding adapter step returned that result. A backend without a
+versioned retention adapter is recorded as `unsupported`; the Router does not
+infer enforcement from a successful request or response.
+
+The first contract is intentionally adapter-only. It provides deterministic
+fake-adapter coverage and an explicit no-op result while provider-specific
+integrations are evaluated separately.
 
 ## Data and Security
 

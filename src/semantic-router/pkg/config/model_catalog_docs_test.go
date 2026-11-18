@@ -328,7 +328,7 @@ func TestModelResourceMigrationPairsMigrateToTheNewForm(t *testing.T) {
 // The model runtime's migration page shows what `vllm-sr config migrate`
 // writes for its legacy.yaml, in both languages.
 func TestModelRuntimeMigrationExampleIsWhatConfigMigrateWrites(t *testing.T) {
-	page := filepath.Join("model-runtime", "migrate.md")
+	page := filepath.Join("model-runtime", "deploy", "migrate.md")
 	for _, path := range []string{
 		filepath.Join(docsRoot(), "docs", page),
 		filepath.Join(docsRoot(), "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", page),

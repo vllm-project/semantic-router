@@ -1,8 +1,8 @@
 import { formatRoutingMetadataValue, matchedSignalKey } from '../components/routingMetadataDisplay'
 import type { ViewField } from '../components/ViewPanel'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
+import { Badge } from '../ui'
 import type { Signal } from './insightsPageTypes'
-import styles from './InsightsPage.module.css'
 
 const signalFamilies = new Map<string, { label: string; order: number }>(
   ROUTER_CONFIG_EXTENSION.signals.map(({ type, display_name }, order) => [
@@ -26,8 +26,20 @@ function recordedSignalGroups(signals: Signal) {
     })
 }
 
+/** A signal family as people read it, such as Domain for domain. */
+export function signalFamilyLabel(type: string): string {
+  return signalFamilies.get(type)?.label ?? formatSignalMatch('family', type)
+}
+
 function formatSignalMatch(type: string, value: string): string {
   return formatRoutingMetadataValue(matchedSignalKey(type), value)
+}
+
+// Each recorded match with its family and the words it shows as.
+export function recordedSignalMatches(signals: Signal) {
+  return recordedSignalGroups(signals).flatMap(({ type, values }) =>
+    values.map((value) => ({ type, value, text: formatSignalMatch(type, value) })),
+  )
 }
 
 export function collectSignals(signals: Signal): string[] {
@@ -43,8 +55,8 @@ export function buildSignalFields(signals: Signal): ViewField[] {
       label: 'Recorded matches',
       fullWidth: true,
       value: (
-        <div className={styles.pluginStack}>
-          <p className={styles.costSubtle}>
+        <div className="flex flex-col gap-1 text-[13px]">
+          <p className="text-xs text-subtle-foreground">
             Recorded matches only. Measurements are available in Routing Metadata; unmatched or
             unrecorded rules are not listed.
           </p>
@@ -56,11 +68,11 @@ export function buildSignalFields(signals: Signal): ViewField[] {
       label: `${signalFamilies.get(type)?.label ?? formatSignalMatch('family', type)} signals`,
       fullWidth: true,
       value: (
-        <div className={styles.modalSignalList}>
+        <div className="flex flex-wrap gap-1.5">
           {values.map((value, index) => (
-            <span key={`${type}-${index}`} className={styles.modalSignalPill} title={value}>
+            <Badge key={`${type}-${index}`} tone="gold" title={value}>
               {formatSignalMatch(type, value)}
-            </span>
+            </Badge>
           ))}
         </div>
       ),

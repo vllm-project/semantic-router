@@ -67,7 +67,9 @@ func (p CachePartition) Key() string {
 func joinPartitionParts(parts ...string) string {
 	escaped := make([]string, len(parts))
 	for index, part := range parts {
-		escaped[index] = strings.ReplaceAll(part, ":", "%3A")
+		// Escape '%' before ':' so the encoding stays injective: a part holding
+		// the literal "%3A" must not produce the same token as a part holding ':'.
+		escaped[index] = strings.ReplaceAll(strings.ReplaceAll(part, "%", "%25"), ":", "%3A")
 	}
 	return strings.Join(escaped, ":")
 }
@@ -165,6 +167,9 @@ type CacheResult struct {
 	Age           time.Duration        `json:"-"`
 	AgeKnown      bool                 `json:"-"`
 	ExpiresAt     time.Time            `json:"expires_at,omitempty"`
+	// RequestID names the request that wrote a semantic hit's entry, so
+	// the store can count the hit its caller serves.
+	RequestID string `json:"-"`
 }
 
 type BackendCapabilities struct {
@@ -205,6 +210,9 @@ type InvalidationResult struct {
 	DryRun          bool  `json:"dry_run"`
 	MatchedEstimate int64 `json:"matched_estimate"`
 	Deleted         int64 `json:"deleted"`
+	// CountUnknown reports that the backend cannot count the entries the
+	// call reaches, so the zero counts do not mean that it reaches none.
+	CountUnknown bool `json:"count_unknown,omitempty"`
 }
 
 type CacheAdmin interface {

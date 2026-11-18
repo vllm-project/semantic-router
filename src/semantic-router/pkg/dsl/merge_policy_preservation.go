@@ -53,10 +53,16 @@ func mergeModelFacts(base, replacement map[string]interface{}) {
 	}
 }
 
+// BaseDecisionFields are the decision fields the DSL cannot express. A DSL
+// recipe replacement keeps each from the base decision of its recipe and name;
+// the Dashboard deploy keeps the same list.
+func BaseDecisionFields() []string {
+	return []string{"adaptations", "reliability", "fallback", "output_contract", "output_contract_spec", "annotations"}
+}
+
 // preserveBaseDecisionField carries YAML-only decision policy through a DSL
-// recipe replacement. The DSL owns the executable routing surface, but fields
-// such as adaptations, reliability and fallback are intentionally configured
-// only in the base document.
+// recipe replacement. The DSL owns the executable routing surface, but the
+// BaseDecisionFields are configured only in the base document.
 func preserveBaseDecisionField(compiled, base interface{}, field string) {
 	compiledRouting, ok := compiled.(map[string]interface{})
 	if !ok {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,26 @@ sys.path.insert(0, str(REPO_ROOT / "src" / "vllm-sr"))
 
 import snapshot_model_catalog as snapshot  # noqa: E402
 from cli.model_bundle import MODEL_BUNDLE_FILES, model_bundle_digest  # noqa: E402
+
+
+def git(repo: Path, *args: str) -> str:
+    """Run git in a test repository without the user's global or system config,
+    whose tag or commit signing would change what these commands do."""
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Catalog Test",
+            "GIT_AUTHOR_EMAIL": "catalog@example.invalid",
+            "GIT_COMMITTER_NAME": "Catalog Test",
+            "GIT_COMMITTER_EMAIL": "catalog@example.invalid",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+        },
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
 
 
 class ModelCatalogSnapshotTests(unittest.TestCase):
@@ -137,40 +158,11 @@ class ModelCatalogSnapshotTests(unittest.TestCase):
             published_root = repo / "config" / "recipes" / "built-in" / "v9.8"
             published_root.mkdir(parents=True)
             (published_root / "catalog.yaml").write_bytes(b"published\n")
-            subprocess.run(["git", "init", "-q", str(repo)], check=True)
-            subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(repo),
-                    "add",
-                    "config/recipes/built-in/v9.8",
-                ],
-                check=True,
-            )
-            subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(repo),
-                    "-c",
-                    "user.name=Catalog Test",
-                    "-c",
-                    "user.email=catalog@example.invalid",
-                    "commit",
-                    "-q",
-                    "-m",
-                    "publish snapshot",
-                ],
-                check=True,
-            )
-            subprocess.run(["git", "-C", str(repo), "tag", "v9.8.0"], check=True)
-            base_ref = subprocess.run(
-                ["git", "-C", str(repo), "rev-parse", "HEAD"],
-                check=True,
-                stdout=subprocess.PIPE,
-                text=True,
-            ).stdout.strip()
+            git(repo, "init", "-q")
+            git(repo, "add", "config/recipes/built-in/v9.8")
+            git(repo, "commit", "-q", "-m", "publish snapshot")
+            git(repo, "tag", "v9.8.0")
+            base_ref = git(repo, "rev-parse", "HEAD")
             built_in_root = repo / "config" / "recipes" / "built-in"
             published = snapshot.published_snapshots_from_git(
                 repo, built_in_root, base_ref

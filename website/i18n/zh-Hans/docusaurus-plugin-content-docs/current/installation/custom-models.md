@@ -80,7 +80,7 @@ reasoning:
   disabled: none
 ```
 
-恰好选择一种形式。此前的全局自定义家族注册表不属于 canonical v0.3；内联定义位于使用它们的自定义 Model 上。字段语义和决策控制见[推理配置](model-reasoning)。
+恰好选择一种形式。此前的全局自定义家族注册表不属于 canonical v0.5；内联定义位于使用它们的自定义 Model 上。字段语义和决策控制见[推理配置](model-reasoning)。
 
 ## 仅对相同上游契约使用副本
 
@@ -108,9 +108,9 @@ providers:
 
 ## 使用控制面板
 
-打开 **Build → Routing → Models → Add Model**：
+打开 **Models → Backend models**，选择 **Connect model**：
 
 - 选择 Provider，并在连接流程中输入自定义模型 ID；或
-- 选择 **Manual setup**，编辑完整的身份、推理、Model Card、定价、可靠性和后端引用字段。
+- 选择 **Add manually**，编辑完整的身份、推理、Model Card、定价、可靠性和后端引用字段。
 
 保持 **Built-in Catalog Model** 为空。**Reasoning Family** 仅选择内置家族；当模型需要新契约时，使用 **Inline Reasoning** 字段。

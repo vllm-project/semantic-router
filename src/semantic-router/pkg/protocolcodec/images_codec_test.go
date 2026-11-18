@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -332,6 +333,28 @@ func TestImagesCodecEncodeResponseRoundTrip(t *testing.T) {
 	}
 	if wire.Created != 1700000000 {
 		t.Fatalf("created = %d, want the response's own creation time", wire.Created)
+	}
+}
+
+// An image_generation_call that failed, or ended without an image, is no image
+// for an Images API client: the reply fails instead of carrying an empty one.
+func TestImagesCodecFailsAnImageTheModelDidNotGenerate(t *testing.T) {
+	engine, err := NewEngine(NewBuiltinRegistry(), llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, item := range map[string]string{
+		"failed":       `{"type":"image_generation_call","id":"ig_1","status":"failed","result":null}`,
+		"null result":  `{"type":"image_generation_call","id":"ig_1","status":"completed","result":null}`,
+		"empty result": `{"type":"image_generation_call","id":"ig_1","status":"completed","result":""}`,
+	} {
+		body := `{"id":"resp_1","object":"response","created_at":1,"model":"omni","status":"completed","error":null,"incomplete_details":null,` +
+			`"output":[` + item + `],"parallel_tool_calls":false,"tool_choice":"auto","tools":[{"type":"image_generation"}]}`
+		translated, err := engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIImagesV1, []byte(body), nil)
+		var protocolErr *llmprotocol.ProtocolError
+		if !errors.As(err, &protocolErr) || protocolErr.Code != "image_generation_failed" {
+			t.Errorf("%s: images reply = %s, %v; want image_generation_failed", name, translated.Body, err)
+		}
 	}
 }
 

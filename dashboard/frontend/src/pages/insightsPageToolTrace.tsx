@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 
-import type { InsightsRecord, ToolTrace } from './insightsPageTypes'
-import styles from './InsightsPage.module.css'
+import { traceToolNames } from './insightsAgentIdentity'
+import type { InsightsRecord } from './insightsPageTypes'
 
 export function renderToolNamesCell(record: InsightsRecord): ReactNode {
-  const toolNames = getTraceToolNames(record.tool_trace)
+  const toolNames = traceToolNames(record.tool_trace)
   if (toolNames.length === 0) {
     return <span>-</span>
   }
@@ -17,22 +17,8 @@ export function renderToolNamesCell(record: InsightsRecord): ReactNode {
       : visibleToolNames.join(' · ')
 
   return (
-    <span className={styles.tableSummaryText} title={toolNames.join(', ')}>
+    <span className="truncate text-xs text-muted-foreground" title={toolNames.join(', ')}>
       {summary}
     </span>
   )
-}
-
-function getTraceToolNames(trace?: ToolTrace) {
-  if (!trace) {
-    return []
-  }
-
-  const toolNames = new Set<string>(trace.tool_names ?? [])
-  for (const step of trace.steps ?? []) {
-    if (step.tool_name) {
-      toolNames.add(step.tool_name)
-    }
-  }
-  return [...toolNames]
 }

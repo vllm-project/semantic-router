@@ -70,8 +70,14 @@ func systemOnePublicationYAML(models, extraModels, input string) string {
 listeners:
   - name: public
     port: 8899
-    systemone:
-      models: [` + models + `]
+    apis:
+      chat_completions: {}
+      responses: {}
+      messages: {}
+      images: {}
+      systemone:
+        schema: vllm-sr/4.0
+        models: [` + models + `]
 providers:
   defaults: {model: m}
   models:
@@ -115,7 +121,7 @@ func TestEmbeddingDeploymentKeepsItsInputUntilPublishedOnSystemOne(t *testing.T)
 func embeddingDeploymentYAML(input string, publish bool) string {
 	listener := ""
 	if publish {
-		listener = "\n    systemone: {models: [encoder-public]}"
+		listener = "\n    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [encoder-public]}}"
 	}
 	return `version: v0.5
 listeners:

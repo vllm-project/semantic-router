@@ -36,7 +36,10 @@ func validateApplicationSignalContracts(cfg *RouterConfig) (err error) {
 		}
 		deployment := cfg.SystemOneRuleDeployment(rule.Rule)
 		questionTypes, modalities := cfg.deploymentAnswers(deployment)
-		if err := CheckApplicationAnswerer(cfg.ApplicationRulePath(spec.signalType, spec.name), cfg.ScopePath(""), deployment, rule, questionTypes, modalities); err != nil {
+		if err := CheckApplicationAnswerer(cfg.ApplicationRulePath(spec.signalType, spec.name), cfg.ScopePath(""), deployment, rule, questionTypes, cfg.ModelDeployments[deployment].DeclaredPresets(), modalities); err != nil {
+			return err
+		}
+		if err := checkSchemaCarries(cfg, cfg.ApplicationRulePath(spec.signalType, spec.name), deployment, rule.Rule); err != nil {
 			return err
 		}
 	}
@@ -59,6 +62,17 @@ func validateApplicationRuleSpec(spec applicationRuleSpec) error {
 	}
 	if spec.onUnknown != "" && spec.stage == presets.StageResponse {
 		return fmt.Errorf("on_unknown applies to a request-stage rule; the response_guard plugin's on_unknown decides a response-stage rule")
+	}
+	switch spec.onUnscanned {
+	case "", SystemOneUnscannedBestEffort, SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown:
+	default:
+		return fmt.Errorf("on_unscanned must be %s, %s, %s or %s", SystemOneUnscannedBestEffort, SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown)
+	}
+	if !(spec.minCoverage >= 0 && spec.minCoverage <= 1) {
+		return fmt.Errorf("min_coverage must be between 0 and 1")
+	}
+	if spec.minCoverage > 0 && spec.onUnscanned != SystemOneUnscannedBestEffort {
+		return fmt.Errorf("min_coverage applies to on_unscanned: %s, which decides on the windows read", SystemOneUnscannedBestEffort)
 	}
 	if spec.input.PreviousTurns < 0 || spec.input.PreviousTurns > MaxSystemOnePreviousTurns {
 		return fmt.Errorf("input.previous_turns must be within [1, %d] when set", MaxSystemOnePreviousTurns)
@@ -103,6 +117,9 @@ func validateApplicationLeaf(cfg *RouterConfig, decisionName string, node *RuleN
 	}
 	if slices.Contains(rule.Rule.IgnoreLabels, node.Label) {
 		return fmt.Errorf("decision '%s': %s condition %q names label %q, which the rule's ignore_labels never count", decisionName, signalType, node.Name, node.Label)
+	}
+	if rule.Rule.Question.Type != SystemOneQuestionChoice && !slices.Contains(rule.Rule.CountedLabels(), node.Label) {
+		return fmt.Errorf("decision '%s': %s condition %q names label %q, which is not one of the rule's labels (%s)", decisionName, signalType, node.Name, node.Label, strings.Join(rule.Rule.Labels, ", "))
 	}
 	return nil
 }

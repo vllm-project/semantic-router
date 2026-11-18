@@ -195,14 +195,18 @@ type EmbeddingRequirement struct {
 }
 
 // EmbeddingRequirements lists the embedding consumers one prepared scope
-// runs: its RAG sources, and with sharedServices the response cache, memory
-// and vector store ingestion.
+// runs: the RAG sources of its default plugins and its decisions, and with
+// sharedServices the response cache, memory and vector store ingestion.
 func EmbeddingRequirements(cfg *RouterConfig, sharedServices bool) []EmbeddingRequirement {
 	cacheNeeded := sharedServices && cfg.NeedsSemanticResponseCache()
 	cfg = cfg.ModelConsumerScope()
 	var result []EmbeddingRequirement
+	sources := []*ContextSource{cfg.ContextPlugin(nil).Source(ContextSourceRAG)}
 	for i := range cfg.Decisions {
-		bindings := RAGQueryEmbeddings(cfg.ContextPlugin(&cfg.Decisions[i]).Source(ContextSourceRAG))
+		sources = append(sources, cfg.ContextPlugin(&cfg.Decisions[i]).Source(ContextSourceRAG))
+	}
+	for _, source := range sources {
+		bindings := RAGQueryEmbeddings(source)
 		for _, path := range slices.Sorted(maps.Keys(bindings)) {
 			binding := bindings[path]
 			result = append(result, EmbeddingRequirement{Deployment: cfg.EmbeddingDeploymentOf(binding), Consumer: EmbeddingConsumerRAG, Dimension: binding.width()})

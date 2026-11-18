@@ -427,7 +427,7 @@ export interface ConfigData {
       name: string
       predicate?: NumericPredicate
       ignore_labels?: string[]
-      input?: { history?: boolean; tool_results?: boolean }
+      input?: { history?: boolean; tool_results?: boolean; request?: boolean }
       deployment?: string
       timeout_ms?: number
       on_unknown?: 'match' | 'no_match'
@@ -485,6 +485,8 @@ export interface ConfigData {
     strategy?: 'priority' | 'confidence'
   }
   entrypoints?: Array<{
+    review_model?: string
+    memory_model?: string
     model_names: string[]
     recipe: string
   }>

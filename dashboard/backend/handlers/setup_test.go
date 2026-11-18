@@ -452,7 +452,7 @@ func postSetupActivation(t *testing.T, configPath string) *httptest.ResponseReco
 		t.Fatalf("failed to marshal request: %v", err)
 	}
 	w := httptest.NewRecorder()
-	SetupActivateHandler(configPath, false, filepath.Dir(configPath), setupmode.New(configPath, false))(
+	asSecretReader(SetupActivateHandler(configPath, false, filepath.Dir(configPath), setupmode.New(configPath, false)))(
 		w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
 	return w
 }

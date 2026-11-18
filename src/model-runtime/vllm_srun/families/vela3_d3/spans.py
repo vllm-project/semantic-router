@@ -13,12 +13,18 @@ reads its input completely.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from ...errors import SCAN_BUDGET_EXCEEDED, QuestionError
-from ...systemone import listed_options, named_options, require_full_input
+from ...systemone import (
+    REQUEST_ROLES,
+    listed_options,
+    named_options,
+    require_full_input,
+)
 from ..vela3_shared import SPAN_HEADS, expand_preset, invalid, text, threshold_of
 from .package import SPAN_TARGET_TOKENS
 from .span_policy import Policy
@@ -51,6 +57,9 @@ def is_span(question: Any) -> bool:
 
 
 def parts_of(state: Any) -> list[tuple[str, str]]:
+    """A span state's parts by name: text is the user part, an object of text parts its keys in order, and,
+    with ``roles: null`` (no part has a role), an object the user's content as Decision 3 writes it.
+    """
     if isinstance(state, str):
         return [("user", state)]
     if (
@@ -58,8 +67,20 @@ def parts_of(state: Any) -> list[tuple[str, str]]:
         and state
         and all(isinstance(v, str) for v in state.values())
     ):
+        if REQUEST_ROLES.get() is None:
+            return [("user", json.dumps(state, ensure_ascii=False))]
         return list(state.items())
     raise invalid("span questions need a text state or an object of text parts")
+
+
+def default_target(names: list[str]) -> str:
+    """The part a span question reads without ``over``: the answer (the first part ``roles`` names the answer,
+    or the ``answer`` key without roles), else the last part."""
+    roles = REQUEST_ROLES.get()
+    if isinstance(roles, dict):
+        answers = [name for name in names if roles.get(name) == "answer"]
+        return answers[0] if answers else names[-1]
+    return "answer" if "answer" in names else names[-1]
 
 
 def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
@@ -131,7 +152,7 @@ class Spans:
             raise invalid("this model has no broad span head")
         parts = parts_of(state)
         roles = [role for role, _ in parts]
-        target = question.get("over") or ("answer" if "answer" in roles else roles[-1])
+        target = question.get("over") or default_target(roles)
         if not isinstance(target, str) or target not in roles:
             raise invalid(f"over names no part of the state: {target!r}")
         labels = labels_of(question)

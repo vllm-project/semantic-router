@@ -196,9 +196,9 @@ func (c *RouterConfig) visitReachablePlugins(visit func([]DecisionPlugin)) {
 	c.visitPlugins(c.ReachableRoutingRecipes(), visit)
 }
 
-// visitEveryPlugins is visitReachablePlugins over every recipe, reachable or
+// VisitEveryPlugins is visitReachablePlugins over every recipe, reachable or
 // not.
-func (c *RouterConfig) visitEveryPlugins(visit func([]DecisionPlugin)) {
+func (c *RouterConfig) VisitEveryPlugins(visit func([]DecisionPlugin)) {
 	recipes := make([]*RoutingRecipe, 0, len(c.Recipes))
 	for i := range c.Recipes {
 		recipes = append(recipes, &c.Recipes[i])

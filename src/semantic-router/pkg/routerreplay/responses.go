@@ -29,6 +29,12 @@ type AggregateResponse struct {
 	AvailableRecipes     []string                      `json:"available_recipes"`
 	AvailableDecisions   []string                      `json:"available_decisions"`
 	AvailableModels      []string                      `json:"available_models"`
+	// Reviews is present when the filtered records include approval reviews.
+	Reviews *ReviewAggregate `json:"reviews,omitempty"`
+	// AvailableReviewModels lists the models that answered any review.
+	AvailableReviewModels []string `json:"available_review_models,omitempty"`
+	// Traffic is present when the query asked for it with an interval.
+	Traffic *TrafficSeries `json:"traffic,omitempty"`
 }
 
 type LifecycleSummary struct {
@@ -39,24 +45,73 @@ type LifecycleSummary struct {
 	Unknown    int `json:"unknown"`
 }
 
+// AggregateCostSummary compares the records with a baseline over
+// CostRecordCount completed records: GrossSaved is BaselineSpend minus
+// ActualSpend, the selected models' cost, and TotalSaved is GrossSaved minus
+// NettedRouterCallSpend, the calls the Router made itself for those records.
+// It also totals every priced cost of every record, failed ones included
+// (TotalSpend), the calls the Router made itself included apart as
+// RouterCallSpend.
 type AggregateCostSummary struct {
-	TotalSaved          float64 `json:"total_saved"`
-	BaselineSpend       float64 `json:"baseline_spend"`
-	ActualSpend         float64 `json:"actual_spend"`
-	Currency            string  `json:"currency,omitempty"`
-	CostRecordCount     int     `json:"cost_record_count"`
-	ExcludedRecordCount int     `json:"excluded_record_count"`
+	TotalSaved            float64 `json:"total_saved"`
+	GrossSaved            float64 `json:"gross_saved"`
+	NettedRouterCallSpend float64 `json:"netted_router_call_spend"`
+	BaselineSpend         float64 `json:"baseline_spend"`
+	ActualSpend           float64 `json:"actual_spend"`
+	RouterCallSpend       float64 `json:"router_call_spend"`
+	TotalSpend            float64 `json:"total_spend"`
+	Currency              string  `json:"currency,omitempty"`
+	CostRecordCount       int     `json:"cost_record_count"`
+	ExcludedRecordCount   int     `json:"excluded_record_count"`
 	// ByCurrency retains every complete estimate without converting or summing
 	// currencies. Flat amounts are populated only when exactly one currency exists.
 	ByCurrency []CurrencyCostSummary `json:"by_currency,omitempty"`
+	// Coverage says how much of the filtered traffic the amounts leave out.
+	Coverage AggregateCostCoverage `json:"coverage"`
 }
 
 type CurrencyCostSummary struct {
-	Currency        string  `json:"currency"`
-	TotalSaved      float64 `json:"total_saved"`
-	BaselineSpend   float64 `json:"baseline_spend"`
-	ActualSpend     float64 `json:"actual_spend"`
-	CostRecordCount int     `json:"cost_record_count"`
+	Currency              string  `json:"currency"`
+	TotalSaved            float64 `json:"total_saved"`
+	GrossSaved            float64 `json:"gross_saved"`
+	NettedRouterCallSpend float64 `json:"netted_router_call_spend"`
+	BaselineSpend         float64 `json:"baseline_spend"`
+	ActualSpend           float64 `json:"actual_spend"`
+	RouterCallSpend       float64 `json:"router_call_spend"`
+	TotalSpend            float64 `json:"total_spend"`
+	CostRecordCount       int     `json:"cost_record_count"`
+}
+
+// AggregateCostCoverage counts the filtered records whose every cost has a
+// price, those with some, and those with none; a record that has not
+// completed is at most partly priced. UnpricedReasons counts the partly
+// priced and unpriced records by the reason of their first missing price. A
+// Looper hop's record is in none of them but in LooperHopRecords: the record
+// of the request that made the hop counts its call.
+// ListPriceRecords are priced at a catalog list price, an estimate.
+// CallerLoginRecords ran on the client's own provider login, priced or not:
+// a price shown for one is what its tokens cost at API prices, not what the
+// client's plan charges. BaselineSources counts the records compared with a
+// baseline by how it was chosen; BaselineUnavailable, the priced completed
+// records without one, by why. NettedRouterCalls counts the Router calls
+// netted out of savings by kind. NetUnavailable counts the records with a
+// baseline left out of savings because a Router call they made has no price
+// in their currency, by the reason of the first such call: an unknown cost is
+// never netted as zero.
+type AggregateCostCoverage struct {
+	PricedRecords       int            `json:"priced_records"`
+	PartlyPricedRecords int            `json:"partly_priced_records"`
+	UnpricedRecords     int            `json:"unpriced_records"`
+	UnpricedReasons     map[string]int `json:"unpriced_reasons,omitempty"`
+	LooperHopRecords    int            `json:"looper_hop_records"`
+	ListPriceRecords    int            `json:"list_price_records"`
+	CallerLoginRecords  int            `json:"caller_login_records"`
+	RouterCalls         int            `json:"router_calls"`
+	UnpricedRouterCalls int            `json:"unpriced_router_calls"`
+	BaselineSources     map[string]int `json:"baseline_sources,omitempty"`
+	BaselineUnavailable map[string]int `json:"baseline_unavailable,omitempty"`
+	NettedRouterCalls   map[string]int `json:"netted_router_calls,omitempty"`
+	NetUnavailable      map[string]int `json:"net_unavailable,omitempty"`
 }
 
 // AggregateProviderCacheSummary totals the same-model provider prompt-cache
@@ -137,7 +192,7 @@ type TrajectoryMessage struct {
 	ToolCalls      []TrajectoryToolCall `json:"tool_calls,omitempty"`
 	ToolCallID     string               `json:"tool_call_id,omitempty"`
 	ToolName       string               `json:"tool_name,omitempty"`
-	// ContentTruncated marks a captured tool result cut at max_tool_trace_bytes.
+	// ContentTruncated marks message text or a tool result cut at max_tool_trace_bytes.
 	ContentTruncated bool `json:"content_truncated,omitempty"`
 	TurnIndex        int  `json:"turn_index"`
 }
@@ -152,6 +207,11 @@ type TrajectoryResponse struct {
 	Routes      []TrajectoryRoute   `json:"routes"`
 }
 
+// TrajectoryRoute is one routed call of a session. Agent is the short hash of
+// the agent identity header a harness sent with a subagent's call, empty for
+// the main conversation. TurnID and ParentTurnID are the record's agent turn
+// ids, so a session's calls can be read by the Codex turn that sent or
+// started them.
 type TrajectoryRoute struct {
 	ConversationID       string    `json:"conversation_id,omitempty"`
 	RecordID             string    `json:"record_id"`
@@ -165,6 +225,9 @@ type TrajectoryRoute struct {
 	SessionPolicyApplied bool      `json:"session_policy_applied"`
 	SessionAction        string    `json:"session_action,omitempty"`
 	SessionReason        string    `json:"session_reason,omitempty"`
+	Agent                string    `json:"agent,omitempty"`
+	TurnID               string    `json:"turn_id,omitempty"`
+	ParentTurnID         string    `json:"parent_turn_id,omitempty"`
 	LifecycleState       string    `json:"lifecycle_state"`
 	ResponseStatus       int       `json:"response_status,omitempty"`
 	DurationMS           int64     `json:"duration_ms"`

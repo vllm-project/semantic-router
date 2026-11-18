@@ -1,9 +1,10 @@
-"""What both Vela 3.0 families (``vela3`` and the d3 sizes, ``vela3_d3``) read the same way.
+"""What the Vela 3.0 families (``vela3``, the d3 sizes ``vela3_d3``, the picos ``vela3_pico``) read the same way.
 
 The package description's name, model text, a question's threshold override,
-the trained presets and the wording that marks a relation question come from the same released code for
-every Vela 3.0 package, so the two families share them here rather than one
-importing the other's internals.
+the trained presets, the wordings that mark a relation or evidence question,
+the base UltraBERT tokenizer, the marker layout and the marker check come from
+the same released code for every Vela 3.0 package, so the families share them
+here rather than one importing another's internals.
 """
 
 from __future__ import annotations
@@ -11,10 +12,14 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
-from ..errors import INVALID_QUESTION, QuestionError
+from ..errors import INVALID_QUESTION, PackageError, QuestionError
 from ..registry.artifacts import package_file
+from .vela2.encoder_layout import MARKERS, EncoderLayout
+from .vela2.layout import Tokens
 
 # Both families' package description.
 CONFIG_FILE = "vela3_config.json"
@@ -28,6 +33,76 @@ RELATION_WORDING = re.compile(
     r"\bspans? (?:are|is) the .+ (?:of|for)\b|\brelat(?:ed|ion|ions|es|ing)?\b|\b(?:head|tail)\b|\bstands? in\b"
     r"|\bwith respect to\b|\bcounterpart\b|\bsuch that\b|\brole of\b"
 )
+# vela3_encoder._EV_Q, character for character.
+EVIDENCE_WORDING = re.compile(
+    r"\b(?:evidence|support(?:s|ing|ed)?|cite[sd]?|citations?)\b"
+)
+TOKEN_CACHE = 8192
+
+
+def normalize(text: Any) -> str:
+    """Whitespace-normalised text (``vela3_encoder._norm``)."""
+    return " ".join(str(text or "").split())
+
+
+def tokens(root: Path, markers: Mapping[str, Any]) -> Tokens:
+    """The base UltraBERT tokenizer without the marker tokens, so text never creates one."""
+    from tokenizers import Tokenizer
+
+    data = json.loads((Path(root) / "tokenizer.json").read_text(encoding="utf-8"))
+    data["added_tokens"] = [
+        token
+        for token in data.get("added_tokens", [])
+        if token["content"] not in markers
+    ]
+    tokenizer = Tokenizer.from_str(json.dumps(data))
+    tokenizer.no_padding()
+    tokenizer.no_truncation()
+    cached = lru_cache(maxsize=TOKEN_CACHE)(
+        lambda value: tuple(tokenizer.encode(value, add_special_tokens=False).ids)
+    )
+    return Tokens(
+        encode=lambda value: tokenizer.encode(value, add_special_tokens=False),
+        ids=lambda value: list(cached(value)) if value else [],
+        tokenizer=tokenizer,
+    )
+
+
+def layout(config: Mapping[str, Any], window: int, overlap: int) -> EncoderLayout:
+    """The Vela 2.0 marker layout of a package's ``config.json`` at one window."""
+    return EncoderLayout(
+        {
+            "marker_ids": config["decision"]["marker_ids"],
+            "bos_token_id": config["bos_token_id"],
+            "eos_token_id": config["eos_token_id"],
+            "pad_token_id": config["pad_token_id"],
+            "max_length": window,
+            "window_overlap": overlap,
+        }
+    )
+
+
+def check_markers(config: Mapping[str, Any]) -> None:
+    """Every marker a distinct row of the backbone's embedding table, so no input indexes past it."""
+    vocab = config.get("vocab_size")
+    if type(vocab) is not int or vocab <= 0:
+        raise PackageError("config.json: vocab_size must be a positive integer")
+    markers = config["decision"].get("marker_ids")
+    if not isinstance(markers, dict) or set(markers) != set(MARKERS):
+        raise PackageError(
+            f"config.json: decision.marker_ids must name the markers {list(MARKERS)}"
+        )
+    wrong = sorted(
+        name
+        for name, value in markers.items()
+        if type(value) is not int or not 0 <= value < vocab
+    )
+    if wrong:
+        raise PackageError(
+            f"config.json: decision.marker_ids {wrong} are not token IDs below vocab_size {vocab}"
+        )
+    if len(set(markers.values())) != len(markers):
+        raise PackageError("config.json: decision.marker_ids must be distinct")
 
 
 def invalid(message: str, reason: str | None = None) -> QuestionError:

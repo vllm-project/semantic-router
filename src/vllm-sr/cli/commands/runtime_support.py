@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -34,10 +33,12 @@ from cli.consts import (
 )
 from cli.container_management_listener import resolve_managed_management_listener
 from cli.gateway_mode import GATEWAY_ENV, GATEWAY_STANDALONE, runs_envoy
+from cli.masking_identity import inject_local_masking_identity
 from cli.models import UserConfig
 from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_env_names import (
     RESERVED_RUNTIME_ENV_NAMES,
+    expand_router_references,
     normalize_runtime_env_names,
 )
 from cli.runtime_stack import resolve_runtime_stack
@@ -53,10 +54,6 @@ RUNTIME_CONFIG_PATH_ENV = "VLLM_SR_RUNTIME_CONFIG_PATH"
 SOURCE_CONFIG_PATH_ENV = "VLLM_SR_SOURCE_CONFIG_PATH"
 RUNTIME_ALGORITHM_OVERRIDE_ENV = "VLLM_SR_ALGORITHM_OVERRIDE"
 RECIPE_ENV_ALLOWLIST_ENV = "VLLM_SR_RECIPE_ENV_ALLOWLIST"
-
-# Preserve trusted source-config passthrough semantics, including references
-# with fallbacks. A narrower matcher below drives package activation policy.
-_ENV_REFERENCE = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::?-[^}]*)?\}")
 
 API_KEY_ENV_FIELD = "api_key_env"
 
@@ -121,42 +118,19 @@ def validate_setup_mode_flags(setup_mode: bool, minimal: bool, readonly: bool) -
 
 
 def config_env_references(config_path: Path | str | None) -> set[str]:
-    """Env names used by trusted source config passthrough.
-
-    This preserves the established ``api_key_env`` and braced interpolation
-    behavior for operator-selected local source configs.
-    """
-    if config_path is None:
-        return set()
-    try:
-        document = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return set()
-
-    names: set[str] = set()
-    pending: list[object] = [document]
-    while pending:
-        node = pending.pop()
-        if isinstance(node, dict):
-            named = node.get(API_KEY_ENV_FIELD)
-            if isinstance(named, str) and named.strip():
-                names.add(named.strip())
-            pending.extend(node.values())
-        elif isinstance(node, list):
-            pending.extend(node)
-        elif isinstance(node, str):
-            names.update(_ENV_REFERENCE.findall(node))
-    return names - RESERVED_RUNTIME_ENV_NAMES
+    """Env names used by trusted source config passthrough: the names the
+    Router reads, less the reserved ones."""
+    return required_config_env_references(config_path) - RESERVED_RUNTIME_ENV_NAMES
 
 
 def required_config_env_references(config_path: Path | str | None) -> set[str]:
     """Return every environment name Router interpolation will consult.
 
-    This parser deliberately mirrors Router's permissive tokenization, then
-    ``validate_config_recipe_env_bindings`` applies the stricter remote-package
-    name and reserved-name policy. That two-step design makes lowercase,
-    malformed, fallback, and reserved references fail closed instead of
-    disappearing from the preflight inventory.
+    This parser mirrors Router's tokenization, which reads only uppercase
+    names, then ``validate_config_recipe_env_bindings`` applies the
+    remote-package reserved-name policy. That two-step design makes fallback
+    and reserved references fail closed instead of disappearing from the
+    preflight inventory.
     """
 
     if config_path is None:
@@ -171,9 +145,11 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
     while pending:
         node = pending.pop()
         if isinstance(node, dict):
-            named = node.get(API_KEY_ENV_FIELD)
-            if isinstance(named, str) and named.strip():
-                names.add(named.strip())
+            # A masking identity namespace may read its key from key_env.
+            for field in (API_KEY_ENV_FIELD, "key_env"):
+                named = node.get(field)
+                if isinstance(named, str) and named.strip():
+                    names.add(named.strip())
             pending.extend(node.values())
         elif isinstance(node, list):
             pending.extend(node)
@@ -184,40 +160,7 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
 
 def _router_consulted_env_names(value: str) -> set[str]:
     names: set[str] = set()
-    index = 0
-    while index < len(value):
-        if value[index] != "$":
-            index += 1
-            continue
-        if index + 1 < len(value) and value[index + 1] == "$":
-            index += 2
-            continue
-        if index + 1 < len(value) and value[index + 1] == "{":
-            close = value.find("}", index + 2)
-            if close < 0:
-                index += 1
-                continue
-            inner = value[index + 2 : close]
-            separator = inner.find(":-")
-            if separator > 0:
-                name = inner[:separator]
-            else:
-                separator = inner.find("-")
-                name = inner[:separator] if separator > 0 else inner
-            if name:
-                names.add(name)
-            index = close + 1
-            continue
-        end = index + 1
-        while end < len(value) and (
-            value[end].isascii() and (value[end].isalnum() or value[end] == "_")
-        ):
-            end += 1
-        if end > index + 1:
-            names.add(value[index + 1 : end])
-            index = end
-            continue
-        index += 1
+    expand_router_references(value, names.add)
     return names
 
 
@@ -416,6 +359,7 @@ def _resolve_effective_config_document(
     changed = False
     if not setup_mode and materialize_local_runtime:
         stack = resolve_runtime_stack()
+        changed = inject_local_masking_identity(config, stack.stack_name) or changed
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed

@@ -24,7 +24,7 @@ func TestSystemOneListenerIsExactModelDemand(t *testing.T) {
 	cfg.SemanticCache.InUse = false
 	cfg.ModelDeployments["published"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/decision", PublicName: "public-model"}
 	cfg.ModelDeployments["unused"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/other"}
-	cfg.Listeners = []Listener{{Name: "public", SystemOne: &ListenerSystemOne{Models: []string{"public-model"}}}}
+	cfg.Listeners = []Listener{{Name: "public", APIs: ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"public-model"}}}}}
 	used := ModelRuntimeDeploymentsInUse(&cfg)
 	if len(used) != 1 || used["published"].Artifact != "org/decision" {
 		t.Fatalf("explicit API grant must be the sole demand: %+v", used)

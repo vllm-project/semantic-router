@@ -84,3 +84,66 @@ func TestResponsesToolResponseInfersToolCallStopReason(t *testing.T) {
 		t.Fatalf("stop reason = %q, want %q", response.StopReason, llmprotocol.StopToolCall)
 	}
 }
+
+func TestResponsesReasoningTerminalCiphertext(t *testing.T) {
+	tests := []struct {
+		name       string
+		mutate     func(completed, terminal map[string]any)
+		incomplete bool
+		wantError  bool
+	}{
+		{name: "different ciphertext"},
+		{name: "incomplete response", incomplete: true},
+		{name: "missing terminal ciphertext", wantError: true, mutate: func(_, terminal map[string]any) { delete(terminal, "encrypted_content") }},
+		{name: "missing completed ciphertext", wantError: true, mutate: func(completed, _ map[string]any) { delete(completed, "encrypted_content") }},
+		{name: "null ciphertext", wantError: true, mutate: func(_, terminal map[string]any) { terminal["encrypted_content"] = nil }},
+		{name: "empty ciphertext", wantError: true, mutate: func(completed, _ map[string]any) { completed["encrypted_content"] = "" }},
+		{name: "non-string ciphertext", wantError: true, mutate: func(_, terminal map[string]any) { terminal["encrypted_content"] = 1 }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			frames := responsesReasoningFrames(t)
+			response := frames[17]["response"].(map[string]any)
+			if test.mutate != nil {
+				test.mutate(frames[10]["item"].(map[string]any), response["output"].([]any)[0].(map[string]any))
+			}
+			wantReason := llmprotocol.StopEndTurn
+			if test.incomplete {
+				frames[17]["type"] = "response.incomplete"
+				response["status"] = "incomplete"
+				response["incomplete_details"] = map[string]any{"reason": "max_output_tokens"}
+				wantReason = llmprotocol.StopMaxTokens
+			}
+			events, err := decodeResponsesReasoningFrames(t, frames)
+			if test.wantError {
+				assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_terminal_output_mismatch")
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			terminal := events[len(events)-1]
+			if terminal.Type != llmprotocol.EventResponseCompleted || terminal.StopReason != wantReason {
+				t.Fatalf("unexpected terminal event: %+v", terminal)
+			}
+		})
+	}
+}
+
+func TestResponsesOpaqueEncryptedReasoning(t *testing.T) {
+	frames := responsesReasoningFrames(t)
+	completed := frames[10]["item"].(map[string]any)
+	terminal := frames[17]["response"].(map[string]any)["output"].([]any)[0].(map[string]any)
+	for _, item := range []map[string]any{completed, terminal} {
+		item["summary"] = []any{}
+		delete(item, "content")
+	}
+	frames = append(frames[:2], frames[10:]...)
+	events, err := decodeResponsesReasoningFrames(t, frames)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if events[len(events)-1].Type != llmprotocol.EventResponseCompleted {
+		t.Fatal("opaque reasoning prevented stream completion")
+	}
+}

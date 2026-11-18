@@ -58,7 +58,7 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-[Choose a deployment](../website/docs/system-one/deployments.md) explains the
+[Choose a deployment](../website/docs/system-one/deploy/deployments.md) explains the
 built-in decision model, the other sizes and remote System One APIs, and what
 the Router checks at load.
 
@@ -101,9 +101,9 @@ Card before using it; the card explains its intended use, backend roles, data
 handling, evaluation scope, and limitations.
 
 `config/recipes/built-in/` is the versioned source for virtual models bundled
-with the distribution. Dashboard presents these under **Build →
-Mixture-of-Models → Recipes** and lets operators assign connected Models
-without editing provider credentials into a Recipe.
+with the distribution. Dashboard presents these under **Routing → Recipes**
+and lets operators assign connected Models without editing provider
+credentials into a Recipe.
 
 ### Runtime examples
 
@@ -145,8 +145,10 @@ runtime dependency; they do not define routing behavior by themselves.
   an Entrypoint assigns Models. Request-time context filtering cannot silently
   reduce the eligible pool below that contract.
 - A PII rule reads the current user turn. `input.history: true` adds the
-  earlier user turns, and `input.tool_results: true` the request's textual
-  tool results.
+  earlier user turns, `input.tool_results: true` the request's textual
+  tool results, and `input.request: false` leaves the current turn out.
+  A tool result the Router cannot read as text, such as an image or an
+  unsupported block, counts as unread input, which `on_unscanned` decides.
 - The decision model answers the application signals (domain, PII, jailbreak,
   complexity and the others) as System One questions. A rule's `deployment`, a
   recipe's `model_bindings` or `global.model_catalog.bindings` names another
@@ -162,8 +164,11 @@ runtime dependency; they do not define routing behavior by themselves.
   `limits.max_response_bytes`.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
-- Router replay is disabled by default and can capture request or response
-  bodies. Review its access controls and retention settings before enabling it.
+- Router replay records each request's routing data by default, with no
+  request or response text, in `.vllm-sr/router-replay.jsonl` beside the
+  configuration file, and can capture request or response bodies when a
+  `router_replay` plugin asks for it. Review its access controls and retention
+  settings before capturing text.
 - `global.router.skip_processing.enabled` should be enabled only when an
   authenticated upstream component owns the bypass header.
 

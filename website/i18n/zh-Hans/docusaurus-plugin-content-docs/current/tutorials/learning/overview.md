@@ -54,7 +54,7 @@ translation:
 
 使用 `vllm-sr recipe builtin init` 初始化内置配方时，会开启 conversation protection，并关闭在线 adaptation；基础配置中已有的设置优先。显式的 `false`、自定义身份请求头和调优参数都会保留。这些默认值作用于整份配置，decision 级别的 `bypass` 仍然有效。
 
-客户端需要提供稳定的 session 和 conversation 标识，防护才能保持模型。缺少标识时，路由不会获得会话防护，并会记录诊断。详见[会话标识](../../api/session-identification)。
+客户端需要提供稳定的 session 标识，防护才能保持模型；在 `scope: conversation` 下，没有 conversation 标识的请求会按对话开头命名并分别保持。缺少 session 标识时，路由不会获得会话防护，并会记录诊断。详见[会话标识](../../api/session-identification)。
 
 参考配置 `config/config.yaml` 启用了两个组件。若还需要开启在线 adaptation，并在多个副本间共享防护状态，可以配置：
 

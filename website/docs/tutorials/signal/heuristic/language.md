@@ -5,15 +5,14 @@
 `language` detects the request language and exposes it as a routing signal.
 Define language rules under `recipes[].signals.language`.
 
-It uses a lightweight language detector rather than a general-purpose
-classifier model.
+It uses a lightweight language detector rather than the decision model.
 
 ## Key Advantages
 
 - Lets multilingual traffic route without duplicating decisions per locale.
 - Keeps language handling explicit in the routing graph.
 - Works well with modality, context, and model-family constraints.
-- Avoids paying for a domain classifier when only locale matters.
+- Avoids a decision-model call when only the locale matters.
 
 ## What Problem Does It Solve?
 

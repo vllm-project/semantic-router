@@ -203,7 +203,9 @@ def apply_instance_options(
     catalog = global_config.get("model_catalog") or {}
     deployments = catalog.get("deployments") or {}
     authored = key in deployments
-    if not remote and (model_options or (not authored and platform in {"cuda", "rocm"})):
+    if not remote and (
+        model_options or (not authored and platform in {"cuda", "rocm"})
+    ):
         catalog = document.setdefault("global", {}).setdefault("model_catalog", {})
         deployments = catalog.setdefault("deployments", {})
         defaults = decision_model_deployment(document)
@@ -263,6 +265,6 @@ def apply_instance_options(
                 raise ValueError(
                     "A local MODEL needs an explicit public_name in --config"
                 )
-            bootstrap_listeners[0]["systemone"] = {"models": [name]}
+            bootstrap_listeners[0]["apis"] = {"systemone": {"models": [name]}}
             document["listeners"] = bootstrap_listeners
     return document != before

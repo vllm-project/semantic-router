@@ -45,7 +45,7 @@ recipes:
     signals:
       pii:
         - name: sensitive-input
-          threshold: 0.5
+          predicate: {gte: 0.5}
     decisions:
       - name: local-sensitive-route
         description: Keep detected PII on the local backend.
@@ -79,7 +79,7 @@ providers:
 | --- | --- |
 | 信号及其阈值 | 提供商模型和后端端点 |
 | 投影和依赖图 | 顶层 `providers.models` |
-| 决策、优先级和路由策略 | 共享分类器和嵌入资产 |
+| 决策、优先级和路由策略 | Router 的决策模型和嵌入模型 |
 | 选择与 looper 策略 | API、身份、可观测性和传输设置 |
 | 路由局部插件 | 外部存储和集成服务 |
 | 缓存、回放、学习、会话和指标命名空间 | 模型文件和服务连接 |

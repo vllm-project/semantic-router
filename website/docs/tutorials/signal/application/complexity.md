@@ -4,7 +4,7 @@
 
 `complexity` rates how difficult a request is to answer well: easy, medium or hard.
 It asks the `complexity`
-[preset](../../../system-one/reference#preset-catalog), "How difficult is
+[preset](../../../system-one/reference/presets#preset-catalog), "How difficult is
 this request to answer well?", over `easy` (straightforward retrieval,
 rewriting or formatting), `medium` (several steps of reasoning, or a moderate
 amount of code or analysis) and `hard` (advanced multi-step reasoning or
@@ -76,7 +76,7 @@ condition can add a `predicate` on the level's probability.
 
 The decision model answers every complexity rule, unless the `complexity`
 binding or the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). No model has a
+[Choose a deployment](../../../system-one/deploy/deployments). No model has a
 trained form of the question yet, so every model answers it zero-shot:
 check it on your own traffic before it gates a costly route. It reads the
 current user turn, truncated to the model's input.

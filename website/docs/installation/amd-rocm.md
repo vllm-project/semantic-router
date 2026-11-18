@@ -188,15 +188,15 @@ answer quality and operating behavior on the actual deployment.
 
 ## Run Vela routing models on AMD
 
-The Router's own models (the Vela classifiers, embeddings and decision
-models) run in the [model runtime](model-runtime/overview.md). On
+The Router's own models (the decision model and the embedding model) run in
+the [model runtime](model-runtime/get-started/overview.md). On
 AMD Instinct MI300X and MI325X GPUs it runs them through PyTorch for ROCm,
 which is validated. `--platform rocm` selects the AMD image, which ships the
 runtime with the validated stack (PyTorch 2.12 for ROCm 7.2, FLA 0.5.2, and
 `causal-conv1d` 1.7.0 built for ROCm), and passes the GPUs to the Router.
 Every model checks its answers against references verified on that stack
 when it loads; see
-[Choose a model](model-runtime/choose-a-model.md#hardware).
+[Choose a model](../model-runtime/get-started/choose-a-model.md#hardware).
 
 The [Vela AMD Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)
 and complete config place the decision model and the embedding model on `rocm:0`. Connect an existing
@@ -257,12 +257,12 @@ The jailbreak, safety, PII and hallucination questions read the whole input,
 in windows; the others read what fits the model's input. The limit applies to
 the decision model only; it does not shorten the chat request or change the
 generation model's context window. See
-[Long inputs](../system-one/performance#long-inputs).
+[Long inputs](../system-one/deploy/performance#long-inputs).
 
 Earlier releases selected fixed ONNX Runtime graphs (`head:
 onnx/model_rocm_32k.onnx`) and MIGraphX compilation caches here.
 `vllm-sr config migrate` removes those settings; see
-[Migrate from the native bindings](model-runtime/migrate.md).
+[Migrate from the native bindings](../model-runtime/deploy/migrate.md).
 
 ## Compare with the 98x paper setup
 

@@ -49,8 +49,17 @@ func TestOpenAIResponseCacheUsagePresence(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
+						read, uncached := test.read, test.uncached
+						if target == llmprotocol.OpenAIResponsesV1 && read == nil {
+							// Responses requires an integer cached_tokens, so an
+							// unreported read count goes out, and reads back, as 0.
+							read = llmprotocol.Int64(0)
+							if test.write != nil {
+								uncached = llmprotocol.Int64(10 - *test.write)
+							}
+						}
 						roundtrip := decodeCacheUsageResponse(t, engine, target, encoded, streaming)
-						assertCacheUsage(t, roundtrip.Usage, test.read, test.write, test.uncached)
+						assertCacheUsage(t, roundtrip.Usage, read, test.write, uncached)
 					}
 				})
 			}

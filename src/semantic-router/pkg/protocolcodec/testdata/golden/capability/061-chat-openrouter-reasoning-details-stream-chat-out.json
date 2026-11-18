@@ -164,12 +164,9 @@
                       "tool_calls": [
                         {
                           "function": {
-                            "arguments": "{\"city\":\"Paris\"}",
-                            "name": "get_weather"
+                            "arguments": "{\"city\":\"Paris\"}"
                           },
-                          "id": "call_2",
-                          "index": 0,
-                          "type": "function"
+                          "index": 0
                         }
                       ]
                     },

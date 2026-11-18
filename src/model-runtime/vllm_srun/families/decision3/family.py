@@ -38,8 +38,8 @@ from typing import Any, ClassVar, TypeVar, cast
 
 import torch
 
+from ... import dtypes, quantization
 from ... import media as workers
-from ... import quantization
 from ...errors import (
     INVALID_MODEL_OUTPUT,
     INVALID_QUESTION,
@@ -280,7 +280,11 @@ class Decision3Family(ModelFamily):
                 autocast=None,
                 bf16_resident=False,
                 gpu_weights="bfloat16",
-                cpu_weights="bfloat16",
+                # docs/records/d3-cpu-fp32.md: BF16 answers differ by CPU kernel and
+                # FP32 answers do not, so a CPU computes in FP32 (--dtype bfloat16
+                # opts in to BF16). A quantized package keeps its format's BF16
+                # activations.
+                cpu_weights=None if quantized is None else "bfloat16",
                 # docs/records/decision3-quantized.md: the fused int4 kernel and,
                 # in the FP8 d3-mini table, the fused element-wise kernels change
                 # few of a quantized package's answers; BF16 packages keep exact
@@ -327,7 +331,13 @@ class Decision3Family(ModelFamily):
         prompt.check_chat_template(root)
         backend, pad_id = prompt.load_tokenizer(root)
         prompt.check_codes(backend, decision["codes"], decision["token_ids"])
-        readout_dtype = decision.get("readout_dtype", "float32")
+        held = dtypes.published(spec.dtype, engine_model.device.type != "cpu")
+        # readout_dtype names the BF16 runtime's readout; other dtypes read out in FP32.
+        readout_dtype = (
+            decision.get("readout_dtype", "float32")
+            if held == "bfloat16"
+            else "float32"
+        )
         readout = load_file(str(root / "readout.safetensors"))["weight"].to(
             engine_model.device, getattr(torch, readout_dtype)
         )
@@ -429,7 +439,11 @@ class Decision3Family(ModelFamily):
             limits=limits,
             licence=package.licence,
             parameters=parameters,
-            dtype=f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout",
+            dtype=(
+                "fp32"
+                if held == "float32"
+                else f"bf16/{'fp32' if readout_dtype == 'float32' else 'bf16'}-readout"
+            ),
             modalities=modalities,
         )
         if pkg.is_state_once(decision):
@@ -568,22 +582,35 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         return cap if limit is None else min(cap, limit)
 
     def calibration_items(self, rows: int, row_tokens: int) -> list[Item] | None:
-        """Text rows of ``row_tokens`` tokens of a two-option question, for the startup calibration."""
+        """Text rows of ``row_tokens`` tokens of a two-option question, for the startup calibration.
+
+        Each row opens with its own ``case N:`` marker: the rows stay uniform
+        in shape but content-distinct for any ``rows`` — the burst calibration
+        times the no-sharing case, which content dedup would otherwise
+        collapse. (Rotating a cyclic filler repeats every ``len(filler)``
+        rows: 11 distinct states among 32 calibration rows on the d3
+        tokenizer.)
+        """
         filler = self.tokenizer.encode(
             "Decide whether this request needs a careful answer. ",
             add_special_tokens=False,
         ).ids
-        ids = list(itertools.islice(itertools.cycle(filler), row_tokens))
-        return [
-            Item(
-                question_id=f"calibration{row}",
-                task_type="noul",
-                ids=ids,
-                keys=["false", "true"],
-                descriptions=[None, None],
+        base = list(itertools.islice(itertools.cycle(filler), row_tokens))
+        out = []
+        for row in range(rows):
+            marker = self.tokenizer.encode(
+                f"Case {row}: ", add_special_tokens=False
+            ).ids
+            out.append(
+                Item(
+                    question_id=f"calibration{row}",
+                    task_type="noul",
+                    ids=(marker + base)[:row_tokens],
+                    keys=["false", "true"],
+                    descriptions=[None, None],
+                )
             )
-            for row in range(rows)
-        ]
+        return out
 
     def shared_context(self, items: list[Item], token_budget: int | None) -> int | None:
         return 0

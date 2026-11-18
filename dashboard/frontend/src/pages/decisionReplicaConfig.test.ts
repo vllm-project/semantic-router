@@ -5,7 +5,14 @@ import { decisionRuntimeDeclarations } from './decisionRuntimeDeployment'
 
 const snapshot = (): RouterConfig => ({
   version: 'v0.3',
-  listeners: [{ name: 'public', address: '127.0.0.1', port: 8899, models: ['vllm-sr/auto'] }],
+  listeners: [
+    {
+      name: 'public',
+      address: '127.0.0.1',
+      port: 8899,
+      apis: { chat_completions: { models: ['vllm-sr/auto'] } },
+    },
+  ],
   global: {
     router: { enabled: false },
     model_catalog: {

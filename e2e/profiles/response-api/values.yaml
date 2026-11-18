@@ -204,6 +204,19 @@ config:
             description: Request contains user-provided text.
             modality: text
   global:
+    model_catalog:
+      deployments:
+        # provider-mocker's embedding fixture (see its README) stands in for
+        # the embedding model, so the Router downloads none.
+        fixture-embedding:
+          provider: openai_embeddings
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1
+          model: e2e/fixture-embedding
+          timeout_ms: 5000
+          capabilities:
+            dimensions: 256
+      embeddings:
+        default: {deployment: fixture-embedding}
     router:
       strategy: priority
     services:

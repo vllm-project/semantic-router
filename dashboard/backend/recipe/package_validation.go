@@ -230,6 +230,19 @@ func detectEnvironmentBindingWarnings(configData []byte) []PackageWarning {
 	return warnings
 }
 
+// HasEnvironmentBindings reports whether config binds any environment
+// reference the Router expands and sends on, such as a provider key an
+// auth.api_key_env names or a ${NAME} in any value. A Dashboard caller who may
+// not read configuration secrets may not activate such a Recipe, as the value
+// a binding reads is one the caller never sees.
+func HasEnvironmentBindings(configData []byte) (bool, error) {
+	bindings, err := extractEnvironmentBindings(configData)
+	if err != nil {
+		return false, err
+	}
+	return len(bindings) > 0, nil
+}
+
 // ValidateEnvironmentBindings enforces the process-scoped allowlist populated
 // by `vllm-sr serve --recipe-env`. It never returns or logs secret values.
 func ValidateEnvironmentBindings(configData []byte) error {
@@ -318,7 +331,7 @@ func walkEnvironmentBindingNodes(node *yaml.Node, pointer string, bindings map[s
 			}
 		}
 	case yaml.ScalarNode:
-		for _, name := range requiredEnvironmentReferences(node.Value) {
+		for _, name := range routerconfig.EnvironmentReferenceNames(node.Value) {
 			if err := addEnvironmentBinding(name, pointer, bindings); err != nil {
 				return err
 			}
@@ -336,58 +349,6 @@ func addEnvironmentBinding(name, pointer string, bindings map[string]environment
 	}
 	bindings[pointer+"\x00"+name] = environmentBinding{name: name, path: pointer}
 	return nil
-}
-
-func requiredEnvironmentReferences(value string) []string {
-	result := []string{}
-	for index := 0; index < len(value); {
-		if value[index] != '$' {
-			index++
-			continue
-		}
-		if index+1 < len(value) && value[index+1] == '$' {
-			index += 2
-			continue
-		}
-		if index+1 < len(value) && value[index+1] == '{' {
-			end := strings.IndexByte(value[index+2:], '}')
-			if end < 0 {
-				index++
-				continue
-			}
-			end += index + 2
-			inner := value[index+2 : end]
-			name := inner
-			if separator := strings.Index(inner, ":-"); separator > 0 {
-				name = inner[:separator]
-			} else if separator := strings.Index(inner, "-"); separator > 0 {
-				name = inner[:separator]
-			}
-			if name != "" {
-				result = append(result, name)
-			}
-			index = end + 1
-			continue
-		}
-		end := index + 1
-		for end < len(value) && isEnvironmentNameByte(value[end]) {
-			end++
-		}
-		if end > index+1 {
-			result = append(result, value[index+1:end])
-			index = end
-			continue
-		}
-		index++
-	}
-	return result
-}
-
-func isEnvironmentNameByte(value byte) bool {
-	return (value >= 'A' && value <= 'Z') ||
-		(value >= 'a' && value <= 'z') ||
-		(value >= '0' && value <= '9') ||
-		value == '_'
 }
 
 func walkCredentialNodes(node *yaml.Node, path, parentKey string, warnings *[]PackageWarning) {

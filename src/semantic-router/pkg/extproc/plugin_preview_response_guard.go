@@ -54,6 +54,10 @@ func (r *OpenAIRouter) PreviewResponseGuard(ctx context.Context, input pluginrun
 		return pluginruntime.ResponseGuardPreviewResponse{}, err
 	}
 	result := pluginruntime.ResponseGuardPreviewResponse{Guarantees: pluginruntime.Guarantees{Mode: mode}, Binding: input.Binding, Action: config.ResponseGuardNone}
+	if requestResponseGuard(request) == nil {
+		result.Reason = "disabled"
+		return result, nil
+	}
 	if strings.TrimSpace(input.Response) == "" {
 		result.Reason = "empty_response"
 		return result, nil

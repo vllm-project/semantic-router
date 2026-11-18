@@ -127,7 +127,7 @@ func reachOutputAPI(m *Migration, at FormMatch, withText bool) {
 			continue
 		}
 		if written == "" {
-			written = APIFormatOpenAI
+			written = APIFormatChatCompletions
 		}
 		setNode(model, "api_format", Scalar(format))
 		m.Note("providers.models["+name+"].api_format", fmt.Sprintf("it was %s, which cannot carry a generated image, and decision %s takes its output from the model: "+
