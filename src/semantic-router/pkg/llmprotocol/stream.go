@@ -65,6 +65,10 @@ type StreamContext struct {
 	// PreferProviderModel names events with the model the provider's stream
 	// reports, once it reports one, and with PublicModel until then.
 	PreferProviderModel bool
+	// EstimatedInputTokens is the Router's own count of the request's input
+	// tokens, which an encoder that reports input usage before the provider
+	// does reports instead, as Messages message_start does. 0 reports none.
+	EstimatedInputTokens int64
 }
 
 type StreamDecoder interface {

@@ -106,12 +106,19 @@ Chat 的 tool 消息只能携带文本。发往 Chat 后端时，工具结果中
 对于使用 Chat Completions 或 Responses 后端的 Anthropic Messages 客户端，
 `thinking.type: adaptive` 使用后端模型的默认推理行为，`output_config.effort` 会保留。
 `thinking.display: omitted` 会从转换后的响应中移除推理内容，包括流式输出。显式设置
-`thinking.type: disabled` 需要已配置的推理家族和有效的后端关闭推理控制。不支持的
+`thinking.type: disabled` 需要已配置的推理家族和有效的后端关闭推理控制；无论决策
+如何选择，后端都以关闭推理的方式运行，`x-vsr-trace` 的 `reasoning` 成员为 `off`。不支持的
 控制会返回类型化请求错误。`context_management` 中 `clear_thinking_20251015` 的
 `keep: all` 编辑没有实际作用，会在这些后端上省略；会改变历史的编辑则被拒绝。
 当所选后端使用 Responses 时，会省略它无法表示的 Anthropic `cache_control` 边界。
 提示词和工具结果仍会派发，`x-vsr-warnings` 会为 `cache_control` 报告
-`dropped` 诊断。
+`dropped` 诊断。这些客户端收到的回复与 `anthropic` 后端给出的形状一致：每个
+thinking 块都带有 `signature`，后端没有给出时为空；流式响应在 `content_block_start`
+上发送它，并以空的 `signature_delta` 结束该块；之后的轮次发回这样的块时，无论后端
+是哪种格式，Router 都接受它。消息 ID 以 `msg_` 开头，每个工具调用 ID 以 `toolu_`
+开头，二者都由后端的 ID 派生，因此缓冲和流式回复带有相同的 ID，客户端发回的
+`tool_result` 块也能与对应的调用配对。这些后端只在回答结束时报告用量，因此流式响应的
+`message_start` 报告 Router 对输入 token 的估算，最后的 `message_delta` 报告后端的计数。
 
 从 Anthropic 后端转换推理内容时，如果后端附带推理签名，转换会失败；其 thinking
 响应默认携带签名。Chat Completions 或 Responses 客户端的缓冲请求会收到类型化的

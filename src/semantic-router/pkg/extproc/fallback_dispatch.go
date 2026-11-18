@@ -433,6 +433,10 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	} else if candidateResponse.ID == "" {
 		candidateResponse.ID = "chatcmpl-" + ctx.RequestID
 	}
+	if ctx.SourceFormat == llmprotocol.AnthropicMessagesV1 {
+		// A streaming client's answer is rendered from this response.
+		candidateResponse = protocolcodec.AnthropicReplyIdentifiers(dispatch.targetFormat, candidateResponse)
+	}
 
 	var responseBody []byte
 	var streamDiags []llmprotocol.Diagnostic
