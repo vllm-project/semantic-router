@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const (
@@ -19,6 +21,11 @@ const (
 	routerReplayDefaultListLimit = 20
 	routerReplayMaxListLimit     = 100
 )
+
+// routerReplayHarnesses are the values a harness filter lists.
+var routerReplayHarnesses = []string{
+	store.HarnessClaudeCode, store.HarnessCodex, store.HarnessOpenCode, store.HarnessDeepSeekHarness, store.HarnessAPIClient,
+}
 
 type routerReplayFilters struct {
 	search      string
@@ -28,8 +35,10 @@ type routerReplayFilters struct {
 	cacheStatus string
 	sessionID   string
 	turnID      string
-	since       time.Time
-	review      routerReplayReviewFilters
+	// harness is a sorted, comma-separated list of routerReplayHarnesses.
+	harness string
+	since   time.Time
+	review  routerReplayReviewFilters
 }
 
 // cacheKey names the filters in one canonical form, so that two spellings of
@@ -39,7 +48,7 @@ func (filters routerReplayFilters) cacheKey() string {
 	for key, value := range map[string]string{
 		"search": filters.search, "recipe": filters.recipe, "decision": filters.decision,
 		"model": filters.model, "cache_status": filters.cacheStatus, "session_id": filters.sessionID,
-		"turn_id": filters.turnID, "request_kind": filters.review.requestKind,
+		"turn_id": filters.turnID, "harness": filters.harness, "request_kind": filters.review.requestKind,
 		"review_status": filters.review.status, "review_outcome": filters.review.outcome,
 		"review_risk": filters.review.risk,
 	} {
@@ -253,9 +262,35 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		filters.since = since
 	}
 
+	harness, err := parseRouterReplayHarnesses(values)
+	if err != nil {
+		return filters, err
+	}
+	filters.harness = harness
+
 	review, err := parseRouterReplayReviewFilters(values)
 	filters.review = review
 	return filters, err
+}
+
+// parseRouterReplayHarnesses reads the harness filter, comma-separated or
+// repeated, as one sorted list without repeats.
+func parseRouterReplayHarnesses(values url.Values) (string, error) {
+	var harnesses []string
+	for _, raw := range values["harness"] {
+		for harness := range strings.SplitSeq(raw, ",") {
+			harness = strings.TrimSpace(harness)
+			if harness == "" {
+				continue
+			}
+			if !slices.Contains(routerReplayHarnesses, harness) {
+				return "", fmt.Errorf("harness must list one or more of %s", strings.Join(routerReplayHarnesses, ", "))
+			}
+			harnesses = append(harnesses, harness)
+		}
+	}
+	slices.Sort(harnesses)
+	return strings.Join(slices.Compact(harnesses), ","), nil
 }
 
 func parseRouterReplayQueryInt(values url.Values, key string, positiveOnly bool) (int, error) {
@@ -303,6 +338,7 @@ func doesRouterReplayRecordMatchFilters(
 		matchesOptionalModel(record, filters.model),
 		matchesOptionalValue(record.SessionID, filters.sessionID),
 		matchesOptionalTurn(record, filters.turnID),
+		matchesOptionalHarness(record, filters.harness),
 		filters.since.IsZero() || !record.Timestamp.Before(filters.since),
 		filters.review.matches(record),
 		matchesReplaySearch(record, search),
@@ -331,6 +367,10 @@ func matchesOptionalModel(record routerreplay.RoutingRecord, model string) bool 
 // started, such as its approval reviews, as the Postgres store filters them.
 func matchesOptionalTurn(record routerreplay.RoutingRecord, turnID string) bool {
 	return turnID == "" || record.TurnID == turnID || record.ParentTurnID == turnID
+}
+
+func matchesOptionalHarness(record routerreplay.RoutingRecord, harness string) bool {
+	return harness == "" || store.HarnessListed(harness, store.FilterHarness(record))
 }
 
 func matchesReplaySearch(record routerreplay.RoutingRecord, search string) bool {

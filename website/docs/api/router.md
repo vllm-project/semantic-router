@@ -582,6 +582,15 @@ fields, so use it only when those fields are needed. See
 [Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
 for the review record and the aggregate's `reviews` summary.
 
+`harness` keeps the records sent by the harnesses it lists, comma-separated:
+`claude_code`, `codex`, `opencode`, `deepseek_harness`, and `api_client` for
+the requests no harness sent, such as a script calling the API directly; a
+record's harness is its `agent.harness`, described in
+[Agent runs](../tutorials/plugin/router-replay#agent-runs). The list response
+carries `harness_counts`, the records every other filter selects counted by
+harness, such as `{"api_client": 51234, "claude_code": 1820, "codex": 977}`,
+so a page of one harness's records still shows how many each harness sent.
+
 With `since`, the aggregate also takes `interval`, a duration of at least `1m`
 such as `5m` or `1h` that splits the window into at most 1,000 intervals. The
 response then carries `traffic`: `since`, `interval_seconds`,
