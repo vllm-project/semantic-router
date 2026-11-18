@@ -199,6 +199,7 @@ Router 把一轮的媒体放在 state 前面：`"state": ["⟦img-1⟧", "⟦vid
 - 过载的服务器返回 529 并带 `Retry-After`；正在启动的服务器返回 503 并带 `Retry-After`。
 - 带有 schema 未定义成员的请求体以 400 `invalid_request` 拒绝，并写明其名称。
 - 不提供任何文本的 state（`""`、只有空白，或没有任何部分的对象）以 400 `invalid_request`（"the state is empty"）拒绝，除非请求带有可读取的图片、视频或 asset；既不是文本、由各部分组成的对象，也不是前置媒体加 state 的 state，同样以 400 拒绝，并写明是 state。
+- 模型无法读取的图片或视频以 400 拒绝，并带其 `reason`：不是模型可读格式的 base64 data URL 时为 `unsupported_media_type`（`image_format`、`video_format`），数据无法解码时为 `invalid_media`（`image_malformed`、`video_malformed`）；超过媒体限制（字节、像素、宽高比、时长、视频 token）时为 `invalid_request`，并带 `reason` 和 `limit`。
 - 每个问题的选项为 2 到 255 个，标签 1 到 255 个，等级 2 到 10 个；问题数量没有上限。
 
 Router 收到错误时，该调用的问题为未知：每条规则或功能的失败策略决定其含义。候选过多的 judge 永远不会使请求失败。
