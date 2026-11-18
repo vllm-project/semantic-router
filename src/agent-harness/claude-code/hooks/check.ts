@@ -42,7 +42,7 @@ export async function noteRead($: EngineInterface, e: ToolCallInput, ran: ToolCa
   if (!settings.apps.check || !CHECKED.has(tool) || e.agentId !== undefined) return
   const fields = outputOf(tool, ran)?.fields.filter(field => field.trim() !== '') ?? []
   if (fields.length === 0) return
-  const read = `${await sourceOf($, e)}:\n${fields.join('\n')}`
+  const read = `${await sourceOf($, e, false)}:\n${fields.join('\n')}`
   await update($, turnReads, turn => ({
     ...turn,
     files: turn.files + (tool === 'Read' ? 1 : 0),

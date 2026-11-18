@@ -36,9 +36,12 @@ import (
 // answer puts a rule close below its threshold (scan_window.reread_margin) is
 // read again in windows of that size: at once within half the margin, where
 // a diluted match lands, and after the windows still unread further below.
-// When the stage's deadline leaves only some windows read, on_unscanned
-// decides (best_effort: on the windows read, once they reach the rule's
-// min_coverage); when none was, the rule is unknown, which on_unknown decides.
+// The tail holds an injection at the very end behind up to a whole window of
+// earlier text, so a tail close below a threshold has the input's last half
+// window read again, at once. When the stage's deadline leaves only some
+// windows read, on_unscanned decides (best_effort: on the windows read, once
+// they reach the rule's min_coverage); when none was, the rule is unknown,
+// which on_unknown decides.
 
 // maxScanWindows bounds the windows of one input, and so the calls its scan
 // holds. An input that needs more windows of its deployment's size is read in
@@ -113,7 +116,12 @@ type guardScan struct {
 	responses []modelservice.Response
 	errs      []error
 	done      []bool
-	latency   float64
+	// reused are the windows whose answers an earlier request's read of the
+	// same input gave (windowVerdicts), which took no time; verdicts keys the
+	// scan's windows there, nil for a scan that keeps none.
+	reused   []bool
+	verdicts *scanVerdictKeys
+	latency  float64
 	// waiting are the re-reads that wait for the windows still unread, and
 	// rank the highest rank the scan's windows took.
 	waiting []waitingReread
@@ -182,6 +190,7 @@ func newGuardScan(deployment string, state modelservice.Request, budget scanBudg
 		size: size, grown: grown, most: most, overlap: overlap, rereadMargin: budget.rereadMargin,
 		order: scanOrder(len(windows), offset), turn: offset, windowState: windowState, parallel: budget.parallel, stop: func() {},
 		responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)), done: make([]bool, len(windows)),
+		reused: make([]bool, len(windows)),
 	}
 }
 
@@ -219,7 +228,9 @@ func cutScanWindows(text string, size, most, overlap int) ([]scanWindow, int) {
 // turn last.
 func scanSource(state modelservice.Request, size int) (string, int, func(string) modelservice.Request) {
 	if state.Parts == nil {
-		return state.State, size, func(window string) modelservice.Request { return modelservice.Request{State: window} }
+		return state.State, size, func(window string) modelservice.Request {
+			return modelservice.Request{State: window, Images: state.Images, Videos: state.Videos}
+		}
 	}
 	if answer, ok := state.Parts["answer"]; ok {
 		others := modelservice.Request{Parts: map[string]string{}}
@@ -234,7 +245,7 @@ func scanSource(state modelservice.Request, size int) (string, int, func(string)
 			for name, text := range others.Parts {
 				parts[name] = text
 			}
-			return modelservice.Request{Parts: parts}
+			return modelservice.Request{Parts: parts, Images: state.Images, Videos: state.Videos}
 		}
 	}
 	names := make([]string, 0, len(state.Parts))
@@ -254,7 +265,9 @@ func scanSource(state modelservice.Request, size int) (string, int, func(string)
 	for index, name := range names {
 		texts[index] = state.Parts[name]
 	}
-	return strings.Join(texts, "\n\n"), size, func(window string) modelservice.Request { return modelservice.Request{State: window} }
+	return strings.Join(texts, "\n\n"), size, func(window string) modelservice.Request {
+		return modelservice.Request{State: window, Images: state.Images, Videos: state.Videos}
+	}
 }
 
 // scanWindowsOf cuts text into windows of at most size bytes, each starting
@@ -343,7 +356,10 @@ func (scan *guardScan) windowCalls(ctx context.Context) []*systemOneCall {
 		window := scan.windows[index]
 		request := scan.windowState(scan.text[window.start:window.end])
 		request.Window, request.Parallel = rank+1, scan.parallel
-		calls[rank] = &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index}
+		calls[rank] = &systemOneCall{
+			deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index,
+			verdict: scan.verdictKey(window),
+		}
 		scan.pace.reads[index], scan.pace.cancels[index] = context.WithCancelCause(ctx)
 	}
 	for index := range scan.cut {
@@ -425,6 +441,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 	var readers []func()
 	for _, scan := range scans {
 		scan.refusing = c.refusingRules(scan.rules)
+		scan.verdicts = c.newScanVerdictKeys(scan)
 		scan.stop = stop
 		scan.pace.stage, scan.pace.started, scan.pace.deadline = stage, started, deadline
 		calls := scan.windowCalls(ctx)
@@ -439,7 +456,11 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 			var response modelservice.Response
 			var latency float64
 			err := readCtx.Err()
+			kept := false
 			if err == nil {
+				response, kept = c.keptWindow(call)
+			}
+			if err == nil && !kept {
 				if slots != nil {
 					slots <- struct{}{}
 				}
@@ -447,6 +468,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 				if slots != nil {
 					<-slots
 				}
+				c.keepWindow(call, response, err)
 			}
 			if err != nil {
 				err = windowError(readCtx, err)
@@ -514,11 +536,18 @@ func (scan *guardScan) record(window int, response modelservice.Response, err er
 // read its windows in orders of their own, and in a bundle the call that reads
 // a window for all of them goes at the lowest of their ranks, so the window
 // may have been read long before its rank in this scan comes.
+//
+// The tail, the cut's window that ends where the input ends, holds what the
+// model reads last before it answers, where an injection works best, behind
+// up to a whole window of earlier text. A tail close below a threshold has
+// the input's last half window read again (endWindowLocked), at rank 1
+// wherever in the margin its answer lands: it is one window.
 func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Response, err error) []*systemOneCall {
 	scan.mu.Lock()
 	defer scan.mu.Unlock()
 	window := scan.windows[call.window]
-	if err != nil || scan.rereadMargin <= 0 || window.end-window.start <= scan.size {
+	end, tail := scan.endWindowLocked(window)
+	if err != nil || scan.rereadMargin <= 0 || (window.end-window.start <= scan.size && !tail) {
 		return nil
 	}
 	gap := math.Inf(1)
@@ -534,6 +563,9 @@ func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Re
 	if gap > scan.rereadMargin {
 		return nil
 	}
+	if window.end-window.start <= scan.size {
+		return []*systemOneCall{scan.addWindowLocked(end, 1)}
+	}
 	parts := scan.rereadPartsLocked(window)
 	if gap > scan.rereadMargin/2 {
 		scan.waiting = append(scan.waiting, waitingReread{parts: parts, gap: gap})
@@ -544,6 +576,21 @@ func (scan *guardScan) rereadCalls(call *systemOneCall, response modelservice.Re
 		calls[index] = scan.addWindowLocked(part, 1)
 	}
 	return calls
+}
+
+// endWindowLocked is the window that reads the input's last half window of the
+// configured size again, when window is the cut's tail and holds more than
+// that; false otherwise.
+func (scan *guardScan) endWindowLocked(window scanWindow) (scanWindow, bool) {
+	if window.first < 0 || window.end != len(scan.text) {
+		return scanWindow{}, false
+	}
+	start := snapForward(scan.text, runeStartAfter(scan.text, len(scan.text)-scan.size/2))
+	if start <= window.start {
+		return scanWindow{}, false
+	}
+	runes := window.runeStart + utf8.RuneCountInString(scan.text[window.start:start])
+	return scanWindow{start: start, end: len(scan.text), runeStart: runes, first: -1, last: -1}, true
 }
 
 // waitingReread is the parts of a window to read again once the windows
@@ -609,9 +656,13 @@ func (scan *guardScan) addWindowLocked(window scanWindow, rank int) *systemOneCa
 	scan.responses = append(scan.responses, modelservice.Response{})
 	scan.errs = append(scan.errs, nil)
 	scan.done = append(scan.done, false)
+	scan.reused = append(scan.reused, false)
 	request := scan.windowState(scan.text[window.start:window.end])
 	request.Window, request.Parallel = rank, scan.parallel
-	return &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index, reread: window.first < 0}
+	return &systemOneCall{
+		deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index, reread: window.first < 0,
+		verdict: scan.verdictKey(window),
+	}
 }
 
 // refusingRules are the rules among rules whose match in one window refuses
@@ -733,6 +784,11 @@ func (scan *guardScan) answersTo(question string) ([]windowAnswer, int, string) 
 			reason = "missing_answer"
 		case answer.Error != "":
 			reason = answer.Error
+		case answer.InputCoverage != "complete":
+			// A window's call succeeding says nothing about how much of the
+			// window it read: the answer covers the window only when the
+			// model proved it read all of it.
+			reason = "input_coverage_unknown"
 		default:
 			answered = true
 			read = append(read, windowAnswer{answer: answer, window: index})

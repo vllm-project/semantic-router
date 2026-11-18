@@ -1,34 +1,24 @@
 import { readFileSync } from 'node:fs'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import ModelDeleteDialog from './ModelDeleteDialog'
+import { modelDeleteConfirmation } from './configPageModelInventory'
 
 describe('ModelDeleteDialog', () => {
-  it('renders an accessible typed destructive confirmation', () => {
-    const markup = renderToStaticMarkup(
-      createElement(ModelDeleteDialog, {
-        modelNames: ['model-a', 'model-b'],
-        pending: false,
-        onCancel: vi.fn(),
-        onConfirm: vi.fn(),
-      }),
-    )
-
-    expect(markup).toContain('role="alertdialog"')
-    expect(markup).toContain('aria-modal="true"')
-    expect(markup).toContain('aria-busy="false"')
-    expect(markup).toContain('Type <strong>DELETE 2</strong>')
-    expect(markup).toContain('data-dialog-initial-focus="true"')
+  it('asks for a typed phrase only when several models are deleted at once', () => {
+    expect(modelDeleteConfirmation(1)).toBe('')
+    expect(modelDeleteConfirmation(2)).toBe('DELETE 2')
+    expect(modelDeleteConfirmation(14)).toBe('DELETE 14')
   })
 
-  it('delegates focus management and blocks implicit dismissal after typed input or while pending', () => {
+  it('is an accessible alert dialog that blocks implicit dismissal after typed input or while pending', () => {
     const source = readFileSync(new URL('./ModelDeleteDialog.tsx', import.meta.url), 'utf8')
 
-    expect(source).toContain('useAccessibleDialog<HTMLElement>')
+    expect(source).toContain('role="alertdialog"')
+    expect(source).toContain('aria-busy={pending}')
     expect(source).toContain('const dismissible = !pending && confirmation.length === 0')
-    expect(source).toContain('onMouseDown={dismissible ? onCancel : undefined}')
-    expect(source).toContain('disabled={pending}')
+    expect(source).toContain('if (!open && dismissible) onCancel()')
+    expect(source).toContain('if (!dismissible) event.preventDefault()')
+    expect(source).toContain('data-dialog-initial-focus')
+    expect(source).toContain('disabled={pending || !confirmationReady}')
   })
 })

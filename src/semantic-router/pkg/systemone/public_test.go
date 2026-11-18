@@ -135,6 +135,35 @@ func TestPublicDiscoveryAndListenerSelectionFailClosed(t *testing.T) {
 	}
 }
 
+// Both listener schemas hand the listener's vsr profile to the plugins that
+// read the listing, and a listener without one lists none.
+func TestTheListingCarriesTheListenersVSRProfile(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/vela3-lite"}}
+	off, on := false, true
+	profile := &config.VSRProfile{Redact: &off, RouterTurns: &on, RouterGoal: "save"}
+	for _, schema := range []string{"vllm-sr/5.0", "vllm-sr/4.0"} {
+		for _, vsr := range []*config.VSRProfile{profile, nil} {
+			listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: schema, Models: []string{"vllm-sr/vela3-lite"}, VSR: vsr}}}
+			response := httptest.NewRecorder()
+			Handler(cfg, listener, nil)(response, httptest.NewRequest(http.MethodGet, "/v1/systemone/models", nil))
+			var listed struct {
+				VSR map[string]any `json:"vsr"`
+			}
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &listed) != nil {
+				t.Fatalf("%s: %d %s", schema, response.Code, response.Body.String())
+			}
+			want := `{"redact":false,"router_goal":"save","router_turns":true}`
+			if vsr == nil {
+				want = "null"
+			}
+			if got, _ := json.Marshal(listed.VSR); string(got) != want {
+				t.Fatalf("%s lists vsr %s, want %s: %s", schema, got, want, response.Body.String())
+			}
+		}
+	}
+}
+
 // The listing gives the question types of each model it lists, where a
 // systemone deployment that names this API reads them (GET <endpoint>/models).
 func TestPublicDiscoveryListsTheQuestionTypesARemoteDeploymentReads(t *testing.T) {
@@ -273,7 +302,7 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 	}{
 		{400, rejection("invalid_request", "video_too_large", 32_000_000), 400, "invalid_request", "video exceeds 32 MB"},
 		{400, rejection("invalid_request", "video_too_long", 300), 400, "invalid_request", "video longer than 300 s"},
-		{400, rejection("invalid_request", "video_malformed", 0), 400, "invalid_request", "malformed video"},
+		{400, rejection("invalid_request", "video_malformed", 0), 400, "invalid_media", "malformed video"},
 		{400, rejection("invalid_request", "video_pixels", 8_294_400), 400, "invalid_request", "video frames exceed 8,294,400 pixels"},
 		{400, rejection("invalid_request", "video_tokens", 16_384), 400, "invalid_request", "videos exceed 16,384 input tokens"},
 		{400, rejection("invalid_request", "image_too_large", 8_000_000), 400, "invalid_request", "image exceeds 8 MB"},
@@ -299,6 +328,40 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus ||
 			got.Error.Code != test.wantCode || got.Error.Message != test.wantMessage || strings.Contains(response.Body.String(), "private") {
 			t.Fatalf("runtime %d %s => %d %s", test.status, test.body, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestPublicNativeMediaRejectionsTakeTheDocumentedCodes(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
+	for _, test := range []struct {
+		status, wantStatus int
+		code, reason       string
+		wantCode           string
+	}{
+		{400, 400, "invalid_request", "image_format", "unsupported_media_type"},
+		{400, 400, "invalid_request", "video_format", "unsupported_media_type"},
+		{400, 400, "invalid_request", "image_malformed", "invalid_media"},
+		{400, 400, "invalid_request", "video_malformed", "invalid_media"},
+		{400, 400, "invalid_request", "image_pixels", "invalid_request"},
+		{400, 400, "invalid_request", "video_unsupported", "invalid_request"},
+		{415, 415, "unsupported_media_type", "encoding_unsupported", "unsupported_media_type"},
+	} {
+		body := `{"error":{"code":"` + test.code + `","reason":"` + test.reason + `","limit":100,"message":"images[0]: /private/models/test"}}`
+		handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+			return test.status, []byte(body), nil
+		})
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
+		var got struct {
+			Error struct{ Code, Reason, Message string } `json:"error"`
+		}
+		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus ||
+			got.Error.Code != test.wantCode || got.Error.Reason != test.reason ||
+			got.Error.Message == "" || strings.Contains(response.Body.String(), "private") {
+			t.Fatalf("runtime %d %s => %d %s", test.status, body, response.Code, response.Body.String())
 		}
 	}
 }

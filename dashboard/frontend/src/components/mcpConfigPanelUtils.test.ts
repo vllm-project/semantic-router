@@ -5,8 +5,8 @@ import type { UnifiedTool } from './mcpConfigPanelTypes'
 import {
   buildServerConfig,
   buildTestServerConfig,
-  filterAndSortServers,
-  filterAndSortUnifiedTools,
+  filterServers,
+  filterUnifiedTools,
   getMCPVisibleRange,
   hiddenArgumentsBlockCommandChange,
   paginateMCPItems,
@@ -128,28 +128,32 @@ describe('MCP configuration support', () => {
     expect(hiddenArgumentsBlockCommandChange(server, 'npx', true)).toBe(false)
   })
 
-  it('searches, filters, sorts, and bounds a large tools catalog', () => {
+  it('searches, filters, sorts by name, and bounds a large tools catalog', () => {
     const tools = Array.from({ length: 48 }, (_, index) =>
       makeTool(index, index % 3 === 0 ? 'mcp' : index % 3 === 1 ? 'frontend' : 'backend'),
-    )
-    const searched = filterAndSortUnifiedTools(tools, 'private documentation', 'all', 'name-asc')
+    ).reverse()
+    const searched = filterUnifiedTools(tools, 'private documentation', 'all')
     expect(searched.map((tool) => tool.id)).toEqual(['backend-17'])
 
-    const mcpTools = filterAndSortUnifiedTools(tools, 'tenant', 'mcp', 'parameters-desc')
+    const mcpTools = filterUnifiedTools(tools, 'tenant', 'mcp')
     expect(mcpTools).toHaveLength(16)
     expect(mcpTools.every((tool) => tool.sourceType === 'mcp')).toBe(true)
+    expect(mcpTools[0]?.name).toBe('tool-00')
+    tools.reverse()
     expect(paginateMCPItems(tools, 2, 12)).toHaveLength(12)
     expect(paginateMCPItems(tools, 2, 12)[0]?.id).toBe('mcp-12')
     expect(getMCPVisibleRange(48, 2, 12)).toEqual({ start: 13, end: 24 })
   })
 
-  it('searches and bounds servers while keeping status and tool-count sorting stable', () => {
-    const servers = Array.from({ length: 25 }, (_, index) => makeServer(index))
-    expect(filterAndSortServers(servers, 'all', 'private document', 'name-asc')).toHaveLength(1)
+  it('searches, filters by transport and status, and bounds servers in name order', () => {
+    const servers = Array.from({ length: 25 }, (_, index) => makeServer(index)).reverse()
+    const none = { transports: [], statuses: [] }
+    expect(filterServers(servers, 'private document', none)).toHaveLength(1)
 
-    const connected = filterAndSortServers(servers, 'connected', '', 'tools-desc')
+    const connected = filterServers(servers, '', { transports: [], statuses: ['connected'] })
     expect(connected).toHaveLength(13)
-    expect(connected[0]?.tools?.length).toBeGreaterThanOrEqual(connected[1]?.tools?.length || 0)
+    expect(connected[0]?.config.name).toBe('Server 00')
+    expect(filterServers(servers, '', { transports: ['stdio'], statuses: [] })).toHaveLength(0)
     expect(paginateMCPItems(connected, 1, 8)).toHaveLength(8)
     expect(paginateMCPItems(connected, 2, 8)).toHaveLength(5)
   })

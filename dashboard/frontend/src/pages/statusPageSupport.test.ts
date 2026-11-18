@@ -1,30 +1,126 @@
 import { describe, expect, it } from 'vitest'
 
-import type { EmbeddingProviderRuntimeStatus, ServiceStatus } from '../utils/routerRuntime'
+import type {
+  EmbeddingProviderRuntimeStatus,
+  ServiceStatusHistory,
+  SystemStatus,
+} from '../utils/routerRuntime'
 import {
-  clampPage,
+  deploymentUptime,
+  describeOverall,
+  describeService,
   embeddingProviderHealthLabel,
   embeddingProviderTone,
-  filterServices,
+  formatDeploymentType,
   formatEmbeddingProviderBackend,
   formatProviderCheckedAt,
+  formatUptime,
+  historyUptime,
+  orderedServiceNames,
 } from './statusPageSupport'
 
-const services: ServiceStatus[] = [
-  { name: 'router', component: 'semantic-router', status: 'ready', healthy: true },
-  { name: 'envoy', status: 'degraded', message: 'upstream unavailable', healthy: false },
-]
+const status = (overrides: Partial<SystemStatus> = {}): SystemStatus => ({
+  overall: 'healthy',
+  deployment_type: 'local',
+  services: [
+    { name: 'Router', status: 'running', healthy: true },
+    { name: 'Dashboard', status: 'running', healthy: true },
+  ],
+  ...overrides,
+})
+
+const history = (name: string, states: ServiceStatusHistory['hours'][number]['status'][]) => ({
+  name,
+  hours: states.map((state, index) => ({
+    observedAt: new Date(Date.UTC(2026, 7, 24, index)).toISOString(),
+    status: state,
+  })),
+})
 
 describe('status page support', () => {
-  it('filters services by health and searchable metadata', () => {
-    expect(filterServices(services, '', 'unhealthy')).toEqual([services[1]])
-    expect(filterServices(services, 'semantic', 'all')).toEqual([services[0]])
-    expect(filterServices(services, 'upstream', 'all')).toEqual([services[1]])
+  it('only calls a deployment operational when every reported service is healthy', () => {
+    expect(describeOverall(status())).toMatchObject({
+      title: 'All systems operational',
+      tone: 'success',
+      fullyOperational: true,
+    })
+    const degraded = status({
+      overall: 'degraded',
+      services: [
+        ...status().services,
+        { name: 'Telemetry', status: 'unavailable', healthy: false },
+      ],
+    })
+    expect(describeOverall(degraded)).toMatchObject({ title: 'Degraded', tone: 'warning' })
+    expect(describeOverall(status({ services: [] })).title).toBe('No running services detected')
+    expect(describeOverall(null).title).toBe('Status unavailable')
   })
 
-  it('clamps pagination after result counts change', () => {
-    expect(clampPage(4, 13, 6)).toBe(3)
-    expect(clampPage(0, 0, 6)).toBe(1)
+  it('reports an offline Router as a danger state instead of a generic label', () => {
+    const offline = status({
+      overall: 'not_running',
+      services: [{ name: 'Router', status: 'not running', healthy: false }],
+    })
+    expect(describeOverall(offline)).toMatchObject({ title: 'Router offline', tone: 'danger' })
+  })
+
+  it('describes each service state with its condition', () => {
+    expect(describeService({ name: 'Router', status: 'running', healthy: true })).toEqual({
+      label: 'Operational',
+      condition: 'Normal',
+      tone: 'success',
+    })
+    expect(describeService({ name: 'Router', status: 'starting', healthy: false }).tone).toBe(
+      'info',
+    )
+    expect(describeService({ name: 'Envoy', status: 'unavailable', healthy: false })).toEqual({
+      label: 'Unavailable',
+      condition: 'Unavailable',
+      tone: 'danger',
+    })
+    expect(describeService({ name: 'Router', status: 'degraded', healthy: false })).toEqual({
+      label: 'Degraded',
+      condition: 'Needs attention',
+      tone: 'warning',
+    })
+    expect(describeService(undefined).label).toBe('Not reported')
+  })
+
+  it('keeps services that only appear in history after the live ones', () => {
+    const value = status({
+      history: {
+        windowHours: 2,
+        through: '2026-08-24T01:00:00Z',
+        services: [history('Router', ['operational']), history('Gateway', ['unknown'])],
+      },
+    })
+    expect(orderedServiceNames(value)).toEqual(['Router', 'Dashboard', 'Gateway'])
+  })
+
+  it('computes uptime from observed hours only', () => {
+    expect(historyUptime(history('Router', ['operational', 'unknown', 'unavailable']))).toBe(50)
+    expect(historyUptime(history('Router', ['unknown', 'unknown']))).toBeNull()
+    expect(formatUptime(null)).toBe('No data')
+    expect(formatUptime(100)).toBe('100%')
+    expect(formatUptime(97.5)).toBe('97.50%')
+    const value = status({
+      history: {
+        windowHours: 2,
+        through: '2026-08-24T01:00:00Z',
+        services: [
+          history('Router', ['operational', 'unavailable']),
+          history('Dashboard', ['operational', 'operational']),
+          history('Gateway', ['unknown', 'unknown']),
+        ],
+      },
+    })
+    expect(deploymentUptime(value)).toBe(75)
+    expect(deploymentUptime(status())).toBeNull()
+  })
+
+  it('formats deployment facts for display', () => {
+    expect(formatDeploymentType('none')).toBe('Not detected')
+    expect(formatDeploymentType('local-spool')).toBe('Local Spool')
   })
 
   it('maps embedding provider health without treating an unprobed provider as healthy', () => {

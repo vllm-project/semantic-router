@@ -31,6 +31,14 @@ func GlobalConfigYAMLHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
+		if !callerCanViewConfigSecrets(r) {
+			globalYAML, err = redactConfigYAML(globalYAML)
+			if err != nil {
+				http.Error(w, "Failed to read global config", http.StatusInternalServerError)
+				return
+			}
+		}
+
 		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		_, _ = w.Write(globalYAML)
@@ -83,13 +91,15 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
-		if auth.RejectRevokedMutation(w, r) {
+		if rejectKeyReferenceRedirect(w, r, existingData, updatedYAML) || auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if err := writeConfigAtomically(configPath, updatedYAML); err != nil {
+		_, keptKeys, err := persistConfig(configPath, updatedYAML)
+		if err != nil {
 			writeConfigPersistenceError(w, err)
 			return
 		}
+		warnings = append(warnings, keptKeys...)
 		if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 			return
 		}
@@ -121,15 +131,15 @@ func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
 		return nil, err
 	}
 
-	parsed, err := routerconfig.ParseYAMLBytes(data)
-	if err != nil {
-		return nil, fmt.Errorf("parse config.yaml: %w", err)
-	}
-
-	global := routerconfig.CanonicalGlobalFromRouterConfig(parsed)
-	if global == nil {
-		defaults := routerconfig.DefaultCanonicalGlobal()
-		global = &defaults
+	defaults := routerconfig.DefaultCanonicalGlobal()
+	global := &defaults
+	// A field this build does not know elsewhere in config.yaml, such as a
+	// newer Router's capability, must not hide the global view: the defaults
+	// merged with what config.yaml writes under global still describe it.
+	if parsed, parseErr := routerconfig.ParseYAMLBytesWithoutEnvExpansion(data); parseErr != nil {
+		log.Printf("Global config view: config.yaml did not parse, showing its written global block: %v", parseErr)
+	} else if canonical := routerconfig.CanonicalGlobalFromRouterConfig(parsed); canonical != nil {
+		global = canonical
 	}
 
 	var effective yaml.Node
@@ -182,6 +192,10 @@ func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, []ro
 		return nil, nil, fmt.Errorf("marshal updated config: %w", err)
 	}
 
+	updatedYAML, err = restoreConfigSecrets(existingData, updatedYAML)
+	if err != nil {
+		return nil, nil, err
+	}
 	parsed, err := routerconfig.ParseYAMLBytes(updatedYAML)
 	if err != nil {
 		return nil, nil, err

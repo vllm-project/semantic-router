@@ -33,7 +33,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"provider":                                               wire.Provider != nil,
 		"choices.native_finish_reason":                           chatChoicesHaveNativeFinishReason(wire.Choices),
 		"kv_transfer":                                            wire.hasLegacyKVTransferMetadata(),
-		"metadata":                                               len(wire.Metadata) > 0,
+		"metadata":                                               wire.hasMetadata(),
 		"moderation":                                             len(wire.Moderation) > 0,
 		"x_groq":                                                 len(wire.XGroq) > 0,
 		"usage_breakdown":                                        wire.hasUsageBreakdown(),
@@ -58,14 +58,25 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// from the neutral response, so render it again instead of leaking them.
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
 	// not be replayed.
-	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices)
-	replay := body
-	if needsReencode {
-		replay = nil
+	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices) || wire.hasDeepSeekDecorations()
+	var replay []byte
+	public := false
+	if !needsReencode {
+		if replay, public, err = publicChatResponseBody(body); err != nil {
+			return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, invalidProviderResponse("invalid_upstream_json", "upstream response JSON is invalid")
+		}
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, replay, response.Generation, response.SourceStopReason, policy)
-	envelope.ResponseReencodeRequired = needsReencode
+	// Public bytes too large to keep are rendered again rather than forwarded.
+	envelope.ResponseReencodeRequired = needsReencode || public && len(envelope.Response) == 0
 	return response, envelope, diagnostics, nil
+}
+
+func (wire chatResponseWire) hasDeepSeekDecorations() bool {
+	if wire.Usage == nil {
+		return false
+	}
+	return wire.Usage.PromptCacheHitTokens != nil || wire.Usage.PromptCacheMissTokens != nil
 }
 
 func chatChoicesHaveNativeFinishReason(choices []chatChoiceWire) bool {
@@ -185,6 +196,8 @@ func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool 
 		prefix + "is_byok":                                              wire.IsBYOK != nil,
 		prefix + "cost_details":                                         wire.CostDetails != nil,
 		prefix + "server_tool_use":                                      wire.ServerToolUse != nil,
+		prefix + "prompt_cache_hit_tokens":                              wire.PromptCacheHitTokens != nil,
+		prefix + "prompt_cache_miss_tokens":                             wire.PromptCacheMissTokens != nil,
 	}
 }
 
@@ -274,10 +287,27 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 		OutputTotal:     authoritative(wire.CompletionTokens),
 		Total:           authoritative(wire.TotalTokens),
 	}
+	var cachedTokens *int64
+	var cacheWriteTokens *int64
+	var createdCacheTokens *int64
+	var cacheCreationTokens *int64
 	if wire.PromptTokensDetails != nil {
-		details := wire.PromptTokensDetails
-		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
+		cachedTokens = wire.PromptTokensDetails.CachedTokens
+		cacheWriteTokens = wire.PromptTokensDetails.CacheWriteTokens
+		createdCacheTokens = wire.PromptTokensDetails.CreatedCacheTokens
+		cacheCreationTokens = wire.PromptTokensDetails.CacheCreationTokens
+	}
+	if cachedTokens == nil {
+		cachedTokens = wire.PromptCacheHitTokens
+	}
+	if cachedTokens != nil || cacheWriteTokens != nil || createdCacheTokens != nil || cacheCreationTokens != nil {
+		if err := decodeInputCacheUsage(&usage, cachedTokens, cacheWriteTokens, createdCacheTokens, cacheCreationTokens); err != nil {
 			return llmprotocol.Usage{}, err
+		}
+	}
+	if usage.InputUncached.Value == nil && wire.PromptCacheMissTokens != nil {
+		if *wire.PromptCacheMissTokens >= 0 && *wire.PromptCacheMissTokens <= wire.PromptTokens {
+			usage.InputUncached = authoritative(*wire.PromptCacheMissTokens)
 		}
 	}
 	if wire.CompletionTokensDetails != nil {
@@ -304,6 +334,14 @@ func splitOutputUsage(total, reasoning int64, otherProvenance llmprotocol.UsageP
 }
 
 func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	for _, items := range append([][]llmprotocol.OutputItem{response.Output}, response.Alternatives...) {
+		for _, item := range items {
+			if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, item.Content); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
 	if response.Error != nil {
 		var diagnostics llmprotocol.Diagnostics
 		if response.Usage.State == llmprotocol.UsageAvailable {

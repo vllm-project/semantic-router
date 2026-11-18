@@ -32,10 +32,60 @@ recipes:
 OpenAI-specific mapping from `catalog: openai/gpt-5.6-sol`; do not repeat its
 reasoning definition in YAML.
 
-Browse built-in identities and their Provider support in **Model Hub**, or
-choose a Provider in **Build → Routing → Models → Add Model**. The Dashboard labels
+Browse built-in identities and their Provider support in **Models → Model Hub**,
+or choose a Provider in **Models → Backend models → Connect model**. The Dashboard labels
 catalog choices as **Built-in** and saves both the local alias and canonical
 identity.
+
+## List prices
+
+A catalog-backed Model without `pricing` of its own takes its Provider
+mapping's list price, so cost and savings also work for a Model reached with a
+Claude or ChatGPT login (`auth.credential: caller`). The first-party Anthropic
+and OpenAI mappings carry USD input, output and cache-read rates and these
+cache writes:
+
+| Provider | Models | Cache writes |
+| --- | --- | --- |
+| `anthropic` | Claude Fable 5.2, Opus 5.5, Sonnet 5.5, Fable 5.1, Opus 5, Sonnet 5, Fable 5 and Opus 4.8 | 5-minute `cache_write_per_1m` and 1-hour `cache_write_1h_per_1m` |
+| `openai` | GPT-6 Astra, GPT-5.6 Sol, Terra and Luna, GPT-5.5, GPT-5.4 and GPT-5.4 mini | 30-minute `cache_write_per_1m` on GPT-6 Astra and GPT-5.6; the others price a write as input |
+
+The rates come from the [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing)
+and [OpenAI](https://developers.openai.com/api/docs/pricing) pricing pages and
+leave out long-context, data-residency, batch and service-tier adjustments.
+The Dashboard's **Requests** page marks such a cost as a list price estimate,
+and on a login it is what the tokens would cost at API prices, not what the
+plan charges. Set `pricing`
+on the alias to use other rates. A written `pricing` block always wins,
+whatever its rates, and its `currency` defaults to `USD`, so
+`pricing: {prompt_per_1m: 0, completion_per_1m: 0}` marks a Model free: its
+cost is 0.
+
+A Model without `pricing` that had no price before list prices has one now, so
+routing sees it after an upgrade: `max_cost_per_1m` can exclude it, the `cost`
+factor of
+[multi-factor selection](../tutorials/algorithm/selection/multi-factor#cost-and-slos)
+scores it, and the `cost` order of
+[Escalate](../tutorials/algorithm/looper/escalate) places it by price instead
+of last. A Model on a Claude or ChatGPT login is ranked at the API price, not
+the plan's. Set `pricing` on it to rank it at other rates, or free.
+
+A custom Model, one without `catalog`, takes the list price its backend's
+Provider gives the model ID the backend calls: its `external_model_ids` entry,
+else `provider_model_id`, else the name. Only the backend's own Provider is
+read, and only when the backend's endpoints are that Provider's API: the host
+of its default base URL (`api.anthropic.com`, `api.openai.com`), or
+`chatgpt.com`, which serves ChatGPT logins.
+`provider_model_id: claude-sonnet-5-5` on an `anthropic` backend is priced as
+Claude Sonnet 5.5, while a `vllm` backend serving the same ID, or an `openai`
+backend whose `endpoint` is an OpenAI-compatible server elsewhere, takes no
+price. Set `pricing` on a Model behind a proxy that bills at list price. Some
+model IDs have a list price but no Model Card yet: Claude Haiku 5.5
+(`claude-haiku-5-5`) and GPT-6.1 Sol, GPT-6.1 Terra, GPT-6 Sol and GPT-6 Luna
+(`gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-sol`, `gpt-6-luna`). A custom Model
+that calls one of them is priced at the standard rate, since a cost leaves out
+long-context rates such as Haiku 5.5's five-times rate over 100,000 prompt
+tokens. `catalog:` cannot name these IDs.
 
 ## MiniMax M3.1 Flash
 

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"net/url"
 	"slices"
 	"strings"
@@ -25,6 +26,7 @@ type routerReplayTrajectoryResponse = routerreplay.TrajectoryResponse
 // Multiple HTTP requests made by one agent turn are cumulative snapshots; the most
 // complete snapshot is selected before messages are emitted.
 func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
+	ctx context.Context,
 	method string,
 	rawQuery string,
 ) *ext_proc.ProcessingResponse {
@@ -47,7 +49,7 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 	if scoped {
 		recipeFilter = &recipe
 	}
-	records, err := r.queryRouterReplaySession(sessionID, recipeFilter)
+	records, err := r.queryRouterReplaySession(ctx, sessionID, recipeFilter)
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
@@ -113,7 +115,9 @@ func buildTrajectoryTurns(records []routerreplay.RoutingRecord) []trajectoryTurn
 	}
 	turnByIndex := make(map[turnKey]int)
 	for _, record := range records {
-		if record.ToolTrace == nil || len(record.ToolTrace.Steps) == 0 {
+		// An approval review quotes the session's transcript to its reviewer;
+		// that copy is not another turn of the conversation.
+		if record.ToolTrace == nil || len(record.ToolTrace.Steps) == 0 || record.RequestKind != "" {
 			continue
 		}
 

@@ -95,7 +95,7 @@ func validateResponseStopReason(response Response) error {
 }
 
 func validateResponseOutputCardinality(response Response, limits Limits) error {
-	if len(response.Output) == 0 && response.StopReason != StopContentFilter {
+	if len(response.Output) == 0 && !StopAllowsEmptyOutput(response.StopReason) {
 		return NewError(ErrorUpstreamUnavailable, "empty_response_output", "successful upstream response has no primary output", nil)
 	}
 	if limits.Alternatives > 0 && len(response.Alternatives) > limits.Alternatives {
@@ -107,6 +107,13 @@ func validateResponseOutputCardinality(response Response, limits Limits) error {
 		}
 	}
 	return nil
+}
+
+// StopAllowsEmptyOutput reports a stop that explains a reply with no output: a
+// content filter, or an output limit spent before any output, such as on
+// reasoning the client asked to omit.
+func StopAllowsEmptyOutput(reason StopReason) bool {
+	return reason == StopContentFilter || StopsAtOutputLimit(reason)
 }
 
 // StopsAtOutputLimit reports a stop at the output token limit or the end of the
@@ -373,7 +380,7 @@ func RequireCapabilities(format WireFormat, available, required CapabilitySet) e
 	}
 	return NewError(
 		ErrorUnsupportedFeature, "unsupported_capability",
-		fmt.Sprintf("wire format %q does not support: %s", format, strings.Join(missing, ", ")), nil,
+		fmt.Sprintf("the %s API does not support: %s", format.APIName(), strings.Join(missing, ", ")), nil,
 	)
 }
 

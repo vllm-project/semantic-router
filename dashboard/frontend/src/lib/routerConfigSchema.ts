@@ -1,7 +1,7 @@
 import { ROUTER_CONFIG_EXTENSION, ROUTER_CONFIG_SCHEMA } from '../generated/routerConfigContract'
 import type { FieldSchema } from './dslSchemaTypes'
 
-interface JSONSchemaNode {
+export interface JSONSchemaNode {
   $ref?: string
   type?: string
   title?: string
@@ -16,6 +16,7 @@ interface JSONSchemaNode {
   oneOf?: JSONSchemaNode[]
   minimum?: number
   maximum?: number
+  deprecated?: boolean
 }
 
 interface RouterConfigDocument extends JSONSchemaNode {
@@ -50,6 +51,11 @@ function concreteSchema(schema: JSONSchemaNode): JSONSchemaNode {
   if (!branches) return resolved
   const concrete = branches.find((branch) => branch.type !== 'null')
   return concrete ? resolveRouterConfigSchema(concrete) : resolved
+}
+
+/** The schema node a value at this reference is validated against, with $ref and nullable unions resolved. */
+export function concreteRouterConfigSchema(schemaOrRef: JSONSchemaNode | string): JSONSchemaNode {
+  return concreteSchema(typeof schemaOrRef === 'string' ? { $ref: schemaOrRef } : schemaOrRef)
 }
 
 function arrayFieldType(items: JSONSchemaNode | undefined): FieldSchema['type'] {
@@ -134,9 +140,10 @@ function fieldsFromObjectSchema(
     typeof schemaOrRef === 'string' ? { $ref: schemaOrRef } : schemaOrRef,
   )
   const required = new Set(schema.required ?? [])
-  return Object.entries(schema.properties ?? {}).map(([key, property]) =>
-    fieldFromSchema(key, property, required.has(key), nextRefs),
-  )
+  // A deprecated field loads rewritten as its replacement, so no form offers it.
+  return Object.entries(schema.properties ?? {})
+    .filter(([, property]) => !property.deprecated)
+    .map(([key, property]) => fieldFromSchema(key, property, required.has(key), nextRefs))
 }
 
 export function routerConfigFieldsForRef(

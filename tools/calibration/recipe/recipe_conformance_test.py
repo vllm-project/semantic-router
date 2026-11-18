@@ -73,7 +73,7 @@ class RecipeConformanceTest(unittest.TestCase):
         self.assertEqual(len(mom.decisions), 23)
         self.assertEqual(mom.variants, 366)
         self.assertNotIn("classifier", mom.coverage["signals"]["by_family"])
-        self.assertEqual(len(mom.probe_shard_sizes), 16)
+        self.assertEqual(len(mom.probe_shard_sizes), 8)
         self.assertEqual(sum(mom.probe_shard_sizes), mom.variants)
         self.assertEqual(
             set(mom.algorithms),

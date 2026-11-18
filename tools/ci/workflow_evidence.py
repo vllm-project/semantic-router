@@ -29,6 +29,44 @@ def junit_cases(path: Path) -> list[dict]:
     return cases
 
 
+PLUGIN_TEST_FILE = re.compile(r"^(\S+\.test\.tsx?):$")
+PLUGIN_TEST_CASE = re.compile(r"^\((pass|fail|skip|todo)\) (.+?)(?: \[[0-9.]+m?s\])?$")
+PLUGIN_TEST_TOTAL = re.compile(r"^Ran (\d+) tests? across \d+ files?\.")
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def plugin_test_cases(path: Path) -> list[dict]:
+    """Cases from a `claude plugin test` report: each file's (pass)/(fail)/(skip)
+    lines, which must add up to the run's own total."""
+    cases, current, total = [], "", None
+    statuses = {
+        "pass": "passed",
+        "fail": "failed",
+        "skip": "skipped",
+        "todo": "skipped",
+    }
+    for raw in path.read_text().splitlines():
+        line = ANSI.sub("", raw).strip()
+        if match := PLUGIN_TEST_FILE.match(line):
+            current = match.group(1)
+        elif match := PLUGIN_TEST_CASE.match(line):
+            cases.append(
+                {
+                    "id": f"{current}::{match.group(2)}",
+                    "status": statuses[match.group(1)],
+                }
+            )
+        elif match := PLUGIN_TEST_TOTAL.match(line):
+            total = int(match.group(1))
+    if total is None or len(cases) != total:
+        raise ValueError(
+            f"incomplete plugin test report: {len(cases)} cases, total {total}: {path}"
+        )
+    if len({case["id"] for case in cases}) != len(cases):
+        raise ValueError(f"plugin test report names a case twice: {path}")
+    return cases
+
+
 def go_cases(
     events_path: Path, inventory_path: Path, exclusions: set[str]
 ) -> tuple[list[dict], list[str]]:

@@ -30,6 +30,23 @@ const (
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
 )
 
+// APIName is the API a wire format serves, as clients and operators call it;
+// the identifier itself is not client-facing.
+func (format WireFormat) APIName() string {
+	switch format {
+	case OpenAIChatV1:
+		return "Chat Completions"
+	case OpenAIResponsesV1:
+		return "Responses"
+	case AnthropicMessagesV1:
+		return "Anthropic Messages"
+	case OpenAIImagesV1:
+		return "Images"
+	default:
+		return string(format)
+	}
+}
+
 type Role string
 
 const (
@@ -123,12 +140,24 @@ type Message struct {
 	// next to an Anthropic tool_result block. It continues the tool loop
 	// rather than starting a user turn. It is not a wire field.
 	WithToolResults bool `json:",omitempty"`
+	// SourcePosition is the client message this one was decoded from, counted
+	// from one, so a refusal can name the client's own field. Only Anthropic
+	// Messages decoding sets it; zero means unknown, as for a message the
+	// Router added. It is not a wire field.
+	SourcePosition int `json:",omitempty"`
 }
 
 type InstructionBlock struct {
 	Role    Role
 	Content []Content
 	Name    string // Chat Completions participant name; formats without one drop it.
+	// Position is how many conversation messages came before the instruction
+	// where the client sent it, zero for one that leads the conversation. Chat
+	// Completions and Responses decoding read a system or developer message
+	// anywhere as an instruction and record it here. Code that inserts or
+	// removes conversation messages keeps it with InsertMessages and
+	// KeepInstructionPositions. It is not a wire field.
+	Position int `json:",omitempty"`
 }
 
 type ToolCall struct {
@@ -141,6 +170,10 @@ type ToolCall struct {
 	ID        string
 	Name      string
 	Arguments string
+	// Namespace is the Responses namespace the client knows the tool under, and
+	// Name is then the tool's name inside it. Backends never receive it: their
+	// requests carry the flat name of the tool instead.
+	Namespace string
 }
 
 type ToolResult struct {
@@ -172,6 +205,10 @@ type Tool struct {
 	// CustomFormat constrains a custom tool's input. Nil means unconstrained text.
 	CustomFormat *CustomToolFormat
 	Cache        *CacheDirective
+	// Namespace and LocalName record where a tool flattened from a Responses
+	// namespace came from. Name holds the flat name every backend receives.
+	Namespace string
+	LocalName string
 }
 
 type CustomToolFormat struct {
@@ -283,6 +320,8 @@ type Request struct {
 	// ReasoningSummary asks a Responses provider for a reasoning summary: auto,
 	// concise or detailed. Chat Completions and Messages cannot carry it.
 	ReasoningSummary string
+	// IncludeEncryptedReasoning requests Responses encrypted continuation state.
+	IncludeEncryptedReasoning bool
 	// ReasoningDisplay controls whether a provider returns summarized reasoning
 	// content or only its signed continuation token. It is distinct from whether
 	// reasoning itself is enabled.
@@ -304,11 +343,19 @@ type Request struct {
 	// ContextManagement carries Anthropic context edits through routing and
 	// same-format re-encoding. Other wire formats must reject or report its loss.
 	ContextManagement json.RawMessage
+	// Safeguards carries the context Claude Code's auto mode sends for
+	// Anthropic's server-side classifier review, as sent. Only Anthropic
+	// Messages re-encodes it; other wire formats report its omission.
+	Safeguards json.RawMessage
 	// CacheSalt isolates backend prefix-cache entries; it is never prompt text.
 	CacheSalt *string
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
 	// output, but targets that cannot carry it must reject it, not drop it.
 	PromptCacheKey string
+	// ToolNameOrigins is decode state that no wire carries. A request that
+	// flattened a Responses namespace keeps where each tool name came from, so
+	// retained history prepended later is checked against the same names.
+	ToolNameOrigins ToolNameOrigins
 }
 
 type StopReason string

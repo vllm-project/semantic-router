@@ -57,11 +57,16 @@ func isClientStreamingRequested(ctx *RequestContext) bool {
 	return ctx.ExpectStreamingResponse || (ctx.SemanticRequest != nil && ctx.SemanticRequest.Stream)
 }
 
-// candidateReasoningChoice resolves the effective reasoning policy for a fallback candidate.
+// candidateReasoningChoice resolves the effective reasoning policy for a
+// fallback candidate, off when the request's output limit is too small for it.
 func (r *OpenAIRouter) candidateReasoningChoice(ctx *RequestContext, candidateModel string) bool {
 	if ctx == nil {
 		return false
 	}
+	return r.decisionReasoningChoice(ctx, candidateModel) && !r.outputBudgetTurnsReasoningOff(ctx, candidateModel)
+}
+
+func (r *OpenAIRouter) decisionReasoningChoice(ctx *RequestContext, candidateModel string) bool {
 	for i := range ctx.VSREligibleModelRefs {
 		ref := &ctx.VSREligibleModelRefs[i]
 		if candidateModelIdentity(*ref) == candidateModel {
@@ -269,7 +274,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		}
 	}
 
-	if refused := r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx); refused != nil {
+	if refused := r.fallbackCredentialRefusal(ctx); refused != nil {
 		return refused
 	}
 	return r.failedAttemptResponse(ctx, ctx.fallbackLastFailure)
@@ -433,6 +438,10 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	} else if candidateResponse.ID == "" {
 		candidateResponse.ID = "chatcmpl-" + ctx.RequestID
 	}
+	if ctx.SourceFormat == llmprotocol.AnthropicMessagesV1 {
+		// A streaming client's answer is rendered from this response.
+		candidateResponse = protocolcodec.AnthropicReplyIdentifiers(dispatch.targetFormat, candidateResponse)
+	}
 
 	var responseBody []byte
 	var streamDiags []llmprotocol.Diagnostic
@@ -444,13 +453,13 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			format = llmprotocol.OpenAIChatV1
 		}
 		streamBody, diags, streamErr := engine.EncodeResponseStream(format, candidateResponse, llmprotocol.StreamContext{
-			Context:            ctx.TraceContext,
-			Source:             format,
-			Target:             format,
-			Options:            clientStreamOptions(ctx),
-			PublicModel:        candidateModel,
-			ResponseID:         candidateResponse.ID,
-			PreviousResponseID: responseObjectPreviousID(ctx),
+			Context:        ctx.TraceContext,
+			Source:         format,
+			Target:         format,
+			Options:        clientStreamOptions(ctx),
+			PublicModel:    candidateModel,
+			ResponseID:     candidateResponse.ID,
+			ResponseRender: responseObjectRender(ctx),
 		})
 		if streamErr != nil {
 			attemptOutcome.Error = streamErr
@@ -507,7 +516,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	// side effects until the final public wire has passed validation.
 	policyPlan := r.prepareResponsePolicy(ctx, ctx.SemanticResponse, translated.Body)
 	if policyPlan.blocked != nil {
-		blockedStatus := http.StatusForbidden
+		blockedStatus := http.StatusBadRequest
 		if imm := policyPlan.blocked.GetImmediateResponse(); imm != nil && imm.GetStatus() != nil {
 			if code := int(imm.GetStatus().GetCode()); code != 0 {
 				blockedStatus = code
@@ -539,13 +548,13 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			}
 			streamResp := *ctx.SemanticResponse
 			reencodedStream, _, streamErr := engine.EncodeResponseStream(format, streamResp, llmprotocol.StreamContext{
-				Context:            ctx.TraceContext,
-				Source:             format,
-				Target:             format,
-				Options:            clientStreamOptions(ctx),
-				PublicModel:        candidateModel,
-				ResponseID:         ctx.SemanticResponse.ID,
-				PreviousResponseID: responseObjectPreviousID(ctx),
+				Context:        ctx.TraceContext,
+				Source:         format,
+				Target:         format,
+				Options:        clientStreamOptions(ctx),
+				PublicModel:    candidateModel,
+				ResponseID:     ctx.SemanticResponse.ID,
+				ResponseRender: responseObjectRender(ctx),
 			})
 			if streamErr == nil {
 				if validateErr := engine.ValidateEncodedResponse(reencodedStream, true); validateErr == nil {
@@ -555,13 +564,13 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 					// Produce a bounded stream containing the policy result by chunking text across frames within SSE limits.
 					boundedResp := splitResponseTextContent(streamResp, 64*1024)
 					boundedStream, _, boundedErr := engine.EncodeResponseStream(format, boundedResp, llmprotocol.StreamContext{
-						Context:            ctx.TraceContext,
-						Source:             format,
-						Target:             format,
-						Options:            clientStreamOptions(ctx),
-						PublicModel:        candidateModel,
-						ResponseID:         ctx.SemanticResponse.ID,
-						PreviousResponseID: responseObjectPreviousID(ctx),
+						Context:        ctx.TraceContext,
+						Source:         format,
+						Target:         format,
+						Options:        clientStreamOptions(ctx),
+						PublicModel:    candidateModel,
+						ResponseID:     ctx.SemanticResponse.ID,
+						ResponseRender: responseObjectRender(ctx),
 					})
 					if boundedErr == nil && engine.ValidateEncodedResponse(boundedStream, true) == nil {
 						responseBody = boundedStream
@@ -753,6 +762,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
 	requestBackendStreamUsage(dispatch.targetFormat, &projected)
+	r.requestUnstoredOnCallerLogin(dispatch.targetFormat, &projected)
 	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
@@ -778,6 +788,14 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 			CanFallback: true,
 			Reason:      "candidate_rate_limited",
 		}, fmt.Errorf("fallback candidate %q rejected by rate limit", candidateModel)
+	}
+	// The primary's reservation ends here; a candidate the budget cannot
+	// cover gives way to the next, which may cost less.
+	if refusal := r.reserveDispatchSpend(ctx, candidateModel, reqCopy); refusal != nil {
+		return nil, fallback.EvaluationResult{
+			CanFallback: true,
+			Reason:      "candidate_" + refusal.code,
+		}, fmt.Errorf("fallback candidate %q refused by the spend budget: %s", candidateModel, refusal.message)
 	}
 
 	return &fallbackCandidate{
@@ -849,6 +867,18 @@ func (r *OpenAIRouter) fallbackProviderAuthorizer(
 	provider, providerAuth, err := resolveProviderAuth(profile)
 	if err != nil {
 		return nil, err
+	}
+	if profile.Caller() {
+		// The same contract as primary dispatch: only the client's own login,
+		// and the attempt fails before the call without it.
+		present, err := callerCredentialAuthorizer(reqCtx, profile)
+		if err != nil {
+			return nil, err
+		}
+		return func(_ context.Context, request *http.Request) error {
+			present(request)
+			return nil
+		}, nil
 	}
 	if profile.Delegated() {
 		// The same contract as primary dispatch: only the request's delegated
@@ -959,7 +989,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		var connErr *connector.Error
 		if errors.As(err, &connErr) && connErr.Kind == connector.KindStatus {
 			errBody, _ := connErr.ResponseBody()
-			return errBody, connErr.StatusCode, err
+			return redactCallerCredential(reqCtx, errBody), connErr.StatusCode, err
 		}
 		return nil, 0, err
 	}
@@ -1029,6 +1059,10 @@ func (r *OpenAIRouter) buildFallbackImmediateResponse(
 	}
 }
 
+// fallbackOutcomeSource is the source of the outcome the fallback audit
+// appends to a request's replay record.
+const fallbackOutcomeSource = "fallback"
+
 // recordFallbackExecution persists one bounded terminal audit record containing
 // every correlated attempt. It runs for success, exhaustion, cancellation, and
 // policy rejection so replay consumers never have to infer missing attempts.
@@ -1094,7 +1128,7 @@ func (r *OpenAIRouter) recordFallbackExecution(ctx *RequestContext) {
 	}
 	outcome := routerreplay.Outcome{
 		Timestamp: time.Now().UTC(),
-		Source:    "fallback",
+		Source:    fallbackOutcomeSource,
 		Target:    "request",
 		TargetRef: selectedModel,
 		Verdict:   verdict,

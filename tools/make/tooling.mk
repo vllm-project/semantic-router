@@ -62,9 +62,12 @@ test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub
 test-looper-tts: $(HARNESS_VENV_DEPS) ## Test the offline Looper experiment and evidence contracts
 	@"$(AGENT_PYTHON)" -m unittest discover -s bench/looper_tts -t . -p 'test_*.py'
 
+test-agent-kv-tier-bench: $(HARNESS_VENV_DEPS) ## Test the agent KV tier placement rules and report arithmetic offline
+	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_kv_tier
+
 test-coding-agent-live: $(HARNESS_VENV_DEPS) ## Test the Claude Code lane's command, alias mapping and report without Harbor
 	@"$(AGENT_PYTHON)" -m pytest -q bench/coding_agent_live
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-coding-agent-live ## Test every registered bench/ research tool
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench test-coding-agent-live ## Test every registered bench/ research tool
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-coding-agent-live test-bench-tools
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench test-coding-agent-live test-bench-tools

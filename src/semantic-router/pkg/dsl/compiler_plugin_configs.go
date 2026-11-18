@@ -195,9 +195,13 @@ func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) (int
 	// Preserve omission and explicit false/zero overrides. Serializing the
 	// effective capture config here would replace inherited global defaults.
 	raw := fieldsToMap(fields)
+	var replay config.RouterReplayPluginConfig
 	payload, err := config.NewStructuredPayload(raw)
 	if err == nil {
-		err = payload.DecodeIntoStrict(&config.RouterReplayPluginConfig{})
+		err = payload.DecodeIntoStrict(&replay)
+	}
+	if err == nil {
+		err = replay.ValidatePromptCapture()
 	}
 	if err != nil {
 		c.addError(Position{}, "invalid router_replay configuration: %v", err)
@@ -213,6 +217,9 @@ func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) conf
 	}
 	if v, ok := getStringField(fields, "message"); ok {
 		cfg.Message = v
+	}
+	if v, ok := getBoolField(fields, "block"); ok {
+		cfg.Block = v
 	}
 	return cfg
 }

@@ -1,14 +1,9 @@
 package llmprotocol
 
-import (
-	"fmt"
-	"slices"
-	"strconv"
-	"strings"
-)
+import "strconv"
 
-// unsupportedSamplingControls are the request capabilities a model may declare
-// it lacks, each with the request field the Router then leaves out. A vLLM
+// unsupportedSamplingControls are the sampling controls a model may declare it
+// lacks, each with the request field the Router then leaves out. A vLLM
 // backend that runs speculative decoding, for example, rejects min_p and
 // logit_bias.
 var unsupportedSamplingControls = []struct {
@@ -17,34 +12,6 @@ var unsupportedSamplingControls = []struct {
 }{
 	{CapabilitySamplingMinP, "min_p"},
 	{CapabilitySamplingLogitBias, "logit_bias"},
-}
-
-// UnsupportedCapabilityNames lists the capabilities a model may declare it
-// lacks.
-func UnsupportedCapabilityNames() []string {
-	names := make([]string, 0, len(unsupportedSamplingControls))
-	for _, control := range unsupportedSamplingControls {
-		names = append(names, Capabilities(control.capability).Names()...)
-	}
-	return names
-}
-
-// ParseUnsupportedCapabilities reads the capabilities a model declares it
-// lacks. Only the names UnsupportedCapabilityNames lists are accepted.
-func ParseUnsupportedCapabilities(names []string) (CapabilitySet, error) {
-	allowed := UnsupportedCapabilityNames()
-	var set CapabilitySet
-	for _, name := range names {
-		if !slices.Contains(allowed, name) {
-			return CapabilitySet{}, fmt.Errorf("%q cannot be declared unsupported, use one of: %s", name, strings.Join(allowed, ", "))
-		}
-		parsed, err := ParseCapabilities([]string{name})
-		if err != nil {
-			return CapabilitySet{}, err
-		}
-		set.bits |= parsed.bits
-	}
-	return set, nil
 }
 
 // ProjectUnsupportedSampling leaves out of the request each sampling control

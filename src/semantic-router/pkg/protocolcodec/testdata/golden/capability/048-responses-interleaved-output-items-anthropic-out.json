@@ -3,5 +3,11 @@
   "error": {
     "category": "unsupported_feature",
     "code": "anthropic_content_interleaving"
-  }
+  },
+  "diagnostics": [
+    {
+      "field": "output.status",
+      "action": "dropped"
+    }
+  ]
 }

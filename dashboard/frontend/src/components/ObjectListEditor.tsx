@@ -1,8 +1,9 @@
 import { useId, useState } from 'react'
+import { Plus } from 'lucide-react'
 
+import { Button } from '../ui'
 import { ObjectListEditorItem } from './ObjectListEditorItem'
 import type { ObjectEditorField, ObjectListEditorProps } from './ObjectListEditorTypes'
-import styles from './StructuredFieldEditors.module.css'
 import { updateStructuredObjectField } from './structuredFieldEditorSupport'
 
 export type {
@@ -57,35 +58,47 @@ export function ObjectListEditor<TItem extends object>({
   }
 
   return (
-    <div className={styles.editor}>
-      <div className={styles.objectList}>
-        {value.map((item, index) => (
-          <ObjectListEditorItem
-            key={index}
-            editorId={editorId}
-            item={item}
-            index={index}
-            fields={fields}
-            label={itemLabel(item, index)}
-            description={itemDescription?.(item, index)}
-            errors={validateItem?.(item, index) ?? []}
-            expanded={readOnly || editingIndex === index}
-            removable={value.length > minItems}
-            disabled={disabled}
-            readOnly={readOnly}
-            onToggle={() => setEditingIndex(editingIndex === index ? null : index)}
-            onRemove={() => removeItem(index)}
-            onChange={(field, nextValue) => updateItem(index, field, nextValue)}
-          />
-        ))}
-      </div>
+    <div className="flex flex-col gap-2.5">
+      {value.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {value.map((item, index) => (
+            <ObjectListEditorItem
+              key={index}
+              editorId={editorId}
+              item={item}
+              index={index}
+              fields={fields}
+              label={itemLabel(item, index)}
+              description={itemDescription?.(item, index)}
+              errors={validateItem?.(item, index) ?? []}
+              expanded={readOnly || editingIndex === index}
+              removable={value.length > minItems}
+              disabled={disabled}
+              readOnly={readOnly}
+              onToggle={() => setEditingIndex(editingIndex === index ? null : index)}
+              onRemove={() => removeItem(index)}
+              onChange={(field, nextValue) => updateItem(index, field, nextValue)}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed border-border-strong px-3 py-4 text-center text-xs text-muted-foreground">
+          {emptyLabel}
+        </p>
+      )}
 
-      {value.length === 0 ? <p className={styles.empty}>{emptyLabel}</p> : null}
       {!readOnly && (maxItems === undefined || value.length < maxItems) ? (
-        <button type="button" className={styles.addButton} onClick={addItem} disabled={disabled}>
-          <span aria-hidden="true">+</span>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="self-start"
+          onClick={addItem}
+          disabled={disabled}
+        >
+          <Plus />
           {addLabel}
-        </button>
+        </Button>
       ) : null}
     </div>
   )

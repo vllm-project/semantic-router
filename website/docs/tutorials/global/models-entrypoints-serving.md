@@ -48,11 +48,15 @@ vllm-sr serve
 vllm-sr dashboard
 ```
 
-Open **Build → Models**, choose a provider, and enter the endpoint credentials.
+Open **Models → Backend models**, choose **Connect model**, pick a provider,
+and enter the endpoint credentials.
+The Dashboard saves the API key to an owner-only file beside the configuration
+and writes only its path, `auth.api_key_file`, into `config.yaml`
+([Keys saved from the Dashboard or the management API](../../installation/security-hardening#keys-saved-from-the-dashboard-or-the-management-api)).
 For compatible providers the Dashboard discovers available model IDs, so you
 can import several in one step. Use **Advanced settings** only when you need to
 override metadata, pricing, connection behavior, or select a built-in reasoning
-family. Use **Manual setup** for a custom inline reasoning contract. Verify each
+family. Use **Add manually** for a custom inline reasoning contract. Verify each
 connection before assigning it to a Recipe. See
 [Configure models](../../installation/model-configuration) for the YAML and
 Dashboard paths and
@@ -61,15 +65,15 @@ for the supported combinations.
 
 ### 2. Choose a Recipe
 
-Open **Build → Mixture-of-Models → Recipes**. A Recipe describes the routing
-logic without embedding provider URLs or credentials. Review its decisions and
-probes, or create a custom Recipe from the Signals, Projections, and Decisions
-you already maintain. **Built-in recipes** lists the maintained Recipes
-installed with vLLM-SR; choose **Create model** on one to publish it.
+Open **Routing → Recipes** and select the **Recipes** tab. A Recipe describes
+the routing logic without embedding provider URLs or credentials. Review its
+decisions and probes, or create a custom Recipe from the Signals, Projections,
+and Decisions you already maintain. The tab also lists the maintained built-in
+Recipes installed with vLLM-SR; choose **Create model** on one to publish it.
 
 ### 3. Publish a Mixture-of-Model
 
-In **Models**, create a Mixture-of-Model, choose the Recipe, and assign eligible
+On the **Public models** tab, choose **New public model**, choose the Recipe, and assign eligible
 connected Models to each decision. A decision can use one Model or an ordered
 set when the algorithm supports multiple candidates. Add concise public aliases
 and publish only after the topology and probes are complete.
@@ -78,8 +82,8 @@ and publish only after the topology and probes are complete.
 
 Select the new public model in **Playground** and send a representative request.
 The response metadata shows the decision, algorithm, selected Model, latency,
-TTFT, and TPOT without interrupting the conversation. Use **Insights** for a
-deeper routing trace and cost comparison.
+TTFT, and TPOT without interrupting the conversation. Use
+**Observe → Requests** for a deeper routing trace and cost comparison.
 
 ### 5. Call the OpenAI-compatible API
 

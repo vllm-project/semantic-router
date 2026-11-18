@@ -12,10 +12,14 @@ Envoy and the Router to the provider-mocker.
 | `headers` | Non-credential headers the client sent, such as `anthropic-beta`. |
 | `backends` | The backend formats this capture passes through today, each with the request fields that must reach the provider. |
 | `turns` | Two request bodies: the turn that asks for a tool call, then the follow-up that carries the client's call and its result. |
+| `tool_call` | Optional, Responses captures only. The tool the provider is asked to call when it is declared in a Responses namespace: `namespace` and `name` as the client knows them, and `backend_name`, the flat name every backend receives. |
 
 The replay changes only the model, the `stream` flag, the text of the last user
-message and, in the follow-up, the tool call's ID and name, which it takes from
-the call the mocker returned on the first turn, as the client would. Buffered
+message and, in the follow-up, the tool call's ID, name and namespace, which it
+takes from the call the mocker returned on the first turn, as the client would.
+For a capture with `tool_call`, the mocker calls `backend_name`; the replay
+requires the client to receive the call under `namespace` and `name`, and every
+provider request to carry the flat tool and no namespace. Buffered
 replays drop `stream_options`, which Chat Completions accepts only on streams. It
 sends each turn streamed and buffered, adds the mocker's `__mock_tool_call__` or
 `__mock_provider_error__` marker to the user text, and checks the status, the
@@ -31,6 +35,7 @@ a provider 429.
 | `claude-code-2.1.281-messages-tool-loop.json` | `claude -p --bare --strict-mcp-config --model vllm-sr/auto`, with `ANTHROPIC_BASE_URL` at a loopback recorder |
 | `copilot-cli-1.0.88-chat-tool-loop.json` | Copilot CLI BYOK, `COPILOT_PROVIDER_TYPE=openai`, `COPILOT_MODEL=vllm-sr/auto` |
 | `copilot-cli-1.0.88-messages-tool-loop.json` | Copilot CLI BYOK, `COPILOT_PROVIDER_TYPE=anthropic`, `COPILOT_MODEL=vllm-sr/auto` |
+| `codex-cli-0.166.0-responses-namespace-tool-loop.json` | `codex exec` with `multi_agent = true` and a stdio MCP server named `echo`, through a `wire_api = "responses"` provider at a loopback recorder; the first turn calls the MCP tool |
 
 ## Adding a capture
 

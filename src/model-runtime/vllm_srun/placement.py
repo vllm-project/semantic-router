@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 
 from . import dtypes
-from .errors import PlacementError, UnsupportedDeviceError
+from .errors import PackageError, PlacementError, UnsupportedDeviceError
 from .plugins import registry
 from .plugins.base import Accelerator, DeviceInfo, ModelSpec
+from .registry.artifacts import safetensors_header
 
 DEVICE = re.compile(r"(?P<kind>[a-z][a-z0-9_]*)(?::(?P<index>\d+))?\Z")
 DTYPE_BYTES = {"float32": 4, "bfloat16": 2, "float16": 2}
@@ -83,6 +85,17 @@ def resident_dtype(spec: ModelSpec, accelerator: str) -> str:
     if accelerator == "cpu":
         return policy.cpu_weights or policy.weights
     return policy.gpu_weights or policy.weights
+
+
+def lm_head_parameters(spec: ModelSpec) -> int:
+    """A grafted LM head's parameters (read from its header): held beside the backbone, outside its count."""
+    head = spec.backbone.lm_head
+    if head is None or head.tied or head.weight_file is None:
+        return 0
+    entry = safetensors_header(head.weight_file).get(head.tensor)
+    if not isinstance(entry, dict) or not entry.get("shape"):
+        raise PackageError(f"{head.weight_file.name} has no {head.tensor}")
+    return math.prod(int(size) for size in entry["shape"])
 
 
 def estimate_bytes(
