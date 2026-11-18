@@ -232,6 +232,23 @@ func TestChatReasoningBudgetOptInPreservesEffortAndNoBudgetRequests(t *testing.T
 	}
 }
 
+func TestReasoningBudgetProjectionReturnsProviderResolutionErrors(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	profile := router.Config.ProviderProfiles["provider"]
+	profile.BaseURL = "missing-host"
+	router.Config.ProviderProfiles["provider"] = profile
+	budget := int64(1024)
+	request := llmprotocol.Request{
+		ReasoningBudgetTokens: &budget,
+		Trusted:               llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
+	}
+
+	_, _, err := router.projectRequestForBackendWithDiagnostics(request, model, llmprotocol.OpenAIChatV1)
+	if err == nil || hasReasoningBudgetLossError(err) || !strings.Contains(err.Error(), "invalid provider base_url") {
+		t.Fatalf("provider resolution error = %v, want invalid provider base_url without lossy hint", err)
+	}
+}
+
 func TestReasoningBudgetQualificationKeepsVLLMFallbackCandidate(t *testing.T) {
 	router, openAIModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	vllmModel := "target-vllm-fallback"

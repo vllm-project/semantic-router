@@ -501,8 +501,10 @@ request without `store` and reports a `dropped` diagnostic for `store` in
 ### Chat reasoning budgets
 
 The Router maps Chat `reasoning_budget_tokens` to vLLM's
-`thinking_token_budget`. Other Chat providers cannot honor the neutral budget,
-so the Router rejects the request with `lossy_translation` by default.
+`thinking_token_budget`. Clients should send the neutral field; the public Chat
+endpoint rejects vLLM-native `thinking_token_budget` input. Other Chat providers
+cannot honor the neutral budget, so the Router rejects the request with
+`lossy_translation` by default.
 
 Listing `reasoning_budget_tokens` in `global.router.allow_lossy_translation`
 sends a non-vLLM Chat request without the budget and reports a `dropped`

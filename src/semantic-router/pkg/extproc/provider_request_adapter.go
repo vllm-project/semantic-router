@@ -82,7 +82,9 @@ func (r *OpenAIRouter) reportApproximatedReasoningDisplay(ctx *RequestContext, d
 // adaptChatReasoningBudget projects the Router-neutral Chat budget to vLLM's
 // native field. Other providers should have been rejected or projected by the
 // shared request projection before encoding. A null budget is equivalent to
-// an omitted field, and an explicit non-null vLLM value takes precedence.
+// an omitted field. An existing non-null native budget in the provider-bound
+// body takes precedence; public Chat ingress rejects client-supplied
+// thinking_token_budget.
 func (r *OpenAIRouter) adaptChatReasoningBudget(body []byte, dispatch *providerDispatch) ([]byte, error) {
 	if dispatch == nil || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 		return body, nil
@@ -100,7 +102,11 @@ func (r *OpenAIRouter) adaptChatReasoningBudget(body []byte, dispatch *providerD
 		providerType, _ = dispatch.profile.ProviderType()
 	}
 	if providerType == "" {
-		providerType = r.providerTypeForModel(dispatch.effectiveBackendModel())
+		var err error
+		providerType, err = r.providerTypeForModel(dispatch.effectiveBackendModel())
+		if err != nil {
+			return nil, err
+		}
 	}
 	if providerType != vllmProviderType {
 		field := llmprotocol.LossyFieldReasoningBudget

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -54,7 +55,14 @@ func (r *OpenAIRouter) projectUnsupportedReasoningBudget(
 	model string,
 	target llmprotocol.WireFormat,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
-	if request.ReasoningBudgetTokens == nil || target != llmprotocol.OpenAIChatV1 || r.providerTypeForModel(model) == vllmProviderType {
+	if request.ReasoningBudgetTokens == nil || target != llmprotocol.OpenAIChatV1 {
+		return request, nil, nil
+	}
+	providerType, err := r.providerTypeForModel(model)
+	if err != nil {
+		return request, nil, err
+	}
+	if providerType == vllmProviderType {
 		return request, nil, nil
 	}
 	field := llmprotocol.LossyFieldReasoningBudget
@@ -73,24 +81,31 @@ func (r *OpenAIRouter) projectUnsupportedReasoningBudget(
 // providerTypeForModel resolves the provider selected by the same primary
 // backend lookup used for dispatch. Legacy endpoints can still identify their
 // provider through VLLMEndpoint.Type.
-func (r *OpenAIRouter) providerTypeForModel(model string) string {
+func (r *OpenAIRouter) providerTypeForModel(model string) (string, error) {
 	if r == nil || r.Config == nil {
-		return ""
+		return "", nil
 	}
 	_, endpointName, found, err := r.Config.ResolvePrimaryBackendForModel(model)
-	if err != nil || !found {
-		return ""
+	if err != nil {
+		return "", fmt.Errorf("resolve primary backend for model %q: %w", model, err)
 	}
-	if profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName); profileErr == nil && profile != nil {
+	if !found {
+		return "", fmt.Errorf("model %q has no configured backend", model)
+	}
+	profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName)
+	if profileErr != nil {
+		return "", fmt.Errorf("resolve provider profile for model %q: %w", model, profileErr)
+	}
+	if profile != nil {
 		if providerType, typeErr := profile.ProviderType(); typeErr == nil {
-			return strings.ToLower(strings.TrimSpace(providerType))
+			return strings.ToLower(strings.TrimSpace(providerType)), nil
 		}
-		return strings.ToLower(strings.TrimSpace(profile.Type))
+		return strings.ToLower(strings.TrimSpace(profile.Type)), nil
 	}
 	if endpoint, exists := r.Config.GetEndpointByName(endpointName); exists {
-		return strings.ToLower(strings.TrimSpace(endpoint.Type))
+		return strings.ToLower(strings.TrimSpace(endpoint.Type)), nil
 	}
-	return ""
+	return "", fmt.Errorf("provider endpoint %q for model %q was not found", endpointName, model)
 }
 
 // appendRequestProjectionDiagnostics keeps a projection warning to one entry
