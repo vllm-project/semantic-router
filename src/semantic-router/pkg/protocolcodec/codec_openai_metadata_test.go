@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -359,8 +360,8 @@ func TestAnthropicRejectsMetadataTranslation(t *testing.T) {
 		t.Fatalf("expected error translating metadata to Anthropic Messages, got nil")
 	}
 
-	protocolErr, ok := err.(*llmprotocol.ProtocolError)
-	if !ok {
+	var protocolErr *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolErr) {
 		t.Fatalf("expected *llmprotocol.ProtocolError, got %T: %v", err, err)
 	}
 	if protocolErr.Code != "unsupported_metadata" {
