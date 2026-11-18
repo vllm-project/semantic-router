@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -592,18 +593,28 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 
 	if responseErr != nil {
 		observeStreamedApprovalReviewFailure(ctx)
-		fields := map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"error":      responseErr.Error(),
-		}
+		fields := map[string]interface{}{"request_id": ctx.RequestID}
+		addStreamFailureReason(fields, "error", responseErr)
 		if streamErr != nil {
-			fields["cause"] = streamErr.Error()
+			addStreamFailureReason(fields, "cause", streamErr)
 		}
 		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", fields)
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return nil
 	}
 	return semanticResponse
+}
+
+// addStreamFailureReason logs a protocol failure by its category and code
+// only: the message can quote the upstream provider's own error text.
+func addStreamFailureReason(fields map[string]interface{}, key string, err error) {
+	var protocolErr *llmprotocol.ProtocolError
+	if errors.As(err, &protocolErr) {
+		fields[key+"_category"] = string(protocolErr.Category)
+		fields[key+"_code"] = protocolErr.Code
+		return
+	}
+	fields[key] = err.Error()
 }
 
 // commitStreamedAnswer keeps an answer the client received as it streamed:
