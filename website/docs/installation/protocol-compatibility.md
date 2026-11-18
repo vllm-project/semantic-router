@@ -251,6 +251,45 @@ blocks are omitted:
 | Non-empty text, including whitespace | The same text |
 | A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
 
+### Chat request fields the Router refuses
+
+The Router fails closed on a Chat Completions field it can't carry to every
+backend: the request gets `400` with the code below and reaches no backend. A
+value that asks for nothing a backend wouldn't do without the field is
+accepted instead. The backend receives the request without the field, and
+`x-vsr-warnings` reports a `dropped` diagnostic for it. A `null` value counts
+as no field, and `logprobs: false` asks for the default, so neither is
+reported.
+
+| Field | Code | Accepted |
+| --- | --- | --- |
+| `audio` | `unsupported_audio` | None |
+| `function_call` | `unsupported_function_call` | None |
+| `functions` | `unsupported_functions` | None |
+| `logprobs` | `unsupported_logprobs` | `false` |
+| `modalities` | `unsupported_modalities` | Exactly `["text"]` |
+| `moderation` | `unsupported_moderation` | None |
+| `prediction` | `unsupported_prediction` | None |
+| `prompt_cache_options` | `unsupported_prompt_cache_options` | None |
+| `prompt_cache_retention` | `unsupported_prompt_cache_retention` | None |
+| `safety_identifier` | `unsupported_safety_identifier` | Any string: an end-user ID for the provider's abuse monitoring, which a backend doesn't use |
+| `service_tier` | `unsupported_service_tier` | `"auto"` and `"default"` |
+| `top_logprobs` | `unsupported_top_logprobs` | None |
+| `web_search_options` | `unsupported_web_search_options` | None |
+| `messages[].audio`, output audio in replayed history | `unsupported_output_audio` | None |
+| `messages[].function_call`, a legacy function call in history | `unsupported_legacy_function_call` | None |
+| `messages[].tool_calls[].function.TokenizedArguments` | `unsupported_messages_tool_calls_function_tokenized_arguments` | None |
+| A content part the message's role can't hold, such as an image in a system message | `unsupported_content` | None |
+| A tool whose `type` is not `function` or `custom` | `unsupported_tool` | None |
+| `tool_choice` of type `allowed_tools` | `unsupported_tool_choice` | None |
+| A `response_format` other than `text`, `json_object` or `json_schema` | `unsupported_output_format` | None |
+
+A Responses request's `service_tier` and `safety_identifier` follow the same
+rule. Its other top-level fields the Router can't carry, `background`,
+`context_management`, `max_tool_calls`, `moderation`, `prompt`,
+`prompt_cache_options`, `prompt_cache_retention` and `top_logprobs`, fail with
+`unsupported_<field>`.
+
 ### Anthropic Messages clients on other backends
 
 For an Anthropic Messages client using a Chat Completions or Responses
@@ -532,6 +571,16 @@ Chat provider.
 - **Verbosity.** Responses `text.verbosity` maps to the Chat `verbosity`
   field. Messages has no equivalent, so the Router drops this hint and reports
   `text.verbosity` in `x-vsr-warnings`.
+- **Response objects.** The response object, buffered and in every streamed
+  `response.*` event, repeats the request's `instructions`, `tools`,
+  `tool_choice`, `parallel_tool_calls`, `max_output_tokens`, `temperature`,
+  `top_p`, `text`, `reasoning`, `metadata`, `truncation`, `user` and
+  `prompt_cache_key` as the client sent them, whatever routing changed for the
+  backend. A member the request leaves out or sets to `null` keeps its
+  default. `created_at` is the backend's creation time, or the Router's when
+  the backend reports none, as Messages backends don't. When the output limit
+  ends the answer, its message item is `incomplete`, in
+  `response.output_item.done` and in the terminal response.
 
 ## Configure a backend format
 
@@ -654,14 +703,27 @@ tools or error translation.
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
 - vLLM's serving metadata never fails a reply, whatever its value:
-  `prompt_logprobs`, `prompt_text`, `prompt_routed_experts`,
-  `kv_transfer_params`, `ec_transfer_params` and `metrics` at the top level of
-  a reply or stream chunk, and `routed_experts` and `weight_versions` in its
-  choices. Chat clients receive them unchanged; a value other than null or
-  empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
+  `prompt_logprobs`, `prompt_token_ids`, `prompt_text`,
+  `prompt_routed_experts`, `kv_transfer_params`, `ec_transfer_params` and
+  `metrics` at the top level of a reply or stream chunk, and `token_ids`,
+  `routed_experts` and `weight_versions` in its choices. No client receives
+  them, nor the server's `system_fingerprint`, which names vLLM's version,
+  commit and parallel layout; the Router has no stable fingerprint of its own
+  to send instead, and `x-vsr-config-version` names the configuration that
+  served. A Chat client of a Chat backend receives the rest of the reply as
+  the backend sent it, buffered and streamed. A metadata value other than null
+  or empty is reported as `dropped`. In a vLLM-Omni stream, a chunk whose
   `modality` is not `text` fails with `unsupported_upstream_audio` (or
   `unsupported_upstream_modality`), because its `delta.content` carries
   encoded media, not answer text.
+- A request whose `tool_choice` is `none` reaches a Chat Completions backend
+  without its `tools`, `tool_choice` and `parallel_tool_calls`, and
+  `x-vsr-warnings` reports `tools` as `dropped`. Model servers such as vLLM
+  render declared tools into the prompt whatever the choice, so a model could
+  start a call the server then drops, leaving only the sentence before it.
+  Messages backends receive the tools, which they require while the history
+  holds `tool_use` blocks, and Responses backends receive them with
+  `tool_choice: "none"`, which the Responses API enforces.
 - A Chat provider ends a forced named tool call with `finish_reason: "stop"`.
   Anthropic Messages clients receive `stop_reason: "tool_use"` for a turn that
   ends that way and carries `tool_use` blocks. A turn that ends at the output

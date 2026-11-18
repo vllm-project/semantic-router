@@ -91,7 +91,16 @@ type responsesStreamEncoder struct {
 	completedOutput        map[int]json.RawMessage
 	imageProgressCompleted map[responsesOutputKey]bool
 	responseStarted        bool
-	wireSequence           uint64
+	createdAt              int64
+	// heldMessage is the last completed message, whose done event waits for
+	// the next event to show whether the output limit ended it.
+	heldMessage  *responsesHeldItem
+	wireSequence uint64
+}
+
+type responsesHeldItem struct {
+	outputIndex int
+	item        responsesItemWire
 }
 
 func (OpenAIResponsesCodec) NewDecoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamDecoder {

@@ -249,7 +249,7 @@ func (r *OpenAIRouter) encodeClientStream(ctx *RequestContext, response llmproto
 	}
 	body, diagnostics, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Source: format, Target: format,
-		Options: clientStreamOptions(ctx), PreviousResponseID: responseObjectPreviousID(ctx),
+		Options: clientStreamOptions(ctx), ResponseRender: responseObjectRender(ctx),
 	})
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 	return body, err

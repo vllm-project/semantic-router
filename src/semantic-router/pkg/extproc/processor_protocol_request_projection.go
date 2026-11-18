@@ -40,11 +40,13 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 		return projected, nil, err
 	}
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
+	projected, toolChoiceDiagnostics := llmprotocol.ProjectToolChoiceNone(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, budgetDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, budgetDiagnostics, verbosityDiagnostics,
+		toolChoiceDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
 }
 
 // projectUnsupportedReasoningBudget follows the same projection path during
