@@ -215,14 +215,14 @@ logo, plugin rose, evaluation orange, system slate.
 ## Application shell
 
 - **Sidebar.** The vLLM Semantic Router wordmark (black and white variants for
-  the two themes, the vLLM mark when collapsed) with a version pill beside it,
-  as LiteLLM shows it; the pill opens the instance details (status, version,
-  mode, deployment). Below it, grouped navigation with an animated active indicator,
+  the two themes, the vLLM mark when collapsed), kept at its own proportions,
+  with a fixed-width pill beside it that shows the short release, as LiteLLM
+  shows it; the pill opens the full version and the instance details. Below it, grouped navigation with an animated active indicator,
   attention badges (for example a running evaluation or a degraded service),
   Settings and the account menu. It collapses to an icon rail with ⌘B and
   becomes a drawer on small screens.
-- **Top bar.** Breadcrumb, search that opens the command menu, a live router
-  status pill linking to Status, notifications for deploys, evaluations and
+- **Top bar.** Breadcrumb, search that opens the command menu, a router status
+  icon linking to Status, notifications for deploys, evaluations and
   health events, the theme toggle and the help menu.
 - **Command menu.** ⌘K searches pages, recipes, decisions and backend models,
   and runs actions such as creating a decision or starting an evaluation.
@@ -243,15 +243,21 @@ logo, plugin rose, evaluation orange, system slate.
 - **Home** greets the operator and shows, from existing APIs: anything needing
   attention, requests, p95 latency, spend and savings with trends, traffic over
   time, routing mix by decision, models in use, public models, recent requests,
-  service health and a setup checklist.
-- **Get started** shows public model names, the gateway base URL and copyable
+  service health and a setup checklist. Each card loads on its own, so a slow
+  call never holds the page, and a range's last snapshot shows at once while it
+  refreshes. The decision model card and the checklist read the model runtime,
+  as Models does.
+- **Get started** shows public model names, the base URL clients call (the
+  address a deployment declares in `VLLM_SR_PUBLIC_BASE_URL`, else the
+  listener's address labelled as derived) and copyable
   examples for cURL, Python and TypeScript, and connection steps for the coding
   agents the Router identifies (Claude Code, Codex, OpenCode and DeepSeek
   Harness), explains the `x-vsr-*` response headers, and waits for the first
   request.
-- **Playground** keeps chats on the left, the conversation in the center and a
-  routing trace on the right: signals with scores, the matched decision and why
-  it won, candidate models, plugins, headers and the request.
+- **Playground** fills the viewport, each pane scrolling on its own, with chats
+  on the left, the conversation in the center and a routing trace on the right:
+  signals with scores, the matched decision and why it won, candidate models,
+  plugins, headers and the request.
 - **Recipes** groups public model names, recipe packages and route probes, and
   previews activation changes, including whether a restart is required.
 - **Decisions, Signals, Projections** use the list pattern, and every field of
@@ -287,14 +293,18 @@ logo, plugin rose, evaluation orange, system slate.
   details with specifications, pricing and published evidence, and an "add as
   backend" path. It no longer shows the Open Intelligence Index Arena or
   rankings, and neither does the website's Model Hub.
-- **Requests** replaces Insights: a filterable live table, agent runs, reviews,
-  and a request page with the full routing trace. Every request shows the
+- **Requests** replaces Insights: a filterable live table of the last 24 hours
+  (other ranges on demand) paged on the server, agent runs loaded when their tab
+  opens and bounded by the range, reviews, and a request page with the full
+  routing trace. Every request shows the
   coding-agent harness that sent it (Claude Code, Codex, OpenCode or DeepSeek
   Harness, with its logo) and, when the harness names them, the session and its
   title, whether the main agent or a subagent made the call, the turn, the tools
   used and the session routing action. Housekeeping calls such as session titles
-  can be hidden, a session opens its run, and a run shows one timeline lane per
-  agent with the agent tree. One harness registry serves every page. Lists stay
+  can be hidden, and a session opens its run: a one-line title with the full
+  task one click away, key figures, a timeline with one lane per agent that
+  shows 100 calls at a time and folds idle stretches, and paged calls, agents
+  and outcomes. One harness registry serves every page. Lists stay
   live and pause while hidden or under the pointer, a request that failed after
   its status line went out reads as failed, and spend leads with the currency
   that carries it.
@@ -307,9 +317,14 @@ logo, plugin rose, evaluation orange, system slate.
   frozen protocol. New evaluation is a stepped sheet (what to measure, what to
   compare, limits, then a review with estimated questions, cost and time) with
   dataset preparation inline and routing preview as a dry run.
-- **Status, Logs, Metrics, Traces** follow the same patterns. Metrics and
-  Traces embed Grafana and Jaeger through the same-origin proxy, say when
-  either is not configured or cannot be embedded, and open the full view.
+- **Status, Logs, Metrics, Traces** follow the same patterns. Status shows the
+  Router, the deployment and the decision model in cards of equal height. Logs
+  reads the bounded log spool or, in Kubernetes without one, the Router and
+  Dashboard pod logs through the API with the Dashboard's service account, each
+  line naming its pod. Metrics charts the Router's Prometheus series natively
+  and Traces lists Jaeger traces with a span waterfall, both through the
+  Dashboard's same-origin proxies; Grafana stays one link away when it is
+  configured.
 - **Settings** groups router settings, integrations, users and access, and the
   schema reference behind one sub-navigation. Router settings render every
   global field from the generated contract in cards with an on-this-page index:
@@ -352,7 +367,8 @@ logo, plugin rose, evaluation orange, system slate.
 
 ## API additions
 
-Each addition is additive: existing requests keep their responses.
+Each change is additive except one: spool log lines name their component in a
+field rather than a `[component]` prefix.
 
 | Surface | Addition | Used by |
 | --- | --- | --- |
@@ -361,6 +377,8 @@ Each addition is additive: existing requests keep their responses.
 | Dashboard users and audit lists | Comma-separated multi-value filters, sorting by column, and the most frequent actors and actions as filter facets. | Users & access |
 | Dashboard global configuration YAML view | Shows the written `global` block when another part of `config.yaml` does not parse, instead of failing. | Router settings |
 | Router Replay `aggregate` | An optional `interval` with `since` returns `traffic`: the records in contiguous intervals from `since` to now. | Home |
+| Dashboard setup state | `publicBaseUrl` and `publicRequiresKey`, from `VLLM_SR_PUBLIC_BASE_URL` and `VLLM_SR_PUBLIC_REQUIRES_KEY`. | Get started |
+| Dashboard logs | Without a spool, a Dashboard in Kubernetes reads pod logs through the API (pods `list`, pods/log `get`); responses add `components`, `namespace`, `pods` and each line's `pod` and `timestamp`. | Logs |
 
 ## Compatibility
 
@@ -410,7 +428,7 @@ implementation began; it is not part of this change.
 
 ## Follow-ups
 
-These are Router-side gaps the Requests page works around today:
+These are gaps the pages work around today:
 
 - Claude Code names a subagent only when it sends the agent hint headers, so
   without them a subagent's calls cannot be told apart from the main agent's.
@@ -419,3 +437,9 @@ These are Router-side gaps the Requests page works around today:
   the page infers housekeeping calls from their shape.
 - A run summary carries no turn count; the page counts turns from the records
   it loaded.
+- Router Replay builds the aggregate's filter options with a full scan on each
+  cache miss, `/runs` has no `until`, list summaries carry no session name, and
+  a run comes back with every call at once, so the run page pages in the
+  browser.
+- The Helm chart's pod labels and Role do not match the Kubernetes log source
+  yet, and the setup wizard still derives the base URL from the listener.
