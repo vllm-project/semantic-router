@@ -433,6 +433,13 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
 
 /* Collapsed navigation at 996px. Right group hidden; search.css re-shows container. */
 @media (max-width: 996px) {
+  /* Safari can use a backdrop-filtered navbar as the containing block for
+   * Docusaurus's fixed sidebar, clipping the menu below the header. */
+  .navbar {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .navbar__inner {
     gap: 0.4rem;
   }
@@ -487,11 +494,6 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
 
   .navbar__brand {
     max-width: calc(100vw - 6rem);
-  }
-
-  .navbar.navbar-sidebar--show {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
   }
 
   .navbar-sidebar__backdrop {

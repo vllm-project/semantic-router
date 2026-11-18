@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -102,7 +103,7 @@ func TestHeaderlessConversationKeepsOneSessionForTwentyTurns(t *testing.T) {
 	if !ok || usage.CumulativePromptTokens != 2000 || usage.CumulativeCompletionTokens != 200 {
 		t.Fatalf("session usage did not accumulate over the 20 turns: %+v found=%t", usage, ok)
 	}
-	response := router.handleRouterReplayTrajectoryAPI("GET", "session_id="+url.QueryEscape(sessionID)).GetImmediateResponse()
+	response := router.handleRouterReplayTrajectoryAPI(context.Background(), "GET", "session_id="+url.QueryEscape(sessionID)).GetImmediateResponse()
 	var trajectory struct {
 		RecordCount int `json:"record_count"`
 	}

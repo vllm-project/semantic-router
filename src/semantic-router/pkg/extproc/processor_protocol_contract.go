@@ -152,7 +152,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
-	ctx.SemanticRequest = &request
+	attachSemanticRequest(ctx, &request)
 	observeAgentTurn(ctx, body)
 	r.observeApprovalReview(ctx, body, &request)
 	observeSessionTitleRequest(ctx, &request)
