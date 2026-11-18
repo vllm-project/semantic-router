@@ -978,21 +978,29 @@ test.describe('Dashboard auth flow', () => {
   test('protected browser transports carry no reusable credential', async ({ page }) => {
     await mockAuthenticatedAppShell(page, { token: 'transport-auth-token' })
 
-    await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
+    const observabilityReads: { url: string; authorization: string | null }[] = []
+    await page.route('**/embedded/prometheus/api/v1/**', async (route) => {
+      const request = route.request()
+      observabilityReads.push({
+        url: request.url(),
+        authorization: await request.headerValue('authorization'),
+      })
       await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ users: [] }),
+        json: {
+          status: 'success',
+          data: {
+            resultType: request.url().includes('/query_range') ? 'matrix' : 'vector',
+            result: [],
+          },
+        },
       })
     })
 
-    await page.goto('/users')
-    await expect(page).toHaveURL(/\/users$/)
+    await page.goto('/observe/metrics')
+    await expect(page.getByRole('heading', { name: 'Metrics', exact: true })).toBeVisible()
+    await expect.poll(() => observabilityReads.length).toBeGreaterThan(0)
 
     const urls = await page.evaluate(() => {
-      const iframe = document.createElement('iframe')
-      iframe.src = '/embedded/grafana/'
-
       const source = new EventSource('/api/events')
       const sourceUrl = source.url
       source.close()
@@ -1007,7 +1015,6 @@ test.describe('Dashboard auth flow', () => {
       return {
         cookie: document.cookie,
         storageKeys: Object.keys(window.localStorage),
-        iframeUrl: iframe.src,
         sourceUrl,
         socketUrl,
       }
@@ -1021,7 +1028,10 @@ test.describe('Dashboard auth flow', () => {
     expect(urls.storageKeys).not.toContain('vsr_auth_token')
 
     // Issue #2465's first acceptance criterion, asserted directly.
-    expect(urls.iframeUrl).not.toContain('authToken')
+    for (const read of observabilityReads) {
+      expect(read.url).not.toContain('authToken')
+      expect(read.authorization).toBeNull()
+    }
     expect(urls.sourceUrl).not.toContain('authToken')
     expect(urls.socketUrl).not.toContain('authToken')
   })
