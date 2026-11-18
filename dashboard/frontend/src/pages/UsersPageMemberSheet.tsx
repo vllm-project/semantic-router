@@ -103,7 +103,9 @@ export default function UsersPageMemberSheet({
         }
         description={
           <>
-            <span>{user.email}</span>
+            <span className="min-w-0 truncate" title={user.email}>
+              {user.email}
+            </span>
             <span className="text-subtle-foreground">·</span>
             <StatusLabel tone={user.status === 'active' ? 'success' : 'neutral'}>
               {user.status === 'active' ? 'Active' : 'Inactive'}

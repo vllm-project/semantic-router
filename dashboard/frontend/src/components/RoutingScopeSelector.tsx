@@ -1,68 +1,61 @@
-import { useId } from 'react'
-import { ChevronDown, Layers } from 'lucide-react'
+import { Layers } from 'lucide-react'
 
-import { countSignalsInProfile, type RoutingScope } from '../utils/routingScopes'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, cn } from '../ui'
+import type { RoutingScope } from '../utils/routingScopes'
+import { routingScopeDetail, routingScopeSummary } from './routingScopeSelectorSupport'
 
 interface RoutingScopeSelectorProps {
   label?: string
   onChange: (scopeId: string) => void
   scopes: RoutingScope[]
   value: string
+  /** Repeat the label inside the trigger; off where a visible heading already names the control. */
+  showLabel?: boolean
+  className?: string
 }
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`
-
-function routingScopeOptionLabel(scope: RoutingScope): string {
-  const decisions = Array.isArray(scope.routing?.decisions) ? scope.routing.decisions.length : 0
-  const signals = countSignalsInProfile(scope.routing).total
-  return [scope.label, plural(decisions, 'decision'), plural(signals, 'signal')].join(' · ')
-}
-
-/**
- * Recipe scope picker drawn like the design-system Select trigger. A native
- * <select> covers the trigger so keyboard, screen reader and form automation
- * all operate on the platform control.
- */
+/** Recipe scope picker: the recipe's name in the trigger, its routing counts under each option. */
 export default function RoutingScopeSelector({
-  label = 'Routing profile',
+  label = 'Recipe',
   onChange,
   scopes,
   value,
+  showLabel = true,
+  className,
 }: RoutingScopeSelectorProps) {
-  const selectId = useId()
   const selected = scopes.find((scope) => scope.id === value) ?? scopes[0]
   if (!selected) return null
-  const detail =
-    selected.entrypointModelNames.length > 0
-      ? selected.entrypointModelNames.join(', ')
-      : selected.description || 'Top-level automatic routing'
 
   return (
-    <div
-      title={detail}
-      className="relative inline-flex h-9 min-w-[200px] max-w-[22rem] items-center gap-2 rounded-md border border-input bg-surface px-3 text-[13px] shadow-xs transition-[border-color,box-shadow] hover:border-border-strong has-[select:disabled]:opacity-50 has-[select:focus-visible]:border-ring has-[select:focus-visible]:ring-[3px] has-[select:focus-visible]:ring-ring/40"
-    >
-      <Layers className="size-4 shrink-0 text-chart-1" aria-hidden="true" />
-      <span className="shrink-0 text-subtle-foreground" aria-hidden="true">
-        Recipe
-      </span>
-      <span className="min-w-0 flex-1 truncate font-medium text-foreground" aria-hidden="true">
-        {selected.label}
-      </span>
-      <ChevronDown className="size-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
-      <select
-        id={selectId}
+    <Select value={selected.id} onValueChange={onChange}>
+      <SelectTrigger
         aria-label={label}
-        value={selected.id}
-        onChange={(event) => onChange(event.target.value)}
-        className="absolute inset-0 size-full cursor-pointer appearance-none rounded-md opacity-0 outline-none [&>option]:bg-popover [&>option]:text-popover-foreground"
+        title={routingScopeDetail(selected)}
+        className={cn('min-w-[200px] max-w-[22rem]', className)}
       >
+        <Layers className="size-4 text-chart-1" aria-hidden="true" />
+        {showLabel ? <span className="shrink-0 text-subtle-foreground">{label}</span> : null}
+        <span className="min-w-0 flex-1 truncate text-left font-medium text-foreground">
+          <SelectValue>{selected.label}</SelectValue>
+        </span>
+      </SelectTrigger>
+      <SelectContent align="start" className="w-auto max-w-[min(24rem,calc(100vw-2rem))]">
         {scopes.map((scope) => (
-          <option key={scope.id} value={scope.id}>
-            {routingScopeOptionLabel(scope)}
-          </option>
+          <SelectItem
+            key={scope.id}
+            value={scope.id}
+            textValue={scope.label}
+            className="items-start py-2 [&>span:first-child]:top-2.5"
+          >
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate font-medium">{scope.label}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {routingScopeSummary(scope)}
+              </span>
+            </span>
+          </SelectItem>
         ))}
-      </select>
-    </div>
+      </SelectContent>
+    </Select>
   )
 }

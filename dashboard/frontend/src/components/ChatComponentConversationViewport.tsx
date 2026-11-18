@@ -32,8 +32,10 @@ export default function ChatComponentConversationViewport({
   const { containerRef, contentRef } = useChatTranscriptAutoScroll(messages, conversationId)
 
   return (
+    // Positioned, so absolutely placed descendants such as screen-reader labels
+    // clip and scroll with the transcript instead of lengthening the page.
     <div
-      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]"
+      className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]"
       ref={containerRef}
       data-testid="chat-transcript"
     >

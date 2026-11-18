@@ -106,13 +106,15 @@ export function ViewPanel({
       </div>
       <div className="flex flex-col gap-4 p-3">
         {scopes.length ? (
-          <section className="flex flex-col gap-1.5 [&>div]:w-full [&>div]:min-w-0">
+          <section className="flex flex-col gap-1.5">
             <SectionLabel>Recipe</SectionLabel>
             <RoutingScopeSelector
               label="Recipe"
+              showLabel={false}
               scopes={scopes}
               value={scopeId}
               onChange={onScope}
+              className="w-full min-w-0 max-w-none"
             />
           </section>
         ) : null}

@@ -1,6 +1,14 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
+
+const recipeScope = (page: Page) => page.getByRole('combobox', { name: 'Recipe', exact: true })
+
+/** Picks a recipe from the design-system Select, whose options read "<name> <counts>". */
+async function chooseRecipe(page: Page, recipe: string) {
+  await recipeScope(page).click()
+  await page.getByRole('option', { name: new RegExp(`^${recipe}\\b`) }).click()
+}
 
 const config = {
   version: 'v0.5',
@@ -283,27 +291,25 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   await expect(page).toHaveURL(/\/routing\/topology\?scope=privacy$/)
 
   await page.goto('/routing/signals')
-  const signalScope = page.getByLabel('Recipe', { exact: true })
-  await expect(signalScope).toHaveValue('balanced')
+  await expect(recipeScope(page)).toContainText('balanced')
   await expect(page.getByRole('row', { name: /balanced-keyword/ })).toBeVisible()
-  await signalScope.selectOption('privacy')
+  await chooseRecipe(page, 'privacy')
+  await expect(recipeScope(page)).toContainText('privacy')
   await expect(page).toHaveURL(/recipe=privacy/)
   await expect(page.getByRole('row', { name: /private-pii/ })).toBeVisible()
   await expect(page.getByRole('row', { name: /balanced-keyword/ })).toHaveCount(0)
 
   await page.goto('/routing/projections')
-  const projectionScope = page.getByLabel('Recipe', { exact: true })
-  await expect(projectionScope).toHaveValue('balanced')
+  await expect(recipeScope(page)).toContainText('balanced')
   await expect(page.getByText('balanced-score').first()).toBeVisible()
-  await projectionScope.selectOption('privacy')
+  await chooseRecipe(page, 'privacy')
   await expect(page.getByText('private-score').first()).toBeVisible()
   await expect(page.getByText('balanced-score')).toHaveCount(0)
 
   await page.goto('/routing/decisions')
-  const decisionScope = page.getByLabel('Recipe', { exact: true })
-  await expect(decisionScope).toHaveValue('balanced')
+  await expect(recipeScope(page)).toContainText('balanced')
   await expect(page.getByRole('row', { name: /balanced-route/ })).toBeVisible()
-  await decisionScope.selectOption('privacy')
+  await chooseRecipe(page, 'privacy')
   await expect(page.getByRole('row', { name: /private-route/ })).toBeVisible()
 })
 
@@ -312,12 +318,22 @@ test('topology switches the complete graph and test model by entrypoint recipe',
 }) => {
   await page.goto('/topology')
 
-  const scope = page.getByLabel('Recipe', { exact: true })
-  await expect(scope).toHaveValue('default')
+  const scope = recipeScope(page)
+  await expect(scope).toHaveText('Default routing')
+  await expect(
+    page.getByRole('complementary', { name: 'Topology view' }).locator('select'),
+  ).toHaveCount(0)
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
   await expect(page.getByTestId('rf__node-decision-private-route')).toHaveCount(0)
-  await scope.selectOption('balanced')
-  await expect(scope).toHaveValue('balanced')
+  // Each option names the recipe and, below it, what the recipe routes with.
+  await scope.click()
+  const balanced = page.getByRole('option', { name: /^balanced\b/ })
+  await expect(balanced).toContainText('1 decision · 1 signal')
+  await expect(page.getByRole('option', { name: /^privacy\b/ })).toContainText(
+    '1 decision · 1 signal',
+  )
+  await balanced.click()
+  await expect(scope).toHaveText('balanced')
   await expect(page).toHaveURL(/\/routing\/topology\?scope=balanced$/)
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toBeVisible()
   await expect(page.getByTestId('rf__node-signal-group-keyword')).toContainText('balanced-keyword')
@@ -334,7 +350,8 @@ test('topology switches the complete graph and test model by entrypoint recipe',
     model: 'vllm-sr/balanced',
   })
 
-  await scope.selectOption('privacy')
+  await chooseRecipe(page, 'privacy')
+  await expect(scope).toHaveText('privacy')
   await expect(page.getByTestId('rf__node-decision-private-route')).toBeVisible()
   await expect(page.getByTestId('rf__node-signal-group-pii')).toContainText('private-pii')
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)

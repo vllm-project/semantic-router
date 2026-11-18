@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CircleCheck, Link2, Minus, Plus, UserPlus, UsersRound } from 'lucide-react'
+import { CircleCheck, Info, Link2, Minus, Plus, UserPlus, UsersRound } from 'lucide-react'
 
 import {
   Alert,
@@ -21,7 +21,7 @@ import {
   cn,
 } from '../ui'
 import type { DashboardInvitation, DashboardRole, InvitationKind } from './dashboardInvitationTypes'
-import { ROLE_META, absoluteTime, invitationUrl, responseText } from './usersPageSupport'
+import { ROLE_META, absoluteTime, invitationUrl, responseText, roleLabel } from './usersPageSupport'
 
 interface Props {
   isOpen: boolean
@@ -31,6 +31,49 @@ interface Props {
 
 const ROLE_ORDER: DashboardRole[] = ['read', 'write', 'admin']
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** The header of a dialog that hands over a new link: a check beside its title. */
+export function InvitationReadyHeader({
+  title,
+  description,
+  descriptionId,
+}: {
+  title: ReactNode
+  description: ReactNode
+  descriptionId?: string
+}) {
+  return (
+    <DialogHeader className="flex-row items-start gap-3.5 pb-4 pr-12 pt-6">
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-success-soft text-success-foreground">
+        <CircleCheck className="size-[18px]" aria-hidden />
+      </span>
+      <div className="flex min-w-0 flex-col gap-1 pt-0.5">
+        <DialogTitle className="leading-6 [overflow-wrap:anywhere]">{title}</DialogTitle>
+        <DialogDescription
+          className="leading-relaxed"
+          {...(descriptionId ? { id: descriptionId } : {})}
+        >
+          {description}
+        </DialogDescription>
+      </div>
+    </DialogHeader>
+  )
+}
+
+/** A freshly made invitation link, which the dashboard shows only this once. */
+export function InvitationLink({ label, url }: { label: string; url: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <Label>{label}</Label>
+      <CopyField value={url} className="h-10" />
+      <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
+        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        Copy it now: the dashboard shows each link once and sends no email. Share it yourself, for
+        example in your team chat.
+      </p>
+    </div>
+  )
+}
 
 export default function DashboardInviteDialog({ isOpen, onClose, onCreated }: Props) {
   const [email, setEmail] = useState('')
@@ -101,6 +144,12 @@ export default function DashboardInviteDialog({ isOpen, onClose, onCreated }: Pr
       ? 'Shared invitation ready'
       : `Welcome ${created.invitation.name}`
     : 'Invite user'
+  const createdRole = created ? roleLabel(created.invitation.role) : ''
+  const readyDescription = !created
+    ? ''
+    : created.invitation.kind === 'shared'
+      ? `${created.invitation.maxUses} tickets are ready. Each person creates their own account with the ${createdRole} role; the link expires ${expiry}.`
+      : `A workspace ticket is reserved for ${created.invitation.email} with the ${createdRole} role. The link works once and expires ${expiry}.`
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && !pending && onClose()}>
@@ -109,36 +158,26 @@ export default function DashboardInviteDialog({ isOpen, onClose, onCreated }: Pr
           {created ? (
             <motion.div
               key="ready"
+              className="flex min-h-0 flex-col"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             >
-              <DialogHeader className="items-start pt-6">
-                <span className="mb-2 grid size-10 place-items-center rounded-full bg-success-soft text-success-foreground">
-                  <CircleCheck className="size-5" />
-                </span>
-                <DialogTitle>{title}</DialogTitle>
-                <DialogDescription id="invite-dialog-description">
-                  {created.invitation.kind === 'shared'
-                    ? `${created.invitation.maxUses} tickets are ready. Each person creates their own account; the link expires ${expiry}.`
-                    : `A workspace ticket is reserved for ${created.invitation.email}. The link works once and expires ${expiry}.`}
-                </DialogDescription>
-              </DialogHeader>
-              <DialogBody className="flex flex-col gap-3 pb-5">
-                <div className="flex flex-col gap-1.5">
-                  <Label>
-                    {created.invitation.kind === 'shared'
+              <InvitationReadyHeader
+                title={title}
+                description={readyDescription}
+                descriptionId="invite-dialog-description"
+              />
+              <DialogBody className="pb-6 pt-1">
+                <InvitationLink
+                  label={
+                    created.invitation.kind === 'shared'
                       ? 'Shared invitation link'
-                      : 'One-time invitation link'}
-                  </Label>
-                  <CopyField value={created.url} />
-                </div>
-                <Alert tone="info">
-                  The dashboard does not send email. Share the link yourself, for example in your
-                  team chat. It joins as{' '}
-                  {ROLE_META[created.invitation.role]?.label ?? created.invitation.role}.
-                </Alert>
+                      : 'One-time invitation link'
+                  }
+                  url={created.url}
+                />
               </DialogBody>
               <DialogFooter>
                 <Button variant="ghost" className="mr-auto" onClick={() => setCreated(null)}>
@@ -150,6 +189,7 @@ export default function DashboardInviteDialog({ isOpen, onClose, onCreated }: Pr
           ) : (
             <motion.form
               key="form"
+              className="flex min-h-0 flex-col"
               onSubmit={submit}
               noValidate
               initial={{ opacity: 0, y: 8 }}
@@ -157,7 +197,7 @@ export default function DashboardInviteDialog({ isOpen, onClose, onCreated }: Pr
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              <DialogHeader>
+              <DialogHeader className="pr-12">
                 <DialogTitle>{title}</DialogTitle>
                 <DialogDescription id="invite-dialog-description">
                   {kind === 'personal'

@@ -177,7 +177,7 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   return (
     <details className="group/details w-full">
       <summary
-        className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden"
+        className="flex cursor-pointer list-none items-center gap-1.5 rounded-sm text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 [&::-webkit-details-marker]:hidden"
         aria-label="Show response details"
       >
         <span>Response details</span>
@@ -198,7 +198,7 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
               key={key}
               data-header-type={info.type}
               title={`${info.label}: ${displayValue}${unit}`}
-              className="flex min-w-0 items-baseline justify-between gap-3 px-2.5 py-1.5 text-xs"
+              className="flex min-w-0 items-baseline justify-between gap-3 px-3 py-1.5 text-xs"
             >
               <dt className="shrink-0 text-subtle-foreground">{info.label}</dt>
               <dd

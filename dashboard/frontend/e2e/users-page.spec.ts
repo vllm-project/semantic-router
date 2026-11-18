@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
 const adminUser = {
@@ -311,4 +311,96 @@ test.describe('Users and access', () => {
     await expect.poll(() => passwords).toEqual([{ userId: 'user-1', password: 'rotated-password' }])
     await expect(page.getByText('User updated and password rotated')).toBeVisible()
   })
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`keeps long invitation links inside their dialogs at ${viewport.width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport)
+      await mockAuthenticatedAppShell(page, { user: adminUser })
+      await page.route('**/api/admin/users?**', (route) =>
+        route.fulfill({
+          json: {
+            users: [{ id: 'user-1', email: 'reader@example.com', name: 'Read User', role: 'read' }],
+            total: 1,
+          },
+        }),
+      )
+      await page.route('**/api/admin/permissions', (route) =>
+        route.fulfill({ json: { rolePermissions: { admin: [], write: [], read: [] } } }),
+      )
+      const sharedToken = 'hmas8JpU961_t_dMYVm1kTXMmDfTJOAMIYb2DwxayXU'.repeat(3)
+      const rotatedToken = 'rotated_0QWJmZ3RzbGlua3RoYXRrZWVwc2dvaW5nYW5kZ29pbmc'.repeat(3)
+      const shared = {
+        id: 'invite-shared',
+        kind: 'shared',
+        role: 'admin',
+        maxUses: 100,
+        usedCount: 0,
+        remainingUses: 100,
+        status: 'pending',
+        expiresAt: 1893456000,
+        createdAt: 1893000000,
+      }
+      await page.route('**/api/admin/invitations', async (route) => {
+        if (route.request().method() !== 'POST') {
+          await route.fulfill({ json: { invitations: [shared] } })
+          return
+        }
+        await route.fulfill({ status: 201, json: { invitation: shared, token: sharedToken } })
+      })
+      await page.route('**/api/admin/invitations/invite-shared/rotate', (route) =>
+        route.fulfill({ json: { invitation: shared, token: rotatedToken } }),
+      )
+
+      // The link truncates inside its field, and the field, copy button and
+      // footer all stay inside the dialog instead of widening it.
+      const expectLinkInside = async (dialog: Locator, token: string) => {
+        const link = dialog.getByText(`/invite/${token}`)
+        await expect(link).toBeVisible()
+        expect(await link.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+          true,
+        )
+        expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+          true,
+        )
+        const frame = await dialog.boundingBox()
+        for (const control of [
+          dialog.getByRole('button', { name: 'Copy', exact: true }),
+          dialog.getByRole('button', { name: 'Done', exact: true }),
+        ]) {
+          const box = await control.boundingBox()
+          expect(box!.x + box!.width).toBeLessThanOrEqual(frame!.x + frame!.width - 12)
+        }
+      }
+
+      await page.goto('/settings/access')
+      await page.getByRole('button', { name: 'Invite user' }).click()
+      const form = page.getByRole('dialog', { name: 'Invite user' })
+      await form.getByRole('radio', { name: 'Shared link', exact: true }).click()
+      await form.getByRole('radio', { name: /^Admin/ }).click()
+      await form.getByRole('button', { name: 'Create shared link' }).click()
+
+      const ready = page.getByRole('dialog', { name: 'Shared invitation ready' })
+      await expect(ready).toContainText('100 tickets are ready')
+      await expect(ready).toContainText('with the Admin role')
+      await expect(ready.getByText('Copy it now', { exact: false })).toBeVisible()
+      await expectLinkInside(ready, sharedToken)
+      await ready.getByRole('button', { name: 'Done', exact: true }).click()
+      await expect(ready).toBeHidden()
+
+      await page.getByRole('tab', { name: /Invitations/ }).click()
+      await page
+        .getByRole('row', { name: /Shared invitation/ })
+        .getByRole('button', { name: 'Row actions' })
+        .click()
+      await page.getByRole('menuitem', { name: 'New link' }).click()
+      const rotated = page.getByRole('dialog', { name: 'New invitation link' })
+      await expect(rotated.getByText('Shared invitation link', { exact: true })).toBeVisible()
+      await expectLinkInside(rotated, rotatedToken)
+    })
+  }
 })

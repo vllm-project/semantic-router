@@ -1723,6 +1723,84 @@ test.describe('Playground Chat Component', () => {
     expect(secondTurnBox!.y + secondTurnBox!.height).toBeLessThan(composerBox!.y - 24)
   })
 
+  test('fills the viewport below the top bar and scrolls each pane inside itself', async ({
+    page,
+  }) => {
+    const viewport = { width: 1440, height: 900 }
+    await page.setViewportSize(viewport)
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'x-vsr-selected-model': 'qwen/qwen3-32b',
+          'x-vsr-selected-decision': 'computer_science_route',
+          'x-vsr-trace': 'algorithm=confidence, confidence=0.86, routing_latency_ms=38',
+        },
+        body: chatStreamBody(
+          Array.from(
+            { length: 40 },
+            (_, index) => `Paragraph ${index + 1} keeps the routed answer long.`,
+          ).join('\n\n'),
+        ),
+      })
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+
+    const main = page.locator('main#main')
+    const transcript = page.getByTestId('chat-transcript')
+    const composer = page.getByTestId('chat-composer')
+    const pageOverflow = () =>
+      main.evaluate((element) => element.scrollHeight - element.clientHeight)
+    const bottom = (box: { y: number; height: number } | null) => (box ? box.y + box.height : 0)
+
+    // Empty: the welcome sits centred in the transcript, the composer at the pane's foot.
+    // Polling lets the page's entrance animation settle before anything is measured.
+    const welcome = page.getByRole('heading', { name: /^Welcome/ })
+    await expect(welcome).toBeVisible()
+    await expect.poll(pageOverflow).toBeLessThanOrEqual(0)
+    const [mainBox, transcriptBox, welcomeBox, composerBox] = await Promise.all([
+      main.boundingBox(),
+      transcript.boundingBox(),
+      welcome.boundingBox(),
+      composer.boundingBox(),
+    ])
+    expect(Math.abs(bottom(composerBox) - bottom(mainBox))).toBeLessThanOrEqual(1)
+    expect(welcomeBox!.y).toBeGreaterThan(transcriptBox!.y)
+    expect(bottom(welcomeBox)).toBeLessThan(bottom(transcriptBox))
+
+    await page.getByPlaceholder('Ask me anything...').fill('Write a long routed answer')
+    await page.getByRole('button', { name: 'Send message' }).click()
+    await expect(page.getByText('Paragraph 40 keeps the routed answer long.')).toBeVisible({
+      timeout: 15000,
+    })
+    await expect(
+      page
+        .locator('[data-message-role="assistant"]')
+        .last()
+        .getByRole('button', { name: /^Inspect route/ }),
+    ).toBeVisible()
+
+    // A long routed answer scrolls the transcript, never the page around it.
+    await expect.poll(pageOverflow).toBeLessThanOrEqual(0)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight),
+    ).toBeLessThanOrEqual(0)
+    expect(
+      await transcript.evaluate((element) => element.scrollHeight > element.clientHeight),
+    ).toBe(true)
+    const [finalMain, finalComposer, inspectorBox] = await Promise.all([
+      main.boundingBox(),
+      composer.boundingBox(),
+      page.getByTestId('playground-inspector').boundingBox(),
+    ])
+    expect(Math.abs(bottom(finalComposer) - bottom(finalMain))).toBeLessThanOrEqual(1)
+    expect(bottom(finalComposer)).toBeLessThanOrEqual(viewport.height)
+    expect(inspectorBox!.y).toBeGreaterThanOrEqual(finalMain!.y)
+    expect(bottom(inspectorBox)).toBeLessThanOrEqual(bottom(finalMain) + 1)
+  })
+
   test('renders thinking block from streaming reasoning field', async ({ page }) => {
     await page.route('**/api/router/v1/chat/completions', async (route) => {
       await route.fulfill({
@@ -1907,10 +1985,16 @@ test.describe('Playground Chat Component', () => {
     await expect(inspector).toContainText('qwen/qwen3-32b')
     await expect(inspector).toContainText('computer science')
     await expect(inspector).toContainText('code_keywords')
-    await expect(inspector).toContainText('confidence 0.86')
-    await expect(inspector).toContainText('Model selection · Confidence')
-    await expect(inspector).toContainText('Input tokens')
-    await expect(inspector).toContainText('412')
+    await expect(inspector.getByRole('region', { name: 'Signals' })).toContainText('2 matched')
+    await expect(inspector.getByRole('region', { name: 'Decision' })).toContainText(
+      'confidence 0.86',
+    )
+    await expect(inspector.getByRole('region', { name: 'Model selection' })).toContainText(
+      'Confidence',
+    )
+    const usage = inspector.getByRole('region', { name: 'Timing and usage' })
+    await expect(usage.getByRole('definition').filter({ hasText: '412' })).toBeVisible()
+    await expect(usage.getByRole('term').filter({ hasText: 'Input tokens' })).toBeVisible()
     await expect(inspector.locator('[data-signal="domain:computer science"]')).toContainText('0.91')
     await expect(inspector.locator('[data-signal="domain:law"]')).toHaveAttribute(
       'data-matched',

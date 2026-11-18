@@ -6,27 +6,23 @@ import {
   Alert,
   Badge,
   Button,
-  CopyField,
   DataTable,
   DataToolbar,
   Dialog,
   DialogBody,
   DialogContent,
-  DialogDescription,
   DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DropdownMenuItem,
   DropdownMenuSeparator,
   EmptyState,
   FilterPill,
-  Label,
   StatusLabel,
   Tooltip,
   toast,
   type Column,
   type StatusTone,
 } from '../ui'
+import { InvitationLink, InvitationReadyHeader } from './DashboardInviteDialog'
 import type { DashboardInvitation, InvitationStatus } from './dashboardInvitationTypes'
 import {
   ROLE_META,
@@ -353,20 +349,23 @@ export default function UsersPageInvitationsPanel({
 
       <Dialog open={rotated !== null} onOpenChange={(open) => !open && setRotated(null)}>
         <DialogContent size="md">
-          <DialogHeader>
-            <DialogTitle>New invitation link</DialogTitle>
-            <DialogDescription>
-              The old link no longer works. This one expires{' '}
-              {rotated ? absoluteTime(rotated.invitation.expiresAt) : ''}.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody className="flex flex-col gap-1.5 pb-5">
-            <Label>
-              {rotated?.invitation.kind === 'shared'
-                ? 'Shared invitation link'
-                : `Link for ${rotated?.invitation.email ?? ''}`}
-            </Label>
-            {rotated ? <CopyField value={rotated.url} /> : null}
+          <InvitationReadyHeader
+            title="New invitation link"
+            description={`The old link no longer works. This one expires ${
+              rotated ? absoluteTime(rotated.invitation.expiresAt) : ''
+            }.`}
+          />
+          <DialogBody className="pb-6 pt-1">
+            {rotated ? (
+              <InvitationLink
+                label={
+                  rotated.invitation.kind === 'shared'
+                    ? 'Shared invitation link'
+                    : `Link for ${rotated.invitation.email ?? ''}`
+                }
+                url={rotated.url}
+              />
+            ) : null}
           </DialogBody>
           <DialogFooter>
             <Button onClick={() => setRotated(null)}>Done</Button>

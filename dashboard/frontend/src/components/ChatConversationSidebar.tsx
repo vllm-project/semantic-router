@@ -69,7 +69,10 @@ export default function ChatConversationSidebar({
           />
         </div>
       ) : null}
-      <nav aria-label="Saved conversations" className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <nav
+        aria-label="Saved conversations"
+        className="relative min-h-0 flex-1 overflow-y-auto px-2 pb-3"
+      >
         {groups.length === 0 ? (
           <p className="px-2 py-6 text-center text-xs leading-relaxed text-subtle-foreground">
             {query.trim()

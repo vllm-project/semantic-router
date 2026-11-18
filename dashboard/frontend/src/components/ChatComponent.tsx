@@ -604,7 +604,7 @@ const ChatComponent = ({
   const selectedRecipe = routingModels.find((option) => option.id === model)?.recipe
 
   return (
-    <div className="relative flex min-h-0 flex-1" data-testid="playground">
+    <div className="relative flex min-h-0 flex-1 overflow-hidden" data-testid="playground">
       <ChatComponentSidebarShell
         isOpen={panes.conversationsOpen}
         overlay={panes.conversationsOverlay}
@@ -621,7 +621,7 @@ const ChatComponent = ({
         />
       </ChatComponentSidebarShell>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <ChatComponentHeader
           conversationsOpen={panes.conversationsOpen}
           inspectorOpen={panes.inspectorOpen}

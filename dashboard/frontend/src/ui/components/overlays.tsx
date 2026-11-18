@@ -30,7 +30,8 @@ export const DialogContent = React.forwardRef<
       ref={ref}
       data-slot="dialog-content"
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 grid max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl outline-none',
+        // A column, not a grid: an auto grid track widens to its widest unbreakable child, such as a long link.
+        'fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl outline-none',
         'duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.97] data-[state=open]:zoom-in-[0.97] data-[state=open]:slide-in-from-bottom-2',
         size === 'sm' && 'max-w-md',
         size === 'md' && 'max-w-lg',
@@ -53,18 +54,18 @@ export const DialogContent = React.forwardRef<
 DialogContent.displayName = 'DialogContent'
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex flex-col gap-1 px-6 pb-2 pt-5', className)} {...props} />
+  return <div className={cn('flex shrink-0 flex-col gap-1 px-6 pb-2 pt-5', className)} {...props} />
 }
 
 export function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('overflow-y-auto px-6 py-3', className)} {...props} />
+  return <div className={cn('min-h-0 grow overflow-y-auto px-6 py-3', className)} {...props} />
 }
 
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        'flex items-center justify-end gap-2 border-t border-border bg-surface-subtle px-6 py-3',
+        'flex shrink-0 items-center justify-end gap-2 border-t border-border bg-surface-subtle px-6 py-3',
         className,
       )}
       {...props}

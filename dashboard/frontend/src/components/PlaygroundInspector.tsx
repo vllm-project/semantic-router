@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -9,13 +9,13 @@ import {
   PanelRightClose,
   Split,
   TriangleAlert,
+  type LucideIcon,
 } from 'lucide-react'
 
 import {
   Badge,
   Button,
   CopyButton,
-  EmptyState,
   IconTile,
   MiniBar,
   ProviderLogo,
@@ -120,75 +120,159 @@ function ModelName({ name, className }: { name: string; className?: string }) {
   )
 }
 
-function SignalsSection({ route }: { route: InspectedRoute }) {
+// Every section lists its rows in one card: a bordered surface split by hairlines.
+const listCard = 'overflow-hidden rounded-lg border border-border bg-surface divide-y divide-border'
+
+function InspectorSection({
+  title,
+  meta,
+  children,
+}: {
+  title: string
+  meta?: ReactNode
+  children: ReactNode
+}) {
+  const id = useId()
   return (
-    <section className="flex flex-col gap-2">
-      <SectionLabel>Signals</SectionLabel>
+    <section aria-labelledby={id} className="flex min-w-0 flex-col gap-2">
+      <div className="flex min-w-0 items-baseline justify-between gap-3">
+        <SectionLabel id={id} className="shrink-0">
+          {title}
+        </SectionLabel>
+        {meta ? (
+          <span className="min-w-0 truncate text-[11px] text-subtle-foreground tabular">
+            {meta}
+          </span>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function SectionNote({ children }: { children: ReactNode }) {
+  return <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>
+}
+
+function InspectorEmpty({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon
+  title: string
+  description: string
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-1.5 px-2 py-10 text-center">
+      <span className="mb-1.5 grid size-9 place-items-center rounded-full bg-surface text-subtle-foreground ring-1 ring-inset ring-border">
+        <Icon className="size-4" aria-hidden />
+      </span>
+      <p className="text-[13px] font-medium text-foreground">{title}</p>
+      <p className="max-w-[15rem] text-xs leading-relaxed text-muted-foreground">{description}</p>
+    </div>
+  )
+}
+
+function Fact({ label, value, className }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={cn('flex min-w-0 items-baseline justify-between gap-3 text-xs', className)}>
+      <dt className="shrink-0 text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 truncate text-right font-mono tabular text-foreground" title={value}>
+        {value}
+      </dd>
+    </div>
+  )
+}
+
+/** A fixed slot for the chosen mark, so scores line up whether or not a row was chosen. */
+function ChosenMark({ chosen }: { chosen: boolean }) {
+  return (
+    <span className="grid size-3.5 shrink-0 place-items-center">
+      {chosen ? (
+        <Check className="size-3.5 text-primary" strokeWidth={2.6} aria-label="Chosen" />
+      ) : null}
+    </span>
+  )
+}
+
+function SignalsSection({ route }: { route: InspectedRoute }) {
+  const matched = route.signals.filter((signal) => signal.matched).length
+  return (
+    <InspectorSection
+      title="Signals"
+      meta={route.signals.length ? `${matched} matched` : undefined}
+    >
       {route.signals.length ? (
-        route.signals.map((signal, index) => {
-          const Icon = signalTypeIcon(signal.type)
-          return (
-            <motion.div
-              key={signal.key}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.04 * index, duration: 0.24, ease: EASE }}
-              className={cn(
-                'flex flex-col gap-1.5 rounded-lg border px-2.5 py-2',
-                signal.matched
-                  ? 'border-chart-2/35 bg-chart-2/[0.07]'
-                  : 'border-border bg-surface opacity-70',
-              )}
-              data-signal={signal.key}
-              data-matched={signal.matched}
-            >
-              <span className="flex min-w-0 items-center gap-2 text-xs">
-                <Icon
-                  className={cn(
-                    'size-3.5 shrink-0',
-                    signal.matched ? 'text-chart-2' : 'text-subtle-foreground',
-                  )}
-                  aria-hidden
-                />
-                <span className="truncate font-mono" title={`${signal.typeLabel}: ${signal.name}`}>
-                  {signal.name}
-                </span>
-                <span className="shrink-0 text-[11px] text-subtle-foreground">
-                  {signal.typeLabel}
+        <div className={listCard}>
+          {route.signals.map((signal, index) => {
+            const Icon = signalTypeIcon(signal.type)
+            return (
+              <motion.div
+                key={signal.key}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.04 * index, duration: 0.24, ease: EASE }}
+                className="flex flex-col gap-1.5 px-3 py-2"
+                data-signal={signal.key}
+                data-matched={signal.matched}
+              >
+                <span className="flex min-w-0 items-center gap-2 text-xs">
+                  <Icon
+                    className={cn(
+                      'size-3.5 shrink-0',
+                      signal.matched ? 'text-chart-2' : 'text-subtle-foreground',
+                    )}
+                    aria-hidden
+                  />
+                  <span
+                    className={cn(
+                      'truncate font-mono',
+                      signal.matched ? 'text-foreground' : 'text-muted-foreground',
+                    )}
+                    title={`${signal.typeLabel}: ${signal.name}`}
+                  >
+                    {signal.name}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-subtle-foreground">
+                    {signal.typeLabel}
+                  </span>
+                  {signal.confidence !== undefined ? (
+                    <span className="ml-auto shrink-0 pl-1 font-mono text-[11px] tabular text-muted-foreground">
+                      {signal.confidence.toFixed(2)}
+                    </span>
+                  ) : null}
                 </span>
                 {signal.confidence !== undefined ? (
-                  <span className="ml-auto shrink-0 font-mono tabular text-muted-foreground">
-                    {signal.confidence.toFixed(2)}
-                  </span>
+                  <MiniBar
+                    value={signal.confidence * 100}
+                    tone={signal.matched ? 'gold' : 'slate'}
+                    className="h-1"
+                  />
                 ) : null}
-              </span>
-              {signal.confidence !== undefined ? (
-                <MiniBar
-                  value={signal.confidence * 100}
-                  tone={signal.matched ? 'gold' : 'slate'}
-                  className="h-1"
-                />
-              ) : null}
-            </motion.div>
-          )
-        })
+              </motion.div>
+            )
+          })}
+        </div>
       ) : (
-        <p className="text-xs leading-relaxed text-muted-foreground">
-          No matched signal was reported. The router lists them when it allows this dashboard its
-          debug trace.
-        </p>
+        <SectionNote>
+          No signal was reported. The router lists the signals that matched when it shares its debug
+          trace with this dashboard.
+        </SectionNote>
       )}
-    </section>
+    </InspectorSection>
   )
 }
 
 function DecisionSection({ route }: { route: InspectedRoute }) {
   return (
-    <section className="flex flex-col gap-2">
-      <SectionLabel>Decision</SectionLabel>
+    <InspectorSection
+      title="Decision"
+      meta={route.confidence ? `confidence ${route.confidence}` : undefined}
+    >
       {route.decision ? (
-        <div className="rounded-lg border border-chart-3/30 bg-chart-3/[0.06] p-3">
-          <div className="flex items-start gap-2.5">
+        <div className={listCard}>
+          <div className="flex items-center gap-2.5 px-3 py-2.5">
             <IconTile icon={Split} tone="violet" size="sm" />
             <div className="flex min-w-0 flex-col">
               <span className="truncate text-[13px] font-semibold">{route.decision.label}</span>
@@ -197,71 +281,52 @@ function DecisionSection({ route }: { route: InspectedRoute }) {
               </span>
             </div>
           </div>
-          {route.runnerUp ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Beat <span className="font-mono text-foreground/85">{route.runnerUp}</span>
-            </p>
-          ) : null}
-          {route.recipe || route.confidence ? (
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {route.recipe ? (
-                <Badge tone="outline" size="sm">
-                  recipe {route.recipe}
-                </Badge>
-              ) : null}
-              {route.confidence ? (
-                <Badge tone="outline" size="sm" className="tabular">
-                  confidence {route.confidence}
-                </Badge>
-              ) : null}
-            </div>
+          {route.recipe || route.runnerUp ? (
+            <dl className="flex flex-col gap-1 px-3 py-2">
+              {route.recipe ? <Fact label="Recipe" value={route.recipe} /> : null}
+              {route.runnerUp ? <Fact label="Runner-up" value={route.runnerUp} /> : null}
+            </dl>
           ) : null}
         </div>
       ) : (
-        <p className="text-[13px] text-muted-foreground">The router reported no decision.</p>
+        <SectionNote>The router reported no decision.</SectionNote>
       )}
-    </section>
+    </InspectorSection>
   )
 }
 
 function ModelSection({ route }: { route: InspectedRoute }) {
   return (
-    <section className="flex flex-col gap-2">
-      <SectionLabel>
-        {route.algorithm ? `Model selection · ${route.algorithm}` : 'Model selection'}
-      </SectionLabel>
+    <InspectorSection title="Model selection" meta={route.algorithm}>
       {route.candidates.length ? (
-        route.candidates.map((candidate) => (
-          <div
-            key={candidate.model}
-            className={cn(
-              'flex items-center gap-2.5 rounded-lg border px-2.5 py-2',
-              candidate.chosen
-                ? 'border-primary/40 bg-primary-soft/60'
-                : 'border-border bg-surface',
-            )}
-            data-candidate={candidate.model}
-          >
-            <ModelName name={candidate.model} className="flex-1" />
-            {candidate.score !== undefined ? (
-              <span className="font-mono text-xs tabular text-muted-foreground">
-                {candidate.score.toFixed(2)}
-              </span>
-            ) : null}
-            {candidate.chosen ? (
-              <Check
-                className="size-3.5 shrink-0 text-primary"
-                strokeWidth={2.6}
-                aria-label="Chosen"
-              />
-            ) : null}
-          </div>
-        ))
+        <div className={listCard}>
+          {route.candidates.map((candidate) => (
+            <div
+              key={candidate.model}
+              className={cn(
+                'flex items-center gap-2.5 px-3 py-2',
+                candidate.chosen && 'bg-primary-soft/40',
+              )}
+              data-candidate={candidate.model}
+            >
+              <ModelName name={candidate.model} className="flex-1" />
+              {candidate.score !== undefined ? (
+                <span className="font-mono text-[11px] tabular text-muted-foreground">
+                  {candidate.score.toFixed(2)}
+                </span>
+              ) : null}
+              <ChosenMark chosen={candidate.chosen} />
+            </div>
+          ))}
+        </div>
       ) : route.model ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-primary/30 bg-primary-soft/50 px-3 py-2.5">
-          <ModelName name={route.model} />
+        <div className={listCard}>
+          <div className="flex items-center gap-2.5 bg-primary-soft/40 px-3 py-2.5">
+            <ModelName name={route.model} className="flex-1" />
+            <ChosenMark chosen />
+          </div>
           {route.looper ? (
-            <div className="flex flex-col gap-1 border-t border-border pt-2">
+            <div className="flex flex-col gap-1.5 px-3 py-2">
               <span className="text-[11px] text-subtle-foreground">
                 Looper
                 {route.looper.iterations ? ` · ${route.looper.iterations} iterations` : ''}
@@ -273,9 +338,9 @@ function ModelSection({ route }: { route: InspectedRoute }) {
           ) : null}
         </div>
       ) : (
-        <p className="text-[13px] text-muted-foreground">The router reported no model.</p>
+        <SectionNote>The router reported no model.</SectionNote>
       )}
-    </section>
+    </InspectorSection>
   )
 }
 
@@ -283,12 +348,10 @@ function RouteView({
   route,
   headers,
   prompt,
-  recordHref,
 }: {
   route: InspectedRoute
   headers: Record<string, string>
   prompt?: string
-  recordHref?: string
 }) {
   return (
     <div className="flex flex-col gap-5">
@@ -303,8 +366,7 @@ function RouteView({
       <ModelSection route={route} />
 
       {route.plugins.length ? (
-        <section className="flex flex-col gap-2">
-          <SectionLabel>Plugins</SectionLabel>
+        <InspectorSection title="Plugins">
           <div className="flex flex-wrap gap-1.5">
             {route.plugins.map((plugin) => (
               <Badge key={plugin.id} tone={plugin.tone}>
@@ -313,63 +375,52 @@ function RouteView({
               </Badge>
             ))}
           </div>
-        </section>
+        </InspectorSection>
       ) : null}
 
       {route.metrics.length ? (
-        <section className="grid grid-cols-2 gap-2">
-          {route.metrics.map((metric) => (
-            <div key={metric.id} className="rounded-lg border border-border bg-surface px-2.5 py-2">
-              <div className="text-[11px] text-subtle-foreground">{metric.label}</div>
-              <div
-                className="truncate font-mono text-[13px] font-medium tabular"
-                title={metric.value}
-              >
-                {metric.value}
-              </div>
-            </div>
-          ))}
-        </section>
+        <InspectorSection title="Timing and usage">
+          <dl className={listCard}>
+            {route.metrics.map((metric) => (
+              <Fact
+                key={metric.id}
+                label={metric.label}
+                value={metric.value}
+                className="px-3 py-1.5"
+              />
+            ))}
+          </dl>
+        </InspectorSection>
       ) : null}
 
       {route.warnings.length || route.truncated ? (
-        <div className="flex flex-wrap gap-1.5">
-          {route.warnings.map((warning) => (
-            <Badge key={warning} tone="warning" size="sm">
-              <TriangleAlert />
-              {warning}
-            </Badge>
-          ))}
-          {route.truncated ? (
-            <Badge tone="warning" size="sm">
-              Trace truncated
-            </Badge>
-          ) : null}
-        </div>
+        <InspectorSection title="Warnings">
+          <div className="flex flex-wrap gap-1.5">
+            {route.warnings.map((warning) => (
+              <Badge key={warning} tone="warning" size="sm">
+                <TriangleAlert />
+                {warning}
+              </Badge>
+            ))}
+            {route.truncated ? (
+              <Badge tone="warning" size="sm">
+                Trace truncated
+              </Badge>
+            ) : null}
+          </div>
+        </InspectorSection>
       ) : null}
 
       <HeaderDisplay headers={headers} />
-
-      {recordHref ? (
-        <Button variant="outline" size="sm" asChild>
-          <Link to={recordHref}>
-            Open in Requests
-            <ArrowUpRight />
-          </Link>
-        </Button>
-      ) : null}
     </div>
   )
 }
 
 function HeadersView({ headers }: { headers: Record<string, string> }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={listCard}>
       {sortedHeaderEntries(headers).map(([key, value]) => (
-        <div
-          key={key}
-          className="flex items-center gap-2 rounded-lg border border-border bg-surface px-2.5 py-1.5"
-        >
+        <div key={key} className="flex items-center gap-2 py-1.5 pl-3 pr-1.5">
           <div className="flex min-w-0 flex-1 flex-col">
             <span className="truncate font-mono text-[11px] text-subtle-foreground">{key}</span>
             <span className="truncate font-mono text-xs" title={value}>
@@ -409,13 +460,11 @@ export default function PlaygroundInspector({
     ? buildFeedbackInsightsHref(insightsBasePath, route.replayId)
     : undefined
 
-  let body
+  let body: ReactNode = null
   if (!message) {
     body = (
-      <EmptyState
-        compact
+      <InspectorEmpty
         icon={ListTree}
-        tone="violet"
         title="Nothing to inspect yet"
         description="Send a message. Its signals, decision, model, latency and tokens show up here."
       />
@@ -431,16 +480,12 @@ export default function PlaygroundInspector({
         <Skeleton className="h-24 w-full rounded-lg" />
       </div>
     ) : (
-      <EmptyState
-        compact
+      <InspectorEmpty
         icon={ListTree}
-        tone="slate"
         title="No routing headers on this answer"
         description="The answer failed, or a proxy in front of the router dropped its x-vsr headers."
       />
     )
-  } else {
-    body = null
   }
 
   return (
@@ -466,14 +511,14 @@ export default function PlaygroundInspector({
           exit={{ opacity: 0, x: 16 }}
           transition={{ duration: 0.28, ease: EASE }}
           className={cn(
-            'flex w-[340px] shrink-0 flex-col border-l border-border',
+            'flex min-h-0 w-[340px] shrink-0 flex-col overflow-hidden border-l border-border',
             overlay
               ? 'absolute inset-y-0 right-0 z-30 max-w-[calc(100%-2.5rem)] bg-surface shadow-xl'
               : 'bg-surface-subtle/50',
           )}
         >
           <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-            <ListTree className="size-4 text-subtle-foreground" />
+            <ListTree className="size-4 text-subtle-foreground" aria-hidden />
             <span className="text-[13px] font-semibold">Routing trace</span>
             <Button
               variant="ghost"
@@ -487,18 +532,13 @@ export default function PlaygroundInspector({
           </div>
           {route && headers ? (
             <Tabs defaultValue="route" className="min-h-0 flex-1 gap-0">
-              <TabsList className="px-4">
+              <TabsList className="shrink-0 px-4">
                 <TabsTrigger value="route">Route</TabsTrigger>
                 <TabsTrigger value="headers">Headers</TabsTrigger>
               </TabsList>
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="relative min-h-0 flex-1 overflow-y-auto">
                 <TabsContent value="route" className="p-4">
-                  <RouteView
-                    route={route}
-                    headers={headers}
-                    prompt={prompt}
-                    recordHref={recordHref}
-                  />
+                  <RouteView route={route} headers={headers} prompt={prompt} />
                 </TabsContent>
                 <TabsContent value="headers" className="p-4">
                   <HeadersView headers={headers} />
@@ -506,8 +546,18 @@ export default function PlaygroundInspector({
               </div>
             </Tabs>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">{body}</div>
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto p-4">{body}</div>
           )}
+          {recordHref ? (
+            <div className="shrink-0 border-t border-border p-3">
+              <Button variant="outline" size="sm" className="w-full" asChild>
+                <Link to={recordHref}>
+                  Open in Requests
+                  <ArrowUpRight />
+                </Link>
+              </Button>
+            </div>
+          ) : null}
         </motion.aside>
       ) : null}
     </AnimatePresence>
