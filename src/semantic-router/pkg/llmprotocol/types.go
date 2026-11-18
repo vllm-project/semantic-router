@@ -123,6 +123,11 @@ type Message struct {
 	// next to an Anthropic tool_result block. It continues the tool loop
 	// rather than starting a user turn. It is not a wire field.
 	WithToolResults bool `json:",omitempty"`
+	// SourcePosition is the client message this one was decoded from, counted
+	// from one, so a refusal can name the client's own field. Only Anthropic
+	// Messages decoding sets it; zero means unknown, as for a message the
+	// Router added. It is not a wire field.
+	SourcePosition int `json:",omitempty"`
 }
 
 type InstructionBlock struct {
