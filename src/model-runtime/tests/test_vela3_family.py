@@ -106,6 +106,20 @@ def test_typed_added_tokens_are_text(model, package) -> None:
     assert model.tokens.ids(plain) == full.encode(plain, add_special_tokens=False).ids
 
 
+def test_span_labels_that_are_not_strings_are_refused(model) -> None:
+    questions = {
+        "null": {"type": "span", "criteria": [None, "PERSON"], "over": "user"},
+        "object": {"type": "span", "criteria": [{"a": 1}], "over": "user"},
+        "names": {"type": "span", "criteria": ["PERSON"], "over": "user"},
+    }
+    request = model.reader.read(STATE, questions)
+    for key in ("null", "object"):
+        error = request.errors[key]
+        assert error["error"] == "invalid_question", error
+        assert "labels as strings" in error["message"]
+    assert [asked.question.id for asked in request.asked] == ["names"]
+
+
 def test_a_missing_adapter_routes_off(package, tmp_path) -> None:
     copy = Path(shutil.copytree(package, tmp_path / "no-relation"))
     (copy / "relation_adapter.safetensors").unlink()
