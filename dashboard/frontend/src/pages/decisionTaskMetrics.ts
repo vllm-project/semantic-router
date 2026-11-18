@@ -5,11 +5,11 @@ import {
 } from './decisionModelMetrics'
 
 export const TASK_METRICS = [
-  { key: 'calls', label: 'Task calls / sec', unit: 'rate', color: '#7297f5' },
-  { key: 'errors', label: 'Errors', unit: 'percent', color: '#ee8b9b' },
-  { key: 'unknown', label: 'Unknown results', unit: 'percent', color: '#dca965' },
-  { key: 'latency', label: 'Mean latency', unit: 'seconds', color: '#49bba5' },
-  { key: 'p95', label: 'P95 latency', unit: 'seconds', color: '#b19ae8' },
+  { key: 'calls', label: 'Task calls / sec', unit: 'rate', color: 'var(--chart-1)' },
+  { key: 'errors', label: 'Errors', unit: 'percent', color: 'var(--chart-5)' },
+  { key: 'unknown', label: 'Unknown results', unit: 'percent', color: 'var(--chart-2)' },
+  { key: 'latency', label: 'Mean latency', unit: 'seconds', color: 'var(--chart-4)' },
+  { key: 'p95', label: 'P95 latency', unit: 'seconds', color: 'var(--chart-3)' },
 ] as const
 export type TaskMetricKey = (typeof TASK_METRICS)[number]['key']
 export type TaskMetricPoint = { time: number } & Partial<Record<TaskMetricKey, number | null>>

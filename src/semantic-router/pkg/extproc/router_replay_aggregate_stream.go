@@ -22,6 +22,7 @@ type replayAggregateAccumulator struct {
 	availableReviewModels                                 map[string]struct{}
 	reviews                                               *replayReviewAccumulator
 	decisionNames                                         map[[2]string]string
+	traffic                                               *replayTrafficAccumulator
 }
 
 func newReplayAggregateAccumulator() *replayAggregateAccumulator {
@@ -41,7 +42,18 @@ func newReplayAggregateAccumulator() *replayAggregateAccumulator {
 // options cover every record: a database reader that narrows the scan reads
 // them in a separate grouped query, and otherwise the scan collects them.
 func (r *OpenAIRouter) queryRouterReplayAggregate(ctx context.Context, filters routerReplayFilters) (routerReplayAggregateResponse, error) {
+	return r.queryRouterReplayAggregateTraffic(ctx, filters, nil)
+}
+
+// queryRouterReplayAggregateTraffic is queryRouterReplayAggregate with the
+// traffic series a non-nil query asks for, counted in the same scan.
+func (r *OpenAIRouter) queryRouterReplayAggregateTraffic(
+	ctx context.Context,
+	filters routerReplayFilters,
+	traffic *routerReplayTrafficQuery,
+) (routerReplayAggregateResponse, error) {
 	accumulator := newReplayAggregateAccumulator()
+	accumulator.traffic = newReplayTrafficAccumulator(traffic)
 	search := strings.ToLower(filters.search)
 	storageFilters := filters.storageFilters()
 	for _, reader := range r.routerReplayReaders() {
@@ -92,6 +104,7 @@ func (a *replayAggregateAccumulator) add(record routerreplay.RoutingRecord) {
 	a.costs.add(record)
 	a.providerCache.add(record)
 	a.reviews.add(record)
+	a.traffic.add(record)
 	model := routerReplayFallbackName(record.SelectedModel)
 	decision := a.decisionName(record)
 	a.models[model]++
@@ -135,5 +148,6 @@ func (a *replayAggregateAccumulator) result() routerReplayAggregateResponse {
 	if len(a.availableReviewModels) > 0 {
 		a.payload.AvailableReviewModels = sortRouterReplayOptionSet(a.availableReviewModels)
 	}
+	a.payload.Traffic = a.traffic.result()
 	return a.payload
 }

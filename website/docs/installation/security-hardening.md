@@ -153,7 +153,7 @@ namespace and release ownership discipline for every manually managed Secret.
 
 ### Keys saved from the Dashboard or the management API
 
-A key you enter in the Dashboard, in **Connect Models** or in a backend's
+A key you enter in the Dashboard, in **Connect model** or in a backend's
 **API key** field, never lands in the configuration, and neither does one in a
 file you apply with `vllm-sr config apply` (`PUT` or `PATCH /api/v1/config`).
 Each save moves every literal backend `api_key`, and every literal listener
@@ -412,7 +412,7 @@ Claude Code its Claude subscription, Codex its ChatGPT login. With
 `credential: caller` on a backend of that provider, the Router routes the
 request and presents that login in the header the client sent it in, so the
 gateway holds no key and the plan behind that login pays for the calls. The
-Dashboard's Insights record every call as for any gateway traffic.
+Dashboard's **Requests** page records every call as for any gateway traffic.
 
 ```yaml
 providers:

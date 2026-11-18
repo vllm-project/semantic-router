@@ -1,27 +1,30 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  buildRunLanes,
+  callSpan,
+  countVerdicts,
+  filterRunCalls,
   formatRunCost,
+  formatRunDuration,
   getRunPath,
+  oneLine,
+  orderRunAgents,
+  outcomeWord,
   runAgentTreeText,
+  runHeadline,
   runTitle,
+  verdictLabel,
 } from './insightsRunSupport'
 import { compactID } from './insightsReviewSupport'
-import type { RunCall, RunResponse } from './insightsRunTypes'
+import type { RunAgent, RunCall, RunSummary } from './insightsRunTypes'
 
 const START = Date.parse('2026-11-16T09:00:00Z')
 
-function call(
-  agent: string,
-  model: string,
-  second: number,
-  fields: Partial<RunCall> = {},
-): RunCall {
+function call(agent: string, second: number, fields: Partial<RunCall> = {}): RunCall {
   return {
     record_id: `${agent}-${second}`,
     agent,
-    model,
+    model: 'small',
     timestamp: new Date(START + second * 1000).toISOString(),
     duration_ms: 1000,
     lifecycle_state: 'completed',
@@ -36,70 +39,26 @@ const cost = {
   completion_tokens: 0,
 }
 
-function run(calls: RunCall[]): RunResponse {
-  const agent = (label: string, parent?: string) => ({
-    label,
-    parent,
-    calls: calls.filter((entry) => entry.agent === label).length,
-    first_call_at: '',
-    last_call_at: '',
-    cost,
-  })
-  return {
-    object: 'router_replay.run',
-    run: {
-      session_id: 'run-1',
-      started_at: new Date(START).toISOString(),
-      ended_at: new Date(START + 100_000).toISOString(),
-      duration_ms: 100_000,
-      calls: calls.length,
-      // The response lists the nested subagent before its sibling; lanes follow the tree.
-      agents: [agent('main'), agent('subagent 2', 'subagent 1'), agent('subagent 1', 'main')],
-      models: [],
-      outcome: { status: 'answered', tool_results: 0, tool_failures: 0 },
-      cost,
-    },
-    calls,
-  }
-}
-
-describe('buildRunLanes', () => {
-  it("groups an agent's calls on one model until a switch or another agent's call", () => {
-    const lanes = buildRunLanes(
-      run([
-        call('main', 'small', 0),
-        call('main', 'small', 10, { markers: ['tool_failure'] }),
-        call('subagent 1', 'small', 20),
-        call('main', 'small', 30),
-        call('main', 'large', 40, { markers: ['switch'] }),
-        call('subagent 2', 'small', 50, { markers: ['failure'] }),
-      ]),
-    )
-    expect(lanes.map((lane) => [lane.agent.label, lane.depth])).toEqual([
-      ['main', 0],
-      ['subagent 1', 1],
-      ['subagent 2', 2],
-    ])
-    const main = lanes[0].segments
-    expect(main.map((segment) => [segment.model, segment.calls.length])).toEqual([
-      ['small', 2],
-      ['small', 1],
-      ['large', 1],
-    ])
-    expect(main[0].markers).toEqual(['tool_failure'])
-    expect(main[2].markers).toEqual(['switch'])
-    expect(main[0].left).toBe(0)
-    expect(main[2].left).toBeCloseTo(40)
-    expect(lanes[2].segments[0].markers).toEqual(['failure'])
-  })
-
-  it('keeps a few hundred calls to a handful of segments', () => {
-    const calls = Array.from({ length: 300 }, (_, index) =>
-      call('main', index < 200 ? 'small' : 'large', index / 4),
-    )
-    expect(buildRunLanes(run(calls))[0].segments).toHaveLength(2)
-  })
+const agent = (label: string, parent?: string): RunAgent => ({
+  label,
+  parent,
+  calls: 1,
+  first_call_at: '',
+  last_call_at: '',
+  cost,
 })
+
+const summary: RunSummary = {
+  session_id: 'run-1',
+  started_at: new Date(START).toISOString(),
+  ended_at: new Date(START + 100_000).toISOString(),
+  duration_ms: 100_000,
+  calls: 3,
+  agents: [agent('main'), agent('subagent 2', 'subagent 1'), agent('subagent 1', 'main')],
+  models: [],
+  outcome: { status: 'answered', tool_results: 0, tool_failures: 0 },
+  cost,
+}
 
 describe('run labels', () => {
   it('formats cost per currency and names an unpriced run', () => {
@@ -112,8 +71,21 @@ describe('run labels', () => {
     expect(formatRunCost({ ...cost, unpriced_records: 2 })).toBe('no price')
   })
 
+  it('leaves a currency the run spent nothing in out of a mixed total', () => {
+    const mixed = (usd: number, units: number) =>
+      formatRunCost({
+        ...cost,
+        by_currency: [
+          { currency: 'USD', total: usd, router_call_spend: 0 },
+          { currency: 'XXX', total: units, router_call_spend: 0 },
+        ],
+      })
+    expect(mixed(0, 0.2882)).toBe('0.2882')
+    expect(mixed(0.5, 0.2882)).toBe('$0.50 + 0.2882')
+    expect(mixed(0, 0)).toBe('$0.0000')
+  })
+
   it('names a run by its session name, else its task, else its session', () => {
-    const summary = run([]).run
     expect(runTitle({ ...summary, session_name: 'Average helper', prompt: 'fix average' })).toBe(
       'Average helper',
     )
@@ -123,22 +95,81 @@ describe('run labels', () => {
     )
   })
 
+  it('keeps a long task to one line for headers, rows and chips', () => {
+    const listing = `<listing_a> Title: AMD Ryzen 9 9950X3D\n\nBrand: AMD   Model: (unknown) ${'Specifications '.repeat(40)}`
+    const headline = runHeadline({ ...summary, prompt: listing })
+    expect(headline.length).toBeLessThanOrEqual(120)
+    expect(headline.endsWith('…')).toBe(true)
+    expect(headline).not.toContain('\n')
+    expect(headline.startsWith('<listing_a> Title: AMD Ryzen 9 9950X3D Brand: AMD Model:')).toBe(
+      true,
+    )
+    expect(oneLine('  short   title ')).toBe('short title')
+  })
+
+  it('reads durations from milliseconds to hours', () => {
+    expect(formatRunDuration(420)).toBe('420ms')
+    expect(formatRunDuration(4_200)).toBe('4.2s')
+    expect(formatRunDuration(125_000)).toBe('2m 5s')
+    expect(formatRunDuration(7_260_000)).toBe('2h 1m')
+  })
+
   it('reads the agent tree at a glance and links a run with its step', () => {
-    expect(runAgentTreeText(run([]).run)).toBe('main, 2 subagents')
+    expect(runAgentTreeText(summary)).toBe('main, 2 subagents')
     expect(getRunPath('tenant:a/b', 'rec-1')).toBe(
-      '/insights/run?session=tenant%3Aa%2Fb&step=rec-1',
+      '/observe/runs?session=tenant%3Aa%2Fb&step=rec-1',
     )
   })
 })
 
-describe('a Looper call', () => {
-  it('spans the hops its record started after', () => {
-    const looper = call('main', 'large', 60, {
+describe('run agents and calls', () => {
+  it('orders the agents as a tree, each after the agent that spawned it', () => {
+    expect(
+      orderRunAgents(summary.agents).map(({ agent: entry, depth }) => [entry.label, depth]),
+    ).toEqual([
+      ['main', 0],
+      ['subagent 1', 1],
+      ['subagent 2', 2],
+    ])
+  })
+
+  it('keeps the calls of the agents and events the table follows', () => {
+    const calls = [
+      call('main', 0),
+      call('subagent 1', 1, { markers: ['failure'] }),
+      call('main', 2, { markers: ['switch', 'tool_failure'] }),
+    ]
+    const ids = (agents: string[], markers: string[]) =>
+      filterRunCalls(calls, { agents, markers }).map((entry) => entry.record_id)
+    expect(ids([], [])).toEqual(['main-0', 'subagent 1-1', 'main-2'])
+    expect(ids(['main'], [])).toEqual(['main-0', 'main-2'])
+    expect(ids([], ['failure', 'tool_failure'])).toEqual(['subagent 1-1', 'main-2'])
+    expect(ids(['main'], ['failure'])).toEqual([])
+  })
+
+  it('spans the hops a Looper call made before its record started', () => {
+    const looper = call('main', 60, {
       duration_ms: 0,
-      hops: [call('main', 'small', 50), call('main', 'large', 55)],
+      hops: [call('main', 50), call('main', 55)],
     })
-    const [segment] = buildRunLanes(run([looper]))[0].segments
-    expect(segment.left).toBeCloseTo(50)
-    expect(segment.width).toBeCloseTo(10)
+    expect(callSpan(looper)).toEqual([START + 50_000, START + 60_000])
+  })
+})
+
+describe('reported outcomes', () => {
+  it('counts verdicts in the order the outcome API lists them, unknown ones last', () => {
+    const reported = ['failed', 'good_fit', 'retry_later', 'good_fit', 'underpowered'].map(
+      (verdict) => ({ outcome: { verdict } }),
+    )
+    expect(countVerdicts(reported)).toEqual([
+      { verdict: 'good_fit', count: 2 },
+      { verdict: 'underpowered', count: 1 },
+      { verdict: 'failed', count: 1 },
+      { verdict: 'retry_later', count: 1 },
+    ])
+    expect(verdictLabel('overprovisioned')).toBe('Overprovisioned')
+    expect(verdictLabel('retry_later')).toBe('retry later')
+    expect(outcomeWord('eval')).toBe('Evaluation')
+    expect(outcomeWord('ci_bot')).toBe('ci bot')
   })
 })
