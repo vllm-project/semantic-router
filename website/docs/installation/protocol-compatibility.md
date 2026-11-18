@@ -227,6 +227,15 @@ Responses requires a detail level on every input image. An image that arrives
 without one, as every Messages image and tool-result image does, reaches a
 Responses backend with `detail: auto`, the Responses default.
 
+A Chat tool message carries text only. Toward a Chat backend, the images a
+tool result holds, as Claude Code's `Read` of a picture or Codex's
+`view_image` returns, go in one user message right after the tool messages
+that answer the turn, opened with "The tool results above returned these
+images."; a tool message whose result held only images says that they follow.
+`x-vsr-warnings` reports the move as `approximated` with field
+`messages[].content.tool_result.image`. Other media in a tool result, such as
+a document, are still refused with `tool_result_media`.
+
 Messages has no image detail level and no document file name. Toward an
 `anthropic` backend, an image `detail` other than `auto` and a file `filename`
 are omitted, and `x-vsr-warnings` reports each as `dropped`.
