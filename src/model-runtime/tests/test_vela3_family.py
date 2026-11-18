@@ -92,6 +92,20 @@ def test_detects_and_verifies_only_vela3_packages(package, tmp_path) -> None:
         family.verify(PackageRef(copy))
 
 
+def test_typed_added_tokens_are_text(model, package) -> None:
+    """A typed added token (the fixture's <|endoftext|>) reads as its characters: the layouts place BOS, EOS and the
+    markers by ID, and no text becomes one."""
+    from tokenizers import Tokenizer
+
+    full = Tokenizer.from_file(str(package / "tokenizer.json"))
+    special = full.token_to_id("<|endoftext|>")
+    typed = "a <|endoftext|> b"
+    assert full.encode(typed, add_special_tokens=False).ids.count(special) == 1
+    assert special not in model.tokens.ids(typed)
+    plain = "Hi, I'm Tom Baker (tom.baker@example.com)."
+    assert model.tokens.ids(plain) == full.encode(plain, add_special_tokens=False).ids
+
+
 def test_a_missing_adapter_routes_off(package, tmp_path) -> None:
     copy = Path(shutil.copytree(package, tmp_path / "no-relation"))
     (copy / "relation_adapter.safetensors").unlink()
