@@ -264,6 +264,19 @@ def test_span_answers_follow_the_contract(runtime) -> None:
     assert body["answers"]["all"]["noul"] == body["answers"]["none"]["noul"] > 0
 
 
+def test_a_raised_threshold_decodes_at_the_packages_own(model) -> None:
+    question = {"type": "span", "criteria": ["dose"]}
+    own = model.spans.plan("q", question, STATE, no_limit).threshold
+    raised = model.spans.plan(
+        "q", {**question, "threshold": own + 0.2}, STATE, no_limit
+    )
+    lowered = model.spans.plan(
+        "q", {**question, "threshold": own - 0.2}, STATE, no_limit
+    )
+    assert (raised.threshold, raised.decode_threshold) == (own + 0.2, own)
+    assert (lowered.threshold, lowered.decode_threshold) == (own - 0.2, None)
+
+
 def test_personal_data_outside_the_last_part_is_read(runtime) -> None:
     # A span question without over reads the user part of a state without an answer, not its last part: a name and
     # an e-mail in "user" beside a "channel" were missed with a 200 when the last part was read.

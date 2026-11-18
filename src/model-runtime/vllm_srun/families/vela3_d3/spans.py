@@ -6,8 +6,9 @@ windows of d3's own prompt (``span_render.py``), and the reader runs and
 answers it (``span_read.py``). The questions follow the runtime's contract:
 ``over`` names the target part (by default the answer part, else the user
 part, else the only one; a state of several parts with neither needs
-``over``), ``threshold`` overrides the package's,
-``preset`` asks a trained label set, and answers are ``spans`` with each
+``over``), ``threshold`` overrides the package's (one above it keeps the
+package's spans that reach it, whole), ``preset`` asks a trained label set,
+and answers are ``spans`` with each
 span's mean word probability. The windows read the whole target, so
 ``overflow`` is ``window`` and a question that sets ``require_full_input``
 reads its input completely.
@@ -189,13 +190,10 @@ class Spans:
         refused = length_error(max(len(window.ids) for window in windows))
         if refused is not None:
             raise refused
-        threshold = (
-            override
-            if override is not None
-            else self.policy.threshold(
-                routed.route, routed.label_set, routed.labels, count
-            )
+        own = self.policy.threshold(
+            routed.route, routed.label_set, routed.labels, count
         )
+        threshold = own if override is None else override
         return SpanItem(
             question_id=question_id,
             task_type="span",
@@ -207,6 +205,7 @@ class Spans:
             names=tuple(names),
             label_set=routed.label_set,
             threshold=threshold,
+            decode_threshold=own if threshold > own else None,
             evidence=routed.evidence,
             text=dict(parts)[target],
             windows=tuple(windows),
