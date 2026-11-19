@@ -43,7 +43,8 @@ const AGENT_CALL_LIMIT = 200
 
 function runFiltersOf(filters: RequestFilters): RunFilters {
   return {
-    search: filters.session || filters.search,
+    search: filters.search,
+    session: filters.session || undefined,
     range: filters.range,
     harness: filters.harness.map((value) => (value === API_CLIENT_FILTER ? API_RUN_FILTER : value)),
     status: [],
@@ -452,9 +453,12 @@ function SessionRow({
 export default function InsightsSessionsView({
   filters,
   live,
+  paused = false,
 }: {
+  /** The Requests page's filters, its session filter as the session's full id. */
   filters: RequestFilters
   live: boolean
+  paused?: boolean
 }) {
   const [params, setParams] = useSearchParams()
   const page = readPage(params)
@@ -468,6 +472,7 @@ export default function InsightsSessionsView({
     live,
     held: false,
     withWindow: true,
+    paused,
   })
   const [open, setOpen] = useState<Set<string>>(() => new Set())
   const toggle = (session: string) =>
