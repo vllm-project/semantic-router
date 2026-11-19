@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -75,56 +76,62 @@ func ConfigureRouterVerdict(routerAPIURL string, provider routerauth.CredentialP
 	}
 }
 
-// routerRestartReason waits for the Router to take or refuse the document
-// with this SHA-256 and returns why it needs a restart, if that is the only
-// reason it refused.
-func routerRestartReason(ctx context.Context, documentSHA256 string) (string, bool) {
+// waitForRouterVerdict reports an observed rejection of the document, including
+// a restart requirement. If no verdict is available, reload can continue asynchronously.
+func waitForRouterVerdict(ctx context.Context, documentSHA256 string, writtenAt time.Time) error {
 	routerVerdict.RLock()
 	endpoint, client, provider := routerVerdict.endpoint, routerVerdict.client, routerVerdict.provider
 	routerVerdict.RUnlock()
 	if endpoint == "" {
-		return "", false
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, routerVerdictTimeout)
 	defer cancel()
 	for {
 		if response, err := fetchRouterConfigHash(ctx, client, endpoint, provider); err == nil {
-			if detail, done, restart := judgeRouterAttempt(response, documentSHA256); done {
-				return detail, restart
+			// A retry of the same bytes can first see a rejection from the
+			// previous write, before the Router starts processing this one.
+			if attempt := response.Activation; attempt != nil && !attempt.StartedAt.IsZero() && attempt.StartedAt.Before(writtenAt) {
+				response.Activation = nil
+			}
+			if done, verdict := judgeRouterAttempt(response, documentSHA256); done {
+				return verdict
 			}
 		}
 		select {
 		case <-ctx.Done():
-			return "", false
+			return nil
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
 }
 
-// judgeRouterAttempt reads the Router's verdict on one document: done once the
-// Router activated or refused it, restart when every reason it gave is
-// restart_required.
-func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (detail string, done bool, restart bool) {
+// judgeRouterAttempt reports whether the matching document is active or rejected.
+func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (done bool, err error) {
 	digest := strings.TrimPrefix(documentSHA256, "sha256:")
 	if response.GeneratedRuntimeHash != digest {
-		return "", false, false
+		return false, nil
+	}
+	if response.ActiveRuntimeHash == digest {
+		// A restored document may already be active without a new attempt.
+		return true, nil
 	}
 	attempt := response.Activation
-	switch {
-	case attempt == nil || attempt.Status == "preparing" || strings.TrimPrefix(attempt.DocumentHash, "sha256:") != digest:
-		return "", false, false
-	case attempt.Status == "active":
-		return "", response.ActiveRuntimeHash == digest, false
+	if attempt == nil || strings.TrimPrefix(attempt.DocumentHash, "sha256:") != digest {
+		return false, nil
+	}
+	if attempt.Status != "failed" && attempt.Status != "rejected" {
+		return false, nil
 	}
 	if len(attempt.Reasons) == 0 {
-		return "", true, false
+		return true, errors.New("Router rejected configuration activation")
 	}
 	messages := make([]string, 0, len(attempt.Reasons))
 	for _, reason := range attempt.Reasons {
 		if reason.Code != restartRequiredCode {
-			return "", true, false
+			return true, fmt.Errorf("Router rejected configuration activation (%q)", reason.Code)
 		}
 		messages = append(messages, reason.Message)
 	}
-	return strings.Join(messages, "; "), true, true
+	return true, &restartNeededError{detail: strings.Join(messages, "; ")}
 }
