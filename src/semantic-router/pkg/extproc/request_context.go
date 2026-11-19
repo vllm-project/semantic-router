@@ -512,8 +512,15 @@ type RequestContext struct {
 	ProtocolDiagnostics      llmprotocol.Diagnostics
 	ResponseVendor           llmprotocol.ResponseVendor
 	ResponseUnknownFields    bool // Upstream response carried members its wire contract does not declare
-	ImmediateProtocolError   *llmprotocol.ProtocolError
-	ImmediateResponseEncoded bool
+	// ResponseClientBodyReplayed is set by the client-facing encodeClientResponse
+	// call. It is true when that call replayed the envelope's upstream bytes (a
+	// pristine same-format forward or an in-place patch such as the answer
+	// separator trim) rather than rendering a fresh wire body from the neutral
+	// response, so the result may still carry members the wire contract does
+	// not declare.
+	ResponseClientBodyReplayed bool
+	ImmediateProtocolError     *llmprotocol.ProtocolError
+	ImmediateResponseEncoded   bool
 
 	// Masking is the request-scoped placeholder allocator: created on the
 	// first masked dispatch, never persisted, logged or shared (D5).

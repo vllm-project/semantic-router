@@ -395,13 +395,18 @@ func isResponseAPIRequest(ctx *RequestContext) bool {
 // Re-encoding from the neutral response yields the canonical equivalent. When
 // that encode fails, nothing is cached: a miss is recoverable, a wrong entry
 // is not.
+//
+// A rewrite that replayed the envelope's bytes, such as the answer separator's
+// in-place trim, carries the same risk as a verbatim forward: it still
+// preserves whatever the upstream wrote outside the wire contract, so it needs
+// the same canonical re-encode rather than the trust a fresh render earns.
 func (r *OpenAIRouter) cacheableClientResponse(
 	clientBody []byte,
 	rewritten bool,
 	response llmprotocol.Response,
 	ctx *RequestContext,
 ) []byte {
-	if rewritten || ctx == nil || !ctx.ResponseUnknownFields {
+	if ctx == nil || !ctx.ResponseUnknownFields || (rewritten && !ctx.ResponseClientBodyReplayed) {
 		return clientBody
 	}
 	canonical, err := r.encodeCanonicalClientResponse(response, ctx)
