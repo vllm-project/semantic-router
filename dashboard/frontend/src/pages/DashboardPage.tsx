@@ -15,9 +15,9 @@ import type { RouterConfig } from './dashboardPageTypes'
 import { describeServingMode } from './dashboardServingMode'
 import type { ModelRuntimeInventory } from './decisionModelManagement'
 import {
+  HomeAgentsInUse,
   HomeConfigTiles,
   HomeModelsInUse,
-  HomePublicModels,
   HomeRoutingMix,
   HomeServices,
 } from './HomeCards'
@@ -370,7 +370,7 @@ const DashboardPage = () => {
                 range={range}
                 modelProviders={facts.modelProviders}
               />
-              <HomePublicModels config={config} />
+              <HomeAgentsInUse traffic={traffic} range={range} />
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">

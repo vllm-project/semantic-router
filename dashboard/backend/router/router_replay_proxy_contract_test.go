@@ -105,3 +105,46 @@ func TestDashboardReplayPathUsesAuthenticatedManagementProxyNotEnvoy(t *testing.
 		}
 	}
 }
+
+// The records list reaches the Router with its harness filter as the browser
+// sent it, and a read-only user's redacted list keeps the harness counts.
+func TestDashboardReplayListKeepsHarnessFilterAndCounts(t *testing.T) {
+	var upstream string
+	routerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstream = r.URL.RequestURI()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"object":"router_replay.list","total":1,"harness_counts":{"api_client":2,"codex":1},` +
+			`"data":[{"id":"replay-1","request_body":"private prompt","agent":{"harness":"codex","id":"agent-hash"}}]}`))
+	}))
+	defer routerServer.Close()
+	mux := http.NewServeMux()
+	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: routerServer.URL}, nil, nil, nil,
+		replayProxyCredentialProvider{token: "router-service-token"})
+
+	const target = "/api/v1/observability/replays?harness=api_client%2Ccodex&limit=25"
+	request := httptest.NewRequest(http.MethodGet, "/api/router"+target, nil)
+	request = request.WithContext(auth.WithAuthContext(request.Context(),
+		auth.AuthContext{Role: auth.RoleRead, Perms: map[string]bool{auth.PermReplayRead: true}}))
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || upstream != target {
+		t.Fatalf("status = %d, management target = %q, body=%s", response.Code, upstream, response.Body.String())
+	}
+	var page struct {
+		HarnessCounts map[string]int `json:"harness_counts"`
+		Data          []struct {
+			RequestBody string            `json:"request_body"`
+			Agent       map[string]string `json:"agent"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if page.HarnessCounts["api_client"] != 2 || page.HarnessCounts["codex"] != 1 || len(page.HarnessCounts) != 2 {
+		t.Fatalf("harness counts = %v", page.HarnessCounts)
+	}
+	if len(page.Data) != 1 || page.Data[0].RequestBody != "" || page.Data[0].Agent["harness"] != "codex" || page.Data[0].Agent["id"] != "" {
+		t.Fatalf("redacted record = %+v", page.Data)
+	}
+}

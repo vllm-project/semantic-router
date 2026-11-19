@@ -193,7 +193,7 @@ func (l *replayRunLanes) place(entry replayRunEntry) routerreplay.RunCall {
 	if !known {
 		label = "subagent " + strconv.Itoa(len(l.order))
 		l.labels[entry.agent.ID] = label
-		agent := &routerreplay.RunAgent{Label: label, ID: entry.agent.ID, Kind: entry.agent.Kind}
+		agent := &routerreplay.RunAgent{Label: label, ID: entry.agent.ID, Kind: entry.agent.Kind, Type: entry.agent.Type}
 		agent.Parent = l.labels[entry.agent.ParentID]
 		if agent.Parent == "" {
 			agent.Parent = replayRunMainAgent
@@ -203,6 +203,7 @@ func (l *replayRunLanes) place(entry replayRunEntry) routerreplay.RunCall {
 		}
 		l.order = append(l.order, agent)
 		l.byLabel[label] = agent
+		call.Markers = append([]string{routerreplay.RunMarkerSubagentStart}, call.Markers...)
 	}
 	call.Agent = label
 	for index := range call.Hops {

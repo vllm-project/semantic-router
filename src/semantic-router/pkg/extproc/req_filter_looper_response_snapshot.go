@@ -27,18 +27,16 @@ func prepareNativeLooperStream(
 		return nil, nil, err
 	}
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
-	if !streamUsageRequestedByClient(ctx) {
-		filter := engine.NewChatUsageStreamFilter()
-		body, err = filter.Push(body)
-		if err != nil {
-			return nil, nil, err
-		}
-		final, finalErr := filter.Finalize()
-		if finalErr != nil {
-			return nil, nil, finalErr
-		}
-		body = append(body, final...)
+	filter := engine.NewChatPublicStreamFilter(streamUsageRequestedByClient(ctx))
+	body, err = filter.Push(body)
+	if err != nil {
+		return nil, nil, err
 	}
+	final, err := filter.Finalize()
+	if err != nil {
+		return nil, nil, err
+	}
+	body = append(body, final...)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, translated.Diagnostics...)
 	return semantic, body, nil
 }
