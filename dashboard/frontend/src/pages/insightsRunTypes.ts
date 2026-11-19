@@ -25,13 +25,6 @@ export interface RunAgent {
   first_call_at: string
   last_call_at: string
   spawned_after_record_id?: string
-  // What the spawning tool call asked for, the parent's call that took the
-  // agent's result, and how it came back: succeeded or failed.
-  task?: string
-  returned_to_record_id?: string
-  return_status?: string
-  // The tools the agent's first turn offered the model.
-  offered_tools?: string[]
   models?: string[]
   cost: RunCost
 }
@@ -138,8 +131,6 @@ export interface RunCall {
   outcomes?: RunReportedOutcome[]
   markers?: string[]
   tool_calls?: RunToolCall[]
-  offered_tools_added?: string[]
-  offered_tools_removed?: string[]
   hops?: RunCall[]
 }
 

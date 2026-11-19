@@ -26,7 +26,6 @@ import {
   type TimelineBlock,
   type TimelineBreak,
 } from './insightsRunTimeline'
-import { toolStatusText, toolTimeSource, toolTimeText } from './insightsRunSequence'
 import type { RunCall, RunSummary, RunToolCall } from './insightsRunTypes'
 
 const MARKER_TONE: Record<string, string> = {
@@ -36,7 +35,7 @@ const MARKER_TONE: Record<string, string> = {
   guard: 'text-warning-foreground',
 }
 
-export function Markers({ markers, className }: { markers?: string[]; className?: string }) {
+function Markers({ markers, className }: { markers?: string[]; className?: string }) {
   return (
     <>
       {(markers ?? []).map((marker) => (
@@ -512,15 +511,31 @@ function signalParts(signal: string): [string, string] {
     : [signal.slice(0, at).replace(/_/g, ' '), signal.slice(at + 1).replace(/_/g, ' ')]
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  action,
+  className,
+  children,
+}: {
+  title: string
+  action?: ReactNode
+  className?: string
+  children: ReactNode
+}) {
   return (
     <section
-      className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-border bg-surface/60 p-3.5"
+      className={cn(
+        'flex min-w-0 flex-col gap-2.5 rounded-xl border border-border bg-surface/60 p-3.5',
+        className,
+      )}
       aria-label={title}
     >
-      <h4 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle-foreground">
-        {title}
-      </h4>
+      <header className="flex items-center justify-between gap-3">
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle-foreground">
+          {title}
+        </h4>
+        {action}
+      </header>
       {children}
     </section>
   )
@@ -544,15 +559,15 @@ const statusTone = (call: RunCall) =>
       ? 'info'
       : 'danger'
 
-// One call as a card: how it was routed and why, what it used and cost, and
-// how it ended, with internal codes in words and the raw value on hover.
+// One call as a card: how it was routed and why beside what it used and cost
+// over how it ended, with internal codes in words and the raw value on hover.
 export function RunCallDetails({ call }: { call: RunCall }) {
   const labels = useModelLabels()
   const method = [call.selection_method, call.session_action].filter(Boolean).join(' · ')
   const reason = call.reason === '' ? 'Hidden from this viewer' : call.reason
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-      <Section title="Routing">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <Section title="Routing" className="lg:row-span-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px]">
           {call.previous_model ? (
             <>
@@ -578,7 +593,7 @@ export function RunCallDetails({ call }: { call: RunCall }) {
           </Row>
         ) : null}
         {call.signals?.length ? (
-          <div className="flex flex-wrap gap-1 pt-0.5" aria-label="Signals">
+          <div className="mt-auto flex flex-wrap gap-1 pt-0.5" aria-label="Signals">
             {call.signals.map((signal) => {
               const [type, rule] = signalParts(signal)
               return (
@@ -630,7 +645,18 @@ export function RunCallDetails({ call }: { call: RunCall }) {
           <Row label="Looper">{countText(call.looper_attempts, 'attempt')}</Row>
         ) : null}
       </Section>
-      <Section title="Outcome">
+      <Section
+        title="Outcome"
+        action={
+          <Link
+            to={getInsightsRecordPath(call.record_id)}
+            className="inline-flex items-center gap-1 text-[12.5px] font-medium text-primary hover:underline"
+          >
+            Open the replay record
+            <ArrowUpRight className="size-3.5" />
+          </Link>
+        }
+      >
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone={statusTone(call)} title={call.terminal_reason}>
             {describeCallStatus(call)}
@@ -674,13 +700,6 @@ export function RunCallDetails({ call }: { call: RunCall }) {
             ))}
           </div>
         ) : null}
-        <Link
-          to={getInsightsRecordPath(call.record_id)}
-          className="mt-auto inline-flex w-fit items-center gap-1 text-[13px] font-medium text-primary hover:underline"
-        >
-          Open the replay record
-          <ArrowUpRight className="size-3.5" />
-        </Link>
       </Section>
     </div>
   )
@@ -754,26 +773,60 @@ export function RunSegmentPanel({ segment, call, numbers, onSelectCall }: RunSeg
   )
 }
 
-interface RunRowDetailsProps {
-  calls: RunCall[]
-  call?: RunCall
-  /** The run-wide number of each call, by record id. */
-  numbers?: Map<string, number>
-  onSelectCall: (call: RunCall) => void
+// How long a tool call took on the client: the tool's own run when a harness
+// plugin reported it, else the gateway's window.
+function toolDuration(tool: RunToolCall): number | undefined {
+  if (tool.timing_source === 'plugin') {
+    return tool.started_at && tool.ended_at
+      ? Date.parse(tool.ended_at) - Date.parse(tool.started_at)
+      : undefined
+  }
+  return tool.client_ms
+}
+
+// A tool call's time as the run reads it. A plugin's report is the tool's
+// own run, with the time it waited for approval apart; the gateway's window
+// is an estimate, marked ≈, that the calls of one response share.
+function toolTimeText(tool: RunToolCall): string {
+  const duration = toolDuration(tool)
+  if (tool.timing_source !== 'plugin') {
+    return duration === undefined ? '' : `≈${formatRunDuration(duration)}`
+  }
+  let wait = ''
+  if (tool.approval_ms !== undefined) {
+    wait = `waited ${formatRunDuration(tool.approval_ms)} for approval`
+  } else if (tool.approval_requested_at) {
+    // A start the harness took before the answer holds the wait.
+    wait = duration === undefined ? 'asked for approval' : 'approval wait included'
+  }
+  return [duration === undefined ? '' : `ran ${formatRunDuration(duration)}`, wait]
+    .filter(Boolean)
+    .join(', ')
+}
+
+function toolStatusText(status?: string): string {
+  if (status === 'succeeded') return 'ok'
+  if (status === 'failed') return 'failed'
+  if (status === 'denied') return 'refused'
+  return 'no result yet'
 }
 
 // How long a tool call took on the client, and whose clock says so.
 function ToolDuration({ tool }: { tool: RunToolCall }) {
   const text = toolTimeText(tool)
   if (!text) return <span />
+  const source =
+    tool.timing_source === 'plugin'
+      ? "As the harness's vSR plugin reported it: the tool's own run, and its approval wait apart"
+      : 'Estimated by the gateway: from the response that asked for the call to the request that carried its result, shared by the calls of one response'
   return (
-    <span title={toolTimeSource(tool)} data-timing={tool.timing_source}>
+    <span title={source} data-timing={tool.timing_source}>
       {text}
     </span>
   )
 }
 
-// Every tool call of a row's turns with its arguments and result.
+// Every tool call of a block's turns with its arguments and result.
 function RunToolList({ calls }: { calls: RunCall[] }) {
   const rows = calls.flatMap((entry) =>
     (entry.tool_calls ?? []).map((tool, index) => ({ entry, tool, index })),
@@ -797,49 +850,5 @@ function RunToolList({ calls }: { calls: RunCall[] }) {
         </li>
       ))}
     </ol>
-  )
-}
-
-// A row's tool calls, its calls one per line when there are several, and the
-// details of the one picked.
-export function RunRowDetails({ calls, call, numbers, onSelectCall }: RunRowDetailsProps) {
-  return (
-    <div
-      className="flex flex-col gap-3 rounded-lg border border-border bg-surface-subtle p-3"
-      aria-label="Step details"
-    >
-      <RunToolList calls={calls} />
-      {calls.length > 1 ? (
-        <ol className="flex max-h-56 flex-col overflow-y-auto rounded-lg border border-border bg-surface">
-          {calls.map((entry) => (
-            <li key={entry.record_id} className="border-b border-border last:border-0">
-              <button
-                type="button"
-                data-selected={entry.record_id === call?.record_id}
-                onClick={() => onSelectCall(entry)}
-                className="grid w-full grid-cols-[40px_72px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-surface-subtle data-[selected=true]:bg-primary-soft/60"
-              >
-                <span className="font-mono tabular text-subtle-foreground">
-                  {numbers?.get(entry.record_id) ? `#${numbers.get(entry.record_id)}` : ''}
-                </span>
-                <span className="font-mono tabular text-subtle-foreground">
-                  {new Date(entry.timestamp).toLocaleTimeString()}
-                </span>
-                <span className="truncate">{entry.request_kind || entry.decision || '-'}</span>
-                <span className="text-muted-foreground">{describeCallStatus(entry)}</span>
-                <span className="inline-flex gap-1">
-                  <Markers markers={entry.markers} />
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
-      ) : null}
-      {call ? (
-        <RunCallDetails call={call} />
-      ) : (
-        <p className="text-[13px] text-muted-foreground">Pick a call for its details.</p>
-      )}
-    </div>
   )
 }

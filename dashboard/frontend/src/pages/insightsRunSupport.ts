@@ -1,7 +1,7 @@
 import type { BadgeProps, StatusTone } from '../ui'
 import { formatInsightsCost } from '../utils/insightsCost'
 
-import { displaySessionId } from './insightsAgentIdentity'
+import { displaySessionId, sessionParam } from './insightsAgentIdentity'
 import { compactID } from './insightsReviewSupport'
 import type { RunAgent, RunCall, RunCost, RunReportedOutcome, RunSummary } from './insightsRunTypes'
 
@@ -118,7 +118,7 @@ export function modelHue(models: { name: string }[], model?: string): string {
 }
 
 export function getRunPath(sessionId: string, step?: string) {
-  const query = new URLSearchParams({ session: sessionId })
+  const query = new URLSearchParams({ session: sessionParam(sessionId) })
   if (step) query.set('step', step)
   return `/observe/runs?${query.toString()}`
 }

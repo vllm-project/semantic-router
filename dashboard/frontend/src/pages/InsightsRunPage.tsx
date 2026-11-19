@@ -3,6 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Bot,
+  ChevronLeft,
+  ChevronRight,
   CircleDollarSign,
   Clock,
   Copy,
@@ -20,6 +22,7 @@ import {
 import {
   Button,
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -37,6 +40,11 @@ import {
   MetaItem,
   PageContainer,
   PageHeader,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Skeleton,
   Tabs,
   TabsContent,
@@ -65,10 +73,8 @@ import {
   type InsightsUnavailableReason,
 } from './insightsPageApi'
 import { getReviewsPath, getSessionRequestsPath } from './insightsReviewSupport'
-import { RunLegend } from './InsightsRunDiagram'
+import { RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
 import { RunAgentsPanel, RunCallsPanel, RunOutcomesPanel } from './InsightsRunPanels'
-import { RunSequence } from './InsightsRunSequence'
-import { RunTimelineCard } from './InsightsRunTimelineCard'
 import { RunEvents, RunStatus } from './InsightsRunsView'
 import {
   countText,
@@ -79,16 +85,18 @@ import {
   type CallsView,
 } from './insightsRunSupport'
 import {
-  buildRunSequence,
-  useNarrowRunLayout,
-  type RunCallsRow,
-  type RunSequence as RunSequenceLayout,
-} from './insightsRunSequence'
+  buildRunTimeline,
+  TIMELINE_SIZE,
+  TIMELINE_SIZES,
+  type TimelineBlock,
+} from './insightsRunTimeline'
 import type { RunCall, RunResponse } from './insightsRunTypes'
+import { SessionChoice } from './InsightsSessionChoice'
+import { useSessionScope } from './insightsSessionScope'
 
 const RUNS_TAB = '/observe/requests?tab=runs'
 
-function useRun(sessionId: string) {
+function useRun(sessionId: string, pending = false) {
   const [state, setState] = useState<{
     response: RunResponse | null
     error: string | null
@@ -97,6 +105,10 @@ function useRun(sessionId: string) {
     loading: boolean
   }>({ response: null, error: null, notFound: false, loading: true })
   const load = useCallback(async () => {
+    if (pending) {
+      setState((current) => (current.loading ? current : { ...current, loading: true }))
+      return
+    }
     if (!sessionId) {
       setState({ response: null, error: null, notFound: true, loading: false })
       return
@@ -121,7 +133,7 @@ function useRun(sessionId: string) {
         loading: false,
       }))
     }
-  }, [sessionId])
+  }, [pending, sessionId])
   useEffect(() => {
     void load()
   }, [load])
@@ -203,49 +215,23 @@ function TaskSheet({
   )
 }
 
-// The row whose details show, and the call picked in it: at first the row of
-// the step a link names.
-function useOpenRow(sequence: RunSequenceLayout | undefined, step: string | undefined) {
-  // undefined until a row is opened or closed: the row of the linked step opens.
-  const [expanded, setExpanded] = useState<string | null>()
-  const [callId, setCallId] = useState<string | undefined>(step)
-  const rows = useMemo(
-    () =>
-      (sequence?.rows ?? []).filter(
-        (row): row is RunCallsRow => row.kind === 'turns' || row.kind === 'side',
-      ),
-    [sequence],
-  )
-  const open =
-    expanded === undefined
-      ? rows.find((row) => row.calls.some((entry) => entry.record_id === callId))
-      : rows.find((row) => row.key === expanded)
-  const call =
-    open?.calls.find((entry) => entry.record_id === callId) ??
-    (open?.calls.length === 1 ? open.calls[0] : undefined)
-  const toggle = (row: RunCallsRow) => {
-    setExpanded(open?.key === row.key ? null : row.key)
-    setCallId(row.calls.length === 1 ? row.calls[0].record_id : undefined)
-  }
-  const selectCall = (next: RunCall) => {
-    const row = rows.find((entry) => entry.calls.includes(next))
-    setExpanded(row?.key ?? null)
-    setCallId(next.record_id)
-    if (row) document.getElementById(`run-row-${row.key}`)?.scrollIntoView({ block: 'nearest' })
-  }
-  return { open, call, toggle, selectCall }
-}
+const SIZE_ALL = 'all'
 
-// One agent run: a compact header, its figures, its agents as lifelines with
-// their calls top to bottom, a row's details under it on click, and its
-// calls, agents and outcomes as tables a page at a time.
+// One agent run: a compact header, its figures, its calls as lanes on a time
+// axis that pages through long runs and folds idle time, and its calls,
+// agents and outcomes as tables a page at a time.
 function AgentRun() {
   const navigate = useNavigate()
   const labels = useModelLabels()
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session') ?? ''
   const step = searchParams.get('step') ?? undefined
-  const { response, error, unavailable, notFound, loading, load } = useRun(sessionId)
+  // a link may name the id the harness sent; the run reads under the full id
+  const sessionScope = useSessionScope(sessionId)
+  const { response, error, unavailable, notFound, loading, load } = useRun(
+    sessionScope.id,
+    sessionScope.resolving,
+  )
   const calls = useMemo(() => response?.calls ?? [], [response])
   const total = calls.length
   const numbers = useMemo(
@@ -255,15 +241,34 @@ function AgentRun() {
 
   const [taskOpen, setTaskOpen] = useState(false)
   const [tab, setTab] = useState('calls')
+  const [blockKey, setBlockKey] = useState<string>()
+  const [callId, setCallId] = useState<string | undefined>(step)
+  const [windowSize, setWindowSize] = useState<number>()
+  const [windowPage, setWindowPage] = useState<number>()
   const [view, setView] = useState<Omit<CallsView, 'page'> & { page?: number }>({
     agents: [],
     markers: [],
     size: DEFAULT_PAGE_SIZE,
   })
 
-  const narrow = useNarrowRunLayout()
-  const sequence = useMemo(() => (response ? buildRunSequence(response) : undefined), [response])
-  const { open, call, toggle, selectCall } = useOpenRow(sequence, step)
+  // The timeline opens on the window that holds the step a link names, else the first.
+  const size = Math.min(windowSize ?? (total > TIMELINE_SIZE ? TIMELINE_SIZE : total), total) || 1
+  const pages = Math.max(1, Math.ceil(total / size))
+  const stepIndex = step ? (numbers.get(step) ?? 0) - 1 : -1
+  const windowAt = Math.min(windowPage ?? pageHolding(stepIndex, size), pages)
+  const from = (windowAt - 1) * size
+  const to = Math.min(total, from + size)
+  const timeline = useMemo(
+    () => (response ? buildRunTimeline(response, from, to) : null),
+    [from, response, to],
+  )
+  const blocks = useMemo(() => timeline?.lanes.flatMap((lane) => lane.blocks) ?? [], [timeline])
+  const block =
+    blocks.find((entry) => entry.key === blockKey) ??
+    blocks.find((entry) => entry.calls.some((one) => one.record_id === callId))
+  const call =
+    block?.calls.find((entry) => entry.record_id === callId) ??
+    (block?.calls.length === 1 ? block.calls[0] : undefined)
 
   // The calls table opens on the page that holds the step a link names.
   const filtered = useMemo(() => filterRunCalls(calls, view), [calls, view])
@@ -274,9 +279,20 @@ function AgentRun() {
       view.size,
     )
 
-  const showInSequence = (next: RunCall) => {
-    selectCall(next)
-    document.getElementById('run-sequence')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const selectBlock = (next: TimelineBlock) => {
+    setBlockKey(next.key)
+    setCallId(next.calls.length === 1 ? next.calls[0].record_id : undefined)
+  }
+  const selectCall = (next: RunCall) => {
+    setBlockKey(blocks.find((entry) => entry.calls.includes(next))?.key)
+    setCallId(next.record_id)
+  }
+  const showInTimeline = (next: RunCall) => {
+    const index = (numbers.get(next.record_id) ?? 1) - 1
+    setWindowPage(pageHolding(index, size))
+    setBlockKey(undefined)
+    setCallId(next.record_id)
+    document.getElementById('run-timeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
   const toggleAgent = (label: string) =>
     setView((current) => ({
@@ -323,7 +339,7 @@ function AgentRun() {
     )
   }
 
-  if (!response || !sequence) {
+  if (!response || !timeline) {
     return (
       <PageContainer>
         <BackLink />
@@ -371,10 +387,11 @@ function AgentRun() {
             </MetaItem>
             <MetaItem label="Session">
               <span className="inline-flex items-center gap-1">
-                <span className="font-mono" title={run.session_id}>
+                <span className="font-mono" title={shownSession}>
                   {compactIdentifier(shownSession, 10, 8)}
                 </span>
-                <CopyButton value={run.session_id} label="Copy session ID" className="size-6" />
+                <CopyButton value={shownSession} label="Copy session ID" className="size-6" />
+                <SessionChoice scope={sessionScope} />
               </span>
             </MetaItem>
             <MetaItem icon={<Clock />}>{formatDateTime(run.started_at)}</MetaItem>
@@ -425,8 +442,8 @@ function AgentRun() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {
-                    void navigator.clipboard?.writeText(run.session_id).catch(() => undefined)
-                    toast.success('Session ID copied', { description: run.session_id })
+                    void navigator.clipboard?.writeText(shownSession).catch(() => undefined)
+                    toast.success('Session ID copied', { description: shownSession })
                   }}
                 >
                   <Copy />
@@ -496,38 +513,89 @@ function AgentRun() {
         />
       </SummaryStrip>
 
-      <RunTimelineCard
-        run={run}
-        response={response}
-        numbers={numbers}
-        step={step}
-        agents={view.agents}
-        onAgent={toggleAgent}
-      />
-
-      <Card id="run-sequence" className="mb-5 scroll-mt-6">
+      <Card id="run-timeline" className="mb-5 scroll-mt-6">
         <CardHeader>
-          <CardTitle>Sequence</CardTitle>
-          <CardDescription>
-            One lifeline per agent with its calls top to bottom, and an arrow where a subagent
-            starts and where its result comes back. Click a row for its calls, an agent to follow
-            its calls below.
+          <CardTitle>Timeline</CardTitle>
+          <CardDescription className="col-start-1">
+            One lane per agent; a block is a stretch of calls on one model. Click a block for its
+            calls, an agent to follow its calls below.
           </CardDescription>
+          {total > TIMELINE_SIZES[0] ? (
+            <CardAction className="gap-2 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start">
+              <span className="whitespace-nowrap text-xs text-subtle-foreground tabular">
+                Calls {(from + 1).toLocaleString()}–{to.toLocaleString()} of{' '}
+                {total.toLocaleString()}
+              </span>
+              <Button
+                variant="outline"
+                size="icon-xs"
+                aria-label="Earlier calls"
+                disabled={windowAt <= 1}
+                onClick={() => setWindowPage(windowAt - 1)}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-xs"
+                aria-label="Later calls"
+                disabled={windowAt >= pages}
+                onClick={() => setWindowPage(windowAt + 1)}
+              >
+                <ChevronRight />
+              </Button>
+              <Select
+                value={size >= total ? SIZE_ALL : String(size)}
+                onValueChange={(value) => {
+                  const next = value === SIZE_ALL ? total : Number(value)
+                  setWindowSize(next)
+                  setWindowPage(pageHolding(from, next))
+                }}
+              >
+                <SelectTrigger size="sm" aria-label="Calls in view" className="h-7 px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {TIMELINE_SIZES.filter((option) => option < total).map((option) => (
+                    <SelectItem key={option} value={String(option)}>
+                      {option} calls
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={SIZE_ALL}>All {total.toLocaleString()} calls</SelectItem>
+                </SelectContent>
+              </Select>
+            </CardAction>
+          ) : null}
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <RunLegend run={run} />
-          <RunSequence
+          <RunDiagram
             run={run}
-            sequence={sequence}
-            expanded={open?.key}
-            call={call}
-            numbers={numbers}
-            narrow={narrow}
+            timeline={timeline}
+            selected={block?.key}
             agents={view.agents}
-            onToggle={toggle}
-            onSelectCall={selectCall}
+            onSelect={selectBlock}
             onAgent={toggleAgent}
           />
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+            <RunLegend run={run} />
+            <span className="text-xs text-subtle-foreground tabular">
+              {formatRunDuration(timeline.activeMs)} of activity in view
+              {timeline.breaks.length === 1 ? ' · 1 idle stretch folded' : ''}
+              {timeline.breaks.length > 1
+                ? ` · ${timeline.breaks.length} idle stretches folded`
+                : ''}
+            </span>
+          </div>
+          {block ? (
+            <div className="border-t border-border pt-4">
+              <RunSegmentPanel
+                segment={block}
+                call={call}
+                numbers={numbers}
+                onSelectCall={selectCall}
+              />
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -562,7 +630,7 @@ function AgentRun() {
             view={{ ...view, page: callsPage }}
             onView={(patch) => setView((current) => ({ ...current, page: callsPage, ...patch }))}
             activeId={call?.record_id ?? step}
-            onShow={showInSequence}
+            onShow={showInTimeline}
           />
         </TabsContent>
         <TabsContent value="agents">
