@@ -85,6 +85,24 @@ type ConversationTurn struct {
 // a tool result held content that is not text, which toolResults leaves out,
 // and imagesIncomplete whether an image is one no decision model decodes,
 // which images leaves out.
+// The decision-model runtime bounds each question's tokens (vela3-fast
+// rejects bodies above ~12KiB on a shared card), so the two parts that grow
+// with the conversation keep only their tail: recent tool output and recent
+// turns carry what a late-session question reads.
+const (
+	toolResultsCapBytes   = 8 * 1024
+	previousTurnsCapBytes = 4 * 1024
+)
+
+// tailCap keeps the last limit bytes of s behind a truncation marker.
+func tailCap(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	const marker = "[state truncated] "
+	return marker + s[len(s)-limit:]
+}
+
 type systemOneReading struct {
 	request               string
 	history               []string
@@ -137,13 +155,13 @@ func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request 
 		for index, turn := range turns {
 			lines[index] = turn.Role + ": " + turn.Text
 		}
-		add("previous_turns", strings.Join(lines, "\n"))
+		add("previous_turns", tailCap(strings.Join(lines, "\n"), previousTurnsCapBytes))
 	}
 	if input.PreviousAnswer {
 		add("previous_answer", r.previousAnswer())
 	}
 	if input.ToolResults {
-		add("tool_results", strings.Join(r.toolResults, "\n\n"))
+		add("tool_results", tailCap(strings.Join(r.toolResults, "\n\n"), toolResultsCapBytes))
 	}
 	if input.Context {
 		add("context", r.context)
