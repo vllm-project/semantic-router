@@ -341,7 +341,7 @@ func pushResponsesCitationPrefix(t *testing.T, stream *StreamEngine) {
 		{
 			Type: "response.created", Sequence: 0,
 			Response: func() *responsesResponseWire {
-				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, "")
+				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, llmprotocol.ResponseRenderContext{})
 				return &response
 			}(),
 		},

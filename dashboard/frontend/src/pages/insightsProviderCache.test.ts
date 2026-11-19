@@ -36,7 +36,7 @@ describe('provider prompt-cache accounting', () => {
         { label: '1h cache write tokens', value: '50 (authoritative)' },
         { label: 'Same-model no-cache cost', value: '$0.0002' },
         { label: 'Provider cache savings', value: '-$0.0004' },
-        { label: 'Model-routing savings', value: '$0.0020' },
+        { label: 'Difference vs reference model', value: '$0.0020' },
       ]),
     )
   })
@@ -52,10 +52,10 @@ describe('provider prompt-cache accounting', () => {
       },
     }).fields
     expect(fields).toContainEqual({ label: 'Cache read tokens', value: 'Not recorded' })
-    expect(fields).toContainEqual({ label: 'Cache read cost', value: 'N/A' })
+    expect(fields).toContainEqual({ label: 'Cache read cost', value: '—' })
     expect(fields).toContainEqual({ label: 'Cache write tokens', value: '0 (authoritative)' })
     expect(fields).toContainEqual({ label: 'Cache write cost', value: '$0.0000' })
-    expect(fields).toContainEqual({ label: 'Provider cache savings', value: 'N/A' })
+    expect(fields).toContainEqual({ label: 'Provider cache savings', value: '—' })
   })
 
   it('does not reinterpret Router response-cache hits as provider savings', () => {
@@ -72,7 +72,7 @@ describe('provider prompt-cache accounting', () => {
       buildProviderCacheSection({ ...record, lifecycle_state: 'aborted' }).fields,
     ).toContainEqual({
       label: 'Provider cache savings',
-      value: 'N/A',
+      value: '—',
     })
   })
 })

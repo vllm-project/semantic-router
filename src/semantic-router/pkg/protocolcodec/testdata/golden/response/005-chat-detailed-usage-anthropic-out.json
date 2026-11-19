@@ -6,7 +6,7 @@
       "type": "text"
     }
   ],
-  "id": "response_usage_1",
+  "id": "msg_bc60983c19e7d1887f52a06d",
   "model": "routed-model",
   "role": "assistant",
   "stop_details": null,

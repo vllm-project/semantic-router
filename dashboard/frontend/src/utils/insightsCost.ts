@@ -26,7 +26,7 @@ export function formatInsightsCost(
   format: InsightsCostFormat = {},
 ): string {
   const currencyCode = currency?.trim()
-  if (typeof value !== 'number' || !Number.isFinite(value) || !currencyCode) return 'N/A'
+  if (typeof value !== 'number' || !Number.isFinite(value) || !currencyCode) return '—'
 
   const tiny = value !== 0 && Math.abs(value) < MINIMUM_VISIBLE_COST
   const displayed = tiny ? Math.sign(value) * MINIMUM_VISIBLE_COST : value === 0 ? 0 : value
@@ -66,5 +66,5 @@ export function formatInsightsCompactCount(value: number): string {
 }
 
 export function formatInsightsShare(part: number, whole: number): string {
-  return whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : 'N/A'
+  return whole > 0 ? `${((part / whole) * 100).toFixed(1)}%` : '—'
 }

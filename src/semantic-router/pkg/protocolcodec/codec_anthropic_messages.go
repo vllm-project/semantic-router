@@ -82,6 +82,9 @@ type anthropicContentWire struct {
 	FileID          string                     `json:"file_id,omitempty"`
 	// raw is a server tool block, sent as it was written.
 	raw json.RawMessage
+	// signed renders a thinking block's signature even when it is empty, as
+	// Messages replies carry it. It is not a wire field.
+	signed bool
 }
 
 func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
@@ -102,6 +105,9 @@ func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
 		object["text"], _ = json.Marshal(wire.Text)
 	case "thinking":
 		object["thinking"], _ = json.Marshal(wire.Thinking)
+		if wire.signed {
+			object["signature"], _ = json.Marshal(wire.Signature)
+		}
 	}
 	return json.Marshal(object)
 }
@@ -379,7 +385,7 @@ func decodeAnthropicMessages(
 	diagnostics *llmprotocol.Diagnostics,
 ) ([]llmprotocol.Tool, error) {
 	var added []llmprotocol.Tool
-	for _, messageWire := range messages {
+	for position, messageWire := range messages {
 		rest, tools, err := takeAnthropicToolAdditions(messageWire, policy, diagnostics)
 		if err != nil {
 			return nil, err
@@ -391,6 +397,9 @@ func decodeAnthropicMessages(
 		message, err := decodeAnthropicMessage(*rest, policy)
 		if err != nil {
 			return nil, err
+		}
+		for part := range message {
+			message[part].SourcePosition = position + 1
 		}
 		request.Messages = append(request.Messages, message...)
 	}

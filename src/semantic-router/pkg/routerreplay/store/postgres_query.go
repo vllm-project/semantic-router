@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+// postgresHarnessColumn is the harness that sent a record, empty for a plain
+// API client.
+const postgresHarnessColumn = `COALESCE(routing_metadata->'agent'->>'harness', '')`
+
 // QueryPage counts and reads one snapshot, so concurrent inserts cannot make
 // the page disagree with its total. Only the requested page loads full bodies.
 func (p *PostgresStore) QueryPage(ctx context.Context, filters QueryFilters, limit, offset int, details bool) (RecordPage, error) {
@@ -27,8 +31,7 @@ func (p *PostgresStore) QueryPage(ctx context.Context, filters QueryFilters, lim
 	defer func() { _ = tx.Rollback() }()
 	where, args := postgresReplayWhere(filters)
 	page := RecordPage{Records: []Record{}}
-	//nolint:gosec // tableName is validated; filters are parameters
-	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+p.tableName+where, args...).Scan(&page.Total); err != nil {
+	if page.HarnessCounts, page.Total, err = countPostgresHarnesses(ctx, tx, p.tableName, filters); err != nil {
 		return RecordPage{}, err
 	}
 	page.Offset = min(offset, page.Total)
@@ -51,6 +54,37 @@ func (p *PostgresStore) QueryPage(ctx context.Context, filters QueryFilters, lim
 		return RecordPage{}, err
 	}
 	return page, nil
+}
+
+// countPostgresHarnesses counts in one grouped query the records every filter
+// but Harness selects, by harness, and totals the ones Harness keeps. The
+// Router writes a handful of harness ids, so the groups are few.
+func countPostgresHarnesses(ctx context.Context, tx *sql.Tx, tableName string, filters QueryFilters) (counts map[string]int, total int, err error) {
+	harnesses := filters.Harness
+	filters.Harness = ""
+	where, args := postgresReplayWhere(filters)
+	//nolint:gosec // tableName is validated; filters are parameters
+	rows, err := tx.QueryContext(ctx, "SELECT "+postgresHarnessColumn+", COUNT(*) FROM "+tableName+where+" GROUP BY 1", args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	counts = map[string]int{}
+	for rows.Next() {
+		var harness string
+		var count int
+		if err = rows.Scan(&harness, &count); err != nil {
+			return nil, 0, err
+		}
+		if harness == "" {
+			harness = HarnessAPIClient
+		}
+		counts[harness] += count
+		if harnesses == "" || HarnessListed(harnesses, harness) {
+			total += count
+		}
+	}
+	return counts, total, rows.Err()
 }
 
 func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
@@ -80,6 +114,17 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	}
 	if filters.TurnID != "" {
 		add("(turn_id = ? OR parent_turn_id = ?)", filters.TurnID)
+	}
+	if filters.Harness != "" {
+		var placeholders []string
+		for harness := range strings.SplitSeq(filters.Harness, ",") {
+			if harness == HarnessAPIClient {
+				harness = ""
+			}
+			args = append(args, harness)
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
+		}
+		clauses = append(clauses, postgresHarnessColumn+" IN ("+strings.Join(placeholders, ", ")+")")
 	}
 	if filters.Search != "" {
 		add("(strpos(lower(COALESCE(request_id, '')), lower(?)) > 0 OR strpos(lower(COALESCE(recipe, '')), lower(?)) > 0 OR strpos(lower(COALESCE(session_id, '')), lower(?)) > 0)", filters.Search)
