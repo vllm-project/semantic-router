@@ -198,6 +198,10 @@ func (b *servedModelBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b.mu.Unlock()
 	model, _ := body["model"].(string)
 	switch model {
+	case "invalid-model":
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("not JSON"))
+		return
 	case "empty-model":
 		writeEmptyAnthropicAnswer(w, body["stream"] == true)
 		return
@@ -374,6 +378,63 @@ func TestFallbackAnswerOwnsTheRecordAndTheSession(t *testing.T) {
 	plain := h.send(t, "/v1/chat/completions", chatBody("plain again", ""), session)
 	require.Equal(t, []string{"cheap-model"}, plain.called, "the session left the model that holds its cache")
 	require.Equal(t, "session_scope_protect", sessionPolicyString(plain.record, "reason"))
+}
+
+func TestInvalidFallbackAnswerDoesNotTakeOverTheSession(t *testing.T) {
+	h := newServedModelHarness(t, func(cfg string) string {
+		return strings.Replace(cfg, "provider_model_id: cheap-model", "provider_model_id: invalid-model", 1)
+	})
+	session := routing.HeaderField{Name: "x-claude-code-session-id", Value: "invalid-fallback"}
+
+	answer := h.send(t, "/v1/chat/completions", chatBody("FAILOVER question", ""), session)
+	require.Equal(t, []string{"fail-model", "invalid-model"}, answer.called)
+	require.Equal(t, http.StatusBadGateway, answer.status)
+	require.Equal(t, routerreplay.LifecycleFailed, answer.record.LifecycleState)
+	require.Equal(t, "upstream_invalid_response", answer.record.TerminalReason)
+	require.Equal(t, "fail-model", answer.record.SelectedModel)
+	outcomes := fallbackOutcomes(answer.record)
+	require.Len(t, outcomes, 1)
+	require.Equal(t, "failed", outcomes[0].Verdict)
+	require.Equal(t, "upstream_invalid_response", outcomes[0].Reason)
+	require.Equal(t, "2", outcomes[0].Metadata["attempts"])
+
+	again := h.send(t, "/v1/chat/completions", chatBody("FAILOVER again", ""), session)
+	require.Equal(t, []string{"fail-model", "invalid-model"}, again.called)
+	require.Equal(t, "fail-model", sessionPolicyString(again.record, "current_model"))
+}
+
+func TestStreamedFallbackTakesOverTheSessionAfterCompletion(t *testing.T) {
+	for _, tc := range []struct {
+		candidate, providerModel, lifecycle, verdict string
+	}{
+		{"empty-msg", "empty-model", routerreplay.LifecycleCompleted, "completed"},
+		{"cut-msg", "cut-model", routerreplay.LifecycleFailed, "failed"},
+	} {
+		t.Run(tc.candidate, func(t *testing.T) {
+			h := newServedModelHarness(t, func(cfg string) string {
+				return strings.Replace(cfg, "{model: fail-msg}, {model: plain-msg}", "{model: fail-msg}, {model: "+tc.candidate+"}", 1)
+			})
+			session := routing.HeaderField{Name: "x-claude-code-session-id", Value: "streamed-fallback"}
+			body := `{"model":"vllm-sr/auto","max_tokens":64,"stream":true,"messages":[{"role":"user","content":"HANDOFFMSG question"}]}`
+			answer := h.send(t, "/v1/messages", body, session)
+			require.Equal(t, []string{"fail-model", tc.providerModel}, answer.called)
+			require.Equal(t, http.StatusOK, answer.status)
+			require.Equal(t, tc.lifecycle, answer.record.LifecycleState)
+			outcomes := fallbackOutcomes(answer.record)
+			require.Len(t, outcomes, 1)
+			require.Equal(t, tc.verdict, outcomes[0].Verdict)
+			require.Equal(t, "2", outcomes[0].Metadata["attempts"])
+
+			again := h.send(t, "/v1/messages", body, session)
+			if tc.lifecycle == routerreplay.LifecycleCompleted {
+				require.Equal(t, tc.candidate, answer.record.SelectedModel)
+				require.Equal(t, []string{tc.providerModel}, again.called)
+			} else {
+				require.Equal(t, "fail-msg", answer.record.SelectedModel)
+				require.Equal(t, []string{"fail-model", tc.providerModel}, again.called)
+			}
+		})
+	}
 }
 
 // A request its first model answers has no fallback to report, whichever

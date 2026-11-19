@@ -534,10 +534,12 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 // terminal response, which would otherwise read as a client abort. A record
 // the Router already ended keeps what it holds.
 func (r *OpenAIRouter) failAnsweredRouterReplay(ctx *RequestContext, status int, body []byte, reason string) {
-	if status < 400 || !r.routerReplayInProgress(ctx) {
+	if status < 400 {
 		return
 	}
-	r.updateRouterReplayStatus(ctx, status, false)
+	if r.routerReplayInProgress(ctx) {
+		r.updateRouterReplayStatus(ctx, status, false)
+	}
 	r.failStreamedRouterReplay(ctx, body, reason)
 }
 

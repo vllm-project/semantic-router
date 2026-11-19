@@ -26,7 +26,8 @@ func answerThroughFallback(t *testing.T, native bool, recorder *routerreplay.Rec
 		session.router.startRouterReplay(session.ctx, "auto", "model-primary", "chat_fallback_decision")
 		_, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
 		require.NoError(t, err)
-		session.fallback.succeeded(http.StatusOK)
+		session.fallback.beginResponse(http.StatusOK)
+		session.router.finishNativeFallbackResponse(session.ctx, "")
 		return session.ctx
 	}
 	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())

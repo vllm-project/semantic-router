@@ -145,6 +145,7 @@ func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *
 		metrics.RecordResponseGuardBuffered(requestDecisionStateKey(ctx), hold.outcome)
 	}
 	if plan.blocked != nil {
+		r.finishNativeFallbackResponse(ctx, "policy_blocked")
 		plan.commit()
 		return r.refuseHeldStream(ctx, plan.refusal, "request_rejected")
 	}
@@ -158,6 +159,7 @@ func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *
 	if delivered != nil {
 		r.updateResponseCache(ctx, delivered)
 	}
+	r.finishNativeFallbackResponse(ctx, "")
 	plan.commit()
 	response := heldStreamPart(frames)
 	if options := plan.headerOptions(); len(options) > 0 {

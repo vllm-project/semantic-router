@@ -296,8 +296,9 @@ deliberate:
     names its failure the same way.
   - In standalone mode a candidate's request is built like the primary's, from the client's request. Envoy
     mode's candidate gets only the provider's headers.
-  - Standalone mode commits to a candidate when its successful headers arrive. Envoy mode commits once it has
-    translated the buffered body.
+  - Standalone mode starts processing a candidate's response at its 2xx headers. Replay and session protection
+    credit the candidate after the Router accepts the buffered answer or completes a valid stream. Envoy mode
+    validates the buffered answer before crediting the candidate.
   - `per_attempt_timeout` and the rest of `total_timeout` bound a standalone candidate until its response starts, so a
     stream is never cut short.
 

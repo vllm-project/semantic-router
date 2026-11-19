@@ -68,7 +68,7 @@ func (r *OpenAIRouter) decisionReasoningChoice(ctx *RequestContext, candidateMod
 
 // recordPrimarySuccess resets consecutive failures for the primary backend when an attempt succeeds.
 func (r *OpenAIRouter) recordPrimarySuccess(ctx *RequestContext) {
-	if r == nil || ctx == nil {
+	if r == nil || ctx == nil || ctx.nativeFallbackResponse != nil {
 		return
 	}
 	orch := r.fallbackOrchestratorForContext(ctx)

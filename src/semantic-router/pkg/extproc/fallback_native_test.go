@@ -73,24 +73,28 @@ func TestNativeFallbackPreparesTheNextCandidate(t *testing.T) {
 	require.False(t, ctx.FallbackAuditRecorded)
 }
 
-func TestNativeFallbackSwitchesToTheCandidateOnItsSuccess(t *testing.T) {
+func TestNativeFallbackRecordsSuccessOnlyAfterAcceptingTheBody(t *testing.T) {
 	session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
 	ctx := session.ctx
 	step, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
 	require.NoError(t, err)
 	require.NotNil(t, step.Call)
 
-	session.fallback.succeeded(http.StatusOK)
+	session.fallback.beginResponse(http.StatusOK)
 	require.Equal(t, "model-fallback-1", ctx.VSRSelectedModel)
+	require.Len(t, ctx.FallbackRecord.Attempts, 1)
+	require.Empty(t, ctx.FallbackRecord.FinalStatus)
+	require.False(t, ctx.FallbackAuditRecorded)
+
+	session.router.finishNativeFallbackResponse(ctx, "")
 	require.Equal(t, "model-fallback-1", ctx.RequestModel)
 	require.Equal(t, headers.ResponsePathFallback, ctx.ResponsePath)
 	require.Equal(t, "succeeded", ctx.FallbackRecord.FinalStatus)
 	require.Len(t, ctx.FallbackRecord.Attempts, 2)
 	require.True(t, ctx.FallbackAuditRecorded)
 
-	// A later success report, such as the response phases seeing the same
-	// response again, changes nothing.
-	session.fallback.succeeded(http.StatusOK)
+	// A later completion cannot record a second attempt.
+	session.router.finishNativeFallbackResponse(ctx, "")
 	require.Len(t, ctx.FallbackRecord.Attempts, 2)
 }
 
@@ -141,7 +145,8 @@ func TestNativeFallbackEndsWithThePrimaryContext(t *testing.T) {
 	require.Equal(t, "bad gateway", ctx.FallbackRecord.Attempts[1].ErrorMessage)
 	require.True(t, ctx.FallbackAuditRecorded)
 
-	session.fallback.succeeded(http.StatusOK)
+	session.fallback.beginResponse(http.StatusOK)
+	session.router.finishNativeFallbackResponse(session.ctx, "")
 	require.Equal(t, "model-primary", ctx.VSRSelectedModel, "no candidate is in flight once the chain ended")
 }
 

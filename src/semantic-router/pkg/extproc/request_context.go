@@ -293,6 +293,8 @@ type RequestContext struct {
 	// fallbackExecutedByCaller is set when the native gateway runs the
 	// request's fallback chain; the response phases then never fall back.
 	fallbackExecutedByCaller bool
+	// nativeFallbackResponse awaits validation after a candidate's 2xx headers.
+	nativeFallbackResponse *nativeFallbackResponse
 	// fallbackLastFailure is the last fallback candidate's failed upstream
 	// answer; a chain that ends without a success answers the client with it.
 	fallbackLastFailure *failedAttempt
