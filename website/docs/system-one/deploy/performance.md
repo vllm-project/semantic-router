@@ -223,6 +223,24 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
   its threshold by at most `scan_window.reread_margin` has the input's last
   half window read again, at once: one more window, which still ends the scan
   early when it matches.
+- A window read once is not read again for a while. Its answers depend only on
+  what its call sends, so the Router keeps the answers of the request stage's
+  windows, at most 16,384 of them, until 30 minutes after a request last read
+  them, and a request whose input is the same up to a window's end takes that
+  window's answers instead of a call. A tool loop sends the user turn it
+  answers again with every request, and a rule that reads the earlier turns
+  (`input.history`) reads a conversation that grows at its end, so the later
+  requests of a session read only their new windows. Every window of an input
+  is still read, each once, and a kept window that found an attack still
+  refuses the request. A window's key includes all the text before it, so what
+  one conversation's windows answered never serves, or speeds up, another.
+- Kept answers save the second read, not the first. The first request that
+  brings a long input to a Router still reads all of its windows: on one
+  deployment, with 2,048-token windows four at a time, a fresh 80K-token turn
+  took about 5.5 s to route and a 300K-token turn about 20 s, and the same turn
+  read again on that Router about 1 s. Each Router keeps its own answers, so a
+  session whose requests reach several Router replicas reads a long turn once
+  on each, and a restarted Router starts with none.
 - An input whose windows are all read by the signals' deadline is read at the
   configured size, as fast as its windows are read. A scan that falls behind,
   whose windows left would not all be read in time at the pace it read the
@@ -319,6 +337,9 @@ Coverage is reported for every guard rule that read its input in windows:
   as `full`, `partial` or `none`, `vsr_signal_scan_coverage_ratio{signal}` gives
   the share of its windows it read, and `vsr_signal_scan_decided_total{signal}`
   counts the rules a window decided before the rest was read;
+- `vsr_signal_scan_windows_total{deployment, source}` counts the windows the
+  model read (`read`) and those whose answers an earlier request's read of the
+  same input gave (`kept`);
 - the routing preview (`scan_coverage`) and the Router Replay record
   (`scan_coverage`) give `full`, `partial n/m` or `none` per rule;
 - `x-vsr-trace` carries it as `scan_coverage` for a caller allowed the debug

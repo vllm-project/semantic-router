@@ -115,7 +115,7 @@ func TestCompileNamesEveryResourceAndItsReferences(t *testing.T) {
 		t.Fatalf("listener refs = %v", got)
 	}
 
-	route := mustGet(t, resources, KindRoute, "coding-auto")
+	route := mustGet(t, resources, KindRoute, "chat/coding-auto")
 	if got := refNames(route.Refs); len(got) != 1 || got[0] != "program/coding" {
 		t.Fatalf("route refs = %v", got)
 	}
@@ -315,7 +315,7 @@ func TestCompileReportsEveryUnresolvedReference(t *testing.T) {
 			t.Fatalf("reason = %+v", reason)
 		}
 	}
-	if !strings.Contains(err.Error(), "route/ghost-a references program/missing-a") {
+	if !strings.Contains(err.Error(), "route/chat/ghost-a references program/missing-a") {
 		t.Fatalf("error = %q", err)
 	}
 }

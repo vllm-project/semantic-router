@@ -10,11 +10,12 @@ interface InsightsFilterState {
 
 // The list's filters as the replay API reads them. turn is the Codex turn from the
 // page URL, which the API matches on turn_id or parent_turn_id; since is an RFC 3339
-// lower bound on the record time.
+// lower bound on the record time; harness lists the harnesses whose requests to keep.
 export interface ReplayQueryFilters extends InsightsFilterState {
   turn: string
   session?: string
   since?: string
+  harness?: string[]
 }
 
 export function buildReplayQueryString(
@@ -50,6 +51,9 @@ export function buildReplayQueryString(
   }
   if (filters.session) {
     params.set('session_id', filters.session)
+  }
+  if (filters.harness?.length) {
+    params.set('harness', [...filters.harness].sort().join(','))
   }
   if (filters.since) {
     params.set('since', filters.since)

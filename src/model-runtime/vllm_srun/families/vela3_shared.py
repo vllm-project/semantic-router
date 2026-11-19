@@ -46,16 +46,14 @@ def normalize(text: Any) -> str:
     return " ".join(str(text or "").split())
 
 
-def tokens(root: Path, markers: Mapping[str, Any]) -> Tokens:
-    """The base UltraBERT tokenizer without the marker tokens, so text never creates one."""
+def tokens(root: Path) -> Tokens:
+    """The base UltraBERT tokenizer without its added tokens: the layouts place BOS, EOS and the markers by ID, and
+    text never creates any added token (a typed ``<|endoftext|>`` is read as its characters).
+    """
     from tokenizers import Tokenizer
 
     data = json.loads((Path(root) / "tokenizer.json").read_text(encoding="utf-8"))
-    data["added_tokens"] = [
-        token
-        for token in data.get("added_tokens", [])
-        if token["content"] not in markers
-    ]
+    data["added_tokens"] = []
     tokenizer = Tokenizer.from_str(json.dumps(data))
     tokenizer.no_padding()
     tokenizer.no_truncation()

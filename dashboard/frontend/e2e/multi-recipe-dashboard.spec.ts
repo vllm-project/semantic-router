@@ -283,12 +283,10 @@ test('dashboard and managers expose recipe-owned routing state', async ({ page }
   const routingMix = page.getByTestId('home-routing-mix')
   await expect(routingMix.getByText('balanced-route')).toBeVisible()
   await expect(routingMix.getByText('private-route')).toBeVisible()
-  const publicModels = page.getByTestId('home-public-models')
-  await expect(publicModels.getByRole('heading', { name: 'Public models' })).toBeVisible()
-  await expect(publicModels).toContainText('3 recipes')
-  await expect(page.getByRole('button', { name: 'View Default routing topology' })).toBeVisible()
-  await page.getByRole('button', { name: 'View privacy topology' }).click()
-  await expect(page).toHaveURL(/\/routing\/topology\?scope=privacy$/)
+  await expect(page.getByTestId('home-count-recipes')).toContainText('3')
+  await expect(
+    page.getByTestId('home-agents').getByRole('heading', { name: 'Agents in use' }),
+  ).toBeVisible()
 
   await page.goto('/routing/signals')
   await expect(recipeScope(page)).toContainText('balanced')

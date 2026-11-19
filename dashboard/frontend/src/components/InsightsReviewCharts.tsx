@@ -31,7 +31,7 @@ function formatReviewCost(cost: InsightsReviewCost[] | null | undefined) {
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`
 
-const formatLatency = (value?: number) => (typeof value === 'number' ? formatSeconds(value) : 'N/A')
+const formatLatency = (value?: number) => (typeof value === 'number' ? formatSeconds(value) : '—')
 
 function bucketLabel(start: string, bucket?: string) {
   const date = new Date(start)
@@ -54,7 +54,7 @@ function summaryTiles(reviews: InsightsReviewAggregate) {
       value:
         typeof reviews.approval_rate === 'number'
           ? `${(reviews.approval_rate * 100).toFixed(1)}%`
-          : 'N/A',
+          : '—',
       hint: `${reviews.allowed} allowed of ${verdicts} verdicts`,
     },
     { label: 'Denied', value: String(reviews.denied), hint: 'Valid deny verdicts' },

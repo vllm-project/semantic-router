@@ -173,9 +173,18 @@ async function setup(page: Page) {
     seen.lists.push(query)
     const session = query.get('session_id')
     const kind = query.get('request_kind')
-    const data = records.filter(
+    const harnesses = (query.get('harness') ?? '').split(',').filter(Boolean)
+    const harnessOf = (record: (typeof records)[number]) => record.agent?.harness || 'api_client'
+    const others = records.filter(
       (record) =>
         (!session || record.session_id === session) && (!kind || record.request_kind === kind),
+    )
+    const harnessCounts: Record<string, number> = {}
+    for (const record of others) {
+      harnessCounts[harnessOf(record)] = (harnessCounts[harnessOf(record)] ?? 0) + 1
+    }
+    const data = others.filter(
+      (record) => harnesses.length === 0 || harnesses.includes(harnessOf(record)),
     )
     return route.fulfill({
       json: {
@@ -183,6 +192,7 @@ async function setup(page: Page) {
         count: data.length,
         total: data.length,
         has_more: false,
+        harness_counts: harnessCounts,
         data,
       },
     })
@@ -284,25 +294,27 @@ test('lists each request with its harness logo and agent, filters by harness and
   expect(seen.lists.length).toBeGreaterThan(0)
   expect(seen.lists.every((query) => query.get('limit') === '25' && query.has('since'))).toBe(true)
 
+  // The Router counts the harnesses; the class counts read the newest records.
   await page.getByRole('button', { name: 'Client' }).click()
   const opencode = page.getByRole('menuitemcheckbox', { name: /OpenCode/ })
   await expect(opencode).toContainText('1')
   await expect(opencode.getByRole('img', { name: 'OpenCode' })).toBeVisible()
+  expect(seen.lists.some((query) => query.get('limit') === '1' && !query.has('harness'))).toBe(true)
   expect(seen.lists.some((query) => query.get('limit') === '100')).toBe(true)
   await opencode.click()
   await page.keyboard.press('Escape')
   await expect(page).toHaveURL(/harness=opencode/)
   await expect(rows.filter({ hasText: 'Codex' })).toHaveCount(0)
   await expect(housekeeping).toHaveCount(1)
-  await expect(
-    page.getByText(
-      'Client and class filters run in your browser over all 5 requests in the last 24 hours.',
-    ),
-  ).toBeVisible()
+  expect(
+    seen.lists.some((query) => query.get('harness') === 'opencode' && query.get('limit') === '25'),
+  ).toBe(true)
+  await expect(page.getByText('in your browser', { exact: false })).toHaveCount(0)
 
   await page.getByLabel('Hide housekeeping').click()
   await expect(page).toHaveURL(/housekeeping=hide/)
   await expect(housekeeping).toHaveCount(0)
+  await expect(page.getByText('Class filters run in your browser', { exact: false })).toBeVisible()
 })
 
 test("a session is a pivot: its requests, then its run's agent tree", async ({ page }) => {
@@ -313,7 +325,9 @@ test("a session is a pivot: its requests, then its run's agent tree", async ({ p
     .filter({ hasText: 'Codex' })
     .getByRole('button', { name: '01a1ea71…9e9851' })
     .click()
-  await expect(page).toHaveURL(/session=key_3fa9c2%3A01a1ea71/)
+  // the URL names the session by the id Codex sent, never the key it was scoped to
+  await expect(page).toHaveURL(/session=01a1ea71-6532-7fc1-9137-1fd7cf9e9851/)
+  await expect(page).not.toHaveURL(/key_/)
   const chip = page.getByRole('button', { name: 'Clear session filter' }).locator('..')
   await expect(chip).toContainText('Add a histogram for selection latency')
   await expect(chip.getByRole('button', { name: 'Open run' })).toBeVisible()
@@ -462,9 +476,11 @@ test('a long run reads at a glance: a one-line title, its task in a sheet, its c
   await expect(timeline.getByRole('listitem')).toHaveCount(2)
   await page.getByRole('button', { name: 'Later calls' }).click()
   await expect(page.getByText('Calls 101–200 of 300')).toBeVisible()
-  await expect(timeline.locator('[data-marker="failure"]')).toHaveCount(1)
+  await expect(
+    page.getByRole('list', { name: 'Run events' }).locator('[data-event="failure"]'),
+  ).toHaveCount(1)
   // the hour away folds to a narrow mark that says how long it lasted
-  await expect(timeline).toContainText('1h 0m idle')
+  await expect(page.locator('#run-timeline')).toContainText('1h 0m idle')
   await page.screenshot({ path: info.outputPath('run-long.png'), fullPage: true })
 
   await expect(page.getByText('1–25 of 300 calls')).toBeVisible()

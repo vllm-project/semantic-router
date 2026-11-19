@@ -183,9 +183,11 @@ class Vela3Family(ModelFamily):
             backbone=backbone,
             # docs/records/cpu-zentorch-linear-vela3.md: zentorch's FP32 linear
             # changed no decision and no span set, so it runs on CPUs where
-            # opted in; GPUs keep exact kernels.
+            # opted in; other CPU slots and GPUs keep exact kernels.
             dtype=DtypePolicy(
-                autocast=None, bf16_resident=False, approximate_cpu_kernels=True
+                autocast=None,
+                bf16_resident=False,
+                approximate_cpu_kernels=frozenset({"linear"}),
             ),
             max_input_tokens=details.max_input_tokens,
             encoder=True,
@@ -282,7 +284,7 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         self.router = router
         self.reader = Reader(router, render31=package.render31)
         self.answerer = Answerer(router)
-        self.tokens = tokens(package.root, package.config["decision"]["marker_ids"])
+        self.tokens = tokens(package.root)
         self.scan_tokens = scan_tokens
         self.layout = layout(package.config, router.window, router.overlap)
         self.evidence_layout = layout(

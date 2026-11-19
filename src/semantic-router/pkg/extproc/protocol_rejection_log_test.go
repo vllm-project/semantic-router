@@ -53,7 +53,7 @@ func TestIngressRejectionLogsCodeAndMessage(t *testing.T) {
 		t.Fatalf("rejection fields = %v", fields)
 	}
 	// the hint is empty until tools.defer_loading becomes a loss an operator may accept
-	want := "tools.defer_loading is not supported by the protocol-neutral request contract" + llmprotocol.OptInHint("tools.defer_loading")
+	want := "tools.defer_loading is not supported by the Router" + llmprotocol.OptInHint("tools.defer_loading")
 	if message, _ := fields["message"].(string); message != want {
 		t.Fatalf("rejection message = %q", message)
 	}
