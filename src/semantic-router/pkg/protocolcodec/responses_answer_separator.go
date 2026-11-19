@@ -114,19 +114,34 @@ func shiftResponsesPartAnnotations(separator *answerSeparator, key streamContent
 	if !found || len(bytes.TrimSpace(annotations)) == 0 {
 		return true
 	}
-	var wire []responsesAnnotationWire
-	if json.Unmarshal(annotations, &wire) != nil {
+	var objects []map[string]json.RawMessage
+	if json.Unmarshal(annotations, &objects) != nil {
 		return false
 	}
-	if len(wire) == 0 {
+	if len(objects) == 0 {
 		return true
 	}
-	citations, err := decodeResponsesAnnotations(wire)
-	if err != nil {
-		return false
+	removed := separator.removed[key]
+	for _, object := range objects {
+		var annotationType string
+		if json.Unmarshal(object["type"], &annotationType) != nil || annotationType != "url_citation" {
+			return false
+		}
+		var start, end int64
+		if json.Unmarshal(object["start_index"], &start) != nil || json.Unmarshal(object["end_index"], &end) != nil {
+			return false
+		}
+		startEncoded, err := json.Marshal(max(start-removed, 0))
+		if err != nil {
+			return false
+		}
+		endEncoded, err := json.Marshal(max(end-removed, 0))
+		if err != nil {
+			return false
+		}
+		object["start_index"], object["end_index"] = startEncoded, endEncoded
 	}
-	shifted := separator.shiftCitations(key, citations)
-	encoded, err := json.Marshal(encodeResponsesAnnotations(shifted))
+	encoded, err := json.Marshal(objects)
 	if err != nil {
 		return false
 	}

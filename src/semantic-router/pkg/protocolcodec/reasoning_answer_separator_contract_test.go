@@ -73,7 +73,7 @@ func TestAnswerSeparatorEnvelope(t *testing.T) {
 	responsesWithCitation := []byte(`{"id":"resp_1","object":"response","created_at":1,"status":"completed","model":"m","output":[` +
 		`{"id":"rs_1","type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"hmm"}]},` +
 		`{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"\n\nSee the site",` +
-		`"annotations":[{"type":"url_citation","url":"https://example.com","title":"site","start_index":10,"end_index":14}]}]}],` +
+		`"annotations":[{"type":"url_citation","url":"https://example.com","title":"site","start_index":10,"end_index":14,"provider_note":"ranked #1"}]}]}],` +
 		`"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`)
 	result, err = engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIResponsesV1, responsesWithCitation, nil)
 	require.NoError(t, err)
@@ -81,6 +81,7 @@ func TestAnswerSeparatorEnvelope(t *testing.T) {
 	require.True(t, result.Envelope.CanReplay(llmprotocol.OpenAIResponsesV1, result.Response.Generation, llmprotocol.DefaultPolicy(), true))
 	require.Contains(t, string(result.Envelope.Response), `"start_index":8`)
 	require.Contains(t, string(result.Envelope.Response), `"end_index":12`)
+	require.Contains(t, string(result.Envelope.Response), `"provider_note":"ranked #1"`, "a member the annotation wire does not declare survives the shift")
 	answer, _ := wireAnswerAndReasoning(t, llmprotocol.OpenAIResponsesV1, result.Body)
 	require.Equal(t, "See the site", answer, string(result.Body))
 }
