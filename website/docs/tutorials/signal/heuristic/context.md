@@ -101,7 +101,11 @@ filters candidates.
 
 Token estimates depend on the request representation and are not a guarantee
 that a backend accepts the resulting prompt. Prose starts at about four bytes
-per token. The Router then learns the ratio from provider-reported prompt
+per token. An image sent inline as base64 PNG, JPEG, GIF or WebP counts about
+one token per 28 by 28 pixels of its size, at least 4 and at most 16,384,
+which is close to what the vision encoders of open models read; an image the
+Router cannot size (a link, a file ID, another format) counts 8,192. The
+Router then learns the ratio from provider-reported prompt
 usage, but only for requests with at least 4 KiB of text. On shorter requests
 the chat-template overhead dominates the reported count. Keep model-card context windows
 accurate and allow room for generated output. Before selection, the Router

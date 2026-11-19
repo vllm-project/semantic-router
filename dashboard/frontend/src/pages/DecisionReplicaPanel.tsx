@@ -1,155 +1,131 @@
 import { useState } from 'react'
-import type { useDecisionModelManagement } from './useDecisionModelManagement'
-import type { CanonicalModelDeployment } from './configPageSupport'
-import { decisionRuntimeDeclarations } from './decisionRuntimeDeployment'
-import { configuredDecisionDeployment } from './decisionModelSupport'
+import { Plus, Trash2 } from 'lucide-react'
+import {
+  Alert,
+  Button,
+  Input,
+  MiniStat,
+  SectionLabel,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  toast,
+} from '../ui'
+import type { DecisionDeploymentRow } from './decisionDeploymentRows'
 import {
   deploymentPlacements,
   withDecisionReplicas,
   type ReplicaPlacement,
 } from './decisionReplicaConfig'
-import DecisionReplicaStatus from './DecisionReplicaStatus'
 import DecisionObservationStatus from './DecisionObservationStatus'
-import SystemOneSelect from './SystemOneSelect'
-import styles from './DecisionReplicaPanel.module.css'
-import pageStyles from './DecisionModelPage.module.css'
+import DecisionReplicaStatus from './DecisionReplicaStatus'
+import type { DecisionModelManagement } from './useDecisionModelManagement'
 
 export default function DecisionReplicaPanel({
   model,
+  row,
   writable,
 }: {
-  model: ReturnType<typeof useDecisionModelManagement>
+  model: DecisionModelManagement
+  row: DecisionDeploymentRow
   writable: boolean
 }) {
-  const [selected, setSelected] = useState('')
-  const [draft, setDraft] = useState<{ name: string; placements: ReplicaPlacement[] } | null>(null)
+  const [draft, setDraft] = useState<ReplicaPlacement[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [message, setMessage] = useState<string | null>(null)
-  const configured = Object.entries(decisionRuntimeDeclarations(model.config)).filter(
-    ([, value]) => value.provider === 'model_runtime',
-  )
-  // Runtime health can arrive before the saved configuration. Show it while
-  // waiting, but only offer the placement editor for a confirmed declaration.
-  const deployments: Array<[string, CanonicalModelDeployment | undefined]> = model.config
-    ? configured
-    : (model.inventory?.deployments ?? []).map((item) => [item.name, undefined])
-  const selectedEntry =
-    deployments.find(([name]) => name === selected) ??
-    deployments.find(([name]) => name === configuredDecisionDeployment(model.config)) ??
-    deployments[0]
-  if (!selectedEntry)
-    return (
-      <section className={pageStyles.panel} aria-labelledby="replica-pool-title">
-        <h2 id="replica-pool-title">Model replicas</h2>
-        <DecisionObservationStatus
-          label="Replica configuration"
-          observation={model.observationState.config}
-        />
-        {model.config && <p className={styles.hint}>No model runtime deployments configured.</p>}
-      </section>
-    )
-  const [name, config] = selectedEntry
-  const observed = model.inventory?.deployments.find((item) => item.name === name)
-  const placements =
-    draft?.name === name ? draft.placements : config ? deploymentPlacements(config) : []
-  const disabled = !writable || model.deploying || !config || model.observationState.config.stale
+  const editable = row.kind === 'model_runtime' && Boolean(row.declaration)
+  const placements = draft ?? (row.declaration ? deploymentPlacements(row.declaration) : [])
+  const disabled = !writable || model.deploying || !editable || model.observationState.config.stale
   const update = (index: number, value: ReplicaPlacement) =>
-    setDraft({ name, placements: placements.map((entry, i) => (i === index ? value : entry)) })
+    setDraft(placements.map((entry, position) => (position === index ? value : entry)))
   const save = async () => {
     setError(null)
-    setMessage(null)
     try {
       const result = await model.updateConfig((current) =>
-        withDecisionReplicas(current, name, placements),
+        withDecisionReplicas(current, row.name, placements),
       )
-      setMessage(result.message)
       setDraft(null)
+      toast.success(`Replicas saved for ${row.name}`, { description: result.message })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Replica update failed.')
     }
   }
   return (
-    <section className={pageStyles.panel} aria-labelledby="replica-pool-title">
-      <div className={styles.heading}>
-        <div>
-          <span className={pageStyles.eyebrow}>Runtime capacity</span>
-          <h2 id="replica-pool-title">Model replicas</h2>
-          <p className={styles.hint}>
+    <section className="flex flex-col gap-3" aria-label="Replicas">
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <SectionLabel>Replicas</SectionLabel>
+          <p className="text-xs text-muted-foreground">
             Each replica serves the same model. Fused question batches stay together on one worker.
           </p>
         </div>
-        <SystemOneSelect
-          label="Runtime deployment"
-          value={name}
-          onChange={(value) => {
-            setSelected(value)
-            setDraft(null)
-            setError(null)
-            setMessage(null)
-          }}
-          options={deployments.map(([value, item]) => ({
-            value,
-            label: value,
-            description:
-              item?.artifact ||
-              model.inventory?.deployments.find((entry) => entry.name === value)?.repo,
-          }))}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <MiniStat
+          label="Ready / desired"
+          value={
+            <span className="tabular">
+              {row.observed?.ready_replicas ?? '—'}
+              <span className="text-sm font-medium text-subtle-foreground">
+                {' '}
+                / {row.observed?.desired_replicas ?? placements.length}
+              </span>
+            </span>
+          }
         />
+        <MiniStat label="Serving state" value={row.observed?.state || 'Not observed'} />
+        <MiniStat label="Model profile" value={row.observed?.profile || 'Not reported'} />
       </div>
       <DecisionObservationStatus
         label="Replica health"
         observation={model.observationState.inventory}
       />
-      <div className={styles.capacity}>
-        <div>
-          <span>Ready / desired</span>
-          <strong>
-            {observed?.ready_replicas ?? '—'}{' '}
-            <small>/ {observed?.desired_replicas ?? placements.length}</small>
-          </strong>
-        </div>
-        <div>
-          <span>Serving state</span>
-          <strong>{observed?.state || 'Not observed'}</strong>
-        </div>
-        <div>
-          <span>Model profile</span>
-          <strong>{observed?.profile || 'Not reported'}</strong>
-        </div>
-      </div>
-      <DecisionReplicaStatus deployment={observed} />
-      <DecisionObservationStatus
-        label="Replica configuration"
-        observation={model.observationState.config}
-      />
-      {config && (
-        <details className={styles.editor}>
-          <summary>Configure replicas</summary>
-          <p className={styles.hint}>
-            Use different devices for data parallelism, or repeat a device to measure multiple
-            workers on one GPU. Attached runtimes must serve the same artifact and capabilities.
-          </p>
-          <div className={styles.placements}>
-            {placements.map((replica, index) => (
-              <div className={styles.placement} key={index}>
-                <span className={styles.index}>{index + 1}</span>
-                <SystemOneSelect
-                  label={`Replica ${index + 1} owner`}
-                  value={replica.endpoint !== undefined ? 'attached' : 'managed'}
-                  disabled={disabled}
-                  onChange={(value) =>
-                    update(index, value === 'attached' ? { endpoint: '' } : { device: 'auto' })
-                  }
-                  options={[
-                    { value: 'managed', label: 'Managed' },
-                    { value: 'attached', label: 'Attached' },
-                  ]}
-                />
-                {replica.endpoint !== undefined ? (
-                  <>
-                    <label>
-                      Runtime endpoint
-                      <input
+      <DecisionReplicaStatus deployment={row.observed} />
+      {editable ? (
+        <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-surface-subtle/50 p-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[13px] font-medium">Configure replicas</span>
+            <span className="text-xs text-muted-foreground">
+              Use different devices for data parallelism, or repeat a device to run several workers
+              on one GPU. Attached runtimes must serve the same artifact and capabilities.
+            </span>
+          </div>
+          <ol className="flex flex-col gap-2">
+            {placements.map((replica, index) => {
+              const attached = replica.endpoint !== undefined
+              return (
+                <li
+                  key={index}
+                  className="grid grid-cols-[1.5rem_8rem_minmax(0,1fr)_auto] items-center gap-2"
+                >
+                  <span className="text-center font-mono text-xs text-subtle-foreground tabular">
+                    {index + 1}
+                  </span>
+                  <Select
+                    value={attached ? 'attached' : 'managed'}
+                    disabled={disabled}
+                    onValueChange={(value) =>
+                      update(index, value === 'attached' ? { endpoint: '' } : { device: 'auto' })
+                    }
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className="w-full"
+                      aria-label={`Replica ${index + 1} owner`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="managed">Managed</SelectItem>
+                      <SelectItem value="attached">Attached</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {attached ? (
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <Input
+                        aria-label={`Replica ${index + 1} endpoint`}
+                        className="h-8 font-mono text-[12.5px]"
                         disabled={disabled}
                         value={replica.endpoint}
                         placeholder="http://runtime:8100"
@@ -157,10 +133,9 @@ export default function DecisionReplicaPanel({
                           update(index, { ...replica, endpoint: event.target.value })
                         }
                       />
-                    </label>
-                    <label>
-                      Served model name
-                      <input
+                      <Input
+                        aria-label={`Replica ${index + 1} served model`}
+                        className="h-8 font-mono text-[12.5px]"
                         disabled={disabled}
                         value={replica.model || ''}
                         placeholder="Deployment default"
@@ -168,61 +143,65 @@ export default function DecisionReplicaPanel({
                           update(index, { ...replica, model: event.target.value })
                         }
                       />
-                    </label>
-                  </>
-                ) : (
-                  <label className={styles.device}>
-                    Device
-                    <input
+                    </div>
+                  ) : (
+                    <Input
+                      aria-label={`Replica ${index + 1} device`}
+                      className="h-8 font-mono text-[12.5px]"
                       disabled={disabled}
                       value={replica.device || 'auto'}
                       placeholder="rocm:0"
                       onChange={(event) => update(index, { device: event.target.value })}
                     />
-                  </label>
-                )}
-                <button
-                  type="button"
-                  aria-label={`Remove replica ${index + 1}`}
-                  disabled={disabled || placements.length === 1}
-                  onClick={() =>
-                    setDraft({ name, placements: placements.filter((_, i) => i !== index) })
-                  }
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className={styles.actions}>
-            <button
-              type="button"
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Remove replica ${index + 1}`}
+                    disabled={disabled || placements.length === 1}
+                    onClick={() => setDraft(placements.filter((_, position) => position !== index))}
+                  >
+                    <Trash2 />
+                  </Button>
+                </li>
+              )
+            })}
+          </ol>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
               disabled={disabled || placements.length >= 64}
-              onClick={() => setDraft({ name, placements: [...placements, { device: 'auto' }] })}
+              onClick={() => setDraft([...placements, { device: 'auto' }])}
             >
+              <Plus />
               Add replica
-            </button>
-            <button
-              type="button"
-              className={pageStyles.primary}
-              disabled={disabled || draft?.name !== name}
+            </Button>
+            <Button
+              size="sm"
+              className="ml-auto"
+              disabled={disabled || draft === null}
+              loading={model.deploying && draft !== null}
               onClick={() => void save()}
             >
-              {model.deploying ? 'Applying…' : 'Apply replicas'}
-            </button>
+              Apply replicas
+            </Button>
           </div>
-        </details>
-      )}
-      {error && (
-        <p className={pageStyles.notice} role="alert">
-          {error}
+        </div>
+      ) : (
+        <p className="text-xs text-subtle-foreground">
+          {row.kind === 'systemone'
+            ? 'A remote System One API manages its own capacity.'
+            : 'Declare this deployment in the configuration to manage its replicas here.'}
         </p>
       )}
-      {message && (
-        <p className={pageStyles.notice} role="status">
-          {message}
-        </p>
-      )}
+      {error ? (
+        <div role="alert">
+          <Alert tone="danger" title="Replicas were not saved">
+            {error}
+          </Alert>
+        </div>
+      ) : null}
     </section>
   )
 }

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { CornerDownRight, Ellipsis, GripVertical, Pencil, Trash2 } from 'lucide-react'
 
+import { cn } from '../ui'
 import type { PlaygroundTask } from './ChatComponentTypes'
-import styles from './ChatTaskQueue.module.css'
 
 interface ChatTaskQueueProps {
   queuedTasks: PlaygroundTask[]
@@ -17,6 +18,9 @@ const formatPrompt = (prompt: string): string => {
   }
   return `${normalized.slice(0, 79).trim()}...`
 }
+
+const smallButton =
+  'grid size-6 shrink-0 place-items-center rounded-md text-subtle-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 [&_svg]:size-3.5'
 
 export default function ChatTaskQueue({
   queuedTasks,
@@ -56,167 +60,147 @@ export default function ChatTaskQueue({
     }
   }, [openMenuTaskId])
 
-  const summary = useMemo(() => `${queuedTasks.length}`, [queuedTasks.length])
-
   if (queuedTasks.length === 0) {
     return null
   }
 
   return (
-    <section className={styles.queue} data-testid="playground-task-queue">
-      <div className={styles.header}>
-        <div className={styles.summary}>{summary}</div>
-      </div>
+    <section
+      className="mx-auto w-full max-w-3xl shrink-0 px-3 pt-1 sm:px-4"
+      aria-label="Queued prompts"
+      data-testid="playground-task-queue"
+    >
+      <div className="rounded-xl border border-border bg-surface-subtle/70 p-1.5">
+        <div className="flex items-center gap-2 px-2 pb-1 pt-0.5 text-[11px] font-medium text-subtle-foreground">
+          <CornerDownRight className="size-3" />
+          <span className="tabular">{queuedTasks.length} queued</span>
+          <span className="font-normal">· sent in order after the current answer</span>
+        </div>
+        <div className="flex flex-col gap-1">
+          {queuedTasks.map((task) => {
+            const promptLabel = formatPrompt(task.prompt)
+            const isDragSource = draggedTaskId === task.id
+            const isDropTarget = dropTargetTaskId === task.id
 
-      <div className={styles.list}>
-        {queuedTasks.map(task => {
-          const promptLabel = formatPrompt(task.prompt)
-          const isDragSource = draggedTaskId === task.id
-          const isDropTarget = dropTargetTaskId === task.id
-
-          return (
-            <div
-              key={task.id}
-              className={[
-                styles.item,
-                styles.itemQueued,
-                isDragSource ? styles.itemDragSource : '',
-                isDropTarget ? styles.itemDropTarget : '',
-              ].filter(Boolean).join(' ')}
-              draggable
-              data-testid={`playground-task-queue-item-${task.id}`}
-              onDragStart={event => {
-                setDraggedTaskId(task.id)
-                setDropTargetTaskId(null)
-                setOpenMenuTaskId(null)
-                event.dataTransfer.effectAllowed = 'move'
-                event.dataTransfer.setData('text/plain', task.id)
-              }}
-              onDragEnd={() => {
-                setDraggedTaskId(null)
-                setDropTargetTaskId(null)
-              }}
-              onDragOver={event => {
-                event.preventDefault()
-                if (draggedTaskId && draggedTaskId !== task.id) {
-                  setDropTargetTaskId(task.id)
-                }
-              }}
-              onDrop={event => {
-                event.preventDefault()
-                const sourceTaskId = draggedTaskId || event.dataTransfer.getData('text/plain')
-                if (sourceTaskId && sourceTaskId !== task.id) {
-                  onReorderTasks(sourceTaskId, task.id)
-                }
-                setDraggedTaskId(null)
-                setDropTargetTaskId(null)
-              }}
-            >
-              <button
-                type="button"
-                className={styles.dragHandle}
-                aria-label={`Reorder queued task: ${promptLabel}`}
-                title="Drag to reorder"
+            return (
+              <div
+                key={task.id}
+                className={cn(
+                  'group relative flex items-center gap-1.5 rounded-lg border bg-card py-1 pl-1 pr-1.5 shadow-xs transition-[border-color,opacity,box-shadow]',
+                  isDragSource ? 'opacity-50' : 'opacity-100',
+                  isDropTarget ? 'border-primary shadow-[0_0_0_2px_var(--ring)]' : 'border-border',
+                )}
+                draggable
+                data-testid={`playground-task-queue-item-${task.id}`}
+                onDragStart={(event) => {
+                  setDraggedTaskId(task.id)
+                  setDropTargetTaskId(null)
+                  setOpenMenuTaskId(null)
+                  event.dataTransfer.effectAllowed = 'move'
+                  event.dataTransfer.setData('text/plain', task.id)
+                }}
+                onDragEnd={() => {
+                  setDraggedTaskId(null)
+                  setDropTargetTaskId(null)
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  if (draggedTaskId && draggedTaskId !== task.id) {
+                    setDropTargetTaskId(task.id)
+                  }
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  const sourceTaskId = draggedTaskId || event.dataTransfer.getData('text/plain')
+                  if (sourceTaskId && sourceTaskId !== task.id) {
+                    onReorderTasks(sourceTaskId, task.id)
+                  }
+                  setDraggedTaskId(null)
+                  setDropTargetTaskId(null)
+                }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.45" aria-hidden="true">
-                  <path d="M3.5 3.5v5.5c0 1.1.9 2 2 2H11" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M3.5 3.5h4.2" strokeLinecap="round" />
-                  <path d="M7.1 6.9 11 10.8l-2.2 2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
+                <button
+                  type="button"
+                  className={cn(smallButton, 'cursor-grab active:cursor-grabbing')}
+                  aria-label={`Reorder queued task: ${promptLabel}`}
+                  title="Drag to reorder"
+                >
+                  <GripVertical />
+                </button>
 
-              <div className={styles.taskBody}>
-                <div className={styles.taskTitle}>
-                  <span className={styles.taskPrompt}>{promptLabel}</span>
+                <span className="min-w-0 flex-1 truncate text-[13px]">{promptLabel}</span>
+
+                <div
+                  className="relative flex items-center gap-0.5"
+                  ref={openMenuTaskId === task.id ? menuRef : null}
+                >
+                  <button
+                    type="button"
+                    className={smallButton}
+                    aria-label={`Remove queued task: ${promptLabel}`}
+                    data-testid={`playground-task-delete-${task.id}`}
+                    onClick={() => {
+                      setOpenMenuTaskId(null)
+                      onDeleteTask(task.id)
+                    }}
+                    title="Remove queued task"
+                  >
+                    <Trash2 />
+                  </button>
+
+                  <button
+                    type="button"
+                    className={smallButton}
+                    aria-label={`More actions for queued task: ${promptLabel}`}
+                    aria-expanded={openMenuTaskId === task.id}
+                    aria-haspopup="menu"
+                    data-testid={`playground-task-menu-${task.id}`}
+                    onClick={() => {
+                      setOpenMenuTaskId((current) => (current === task.id ? null : task.id))
+                    }}
+                    title="More actions"
+                  >
+                    <Ellipsis />
+                  </button>
+
+                  {openMenuTaskId === task.id ? (
+                    <div
+                      className="absolute bottom-[calc(100%+6px)] right-0 z-40 flex w-44 flex-col gap-0.5 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
+                      role="menu"
+                      aria-label={`Queued task actions for ${promptLabel}`}
+                      data-testid={`playground-task-menu-panel-${task.id}`}
+                    >
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] outline-none hover:bg-accent focus-visible:bg-accent [&_svg]:size-3.5 [&_svg]:text-subtle-foreground"
+                        role="menuitem"
+                        onClick={() => {
+                          setOpenMenuTaskId(null)
+                          onEditTask(task.id)
+                        }}
+                      >
+                        <Pencil />
+                        <span>Edit prompt</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-destructive-foreground outline-none hover:bg-destructive-soft focus-visible:bg-destructive-soft [&_svg]:size-3.5"
+                        role="menuitem"
+                        onClick={() => {
+                          setOpenMenuTaskId(null)
+                          onDeleteTask(task.id)
+                        }}
+                      >
+                        <Trash2 />
+                        <span>Remove from queue</span>
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               </div>
-
-              <div className={styles.actions} ref={openMenuTaskId === task.id ? menuRef : null}>
-                <button
-                  type="button"
-                  className={styles.deleteButton}
-                  aria-label={`Remove queued task: ${promptLabel}`}
-                  data-testid={`playground-task-delete-${task.id}`}
-                  onClick={() => {
-                    setOpenMenuTaskId(null)
-                    onDeleteTask(task.id)
-                  }}
-                  title="Remove queued task"
-                >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.45" aria-hidden="true">
-                    <path
-                      d="M3 4.25h10M6 4.25V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.25M12.5 4.25v8.25a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V4.25M6.5 7v4M9.5 7v4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-
-                <button
-                  type="button"
-                  className={styles.menuButton}
-                  aria-label={`More actions for queued task: ${promptLabel}`}
-                  aria-expanded={openMenuTaskId === task.id}
-                  aria-haspopup="menu"
-                  data-testid={`playground-task-menu-${task.id}`}
-                  onClick={() => {
-                    setOpenMenuTaskId(current => (current === task.id ? null : task.id))
-                  }}
-                  title="More actions"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                    <circle cx="4" cy="8" r="1.05" />
-                    <circle cx="8" cy="8" r="1.05" />
-                    <circle cx="12" cy="8" r="1.05" />
-                  </svg>
-                </button>
-
-                {openMenuTaskId === task.id ? (
-                  <div
-                    className={styles.menu}
-                    role="menu"
-                    aria-label={`Queued task actions for ${promptLabel}`}
-                    data-testid={`playground-task-menu-panel-${task.id}`}
-                  >
-                    <button
-                      type="button"
-                      className={styles.menuItem}
-                      role="menuitem"
-                      onClick={() => {
-                        setOpenMenuTaskId(null)
-                        onEditTask(task.id)
-                      }}
-                    >
-                      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.45" aria-hidden="true">
-                        <path d="M10.9 2.4a1.8 1.8 0 0 1 2.6 2.6l-7.2 7.2-3 .6.6-3z" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="m9.9 3.4 2.7 2.7" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <span>Edit prompt</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.menuItem}
-                      role="menuitem"
-                      onClick={() => {
-                        setOpenMenuTaskId(null)
-                        onDeleteTask(task.id)
-                      }}
-                    >
-                      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.45" aria-hidden="true">
-                        <path
-                          d="M3 4.25h10M6 4.25V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.25M12.5 4.25v8.25a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V4.25M6.5 7v4M9.5 7v4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      <span>Remove from queue</span>
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </section>
   )

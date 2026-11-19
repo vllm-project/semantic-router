@@ -21,9 +21,10 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 		Evaluation: cloneCanonicalEvaluation(cfg.Evaluation),
 		Providers: CanonicalProviders{
 			Defaults: CanonicalProviderDefaults{
-				DefaultModel:           cfg.DefaultModel,
-				DefaultReasoningEffort: cfg.DefaultReasoningEffort,
-				TLS:                    cloneProviderDefaultsTLS(cfg.DefaultBackendTLS),
+				DefaultModel:             cfg.DefaultModel,
+				DefaultReasoningEffort:   cfg.DefaultReasoningEffort,
+				ReasoningMinOutputTokens: cfg.ReasoningMinOutputTokens,
+				TLS:                      cloneProviderDefaultsTLS(cfg.DefaultBackendTLS),
 			},
 			Models: canonicalProviderModelsFromRouterConfig(cfg),
 		},

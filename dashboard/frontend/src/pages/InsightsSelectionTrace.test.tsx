@@ -68,7 +68,9 @@ describe('recorded selection stages', () => {
       </ModelLabelsContext.Provider>,
     )
     expect(html).toContain(`<dd><span`)
-    expect(html).toContain(`title="Configured as ${alpha.Model}">Alpha<small>${alpha.Model}</small>`)
+    expect(html).toContain(
+      `title="Configured as ${alpha.Model}">Alpha<small>${alpha.Model}</small>`,
+    )
     expect(html).toContain(`title="Configured as ${beta.Model}">Beta</span>`)
     expect(html).not.toContain(`<li>${alpha.Model}`)
   })

@@ -53,7 +53,9 @@
             "claude_code",
             "codex",
             "opencode",
-            "deepseek_harness"
+            "deepseek_harness",
+            "cursor",
+            "openclaw"
           ]
         },
         "types": {
@@ -860,6 +862,10 @@
         },
         "reasoning_effort": {
           "type": "string"
+        },
+        "reasoning_min_output_tokens": {
+          "type": "integer",
+          "minimum": 0
         },
         "tls": {
           "$ref": "#/$defs/ProviderDefaultsTLS"
@@ -3260,6 +3266,9 @@
       "properties": {
         "history": {
           "type": "boolean"
+        },
+        "tool_results": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3501,6 +3510,9 @@
         },
         "vsr": {
           "$ref": "#/$defs/VSRProfile"
+        },
+        "unserved_models": {
+          "$ref": "#/$defs/UnservedModels"
         }
       },
       "additionalProperties": false,
@@ -7203,6 +7215,22 @@
       "properties": {
         "previous_turns": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "UnservedModels": {
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "reject",
+            "route"
+          ]
+        },
+        "route_to": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

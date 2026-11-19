@@ -1,16 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import ProductLoadingState from '../ProductLoadingState'
+import {
+  Atom,
+  CodeXml,
+  GraduationCap,
+  ListChecks,
+  MessageCircleQuestion,
+  Sigma,
+  SquareTerminal,
+  type LucideIcon,
+} from 'lucide-react'
+import {
+  Badge,
+  Button,
+  Checkbox,
+  RadioGroup,
+  RadioGroupItem,
+  SectionLabel,
+  StatusDot,
+  cn,
+} from '../../ui'
 import { benchApi } from './api'
 import BenchSelect from './BenchSelect'
 import {
-  benchmarkTitle,
+  catalogBenchmarkTitle,
   friendlyDatasetName,
   profileDescription,
   profileTitle,
 } from './datasetPresentation'
 import type { Catalog, Dataset, DatasetSelection } from './types'
-import styles from './SrBench.module.css'
-import controls from './BenchControls.module.css'
+import { BenchBlock, BenchLoading, Notice } from './benchUi'
+import { benchText, choiceCardClass } from './benchStyles'
 
 export interface ResolvedDatasetScope {
   profile: string
@@ -152,121 +171,203 @@ export default function RunDatasetScope({
   }, [custom, dataset, profile, benchmarks, loading, selection, error])
   useEffect(() => onResolved(resolved), [resolved, onResolved])
   const allSelected = available.length > 0 && available.every((id) => benchmarks.includes(id))
+  const selectedQuestions =
+    !custom && selection?.profile === profile
+      ? benchmarks.reduce(
+          (sum, id) =>
+            sum + (selection.benchmarks.find((entry) => entry.id === id)?.case_count ?? 0),
+          0,
+        )
+      : null
   return (
-    <>
-      <div className={styles.profileCards} role="radiogroup" aria-label="Evaluation size">
-        {['smoke', 'quick', 'standard']
-          .filter((id) => catalog.profiles.some((item) => item.id === id))
-          .map((id) => (
-            <label
-              key={id}
-              className={`${styles.profileCard} ${profile === id ? styles.profileSelected : ''}`}
-            >
-              <input
-                type="radio"
-                name="evaluation-profile"
-                checked={profile === id}
-                onChange={() => onProfile(id)}
-              />
-              <strong>{profileTitle(id)}</strong>
-              <span>{profileDescription(id)}</span>
-            </label>
-          ))}
-      </div>
-      <div className={controls.selectionHeading}>
-        <h4>Benchmarks</h4>
-        <button
-          className={controls.compactButton}
-          disabled={!available.length || loading}
-          onClick={() =>
-            onBenchmarks(
-              allSelected
-                ? benchmarks.filter((id) => !available.includes(id))
-                : [...new Set([...benchmarks, ...available])],
-            )
-          }
+    <div className="flex min-w-0 flex-col gap-6">
+      <section className="flex min-w-0 flex-col gap-2.5">
+        <SectionLabel>Size</SectionLabel>
+        <RadioGroup
+          value={profile}
+          onValueChange={onProfile}
+          aria-label="Evaluation size"
+          className="grid-cols-1 gap-2.5 sm:grid-cols-3"
         >
-          {allSelected ? 'Clear benchmarks' : 'Select all benchmarks'}
-        </button>
-      </div>
-      {!custom && loading && <ProductLoadingState compact label="Checking prepared benchmarks…" />}
-      {!custom && error && (
-        <div className={styles.error} role="alert">
-          <p>{error}</p>
-          <button onClick={() => setRevision((value) => value + 1)}>Retry benchmark check</button>
+          {['smoke', 'quick', 'standard']
+            .filter((id) => catalog.profiles.some((item) => item.id === id))
+            .map((id) => (
+              <label key={id} className={cn(choiceCardClass, 'items-start')}>
+                <RadioGroupItem value={id} className="mt-0.5" />
+                <span className="flex min-w-0 flex-col gap-1">
+                  <strong className="text-[13px] font-semibold text-foreground">
+                    {profileTitle(id)}
+                  </strong>
+                  <span className="text-xs leading-snug text-muted-foreground">
+                    {profileDescription(id)}
+                  </span>
+                  {id === profile && selectedQuestions !== null && (
+                    <span className="mt-0.5 font-mono text-[11px] text-subtle-foreground tabular-nums">
+                      {selectedQuestions.toLocaleString()} questions per target
+                    </span>
+                  )}
+                </span>
+              </label>
+            ))}
+        </RadioGroup>
+      </section>
+      <section className="flex min-w-0 flex-col gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <SectionLabel>Benchmarks</SectionLabel>
+          <span className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {benchmarks.length} selected
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={!available.length || loading}
+              onClick={() =>
+                onBenchmarks(
+                  allSelected
+                    ? benchmarks.filter((id) => !available.includes(id))
+                    : [...new Set([...benchmarks, ...available])],
+                )
+              }
+            >
+              {allSelected ? 'Clear benchmarks' : 'Select all benchmarks'}
+            </Button>
+          </span>
         </div>
-      )}
-      <div className={styles.benchmarkChoices} role="group" aria-label="Included benchmarks">
-        {catalog.benchmarks.map((benchmark, index) => {
-          const entry = entries[index]
-          const selected = benchmarks.includes(benchmark.id)
-          return (
-            <label key={benchmark.id} className={styles.benchmarkChoice}>
-              <input
-                type="checkbox"
-                checked={selected}
-                disabled={!selected && (!available.includes(benchmark.id) || loading)}
-                onChange={(event) =>
-                  onBenchmarks(
-                    event.target.checked
-                      ? [...benchmarks, benchmark.id]
-                      : benchmarks.filter((id) => id !== benchmark.id),
-                  )
-                }
-              />
-              <span>
-                {benchmarkTitle(benchmark.id)}
-                <small>
-                  {entry?.eligible
-                    ? custom
-                      ? 'Included in selected dataset'
-                      : `${entry.case_count} questions`
-                    : entry?.reason_code === 'not_prepared'
-                      ? 'Prepared automatically'
-                      : (entry?.reason ?? 'Not available')}
-                </small>
-              </span>
-            </label>
-          )
-        })}
-      </div>
-      {!custom && (
-        <p className={styles.muted}>
-          Missing datasets and required dependencies are prepared automatically when you review.
-        </p>
-      )}
-      {benchmarks.length > 0 && !resolved.ready && !loading && !error && (
-        <p className={styles.notice}>{resolved.error}</p>
-      )}
+        {!custom && loading && <BenchLoading label="Checking prepared benchmarks…" />}
+        {!custom && error && (
+          <Notice tone="danger" role="alert" className="my-0">
+            <p>{error}</p>
+            <div>
+              <Button variant="outline" size="xs" onClick={() => setRevision((value) => value + 1)}>
+                Retry benchmark check
+              </Button>
+            </div>
+          </Notice>
+        )}
+        <div
+          className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2"
+          role="group"
+          aria-label="Included benchmarks"
+        >
+          {catalog.benchmarks.map((benchmark, index) => {
+            const entry = entries[index]
+            const selected = benchmarks.includes(benchmark.id)
+            const missing = entry?.reason_code === 'not_prepared'
+            const note = entry?.eligible
+              ? custom
+                ? 'Included in selected dataset'
+                : `${entry.case_count} questions`
+              : missing
+                ? 'Prepared automatically'
+                : (entry?.reason ?? 'Not available')
+            const title = catalogBenchmarkTitle(benchmark.id, catalog.benchmarks)
+            const Icon = benchmarkIcon(benchmark.kind)
+            return (
+              <label key={benchmark.id} className={cn(choiceCardClass, 'items-start gap-3 py-3')}>
+                <Checkbox
+                  checked={selected}
+                  className="mt-0.5"
+                  disabled={!selected && (!available.includes(benchmark.id) || loading)}
+                  onCheckedChange={(checked) =>
+                    onBenchmarks(
+                      checked === true
+                        ? [...benchmarks, benchmark.id]
+                        : benchmarks.filter((id) => id !== benchmark.id),
+                    )
+                  }
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Icon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-[13px] font-semibold text-foreground">
+                      {title}
+                    </span>
+                    {benchmark.kind && benchmark.kind !== 'capability' ? (
+                      <Badge tone="outline" size="sm" className="capitalize">
+                        {benchmark.kind}
+                      </Badge>
+                    ) : null}
+                  </span>
+                  {benchmark.description ? (
+                    <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                      {benchmark.description}
+                    </span>
+                  ) : null}
+                  <span className="inline-flex items-center gap-1.5 text-[11.5px] text-subtle-foreground">
+                    <StatusDot
+                      tone={entry?.eligible ? 'success' : missing ? 'warning' : 'neutral'}
+                    />
+                    <span className={cn(entry?.eligible && 'font-mono tabular-nums')}>{note}</span>
+                  </span>
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        {!custom && (
+          <p className={benchText.muted}>
+            Missing datasets and required dependencies are prepared automatically when you review.
+          </p>
+        )}
+        {benchmarks.length > 0 && !resolved.ready && !loading && !error && (
+          <Notice tone="warning" as="p" className="my-0">
+            {resolved.error}
+          </Notice>
+        )}
+      </section>
       {custom ? (
-        <section className={styles.customDataset} aria-label="Specific dataset">
-          <BenchSelect
-            label="Specific dataset"
-            value={datasetID}
-            searchable
-            placeholder="Choose a frozen dataset"
-            options={datasets
-              .filter((item) => item.profile === profile)
-              .map((item) => ({
-                value: item.id,
-                label: friendlyDatasetName(item),
-                description: `${item.case_count} questions · ${item.split ?? 'split unspecified'}`,
-              }))}
-            onChange={setDatasetID}
-          />
-          <p className={styles.muted}>
+        <BenchBlock className="grid gap-3 bg-surface-subtle" aria-label="Specific dataset">
+          <div className="max-w-xl">
+            <BenchSelect
+              label="Specific dataset"
+              value={datasetID}
+              searchable
+              placeholder="Choose a frozen dataset"
+              options={datasets
+                .filter((item) => item.profile === profile)
+                .map((item) => ({
+                  value: item.id,
+                  label: friendlyDatasetName(item),
+                  description: `${item.case_count} questions · ${item.split ?? 'split unspecified'}`,
+                }))}
+              onChange={setDatasetID}
+            />
+          </div>
+          <p className={benchText.muted}>
             This explicit dataset selection replaces automatic source resolution. Benchmark
             selections are preserved; no questions are resampled.
           </p>
-          <button className={styles.linkButton} onClick={() => setCustom(false)}>
-            Choose benchmarks automatically
-          </button>
-        </section>
+          <div>
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0"
+              onClick={() => setCustom(false)}
+            >
+              Choose benchmarks automatically
+            </Button>
+          </div>
+        </BenchBlock>
       ) : (
-        <button className={styles.linkButton} onClick={() => setCustom(true)}>
-          Use a specific dataset
-        </button>
+        <div>
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setCustom(true)}>
+            Use a specific dataset
+          </Button>
+        </div>
       )}
-    </>
+    </div>
   )
+}
+
+function benchmarkIcon(kind?: string): LucideIcon {
+  const value = (kind ?? '').toLowerCase()
+  if (value.includes('cod')) return CodeXml
+  if (value.includes('math')) return Sigma
+  if (value.includes('science')) return Atom
+  if (value.includes('agent') || value.includes('terminal') || value.includes('tool'))
+    return SquareTerminal
+  if (value.includes('fact')) return MessageCircleQuestion
+  if (value.includes('knowledge')) return GraduationCap
+  return ListChecks
 }

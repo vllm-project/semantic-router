@@ -187,8 +187,10 @@ async function mockOutputEvidence(
     else return route.fulfill({ status: 404, json: { error: 'Unexpected fixture request' } })
     await route.fulfill({ json: body })
   })
-  await page.goto('/evaluation?view=runs&run=output-run')
-  await expect(page.getByRole('heading', { name: run.manifest.name, exact: true })).toBeVisible()
+  await page.goto('/observe/evaluations?view=runs&run=output-run')
+  await expect(page.getByRole('heading', { name: run.manifest.name, exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
   return writes
 }
 
@@ -206,7 +208,7 @@ test('full report output counts remain distinct from completed status and loaded
   await expect(fast).toContainText('0 / 27(0%)')
   await expect(fast).toContainText('1 planned case not assessed')
   await expect(small).toContainText('5 / 28(17.86%)')
-  await expect(page.getByText('completed', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Completed', { exact: true }).first()).toBeVisible()
   const disclosure = output.locator('details')
   await expect(disclosure).not.toHaveAttribute('open', '')
   await expect(output.locator('pre')).toHaveCount(0)
