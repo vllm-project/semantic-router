@@ -1271,6 +1271,10 @@ def test_connect_starts_the_router_only_when_nothing_answers(tmp_path, monkeypat
         "_answers",
         lambda _: bool(answering),
     )
+    # whatever listens on the test's port must not answer the probe
+    monkeypatch.setattr(
+        importlib.import_module("cli.commands.connect"), "_probe", lambda *_: None
+    )
     started = []
 
     def serve(config):
