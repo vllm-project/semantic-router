@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { ViewField, ViewSection } from '../components/ViewPanel'
+import { displaySessionId } from './insightsAgentIdentity'
 import type { InsightsRecord } from './insightsPageTypes'
 import type { ReplaySessionPolicy } from './insightsPageRoutingTypes'
 import { ModelName } from './insightsModelLabelSupport'
@@ -139,8 +140,11 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
     sections.push({
       title: 'Session Routing',
       fields: [
-        { label: 'Session', value: record.session_id || 'Not recorded' },
-        { label: 'Conversation', value: record.conversation_id || 'Not recorded' },
+        { label: 'Session', value: displaySessionId(record.session_id) || 'Not recorded' },
+        {
+          label: 'Conversation',
+          value: displaySessionId(record.conversation_id) || 'Not recorded',
+        },
         { label: 'Turn', value: record.turn_index + 1 },
         ...codexFields,
         {

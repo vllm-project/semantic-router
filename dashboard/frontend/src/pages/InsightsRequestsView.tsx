@@ -64,6 +64,7 @@ import {
   REQUEST_CLASSES,
   REQUEST_CLASS_LABELS,
   requestClassOf,
+  sessionParam,
   spawnsSubagent,
   subagentKindLabel,
   traceToolNames,
@@ -114,6 +115,8 @@ import {
 import { compactID } from './insightsReviewSupport'
 import { useSessionRun } from './insightsRunsData'
 import { getRunPath, oneLine, runHeadline } from './insightsRunSupport'
+import { SessionChoice } from './InsightsSessionChoice'
+import { useSessionScope } from './insightsSessionScope'
 
 const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
 const InsightsSessionsView = lazy(() => import('./InsightsSessionsView'))
@@ -548,18 +551,27 @@ export default function InsightsRequestsView() {
   const [searchDraft, setSearchDraft] = useState(filters.search)
   const now = useNow(live ? 5_000 : 30_000)
 
+  // a session filter may name the id its harness sent; the reads match the full id
+  const sessionScope = useSessionScope(filters.session)
+  const scopedFilters = useMemo(
+    () => (filters.session ? { ...filters, session: sessionScope.id } : filters),
+    [filters, sessionScope.id],
+  )
   const data = useRequestsData({
-    filters,
+    filters: scopedFilters,
     page,
     pageSize,
     live,
     held,
     rules: agentRules,
     withFacets: facets || breakdown,
+    paused: sessionScope.resolving,
   })
   const clientMode = hasClientFilters(filters)
   const narrowed = hasAnyFilter(filters)
-  const sessionRun = useSessionRun(filters.session || undefined)
+  const sessionRun = useSessionRun(
+    sessionScope.resolving ? undefined : scopedFilters.session || undefined,
+  )
   const quiet =
     !data.loading && !narrowed && data.total === 0 && !data.listError && !data.unavailable
   const anyRecord = useAnyRecord(quiet && filters.range !== 'all')
@@ -683,7 +695,10 @@ export default function InsightsRequestsView() {
       className: 'w-full max-w-0 min-w-[180px]',
       cell: (row) => (
         <Dim on={requestClassOf(row, agentRules) === 'housekeeping'}>
-          <SessionCell record={row} onFilter={(session) => update({ session })} />
+          <SessionCell
+            record={row}
+            onFilter={(session) => update({ session: sessionParam(session) })}
+          />
         </Dim>
       ),
     },
@@ -939,7 +954,7 @@ export default function InsightsRequestsView() {
                 variant="ghost"
                 size="xs"
                 className="h-5 shrink-0 px-1.5"
-                onClick={() => navigate(getRunPath(filters.session))}
+                onClick={() => navigate(getRunPath(scopedFilters.session))}
               >
                 <Bot />
                 Open run
@@ -947,6 +962,7 @@ export default function InsightsRequestsView() {
             }
           />
         ) : null}
+        <SessionChoice scope={sessionScope} />
         {filters.turn ? (
           <ActiveChip
             label="Codex turn"
@@ -990,7 +1006,11 @@ export default function InsightsRequestsView() {
       </div>
       {view === 'sessions' ? (
         <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
-          <InsightsSessionsView filters={filters} live={live} />
+          <InsightsSessionsView
+            filters={scopedFilters}
+            live={live}
+            paused={sessionScope.resolving}
+          />
         </Suspense>
       ) : (
         <>
@@ -1020,7 +1040,9 @@ export default function InsightsRequestsView() {
                         <Bot />
                         Open agent run
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => update({ session: row.session_id })}>
+                      <DropdownMenuItem
+                        onSelect={() => update({ session: sessionParam(row.session_id ?? '') })}
+                      >
                         <Filter />
                         Only this session
                       </DropdownMenuItem>
@@ -1032,7 +1054,9 @@ export default function InsightsRequestsView() {
                     Copy record ID
                   </DropdownMenuItem>
                   {row.session_id ? (
-                    <DropdownMenuItem onSelect={() => copyText(row.session_id ?? '', 'Session ID')}>
+                    <DropdownMenuItem
+                      onSelect={() => copyText(displaySessionId(row.session_id), 'Session ID')}
+                    >
                       <Copy />
                       Copy session ID
                     </DropdownMenuItem>
