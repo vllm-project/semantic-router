@@ -116,8 +116,11 @@ Cursor, with a custom OpenAI base URL, sends its calls from Cursor's servers
 with `User-Agent: Cursor/<version>`; an agent that only contains `Cursor/`,
 such as the browser built into the Cursor desktop app, is not Cursor. OpenClaw
 sends the generic agent of the OpenAI SDK it calls through, so it is known by
-the comment its system prompt opens with, `<!-- openclaw:`. Neither names a
-session or subagent, Cursor names no request class, so `request_classes`
+the comment its system prompt opens with, `<!-- openclaw:`. Its compaction
+carries no such comment and is known as a call without tools whose system
+prompt opens with its summary instructions, sent with `User-Agent: OpenAI/JS`
+and a `prompt_cache_key`. Neither sends a session header or names a
+subagent, Cursor names no request class, so `request_classes`
 cannot go with `harness: cursor`, and their calls take the `main` role only
 when the request pins a session in `x-vsr-session-id`. This was checked
 with OpenClaw 2026.11.5 and with Cursor's recorded calls.
