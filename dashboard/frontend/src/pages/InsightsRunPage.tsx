@@ -91,10 +91,12 @@ import {
   type TimelineBlock,
 } from './insightsRunTimeline'
 import type { RunCall, RunResponse } from './insightsRunTypes'
+import { SessionChoice } from './InsightsSessionChoice'
+import { useSessionScope } from './insightsSessionScope'
 
 const RUNS_TAB = '/observe/requests?tab=runs'
 
-function useRun(sessionId: string) {
+function useRun(sessionId: string, pending = false) {
   const [state, setState] = useState<{
     response: RunResponse | null
     error: string | null
@@ -103,6 +105,10 @@ function useRun(sessionId: string) {
     loading: boolean
   }>({ response: null, error: null, notFound: false, loading: true })
   const load = useCallback(async () => {
+    if (pending) {
+      setState((current) => (current.loading ? current : { ...current, loading: true }))
+      return
+    }
     if (!sessionId) {
       setState({ response: null, error: null, notFound: true, loading: false })
       return
@@ -127,7 +133,7 @@ function useRun(sessionId: string) {
         loading: false,
       }))
     }
-  }, [sessionId])
+  }, [pending, sessionId])
   useEffect(() => {
     void load()
   }, [load])
@@ -220,7 +226,12 @@ function AgentRun() {
   const [searchParams] = useSearchParams()
   const sessionId = searchParams.get('session') ?? ''
   const step = searchParams.get('step') ?? undefined
-  const { response, error, unavailable, notFound, loading, load } = useRun(sessionId)
+  // a link may name the id the harness sent; the run reads under the full id
+  const sessionScope = useSessionScope(sessionId)
+  const { response, error, unavailable, notFound, loading, load } = useRun(
+    sessionScope.id,
+    sessionScope.resolving,
+  )
   const calls = useMemo(() => response?.calls ?? [], [response])
   const total = calls.length
   const numbers = useMemo(
@@ -376,10 +387,11 @@ function AgentRun() {
             </MetaItem>
             <MetaItem label="Session">
               <span className="inline-flex items-center gap-1">
-                <span className="font-mono" title={run.session_id}>
+                <span className="font-mono" title={shownSession}>
                   {compactIdentifier(shownSession, 10, 8)}
                 </span>
-                <CopyButton value={run.session_id} label="Copy session ID" className="size-6" />
+                <CopyButton value={shownSession} label="Copy session ID" className="size-6" />
+                <SessionChoice scope={sessionScope} />
               </span>
             </MetaItem>
             <MetaItem icon={<Clock />}>{formatDateTime(run.started_at)}</MetaItem>
@@ -430,8 +442,8 @@ function AgentRun() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => {
-                    void navigator.clipboard?.writeText(run.session_id).catch(() => undefined)
-                    toast.success('Session ID copied', { description: run.session_id })
+                    void navigator.clipboard?.writeText(shownSession).catch(() => undefined)
+                    toast.success('Session ID copied', { description: shownSession })
                   }}
                 >
                   <Copy />

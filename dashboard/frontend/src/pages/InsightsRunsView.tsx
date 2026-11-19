@@ -402,7 +402,9 @@ export default function InsightsRunsView() {
                 Show its requests
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => copy(run.session_id, 'Session ID')}>
+              <DropdownMenuItem
+                onSelect={() => copy(displaySessionId(run.session_id), 'Session ID')}
+              >
                 <Copy />
                 Copy session ID
               </DropdownMenuItem>
