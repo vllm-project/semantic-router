@@ -383,8 +383,12 @@ type RequestContext struct {
 	// the answer, nil until it ran.
 	ResponseGuard *responseGuardRun
 	// ResponseGuardHold is the streamed answer the Router holds until the
-	// guard has read all of it, nil for an answer it does not hold.
-	ResponseGuardHold      *responseGuardHold
+	// guard has read all of it, or until the structured output pass knows
+	// the answer; nil for an answer it does not hold.
+	ResponseGuardHold *responseGuardHold
+	// structuredOutputPass is the turn whose output format the primary
+	// dispatch held back while its tools were callable; nil for any other.
+	structuredOutputPass   *structuredOutputPass
 	VSRDecisionDiagnostics decision.EvaluationDiagnostics
 	VSRProjectionTrace     *projectiontrace.Trace
 

@@ -239,6 +239,12 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
+	if ctx.structuredOutputPass != nil {
+		// A model server holds the whole completion to the format, so the
+		// tools are callable only without it.
+		dispatchRequest.OutputFormat = llmprotocol.OutputFormat{}
+		dispatchRequest.Generation++
+	}
 	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); policyErr != nil {
 		return nil, policyErr
 	}
@@ -261,6 +267,24 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, err
 	}
 	return encodeLooperEvidence(body, format, ctx)
+}
+
+// appendUnheldDiagnostics adds the losses another encode of the request
+// reports, past the copies the request already holds: two of the same loss
+// still count as two.
+func appendUnheldDiagnostics(ctx *RequestContext, diagnostics llmprotocol.Diagnostics) {
+	type loss struct{ action, field, reason string }
+	held := map[loss]int{}
+	for _, seen := range ctx.ProtocolDiagnostics {
+		held[loss{string(seen.Action), seen.Field, seen.Reason}]++
+	}
+	for _, diagnostic := range diagnostics {
+		if key := (loss{string(diagnostic.Action), diagnostic.Field, diagnostic.Reason}); held[key] > 0 {
+			held[key]--
+			continue
+		}
+		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
+	}
 }
 
 // requestBackendStreamUsage asks a Chat backend for the final usage chunk of
