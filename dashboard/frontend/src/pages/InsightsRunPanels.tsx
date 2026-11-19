@@ -269,7 +269,7 @@ export function RunCallsPanel({
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => onShow(entry)}>
               <Crosshair />
-              Show in the sequence
+              Show in the timeline
             </DropdownMenuItem>
           </>
         )}

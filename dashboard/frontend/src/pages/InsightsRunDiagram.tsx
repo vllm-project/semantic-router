@@ -26,7 +26,6 @@ import {
   type TimelineBlock,
   type TimelineBreak,
 } from './insightsRunTimeline'
-import { toolDuration, toolStatusText } from './insightsRunSequence'
 import type { RunCall, RunSummary, RunToolCall } from './insightsRunTypes'
 
 const MARKER_TONE: Record<string, string> = {
@@ -36,7 +35,7 @@ const MARKER_TONE: Record<string, string> = {
   guard: 'text-warning-foreground',
 }
 
-export function Markers({ markers, className }: { markers?: string[]; className?: string }) {
+function Markers({ markers, className }: { markers?: string[]; className?: string }) {
   return (
     <>
       {(markers ?? []).map((marker) => (
@@ -754,12 +753,19 @@ export function RunSegmentPanel({ segment, call, numbers, onSelectCall }: RunSeg
   )
 }
 
-interface RunRowDetailsProps {
-  calls: RunCall[]
-  call?: RunCall
-  /** The run-wide number of each call, by record id. */
-  numbers?: Map<string, number>
-  onSelectCall: (call: RunCall) => void
+// How long a tool call took on the client: the harness's own times when it
+// reported them, else the gateway's measure.
+function toolDuration(tool: RunToolCall): number | undefined {
+  if (tool.started_at && tool.ended_at) {
+    return Date.parse(tool.ended_at) - Date.parse(tool.started_at)
+  }
+  return tool.client_ms
+}
+
+function toolStatusText(status?: string): string {
+  if (status === 'succeeded') return 'ok'
+  if (status === 'failed') return 'failed'
+  return 'no result yet'
 }
 
 // How long a tool call took on the client, and whose clock says so.
@@ -773,7 +779,7 @@ function ToolDuration({ tool }: { tool: RunToolCall }) {
   return <span title={source}>{formatRunDuration(duration)}</span>
 }
 
-// Every tool call of a row's turns with its arguments and result.
+// Every tool call of a block's turns with its arguments and result.
 function RunToolList({ calls }: { calls: RunCall[] }) {
   const rows = calls.flatMap((entry) =>
     (entry.tool_calls ?? []).map((tool, index) => ({ entry, tool, index })),
@@ -797,49 +803,5 @@ function RunToolList({ calls }: { calls: RunCall[] }) {
         </li>
       ))}
     </ol>
-  )
-}
-
-// A row's tool calls, its calls one per line when there are several, and the
-// details of the one picked.
-export function RunRowDetails({ calls, call, numbers, onSelectCall }: RunRowDetailsProps) {
-  return (
-    <div
-      className="flex flex-col gap-3 rounded-lg border border-border bg-surface-subtle p-3"
-      aria-label="Step details"
-    >
-      <RunToolList calls={calls} />
-      {calls.length > 1 ? (
-        <ol className="flex max-h-56 flex-col overflow-y-auto rounded-lg border border-border bg-surface">
-          {calls.map((entry) => (
-            <li key={entry.record_id} className="border-b border-border last:border-0">
-              <button
-                type="button"
-                data-selected={entry.record_id === call?.record_id}
-                onClick={() => onSelectCall(entry)}
-                className="grid w-full grid-cols-[40px_72px_minmax(0,1fr)_auto_auto] items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-surface-subtle data-[selected=true]:bg-primary-soft/60"
-              >
-                <span className="font-mono tabular text-subtle-foreground">
-                  {numbers?.get(entry.record_id) ? `#${numbers.get(entry.record_id)}` : ''}
-                </span>
-                <span className="font-mono tabular text-subtle-foreground">
-                  {new Date(entry.timestamp).toLocaleTimeString()}
-                </span>
-                <span className="truncate">{entry.request_kind || entry.decision || '-'}</span>
-                <span className="text-muted-foreground">{describeCallStatus(entry)}</span>
-                <span className="inline-flex gap-1">
-                  <Markers markers={entry.markers} />
-                </span>
-              </button>
-            </li>
-          ))}
-        </ol>
-      ) : null}
-      {call ? (
-        <RunCallDetails call={call} />
-      ) : (
-        <p className="text-[13px] text-muted-foreground">Pick a call for its details.</p>
-      )}
-    </div>
   )
 }

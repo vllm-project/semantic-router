@@ -1055,46 +1055,25 @@ records whole, so bound it with `since` on a large PostgreSQL store.
 In **Requests**, the **Agent runs** tab lists one row per run: its session name or
 task, the harness, the agents, the models, the outcome, the cost and duration,
 and the events. **Requests** shows a model by its label wherever it names one: the
-runs, records and reviews lists, the model filters and charts, a run's
-sequence, legend and call details, and a record's route, routing, candidate
-scores, cost text and session history, with the configured name beside it, in
-its tooltip, or in parentheses after it.
-
-A run opens as a sequence that reads top to bottom in time order. Each agent
-has a lifeline, main first and each subagent after the agent that spawned it,
-under a header that stays in view and names the agent, its calls and cost, and
-the models it used. A row is a call, or consecutive calls of one agent on one
-model and decision collapsed into one, such as "Claude Fable 5.2, 9 calls,
-2m 10s": its model in the model's color, its decision, its duration, its cost
-(marked `list price` when it is the catalog's estimate), its markers and the
-tool calls its turn made, a line each in the order its response asked for
-them, such as `Bash · pytest -q · 13.0s · ok` with the time the gateway saw
-it take (see [Tool timing](#tool-timing)) and a failed one in red; a
-collapsed row counts them, as "12 tool calls, 1 failed". A row whose turn
-offered other tools than its agent's previous one says so, as "+3 tools
-offered", and each agent's header lists the tools its first turn offered. A solid arrow in the subagent's color runs
-from the parent's call to a subagent's first call, labelled with what the
-spawn tool call asked for, or, where its arguments were not kept, with the
-subagent kind its harness sent (`Explore`, `collab_spawn`), and a dashed one returns from the subagent to the
-parent's call that took its result, labelled with how it came back, its calls
-and cost. Parallel subagents each get their own arrows. Side requests,
-such as a title, a compaction or a quota check, sit in a muted side column of
-their own, consecutive ones in one row, and never split or join the agent's
-rows. A gap of more than 30 seconds with no call in flight shows as an idle
-divider. Clicking a row opens its tool calls with their arguments and
-results and its calls under it, and a call shows its decision and signals, model and effort, tokens and cost, status and reason,
-with a link to its record. Clicking an agent's header follows its calls in the
-calls table and dims the other agents' rows. Under 640 pixels wide the
-lifelines become one list, indented by agent and with each row tagged with its
-agent. Tool calls follow the record's capture. By default a record keeps each
-tool call's name and its result's status, whatever `prompt_capture` says, so
-the chips show under the default capture too;
-`capture_tool_names: false` keeps none, and a masking route never keeps them.
-A tool's arguments, and a subagent's task, show only under `raw` with the
-request or response body that carried them captured, and a viewer without
-replay detail access sees tool names and results but no arguments or subagent
-tasks. The table of every call is one click further. A record page opens its
-run with **Open run**.
+runs, records and reviews lists, the model filters and charts, a run's lanes,
+legend and step panel, and a record's route, routing, candidate scores, cost
+text and session history, with the configured name beside it, in its tooltip,
+or in parentheses after it. A run opens as a timeline: a lane per agent in
+tree order, a dashed tick where a subagent started, and consecutive calls of
+one agent on one model drawn as one segment with its calls' markers, so a run
+of hundreds of calls reads as a few blocks. A segment lists the tool calls its
+turns made, a line each with its arguments where they were kept, the time it
+took (see [Tool timing](#tool-timing)) and its result, a failed one in red,
+and then its calls. A call shows its decision and signals, model and effort,
+tokens and cost (marked `list price` when it is the catalog's estimate), status
+and reason, with a link to its record. Tool calls follow the record's capture.
+By default a record keeps each tool call's name and its result's status,
+whatever `prompt_capture` says; `capture_tool_names: false` keeps none, and a
+masking route never keeps them. A tool's arguments show only under `raw` with
+the request or response body that carried them captured, and a viewer without
+replay detail access sees tool names and results but no arguments. The table
+of every call is one click further. A record page opens its run with **Open
+run**.
 
 With [tracing](../global/api-and-observability#observability) on, the
 Router's request span carries `session.id`, `vsr.harness`, `vsr.agent.id`,
