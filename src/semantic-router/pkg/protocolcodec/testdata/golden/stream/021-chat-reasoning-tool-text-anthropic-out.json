@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "response_mixed_1",
+          "id": "msg_ebafb5bd132156df7d67b7ca",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,
@@ -40,6 +40,7 @@
       "event": "content_block_start",
       "data": {
         "content_block": {
+          "signature": "",
           "thinking": "",
           "type": "thinking"
         },
@@ -53,6 +54,17 @@
         "delta": {
           "thinking": "I should inspect the weather first.",
           "type": "thinking_delta"
+        },
+        "index": 0,
+        "type": "content_block_delta"
+      }
+    },
+    {
+      "event": "content_block_delta",
+      "data": {
+        "delta": {
+          "signature": "",
+          "type": "signature_delta"
         },
         "index": 0,
         "type": "content_block_delta"
@@ -98,7 +110,7 @@
       "event": "content_block_start",
       "data": {
         "content_block": {
-          "id": "call_weather",
+          "id": "toolu_46a3b02feff9a8237e1a13ce",
           "input": {},
           "name": "lookup_weather",
           "type": "tool_use"

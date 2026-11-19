@@ -6,6 +6,12 @@ status: Implemented
 ---
 
 > **Status:** Implemented · **Tracks:** [#3577](https://github.com/vllm-project/semantic-router/issues/3577)
+>
+> **Lifecycle update:** The [Dashboard UX redesign](./dashboard-ux-redesign)
+> retired the Model Arena display from the Dashboard and from the website's
+> [Models page](/models); Model Hub keeps each model's published results as
+> evidence, not a ranking. The index data in the model catalog still informs
+> multi-factor selection.
 
 ## Decision
 

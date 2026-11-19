@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -16,16 +17,33 @@ type QueryFilters struct {
 	// TurnID matches a record's turn_id or parent_turn_id: the requests one
 	// agent turn sent and the ones it started, such as its approval reviews.
 	TurnID string
+	// Harness keeps the records of the harnesses it lists, comma-separated,
+	// by FilterHarness. A string rather than a slice keeps the filters
+	// comparable.
+	Harness string
 	// Since keeps the records at or after an instant; zero keeps every one.
 	Since time.Time
 	// RecipeSet distinguishes an explicit legacy empty recipe from no filter.
 	RecipeSet bool
 }
 
+// HarnessListed reports whether a comma-separated harness list holds harness.
+func HarnessListed(list, harness string) bool {
+	for listed := range strings.SplitSeq(list, ",") {
+		if listed == harness {
+			return true
+		}
+	}
+	return false
+}
+
 type RecordPage struct {
 	Records []Record
 	Total   int
 	Offset  int
+	// HarnessCounts counts the records every filter but Harness selects, by
+	// FilterHarness.
+	HarnessCounts map[string]int
 }
 
 // QueryReader optionally provides database-side pagination and a streaming

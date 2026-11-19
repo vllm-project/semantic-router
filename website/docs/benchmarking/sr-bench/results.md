@@ -188,15 +188,16 @@ useful, but report their exposure separately from unseen validation.
 
 ### Runs
 
-Dashboard opens on **Runs**, with filters for name or model, status and mode.
-Each row shows the completed denominator, failures, persisted update time and
-target kind. Read-only polling reconnects after a temporary network failure
+**Observe → Evaluations** opens on **Runs**, with a search box and **Status**,
+**Benchmark**, **Profile** and **Type** filters. Each row shows the run, its
+benchmarks and targets, its status, the best score and the cost. Read-only
+polling reconnects after a temporary network failure
 and discovers CLI-created runs; closing or refreshing the page doesn't restart
 a run.
 
 ### Create an evaluation
 
-In **Create evaluation**:
+In **New evaluation**:
 
 1. **Choose a profile:** **smoke**, **quick** or **standard**. These are the
    actual run profiles; standard uses the holdout split.
@@ -210,7 +211,7 @@ In **Create evaluation**:
    - conflicting selections are rejected rather than silently merged.
 4. **Set sampling, budget and request or case limits** with the form
    controls; no JSON editing is needed. Registered target settings override
-   run defaults and stay read-only, and **Route preview** also accepts
+   run defaults and stay read-only, and a **Dry run** also accepts
    optional session and conversation context, for inspecting
    session-dependent routing.
 5. **Review the frozen plan** before starting. Plan review doesn't generate
@@ -244,9 +245,10 @@ standard tasks for tuning.
 
 ### Run details
 
-Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
-**Recipe**. Start with the aggregate results, then inspect individual
-responses, accounting and frozen configuration as needed.
+Opening a run shows its status, progress, best score, cost and duration, then
+**Results**, **Questions**, **Calls**, **Activity** and **Protocol**. Start with
+the aggregate results, then inspect individual responses, live activity and
+events, accounting and the frozen configuration as needed.
 
 While a run is active:
 
@@ -258,10 +260,12 @@ While a run is active:
 - **From the CLI,** `vllm-sr benchmark show RUN_ID --calls --active` reads the
   same activity; `--after` and `--limit` bound each page.
 
-### Compare iterations
+### Compare runs
 
-**Compare iterations** guides two choices: a live single-model baseline with
-compatible saved outcomes, then any number of eligible candidate runs.
+Select runs in the table and choose **Compare**, or open a run and choose
+**Compare with…**. The comparison guides two choices: a live single-model
+baseline with compatible saved outcomes, then any number of eligible candidate
+runs.
 
 - **Baselines** without a compatible candidate are excluded.
 - **Candidates.** Search narrows the list, and **Select all** selects matching
@@ -308,9 +312,9 @@ recipe.
   1,000 events, and **Load more events** reads the next saved page. A full API
   page is labelled as a loaded count, because the endpoint provides no total,
   and filtering applies only to loaded events.
-- **Snapshots.** Events are a snapshot: **Refresh evidence** loads a new one,
-  while run progress keeps polling independently. A failed page read keeps its
-  cursor and existing rows.
+- **Snapshots.** Events are a snapshot: **Reload evidence** in the run's menu
+  loads a new one, while run progress keeps polling independently. A failed
+  page read keeps its cursor and existing rows.
 - **No new calls.** Regrade and training export reuse saved evidence, without
   new model calls.
 

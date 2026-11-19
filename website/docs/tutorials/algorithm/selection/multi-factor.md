@@ -89,8 +89,9 @@ session protection, and dispatch. These steps cannot restore a model excluded
 by an earlier quality or cost band. Recorded scores may still include excluded
 models to explain the selection.
 
-Preview returns `selection_trace` for lexicographic selection, and Insights
-saves the same structure under `route_diagnostics.selection_trace`:
+Preview returns `selection_trace` for lexicographic selection, and the request
+record that the Dashboard's **Requests** page shows saves the same structure
+under `route_diagnostics.selection_trace`:
 
 - the stages reached and skipped, with measurement coverage and the available
   values;

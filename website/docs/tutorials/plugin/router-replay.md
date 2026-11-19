@@ -2,15 +2,15 @@
 
 ## Overview
 
-Use Router Replay to inspect requests in Dashboard Insights: the selected route,
-model, token usage, response, and tool trajectory. Configure storage in
+Use Router Replay to inspect requests in the Dashboard's **Requests** page: the
+selected route, model, token usage, response, and tool trajectory. Configure storage in
 `global.services.router_replay`, and the switch and capture defaults in a
 `router_replay` plugin in `global.plugins`; use a recipe's or a decision's
 `router_replay` plugin to override only the capture fields that differ.
 
 Replay is on by default. A configuration without a `router_replay` plugin
-records every request's routing data and none of its text, so Insights,
-sessions and cost work with no extra configuration.
+records every request's routing data and none of its text, so the **Requests**
+page, sessions and cost work with no extra configuration.
 
 ## What Problem Does It Solve?
 
@@ -31,8 +31,8 @@ Without a store in `global.services.router_replay`, Replay uses the `file`
 store. It writes each record once, when the request ends (completed, failed or
 aborted), to `.vllm-sr/router-replay.jsonl` in the configuration file's
 directory, a file only its owner can read, and reads the records back when the
-Router starts, so Insights keeps its history across restarts and configuration
-reloads. `vllm-sr serve` mounts that directory from the host, so the file
+Router starts, so the **Requests** page keeps its history across restarts and
+configuration reloads. `vllm-sr serve` mounts that directory from the host, so the file
 outlives the Router container.
 
 - **In progress.** A request still in progress when the Router crashes is not
@@ -329,12 +329,12 @@ route, or on one recipe or decision. A request sent to a model dearer than the
 baseline then shows a negative saving. A record whose baseline is priced in
 another currency than the selected model has no baseline and says why
 (`baseline_unavailable`); it never falls back to the default. Each record names
-how its baseline was chosen in `cost_accounting.baseline_source`, and Insights
-shows which baselines the savings cover.
+how its baseline was chosen in `cost_accounting.baseline_source`, and the
+**Requests** page shows which baselines the savings cover.
 
 A model with no `pricing` of its own takes its provider's list price from the
-built-in catalog when the catalog has one, and Insights marks that cost as a
-list price estimate. For a backend on the client's own login
+built-in catalog when the catalog has one, and the **Requests** page marks that
+cost as a list price estimate. For a backend on the client's own login
 (`auth.credential: caller`) a cost is the API-price equivalent of its tokens,
 not what the client's plan charges; set `pricing` on such a model to see it.
 
@@ -345,8 +345,8 @@ Each entry names its model, input and output tokens, cost and currency, or an
 unpriced reason. Fused runtime tasks count once; cached results and startup or
 warmup calls add no request spend. Calls spent before a decision fails remain
 in its record and in aggregate router spend. A record's generation cost and
-`cost_savings` keep their meaning, while the savings Insights and the aggregate
-API report are net of the Router calls of the requests they compare, with the
+`cost_savings` keep their meaning, while the savings the Dashboard and the
+aggregate API report are net of the Router calls of the requests they compare, with the
 figure before them kept as `gross_saved`. A request whose Router call has no
 price leaves the savings instead of being netted as free. Router spend is also
 added to total spend. Auxiliary model calls made by internal Looper hops count
@@ -761,8 +761,14 @@ Keep datasets out of this repository.
 
 ## Read the results
 
-Open **Insights** in the Dashboard, or use the
+Open **Observe → Requests** in the Dashboard, or use the
 [Replay API](../../api/router#router-replay) to filter records and inspect a session.
+Each request names the coding-agent harness that sent it, its session, and
+whether the main agent or a subagent made the call.
+The **Client** filter keeps the requests of the harnesses you pick, or of
+plain API clients. The Router applies it to the whole history and counts each
+client over every request the other filters select, so a script that sends
+most of the traffic does not hide older agent requests.
 The search finds a record by its request id, its recipe or its session id, so
 the session id an agent harness sends, such as Claude Code's
 `x-claude-code-session-id`, finds every call of that session. A record's header
@@ -780,6 +786,22 @@ thread, whose agent and session ids are equal, is `main`. A viewer without
 so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
+
+The page's **Sessions** view groups the records by harness session. Each session
+opens into its agents, the main agent first and every subagent under the agent
+that started it, with its type, and into each agent's turns with their decision,
+model, duration and tokens. The calls a run marks share one set of event chips
+across the request list, the sessions and the run page: a subagent's first call,
+a compaction, a session title or another housekeeping call, a tool loop, an image
+in the newest turn, a guard refusal and a failure. **Signals by harness** shows
+which agent signals each harness gave in the loaded sessions (a session id,
+subagents and their types, request classes, compactions, titles or other
+housekeeping calls, and images), which ones its requests never carry, and which
+sessions the Router keyed itself because the client sent no session id. Tool
+loops come from the request body for every harness, so they show on each turn
+rather than in that table. Cost figures compare each request with its reference model at list
+prices: they are cost-only estimates, not a quality comparison, and a figure the
+recorded data cannot support shows a dash with the reason.
 
 Each record's `route_diagnostics` explains the route:
 
@@ -803,7 +825,7 @@ vllm-sr usage --since 7d --json
 vllm-sr usage --endpoint http://localhost:8080
 ```
 
-`vllm-sr usage` prints the figures Insights shows for one window, read from
+`vllm-sr usage` prints the figures the Dashboard shows for one window, read from
 the replay list and aggregate with `since`:
 
 ```text
@@ -895,7 +917,7 @@ that session's requests. Every store keeps the review on the record; PostgreSQL
 also keeps `request_kind`, the status, the outcome and the risk in indexed
 columns, added to an existing table when the Router starts.
 
-In **Insights**, the **Reviews** switch shows reviews alone: the number of
+In **Requests**, the **Reviews** tab shows reviews alone: the number of
 reviews, the approval rate, denials, failures, p50 and p95 latency and cost,
 reviews over time by result, requests by review model, and a table with each
 review's time, result, risk, action, session, model, latency, tokens and cost.
@@ -933,9 +955,9 @@ keeps the ids on the record; PostgreSQL also keeps them in columns, with
 indexes on `turn_id` and `parent_turn_id`, added to an existing table when the
 Router starts.
 
-Trajectory routes carry `turn_id` and `parent_turn_id` too. In **Insights**, a
+Trajectory routes carry `turn_id` and `parent_turn_id` too. In **Requests**, a
 record's Session Routing section shows its Codex thread, turn and parent turn,
-and each turn opens the request list filtered to it (`/insights?turn=...`),
+and each turn opens the request list filtered to it (`/observe/requests?turn=...`),
 with a chip that clears the filter. A session's routing history opens each
 Codex turn with a row that links there and counts its calls, so a turn's own
 calls and its subagents' calls read as one unit, and a review that names the
@@ -964,16 +986,21 @@ not send, is filed under its `session-id`. Each record keeps its agent in
 
 | Field | Holds |
 | --- | --- |
-| `harness` | `claude_code` or `codex` when the request carries their identity headers, `opencode` when its User-Agent names OpenCode. |
+| `harness` | `claude_code` or `codex` when the request carries their identity headers, `opencode`, `deepseek_harness` or `cursor` when its User-Agent names OpenCode, DeepSeek Harness or Cursor, `openclaw` when its system prompt opens with OpenClaw's `<!-- openclaw:` comment, or for OpenClaw's compaction, a call without tools whose system prompt opens with `You are a context summarization assistant.`, sent with `User-Agent: OpenAI/JS` and a `prompt_cache_key`. |
 | `id` | The short SHA-256 hash of the agent id, empty for the main agent. |
 | `parent_id` | The hash of the agent that spawned it, empty when the main agent did. |
 | `kind` | The subagent kind Codex sends in `x-openai-subagent`, such as `collab_spawn` or `review`. |
+| `type` | The subagent type the harness names, such as Claude Code's `Explore` in `x-claude-code-agent-type`. |
+| `request_class` | The call's class as the [agent signal](../signal/heuristic/agent) reads it: Claude Code's `x-claude-code-request-class`, or `main`, `subagent`, `compaction` or `auxiliary` for an OpenCode call. |
 
 A Looper hop carries none of its client's headers. Its record is filed in the
 run of the request that made it, under that request's agent, with
 `parent_request_id` naming the request. A record also keeps the
 `reasoning_effort` the request was sent with. A record written before these
-fields name a subagent only where protection recorded one.
+fields name a subagent only where protection recorded one. A record also counts
+the images of its request: `image_count` in its newest turn, after the last
+assistant message (a picture the user attached or a tool returned), and
+`history_image_count` before it, which later calls keep resending.
 
 Two [Replay API](../../api/router#router-replay) routes read runs. `GET /api/v1/observability/replays/runs`
 takes the list's filters, `limit` and `offset`, and returns one summary per
@@ -986,20 +1013,20 @@ recipes: the same summary in `run` and every call in time order in `calls`.
 | `session_name` | The name the harness last gave the session, when Replay saw one: see [Session names](#session-names). |
 | `prompt` | The main agent's first prompt, when Replay kept it, without `<system-reminder>` blocks. A session-title request is not the task. |
 | `harness`, `models`, `duration_ms` | The harness, the calls each model answered with Looper hops included, and the time from the first call's start to the last one's end. |
-| `agents` | Each agent: its `label` (`main`, then `subagent 1`, `subagent 2` by first call), the `parent` agent's label, `kind`, `id`, `calls`, first and last call, `spawned_after_record_id` (the parent's last call before this agent's first), `models` and `cost`. |
+| `agents` | Each agent: its `label` (`main`, then `subagent 1`, `subagent 2` by first call), the `parent` agent's label, `kind`, `type`, `id`, `calls`, first and last call, `spawned_after_record_id` (the parent's last call before this agent's first), `models` and `cost`. |
 | `outcome` | `status` from the main agent's last call: `answered` when it gave a final answer, `failed`, `aborted`, `in_progress`, or `unknown` when it asked for a tool and no call followed. With it `final_answer_record_id`, the tool results the calls carried and how many failed, each counted once, and `reported`, the outcomes posted to `/api/v1/observability/outcomes` for the run's calls. |
 | `cost` | Spend per currency as the aggregate's `total_spend` adds it, the Router's own calls apart, with the calls missing a price counted, never as free, and the tokens. |
-| `events` | Calls per marker: `switch` (another model than the agent's previous call to the same entrypoint), `escalation` (an `escalate` Looper answered by a later model than its first), `guard` (jailbreak, PII or hallucination detected), `block`, `fallback` (a cross-model fallback tried another candidate), `failure`, `tool_failure`. |
-| `calls` | Each call's `agent` label, `decision`, matched `signals` as `type:name`, `entrypoint`, `model`, `previous_model` on a switch, `effort`, `selection_method`, `session_action`, `reason` (protection's reason, and the Looper algorithm with its final attempt's reason), lifecycle and status, tokens, `cost`, `router_calls`, `looper_attempts`, `tool_results`, `tool_failures`, `final_answer`, `outcomes`, `markers`, and the Looper `hops` it made. |
+| `events` | Calls per marker: `switch` (another model than the agent's previous call to the same entrypoint), `escalation` (an `escalate` Looper answered by a later model than its first), `guard` (jailbreak, PII or hallucination detected), `block` (a guard refused the call, with an error status or with a guard decision's fast response), `fallback` (a cross-model fallback tried another candidate), `failure`, `tool_failure`, `subagent_start` (a subagent's first call), `compaction` (request class `compaction`), `housekeeping` (request class `auxiliary`, or a session title), `tool_loop` (the call carried tool results), `image` (its newest turn holds an image). |
+| `calls` | Each call's `agent` label, `decision`, matched `signals` as `type:name`, `entrypoint`, `model`, `previous_model` on a switch, `effort`, `selection_method`, `session_action`, `reason` (protection's reason, and the Looper algorithm with its final attempt's reason), `request_class`, `agent_type`, `image_count`, lifecycle and status, tokens, `cost`, `router_calls`, `looper_attempts`, `tool_results`, `tool_failures`, `final_answer`, `outcomes`, `markers`, and the Looper `hops` it made. |
 
 Without `replay.detail` a run keeps its tree, labels, markers and counts, and
 loses what its records would: the session name, the prompt, the agent hashes,
 the reasons and the text of reported outcomes. The runs list reads the filtered
 records whole, so bound it with `since` on a large PostgreSQL store.
 
-In **Insights**, the **Runs** view lists one row per run: its session name or
+In **Requests**, the **Agent runs** tab lists one row per run: its session name or
 task, the harness, the agents, the models, the outcome, the cost and duration,
-and the events. Insights shows a model by its label wherever it names one: the
+and the events. **Requests** shows a model by its label wherever it names one: the
 runs, records and reviews lists, the model filters and charts, a run's lanes,
 legend and step panel, and a record's route, routing, candidate scores, cost
 text and session history, with the configured name beside it, in its tooltip,

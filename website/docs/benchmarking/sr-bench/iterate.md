@@ -148,7 +148,10 @@ make no model requests.
 Experiments link baseline, initial, preview, estimate, candidate, validation
 and recovery runs, without changing their original receipts. Creating or
 attaching an experiment, selecting replay options and deriving a candidate
-plan generate no model answers.
+plan generate no model answers. In the Dashboard, choose an experiment in the
+**Experiment** filter on **Runs**: its runs read as a sequence (reference,
+starting recipe, numbered versions, validation) under a panel that suggests
+the next step, and **New experiment…** in the same filter creates one.
 
 - **Membership isn't comparability.** Experiment membership alone doesn't
   establish paired comparability.
@@ -162,7 +165,7 @@ plan generate no model answers.
   writers can only add new attempts to their own experiments. Read-only users
   can compare accessible saved runs.
 
-Delete a finished experiment from its Dashboard detail, or with
+Delete a finished experiment from its panel on **Runs**, or with
 `vllm-sr benchmark experiment delete EXPERIMENT_ID`:
 
 - **Only the group goes.** Deletion removes the group and its links; every

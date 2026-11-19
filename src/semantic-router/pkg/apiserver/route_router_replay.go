@@ -36,7 +36,7 @@ func apiRouterReplayRoutes() []apiRoute {
 				Path:        apiObservabilityReplaysPath + "/aggregate",
 				Method:      "GET",
 				Description: "Aggregate Router Replay routing and cost metadata",
-				Parameters:  routerReplayFilterParameters(),
+				Parameters:  routerReplayAggregateParameters(),
 			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
@@ -149,6 +149,7 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 		queryParameter("model", "Filter by selected model.", "string"),
 		queryParameter("session_id", "Filter by logical session identifier.", "string"),
 		queryParameter("turn_id", "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.", "string"),
+		queryParameter("harness", "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.", "string"),
 		queryParameter("since", "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.", "string"),
 		queryParameter("cache_status", "Filter by response-cache outcome.", "string", "all", "cached", "streamed"),
 		queryParameter("request_kind", "Filter by request kind; codex_approval_review selects Codex approval reviews.", "string", "all", "codex_approval_review"),
@@ -156,6 +157,12 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 		queryParameter("review_outcome", "Filter completed approval reviews by verdict.", "string", "all", "allow", "deny"),
 		queryParameter("review_risk", "Filter completed approval reviews by reported risk.", "string", "all", "low", "medium", "high", "critical"),
 	}
+}
+
+func routerReplayAggregateParameters() []OpenAPIParameter {
+	return append(routerReplayFilterParameters(),
+		queryParameter("interval", "With since, also return traffic: the records in contiguous intervals of this length from since to now, such as 5m or 1h; at least 1m and at most 1000 intervals.", "string"),
+	)
 }
 
 func routerReplayDatasetParameters() []OpenAPIParameter {

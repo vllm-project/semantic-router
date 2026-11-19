@@ -241,7 +241,7 @@ class Vela3D3Family(ModelFamily):
                 policy=Policy(
                     details.span, _names_only if definer is None else definer.define
                 ),
-                renderer=Renderer(model.tokenizer, model.codes),
+                renderer=Renderer(model.prompts, model.codes),
                 reader=SpanReader(engine_model, heads),
             ),
         )
@@ -292,7 +292,7 @@ def _definer(
             else "names"
         ),
         model.engine_model,
-        model.tokenizer,
+        model.prompts,
         model.pad_id,
         details.root / cache if isinstance(cache, str) else None,
         eos_token_id=(

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -296,5 +297,60 @@ func TestRouterReplayEveryReadRouteRedactsRecordedTextForViewer(t *testing.T) {
 	assertReplayStatus(t, operator, http.StatusOK, "operator")
 	if !bytes.Contains(operator.Body.Bytes(), []byte(`"selection_reasoning":"`+private)) {
 		t.Fatalf("operator trajectory lost the routing reasoning: %s", operator.Body.String())
+	}
+}
+
+// A viewer filters the records list by harness through the management API
+// and reads the harness counts beside the filtered total.
+func TestRouterReplayListFiltersByHarnessThroughManagementAPI(t *testing.T) {
+	const viewerAccessFixture = "viewer-replay-harness-token"
+	t.Setenv("VSR_VIEWER_HARNESS_TOKEN", viewerAccessFixture)
+	cfg := &config.RouterConfig{ManagementAPI: config.ManagementAPIConfig{Auth: config.ManagementAPIAuthConfig{
+		Mode:   config.ManagementAuthModeBearer,
+		Tokens: []config.ManagementAPITokenRef{{Env: "VSR_VIEWER_HARNESS_TOKEN", Role: "viewer"}},
+		Roles:  config.DefaultManagementAPIRoles(),
+	}}}
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	for _, record := range []routerreplay.RoutingRecord{
+		{ID: "codex", Agent: &store.AgentIdentity{Harness: store.HarnessCodex, ID: "subagent"}},
+		{ID: "claude", Agent: &store.AgentIdentity{Harness: store.HarnessClaudeCode}},
+		{ID: "script-1"},
+		{ID: "script-2"},
+	} {
+		if _, err := recorder.AddRecord(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	router := &extproc.OpenAIRouter{ReplayRecorder: recorder}
+	extproc.NewRouterServiceForSnapshot(router, nil)
+	registry := routerruntime.NewRegistry(cfg)
+	registry.SetReplayRuntime(router)
+	mux := (&ClassificationAPIServer{config: cfg, runtimeRegistry: registry}).setupRoutes()
+
+	response := serveReplayManagementRequest(mux, "/api/v1/observability/replays?harness=codex", viewerAccessFixture)
+	assertReplayStatus(t, response, http.StatusOK, "viewer")
+	var page struct {
+		Total         int            `json:"total"`
+		HarnessCounts map[string]int `json:"harness_counts"`
+		Data          []struct {
+			ID    string               `json:"id"`
+			Agent *store.AgentIdentity `json:"agent"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || len(page.Data) != 1 || page.Data[0].ID != "codex" || page.Data[0].Agent.Harness != store.HarnessCodex || page.Data[0].Agent.ID != "" {
+		t.Fatalf("viewer harness page = %s", response.Body.String())
+	}
+	want := map[string]int{store.HarnessCodex: 1, store.HarnessClaudeCode: 1, store.HarnessAPIClient: 2}
+	if !reflect.DeepEqual(page.HarnessCounts, want) {
+		t.Fatalf("harness counts = %v, want %v", page.HarnessCounts, want)
+	}
+
+	invalid := serveReplayManagementRequest(mux, "/api/v1/observability/replays?harness=gemini_cli", viewerAccessFixture)
+	assertReplayStatus(t, invalid, http.StatusBadRequest, "viewer")
+	if !bytes.Contains(invalid.Body.Bytes(), []byte("harness must list one or more of")) {
+		t.Fatalf("invalid harness body = %s", invalid.Body.String())
 	}
 }

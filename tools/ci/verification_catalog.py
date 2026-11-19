@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 from ci_policy import LAYERS
 from execution_targets import resolve_execution_target, target_errors
+from executor_contract import MATRIX_EXECUTORS
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG_PATH = ROOT / "tools/ci/verification_catalog.yaml"
@@ -113,6 +114,19 @@ def catalog_errors(registry: dict) -> list[str]:
     records = verification_records(registry)
     catalog = load_catalog()
     errors = []
+    by_executor: dict[str, list[str]] = {}
+    for name, record in records.items():
+        by_executor.setdefault(record["executor"], []).append(name)
+    for executor, names in by_executor.items():
+        if executor in MATRIX_EXECUTORS:
+            continue
+        if len(names) > 1:
+            errors.append(
+                f"executor {executor} supports exactly one verification "
+                f"but declares {sorted(names)}; ci.yml only passes [0] for "
+                f"non-matrix executors — move extras to a matrix executor "
+                f"({'/'.join(sorted(MATRIX_EXECUTORS))}) or add a matrix to ci.yml"
+            )
     required = full_cpu_ids()
     if len(required) != len(set(required)):
         errors.append("full CPU inventory has duplicate verification IDs")

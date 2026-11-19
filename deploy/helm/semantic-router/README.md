@@ -483,8 +483,11 @@ ConfigMap through the Kubernetes API. A successful write returns HTTP 202 with
 `activation_status: persisted`; the existing `subPath` mount and active Router
 generation stay on the prior document until the Router deployment is rolled
 out. `/api/v1/config/hash` reads the saved ConfigMap and reports when activation
-becomes active. A second mutation on a stale Pod returns HTTP 409
-`CONFIG_ROLLOUT_REQUIRED`, preventing it from overwriting the saved change.
+becomes active. The Dashboard reads the saved ConfigMap through the same API,
+so its configuration pages, model health and topology follow a saved document
+within a few seconds, without a Dashboard restart. A second mutation on a
+stale Pod returns HTTP 409 `CONFIG_ROLLOUT_REQUIRED`, preventing it from
+overwriting the saved change.
 Kubernetes CR-managed configuration remains read-only through this API. Helm
 upgrades preserve the live `config.yaml` by default, including Dashboard and
 Router API edits. Chart values seed the first install. To intentionally replace

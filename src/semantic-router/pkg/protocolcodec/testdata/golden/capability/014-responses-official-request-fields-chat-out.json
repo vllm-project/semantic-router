@@ -276,21 +276,43 @@
     {
       "name": "safety_identifier",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_safety_identifier"
-        }
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "safety_identifier",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
       "name": "service_tier",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_service_tier"
-        }
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "service_tier",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
