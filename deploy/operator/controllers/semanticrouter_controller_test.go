@@ -696,6 +696,15 @@ func TestUpdateStatusAvailableFollowsMinimumReadyReplicas(t *testing.T) {
 			RollingUpdate: &appsv1.RollingUpdateDeployment{MaxUnavailable: &maxUnavailable},
 		}
 	}
+	rollingUpdateWithSurge := func(maxUnavailable, maxSurge intstr.IntOrString) appsv1.DeploymentStrategy {
+		return appsv1.DeploymentStrategy{
+			Type: appsv1.RollingUpdateDeploymentStrategyType,
+			RollingUpdate: &appsv1.RollingUpdateDeployment{
+				MaxUnavailable: &maxUnavailable,
+				MaxSurge:       &maxSurge,
+			},
+		}
+	}
 	tests := []struct {
 		name     string
 		desired  int32
@@ -740,6 +749,18 @@ func TestUpdateStatusAvailableFollowsMinimumReadyReplicas(t *testing.T) {
 			steps: []step{
 				{replicas: 4, ready: 4, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
 				{replicas: 4, ready: 3, status: metav1.ConditionFalse, reason: "MinimumReplicasUnavailable"},
+			},
+		},
+		{
+			// maxSurge 0 and maxUnavailable 25%: 25% of 3 rounds down to 0,
+			// so ResolveFenceposts sets maxUnavailable to 1 and 2/3 stays Available.
+			name:     "max_surge_zero_applies_fencepost",
+			desired:  3,
+			strategy: rollingUpdateWithSurge(intstr.FromString("25%"), intstr.FromInt32(0)),
+			steps: []step{
+				{replicas: 3, ready: 3, status: metav1.ConditionTrue, reason: "AllReplicasReady"},
+				{replicas: 3, ready: 2, status: metav1.ConditionTrue, reason: "MinimumReplicasAvailable"},
+				{replicas: 3, ready: 1, status: metav1.ConditionFalse, reason: "MinimumReplicasUnavailable"},
 			},
 		},
 		{
@@ -817,6 +838,89 @@ func TestUpdateStatusAvailableFollowsMinimumReadyReplicas(t *testing.T) {
 				} else if progressing != nil {
 					t.Errorf("step %d: unexpected Progressing condition %+v", i, progressing)
 				}
+			}
+		})
+	}
+}
+
+func TestDeploymentMaxUnavailableFenceposts(t *testing.T) {
+	desired := int32(3)
+	desiredFour := int32(4)
+	maxSurgeZero := intstr.FromInt32(0)
+	maxUnavailableZero := intstr.FromInt32(0)
+	maxUnavailable25 := intstr.FromString("25%")
+
+	tests := []struct {
+		name       string
+		desired    int32
+		deployment *appsv1.Deployment
+		want       int
+	}{
+		{
+			name:       "zero_replicas",
+			desired:    0,
+			deployment: &appsv1.Deployment{},
+			want:       0,
+		},
+		{
+			name:    "nil_strategy_defaults_keep_surge",
+			desired: 3,
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{Replicas: &desired},
+			},
+			// 25% of 3: unavailable rounds down to 0, surge rounds up to 1.
+			want: 0,
+		},
+		{
+			name:    "max_surge_zero_and_unavailable_25_percent",
+			desired: 3,
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &desired,
+					Strategy: appsv1.DeploymentStrategy{
+						Type: appsv1.RollingUpdateDeploymentStrategyType,
+						RollingUpdate: &appsv1.RollingUpdateDeployment{
+							MaxSurge:       &maxSurgeZero,
+							MaxUnavailable: &maxUnavailable25,
+						},
+					},
+				},
+			},
+			want: 1,
+		},
+		{
+			name:    "recreate",
+			desired: 3,
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &desired,
+					Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
+				},
+			},
+			want: 0,
+		},
+		{
+			name:    "explicit_unavailable_zero_with_default_surge",
+			desired: 4,
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &desiredFour,
+					Strategy: appsv1.DeploymentStrategy{
+						Type: appsv1.RollingUpdateDeploymentStrategyType,
+						RollingUpdate: &appsv1.RollingUpdateDeployment{
+							MaxUnavailable: &maxUnavailableZero,
+						},
+					},
+				},
+			},
+			want: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := deploymentMaxUnavailable(tt.deployment, tt.desired); got != tt.want {
+				t.Fatalf("deploymentMaxUnavailable() = %d, want %d", got, tt.want)
 			}
 		})
 	}

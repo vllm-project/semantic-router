@@ -376,18 +376,33 @@ func partialReadyAvailableCondition(deployment *appsv1.Deployment, generation in
 
 // deploymentMaxUnavailable resolves maxUnavailable the way the Deployment
 // controller does: rounded down, zero for Recreate, and the API defaults
-// (RollingUpdate, 25%) when the strategy is left unset.
+// (RollingUpdate, 25%) when the strategy is left unset. maxSurge uses the
+// same defaults and is rounded up. If both resolve to 0, unavailable is
+// set to 1, matching ResolveFenceposts.
 func deploymentMaxUnavailable(deployment *appsv1.Deployment, desired int32) int {
 	if desired <= 0 || deployment.Spec.Strategy.Type == appsv1.RecreateDeploymentStrategyType {
 		return 0
 	}
 	maxUnavailable := intstr.FromString("25%")
-	if rolling := deployment.Spec.Strategy.RollingUpdate; rolling != nil && rolling.MaxUnavailable != nil {
-		maxUnavailable = *rolling.MaxUnavailable
+	maxSurge := intstr.FromString("25%")
+	if rolling := deployment.Spec.Strategy.RollingUpdate; rolling != nil {
+		if rolling.MaxUnavailable != nil {
+			maxUnavailable = *rolling.MaxUnavailable
+		}
+		if rolling.MaxSurge != nil {
+			maxSurge = *rolling.MaxSurge
+		}
 	}
 	unavailable, err := intstr.GetScaledValueFromIntOrPercent(&maxUnavailable, int(desired), false)
 	if err != nil || unavailable < 0 {
 		return 0
+	}
+	surge, err := intstr.GetScaledValueFromIntOrPercent(&maxSurge, int(desired), true)
+	if err != nil || surge < 0 {
+		surge = 0
+	}
+	if unavailable == 0 && surge == 0 {
+		unavailable = 1
 	}
 	return min(unavailable, int(desired))
 }
