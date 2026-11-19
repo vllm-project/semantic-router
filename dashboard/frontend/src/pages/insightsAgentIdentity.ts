@@ -122,11 +122,33 @@ export function runAgentFor(
 
 /**
  * Router-scoped session ids carry the API key scope they were keyed under, as
- * key_<hash>:<id>. People read the id the harness sent; links and filters keep
- * the whole value.
+ * key_<hash>:<id>. People read, copy and link the id the harness sent.
  */
 export function displaySessionId(sessionId?: string): string {
   return (sessionId ?? '').replace(/^key_[^:]*:/, '')
+}
+
+export function isScopedSessionId(sessionId: string): boolean {
+  return displaySessionId(sessionId) !== sessionId
+}
+
+/** The full id each harness id last named in this tab, so a link opens the session it came from. */
+const chosenSessions = new Map<string, string>()
+
+/**
+ * The value links and filters carry for a session: the id its harness sent,
+ * never the key scope. The full id stays in this tab, so the page a link
+ * opens reads that session even when another key's session shares the id.
+ */
+export function sessionParam(sessionId: string): string {
+  const raw = displaySessionId(sessionId)
+  if (raw && raw !== sessionId) chosenSessions.set(raw, sessionId)
+  return raw
+}
+
+/** The full id a harness id last named in this tab, if a link or a choice named one. */
+export function chosenSession(raw: string): string | undefined {
+  return chosenSessions.get(raw)
 }
 
 /** A long id as its head and tail. */

@@ -147,10 +147,25 @@ Deployment facts, which have no flags:
 | --- | --- |
 | `VLLM_SR_PUBLIC_BASE_URL` | The address clients use to reach the Router's gateway when it sits behind a proxy or edge, as an `http` or `https` URL without credentials, for example `https://gateway.example.com`. **Get started** shows it in place of the address it derives from the listener port and the host the Dashboard is open at, which is wrong behind a proxy. Empty means unset; an invalid value is ignored with a warning. |
 | `VLLM_SR_PUBLIC_REQUIRES_KEY` | `true` when clients of `VLLM_SR_PUBLIC_BASE_URL` must send an API key; **Get started** then puts the key in its snippets. It also does so whenever the listener itself checks client keys. |
+| `VLLM_SR_K8S_CONFIGMAP_NAME`, `VLLM_SR_K8S_CONFIGMAP_NAMESPACE` | The ConfigMap that backs the mounted Router config. With both set, the Dashboard saves and reads the config through the Kubernetes API; see [Config on Kubernetes](#config-on-kubernetes). |
+| `VLLM_SR_K8S_CONFIGMAP_KEY` | The key that holds the config in that ConfigMap; default `config.yaml`. |
 | `VLLM_SR_LOG_SPOOL_DIR` | The bounded log spool `vllm-sr serve` mounts. **Logs** reads it when it is mounted. |
 | `VLLM_SR_K8S_ROUTER_LOG_SELECTOR` | Label selector of the Router pods **Logs** reads when no spool is mounted and the Dashboard runs in Kubernetes; default `app=router`. |
 | `VLLM_SR_K8S_DASHBOARD_LOG_SELECTOR` | Label selector of the Dashboard pods; default `app=dashboard`. |
 | `VLLM_SR_K8S_ENVOY_LOG_SELECTOR` | Label selector of the Envoy pods; unset, Envoy logs are not read from Kubernetes. |
+
+### Config on Kubernetes
+
+On Kubernetes the Router config is a ConfigMap mounted with `subPath`, a file
+that never changes in a running pod. With the ConfigMap's name and namespace
+set, the Dashboard saves to it through the Kubernetes API and reads the saved
+document back from it: the configuration pages, model health and verification
+on **Models**, the topology preview and the tools catalog show a saved change
+within a few seconds, without a Dashboard restart. The Router and Envoy apply
+it when their deployments roll out. A key added to the provider-keys Secret
+reaches the Dashboard's environment when its pod restarts. The service
+account needs `get` and `update` on that ConfigMap, which the chart's
+`rbac.create` grants.
 
 ### Logs on Kubernetes
 

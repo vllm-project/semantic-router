@@ -266,7 +266,9 @@ class Reader:
                 raise invalid("use criteria or labels, not both")
             criteria = listed_options(question["labels"], "labels")
         if isinstance(criteria, list):
-            criteria = {str(name): None for name in criteria}
+            if not all(isinstance(name, str) for name in criteria):
+                raise invalid("criteria must list span labels as strings")
+            criteria = dict.fromkeys(criteria)
         criteria = named_options(criteria, minimum=1)
         instructions = question.get("instructions")
         if instructions is not None:

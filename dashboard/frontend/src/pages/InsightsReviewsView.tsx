@@ -11,6 +11,7 @@ import {
   type ReviewFilters,
 } from './insightsReviewSupport'
 import InsightsReviewsTable from './InsightsReviewsTable'
+import { useSessionScope } from './insightsSessionScope'
 
 const sessionDebounceMs = 300
 const LIVE_INTERVAL_MS = 5_000
@@ -27,15 +28,18 @@ function useReviewData(
   pageSize: number,
   live: boolean,
   held: boolean,
+  paused: boolean,
 ) {
   const scope = buildReviewQueryString(filters)
   const list = useReplayRead<InsightsListResponse>(
-    `${REPLAYS}${buildReviewQueryString(filters, { limit: pageSize, offset: (page - 1) * pageSize })}`,
+    paused
+      ? null
+      : `${REPLAYS}${buildReviewQueryString(filters, { limit: pageSize, offset: (page - 1) * pageSize })}`,
     'approval reviews',
     `${scope}|${page}|${pageSize}`,
   )
   const summary = useReplayRead<InsightsAggregateResponse>(
-    `${REPLAYS}/aggregate${scope}`,
+    paused ? null : `${REPLAYS}/aggregate${scope}`,
     'review summary',
     scope,
   )
@@ -56,7 +60,7 @@ function useReviewData(
     aggregate: summary.stale ? null : summary.data,
     error: list.error ?? summary.error,
     unavailable: list.unavailable ?? summary.unavailable,
-    loading: list.loading && (data === null || list.stale),
+    loading: paused || (list.loading && (data === null || list.stale)),
     refresh,
   }
 }
@@ -71,12 +75,15 @@ export default function InsightsReviewsView({ initialSession = '' }: { initialSe
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [live, setLive] = useState(true)
   const [held, setHeld] = useState(false)
+  // the session box takes the id a harness sent; the reads match the full id
+  const sessionScope = useSessionScope(filters.session)
   const { records, total, aggregate, error, unavailable, loading, refresh } = useReviewData(
-    filters,
+    { ...filters, session: sessionScope.id },
     page,
     pageSize,
     live,
     held,
+    sessionScope.resolving,
   )
 
   useEffect(() => {

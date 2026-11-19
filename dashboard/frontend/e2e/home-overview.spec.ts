@@ -212,7 +212,13 @@ async function mockHome(
     const total = series ? records.length : 500
     const limit = Number(url.searchParams.get('limit') ?? records.length)
     return route.fulfill({
-      json: { object: 'list', data: records.slice(0, limit), count: records.length, total },
+      json: {
+        object: 'list',
+        data: records.slice(0, limit),
+        count: records.length,
+        total,
+        harness_counts: { claude_code: 1, codex: 1, api_client: 1 },
+      },
     })
   })
   const windowReads = () => listQueries.filter((query) => query.get('limit') === '100')
@@ -230,7 +236,25 @@ test('summarizes traffic, recent requests and the routing configuration', async 
   await expect(page.getByRole('link', { name: 'p95 latency: open Requests' })).toContainText(
     '1.50s',
   )
-  await expect(page.getByTestId('home-saved')).toContainText('$0.00')
+  const saved = page.getByTestId('home-saved')
+  await expect(saved).toContainText('Saved vs priciest model')
+  await expect(saved).toContainText('$0.0040')
+  await expect(saved).not.toContainText('−')
+  await expect(saved).toContainText(
+    'Cost only: each request priced at the most expensive model in its pool for the same tokens',
+  )
+  await expect(saved).toContainText('Actual $0.0030')
+  await expect(saved).toContainText('Priciest model $0.0070')
+
+  const agents = page.getByTestId('home-agents')
+  await expect(agents).toContainText('Requests by harness · last 24 hours')
+  await expect(agents.getByRole('img', { name: 'Claude Code' })).toBeVisible()
+  await expect(agents.getByRole('img', { name: 'Codex' })).toBeVisible()
+  await expect(agents.locator('li[data-harness="codex"]')).toContainText('33.3%')
+  await expect(agents.locator('li[data-harness]').last()).toHaveAttribute(
+    'data-harness',
+    'api_client',
+  )
 
   const traffic = page.getByTestId('home-traffic')
   await expect(traffic).toContainText('Last 24 hours across every public model')
@@ -363,7 +387,7 @@ test('keeps the Home grid rows level and leaves the runtime inventory off', asyn
   await level(
     page.getByTestId('home-routing-mix'),
     page.getByTestId('home-models'),
-    page.getByTestId('home-public-models'),
+    page.getByTestId('home-agents'),
   )
   await level(page.getByTestId('home-recent-requests'), page.getByTestId('home-services'))
   await level(intelligence, page.getByRole('navigation', { name: 'Routing configuration' }))

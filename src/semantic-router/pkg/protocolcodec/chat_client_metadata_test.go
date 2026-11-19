@@ -144,14 +144,14 @@ func TestOpenAIChatRequestStillRefusesOtherReplayFields(t *testing.T) {
 			`{"id":"call_1","type":"function","function":{"name":"bash","arguments":"{}"}` + members + `}]}]}`
 	}
 	for name, test := range map[string]struct{ body, code string }{
-		"signed thinking blocks":    {assistant(`"thinking_blocks":[{"type":"thinking","thinking":"x","signature":"sig"}]`), "invalid_json"},
+		"signed thinking blocks":    {assistant(`"thinking_blocks":[{"type":"thinking","thinking":"x","signature":"sig"}]`), "unknown_parameter"},
 		"output audio":              {assistant(`"audio":{"id":"audio_1","data":"","expires_at":1,"transcript":"ok"}`), "unsupported_output_audio"},
 		"legacy function call":      {assistant(`"function_call":{"name":"bash","arguments":"{}"}`), "unsupported_legacy_function_call"},
-		"an unknown member":         {assistant(`"x_client":1`), "invalid_json"},
-		"another spelling":          {assistant(`"Parsed":null`), "invalid_json"},
+		"an unknown member":         {assistant(`"x_client":1`), "unknown_parameter"},
+		"another spelling":          {assistant(`"Parsed":null`), "unknown_parameter"},
 		"a duplicate member":        {assistant(`"parsed":null,"content":"again"`), "duplicate_json_field"},
-		"parsed outside messages":   {`{"model":"client-model","parsed":null,"messages":[{"role":"user","content":"hi"}]}`, "invalid_json"},
-		"parsed_arguments on calls": {toolCall(`,"parsed_arguments":null`), "invalid_json"},
+		"parsed outside messages":   {`{"model":"client-model","parsed":null,"messages":[{"role":"user","content":"hi"}]}`, "unknown_parameter"},
+		"parsed_arguments on calls": {toolCall(`,"parsed_arguments":null`), "unknown_parameter"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, []byte(test.body))

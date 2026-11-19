@@ -290,6 +290,14 @@ class Decision3Family(ModelFamily):
                 # few of a quantized package's answers; BF16 packages keep exact
                 # kernels.
                 approximate_kernels=quantized is not None,
+                # docs/records/cpu-zentorch-d3.md: zentorch's FP32 linear changed
+                # no decision of the FP32 CPU answers. Its SDPA changed none either
+                # but added at most 2% over the linear, so the sdpa slot stays exact
+                # until a record shows it pays. Quantized packages have no CPU record
+                # and keep exact kernels; vela3_d3 shares this policy.
+                approximate_cpu_kernels=(
+                    frozenset({"linear"}) if quantized is None else False
+                ),
             ),
             max_input_tokens=package.max_input_tokens,
             kernel_variants=CONV_VARIANT,
@@ -540,6 +548,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         self.info = info
         self.engine_model = engine_model
         self.tokenizer = tokenizer
+        self.prompts = prompt.PromptEncoder(tokenizer)
         self.pad_id = pad_id
         self.readout = readout
         self.codes: list[str] = decision["codes"]
@@ -712,40 +721,32 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         tokens = 0
         read, errors = self._read(questions)
         header = self._header(read, media)
-        rendered: list[tuple[str, str, list[str], list[Any], str]] = []
-        for question_id, kind, instructions, keys, texts, descriptions in read:
-            text = prompt.render(
-                prompt.user_prompt(state, instructions, texts, self.codes, header),
-                images,
-                videos,
+        rendered = [
+            (
+                question_id,
+                kind,
+                keys,
+                descriptions,
+                prompt.render(
+                    prompt.user_prompt(state, instructions, texts, self.codes, header),
+                    images,
+                    videos,
+                ),
             )
-            if media and (
-                text.count(prompt.IMAGE_TOKEN) != images
-                or text.count(prompt.VIDEO_TOKEN) != videos
-            ):
-                errors[question_id] = question_error(
-                    kind,
-                    QuestionError(
-                        INVALID_QUESTION,
-                        "the state or question contains a literal image or video placeholder token",
-                    ),
-                )
-                continue
-            rendered.append((question_id, kind, keys, descriptions, text))
+            for question_id, kind, instructions, keys, texts, descriptions in read
+        ]
         temperature = self.request_temperature(len(rendered))
-        # One call for all questions: the tokenizer releases the GIL for a batch, not for a single text.
-        encodings = self.tokenizer.encode_batch(
-            [entry[-1] for entry in rendered], add_special_tokens=False
-        )
+        # A prompt holds one placeholder token for each image and video, where
+        # its length counts their visual tokens.
+        room = self.question_cap()[0] - visual + images + videos
+        encodings = self.prompts.read_batch([entry[-1] for entry in rendered], room)
         for (question_id, kind, keys, descriptions, _), encoding in zip(
             rendered, encodings, strict=True
         ):
-            ids = encoding.ids
-            length = len(ids) - images - videos + visual
-            refused = self.length_error(length)
-            if refused is not None:
-                errors[question_id] = question_error(kind, refused)
+            if encoding is None:
+                errors[question_id] = question_error(kind, self.over_cap())
                 continue
+            ids = encoding.ids
             if media:
                 ids = self._expand(ids, media)
             tokens += len(ids)
@@ -782,11 +783,13 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             return self.validated, True
         return self.limit, False
 
-    def length_error(self, length: int) -> QuestionError | None:
-        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+    def over_cap(self, length: int | None = None) -> QuestionError:
+        """Why a question prompt over ``question_cap`` is refused.
+
+        ``length`` is its token count. None is a prompt that was not tokenized
+        to its end, so its count is not known and the message names none.
+        """
         limit, capped = self.question_cap()
-        if length <= limit:
-            return None
         hint = (
             f"the length this model was validated at; long context "
             f"(options.long_context) reads up to "
@@ -794,16 +797,36 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             if capped
             else "the maximum context length"
         )
+        size = (
+            f"more than {limit} tokens"
+            if length is None
+            else f"{length} tokens, over {limit} tokens"
+        )
         return QuestionError(
             MAX_LENGTH_EXCEEDED,
-            f"the question prompt has {length} tokens, over {limit} tokens, {hint}; "
-            "nothing was truncated",
+            f"the question prompt has {size}, {hint}; nothing was truncated",
             "question_tokens",
         )
 
+    def length_error(self, length: int) -> QuestionError | None:
+        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+        if length <= self.question_cap()[0]:
+            return None
+        return self.over_cap(length)
+
     def _expand(self, ids: list[int], media: RequestMedia) -> list[int]:
         """Each image placeholder repeated once per input token of its image, and each video placeholder as its
-        expansion (timestamped frame pairs), images and videos in order."""
+        expansion (timestamped frame pairs), images and videos in order. Placeholders that do not match the
+        media one for one refuse the request before any is expanded."""
+        held = (
+            ids.count(self.image_token) if self.image_token is not None else 0,
+            ids.count(self.video_token) if self.video_token is not None else 0,
+        )
+        if held != (len(media.images), len(media.videos)):
+            raise ValueError(
+                f"the prompt holds {held[0]} image and {held[1]} video placeholders for "
+                f"{len(media.images)} images and {len(media.videos)} videos"
+            )
         out: list[int] = []
         images = iter(media.images)
         videos = iter(media.video_ids)
