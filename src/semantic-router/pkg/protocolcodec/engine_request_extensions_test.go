@@ -28,7 +28,7 @@ func extensionTestBody() []byte {
 }
 
 func TestCaptureRequestExtensions(t *testing.T) {
-	captured, stripped, err := captureRequestExtensions(extensionTestBody(), extensionTestPolicy())
+	captured, stripped, err := captureRequestExtensions(llmprotocol.OpenAIChatV1, extensionTestBody(), extensionTestPolicy())
 	if err != nil {
 		t.Fatalf("capture: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestCrossFormatDispatchDropsExtensionsWithDiagnostic(t *testing.T) {
 func TestExtensionBudgetRejectsOversizedMember(t *testing.T) {
 	policy := extensionTestPolicy()
 	policy.Limits.RequestExtensionBytes = 8
-	_, _, err := captureRequestExtensions(extensionTestBody(), policy)
+	_, _, err := captureRequestExtensions(llmprotocol.OpenAIChatV1, extensionTestBody(), policy)
 	if err == nil {
 		t.Fatal("an oversized member must fail closed")
 	}
@@ -139,7 +139,7 @@ func TestExtensionBudgetRejectsOversizedMember(t *testing.T) {
 
 func TestDuplicateExtensionMemberRejected(t *testing.T) {
 	body := []byte(`{"model":"auto","messages":[{"role":"user","content":"hi"}],"vllm_xargs":{"a":1},"vllm_xargs":{"b":2}}`)
-	_, _, err := captureRequestExtensions(body, extensionTestPolicy())
+	_, _, err := captureRequestExtensions(llmprotocol.OpenAIChatV1, body, extensionTestPolicy())
 	if err == nil {
 		t.Fatal("a duplicate whitelisted member must fail closed")
 	}

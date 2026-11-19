@@ -87,7 +87,7 @@ func (engine *Engine) decodeRequest(
 	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	captured, decodeBody, captureErr := captureRequestExtensions(body, policy)
+	captured, decodeBody, captureErr := captureRequestExtensions(format, body, policy)
 	if captureErr != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, captureErr
 	}
@@ -177,7 +177,7 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	if translateRequestErr != nil {
 		return RequestResult{}, translateRequestErr
 	}
-	captured, decodeBody, captureErr := captureRequestExtensions(body, engine.policy)
+	captured, decodeBody, captureErr := captureRequestExtensions(source, body, engine.policy)
 	if captureErr != nil {
 		return RequestResult{}, captureErr
 	}

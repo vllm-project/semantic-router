@@ -3,7 +3,10 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"slices"
+	"strings"
+	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -19,7 +22,7 @@ import (
 //
 // Bodies that are not objects, or that do not parse, come back unchanged so
 // the codec reports the original problem instead of a capture artifact.
-func captureRequestExtensions(body []byte, policy llmprotocol.Policy) (map[string]json.RawMessage, []byte, error) {
+func captureRequestExtensions(format llmprotocol.WireFormat, body []byte, policy llmprotocol.Policy) (map[string]json.RawMessage, []byte, error) {
 	if len(policy.AllowedRequestExtensions) == 0 || len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return nil, body, nil
 	}
@@ -40,6 +43,7 @@ func captureRequestExtensions(body []byte, policy llmprotocol.Policy) (map[strin
 	if delim, ok := token.(json.Delim); !ok || delim != '{' {
 		return nil, body, nil
 	}
+	declared := declaredTopLevelMembers()[format]
 	var captured map[string]json.RawMessage
 	type keptMember struct {
 		key   string
@@ -56,7 +60,7 @@ func captureRequestExtensions(body []byte, policy llmprotocol.Policy) (map[strin
 		if err := decoder.Decode(&value); err != nil {
 			return nil, body, nil
 		}
-		if !allowed[key] {
+		if !allowed[key] || declared[key] {
 			kept = append(kept, keptMember{key: key, value: append([]byte(nil), value...)})
 			continue
 		}
@@ -158,6 +162,38 @@ func mergeRequestExtensions(
 	merged = append(merged, '}')
 	return merged, nil, nil
 }
+
+// declaredTopLevelMembers lists, per wire format, the top-level request
+// members the format's own contract declares. A whitelisted name that
+// collides with a declared member must never be captured: stripping it at
+// capture would hide it from the decoder, and merging it back after the
+// encoder's own key would emit the member twice, letting a client value
+// override what Router-side plugins and defaults set. Declared members
+// stay in the body and take the normal decode path instead.
+var declaredTopLevelMembers = sync.OnceValue(func() map[llmprotocol.WireFormat]map[string]bool {
+	table := map[llmprotocol.WireFormat]any{
+		llmprotocol.OpenAIChatV1:        chatRequestWire{},
+		llmprotocol.OpenAIResponsesV1:   responsesRequestWire{},
+		llmprotocol.AnthropicMessagesV1: anthropicRequestWire{},
+		llmprotocol.OpenAIImagesV1:      imagesRequestWire{},
+	}
+	declared := make(map[llmprotocol.WireFormat]map[string]bool, len(table))
+	for format, specimen := range table {
+		names := map[string]bool{}
+		specimenType := reflect.TypeOf(specimen)
+		for index := 0; index < specimenType.NumField(); index++ {
+			tag := specimenType.Field(index).Tag.Get("json")
+			if tag == "" || tag == "-" {
+				continue
+			}
+			if name := strings.Split(tag, ",")[0]; name != "" {
+				names[name] = true
+			}
+		}
+		declared[format] = names
+	}
+	return declared
+})
 
 // sortedExtensionNames keeps merged and dropped output deterministic.
 func sortedExtensionNames(members map[string]json.RawMessage) []string {
