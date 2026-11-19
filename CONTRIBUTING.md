@@ -72,7 +72,7 @@ milestone. It runs when a Community run triggered by a PR or review event
 completes, when a completed check suite identifies a PR, and in an hourly
 sweep over open PRs. Admission requires at least one linked accepted issue,
 and the accepted linked issues must together resolve to exactly one recognized
-Workgroup owner. If the PR no longer meets these conditions, it moves to
+owner label. If the PR no longer meets these conditions, it moves to
 `pr/blocked` even though an earlier Community check passed; if that single
 owner changes, the PR follows the new owner.
 
