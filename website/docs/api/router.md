@@ -604,7 +604,7 @@ fields, so use it only when those fields are needed. See
 for the review record and the aggregate's `reviews` summary.
 
 `harness` keeps the records sent by the harnesses it lists, comma-separated:
-`claude_code`, `codex`, `opencode`, `deepseek_harness`, and `api_client` for
+`claude_code`, `codex`, `opencode`, `deepseek_harness`, `cursor`, `openclaw`, and `api_client` for
 the requests no harness sent, such as a script calling the API directly; a
 record's harness is its `agent.harness`, described in
 [Agent runs](../tutorials/plugin/router-replay#agent-runs). The list response

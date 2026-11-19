@@ -1,6 +1,9 @@
 package llmprotocol
 
-import "slices"
+import (
+	"encoding/json"
+	"slices"
+)
 
 type UnknownFieldPolicy string
 
@@ -116,6 +119,11 @@ type Policy struct {
 	// terminal. TranslateResponse and NewStreamWithMutation set it only when
 	// the target wire format can carry a matched stop sequence.
 	ProviderStopSequences bool
+	// RequestOutputLimit is the output token limit the backend received with
+	// the request whose reply this policy decodes, 0 when the request set
+	// none. A reply that stopped for its tool calls once its output reached
+	// the limit decodes as stopped at the limit (ToolCallStopAtOutputLimit).
+	RequestOutputLimit int64
 	// AllowedLossyFields are translated with a diagnostic even under
 	// LossyReject. Entries come from OptInLossyFields.
 	AllowedLossyFields []string
@@ -209,6 +217,10 @@ type Diagnostics []Diagnostic
 // provider state.
 type ResponseRenderContext struct {
 	PreviousResponseID string
+	// RequestEcho is a JSON object of the request members, as the client sent
+	// them, that the request format's response object repeats. The request
+	// codec writes it, and only the same format's response encoder reads it.
+	RequestEcho json.RawMessage
 }
 
 // Envelope is bounded, ephemeral wire fidelity and rendering state. It must
@@ -236,7 +248,7 @@ func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy 
 		if envelope.ResponseReencodeRequired {
 			return false
 		}
-		if envelope.ResponseRender.PreviousResponseID != "" {
+		if envelope.ResponseRender.PreviousResponseID != "" || len(envelope.ResponseRender.RequestEcho) > 0 {
 			return false
 		}
 		return len(envelope.Response) > 0

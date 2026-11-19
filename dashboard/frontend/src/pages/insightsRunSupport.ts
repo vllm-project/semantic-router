@@ -6,10 +6,15 @@ import { compactID } from './insightsReviewSupport'
 import type { RunAgent, RunCall, RunCost, RunReportedOutcome, RunSummary } from './insightsRunTypes'
 
 export const RUN_MARKER_LABELS: Record<string, string> = {
+  subagent_start: 'Subagent started',
+  compaction: 'Compaction',
+  housekeeping: 'Housekeeping',
+  tool_loop: 'Tool loop',
+  image: 'Image',
   switch: 'Model switched',
   escalation: 'Escalated',
   guard: 'Guard flagged',
-  block: 'Blocked',
+  block: 'Guard refusal',
   fallback: 'Fell back',
   failure: 'Failed',
   tool_failure: 'Tool failed',
@@ -17,6 +22,11 @@ export const RUN_MARKER_LABELS: Record<string, string> = {
 
 // A marker's one-character glyph in the diagram, its label in the title.
 export const RUN_MARKER_GLYPHS: Record<string, string> = {
+  subagent_start: '⑂',
+  compaction: '⇊',
+  housekeeping: '#',
+  tool_loop: '↻',
+  image: '▣',
   switch: '⇄',
   escalation: '↑',
   guard: '⚑',

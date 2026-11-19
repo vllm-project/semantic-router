@@ -178,3 +178,24 @@ export function buildRunTimeline(response: RunResponse, from: number, to: number
     to: from + calls.length,
   }
 }
+
+/** The time at a position of the folded axis: idle stretches keep their own length. */
+export function timeAt(
+  timeline: Pick<RunTimeline, 'begin' | 'breaks' | 'activeMs'>,
+  position: number,
+): number {
+  const breaks = [...timeline.breaks].sort((a, b) => a.left - b.left)
+  const folded = breaks.reduce((sum, gap) => sum + gap.width, 0)
+  const msPerPoint = folded < 100 ? timeline.activeMs / (100 - folded) : 0
+  let time = timeline.begin
+  let at = 0
+  for (const gap of breaks) {
+    if (position <= gap.left) break
+    time += (gap.left - at) * msPerPoint
+    const inside = Math.min(position, gap.left + gap.width) - gap.left
+    time += gap.width > 0 ? (inside / gap.width) * gap.ms : 0
+    at = gap.left + gap.width
+  }
+  if (position > at) time += (position - at) * msPerPoint
+  return time
+}

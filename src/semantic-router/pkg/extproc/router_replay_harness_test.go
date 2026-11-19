@@ -122,7 +122,7 @@ func TestRouterReplayHarnessFilterIsCanonicalAndChecked(t *testing.T) {
 		t.Fatalf("unknown harness status = %v", got)
 	}
 	message := decodeJSONBody(t, response.GetImmediateResponse().Body)["error"].(map[string]interface{})["message"]
-	if message != "harness must list one or more of claude_code, codex, opencode, deepseek_harness, api_client" {
+	if message != "harness must list one or more of claude_code, codex, opencode, deepseek_harness, cursor, openclaw, api_client" {
 		t.Fatalf("unknown harness message = %v", message)
 	}
 }

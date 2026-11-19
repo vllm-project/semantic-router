@@ -116,13 +116,14 @@ Highest priority first:
 | `on_unknown` | routing | Decisions whose unknown result `rules.on_unknown` resolved, each with its `policy`. |
 | `client_protocol` | protocol | Client wire protocol, such as `anthropic`. |
 | `upstream_protocol` | protocol | Provider wire protocol, such as `openai`. |
+| `requested_model` | listener | The model the client named when the listener's `unserved_models` routed the request to one of its own models. |
 | `effective_input_tokens` | automatic_output | Rendered input tokens of the final automatic-output dispatch, chat template included. |
 | `effective_max_output_tokens` | automatic_output | Output token limit of the final automatic-output dispatch, reasoning included. |
 | `signals` | signals | Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. |
 | `scan_coverage` | signals | Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. |
 | `context_tokens` | signals | Token count the `context` signal measured. |
 | `category` | classification | Domain category the classifier chose, such as `math`. |
-| `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off. |
+| `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off, and `reason=stop_sequences` when the request's stop sequences did. |
 | `modality` | routing | Output kinds of the selected decision's output contract, such as `(image)` or `(text image)`; omitted for a decision that declares none. |
 | `system_prompt` | system_prompt | Present when a `system_prompt` plugin injected text into the request. |
 | `cache_similarity` | response_cache | Similarity score of the response-cache lookup. |

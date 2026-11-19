@@ -45,7 +45,7 @@ func (r *OpenAIRouter) handleRequestBody(
 		return nil, err
 	}
 
-	originalModel := strings.TrimSpace(snapshot.Model)
+	originalModel := r.routeUnservedModel(strings.TrimSpace(snapshot.Model), ctx)
 	if rejected := r.listenerModelRejection(originalModel, ctx); rejected != nil {
 		return rejected, nil
 	}

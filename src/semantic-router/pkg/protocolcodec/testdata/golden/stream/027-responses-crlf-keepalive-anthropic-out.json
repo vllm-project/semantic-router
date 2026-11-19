@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "resp_crlf",
+          "id": "msg_3bdac681644b096004084b0f",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,
