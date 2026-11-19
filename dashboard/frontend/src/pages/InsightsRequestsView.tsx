@@ -236,6 +236,7 @@ export function RequestsSummary({
   breakdown,
   onBreakdown,
   clientFiltered,
+  sessionsOnly = false,
   harnessCounts,
 }: {
   aggregate: InsightsAggregateResponse | null
@@ -245,6 +246,8 @@ export function RequestsSummary({
   breakdown: boolean
   onBreakdown: (open: boolean) => void
   clientFiltered: boolean
+  /** The totals read only the requests that belong to a session, as the Sessions view lists. */
+  sessionsOnly?: boolean
   harnessCounts: Record<string, number> | null
 }) {
   if (!aggregate) {
@@ -341,6 +344,10 @@ export function RequestsSummary({
       {clientFiltered ? (
         <p className="mt-1.5 text-[11.5px] text-subtle-foreground">
           Totals cover every request class the other filters select.
+        </p>
+      ) : sessionsOnly ? (
+        <p className="mt-1.5 text-[11.5px] text-subtle-foreground">
+          Totals cover the requests that belong to a session, as the list does.
         </p>
       ) : null}
       {breakdown ? (
@@ -626,6 +633,7 @@ export default function InsightsRequestsView() {
     rules: agentRules,
     withFacets: facets || breakdown,
     paused: sessionScope.resolving,
+    sessionsOnly: view === 'sessions',
   })
   const clientMode = hasClientFilters(filters)
   const narrowed = hasAnyFilter(filters)
@@ -903,6 +911,7 @@ export default function InsightsRequestsView() {
           breakdown={breakdown}
           onBreakdown={setBreakdownOpen}
           clientFiltered={clientMode}
+          sessionsOnly={view === 'sessions' && !filters.session}
           harnessCounts={data.harnessCounts}
         />
       )}

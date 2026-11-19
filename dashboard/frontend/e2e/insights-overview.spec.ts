@@ -78,7 +78,15 @@ test('expands a long session at once: its agents from the summary, then its turn
 }, info) => {
   await page.setViewportSize({ width: 1440, height: 1000 })
   const { release, reads } = await mockLongSession(page)
+  // the totals above the Sessions view read only the requests that belong to a session
+  const sessionsTotals = page.waitForRequest(
+    (request) => request.url().includes('/aggregate') && request.url().includes('has_session=true'),
+  )
   await page.goto('/observe/requests?view=sessions')
+  await sessionsTotals
+  await expect(page.getByRole('region', { name: 'Requests summary' })).toContainText(
+    'Totals cover the requests that belong to a session',
+  )
 
   const row = page.locator(`[data-session="${LONG_SESSION}"]`)
   await expect(row).toContainText('Port the billing service to the new queue')
