@@ -1,0 +1,120 @@
+/*
+ * Compatibility layer for CSS modules that predate the design system.
+ * Old variable names resolve to the semantic tokens, so remaining modules
+ * follow the active theme. Delete an alias once nothing references it.
+ */
+
+:root {
+  --surface-canvas: var(--background);
+  --surface-shell: var(--surface);
+  --surface-panel: var(--surface);
+  --surface-raised: var(--surface-subtle);
+  --surface-glass: var(--popover);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: var(--subtle-foreground);
+  --border-subtle: var(--border);
+  --brand-amd: var(--primary);
+  --brand-amd-soft: var(--primary-soft);
+  --action-primary-bg: var(--primary);
+  --focus-ring: var(--ring);
+
+  --app-header-height: 52px;
+  --app-shell-gutter: 2rem;
+
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-hover);
+  --color-primary-light: var(--brand);
+  --color-primary-hover: var(--primary-hover);
+  --color-accent-cyan: var(--chart-4);
+  --color-accent-purple: var(--chart-3);
+  --color-accent-blue: var(--chart-1);
+  --color-accent-pink: var(--chart-5);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--destructive);
+  --color-info: var(--info);
+  --color-bg: var(--background);
+  --color-bg-header: var(--surface);
+  --color-bg-secondary: var(--surface);
+  --color-bg-tertiary: var(--surface-subtle);
+  --color-bg-elevated: var(--popover);
+  --color-text: var(--foreground);
+  --color-text-secondary: var(--muted-foreground);
+  --color-text-muted: var(--subtle-foreground);
+  --color-border: var(--border);
+  --color-border-hover: var(--border-strong);
+  --color-shadow: color-mix(in oklch, var(--foreground) 18%, transparent);
+  --color-surface: var(--surface);
+
+  --glow-primary: var(--shadow-md);
+  --glow-cyan: var(--shadow-md);
+  --glow-purple: var(--shadow-md);
+
+  --bg-primary: var(--background);
+  --bg-secondary: var(--surface);
+  --bg-hover: var(--accent);
+  --border-color: var(--border);
+  --accent-color: var(--primary);
+  --accent-hover: var(--primary-hover);
+  --flow-bg-gradient-start: var(--background);
+  --flow-bg-gradient-mid: var(--surface-subtle);
+  --flow-bg-gradient-end: var(--background);
+  --flow-dot-color: var(--grid-line);
+
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  --control-height: 2.25rem;
+  --control-height-compact: 2rem;
+  --control-radius: calc(var(--radius) - 2px);
+  --control-padding-inline: 0.75rem;
+  --control-padding-inline-compact: 0.625rem;
+  --tag-height: 1.375rem;
+  --tag-radius: 999px;
+
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 350ms ease;
+}
+
+/*
+ * Element defaults the old modules relied on. Opt in by wrapping an unmigrated
+ * component in `.vsr-legacy`; design-system controls never need it.
+ */
+.vsr-legacy :where(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea) {
+  font: inherit;
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--input);
+  border-radius: var(--control-radius);
+  padding: 0.5rem 0.75rem;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.vsr-legacy
+  :where(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea):focus {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 35%, transparent);
+}
+
+.vsr-legacy :where(select) option {
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+
+.vsr-legacy :where(h1, h2, h3, h4) {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.notranslate {
+  translate: no;
+}

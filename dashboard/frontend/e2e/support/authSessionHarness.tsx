@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from '../../src/contexts/AuthContext'
 import AuthGate from '../../src/app/AuthGate'
+import { ThemeProvider } from '../../src/shell/theme'
+import { TooltipProvider } from '../../src/ui'
 
-// Mount the production provider and gate without unrelated page API fixtures.
+// Mount the production providers and gate without unrelated page API fixtures.
 export function SessionControls() {
   const { isAuthenticated, refreshSession } = useAuth()
   return (
@@ -38,15 +40,19 @@ export function Workspace() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <AuthProvider>
-    <SessionControls />
-    <MemoryRouter initialEntries={['/workspace']}>
-      <Routes>
-        <Route path="/login" element={<h1>Sign in</h1>} />
-        <Route element={<AuthGate />}>
-          <Route path="/workspace" element={<Workspace />} />
-        </Route>
-      </Routes>
-    </MemoryRouter>
-  </AuthProvider>,
+  <ThemeProvider>
+    <TooltipProvider>
+      <AuthProvider>
+        <SessionControls />
+        <MemoryRouter initialEntries={['/workspace']}>
+          <Routes>
+            <Route path="/login" element={<h1>Sign in</h1>} />
+            <Route element={<AuthGate />}>
+              <Route path="/workspace" element={<Workspace />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>
+    </TooltipProvider>
+  </ThemeProvider>,
 )

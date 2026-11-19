@@ -103,10 +103,14 @@ export function describeBudget(accounting?: InsightsCostAccounting): string | un
   }
   const cost = (value?: number) => formatInsightsCost(value, budget.currency)
   const left = `${budget.scope}: ${cost(budget.remaining)} of ${cost(budget.limit)} left`
-  const unpriced = budget.unpriced_calls ? `; ${plural(budget.unpriced_calls, 'unpriced call')}` : ''
+  const unpriced = budget.unpriced_calls
+    ? `; ${plural(budget.unpriced_calls, 'unpriced call')}`
+    : ''
   if (!budget.settlement) {
     const refused =
-      budget.remaining > 0 ? `the call was estimated at ${cost(budget.estimate)}` : 'nothing was left'
+      budget.remaining > 0
+        ? `the call was estimated at ${cost(budget.estimate)}`
+        : 'nothing was left'
     return `${left}; refused: ${refused}${unpriced}`
   }
   const settled = BUDGET_SETTLEMENTS[budget.settlement] ?? budget.settlement
@@ -159,7 +163,7 @@ function buildNetSavingsLines(coverage: InsightsAggregateCostCoverage): string[]
   const netted = sortedCounts(coverage.netted_router_calls)
   if (netted.length > 0) {
     lines.push(
-      `Savings are net of the Router’s own calls for these requests: ${netted
+      `The difference includes the Router’s own calls for these requests: ${netted
         .map(([kind, count]) => plural(count, `${ROUTER_CALL_LABELS[kind] ?? kind} call`))
         .join(', ')}.`,
     )
@@ -205,7 +209,7 @@ export function buildCostCoverageLines(
   const baselines = Object.entries(coverage.baseline_sources ?? {})
   if (baselines.length > 0) {
     lines.push(
-      `Savings compare ${plural(costRecordCount, 'request')} with ${baselines
+      `Differences compare ${plural(costRecordCount, 'request')} with ${baselines
         .map(([source, count]) => `${describeBaselineRule(source)} (${count})`)
         .join(', ')}.`,
     )
@@ -227,6 +231,32 @@ export function buildCostCoverageLines(
     )
   }
   return lines
+}
+
+/** How the cost-only estimate is made and what it leaves out, for one tooltip. */
+export function describeEstimateMethod(
+  summary: { coverage?: InsightsAggregateCostCoverage; excluded_record_count: number },
+  recordCount: number,
+): string {
+  const coverage = summary.coverage
+  const parts = [
+    'Each request is priced twice from its recorded tokens: at the selected model’s list price and at the reference model’s.',
+    'The reference is the route’s cost_baseline_model, else the dearest model of its recipe’s pool.',
+    'Router calls are costed apart; nothing here is a GPU bill, an invoice or a quality comparison.',
+  ]
+  if (coverage) {
+    parts.push(
+      `Priced: ${coverage.priced_records.toLocaleString('en-US')} of ${recordCount.toLocaleString('en-US')} requests` +
+        (coverage.partly_priced_records
+          ? `, ${coverage.partly_priced_records.toLocaleString('en-US')} partly`
+          : '') +
+        '.',
+    )
+  }
+  if (summary.excluded_record_count > 0) {
+    parts.push(`${plural(summary.excluded_record_count, 'request')} left out of the comparison.`)
+  }
+  return parts.join(' ')
 }
 
 /** Why no cost shows at all, when every request is unpriced, and how to set it. */

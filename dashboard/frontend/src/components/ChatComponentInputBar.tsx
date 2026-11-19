@@ -8,12 +8,11 @@ import {
   type KeyboardEventHandler,
   type Ref,
 } from 'react'
+import { ArrowUp, Mic, Square, X } from 'lucide-react'
 
-import styles from './ChatComponent.module.css'
+import { Kbd, cn } from '../ui'
 import ChatComposerAddMenu from './ChatComposerAddMenu'
-import ChatComposerModelSelect from './ChatComposerModelSelect'
 import { useSpeechDictation } from '../hooks/useSpeechDictation'
-import type { RouterModelOption } from '../utils/routerModelSelection'
 import {
   formatPlaygroundFileSize,
   isPlaygroundImageAttachment,
@@ -27,15 +26,11 @@ interface ChatComponentInputBarProps {
   inputRef: Ref<HTMLTextAreaElement>
   inputValue: string
   isLoading: boolean
-  modelOptions: RouterModelOption[]
-  modelSelectDisabled: boolean
-  selectedModel: string
   voiceInputDisabled: boolean
   webSearchDisabled?: boolean
   onAttachFiles: (files: FileList | File[]) => void
   onChangeInput: (value: string) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
-  onModelChange: (model: string) => void
   onRemoveAttachment: (attachmentId: string) => void
   onSend: () => void
   onStop: () => void
@@ -44,6 +39,9 @@ interface ChatComponentInputBarProps {
   sendDisabledReason?: string
 }
 
+const iconButton =
+  'grid size-8 shrink-0 place-items-center rounded-full outline-none transition-[color,background-color,transform] duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/40 active:scale-95 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4'
+
 export default function ChatComponentInputBar({
   attachments,
   attachFilesDisabled,
@@ -51,15 +49,11 @@ export default function ChatComponentInputBar({
   inputRef,
   inputValue,
   isLoading,
-  modelOptions,
-  modelSelectDisabled,
-  selectedModel,
   voiceInputDisabled,
   webSearchDisabled = false,
   onAttachFiles,
   onChangeInput,
   onKeyDown,
-  onModelChange,
   onRemoveAttachment,
   onSend,
   onStop,
@@ -146,52 +140,69 @@ export default function ChatComponentInputBar({
   }, [])
 
   return (
-    <div className={styles.inputContainer} data-testid="chat-composer">
-      <div className={`${styles.inputWrapper} ${canSend ? styles.hasContent : ''}`}>
+    <div className="shrink-0 px-3 pb-3 pt-2 sm:px-4 sm:pb-4" data-testid="chat-composer">
+      <div
+        className={cn(
+          'mx-auto w-full max-w-3xl rounded-2xl border border-border bg-card p-2 shadow-md transition-[border-color,box-shadow] duration-200',
+          'focus-within:border-ring focus-within:shadow-[0_0_0_3px_var(--ring),var(--shadow-md)]',
+        )}
+      >
         {attachments.length > 0 ? (
-          <div className={styles.attachmentList} data-testid="playground-attachment-list">
+          <div
+            className="flex flex-wrap gap-2 px-1.5 pb-2 pt-1"
+            data-testid="playground-attachment-list"
+          >
             {attachments.map((attachment) =>
               isPlaygroundImageAttachment(attachment) ? (
                 <figure
                   key={attachment.id}
-                  className={styles.attachmentImagePreview}
+                  className="relative flex w-28 flex-col overflow-hidden rounded-lg border border-border bg-surface-subtle"
                   data-testid={`playground-image-preview-${attachment.id}`}
                 >
-                  <img src={attachment.content} alt={`Preview of ${attachment.fileName}`} />
-                  <figcaption title={attachment.fileName}>
-                    <span>{attachment.fileName}</span>
-                    <small>{formatPlaygroundFileSize(attachment.sizeBytes)}</small>
+                  <img
+                    src={attachment.content}
+                    alt={`Preview of ${attachment.fileName}`}
+                    className="h-20 w-full object-cover"
+                  />
+                  <figcaption
+                    title={attachment.fileName}
+                    className="flex flex-col px-2 py-1 text-[11px] leading-tight"
+                  >
+                    <span className="truncate font-medium">{attachment.fileName}</span>
+                    <small className="text-subtle-foreground tabular">
+                      {formatPlaygroundFileSize(attachment.sizeBytes)}
+                    </small>
                   </figcaption>
                   <button
                     type="button"
-                    className={styles.attachmentImageRemove}
+                    className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-background/80 text-foreground shadow-sm outline-none backdrop-blur-sm hover:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/40"
                     onClick={() => onRemoveAttachment(attachment.id)}
                     aria-label={`Remove image ${attachment.fileName}`}
                     data-testid={`playground-attachment-remove-${attachment.id}`}
                   >
-                    ×
+                    <X className="size-3" />
                   </button>
                 </figure>
               ) : (
                 <div
                   key={attachment.id}
-                  className={styles.attachmentChip}
+                  className="inline-flex h-8 max-w-64 items-center gap-2 rounded-lg border border-border bg-surface-subtle pl-2.5 pr-1 text-xs"
                   data-testid={`playground-attachment-${attachment.id}`}
                 >
-                  <span className={styles.attachmentChipName} title={attachment.fileName}>
+                  <span className="truncate font-medium" title={attachment.fileName}>
                     {attachment.fileName}
                   </span>
-                  <span className={styles.attachmentChipSize}>
+                  <span className="shrink-0 text-subtle-foreground tabular">
                     {formatPlaygroundFileSize(attachment.sizeBytes)}
                   </span>
                   <button
                     type="button"
-                    className={styles.attachmentChipRemove}
+                    className="grid size-6 shrink-0 place-items-center rounded-md text-subtle-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
                     onClick={() => onRemoveAttachment(attachment.id)}
                     aria-label={`Remove attachment ${attachment.fileName}`}
                     data-testid={`playground-attachment-remove-${attachment.id}`}
                   >
-                    ×
+                    <X className="size-3.5" />
                   </button>
                 </div>
               ),
@@ -206,99 +217,75 @@ export default function ChatComponentInputBar({
           onCompositionEnd={() => setIsComposing(false)}
           onKeyDown={handleKeyDown}
           placeholder="Ask me anything..."
-          className={styles.input}
+          aria-label="Message"
+          className="block w-full resize-none bg-transparent px-2.5 py-2 text-[14.5px] leading-relaxed text-foreground outline-none placeholder:text-subtle-foreground"
           rows={1}
         />
-        <div className={styles.inputActionsRow}>
-          <div className={styles.inputActions}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="text/*,.json,.md,.yaml,.yml,.csv,.tsv,image/gif,image/jpeg,image/png,image/webp"
-              className={styles.attachmentFileInput}
-              onChange={handleFileInputChange}
-              aria-hidden="true"
-              tabIndex={-1}
-              data-testid="playground-attachment-input"
-            />
-            <ChatComposerAddMenu
-              attachFilesDisabled={attachFilesDisabled || isLoading}
-              onAttachFiles={handleAttachClick}
-              onToggleWebSearch={onToggleWebSearch}
-              webSearchDisabled={webSearchDisabled || isLoading}
-              webSearchEnabled={enableWebSearch}
-            />
-            <ChatComposerModelSelect
-              disabled={modelSelectDisabled}
-              models={modelOptions}
-              onChange={onModelChange}
-              value={selectedModel}
-            />
-          </div>
-          <div className={styles.composerButtons}>
+        <div className="flex items-center gap-1.5 px-1">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="text/*,.json,.md,.yaml,.yml,.csv,.tsv,image/gif,image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleFileInputChange}
+            aria-hidden="true"
+            tabIndex={-1}
+            data-testid="playground-attachment-input"
+          />
+          <ChatComposerAddMenu
+            attachFilesDisabled={attachFilesDisabled || isLoading}
+            onAttachFiles={handleAttachClick}
+            onToggleWebSearch={onToggleWebSearch}
+            webSearchDisabled={webSearchDisabled || isLoading}
+            webSearchEnabled={enableWebSearch}
+          />
+          <span className="hidden items-center gap-1 text-xs text-subtle-foreground md:inline-flex">
+            <Kbd>↵</Kbd> send <span aria-hidden>·</span> <Kbd>⇧</Kbd>
+            <Kbd>↵</Kbd> new line
+          </span>
+          <div className="ml-auto flex items-center gap-1.5">
             {isLoading ? (
               <button
-                className={`${styles.sendButton} ${styles.stopButton}`}
+                type="button"
+                className={cn(iconButton, 'bg-foreground text-background hover:bg-foreground/85')}
                 onClick={onStop}
                 title="Stop generating"
                 aria-label="Stop generating"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
+                <Square className="fill-current !size-3" />
               </button>
             ) : null}
             {voiceSupported ? (
               <button
                 type="button"
-                className={`${styles.sendButton} ${isListening ? styles.sendButtonVoiceListening : ''}`}
+                className={cn(
+                  iconButton,
+                  isListening
+                    ? 'bg-destructive-soft text-destructive-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
                 onClick={() => toggleListening(inputValue)}
                 disabled={voiceInputDisabled}
                 title={isListening ? 'Stop voice input' : 'Voice input'}
                 aria-label={isListening ? 'Stop voice input' : 'Voice input'}
                 aria-pressed={isListening}
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
-                  <path
-                    d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M19 10v2a7 7 0 0 1-14 0v-2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <line x1="12" y1="19" x2="12" y2="23" strokeLinecap="round" />
-                  <line x1="8" y1="23" x2="16" y2="23" strokeLinecap="round" />
-                </svg>
+                <Mic />
               </button>
             ) : null}
             <button
-              className={styles.sendButton}
+              type="button"
+              className={cn(
+                iconButton,
+                'bg-primary text-primary-foreground shadow-xs hover:bg-primary-hover',
+              )}
               onClick={onSend}
               disabled={!canSend || sendDisabled}
               title={sendDisabled ? sendDisabledReason : 'Send message'}
               aria-label="Send message"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              >
-                <path d="M12 19V5M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <ArrowUp strokeWidth={2.4} />
             </button>
           </div>
         </div>

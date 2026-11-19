@@ -33,7 +33,7 @@ describe('chat routing metadata', () => {
     expect(markup).not.toContain('Consumed tokens')
   })
 
-  it('keeps the primary route compact and puts supporting metadata behind details', () => {
+  it('lists the route first, then its signals and the response path, behind response details', () => {
     const markup = render(routingTrace)
 
     expect(markup).not.toContain('Schema Version')

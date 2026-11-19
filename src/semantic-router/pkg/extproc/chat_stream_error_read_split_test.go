@@ -20,6 +20,10 @@ func TestChatUpstreamErrorEventDoesNotDependOnReadSplit(t *testing.T) {
 	event := `data: {"error":{"message":"mock provider stream failed","type":"vendor_overloaded","param":null,"code":"provider_overloaded"}}` + "\n\n"
 	routerFrame := `data: {"error":{"type":"server_error","code":"provider_overloaded","message":"mock provider stream failed","param":null}}` + "\n\n"
 	content := `data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"provider-model","system_fingerprint":"fp1","choices":[{"index":0,"delta":{"content":"partial"},"logprobs":null,"finish_reason":null}]}` + "\n\n"
+	// The public filter leaves out the server's fingerprint, and adds the null
+	// usage for a client that asks for usage.
+	publicContent := `data: {"choices":[{"index":0,"delta":{"content":"partial"},"logprobs":null,"finish_reason":null}],"created":1,"id":"c1","model":"provider-model","object":"chat.completion.chunk"}` + "\n\n"
+	publicContentWithNullUsage := `data: {"choices":[{"index":0,"delta":{"content":"partial"},"logprobs":null,"finish_reason":null}],"created":1,"id":"c1","model":"provider-model","object":"chat.completion.chunk","usage":null}` + "\n\n"
 	usage := `data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"provider-model","choices":[],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}` + "\n\n"
 	done := "data: [DONE]\n\n"
 	type caller struct {
@@ -45,9 +49,9 @@ func TestChatUpstreamErrorEventDoesNotDependOnReadSplit(t *testing.T) {
 					}
 					sameRead := body(prefix + event + done)
 					if caller.client == llmprotocol.OpenAIChatV1 {
-						want := prefix
+						want := strings.ReplaceAll(prefix, content, publicContentWithNullUsage)
 						if !includeUsage {
-							want = strings.ReplaceAll(want, usage, "")
+							want = strings.ReplaceAll(strings.ReplaceAll(prefix, content, publicContent), usage, "")
 						}
 						require.Equal(t, want+routerFrame, sameRead)
 					}

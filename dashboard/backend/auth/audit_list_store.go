@@ -86,13 +86,15 @@ func auditLogListPredicate(options AuditLogListOptions) (string, []interface{}, 
 			args = append(args, pattern)
 		}
 	}
-	if options.UserID != "" {
-		predicates = append(predicates, "user_id = ?")
-		args = append(args, options.UserID)
-	}
-	if options.Action != "" {
-		predicates = append(predicates, "action = ?")
-		args = append(args, options.Action)
+	for _, filter := range []struct{ column, values string }{
+		{"user_id", options.UserID},
+		{"action", options.Action},
+	} {
+		if values := listFilterValues(filter.values); len(values) > 0 {
+			predicate, valueArgs := sqlMatchAny(filter.column, values)
+			predicates = append(predicates, predicate)
+			args = append(args, valueArgs...)
+		}
 	}
 	if options.Resource != "" {
 		predicates = append(predicates, "resource = ?")
@@ -122,7 +124,53 @@ func auditLogListPredicate(options AuditLogListOptions) (string, []interface{}, 
 	return " WHERE " + strings.Join(predicates, " AND "), args, nil
 }
 
+// listFilterValues splits a comma-separated list filter into its trimmed values.
+func listFilterValues(raw string) []string {
+	values := make([]string, 0, 1)
+	for _, value := range strings.Split(raw, ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+// sqlMatchAny matches a column against any of the values; column is a fixed SQL identifier.
+func sqlMatchAny(column string, values []string) (string, []interface{}) {
+	args := make([]interface{}, len(values))
+	for index, value := range values {
+		args[index] = value
+	}
+	if len(values) == 1 {
+		return column + " = ?", args
+	}
+	return column + " IN (" + strings.TrimSuffix(strings.Repeat("?, ", len(values)), ", ") + ")", args
+}
+
+// auditLogStatusPredicate accepts one status or a comma-separated list that
+// matches any of them; "all" anywhere in the list removes the filter.
 func auditLogStatusPredicate(status string) (string, []interface{}, error) {
+	values := listFilterValues(status)
+	if len(values) <= 1 {
+		return auditLogSingleStatusPredicate(status)
+	}
+	parts := make([]string, 0, len(values))
+	args := make([]interface{}, 0, len(values)*2)
+	for _, value := range values {
+		predicate, valueArgs, err := auditLogSingleStatusPredicate(value)
+		if err != nil {
+			return "", nil, err
+		}
+		if predicate == "" {
+			return "", nil, nil
+		}
+		parts = append(parts, "("+predicate+")")
+		args = append(args, valueArgs...)
+	}
+	return "(" + strings.Join(parts, " OR ") + ")", args, nil
+}
+
+func auditLogSingleStatusPredicate(status string) (string, []interface{}, error) {
 	switch status {
 	case "", "all":
 		return "", nil, nil
@@ -217,4 +265,53 @@ func (s *Store) QueryAuditLogs(ctx context.Context, options AuditLogListOptions)
 		return nil, 0, err
 	}
 	return logs, total, nil
+}
+
+// AuditLogFacet is one value of a filterable audit field and how many entries carry it.
+type AuditLogFacet struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+// AuditLogFacets lists the most frequent actors and actions, for filter menus.
+type AuditLogFacets struct {
+	Users   []AuditLogFacet `json:"users"`
+	Actions []AuditLogFacet `json:"actions"`
+}
+
+const auditLogFacetLimit = 50
+
+func (s *Store) AuditLogFacets(ctx context.Context) (AuditLogFacets, error) {
+	users, err := s.auditLogFacet(ctx, "user_id")
+	if err != nil {
+		return AuditLogFacets{}, err
+	}
+	actions, err := s.auditLogFacet(ctx, "action")
+	if err != nil {
+		return AuditLogFacets{}, err
+	}
+	return AuditLogFacets{Users: users, Actions: actions}, nil
+}
+
+func (s *Store) auditLogFacet(ctx context.Context, column string) ([]AuditLogFacet, error) {
+	// #nosec G201 -- column is one of the fixed identifiers passed by AuditLogFacets.
+	query := fmt.Sprintf(
+		"SELECT %[1]s, COUNT(*) FROM user_audit_logs WHERE %[1]s IS NOT NULL AND %[1]s <> '' GROUP BY %[1]s ORDER BY COUNT(*) DESC, %[1]s LIMIT ?",
+		column,
+	)
+	rows, err := s.db.QueryContext(ctx, query, auditLogFacetLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	facets := make([]AuditLogFacet, 0, auditLogFacetLimit)
+	for rows.Next() {
+		var facet AuditLogFacet
+		if err := rows.Scan(&facet.Value, &facet.Count); err != nil {
+			return nil, err
+		}
+		facets = append(facets, facet)
+	}
+	return facets, rows.Err()
 }

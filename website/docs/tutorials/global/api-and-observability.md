@@ -348,7 +348,7 @@ dashboard in Grafana:
   looper attempt evidence.
 - **Means, not quantiles.** Recipe stage duration and the model timing panels
   are observed means; projection counts show evaluations, with individual
-  scores in Insights.
+  scores in the Dashboard's **Requests** page.
 - **Sources.** Prometheus scrapes both the Router and Jaeger's internal admin
   metrics.
 

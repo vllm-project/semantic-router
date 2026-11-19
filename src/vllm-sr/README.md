@@ -171,8 +171,8 @@ vllm-sr serve --config recipe.yaml --recipe-env PROVIDER_API_KEY
 
 ## Connect Models and build Mixture-of-Models
 
-Run `vllm-sr serve`, connect provider Models in Dashboard, then open **Build →
-Mixture-of-Models** and create a model from a built-in or configured Recipe by
+Run `vllm-sr serve`, connect provider Models in Dashboard, then open
+**Routing → Recipes** and create a model from a built-in or configured Recipe by
 assigning Models to its decisions. Dashboard keeps provider connection details
 separate from reusable routing policy and exposes the published names through
 `/v1/models`.

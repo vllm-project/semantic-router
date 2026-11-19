@@ -40,8 +40,26 @@ func (filters routerReplayFilters) storageFilters() store.QueryFilters {
 		Model: filters.model, CacheStatus: filters.cacheStatus, SessionID: filters.sessionID,
 		RequestKind: filters.review.requestKind, ReviewStatus: filters.review.status,
 		ReviewOutcome: filters.review.outcome, ReviewRisk: filters.review.risk,
-		TurnID: filters.turnID, Since: filters.since,
+		TurnID: filters.turnID, Harness: filters.harness, Since: filters.since,
+		HasSession: filters.hasSession,
 	}
+}
+
+// filterRouterReplayPage answers a list from a store without database
+// queries: the records the filters select, and the harness counts of the
+// records every filter but harness selects.
+func filterRouterReplayPage(records []routerreplay.RoutingRecord, filters routerReplayFilters) store.RecordPage {
+	harness := filters.harness
+	filters.harness = ""
+	page := store.RecordPage{HarnessCounts: map[string]int{}}
+	for _, record := range filterRouterReplayRecords(records, filters) {
+		page.HarnessCounts[store.FilterHarness(record)]++
+		if matchesOptionalHarness(record, harness) {
+			page.Records = append(page.Records, record)
+		}
+	}
+	page.Total = len(page.Records)
+	return page
 }
 
 func (r *OpenAIRouter) queryRouterReplayPage(ctx context.Context, query routerReplayListQuery) (routerReplayListResponse, error) {
@@ -66,6 +84,7 @@ func (r *OpenAIRouter) queryRouterReplayPage(ctx context.Context, query routerRe
 	}
 	var sourced []sourcedRecord
 	total := 0
+	harnessCounts := map[string]int{}
 	for _, reader := range readers {
 		page, supported, err := reader.QueryPage(ctx, query.filters.storageFilters(), query.offset+query.limit, 0, false)
 		if err != nil {
@@ -76,13 +95,15 @@ func (r *OpenAIRouter) queryRouterReplayPage(ctx context.Context, query routerRe
 			if listErr != nil {
 				return routerReplayListResponse{}, listErr
 			}
-			page.Records = filterRouterReplayRecords(all, query.filters)
-			page.Total = len(page.Records)
+			page = filterRouterReplayPage(all, query.filters)
 		}
 		for _, record := range page.Records {
 			sourced = append(sourced, sourcedRecord{record: record, reader: reader})
 		}
 		total += page.Total
+		for harness, count := range page.HarnessCounts {
+			harnessCounts[harness] += count
+		}
 	}
 	sort.SliceStable(sourced, func(i, j int) bool {
 		if sourced[i].record.Timestamp.Equal(sourced[j].record.Timestamp) {
@@ -96,6 +117,7 @@ func (r *OpenAIRouter) queryRouterReplayPage(ctx context.Context, query routerRe
 	}
 	payload := buildRouterReplayListPayload(records, query)
 	payload.Total = total
+	payload.HarnessCounts = harnessCounts
 	payload.HasMore = payload.Offset+payload.Count < total
 	payload.NextOffset = nil
 	if payload.HasMore {
@@ -121,7 +143,7 @@ func routerReplayPagePayload(page store.RecordPage, query routerReplayListQuery)
 	payload := routerReplayListResponse{
 		Object: "router_replay.list", Count: len(page.Records), Total: page.Total,
 		Limit: query.limit, Offset: page.Offset, HasMore: page.Offset+len(page.Records) < page.Total,
-		Data: page.Records,
+		HarnessCounts: page.HarnessCounts, Data: page.Records,
 	}
 	if !query.showDetails {
 		for index, record := range payload.Data {
@@ -139,27 +161,41 @@ func routerReplayPagePayload(page store.RecordPage, query routerReplayListQuery)
 // offset pages that could duplicate or miss turns during concurrent writes.
 func (r *OpenAIRouter) queryRouterReplaySession(ctx context.Context, sessionID string, recipe *string) ([]routerreplay.RoutingRecord, error) {
 	var records []routerreplay.RoutingRecord
+	for _, reader := range r.routerReplayReaders() {
+		page, err := r.querySessionRecords(ctx, reader, sessionID, recipe)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, page...)
+	}
+	return sortRouterReplayRecords(records), nil
+}
+
+// queryRouterReplaySessionIn reads one reader's full records of a session.
+func (r *OpenAIRouter) queryRouterReplaySessionIn(ctx context.Context, reader *routerreplay.Recorder, sessionID string) ([]routerreplay.RoutingRecord, error) {
+	return r.querySessionRecords(ctx, reader, sessionID, nil)
+}
+
+func (r *OpenAIRouter) querySessionRecords(ctx context.Context, reader *routerreplay.Recorder, sessionID string, recipe *string) ([]routerreplay.RoutingRecord, error) {
 	filters := store.QueryFilters{SessionID: sessionID}
 	if recipe != nil {
 		filters.Recipe = *recipe
 		filters.RecipeSet = true
 	}
-	for _, reader := range r.routerReplayReaders() {
-		page, supported, err := reader.QueryPage(ctx, filters, math.MaxInt, 0, true)
-		if err != nil {
-			return nil, err
-		}
-		if !supported {
-			all, listErr := reader.ListRecords()
-			if listErr != nil {
-				return nil, listErr
-			}
-			page.Records = filterTrajectoryRecordsBySession(all, sessionID)
-			if recipe != nil {
-				page.Records = filterTrajectoryRecordsByRecipe(page.Records, *recipe)
-			}
-		}
-		records = append(records, page.Records...)
+	page, supported, err := reader.QueryPage(ctx, filters, math.MaxInt, 0, true)
+	if err != nil {
+		return nil, err
 	}
-	return sortRouterReplayRecords(records), nil
+	if supported {
+		return page.Records, nil
+	}
+	all, err := reader.ListRecords()
+	if err != nil {
+		return nil, err
+	}
+	records := filterTrajectoryRecordsBySession(all, sessionID)
+	if recipe != nil {
+		records = filterTrajectoryRecordsByRecipe(records, *recipe)
+	}
+	return records, nil
 }

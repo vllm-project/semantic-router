@@ -302,7 +302,7 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 	}{
 		{400, rejection("invalid_request", "video_too_large", 32_000_000), 400, "invalid_request", "video exceeds 32 MB"},
 		{400, rejection("invalid_request", "video_too_long", 300), 400, "invalid_request", "video longer than 300 s"},
-		{400, rejection("invalid_request", "video_malformed", 0), 400, "invalid_request", "malformed video"},
+		{400, rejection("invalid_request", "video_malformed", 0), 400, "invalid_media", "malformed video"},
 		{400, rejection("invalid_request", "video_pixels", 8_294_400), 400, "invalid_request", "video frames exceed 8,294,400 pixels"},
 		{400, rejection("invalid_request", "video_tokens", 16_384), 400, "invalid_request", "videos exceed 16,384 input tokens"},
 		{400, rejection("invalid_request", "image_too_large", 8_000_000), 400, "invalid_request", "image exceeds 8 MB"},
@@ -328,6 +328,40 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus ||
 			got.Error.Code != test.wantCode || got.Error.Message != test.wantMessage || strings.Contains(response.Body.String(), "private") {
 			t.Fatalf("runtime %d %s => %d %s", test.status, test.body, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestPublicNativeMediaRejectionsTakeTheDocumentedCodes(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
+	for _, test := range []struct {
+		status, wantStatus int
+		code, reason       string
+		wantCode           string
+	}{
+		{400, 400, "invalid_request", "image_format", "unsupported_media_type"},
+		{400, 400, "invalid_request", "video_format", "unsupported_media_type"},
+		{400, 400, "invalid_request", "image_malformed", "invalid_media"},
+		{400, 400, "invalid_request", "video_malformed", "invalid_media"},
+		{400, 400, "invalid_request", "image_pixels", "invalid_request"},
+		{400, 400, "invalid_request", "video_unsupported", "invalid_request"},
+		{415, 415, "unsupported_media_type", "encoding_unsupported", "unsupported_media_type"},
+	} {
+		body := `{"error":{"code":"` + test.code + `","reason":"` + test.reason + `","limit":100,"message":"images[0]: /private/models/test"}}`
+		handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+			return test.status, []byte(body), nil
+		})
+		response := httptest.NewRecorder()
+		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
+		var got struct {
+			Error struct{ Code, Reason, Message string } `json:"error"`
+		}
+		if json.Unmarshal(response.Body.Bytes(), &got) != nil || response.Code != test.wantStatus ||
+			got.Error.Code != test.wantCode || got.Error.Reason != test.reason ||
+			got.Error.Message == "" || strings.Contains(response.Body.String(), "private") {
+			t.Fatalf("runtime %d %s => %d %s", test.status, body, response.Code, response.Body.String())
 		}
 	}
 }

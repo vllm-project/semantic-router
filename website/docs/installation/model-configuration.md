@@ -90,13 +90,13 @@ can serve the requested task, the Router returns `unsupported_capability`.
 
 ## Configure Models in the Dashboard
 
-Open **Build → Routing → Models → Add Model**. You can then:
+Open **Models → Backend models** and choose **Connect model**. You can then:
 
 1. Choose a Provider, connect it, and select discovered or built-in model IDs.
 2. Enter a model ID when the Provider cannot list models.
 3. Use **Advanced settings** for a name prefix, a built-in reasoning family,
    routing metadata, pricing, and delivery settings.
-4. Use **Manual setup** from the Provider chooser for complete control over
+4. Use **Add manually** from the Provider chooser for complete control over
    `catalog`, inline reasoning fields, `provider_model_id`, `api_format`, and
    backend references.
 
@@ -381,7 +381,9 @@ global:
   request waits; with `HF_HUB_OFFLINE=1` it downloads nothing. The Router
   carries `o200k_base` and `cl100k_base`, and reads byte-level BPE
   `tokenizer.json` files, the kind DeepSeek, Qwen, GLM, MiniMax and gpt-oss
-  publish.
+  publish. A `tokenizer.json` also lists the model's added tokens, whose text
+  the Router escapes in user and tool text
+  ([Control tokens in user and tool text](protocol-compatibility#control-tokens-in-user-and-tool-text)).
 - **Until a tokenizer loads.** While a model's tokenizer downloads, or when
   it cannot load (no Hugging Face access, a gated repo without `HF_TOKEN`, a
   SentencePiece tokenizer), the proxy tokenizer counts for it, with its wider
