@@ -94,6 +94,9 @@ type UpstreamResponse struct {
 	Header Header
 	// Body is the response body; nil when the response has none.
 	Body io.Reader
+	// Deadline is the upstream call's total deadline, for response phases
+	// that continue the call. Zero means there is no deadline to inherit.
+	Deadline time.Time
 }
 
 // Options configure an Engine.
@@ -233,6 +236,9 @@ func (e *engine) Respond(ctx context.Context, plan *Plan, resp *UpstreamResponse
 	}
 	session := plan.session
 	defer func() { plan.Evidence = session.Evidence() }()
+	if receiver, ok := session.(interface{ SetUpstreamDeadline(time.Time) }); ok {
+		receiver.SetUpstreamDeadline(resp.Deadline)
+	}
 
 	header := Header{{Name: ":status", Value: strconv.Itoa(resp.Status)}}
 	for _, field := range resp.Header {
