@@ -242,7 +242,7 @@ logo, plugin rose, evaluation orange, system slate.
 
 - **Home** greets the operator and shows, from existing APIs: anything needing
   attention, requests, p95 latency, spend and savings with trends, traffic over
-  time, routing mix by decision, models in use, public models, recent requests,
+  time, routing mix by decision, models in use, agents in use, recent requests,
   service health and a setup checklist. Each card loads on its own, so a slow
   call never holds the page, and a range's last snapshot shows at once while it
   refreshes. The decision model card and the checklist read the model runtime,

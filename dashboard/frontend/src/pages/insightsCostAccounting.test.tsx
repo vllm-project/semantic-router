@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
 
 import InsightsCharts from '../components/InsightsCharts'
+import { TooltipProvider } from '../ui'
 import { ModelLabelsContext, modelText, type ModelLabels } from './insightsModelLabelSupport'
 import { buildInsightsRecordSections, renderInsightsSavingsCell } from './insightsPageSupport'
 import type {
@@ -187,23 +189,17 @@ const aggregate: InsightsAggregateResponse = {
 }
 
 describe('Insights cost coverage', () => {
-  it('shows priced and unpriced counts and router calls beside the cost cards', () => {
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={aggregate} />)
-    expect(html).toContain('Priced: 2 of 5 requests, 1 partly, 2 without a price.')
-    expect(html).toContain('Left out: 2 no price configured, 1 not completed.')
-    expect(html).toContain('Router calls: 3 calls, 1 unpriced')
-    expect(html).toContain(
-      'Differences compare 2 requests with the configured baseline model (1), the recipe pool’s most expensive model (1).',
-    )
-    expect(html).toContain('1 request priced at a catalog list price: an estimate')
-    expect(html).toContain('API-price equivalent, not what the plan charges')
-    expect(html).toContain('4 Looper hop records not counted')
-    expect(html).toContain('Router calls')
-    expect(html).toContain('$3.50')
+  const render = (node: ReactNode) =>
+    renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>)
+
+  it('shows the model cost and its difference from the reference as figures', () => {
+    const html = render(<InsightsCharts aggregate={aggregate} />)
+    expect(html).toContain('$2.00')
     expect(html).toContain('+$1.00')
-    expect(html).toContain('100.0% above the reference')
+    expect(html).toContain('100.0% above reference')
+    expect(html).toContain('aria-label="How the estimate is made"')
+    expect(html).not.toContain('Priced: 2 of 5 requests')
     expect(html).not.toContain('text-destructive-foreground')
-    expect(html).not.toContain('No cost is shown')
   })
 
   it('says plainly why no cost shows and how to set it', () => {
@@ -223,14 +219,13 @@ describe('Insights cost coverage', () => {
       excluded_record_count: 5,
       coverage: unpriced,
     }
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
+    const html = render(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
     expect(html).toContain('No cost is shown because the models these requests used have no price.')
-    expect(html).toContain('auth.credential: caller')
     expect(html).toContain('providers.models[].pricing')
-    expect(html).not.toContain('Estimated Router Calls')
+    expect(html).not.toContain('N/A')
   })
 
-  it('says the difference includes the Router calls and keeps the figure before them', () => {
+  it('shows the difference net of the Router calls', () => {
     const summary = {
       total_saved: 3.25,
       gross_saved: 4,
@@ -242,24 +237,11 @@ describe('Insights cost coverage', () => {
       currency: 'USD',
       cost_record_count: 2,
       excluded_record_count: 2,
-      coverage: {
-        ...coverage,
-        baseline_sources: { configured_model: 2 },
-        netted_router_calls: { systemone: 1, decision_model: 2, classify: 1 },
-        net_unavailable: { no_usage: 1 },
-      },
+      coverage: { ...coverage, baseline_sources: { configured_model: 2 } },
     }
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('Before them: -$4.00')
-    expect(html).toContain('Router calls in the difference')
-    expect(html).toContain('$0.75')
+    const html = render(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
     expect(html).toContain('-$3.25')
-    expect(html).toContain(
-      'The difference includes the Router’s own calls for these requests: 2 Decision model calls, 1 classify call, 1 System One call.',
-    )
-    expect(html).toContain(
-      '1 request left out of savings for a Router call without a price (1 no token usage reported).',
-    )
+    expect(html).toContain('54.2% below reference')
   })
 
   it('leaves the difference unknown where nothing was compared with a reference', () => {
@@ -274,10 +256,10 @@ describe('Insights cost coverage', () => {
       excluded_record_count: 1,
       coverage: { ...coverage, baseline_sources: undefined },
     }
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('Total cost')
-    expect(html).toContain('$0.50')
-    expect(html).toContain('title="No request in range has both a priced model cost')
+    const html = render(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
+    expect(html).toContain(
+      'aria-label="Not available: No request in range has both a priced model cost',
+    )
     expect(html).not.toContain('$0.0000')
   })
 })

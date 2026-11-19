@@ -298,10 +298,14 @@ test('shows a dash with its reason instead of N/A in the totals and the breakdow
   await expect(page.getByText('Saved by routing')).toHaveCount(0)
   await page.getByRole('button', { name: 'Breakdown' }).click()
   const breakdown = page.locator('#requests-breakdown')
-  const table = breakdown.getByRole('table', { name: 'USD cost estimate' })
-  await expect(table).toContainText('Reference cost')
-  await expect(table.locator('[title^="No request in range"]').first()).toBeVisible()
-  await expect(breakdown).toContainText('not a quality comparison')
+  const figures = breakdown.getByRole('group', { name: 'Breakdown figures' })
+  await expect(figures.getByLabel(/^Not available: No request in range/).first()).toBeVisible()
+  await expect(breakdown).toContainText(
+    'Cost-only estimate against a reference model’s list price.',
+  )
+  const agents = breakdown.getByRole('list', { name: 'Requests by agent harness' })
+  await expect(agents.getByRole('img', { name: 'Cursor' })).toBeVisible()
+  await expect(agents.getByRole('img', { name: 'OpenClaw' })).toBeVisible()
   await expect(page.locator('main')).not.toContainText('N/A')
   await breakdown.screenshot({ path: info.outputPath('breakdown.png') })
 })
