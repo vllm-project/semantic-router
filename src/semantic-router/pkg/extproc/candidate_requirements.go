@@ -69,7 +69,7 @@ func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateReq
 // one backend format and unsupported for another.
 func (r *OpenAIRouter) eligibleRequestModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, request *llmprotocol.Request, decision *config.Decision, minimum int, ctx *RequestContext) ([]config.ModelRef, error) {
 	eligible, dropped, err := eligibleModelRefsWithReserveFallback(refs, minimum, func(ref config.ModelRef, countReserves bool) error {
-		return r.candidateCapabilityMismatch(ref, request, decision, requirements, nil, countReserves)
+		return r.candidateCapabilityMismatch(ctx, ref, request, decision, requirements, nil, countReserves)
 	})
 	if dropped {
 		dropContextReserves(ctx, decision.Name)

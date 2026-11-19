@@ -3056,6 +3056,9 @@ class Entrypoint(BaseModel):
     default: Optional[bool] = None
     review_model: Optional[str] = Field(default=None, min_length=1)
     memory_model: Optional[str] = Field(default=None, min_length=1)
+    # Replaces global.router.allow_lossy_translation for this entrypoint; an
+    # empty list accepts no loss. The Router validates the entries.
+    allow_lossy_translation: Optional[List[str]] = None
 
     @field_validator("model_names", mode="before")
     @classmethod

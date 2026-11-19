@@ -55,12 +55,13 @@ func OptInLossyFields() []string {
 }
 
 // OptInHint is what a refusal of field adds when an operator may accept that
-// loss: the setting that lists it. It is empty for every other field.
+// loss: the settings that list it. It is empty for every other field.
 func OptInHint(field string) string {
 	if !slices.Contains(OptInLossyFields(), field) {
 		return ""
 	}
-	return "; an operator can accept this loss by listing " + field + " in global.router.allow_lossy_translation"
+	return "; an operator can accept this loss by listing " + field + " in global.router.allow_lossy_translation" +
+		" or, for an entrypoint that sets its own list, in that entrypoint's allow_lossy_translation"
 }
 
 type MissingIDPolicy string

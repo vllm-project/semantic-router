@@ -136,6 +136,7 @@ func TestCanonicalNativeRoutingRejectsAmbiguousContracts(t *testing.T) {
 		{"unsupported native type", "question_type: choice", "question_type: span", "question_type must be"},
 		{"a box rule on top probability", "question_type: choice, field: confidence", "question_type: box, field: top_probability", "a box answer has only a confidence"},
 		{"native Chat recipe", "api: systemone", "api: chat", "require an isolated native recipe"},
+		{"accepted losses", "recipe: native-decisions", "recipe: native-decisions\n    allow_lossy_translation: [store]", "entrypoints[1].allow_lossy_translation: a systemone entrypoint translates no wire format"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

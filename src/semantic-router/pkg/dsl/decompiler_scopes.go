@@ -71,6 +71,9 @@ func writeEntrypoints(sb *strings.Builder, entrypoints []config.EntrypointMappin
 		if entrypoint.MemoryModel != "" {
 			fmt.Fprintf(sb, "  memory_model: %q\n", entrypoint.MemoryModel)
 		}
+		if entrypoint.AllowLossyTranslation != nil {
+			fmt.Fprintf(sb, "  allow_lossy_translation: %s\n", formatStringArray(*entrypoint.AllowLossyTranslation))
+		}
 		if entrypoint.Default {
 			sb.WriteString("  default: true\n")
 		}
@@ -141,6 +144,8 @@ func appendConfigScopesToAST(prog *Program, cfg *config.RouterConfig) {
 			Default:     entrypoint.Default,
 			ReviewModel: entrypoint.ReviewModel,
 			MemoryModel: entrypoint.MemoryModel,
+
+			AllowLossyTranslation: cloneStringList(entrypoint.AllowLossyTranslation),
 		})
 	}
 	for i := range cfg.Recipes {

@@ -80,7 +80,7 @@ func TestOllamaShadowRequestCarriesOutputLimitAsMaxTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine, err := router.protocolEngine()
+	engine, err := router.protocolEngine(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

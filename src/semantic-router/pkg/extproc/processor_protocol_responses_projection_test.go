@@ -77,7 +77,7 @@ func TestResponsesReasoningDestinationDispatch(t *testing.T) {
 			ctx.ProtocolEnvelope = envelope
 			dispatch, err := router.prepareProviderDispatch(&request, "worker", "", false, ctx)
 			require.NoError(t, err)
-			require.NoError(t, router.candidateCapabilityMismatch(config.ModelRef{Model: "worker"}, &request, nil, nil, nil, true))
+			require.NoError(t, router.candidateCapabilityMismatch(nil, config.ModelRef{Model: "worker"}, &request, nil, nil, nil, true))
 			body, err := router.encodeDispatchRequest(ctx)
 			require.NoError(t, err)
 			assertResponsesReplayDestination(t, body, tc.hosted)
@@ -330,7 +330,7 @@ func TestResponsesMixedEndpointPoolDropsBlob(t *testing.T) {
 	ctx.ProtocolEnvelope = envelope
 	dispatch, err := router.prepareProviderDispatch(&request, "worker", "", false, ctx)
 	require.NoError(t, err)
-	require.NoError(t, router.candidateCapabilityMismatch(config.ModelRef{Model: "worker"}, &request, nil, nil, nil, true))
+	require.NoError(t, router.candidateCapabilityMismatch(nil, config.ModelRef{Model: "worker"}, &request, nil, nil, nil, true))
 	body, err := router.encodeDispatchRequest(ctx)
 	require.NoError(t, err)
 	assertResponsesReplayDestination(t, body, false)
@@ -357,7 +357,7 @@ func TestResponsesQualificationRefusesOtherContinuityAndSignedThinking(t *testin
 		if content.ReasoningDetail != nil {
 			refusal = "reasoning_continuity"
 		}
-		require.ErrorContains(t, router.candidateCapabilityMismatch(config.ModelRef{Model: "worker"}, &request, nil, nil, nil, true), refusal)
+		require.ErrorContains(t, router.candidateCapabilityMismatch(nil, config.ModelRef{Model: "worker"}, &request, nil, nil, nil, true), refusal)
 		_, err := router.prepareProviderDispatch(&request, "worker", "", false, routingTestContext(llmprotocol.OpenAIChatV1, &request))
 		require.ErrorContains(t, err, refusal)
 	}

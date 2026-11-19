@@ -303,6 +303,39 @@ func TestADelegateTargetHoldsEveryRoleItIsGiven(t *testing.T) {
 	}
 }
 
+// The documented gateway for Claude Code and Codex accepts each harness's
+// losses only on its own entrypoint.
+func TestOneGatewayExampleScopesLossesToEachHarness(t *testing.T) {
+	page := filepath.Join("..", "..", "..", "..", "website", "docs", "installation", "agent-harness.md")
+	content, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fence := range docFences(string(content)) {
+		if fence.lang != "yaml" || !strings.Contains(fence.body, "model_names: [vllm-sr/codex]") {
+			continue
+		}
+		cfg, err := ParseYAMLBytes([]byte(fence.body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for model, want := range map[string][]string{
+			"vllm-sr/claude-code": {"tools.defer_loading", "tool_result.is_error", "messages[].role", "content.file"},
+			"vllm-sr/codex":       {"reasoning.signature"},
+		} {
+			entrypoint, ok := cfg.ResolveEntrypoint(ChatAPI, model)
+			if got := cfg.AcceptedLosses(&entrypoint); !ok || !slices.Equal(got, want) {
+				t.Fatalf("%s accepts %v, want %v", model, got, want)
+			}
+		}
+		if len(cfg.AcceptedLosses(nil)) != 0 {
+			t.Fatalf("global losses = %v, want none", cfg.AcceptedLosses(nil))
+		}
+		return
+	}
+	t.Fatal("one-gateway example missing")
+}
+
 // The documented configs must resolve a review or memory request to its own
 // recipe and backend.
 func TestCodexDelegateExamplesRouteToTheirRecipes(t *testing.T) {

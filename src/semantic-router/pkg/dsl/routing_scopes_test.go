@@ -224,3 +224,49 @@ func TestDelegateModelRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestEntrypointAllowLossyTranslationRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name, line string
+		want       []string
+	}{
+		{"list", `allow_lossy_translation: ["tools.defer_loading", "store"]`, []string{"tools.defer_loading", "store"}},
+		{"accepts nothing", `allow_lossy_translation: []`, []string{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := strings.Replace(scopedRoutingDSL, "recipe: \"alpha\"", "recipe: \"alpha\"\n  "+tc.line, 1)
+			cfg, errs := Compile(source)
+			if len(errs) > 0 {
+				t.Fatalf("compile: %v", errs)
+			}
+			alpha, _ := cfg.ResolveEntrypoint(config.ChatAPI, "router/alpha")
+			if got := alpha.AllowLossyTranslation; got == nil || !reflect.DeepEqual(*got, tc.want) {
+				t.Fatalf("compiled allow_lossy_translation = %v, want %v", got, tc.want)
+			}
+			if beta, _ := cfg.ResolveEntrypoint(config.ChatAPI, "router/beta"); beta.AllowLossyTranslation != nil {
+				t.Fatalf("an entrypoint without the field got %v", *beta.AllowLossyTranslation)
+			}
+			text, err := Decompile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(text, tc.line) {
+				t.Fatalf("allow_lossy_translation lost: %s", text)
+			}
+			next, errs := Compile(text)
+			if len(errs) > 0 {
+				t.Fatalf("recompile: %v", errs)
+			}
+			if !reflect.DeepEqual(cfg.Entrypoints, next.Entrypoints) {
+				t.Fatalf("entrypoints changed: %+v => %+v", cfg.Entrypoints, next.Entrypoints)
+			}
+			prog, parseErrs := Parse(source)
+			if len(parseErrs) > 0 {
+				t.Fatalf("parse: %v", parseErrs)
+			}
+			if ast := ProgramToJSON(prog).Entrypoints[0].AllowLossyTranslation; ast == nil || !reflect.DeepEqual(*ast, tc.want) {
+				t.Fatalf("AST allowLossyTranslation = %v", ast)
+			}
+		})
+	}
+}

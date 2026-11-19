@@ -301,6 +301,8 @@ export interface EntrypointConfig {
   review_model?: string
   /** Another entrypoint model used for agent memory extraction and consolidation. */
   memory_model?: string
+  /** Replaces global.router.allow_lossy_translation for this entrypoint; [] accepts no loss. */
+  allow_lossy_translation?: string[]
   model_names: string[]
   recipe: string
   api?: 'chat' | 'systemone'

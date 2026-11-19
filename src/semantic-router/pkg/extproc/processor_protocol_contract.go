@@ -50,7 +50,7 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 		StopReason: llmprotocol.StopEndTurn,
 		Usage:      usage,
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return nil, "", nil, err
 	}
@@ -90,8 +90,10 @@ func authoritativeZeroUsage() llmprotocol.Usage {
 	}
 }
 
-func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
-	return r.protocolEngineForReply("", nil)
+// protocolEngine is the codec for ctx's request, with the losses its
+// entrypoint accepts. A nil ctx takes the global losses.
+func (r *OpenAIRouter) protocolEngine(ctx *RequestContext) (*protocolcodec.Engine, error) {
+	return r.protocolEngineForReply(ctx, "", nil)
 }
 
 // protocolEngineFor serves callers that hold only the registry and the
@@ -108,7 +110,7 @@ func protocolEngineFor(registry *protocolcodec.Registry, allowedLossyFields []st
 // protocolEngineForReply decodes a backend's reply to request, the request as
 // the backend received it: vendor selects the backend's failure envelope, and
 // the request's output limit is the one a tool-call stop may have reached.
-func (r *OpenAIRouter) protocolEngineForReply(vendor llmprotocol.ResponseVendor, request *llmprotocol.Request) (*protocolcodec.Engine, error) {
+func (r *OpenAIRouter) protocolEngineForReply(ctx *RequestContext, vendor llmprotocol.ResponseVendor, request *llmprotocol.Request) (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
@@ -121,8 +123,8 @@ func (r *OpenAIRouter) protocolEngineForReply(vendor llmprotocol.ResponseVendor,
 	if request != nil && request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens > 0 {
 		policy.RequestOutputLimit = *request.Sampling.MaxOutputTokens
 	}
+	policy.AllowedLossyFields = r.acceptedLosses(ctx)
 	if r.Config != nil {
-		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
 		policy.AllowedRequestExtensions = r.Config.AllowRequestExtensionFields
 	}
 	return protocolcodec.NewEngine(registry, policy)
@@ -135,7 +137,7 @@ func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolc
 	if ctx != nil {
 		vendor, request = ctx.ResponseVendor, ctx.SemanticRequest
 	}
-	return r.protocolEngineForReply(vendor, request)
+	return r.protocolEngineForReply(ctx, vendor, request)
 }
 
 // prepareProtocolRequest decodes every public wire format exactly once. The
@@ -148,7 +150,8 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}
 	body = withAzureDeploymentModel(body, ctx.Headers[":path"])
-	engine, err := r.protocolEngine()
+	r.resolveIngressEntrypoint(body, ctx)
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
 	}
@@ -234,7 +237,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if ctx == nil || ctx.SemanticRequest == nil {
 		return nil, fmt.Errorf("neutral inference request is unavailable")
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +259,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, policyErr
 	}
 	dispatchRequest, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(
-		dispatchRequest, ctx.backendModelForCandidate(ctx.RequestModel), format,
+		ctx, dispatchRequest, ctx.backendModelForCandidate(ctx.RequestModel), format,
 	)
 	if err != nil {
 		return nil, err
@@ -358,7 +361,7 @@ func (r *OpenAIRouter) decodeCachedClientResponse(
 	if ctx == nil {
 		return nil, fmt.Errorf("request context is unavailable")
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +401,7 @@ func (r *OpenAIRouter) encodeClientResponseWithReplay(
 	ctx *RequestContext,
 	replay bool,
 ) ([]byte, error) {
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +469,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 	if format == "" {
 		format = llmprotocol.OpenAIChatV1
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return response
 	}

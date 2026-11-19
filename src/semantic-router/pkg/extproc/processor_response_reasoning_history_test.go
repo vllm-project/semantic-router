@@ -25,7 +25,7 @@ func TestStoredReasoningResponseCanResumeWithoutSummary(t *testing.T) {
 					{ID: "answer", Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Noted."}}},
 				},
 			}
-			engine, err := router.protocolEngine()
+			engine, err := router.protocolEngine(nil)
 			require.NoError(t, err)
 			_, err = engine.EncodeResponse(llmprotocol.OpenAIResponsesV1, *ctx.SemanticResponse, llmprotocol.Envelope{})
 			require.NoError(t, err)

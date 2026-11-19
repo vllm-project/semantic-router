@@ -182,6 +182,7 @@ export interface ASTTestBlockDecl {
 export interface ASTEntrypointDecl {
   reviewModel?: string
   memoryModel?: string
+  allowLossyTranslation?: string[]
   modelNames: string[]
   recipe: string
   pos: ASTPosition

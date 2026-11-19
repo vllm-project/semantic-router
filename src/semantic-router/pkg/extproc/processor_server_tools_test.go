@@ -138,7 +138,7 @@ func TestServerToolRequestRoutedElsewhereIsRefusedAndRecorded(t *testing.T) {
 	router := serverToolRouter()
 	request := serverToolRequest(t, true, false)
 	for model, runs := range map[string]bool{"claude": true, "gateway": true, "qwen-chat": false, "qwen-msg": false} {
-		err := router.candidateCapabilityMismatch(config.ModelRef{Model: model}, request, nil, nil, nil, false)
+		err := router.candidateCapabilityMismatch(nil, config.ModelRef{Model: model}, request, nil, nil, nil, false)
 		require.Equal(t, runs, err == nil, "%s: %v", model, err)
 	}
 	refs := func(models ...string) *selection.SelectionContext {

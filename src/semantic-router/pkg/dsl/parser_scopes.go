@@ -52,6 +52,10 @@ func rawToEntrypoint(raw *rawEntrypointDecl) (*EntrypointDecl, []error) {
 	if memory, ok := getStringField(fields, "memory_model"); ok {
 		decl.MemoryModel = strings.TrimSpace(memory)
 	}
+	if losses, ok := getStringArrayField(fields, "allow_lossy_translation"); ok {
+		losses = append([]string{}, losses...)
+		decl.AllowLossyTranslation = &losses
+	}
 	if marked, ok := fields["default"].(BoolValue); ok {
 		decl.Default = marked.V
 	}
