@@ -52,12 +52,16 @@ func (m *Manager) Connect(ctx context.Context, id string) error {
 		m.mu.Unlock()
 		return connectErr
 	}
+	_, stillConfigured := m.configs[id]
 	m.mu.Unlock()
 
 	// A concurrent update, delete, disconnect, or replacement won the race. The
 	// SDK may not have observed cancellation before publishing its transport, so
 	// close this stale generation again after Connect returns.
 	_ = m.disconnectClient(client)
+	if !stillConfigured {
+		return serverNotFound(id)
+	}
 	return errConnectionSuperseded
 }
 
