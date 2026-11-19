@@ -158,6 +158,73 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 // keep, in the snapshot its total comes from.
 //
 // StorageIntegration: postgres
+// StorageIntegration: postgres
+// A run read returns one session oldest first without its bodies, prompt or
+// tool definitions, and keeps each tool step's kind, source, tool, call id
+// and status but not the text, arguments or output it carried.
+func TestPostgresQueryRunIntegration(t *testing.T) {
+	postgres := openPostgresReviewStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	start := time.Unix(1700000000, 0).UTC()
+	large := strings.Repeat("a long agent history ", 4096)
+	for index, id := range []string{"turn-2", "turn-1", "elsewhere"} {
+		record := postgresMetadataFixture()
+		record.ID, record.RequestID = id, id
+		record.SelectedModel, record.Agent = "qwen", &AgentIdentity{Harness: HarnessCodex}
+		record.SessionID = "session-a"
+		if id == "elsewhere" {
+			record.SessionID = "session-b"
+		}
+		record.Timestamp = start.Add(time.Duration(2-index) * time.Second)
+		record.RequestBody, record.ResponseBody, record.Prompt, record.ToolDefinitions = large, large, large, large
+		record.ToolTrace = &ToolTrace{Flow: "client", ToolNames: []string{"read"}, Steps: []ToolTraceStep{
+			{Type: "assistant_tool_call", Source: "request", ToolName: "read", ToolCallID: "call-1", Arguments: large},
+			{Type: "client_tool_result", Source: "request", ToolName: "read", ToolCallID: "call-1", Status: "failed", Output: large, Text: large},
+		}}
+		if _, err := postgres.Add(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	records, err := postgres.QueryRun(ctx, QueryFilters{SessionID: "session-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, len(records))
+	for index, record := range records {
+		ids[index] = record.ID
+	}
+	if !reflect.DeepEqual(ids, []string{"turn-1", "turn-2"}) {
+		t.Fatalf("run records = %v, want the session's oldest first", ids)
+	}
+	record := records[0]
+	if record.RequestBody != "" || record.ResponseBody != "" || record.Prompt != "" || record.ToolDefinitions != "" {
+		t.Fatal("the run read returned captured bodies")
+	}
+	if record.SelectedModel == "" || record.Agent == nil || record.SessionID != "session-a" {
+		t.Fatalf("the run read lost the metadata: %+v", record)
+	}
+	want := []ToolTraceStep{
+		{Type: "assistant_tool_call", Source: "request", ToolName: "read", ToolCallID: "call-1"},
+		{Type: "client_tool_result", Source: "request", ToolName: "read", ToolCallID: "call-1", Status: "failed"},
+	}
+	if record.ToolTrace == nil || !reflect.DeepEqual(record.ToolTrace.Steps, want) ||
+		record.ToolTrace.Flow != "client" || !reflect.DeepEqual(record.ToolTrace.ToolNames, []string{"read"}) {
+		t.Fatalf("tool trace = %+v, want the steps without their payloads", record.ToolTrace)
+	}
+
+	// A plain API call belongs to no session: has_session leaves it out of the page and its count.
+	plain := postgresMetadataFixture()
+	plain.ID, plain.RequestID, plain.SessionID, plain.Timestamp = "plain", "plain", "", start.Add(time.Minute)
+	if _, err = postgres.Add(ctx, plain); err != nil {
+		t.Fatal(err)
+	}
+	page, err := postgres.QueryPage(ctx, QueryFilters{HasSession: true}, 10, 0, false)
+	if err != nil || page.Total != 3 || len(page.Records) != 3 {
+		t.Fatalf("sessions page total=%d records=%d err=%v, want the 3 records with a session", page.Total, len(page.Records), err)
+	}
+}
+
 func TestPostgresHarnessQueriesIntegration(t *testing.T) {
 	postgres := openPostgresReviewStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
