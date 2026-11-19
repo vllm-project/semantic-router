@@ -256,6 +256,7 @@ func FiveProblem(reply WireReply, now time.Time) *systemoneprotocol.Problem {
 	if problem.Question != "" && (problem.QuestionError == "" || problem.Reason != "") {
 		problem.QuestionError = QuestionError(problem.Reason, reply.Status)
 	}
+	problem.Code = PublicCode(problem.Code, problem.Reason)
 	return problem
 }
 

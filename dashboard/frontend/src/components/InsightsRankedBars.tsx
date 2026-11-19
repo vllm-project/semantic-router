@@ -1,12 +1,7 @@
 import type { ReactNode } from 'react'
 
-import type { InsightsAggregateTokenEntry } from '../pages/insightsPageTypes'
 import { cn } from '../ui'
-import {
-  formatInsightsCompactCount,
-  formatInsightsCount,
-  formatInsightsShare,
-} from '../utils/insightsCost'
+import { formatInsightsCount, formatInsightsShare } from '../utils/insightsCost'
 
 export interface InsightsRankedEntry {
   name: string
@@ -102,70 +97,6 @@ export default function InsightsRankedBars({
             </details>
           ) : null}
         </>
-      )}
-    </Panel>
-  )
-}
-
-/** Each entry's tokens as one bar split into input and output, ranked by the total. */
-export function InsightsTokenRows({
-  title,
-  entries,
-}: {
-  title: string
-  entries: InsightsAggregateTokenEntry[]
-}) {
-  const peak = Math.max(0, ...entries.map((entry) => entry.total_tokens))
-  return (
-    <Panel
-      title={title}
-      meta={
-        <span className="inline-flex items-center gap-3">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-[3px] bg-chart-4" />
-            Input
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-[3px] bg-chart-3" />
-            Output
-          </span>
-        </span>
-      }
-    >
-      {entries.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nothing recorded yet.</p>
-      ) : (
-        <ol className="flex flex-col">
-          {entries.map((entry) => (
-            <li key={entry.name} className={ROW}>
-              <span className="truncate" title={entry.name}>
-                {entry.name}
-              </span>
-              <span
-                className="font-mono text-xs tabular"
-                title={`${formatInsightsCount(entry.total_tokens)} tokens`}
-              >
-                {formatInsightsCompactCount(entry.total_tokens)}
-              </span>
-              <span className="text-right font-mono text-xs text-subtle-foreground tabular">
-                {formatInsightsShare(entry.output_tokens, entry.total_tokens)} out
-              </span>
-              <span
-                className="col-span-full flex h-1 overflow-hidden rounded-full bg-muted"
-                aria-hidden="true"
-              >
-                <span
-                  className="block h-full bg-chart-4"
-                  style={{ width: barWidth(entry.input_tokens, peak) }}
-                />
-                <span
-                  className="block h-full bg-chart-3"
-                  style={{ width: barWidth(entry.output_tokens, peak) }}
-                />
-              </span>
-            </li>
-          ))}
-        </ol>
       )}
     </Panel>
   )

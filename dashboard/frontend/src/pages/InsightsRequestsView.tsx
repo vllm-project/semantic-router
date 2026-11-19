@@ -21,7 +21,7 @@ import {
   ListTree,
   MessagesSquare,
   PanelRightOpen,
-  PiggyBank,
+  Scale,
   RefreshCw,
   Workflow,
   X,
@@ -83,8 +83,10 @@ import {
   SummaryTile,
 } from './InsightsDisplay'
 import { moreCurrenciesLabel, spendSummary } from './homeSupport'
+import { recordEvents } from './insightsAgentEvents'
+import { AgentEventChips } from './InsightsAgentEvents'
 import { HarnessLogo, ToolChips } from './InsightsHarness'
-import { API_CLIENT_LABEL, harnessInfo, PRIMARY_HARNESSES, sortHarnessIds } from './insightsHarness'
+import { API_CLIENT_LABEL, harnessInfo } from './insightsHarness'
 import { readPage, readPageSize, writePage } from './insightsListData'
 import { ModelChip, modelText, useModelLabels } from './insightsModelLabelSupport'
 import {
@@ -97,11 +99,11 @@ import type { InsightsAggregateResponse, InsightsRecord } from './insightsPageTy
 import {
   API_CLIENT_FILTER,
   countFacet,
+  harnessFilterValues,
   hasAnyFilter,
   hasClientFilters,
   RANGE_TEXT,
   readRequestFilters,
-  recordClientFilterValue,
   REQUEST_RANGES,
   REQUEST_WINDOW_SIZE,
   useAnyRecord,
@@ -114,8 +116,27 @@ import { useSessionRun } from './insightsRunsData'
 import { getRunPath, oneLine, runHeadline } from './insightsRunSupport'
 
 const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
+const InsightsSessionsView = lazy(() => import('./InsightsSessionsView'))
 
 const BREAKDOWN_KEY = 'vsr-requests-breakdown'
+const VIEW_KEY = 'vsr-requests-view'
+
+type RequestsViewMode = 'requests' | 'sessions'
+
+const VIEW_OPTIONS: { value: RequestsViewMode; label: string }[] = [
+  { value: 'requests', label: 'Requests' },
+  { value: 'sessions', label: 'Sessions' },
+]
+
+function readViewMode(params: URLSearchParams): RequestsViewMode {
+  const value = params.get('view')
+  if (value === 'sessions' || value === 'requests') return value
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'sessions' ? 'sessions' : 'requests'
+  } catch {
+    return 'requests'
+  }
+}
 
 function readBreakdown(): boolean {
   try {
@@ -137,14 +158,20 @@ const SUMMARY_GRID = 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0
 function spendOf(aggregate: InsightsAggregateResponse) {
   const lead = spendSummary(aggregate)
   const compared = lead.saved !== undefined
+  const difference = compared ? -(lead.saved ?? 0) : undefined
   return {
     spend: formatInsightsCost(lead.spend, lead.currency, { total: true }),
-    saved: compared ? formatInsightsCost(lead.saved, lead.currency, { total: true }) : 'N/A',
-    savedShare:
+    difference:
+      difference === undefined
+        ? '—'
+        : `${difference > 0 ? '+' : ''}${formatInsightsCost(difference, lead.currency, { total: true })}`,
+    differenceHint:
       compared && (lead.baseline ?? 0) > 0
-        ? `${formatInsightsShare(lead.saved ?? 0, lead.baseline ?? 0)} of the baseline`
-        : 'No priced baseline yet',
-    negative: compared && (lead.saved ?? 0) < 0,
+        ? `${formatInsightsShare(Math.abs(lead.saved ?? 0), lead.baseline ?? 0)} ${(lead.saved ?? 0) >= 0 ? 'below' : 'above'} the reference · cost only`
+        : 'Cost only, not a quality comparison',
+    differenceWhy: compared
+      ? undefined
+      : 'No request in range has both a priced cost and a priced reference model',
     more: moreCurrenciesLabel(lead.otherCurrencies),
   }
 }
@@ -174,6 +201,7 @@ function RequestsSummary({
   breakdown,
   onBreakdown,
   clientFiltered,
+  harnessCounts,
 }: {
   aggregate: InsightsAggregateResponse | null
   loading: boolean
@@ -182,6 +210,7 @@ function RequestsSummary({
   breakdown: boolean
   onBreakdown: (open: boolean) => void
   clientFiltered: boolean
+  harnessCounts: Record<string, number> | null
 }) {
   if (!aggregate) {
     if (error && !loading) {
@@ -233,11 +262,18 @@ function RequestsSummary({
           hint={money.more ?? 'Recorded tokens × configured rates'}
         />
         <SummaryTile
-          label="Saved by routing"
-          icon={<PiggyBank className="text-chart-2" />}
-          value={money.saved}
-          hint={money.savedShare}
-          tone={money.negative ? 'negative' : undefined}
+          label="Cost vs reference"
+          icon={<Scale className="text-chart-2" />}
+          value={
+            money.differenceWhy ? (
+              <Tooltip content={money.differenceWhy}>
+                <span>{money.difference}</span>
+              </Tooltip>
+            ) : (
+              money.difference
+            )
+          }
+          hint={money.differenceHint}
         />
         <SummaryTile
           label="Tokens"
@@ -269,13 +305,13 @@ function RequestsSummary({
       </SummaryStrip>
       {clientFiltered ? (
         <p className="mt-1.5 text-[11.5px] text-subtle-foreground">
-          Totals cover every client and request class the other filters select.
+          Totals cover every request class the other filters select.
         </p>
       ) : null}
       {breakdown ? (
         <div id="requests-breakdown" className="mt-4">
           <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
-            <InsightsCharts aggregate={aggregate} />
+            <InsightsCharts aggregate={aggregate} harnessCounts={harnessCounts} />
           </Suspense>
         </div>
       ) : null}
@@ -339,6 +375,7 @@ function ClientCell({
           <span className="truncate" data-request-class={requestClass}>
             {classLine(record, requestClass, detail)}
           </span>
+          <AgentEventChips events={recordEvents(record)} compact />
           {spawned ? (
             <Tooltip content="This call started a subagent">
               <Workflow aria-label="Started a subagent" className="size-3 shrink-0 text-chart-3" />
@@ -475,7 +512,7 @@ function ActiveChip({
   )
 }
 
-/** What the client and class filters read, said whenever one is on. */
+/** What the class filters read, said whenever one is on. */
 function windowNote(data: {
   windowLoaded: boolean
   window: InsightsRecord[]
@@ -484,12 +521,12 @@ function windowNote(data: {
 }): string {
   const range = RANGE_TEXT[data.range]
   if (!data.windowLoaded) {
-    return `Client and class filters run in your browser over the newest ${REQUEST_WINDOW_SIZE} requests ${range}.`
+    return `Class filters run in your browser over the newest ${REQUEST_WINDOW_SIZE} requests ${range}.`
   }
   if (data.windowTotal > data.window.length) {
-    return `Client and class filters run in your browser over the newest ${formatInsightsCount(data.window.length)} of ${formatInsightsCount(data.windowTotal)} requests ${range}. Narrow the time range or add a filter to cover them all.`
+    return `Class filters run in your browser over the newest ${formatInsightsCount(data.window.length)} of ${formatInsightsCount(data.windowTotal)} requests ${range}. Narrow the time range or add a filter to cover them all.`
   }
-  return `Client and class filters run in your browser over all ${formatInsightsCount(data.windowTotal)} requests ${range}.`
+  return `Class filters run in your browser over all ${formatInsightsCount(data.windowTotal)} requests ${range}.`
 }
 
 // ---------------------------------------------------------------- view
@@ -504,9 +541,10 @@ export default function InsightsRequestsView() {
   const labels = useModelLabels()
   const [live, setLive] = useState(true)
   const [held, setHeld] = useState(false)
-  // the newest records load for the client and class counts once a filter control is reached for
+  // the client and class counts load once a filter control is reached for
   const [facets, setFacets] = useState(false)
   const [breakdown, setBreakdown] = useState(readBreakdown)
+  const view = readViewMode(params)
   const [searchDraft, setSearchDraft] = useState(filters.search)
   const now = useNow(live ? 5_000 : 30_000)
 
@@ -517,7 +555,7 @@ export default function InsightsRequestsView() {
     live,
     held,
     rules: agentRules,
-    withWindow: facets,
+    withFacets: facets || breakdown,
   })
   const clientMode = hasClientFilters(filters)
   const narrowed = hasAnyFilter(filters)
@@ -554,6 +592,23 @@ export default function InsightsRequestsView() {
     }
   }, [data.loading, data.stale, data.total, page, pages, setParams])
 
+  const setView = (next: RequestsViewMode) => {
+    setParams(
+      (current) => {
+        const updated = writePage(current, 1)
+        if (next === 'requests') updated.delete('view')
+        else updated.set('view', next)
+        return updated
+      },
+      { replace: true },
+    )
+    try {
+      window.localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // the choice lasts for this page only
+    }
+  }
+
   const setBreakdownOpen = (open: boolean) => {
     setBreakdown(open)
     try {
@@ -563,37 +618,25 @@ export default function InsightsRequestsView() {
     }
   }
 
-  const harnessCounts = useMemo(
-    () => countFacet(data.window, recordClientFilterValue),
-    [data.window],
-  )
   const classCounts = useMemo(
     () => countFacet(data.window, (record) => requestClassOf(record, agentRules)),
     [agentRules, data.window],
   )
   const counted = data.windowLoaded
-  // Before the newest records load, every harness the Router identifies is offered.
-  const harnessOptions: FilterOption[] = useMemo(() => {
-    const seen = counted ? [...harnessCounts.keys()] : [...PRIMARY_HARNESSES, API_CLIENT_FILTER]
-    const shown = new Set([...seen, ...filters.harness])
-    const options: FilterOption[] = sortHarnessIds(
-      [...shown].filter((id) => id !== API_CLIENT_FILTER),
-    ).map((id) => ({
-      value: id,
-      label: harnessInfo(id)?.label ?? id,
-      icon: <HarnessLogo harness={id} size={14} />,
-      count: counted ? (harnessCounts.get(id) ?? 0) : undefined,
-    }))
-    if (shown.has(API_CLIENT_FILTER)) {
-      options.push({
-        value: API_CLIENT_FILTER,
-        label: API_CLIENT_LABEL,
-        icon: <HarnessLogo harness={undefined} size={14} />,
-        count: counted ? (harnessCounts.get(API_CLIENT_FILTER) ?? 0) : undefined,
-      })
-    }
-    return options
-  }, [counted, filters.harness, harnessCounts])
+  // The Router counts the harnesses over every request the other filters select.
+  const harnessOptions: FilterOption[] = useMemo(
+    () =>
+      harnessFilterValues(data.harnessCounts, filters.harness).map(({ value, count }) => {
+        const harness = value === API_CLIENT_FILTER ? undefined : value
+        return {
+          value,
+          label: harnessInfo(harness)?.label ?? API_CLIENT_LABEL,
+          icon: <HarnessLogo harness={harness} size={14} />,
+          count,
+        }
+      }),
+    [data.harnessCounts, filters.harness],
+  )
   const classOptions: FilterOption[] = REQUEST_CLASSES.filter(
     (value) => !counted || classCounts.has(value) || filters.classes.includes(value),
   ).map((value) => ({
@@ -667,9 +710,18 @@ export default function InsightsRequestsView() {
         <Dim on={requestClassOf(row, agentRules) === 'housekeeping'}>
           <ModelChip
             name={row.selected_model}
-            fallback="No backend"
+            fallback={row.decision ? 'No model call' : 'No backend'}
             className="max-w-[170px] text-[13px]"
           />
+          {row.requested_model ? (
+            <Tooltip
+              content={`The client asked for ${row.requested_model}; the listener routed it to ${row.original_model ?? 'its route'}.`}
+            >
+              <span className="block max-w-[170px] truncate text-[11.5px] text-subtle-foreground">
+                requested {row.requested_model}
+              </span>
+            </Tooltip>
+          ) : null}
         </Dim>
       ),
     },
@@ -775,6 +827,7 @@ export default function InsightsRequestsView() {
           breakdown={breakdown}
           onBreakdown={setBreakdownOpen}
           clientFiltered={clientMode}
+          harnessCounts={data.harnessCounts}
         />
       )}
       <DataToolbar
@@ -851,6 +904,12 @@ export default function InsightsRequestsView() {
         }
         actions={
           <>
+            <Segmented
+              aria-label="Requests view"
+              value={view}
+              onValueChange={(next) => setView(next as RequestsViewMode)}
+              options={VIEW_OPTIONS}
+            />
             <Segmented
               aria-label="Time range"
               value={filters.range}
@@ -929,115 +988,123 @@ export default function InsightsRequestsView() {
           </Label>
         </span>
       </div>
-      <div
-        onPointerEnter={() => setHeld(true)}
-        onPointerLeave={() => setHeld(false)}
-        aria-busy={data.stale || undefined}
-        className={cn('transition-opacity duration-200', data.stale && 'opacity-60')}
-      >
-        <DataTable
-          data={data.rows}
-          columns={columns}
-          getRowId={(row) => row.id}
-          loading={data.loading && data.rows.length === 0}
-          onRowClick={(row) => navigate(getInsightsRecordPath(row.id))}
-          rowActions={(row) => (
-            <>
-              <DropdownMenuItem onSelect={() => navigate(getInsightsRecordPath(row.id))}>
-                <PanelRightOpen />
-                Open details
-              </DropdownMenuItem>
-              {row.session_id ? (
+      {view === 'sessions' ? (
+        <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
+          <InsightsSessionsView filters={filters} live={live} />
+        </Suspense>
+      ) : (
+        <>
+          <div
+            onPointerEnter={() => setHeld(true)}
+            onPointerLeave={() => setHeld(false)}
+            aria-busy={data.stale || undefined}
+            className={cn('transition-opacity duration-200', data.stale && 'opacity-60')}
+          >
+            <DataTable
+              data={data.rows}
+              columns={columns}
+              getRowId={(row) => row.id}
+              loading={data.loading && data.rows.length === 0}
+              onRowClick={(row) => navigate(getInsightsRecordPath(row.id))}
+              rowActions={(row) => (
                 <>
-                  <DropdownMenuItem
-                    onSelect={() => navigate(getRunPath(row.session_id ?? '', row.id))}
-                  >
-                    <Bot />
-                    Open agent run
+                  <DropdownMenuItem onSelect={() => navigate(getInsightsRecordPath(row.id))}>
+                    <PanelRightOpen />
+                    Open details
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => update({ session: row.session_id })}>
-                    <Filter />
-                    Only this session
+                  {row.session_id ? (
+                    <>
+                      <DropdownMenuItem
+                        onSelect={() => navigate(getRunPath(row.session_id ?? '', row.id))}
+                      >
+                        <Bot />
+                        Open agent run
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => update({ session: row.session_id })}>
+                        <Filter />
+                        Only this session
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => copyText(row.id, 'Record ID')}>
+                    <Copy />
+                    Copy record ID
                   </DropdownMenuItem>
+                  {row.session_id ? (
+                    <DropdownMenuItem onSelect={() => copyText(row.session_id ?? '', 'Session ID')}>
+                      <Copy />
+                      Copy session ID
+                    </DropdownMenuItem>
+                  ) : null}
                 </>
-              ) : null}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => copyText(row.id, 'Record ID')}>
-                <Copy />
-                Copy record ID
-              </DropdownMenuItem>
-              {row.session_id ? (
-                <DropdownMenuItem onSelect={() => copyText(row.session_id ?? '', 'Session ID')}>
-                  <Copy />
-                  Copy session ID
-                </DropdownMenuItem>
-              ) : null}
-            </>
-          )}
-          empty={
-            onboarding ? (
-              <EmptyState
-                compact
-                icon={ListTree}
-                tone="blue"
-                title="No requests recorded yet"
-                description="Send a request through the gateway, or point Claude Code, Codex, OpenCode or DeepSeek Harness at it, and it appears here with its decision, model and cost."
-                actions={
-                  <Button size="sm" variant="outline" onClick={() => navigate('/playground')}>
-                    Open the playground
-                  </Button>
-                }
-              />
-            ) : quiet ? (
-              <EmptyState
-                compact
-                icon={ListTree}
-                tone="blue"
-                title={`No requests ${RANGE_TEXT[filters.range]}`}
-                description="Older requests are under a longer range; new ones appear here as soon as the router records them."
-                actions={
-                  <Button size="sm" variant="outline" onClick={() => update({ range: 'all' })}>
-                    Show all time
-                  </Button>
-                }
-              />
-            ) : data.listError ? (
-              <EmptyState
-                compact
-                icon={ListTree}
-                tone="slate"
-                title="No requests to show"
-                description="The list could not load. Retry above, or check the router on the Status page."
-              />
-            ) : (
-              <EmptyState
-                compact
-                icon={ListTree}
-                tone="blue"
-                title="No requests match"
-                description={
-                  clientMode
-                    ? 'None of the newest requests match the client and class filters. Widen the time range or clear the filters.'
-                    : 'Widen the time range or clear the filters. New requests appear as soon as the router records them.'
-                }
-                actions={
-                  <Button size="sm" variant="outline" onClick={clearFilters}>
-                    Clear filters
-                  </Button>
-                }
-              />
-            )
-          }
-        />
-      </div>
-      <Pager
-        page={Math.min(page, pages)}
-        pageSize={pageSize}
-        total={data.total}
-        noun="request"
-        onPage={(next) => setParams((current) => writePage(current, next))}
-        onPageSize={(size) => setParams((current) => writePage(current, 1, size))}
-      />
+              )}
+              empty={
+                onboarding ? (
+                  <EmptyState
+                    compact
+                    icon={ListTree}
+                    tone="blue"
+                    title="No requests recorded yet"
+                    description="Send a request through the gateway, or point Claude Code, Codex, OpenCode or DeepSeek Harness at it, and it appears here with its decision, model and cost."
+                    actions={
+                      <Button size="sm" variant="outline" onClick={() => navigate('/playground')}>
+                        Open the playground
+                      </Button>
+                    }
+                  />
+                ) : quiet ? (
+                  <EmptyState
+                    compact
+                    icon={ListTree}
+                    tone="blue"
+                    title={`No requests ${RANGE_TEXT[filters.range]}`}
+                    description="Older requests are under a longer range; new ones appear here as soon as the router records them."
+                    actions={
+                      <Button size="sm" variant="outline" onClick={() => update({ range: 'all' })}>
+                        Show all time
+                      </Button>
+                    }
+                  />
+                ) : data.listError ? (
+                  <EmptyState
+                    compact
+                    icon={ListTree}
+                    tone="slate"
+                    title="No requests to show"
+                    description="The list could not load. Retry above, or check the router on the Status page."
+                  />
+                ) : (
+                  <EmptyState
+                    compact
+                    icon={ListTree}
+                    tone="blue"
+                    title="No requests match"
+                    description={
+                      clientMode
+                        ? 'None of the newest requests match the class filters. Widen the time range or clear the filters.'
+                        : 'Widen the time range or clear the filters. New requests appear as soon as the router records them.'
+                    }
+                    actions={
+                      <Button size="sm" variant="outline" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
+                    }
+                  />
+                )
+              }
+            />
+          </div>
+          <Pager
+            page={Math.min(page, pages)}
+            pageSize={pageSize}
+            total={data.total}
+            noun="request"
+            onPage={(next) => setParams((current) => writePage(current, next))}
+            onPageSize={(size) => setParams((current) => writePage(current, 1, size))}
+          />
+        </>
+      )}
     </>
   )
 }

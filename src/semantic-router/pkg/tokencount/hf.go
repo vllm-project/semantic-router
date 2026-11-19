@@ -20,6 +20,9 @@ type hfTokenizer struct {
 		Merges       json.RawMessage `json:"merges"`
 		IgnoreMerges bool            `json:"ignore_merges"`
 	} `json:"model"`
+	AddedTokens []struct {
+		Content string `json:"content"`
+	} `json:"added_tokens"`
 }
 
 type hfComponent struct {
@@ -57,6 +60,11 @@ func ParseHFTokenizer(name string, data []byte) (*Encoding, error) {
 		return nil, fmt.Errorf("%s: the tokenizer is not byte-level", name)
 	}
 	enc.nfc = normalizesNFC(tok.Normalizer)
+	added := make([]string, len(tok.AddedTokens))
+	for i, token := range tok.AddedTokens {
+		added[i] = token.Content
+	}
+	enc.added = newAddedTokens(added)
 	merges, err := parseMerges(tok.Model.Merges)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", name, err)

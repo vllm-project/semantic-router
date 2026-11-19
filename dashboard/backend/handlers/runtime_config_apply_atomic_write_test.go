@@ -219,7 +219,9 @@ func TestWriteConfigAtomicallyKeepsLocalFileWithoutADeclaredTarget(t *testing.T)
 // return writer on its next call and restores the package's real singleton
 // state afterward. Needed because that init caches its result process-wide:
 // without a reset here, whichever test exercises the Kubernetes path first
-// would permanently pin every later test in this package to its writer.
+// would permanently pin every later test in this package to its writer. A
+// new writer serves another ConfigMap, so the persisted config read from the
+// last one is dropped too.
 func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWriter) func() {
 	t.Helper()
 	configMapWriterMu.Lock()
@@ -233,6 +235,7 @@ func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWr
 	configMapWriterErr = nil
 	configMapWriterResolved = false
 	configMapWriterMu.Unlock()
+	resetPersistedRouterConfigCache()
 
 	return func() {
 		configMapWriterMu.Lock()
@@ -241,5 +244,6 @@ func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWr
 		configMapWriterErr = origErr
 		configMapWriterResolved = origResolved
 		configMapWriterMu.Unlock()
+		resetPersistedRouterConfigCache()
 	}
 }
