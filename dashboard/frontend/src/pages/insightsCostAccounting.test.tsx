@@ -210,7 +210,7 @@ describe('Insights cost coverage', () => {
     const html = render()
     expect(html).toContain('$3.50')
     expect(html).toContain('+$1.00')
-    expect(html).toContain('100.0% above the reference · cost only')
+    expect(html).toContain('Cost only · 100.0% above the reference')
     expect(html).toContain('aria-label="How the estimate is made"')
     expect(html).not.toContain('Priced: 2 of 5 requests')
     expect(html).not.toContain('text-destructive-foreground')
@@ -265,7 +265,7 @@ describe('Insights cost coverage', () => {
     }
     const html = render(summary)
     expect(html).toContain('-$3.25')
-    expect(html).toContain('54.2% below the reference · cost only')
+    expect(html).toContain('Cost only · 54.2% below the reference')
   })
 
   it('leaves the difference unknown where nothing was compared with a reference', () => {
