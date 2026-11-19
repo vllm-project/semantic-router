@@ -34,6 +34,7 @@ import {
   cn,
   toast,
 } from '../ui'
+import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canWriteConfig } from '../utils/accessControl'
@@ -716,30 +717,7 @@ export default function ConfigPageRouterConfigSection({
               again.
             </Alert>
           ) : null}
-          {saveWarnings.length ? (
-            <Alert
-              tone="warning"
-              title={`Saved. The router reports ${saveWarnings.length === 1 ? 'a warning' : `${saveWarnings.length} warnings`}`}
-              actions={
-                <Button size="sm" variant="ghost" onClick={() => setSaveWarnings([])}>
-                  Dismiss
-                </Button>
-              }
-            >
-              <ul className="flex flex-col gap-1">
-                {saveWarnings.map((warning, index) => (
-                  <li key={`${warning.code}-${warning.field}-${index}`}>
-                    {warning.field ? (
-                      <code className="mr-1 font-mono text-[12px] text-foreground/80">
-                        {warning.field}
-                      </code>
-                    ) : null}
-                    {warning.message}
-                  </li>
-                ))}
-              </ul>
-            </Alert>
-          ) : null}
+          <ConfigSaveWarnings warnings={saveWarnings} onDismiss={() => setSaveWarnings([])} />
 
           <div>
             <div className="min-w-0">

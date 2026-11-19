@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
 
-// A Global Config save answers with the Router's warnings, and the page shows
+// A Router settings save answers with the Router's warnings, and the page shows
 // them after it refreshes the configuration it just saved.
 const resetWarning = {
   code: 'replay_store_reset',
@@ -45,42 +45,45 @@ async function mockGlobalConfig(page: Page): Promise<void> {
   }
 }
 
-test.describe('Global Config save warnings', () => {
-  test('a card save keeps the warning on the page after the refresh', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 })
-    await mockGlobalConfig(page)
-    await page.goto('/config/global-config')
+async function openRouterSettings(page: Page, path: string) {
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await mockGlobalConfig(page)
+  await page.goto(path)
+  await expect(
+    page.getByRole('heading', { name: 'Router settings', exact: true }).first(),
+  ).toBeVisible({ timeout: 20_000 })
+}
 
-    await page
-      .locator('#global-section-router_replay')
-      .getByRole('button', { name: 'Edit' })
-      .click()
-    const modal = page.getByRole('dialog', { name: 'Edit Router Replay' })
-    await modal.getByLabel('TTL (seconds)', { exact: true }).fill('86400')
-    await modal.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(modal).toBeHidden()
+const warningText = 'ttl_seconds starts that store empty'
 
-    const status = page.getByRole('status')
-    await expect(status).toContainText('ttl_seconds starts that store empty')
+test.describe('Router settings save warnings', () => {
+  test('a form save keeps the warning on the page after the refresh', async ({ page }) => {
+    await openRouterSettings(page, '/settings/router#global-section-router_replay')
+
+    await page.locator('#setting-services-router_replay-ttl_seconds').fill('86400')
+    await page.getByRole('button', { name: 'Review & save' }).click()
+    const review = page.getByRole('dialog', { name: 'Review changes' })
+    await review.getByRole('button', { name: 'Save and reload' }).click()
+    await expect(review).toBeHidden()
+
+    const status = page.getByRole('status').filter({ hasText: warningText })
+    await expect(status).toBeVisible()
     await expect(status).toBeInViewport()
   })
 
-  test('a raw YAML save keeps the warning and the YAML editor after the refresh', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 })
-    await mockGlobalConfig(page)
-    await page.goto('/config/global-config')
+  test('a YAML save keeps the warning after the refresh', async ({ page }) => {
+    await openRouterSettings(page, '/settings/router?view=yaml')
 
-    await page.getByRole('button', { name: 'Raw YAML' }).click()
-    const editor = page.locator('textarea')
+    await page.getByRole('button', { name: 'Edit effective YAML' }).click()
+    const editor = page
+      .getByRole('dialog', { name: 'Effective global YAML' })
+      .getByLabel('Effective global YAML', { exact: true })
     await expect(editor).toHaveValue(/store_backend: memory/)
     await editor.fill(
       'services:\n  router_replay:\n    store_backend: memory\n    ttl_seconds: 86400\n',
     )
     await page.getByRole('button', { name: 'Save YAML' }).click()
 
-    await expect(page.getByRole('status')).toContainText('ttl_seconds starts that store empty')
-    await expect(page.getByRole('button', { name: 'Save YAML' })).toBeVisible()
+    await expect(page.getByRole('status').filter({ hasText: warningText })).toBeVisible()
   })
 })
