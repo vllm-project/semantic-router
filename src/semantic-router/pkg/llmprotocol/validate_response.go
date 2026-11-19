@@ -122,6 +122,17 @@ func StopsAtOutputLimit(reason StopReason) bool {
 	return reason == StopMaxTokens || reason == StopContextWindow
 }
 
+// ToolCallStopAtOutputLimit reports a tool-call stop that the output token
+// limit made: the reply's output tokens reached limit, the output limit of the
+// request it answers, 0 for none. A backend can report a call that limit cut
+// as a tool-call stop, as vLLM's buffered Chat reply does whenever its tool
+// parser found a call, with the cut arguments closed or empty. Usage counts the
+// tokens of every choice, so only a reply with one choice can be judged by it.
+func ToolCallStopAtOutputLimit(reason StopReason, usage Usage, limit int64) bool {
+	return reason == StopToolCall && limit > 0 && usage.State == UsageAvailable &&
+		usage.OutputTotal.Value != nil && *usage.OutputTotal.Value >= limit
+}
+
 // TruncatedToolCall returns the function call an output limit cut short in the
 // response, the last content of its output: its arguments are the start of a
 // JSON object rather than a whole one. It returns nil for any other response.

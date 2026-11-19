@@ -394,7 +394,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		return nil, evalResult, fmt.Errorf("candidate %s failed with status %d: %w", candidateModel, statusCode, callErr)
 	}
 
-	responseEngine, engineErr := r.protocolEngineForVendor(resolveResponseVendor(dispatch.profile))
+	responseEngine, engineErr := r.protocolEngineForReply(resolveResponseVendor(dispatch.profile), reqCopy)
 	if engineErr != nil {
 		attemptOutcome.Error = engineErr
 		attemptOutcome.Discarded = true
