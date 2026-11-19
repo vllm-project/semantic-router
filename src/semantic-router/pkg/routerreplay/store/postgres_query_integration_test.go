@@ -153,15 +153,11 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	}
 }
 
-// A harness filter keeps the records of its harnesses, a record no harness
-// sent as an API client, and a page counts every harness the other filters
-// keep, in the snapshot its total comes from.
-//
-// StorageIntegration: postgres
-// StorageIntegration: postgres
 // A run read returns one session oldest first without its bodies, prompt or
 // tool definitions, and keeps each tool step's kind, source, tool, call id
 // and status but not the text, arguments or output it carried.
+//
+// StorageIntegration: postgres
 func TestPostgresQueryRunIntegration(t *testing.T) {
 	postgres := openPostgresReviewStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -225,6 +221,11 @@ func TestPostgresQueryRunIntegration(t *testing.T) {
 	}
 }
 
+// A harness filter keeps the records of its harnesses, a record no harness
+// sent as an API client, and a page counts every harness the other filters
+// keep, in the snapshot its total comes from.
+//
+// StorageIntegration: postgres
 func TestPostgresHarnessQueriesIntegration(t *testing.T) {
 	postgres := openPostgresReviewStore(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
