@@ -186,7 +186,9 @@ describe('home traffic helpers', () => {
       currency: 'USD',
       spend: 2.6,
       saved: 1.5,
+      actual: 2.5,
       baseline: 4,
+      routerCalls: 0,
       otherCurrencies: [],
       noPrice: 0,
     })
@@ -194,7 +196,33 @@ describe('home traffic helpers', () => {
       spendSummary({
         summary: { ...aggregate.summary, cost_record_count: 0, total_spend: undefined },
       } as InsightsAggregateResponse),
-    ).toMatchObject({ spend: 2.5, saved: undefined, baseline: undefined })
+    ).toMatchObject({ spend: 2.5, saved: undefined, actual: undefined, baseline: undefined })
+  })
+
+  it('reads the saving before the Router’s own calls, which it keeps apart', () => {
+    const aggregate = {
+      summary: {
+        total_saved: 3.25,
+        gross_saved: 4,
+        netted_router_call_spend: 0.75,
+        baseline_spend: 6,
+        actual_spend: 2,
+        router_call_spend: 0.875,
+        total_spend: 4.875,
+        currency: 'USD',
+        cost_record_count: 2,
+        excluded_record_count: 0,
+      },
+    } as InsightsAggregateResponse
+    expect(spendSummary(aggregate)).toMatchObject({
+      saved: 4,
+      actual: 2,
+      baseline: 6,
+      routerCalls: 0.875,
+    })
+    // a router without gross_saved has the same difference in its two spends
+    const older = { ...aggregate.summary, gross_saved: undefined }
+    expect(spendSummary({ summary: older } as InsightsAggregateResponse).saved).toBe(4)
   })
 
   it('reads money in one currency: a real one before plain units, the rest counted, never added', () => {
