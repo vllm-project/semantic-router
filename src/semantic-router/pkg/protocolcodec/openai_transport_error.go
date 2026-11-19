@@ -22,13 +22,31 @@ type openAITransportErrorDetailWire struct {
 	Param   *string          `json:"param"`
 }
 
+// openAIFlatTransportErrorWire is the error vLLM releases sent before the
+// nested envelope: the details at the top level, beside "object": "error".
+type openAIFlatTransportErrorWire struct {
+	Object  string           `json:"object"`
+	Type    string           `json:"type"`
+	Code    *openAIErrorCode `json:"code"`
+	Message string           `json:"message"`
+	Param   *string          `json:"param"`
+}
+
 func decodeOpenAITransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 	format llmprotocol.WireFormat,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
 	var wire openAITransportErrorWire
-	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
+	var unknownFields []string
+	var err error
+	if flatOpenAITransportError(body) {
+		var flat openAIFlatTransportErrorWire
+		_, unknownFields, err = decodeProviderWireTolerant(body, &flat, policy)
+		wire.Error = &openAITransportErrorDetailWire{Type: flat.Type, Code: flat.Code, Message: flat.Message, Param: flat.Param}
+	} else {
+		_, unknownFields, err = decodeProviderWireTolerant(body, &wire, policy)
+	}
 	if err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
@@ -58,6 +76,14 @@ func decodeOpenAITransportError(
 		Message:   wire.Error.Message,
 		Parameter: parameter,
 	}}, diagnostics, nil
+}
+
+func flatOpenAITransportError(body []byte) bool {
+	var probe struct {
+		Object string          `json:"object"`
+		Error  json.RawMessage `json:"error"`
+	}
+	return json.Unmarshal(body, &probe) == nil && probe.Object == "error" && probe.Error == nil
 }
 
 func encodeOpenAITransportError(transportError llmprotocol.TransportError) []byte {

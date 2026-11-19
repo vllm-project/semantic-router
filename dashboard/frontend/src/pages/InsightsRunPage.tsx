@@ -68,6 +68,7 @@ import { getReviewsPath, getSessionRequestsPath } from './insightsReviewSupport'
 import { RunLegend } from './InsightsRunDiagram'
 import { RunAgentsPanel, RunCallsPanel, RunOutcomesPanel } from './InsightsRunPanels'
 import { RunSequence } from './InsightsRunSequence'
+import { RunTimelineCard } from './InsightsRunTimelineCard'
 import { RunEvents, RunStatus } from './InsightsRunsView'
 import {
   countText,
@@ -494,6 +495,15 @@ function AgentRun() {
           hint="Input / output"
         />
       </SummaryStrip>
+
+      <RunTimelineCard
+        run={run}
+        response={response}
+        numbers={numbers}
+        step={step}
+        agents={view.agents}
+        onAgent={toggleAgent}
+      />
 
       <Card id="run-sequence" className="mb-5 scroll-mt-6">
         <CardHeader>

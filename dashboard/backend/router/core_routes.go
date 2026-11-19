@@ -10,7 +10,6 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
-	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
@@ -212,7 +211,7 @@ func resolveToolsDBPath(cfg *config.Config) string {
 	projectRoot := cfg.ConfigBaseDir
 	fallback := filepath.Join(projectRoot, defaultToolsDBPath)
 
-	toolSelection, err := routercontract.ReadToolSelection(cfg.AbsConfigPath)
+	toolSelection, err := handlers.ReadToolSelection(cfg.AbsConfigPath)
 	if err != nil {
 		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", fallback, err)
 		return fallback

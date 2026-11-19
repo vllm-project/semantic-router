@@ -228,7 +228,8 @@ func TestReplayRunCountsEachToolResultOnce(t *testing.T) {
 	require.Equal(t, 200, replayAPIJSON(t, router, "/api/v1/observability/replays/run?session_id=cc-counted", &run))
 	require.Equal(t, 2, run.Run.Outcome.ToolResults)
 	require.Equal(t, 1, run.Run.Outcome.ToolFailures)
-	require.Equal(t, map[string]int{routerreplay.RunMarkerToolFailure: 1}, run.Run.Events)
+	// One call carried both results first; the later calls that repeat them are no tool loop.
+	require.Equal(t, map[string]int{routerreplay.RunMarkerToolLoop: 1, routerreplay.RunMarkerToolFailure: 1}, run.Run.Events)
 	counted := make(map[string][2]int)
 	for _, entry := range run.Calls {
 		counted[entry.RecordID] = [2]int{entry.ToolResults, entry.ToolFailures}
@@ -242,7 +243,7 @@ func TestReplayRunCountsEachToolResultOnce(t *testing.T) {
 	var runs routerreplay.RunListResponse
 	require.Equal(t, 200, replayAPIJSON(t, router, "/api/v1/observability/replays/runs", &runs))
 	require.Len(t, runs.Data, 1)
-	require.Equal(t, map[string]int{routerreplay.RunMarkerToolFailure: 1}, runs.Data[0].Events)
+	require.Equal(t, map[string]int{routerreplay.RunMarkerToolLoop: 1, routerreplay.RunMarkerToolFailure: 1}, runs.Data[0].Events)
 }
 
 // Without arguments Replay captured, a call reads by its tool's name alone.

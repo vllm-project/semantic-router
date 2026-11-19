@@ -15,7 +15,8 @@
         "id": "response_1",
         "model": "public-model",
         "obfuscation": "\u003crandom\u003e",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {
@@ -33,7 +34,8 @@
         "id": "response_1",
         "model": "public-model",
         "obfuscation": "\u003crandom\u003e",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {
@@ -49,7 +51,8 @@
         "id": "response_1",
         "model": "public-model",
         "obfuscation": "\u003crandom\u003e",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {

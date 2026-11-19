@@ -65,7 +65,7 @@ var modelHealthDefaultClient = &http.Client{
 func newModelHealthService(configPath string, options modelHealthOptions) *modelHealthService {
 	loadConfig := options.loadConfig
 	if loadConfig == nil {
-		loadConfig = routerconfig.Parse
+		loadConfig = ReadPersistedRouterConfig
 	}
 	now := options.now
 	if now == nil {

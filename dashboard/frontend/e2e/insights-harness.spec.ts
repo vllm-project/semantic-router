@@ -173,9 +173,18 @@ async function setup(page: Page) {
     seen.lists.push(query)
     const session = query.get('session_id')
     const kind = query.get('request_kind')
-    const data = records.filter(
+    const harnesses = (query.get('harness') ?? '').split(',').filter(Boolean)
+    const harnessOf = (record: (typeof records)[number]) => record.agent?.harness || 'api_client'
+    const others = records.filter(
       (record) =>
         (!session || record.session_id === session) && (!kind || record.request_kind === kind),
+    )
+    const harnessCounts: Record<string, number> = {}
+    for (const record of others) {
+      harnessCounts[harnessOf(record)] = (harnessCounts[harnessOf(record)] ?? 0) + 1
+    }
+    const data = others.filter(
+      (record) => harnesses.length === 0 || harnesses.includes(harnessOf(record)),
     )
     return route.fulfill({
       json: {
@@ -183,6 +192,7 @@ async function setup(page: Page) {
         count: data.length,
         total: data.length,
         has_more: false,
+        harness_counts: harnessCounts,
         data,
       },
     })
@@ -284,25 +294,27 @@ test('lists each request with its harness logo and agent, filters by harness and
   expect(seen.lists.length).toBeGreaterThan(0)
   expect(seen.lists.every((query) => query.get('limit') === '25' && query.has('since'))).toBe(true)
 
+  // The Router counts the harnesses; the class counts read the newest records.
   await page.getByRole('button', { name: 'Client' }).click()
   const opencode = page.getByRole('menuitemcheckbox', { name: /OpenCode/ })
   await expect(opencode).toContainText('1')
   await expect(opencode.getByRole('img', { name: 'OpenCode' })).toBeVisible()
+  expect(seen.lists.some((query) => query.get('limit') === '1' && !query.has('harness'))).toBe(true)
   expect(seen.lists.some((query) => query.get('limit') === '100')).toBe(true)
   await opencode.click()
   await page.keyboard.press('Escape')
   await expect(page).toHaveURL(/harness=opencode/)
   await expect(rows.filter({ hasText: 'Codex' })).toHaveCount(0)
   await expect(housekeeping).toHaveCount(1)
-  await expect(
-    page.getByText(
-      'Client and class filters run in your browser over all 5 requests in the last 24 hours.',
-    ),
-  ).toBeVisible()
+  expect(
+    seen.lists.some((query) => query.get('harness') === 'opencode' && query.get('limit') === '25'),
+  ).toBe(true)
+  await expect(page.getByText('in your browser', { exact: false })).toHaveCount(0)
 
   await page.getByLabel('Hide housekeeping').click()
   await expect(page).toHaveURL(/housekeeping=hide/)
   await expect(housekeeping).toHaveCount(0)
+  await expect(page.getByText('Class filters run in your browser', { exact: false })).toBeVisible()
 })
 
 test("a session is a pivot: its requests, then its run's agent tree", async ({ page }) => {

@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/tidwall/gjson"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 const (
@@ -19,12 +21,13 @@ const (
 	// prose 4B/token heuristic is not a safe routing-admission lower bound.
 	RequestContextStructuredBytesPerToken = 1
 
-	// RequestContextImageTokenBudget is a provider-neutral routing reserve, not
-	// a tokenizer-exact vision charge. Image preprocessing varies by provider,
-	// resolution, tiling, and detail mode; reserving 8K tokens per image is a
-	// deliberately conservative admission estimate while keeping image URLs and
-	// base64 payloads out of text-derived signals and diagnostics.
-	RequestContextImageTokenBudget = 8 * 1024
+	// RequestContextImageTokenBudget is the provider-neutral routing reserve of
+	// an image whose size the estimate cannot read, such as a link: image
+	// preprocessing varies by provider, resolution, tiling, and detail mode.
+	// An inline image is estimated from its size instead
+	// (llmprotocol.InlineImageTokens). Image URLs and base64 payloads stay out
+	// of text-derived signals and diagnostics either way.
+	RequestContextImageTokenBudget = llmprotocol.InputImageTokens
 
 	// Provider chat templates add role/control tokens that are not present in
 	// message content. These fixed reserves are intentionally provider-neutral;
@@ -38,7 +41,8 @@ const (
 // that can consume a model context window. TextBytes and StructuredBytes cover
 // every message role, structured message content, assistant tool calls, tool
 // results, and top-level tool/function schemas. Image payload bytes are
-// excluded and represented by ImageCount and the fixed image-token reserve.
+// excluded and represented by ImageCount and ImageTokens, each image's
+// estimate from its size or the image-token reserve.
 //
 // TokenFloor is a conservative routing floor. EquivalentBytes is its
 // content-free byte equivalent for bounded diagnostics and bookkeeping; it is
@@ -47,12 +51,13 @@ const (
 //
 // The admission formula is:
 //
-//	ceil(TextBytes / 4) + StructuredBytes + 8192*ImageCount +
+//	ceil(TextBytes / 4) + StructuredBytes + ImageTokens +
 //	FramingTokens + OutputTokenReserve
 type RequestContextEstimate struct {
 	TextBytes           int
 	StructuredBytes     int
 	ImageCount          int
+	ImageTokens         int
 	MessageCount        int
 	ToolCallCount       int
 	ToolDefinitionCount int
@@ -72,6 +77,7 @@ type requestContextAccumulator struct {
 	textBytes           int
 	structuredBytes     int
 	imageCount          int
+	imageTokens         int
 	messageCount        int
 	toolCallCount       int
 	toolDefinitionCount int
@@ -185,7 +191,7 @@ func (estimate *requestContextAccumulator) addOpenAIToolResultContent(content gj
 	}
 	if !content.IsArray() {
 		if content.IsObject() && isContextImageType(content) {
-			estimate.addImage()
+			estimate.addImage(content)
 			return
 		}
 		estimate.addStructuredJSON(content)
@@ -195,7 +201,7 @@ func (estimate *requestContextAccumulator) addOpenAIToolResultContent(content gj
 		if part.IsObject() {
 			switch strings.ToLower(strings.TrimSpace(part.Get("type").String())) {
 			case "image", "image_url", "input_image":
-				estimate.addImage()
+				estimate.addImage(part)
 				return true
 			}
 		}
@@ -234,7 +240,7 @@ func (estimate *requestContextAccumulator) addOpenAIContentPart(part gjson.Resul
 	}
 	switch strings.ToLower(strings.TrimSpace(part.Get("type").String())) {
 	case "image", "image_url", "input_image":
-		estimate.addImage()
+		estimate.addImage(part)
 	case "text", "input_text", "output_text":
 		text := part.Get("text")
 		if text.Exists() {
@@ -319,7 +325,7 @@ func (estimate *requestContextAccumulator) addAnthropicContentBlock(block gjson.
 	}
 	switch strings.ToLower(strings.TrimSpace(block.Get("type").String())) {
 	case "image":
-		estimate.addImage()
+		estimate.addImage(block)
 	case "text", "input_text", "output_text":
 		text := block.Get("text")
 		if text.Exists() {
@@ -347,7 +353,7 @@ func (estimate *requestContextAccumulator) addAnthropicToolResultContent(content
 	}
 	if !content.IsArray() {
 		if content.IsObject() && isContextImageType(content) {
-			estimate.addImage()
+			estimate.addImage(content)
 			return
 		}
 		estimate.addStructuredJSON(content)
@@ -358,7 +364,7 @@ func (estimate *requestContextAccumulator) addAnthropicToolResultContent(content
 			strings.TrimSpace(block.Get("type").String()),
 			"image",
 		) {
-			estimate.addImage()
+			estimate.addImage(block)
 			return true
 		}
 		estimate.addPart(block)
@@ -515,11 +521,30 @@ func (estimate *requestContextAccumulator) addFramingTokens(count int) {
 	estimate.framingTokens = saturatingAddContextEstimate(estimate.framingTokens, count)
 }
 
-func (estimate *requestContextAccumulator) addImage() {
+func (estimate *requestContextAccumulator) addImage(part gjson.Result) {
 	estimate.hasNonText = true
 	if estimate.imageCount < maxContextEstimateInt() {
 		estimate.imageCount++
 	}
+	estimate.imageTokens = saturatingAddContextEstimate(estimate.imageTokens, requestContextImageTokens(part))
+}
+
+// requestContextImageTokens estimates one image part's tokens from the size
+// of an inline image: an Anthropic base64 source, or a data URL in a Chat or
+// Responses part. Any other image keeps RequestContextImageTokenBudget.
+func requestContextImageTokens(part gjson.Result) int {
+	if source := part.Get("source"); source.IsObject() {
+		if data := source.Get("data"); strings.EqualFold(source.Get("type").String(), "base64") && data.Type == gjson.String {
+			return llmprotocol.InlineImageTokens(data.String())
+		}
+		return RequestContextImageTokenBudget
+	}
+	for _, path := range []string{"image_url.url", "image_url", "url"} {
+		if url := part.Get(path); url.Type == gjson.String {
+			return llmprotocol.DataURLImageTokens(url.String())
+		}
+	}
+	return RequestContextImageTokenBudget
 }
 
 func (estimate requestContextAccumulator) result() RequestContextEstimate {
@@ -531,12 +556,8 @@ func (estimate requestContextAccumulator) result() RequestContextEstimate {
 		estimate.structuredBytes,
 		RequestContextStructuredBytesPerToken,
 	)
-	imageTokens := saturatingMultiplyContextEstimate(
-		estimate.imageCount,
-		RequestContextImageTokenBudget,
-	)
 	tokenFloor := saturatingAddContextEstimate(textTokens, structuredTokens)
-	tokenFloor = saturatingAddContextEstimate(tokenFloor, imageTokens)
+	tokenFloor = saturatingAddContextEstimate(tokenFloor, estimate.imageTokens)
 	tokenFloor = saturatingAddContextEstimate(tokenFloor, estimate.framingTokens)
 	tokenFloor = saturatingAddContextEstimate(tokenFloor, estimate.outputTokenReserve)
 	withoutReserves := saturatingAddContextEstimate(textTokens, ceilContextEstimateDivision(
@@ -549,6 +570,7 @@ func (estimate requestContextAccumulator) result() RequestContextEstimate {
 		TextBytes:           estimate.textBytes,
 		StructuredBytes:     estimate.structuredBytes,
 		ImageCount:          estimate.imageCount,
+		ImageTokens:         estimate.imageTokens,
 		MessageCount:        estimate.messageCount,
 		ToolCallCount:       estimate.toolCallCount,
 		ToolDefinitionCount: estimate.toolDefinitionCount,

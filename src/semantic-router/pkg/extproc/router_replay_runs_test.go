@@ -116,10 +116,10 @@ func TestReplayRunReturnsTheAgentTree(t *testing.T) {
 	require.Len(t, run.Calls[0].Hops, 1)
 	require.Equal(t, ids["hop-1"], run.Calls[0].Hops[0].RecordID)
 	require.Equal(t, []string{"keyword:build"}, run.Calls[0].Signals)
-	require.Equal(t, []string{routerreplay.RunMarkerFailure}, run.Calls[2].Markers)
+	require.Equal(t, []string{routerreplay.RunMarkerSubagentStart, routerreplay.RunMarkerFailure}, run.Calls[2].Markers)
 	last := run.Calls[3]
 	require.Equal(t, "small", last.PreviousModel)
-	require.Equal(t, []string{routerreplay.RunMarkerSwitch, routerreplay.RunMarkerToolFailure}, last.Markers)
+	require.Equal(t, []string{routerreplay.RunMarkerSwitch, routerreplay.RunMarkerToolLoop, routerreplay.RunMarkerToolFailure}, last.Markers)
 	require.Equal(t, "complexity rose", last.Reason)
 	require.True(t, last.FinalAnswer)
 	require.Len(t, last.Outcomes, 1)
@@ -128,7 +128,7 @@ func TestReplayRunReturnsTheAgentTree(t *testing.T) {
 		Status: routerreplay.RunStatusAnswered, FinalAnswerRecordID: ids["main-2"], ToolResults: 1, ToolFailures: 1,
 		Reported: []routerreplay.RunOutcomeAt{{RecordID: ids["main-2"], Outcome: last.Outcomes[0]}},
 	}, summary.Outcome)
-	require.Equal(t, map[string]int{"failure": 1, "switch": 1, "tool_failure": 1}, summary.Events)
+	require.Equal(t, map[string]int{"failure": 1, "subagent_start": 2, "switch": 1, "tool_failure": 1, "tool_loop": 1}, summary.Events)
 	require.Len(t, summary.Cost.ByCurrency, 1)
 	require.InDelta(t, 0.013, summary.Cost.ByCurrency[0].Total, 1e-9)
 	// The Looper call counts its hop, which answered it, and the failed call

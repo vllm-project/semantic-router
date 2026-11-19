@@ -22,6 +22,17 @@ const (
 	RunMarkerFailure = "failure"
 	// RunMarkerToolFailure is a call that carried a failed tool result.
 	RunMarkerToolFailure = "tool_failure"
+	// RunMarkerSubagentStart is the first call of a subagent.
+	RunMarkerSubagentStart = "subagent_start"
+	// RunMarkerCompaction is a call that compacts its agent's context.
+	RunMarkerCompaction = "compaction"
+	// RunMarkerHousekeeping is a harness's side call: a session title or
+	// another auxiliary request.
+	RunMarkerHousekeeping = "housekeeping"
+	// RunMarkerToolLoop is a call that carried tool results back.
+	RunMarkerToolLoop = "tool_loop"
+	// RunMarkerImage is a call whose newest turn holds an image.
+	RunMarkerImage = "image"
 )
 
 // Run outcome statuses: the main agent's last call answered, failed, was
@@ -69,7 +80,8 @@ type RunSummary struct {
 
 // RunAgent is one agent of a run. Label names it in the run, main or
 // subagent N by first call; Parent is the label of the agent that spawned
-// it. ID is the short hash of the agent id the harness sent.
+// it. ID is the short hash of the agent id the harness sent, and Type the
+// subagent type it names.
 // SpawnedAfterRecordID is the parent agent's last call before this agent's
 // first one, where the diagram marks the spawn.
 type RunAgent struct {
@@ -77,6 +89,7 @@ type RunAgent struct {
 	ID                   string    `json:"id,omitempty"`
 	Parent               string    `json:"parent,omitempty"`
 	Kind                 string    `json:"kind,omitempty"`
+	Type                 string    `json:"type,omitempty"`
 	Calls                int       `json:"calls"`
 	FirstCallAt          time.Time `json:"first_call_at"`
 	LastCallAt           time.Time `json:"last_call_at"`
@@ -164,6 +177,9 @@ type RunCall struct {
 	SessionAction    string                 `json:"session_action,omitempty"`
 	Reason           string                 `json:"reason,omitempty"`
 	RequestKind      string                 `json:"request_kind,omitempty"`
+	RequestClass     string                 `json:"request_class,omitempty"`
+	AgentType        string                 `json:"agent_type,omitempty"`
+	ImageCount       int                    `json:"image_count,omitempty"`
 	LifecycleState   string                 `json:"lifecycle_state"`
 	ResponseStatus   int                    `json:"response_status,omitempty"`
 	TerminalReason   string                 `json:"terminal_reason,omitempty"`

@@ -47,6 +47,8 @@ configured, because protection reads what they send:
 | OpenCode | `x-session-id`, a `session_id_headers` default; on a subagent's calls `x-parent-session-id` | on a subagent's calls, its own session in `x-session-id` |
 | Pi, with the provider `vllm-sr connect pi` writes, and the VS Code extension | `x-session-id`, a `session_id_headers` default | none |
 | DeepSeek Harness | none | none |
+| Cursor, with a custom OpenAI base URL | none | none |
+| OpenClaw | none | none |
 
 - **Session.** With `identity.headers.session` unset, protection reads the
   session the request pins, `x-vsr-session-id` or a `session_id_headers`
@@ -63,7 +65,24 @@ configured, because protection reads what they send:
   `opencode/<version>`, and DeepSeek Harness by its User-Agent,
   `deepseek-harness/<version>`; DeepSeek Harness sends no session or agent
   header, so its calls keep the session the Router derives unless the request
-  pins one in `x-vsr-session-id`.
+  pins one in `x-vsr-session-id`. Cursor is known by a User-Agent that starts
+  with `Cursor/`, and OpenClaw by the `<!-- openclaw:` comment its system
+  prompt opens with; neither sends a session or agent header.
+- **Replay's conversation id for Cursor and OpenClaw.** The conversation-start
+  fingerprint reads only the first 512 characters of the first user message,
+  and Cursor opens that message with the same workspace preamble in every
+  conversation, so its conversations would share one fingerprint. Replay
+  therefore files a Cursor or OpenClaw call that pins no session under
+  `cursor-start-<hash>` or `openclaw-start-<hash>`. OpenClaw names its session
+  in `prompt_cache_key` when its model entry sets
+  `compat.supportsPromptCacheKey: true`; the part before `:` is then the
+  session, `openclaw-<session>`, kept across its compactions. The hash covers
+  the whole first user message, the first 512 characters of the system instructions, the
+  request's `user` field and the authenticated tenant, keyed with
+  `USER_SCOPE_NAMESPACE_SECRET` as the fingerprint is. Every call of one
+  conversation resends them, and only the hash is kept. Replay and tracing
+  read it; protection and routing never do. A compaction that rewrites the
+  conversation's opening starts a new id.
 - **Codex's turn metadata.** Without those headers, protection reads the
   `session_id` and `thread_id` of Codex's `x-codex-turn-metadata`, or of a
   Responses request's `client_metadata`.
@@ -87,10 +106,12 @@ spawned it, Codex's `x-codex-parent-thread-id`: see
 conversation ID does not change the protection scope or reset model ownership
 under session scope.
 
-The Responses API keeps explicit conversation membership separate from response
-lineage. A request's `conversation` value identifies that membership;
+The Responses API keeps conversations separate from response lineage. The
+Router keeps no Conversations objects and refuses a request that names a
+`conversation` with `unsupported_conversation`; see
+[Responses state](../installation/protocol-compatibility#responses-state-custom-tools-and-verbosity).
 `previous_response_id` retrieves retained history and provides an internal
-lineage tracking key, without joining or creating a conversation. With neither,
+lineage tracking key, without joining or creating a conversation. Without it,
 the router generates an internal tracking identity. These telemetry identities
 do not replace the configured identity headers required by Router Learning
 protection.

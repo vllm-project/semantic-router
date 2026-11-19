@@ -37,6 +37,8 @@ export interface HomeTrafficState {
   aggregate: HomeAggregate | null
   /** The newest records of the range, newest first. */
   rows: InsightsRecord[]
+  /** The range's requests by agent harness, as the records list counts them. */
+  harnessCounts: Record<string, number> | null
   /** The newest records' traffic, for a router whose aggregate has no series. */
   window: TrafficView | null
   /** Agent session titles by session id, for listed records that carry none. */
@@ -121,6 +123,7 @@ export function createHomeTraffic({
     const state: HomeTrafficState = {
       aggregate: saved?.aggregate ?? null,
       rows: saved?.rows ?? [],
+      harnessCounts: saved?.harnessCounts ?? null,
       window: saved?.window ?? null,
       titles: saved?.titles ?? {},
       ...flags(range),
@@ -145,6 +148,7 @@ export function createHomeTraffic({
             rows: state.rows,
             window: state.window,
             titles: state.titles,
+            ...(state.harnessCounts ? { harnessCounts: state.harnessCounts } : {}),
           }),
         )
     } catch {
@@ -226,7 +230,11 @@ export function createHomeTraffic({
     })
     read<InsightsListResponse>(range, 'rows', `${REPLAYS}${query}`, 'recent requests', {
       done: (list) => {
-        publish(range, { rows: list.data ?? [], rowsError: null }, true)
+        publish(
+          range,
+          { rows: list.data ?? [], harnessCounts: list.harness_counts ?? null, rowsError: null },
+          true,
+        )
         readTitles(range)
       },
       failed: (error) => {

@@ -480,6 +480,8 @@ export interface HomeSnapshot {
   /** The newest records' traffic, for a router whose aggregate has no series. */
   window: TrafficView | null
   titles: Record<string, string>
+  /** The range's requests by agent harness, when the router counted them. */
+  harnessCounts?: Record<string, number>
 }
 
 const SNAPSHOT_VERSION = 1
@@ -522,5 +524,8 @@ export function parseHomeSnapshot(text: string | null, now: number): HomeSnapsho
     rows: value.rows as InsightsRecord[],
     window: value.window as TrafficView | null,
     titles: value.titles as Record<string, string>,
+    ...(isObject(value.harnessCounts)
+      ? { harnessCounts: value.harnessCounts as Record<string, number> }
+      : {}),
   }
 }

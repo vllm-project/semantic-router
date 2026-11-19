@@ -216,7 +216,7 @@ func appendEvaluatedRulesFromTrace(result *TestQueryResult, configPath, requestM
 		return
 	}
 	priorities := make(map[string]int)
-	if parsedConfig, err := routerconfig.Parse(configPath); err == nil && parsedConfig != nil {
+	if parsedConfig, err := ReadPersistedRouterConfig(configPath); err == nil && parsedConfig != nil {
 		for _, decision := range topologyConfigForRequestModel(parsedConfig, requestModel).IntelligentRouting.Decisions {
 			priorities[decision.Name] = decision.Priority
 		}

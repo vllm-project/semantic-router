@@ -540,6 +540,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         self.info = info
         self.engine_model = engine_model
         self.tokenizer = tokenizer
+        self.prompts = prompt.PromptEncoder(tokenizer)
         self.pad_id = pad_id
         self.readout = readout
         self.codes: list[str] = decision["codes"]
@@ -582,22 +583,35 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         return cap if limit is None else min(cap, limit)
 
     def calibration_items(self, rows: int, row_tokens: int) -> list[Item] | None:
-        """Text rows of ``row_tokens`` tokens of a two-option question, for the startup calibration."""
+        """Text rows of ``row_tokens`` tokens of a two-option question, for the startup calibration.
+
+        Each row opens with its own ``case N:`` marker: the rows stay uniform
+        in shape but content-distinct for any ``rows`` — the burst calibration
+        times the no-sharing case, which content dedup would otherwise
+        collapse. (Rotating a cyclic filler repeats every ``len(filler)``
+        rows: 11 distinct states among 32 calibration rows on the d3
+        tokenizer.)
+        """
         filler = self.tokenizer.encode(
             "Decide whether this request needs a careful answer. ",
             add_special_tokens=False,
         ).ids
-        ids = list(itertools.islice(itertools.cycle(filler), row_tokens))
-        return [
-            Item(
-                question_id=f"calibration{row}",
-                task_type="noul",
-                ids=ids,
-                keys=["false", "true"],
-                descriptions=[None, None],
+        base = list(itertools.islice(itertools.cycle(filler), row_tokens))
+        out = []
+        for row in range(rows):
+            marker = self.tokenizer.encode(
+                f"Case {row}: ", add_special_tokens=False
+            ).ids
+            out.append(
+                Item(
+                    question_id=f"calibration{row}",
+                    task_type="noul",
+                    ids=(marker + base)[:row_tokens],
+                    keys=["false", "true"],
+                    descriptions=[None, None],
+                )
             )
-            for row in range(rows)
-        ]
+        return out
 
     def shared_context(self, items: list[Item], token_budget: int | None) -> int | None:
         return 0
@@ -699,31 +713,22 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         tokens = 0
         read, errors = self._read(questions)
         header = self._header(read, media)
-        rendered: list[tuple[str, str, list[str], list[Any], str]] = []
-        for question_id, kind, instructions, keys, texts, descriptions in read:
-            text = prompt.render(
-                prompt.user_prompt(state, instructions, texts, self.codes, header),
-                images,
-                videos,
+        rendered = [
+            (
+                question_id,
+                kind,
+                keys,
+                descriptions,
+                prompt.render(
+                    prompt.user_prompt(state, instructions, texts, self.codes, header),
+                    images,
+                    videos,
+                ),
             )
-            if media and (
-                text.count(prompt.IMAGE_TOKEN) != images
-                or text.count(prompt.VIDEO_TOKEN) != videos
-            ):
-                errors[question_id] = question_error(
-                    kind,
-                    QuestionError(
-                        INVALID_QUESTION,
-                        "the state or question contains a literal image or video placeholder token",
-                    ),
-                )
-                continue
-            rendered.append((question_id, kind, keys, descriptions, text))
+            for question_id, kind, instructions, keys, texts, descriptions in read
+        ]
         temperature = self.request_temperature(len(rendered))
-        # One call for all questions: the tokenizer releases the GIL for a batch, not for a single text.
-        encodings = self.tokenizer.encode_batch(
-            [entry[-1] for entry in rendered], add_special_tokens=False
-        )
+        encodings = self.prompts.encode_batch([entry[-1] for entry in rendered])
         for (question_id, kind, keys, descriptions, _), encoding in zip(
             rendered, encodings, strict=True
         ):
@@ -790,7 +795,17 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
 
     def _expand(self, ids: list[int], media: RequestMedia) -> list[int]:
         """Each image placeholder repeated once per input token of its image, and each video placeholder as its
-        expansion (timestamped frame pairs), images and videos in order."""
+        expansion (timestamped frame pairs), images and videos in order. Placeholders that do not match the
+        media one for one refuse the request before any is expanded."""
+        held = (
+            ids.count(self.image_token) if self.image_token is not None else 0,
+            ids.count(self.video_token) if self.video_token is not None else 0,
+        )
+        if held != (len(media.images), len(media.videos)):
+            raise ValueError(
+                f"the prompt holds {held[0]} image and {held[1]} video placeholders for "
+                f"{len(media.images)} images and {len(media.videos)} videos"
+            )
         out: list[int] = []
         images = iter(media.images)
         videos = iter(media.video_ids)
