@@ -81,30 +81,6 @@ models:
     status: claimed
     verified_at: 2026-11-16
     source: https://platform.claude.com/docs/en/models/opus-5-5/overview
-- catalog: anthropic/claude-haiku-5.5
-  relationship: first_party
-  id: claude-haiku-5-5
-  protocols:
-  - anthropic/messages@1
-  pricing:
-    currency: USD
-    prompt_per_1m: 0.1
-    cached_input_per_1m: 0.01
-    cache_write_per_1m: 0.125
-    cache_write_1h_per_1m: 0.2
-    completion_per_1m: 0.5
-  restrictions:
-    long_context_pricing:
-      input_threshold_tokens: 100000
-      prompt_multiplier: 5.0
-      cached_input_multiplier: 5.0
-      cache_write_multiplier: 5.0
-      completion_multiplier: 5.0
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-11-17
-    source: https://platform.claude.com/docs/en/models/haiku-5-5/overview
 - catalog: anthropic/claude-sonnet-5
   relationship: first_party
   id: claude-sonnet-5
@@ -190,3 +166,19 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+# A model ID without a Model Card, priced from the same page. The entry only
+# prices the model ID a backend calls; it is never a model. Claude Haiku 5.5
+# costs five times as much for a prompt over 100,000 tokens.
+price_list:
+- id: claude-haiku-5-5
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.1
+    cached_input_per_1m: 0.01
+    cache_write_per_1m: 0.125
+    cache_write_1h_per_1m: 0.2
+    completion_per_1m: 0.5
+  verification:
+    status: claimed
+    verified_at: 2026-11-16
+    source: https://platform.claude.com/docs/en/about-claude/pricing

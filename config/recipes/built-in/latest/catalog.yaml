@@ -279,30 +279,6 @@ providers:
       status: claimed
       verified_at: '2026-11-16'
       source: https://platform.claude.com/docs/en/models/opus-5-5/overview
-  - catalog: anthropic/claude-haiku-5.5
-    relationship: first_party
-    id: claude-haiku-5-5
-    protocols:
-    - anthropic/messages@1
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.1
-      cached_input_per_1m: 0.01
-      cache_write_per_1m: 0.125
-      cache_write_1h_per_1m: 0.2
-      completion_per_1m: 0.5
-    restrictions:
-      long_context_pricing:
-        input_threshold_tokens: 100000
-        prompt_multiplier: 5.0
-        cached_input_multiplier: 5.0
-        cache_write_multiplier: 5.0
-        completion_multiplier: 5.0
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-11-17'
-      source: https://platform.claude.com/docs/en/models/haiku-5-5/overview
   - catalog: anthropic/claude-sonnet-5
     relationship: first_party
     id: claude-sonnet-5
@@ -388,6 +364,19 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://docs.anthropic.com/en/docs/about-claude/models/overview
+  price_list:
+  - id: claude-haiku-5-5
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.1
+      cached_input_per_1m: 0.01
+      cache_write_per_1m: 0.125
+      cache_write_1h_per_1m: 0.2
+      completion_per_1m: 0.5
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://platform.claude.com/docs/en/about-claude/pricing
 - id: apodex
   display_name: Apodex AI
   description: Apodex reasoning models through first-party OpenAI and Anthropic compatible APIs.
@@ -1933,106 +1922,6 @@ providers:
       status: claimed
       verified_at: '2026-09-07'
       source: https://developers.openai.com/api/docs/models/gpt-6-astra
-  - catalog: openai/gpt-6.1-sol
-    relationship: first_party
-    id: gpt-6.1-sol
-    protocols:
-    - openai/chat-completions@1
-    - openai/responses@1
-    pricing:
-      currency: USD
-      prompt_per_1m: 2.0
-      cached_input_per_1m: 0.1
-      cache_write_per_1m: 2.5
-      completion_per_1m: 10.0
-    restrictions:
-      tools_protocols:
-      - openai/responses@1
-      long_context_pricing:
-        input_threshold_tokens: 272000
-        prompt_multiplier: 2.0
-        cached_input_multiplier: 2.0
-        cache_write_multiplier: 2.0
-        completion_multiplier: 1.5
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-11-17'
-      source: https://developers.openai.com/api/docs/models/gpt-6.1-sol
-  - catalog: openai/gpt-6.1-terra
-    relationship: first_party
-    id: gpt-6.1-terra
-    protocols:
-    - openai/chat-completions@1
-    - openai/responses@1
-    pricing:
-      currency: USD
-      prompt_per_1m: 1.0
-      cached_input_per_1m: 0.05
-      cache_write_per_1m: 1.25
-      completion_per_1m: 5.0
-    restrictions:
-      tools_protocols:
-      - openai/responses@1
-      long_context_pricing:
-        input_threshold_tokens: 272000
-        prompt_multiplier: 2.0
-        cached_input_multiplier: 2.0
-        cache_write_multiplier: 2.0
-        completion_multiplier: 1.5
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-11-17'
-      source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
-  - catalog: openai/gpt-6-sol
-    relationship: first_party
-    id: gpt-6-sol
-    protocols:
-    - openai/chat-completions@1
-    - openai/responses@1
-    pricing:
-      currency: USD
-      prompt_per_1m: 2.0
-      cached_input_per_1m: 0.2
-      cache_write_per_1m: 2.5
-      completion_per_1m: 10.0
-    restrictions:
-      long_context_pricing:
-        input_threshold_tokens: 272000
-        prompt_multiplier: 2.0
-        cached_input_multiplier: 2.0
-        cache_write_multiplier: 2.0
-        completion_multiplier: 1.5
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-11-17'
-      source: https://developers.openai.com/api/docs/models/gpt-6-sol
-  - catalog: openai/gpt-6-luna
-    relationship: first_party
-    id: gpt-6-luna
-    protocols:
-    - openai/chat-completions@1
-    - openai/responses@1
-    pricing:
-      currency: USD
-      prompt_per_1m: 0.1
-      cached_input_per_1m: 0.01
-      cache_write_per_1m: 0.125
-      completion_per_1m: 0.5
-    restrictions:
-      long_context_pricing:
-        input_threshold_tokens: 272000
-        prompt_multiplier: 2.0
-        cached_input_multiplier: 2.0
-        cache_write_multiplier: 2.0
-        completion_multiplier: 1.5
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-11-17'
-      source: https://developers.openai.com/api/docs/models/gpt-6-luna
   - catalog: openai/gpt-5.4
     relationship: first_party
     id: gpt-5.4
@@ -2165,6 +2054,51 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://developers.openai.com/api/docs/models/gpt-5.6-luna
+  price_list:
+  - id: gpt-6.1-sol
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      cached_input_per_1m: 0.1
+      cache_write_per_1m: 2.5
+      completion_per_1m: 10.0
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://developers.openai.com/api/docs/pricing
+  - id: gpt-6.1-terra
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.0
+      cached_input_per_1m: 0.05
+      cache_write_per_1m: 1.25
+      completion_per_1m: 5.0
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://developers.openai.com/api/docs/pricing
+  - id: gpt-6-sol
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      cached_input_per_1m: 0.2
+      cache_write_per_1m: 2.5
+      completion_per_1m: 10.0
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://developers.openai.com/api/docs/pricing
+  - id: gpt-6-luna
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.1
+      cached_input_per_1m: 0.01
+      cache_write_per_1m: 0.125
+      completion_per_1m: 0.5
+    verification:
+      status: claimed
+      verified_at: '2026-11-16'
+      source: https://developers.openai.com/api/docs/pricing
 - id: openrouter
   display_name: OpenRouter
   description: One API for a broad model catalog.
@@ -5433,46 +5367,6 @@ models:
   - proprietary
   - agentic
   released_at: '2026-09-22'
-- id: anthropic/claude-haiku-5.5
-  display_name: Claude Haiku 5.5
-  description: Anthropic Haiku model for high-volume, latency-sensitive work such as classification, routing, extraction,
-    and subagent tasks.
-  kind: physical
-  publisher: Anthropic
-  presentation:
-    logo: package:anthropic
-    monogram: A
-    monochrome: true
-  distribution:
-    type: proprietary_api
-    source: https://platform.claude.com/docs/en/models/haiku-5-5/overview
-  family: claude-haiku
-  lifecycle: active
-  limits:
-    context_window_size: 1000000
-    max_output_tokens: 128000
-  capabilities:
-  - chat
-  - reasoning
-  - tools
-  - vision
-  - long_context
-  modalities:
-    input:
-    - text
-    - image
-    output:
-    - text
-  verification:
-    authority: Anthropic
-    status: claimed
-    verified_at: '2026-11-17'
-    source: https://platform.claude.com/docs/en/models/haiku-5-5/overview
-  tags:
-  - efficient
-  - proprietary
-  - agentic
-  released_at: '2026-10-07'
 - id: anthropic/claude-fable-5.1
   display_name: Claude Fable 5.1
   description: Anthropic high-capability model with extended context and output limits.
@@ -8266,170 +8160,6 @@ models:
   - agentic
   released_at: '2026-09-03'
   knowledge_cutoff: '2026-04-30'
-- id: openai/gpt-6.1-sol
-  display_name: GPT-6.1 Sol
-  description: OpenAI GPT-6.1 model for complex coding, computer use, and professional work.
-  kind: physical
-  publisher: OpenAI
-  presentation:
-    logo: package:openai
-    monogram: O
-    monochrome: true
-  distribution:
-    type: proprietary_api
-    source: https://developers.openai.com/api/docs/models/gpt-6.1-sol
-  family: gpt-6
-  lifecycle: active
-  limits:
-    context_window_size: 1050000
-    max_output_tokens: 128000
-  capabilities:
-  - chat
-  - reasoning
-  - tools
-  - structured_output
-  - vision
-  - long_context
-  modalities:
-    input:
-    - text
-    - image
-    output:
-    - text
-  reasoning_family: gpt-6-astra
-  verification:
-    authority: OpenAI
-    status: claimed
-    verified_at: '2026-11-17'
-    source: https://developers.openai.com/api/docs/models/gpt-6.1-sol
-  tags:
-  - frontier
-  - proprietary
-  - agentic
-  knowledge_cutoff: '2026-04-30'
-- id: openai/gpt-6.1-terra
-  display_name: GPT-6.1 Terra
-  description: OpenAI fast, efficient GPT-6.1 model for visual reasoning, precise computer use, and clear, natural writing.
-  kind: physical
-  publisher: OpenAI
-  presentation:
-    logo: package:openai
-    monogram: O
-    monochrome: true
-  distribution:
-    type: proprietary_api
-    source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
-  family: gpt-6
-  lifecycle: active
-  limits:
-    context_window_size: 1050000
-    max_output_tokens: 128000
-  capabilities:
-  - chat
-  - reasoning
-  - tools
-  - structured_output
-  - vision
-  - long_context
-  modalities:
-    input:
-    - text
-    - image
-    output:
-    - text
-  reasoning_family: gpt-5.6
-  verification:
-    authority: OpenAI
-    status: claimed
-    verified_at: '2026-11-17'
-    source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
-  tags:
-  - efficient
-  - proprietary
-  - agentic
-  knowledge_cutoff: '2026-06-01'
-- id: openai/gpt-6-sol
-  display_name: GPT-6 Sol
-  description: OpenAI GPT-6 model built for complex coding and agentic workflows.
-  kind: physical
-  publisher: OpenAI
-  presentation:
-    logo: package:openai
-    monogram: O
-    monochrome: true
-  distribution:
-    type: proprietary_api
-    source: https://developers.openai.com/api/docs/models/gpt-6-sol
-  family: gpt-6
-  lifecycle: active
-  limits:
-    context_window_size: 1050000
-    max_output_tokens: 128000
-  capabilities:
-  - chat
-  - reasoning
-  - tools
-  - structured_output
-  - vision
-  - long_context
-  modalities:
-    input:
-    - text
-    - image
-    output:
-    - text
-  reasoning_family: gpt-5.6
-  verification:
-    authority: OpenAI
-    status: claimed
-    verified_at: '2026-11-17'
-    source: https://developers.openai.com/api/docs/models/gpt-6-sol
-  tags:
-  - frontier
-  - proprietary
-  - agentic
-  knowledge_cutoff: '2026-04-20'
-- id: openai/gpt-6-luna
-  display_name: GPT-6 Luna
-  description: OpenAI efficient GPT-6 model for focused, high-volume tasks.
-  kind: physical
-  publisher: OpenAI
-  presentation:
-    logo: package:openai
-    monogram: O
-    monochrome: true
-  distribution:
-    type: proprietary_api
-    source: https://developers.openai.com/api/docs/models/gpt-6-luna
-  family: gpt-6
-  lifecycle: active
-  limits:
-    context_window_size: 1050000
-    max_output_tokens: 128000
-  capabilities:
-  - chat
-  - reasoning
-  - tools
-  - structured_output
-  - vision
-  - long_context
-  modalities:
-    input:
-    - text
-    - image
-    output:
-    - text
-  reasoning_family: gpt-5.6
-  verification:
-    authority: OpenAI
-    status: claimed
-    verified_at: '2026-11-17'
-    source: https://developers.openai.com/api/docs/models/gpt-6-luna
-  tags:
-  - efficient
-  - proprietary
-  - agentic
-  knowledge_cutoff: '2026-05-18'
 - id: openai/gpt-5.6-sol
   display_name: GPT-5.6 Sol
   description: OpenAI high-capability GPT-5.6 model for demanding reasoning and agentic work.
@@ -16823,205 +16553,6 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://assets.claude.com/870c8f525702625d2c62fc6dd04c857e3250bec1.pdf
-    redistributable: true
-- id: anthropic/claude-haiku-5-5-max-swe-bench-pro@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: swe-bench/pro@1.0.0
-  benchmark_profile: published-agent
-  reasoning_effort: max
-  subject:
-    variant: Claude Haiku 5.5
-    reasoning_effort: max
-    thinking_mode: adaptive
-    trials: 5
-    effort_source: table_8_1_a_standard_configuration
-    source_kind: official_system_card
-  metrics:
-    resolved: 0.648
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: vendor_claimed
-    verification: claimed
-    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
-    redistributable: true
-- id: anthropic/claude-haiku-5-5-max-frontiercode-1-1-main@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: cognition/frontiercode@1.1.0
-  benchmark_profile: main
-  reasoning_effort: max
-  subject:
-    variant: Claude Haiku 5.5
-    reasoning_effort: max
-    thinking_mode: adaptive
-    subset: main
-    source_kind: official_system_card
-  metrics:
-    score: 0.464
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: vendor_claimed
-    verification: claimed
-    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
-    redistributable: true
-- id: anthropic/claude-haiku-5-5-max-terminal-bench-4@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: harbor/terminal-bench@4.0.0
-  benchmark_profile: published-agent
-  reasoning_effort: max
-  subject:
-    variant: Claude Haiku 5.5
-    reasoning_effort: max
-    thinking_mode: adaptive
-    harness: Claude Code --bare
-    trials: 10
-    safeguards: enabled without a fallback model
-    source_kind: official_system_card
-  metrics:
-    resolved: 0.392
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: vendor_claimed
-    verification: claimed
-    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
-    redistributable: true
-- id: anthropic/claude-haiku-5-5-max-humanitys-last-exam-no-tools@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: published-no-tools
-  reasoning_effort: max
-  subject:
-    variant: Claude Haiku 5.5
-    reasoning_effort: max
-    thinking_mode: adaptive
-    tool_policy: no_tools
-    trials: 5
-    effort_source: table_8_1_a_standard_configuration
-    source_kind: official_system_card
-  metrics:
-    accuracy: 0.459
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: vendor_claimed
-    verification: claimed
-    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
-    redistributable: true
-- id: anthropic/claude-haiku-5-5-max-humanitys-last-exam-with-tools@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: with-tools
-  reasoning_effort: max
-  subject:
-    variant: Claude Haiku 5.5
-    reasoning_effort: max
-    thinking_mode: adaptive
-    tool_policy: with_tools
-    trials: 5
-    effort_source: table_8_1_a_standard_configuration
-    source_kind: official_system_card
-  metrics:
-    accuracy: 0.574
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: vendor_claimed
-    verification: claimed
-    source: https://assets.claude.com/e1080d6bf5ae2018ea3c2f414064be03232f5be5.pdf
-    redistributable: true
-- id: independent/claude-haiku-5-5-max-critpt@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: artificial-analysis/critpt@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: Claude Haiku 5.5 (max)
-    source_model_slug: claude-haiku-5-5
-    run_kind: independent
-  metrics:
-    score: 0.188571428571429
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/claude-haiku-5-5
-    redistributable: true
-- id: independent/claude-haiku-5-5-max-humanitys-last-exam@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-text-only
-  reasoning_effort: max
-  subject:
-    source_model: Claude Haiku 5.5 (max)
-    source_model_slug: claude-haiku-5-5
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    accuracy: 0.443929564411492
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/claude-haiku-5-5
-    redistributable: true
-- id: independent/claude-haiku-5-5-max-artificial-analysis-long-context-reasoning@1.1.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: artificial-analysis/lcr@1.1.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: Claude Haiku 5.5 (max)
-    source_model_slug: claude-haiku-5-5
-    run_kind: independent
-  metrics:
-    score: 0.826666666666667
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/claude-haiku-5-5
-    redistributable: true
-- id: independent/claude-haiku-5-5-max-omniscience@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: artificial-analysis/omniscience@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: Claude Haiku 5.5 (max)
-    source_model_slug: claude-haiku-5-5
-    run_kind: independent
-  metrics:
-    index: 12.3
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/claude-haiku-5-5
-    redistributable: true
-- id: independent/claude-haiku-5-5-max-scicode@1.0.0
-  model: anthropic/claude-haiku-5.5
-  benchmark: scicode-bench/scicode@1.0.0
-  benchmark_profile: independent-test-288
-  reasoning_effort: max
-  subject:
-    source_model: Claude Haiku 5.5 (max)
-    source_model_slug: claude-haiku-5-5
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    score: 0.549768518518518
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/claude-haiku-5-5
     redistributable: true
 - id: anthropic/claude-fable-5-2-max-swe-bench-pro@1.0.0
   model: anthropic/claude-fable-5.2
@@ -34683,374 +34214,6 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://openai.com/index/gpt-6-astra/
-    redistributable: true
-- id: independent/gpt-6-1-sol-max-critpt@1.0.0
-  model: openai/gpt-6.1-sol
-  benchmark: artificial-analysis/critpt@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Sol (max)
-    source_model_slug: gpt-6-1-sol
-    run_kind: independent
-  metrics:
-    score: 0.317142857142857
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-sol
-    redistributable: true
-- id: independent/gpt-6-1-sol-max-humanitys-last-exam@1.0.0
-  model: openai/gpt-6.1-sol
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-text-only
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Sol (max)
-    source_model_slug: gpt-6-1-sol
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    accuracy: 0.529193697868397
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-sol
-    redistributable: true
-- id: independent/gpt-6-1-sol-max-artificial-analysis-long-context-reasoning@1.1.0
-  model: openai/gpt-6.1-sol
-  benchmark: artificial-analysis/lcr@1.1.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Sol (max)
-    source_model_slug: gpt-6-1-sol
-    run_kind: independent
-  metrics:
-    score: 0.83
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-sol
-    redistributable: true
-- id: independent/gpt-6-1-sol-max-omniscience@1.0.0
-  model: openai/gpt-6.1-sol
-  benchmark: artificial-analysis/omniscience@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Sol (max)
-    source_model_slug: gpt-6-1-sol
-    run_kind: independent
-  metrics:
-    index: 42.03333333333333
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-sol
-    redistributable: true
-- id: independent/gpt-6-1-sol-max-scicode@1.0.0
-  model: openai/gpt-6.1-sol
-  benchmark: scicode-bench/scicode@1.0.0
-  benchmark_profile: independent-test-288
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Sol (max)
-    source_model_slug: gpt-6-1-sol
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    score: 0.541666666666667
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-sol
-    redistributable: true
-- id: independent/gpt-6-1-terra-max-critpt@1.0.0
-  model: openai/gpt-6.1-terra
-  benchmark: artificial-analysis/critpt@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Terra (max)
-    source_model_slug: gpt-6-1-terra
-    run_kind: independent
-  metrics:
-    score: 0.28
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-terra
-    redistributable: true
-- id: independent/gpt-6-1-terra-max-humanitys-last-exam@1.0.0
-  model: openai/gpt-6.1-terra
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-text-only
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Terra (max)
-    source_model_slug: gpt-6-1-terra
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    accuracy: 0.462465245597776
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-terra
-    redistributable: true
-- id: independent/gpt-6-1-terra-max-artificial-analysis-long-context-reasoning@1.1.0
-  model: openai/gpt-6.1-terra
-  benchmark: artificial-analysis/lcr@1.1.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Terra (max)
-    source_model_slug: gpt-6-1-terra
-    run_kind: independent
-  metrics:
-    score: 0.826666666666667
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-terra
-    redistributable: true
-- id: independent/gpt-6-1-terra-max-omniscience@1.0.0
-  model: openai/gpt-6.1-terra
-  benchmark: artificial-analysis/omniscience@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Terra (max)
-    source_model_slug: gpt-6-1-terra
-    run_kind: independent
-  metrics:
-    index: 29.566666666666666
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-terra
-    redistributable: true
-- id: independent/gpt-6-1-terra-max-scicode@1.0.0
-  model: openai/gpt-6.1-terra
-  benchmark: scicode-bench/scicode@1.0.0
-  benchmark_profile: independent-test-288
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6.1 Terra (max)
-    source_model_slug: gpt-6-1-terra
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    score: 0.550925925925926
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-1-terra
-    redistributable: true
-- id: independent/gpt-6-sol-max-critpt@1.0.0
-  model: openai/gpt-6-sol
-  benchmark: artificial-analysis/critpt@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Sol (max)
-    source_model_slug: gpt-6-sol
-    run_kind: independent
-  metrics:
-    score: 0.308571428571429
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-sol
-    redistributable: true
-- id: independent/gpt-6-sol-max-humanitys-last-exam@1.0.0
-  model: openai/gpt-6-sol
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-text-only
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Sol (max)
-    source_model_slug: gpt-6-sol
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    accuracy: 0.479147358665431
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-sol
-    redistributable: true
-- id: independent/gpt-6-sol-max-artificial-analysis-long-context-reasoning@1.1.0
-  model: openai/gpt-6-sol
-  benchmark: artificial-analysis/lcr@1.1.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Sol (max)
-    source_model_slug: gpt-6-sol
-    run_kind: independent
-  metrics:
-    score: 0.836666666666667
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-sol
-    redistributable: true
-- id: independent/gpt-6-sol-max-omniscience@1.0.0
-  model: openai/gpt-6-sol
-  benchmark: artificial-analysis/omniscience@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Sol (max)
-    source_model_slug: gpt-6-sol
-    run_kind: independent
-  metrics:
-    index: 21.4
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-sol
-    redistributable: true
-- id: independent/gpt-6-sol-max-scicode@1.0.0
-  model: openai/gpt-6-sol
-  benchmark: scicode-bench/scicode@1.0.0
-  benchmark_profile: independent-test-288
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Sol (max)
-    source_model_slug: gpt-6-sol
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    score: 0.576388888888889
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-sol
-    redistributable: true
-- id: independent/gpt-6-luna-max-critpt@1.0.0
-  model: openai/gpt-6-luna
-  benchmark: artificial-analysis/critpt@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Luna (max)
-    source_model_slug: gpt-6-luna
-    run_kind: independent
-  metrics:
-    score: 0.194285714285714
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-luna
-    redistributable: true
-- id: independent/gpt-6-luna-max-humanitys-last-exam@1.0.0
-  model: openai/gpt-6-luna
-  benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-text-only
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Luna (max)
-    source_model_slug: gpt-6-luna
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    accuracy: 0.385078776645042
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-luna
-    redistributable: true
-- id: independent/gpt-6-luna-max-artificial-analysis-long-context-reasoning@1.1.0
-  model: openai/gpt-6-luna
-  benchmark: artificial-analysis/lcr@1.1.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Luna (max)
-    source_model_slug: gpt-6-luna
-    run_kind: independent
-  metrics:
-    score: 0.833333333333333
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-luna
-    redistributable: true
-- id: independent/gpt-6-luna-max-omniscience@1.0.0
-  model: openai/gpt-6-luna
-  benchmark: artificial-analysis/omniscience@1.0.0
-  benchmark_profile: independent-standard
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Luna (max)
-    source_model_slug: gpt-6-luna
-    run_kind: independent
-  metrics:
-    index: -8.266666666666667
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-luna
-    redistributable: true
-- id: independent/gpt-6-luna-max-scicode@1.0.0
-  model: openai/gpt-6-luna
-  benchmark: scicode-bench/scicode@1.0.0
-  benchmark_profile: independent-test-288
-  reasoning_effort: max
-  subject:
-    source_model: GPT-6 Luna (max)
-    source_model_slug: gpt-6-luna
-    run_kind: independent
-    tool_policy: no_tools
-  metrics:
-    score: 0.546296296296296
-  status: available
-  observed_at: '2026-11-17'
-  evidence:
-    provenance: third_party
-    verification: imported
-    source: https://artificialanalysis.ai/models/gpt-6-luna
     redistributable: true
 - id: mmlu-pro-leaderboard/gpt-oss-20b-high@1.0.0
   model: openai/gpt-oss-20b

@@ -176,8 +176,8 @@ func TestModelsOnAClaudeOrChatGPTLoginTakeTheirListPrice(t *testing.T) {
         - {name: chatgpt, endpoint: "https://chatgpt.com/backend-api/codex", provider: openai, auth: {credential: caller}}`,
 			want: ModelPricing{Currency: "USD", PromptPer1M: 5, CompletionPer1M: 30, CachedInputPer1M: 0.5},
 		},
-		// A ChatGPT login model, priced from its first-party binding.
-		"chatgpt gpt-6.1-sol": {
+		// A model ID with only a price list entry, no card.
+		"chatgpt price list": {
 			model: `provider_model_id: gpt-6.1-sol
       api_format: responses
       backend_refs:

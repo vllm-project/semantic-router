@@ -62,4 +62,8 @@ func TestBuiltInAnthropicAndOpenAIBindingsCarryListPrices(t *testing.T) {
 			}
 		}
 	}
+	openai, _ := registry.Provider("openai")
+	if listed := len(openai.PriceList); listed == 0 {
+		t.Fatal("openai lists no price for a model without a card")
+	}
 }

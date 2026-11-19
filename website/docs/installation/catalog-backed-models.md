@@ -51,8 +51,8 @@ cache writes:
 
 | Provider | Models | Cache writes |
 | --- | --- | --- |
-| `anthropic` | Claude Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1, Opus 5, Sonnet 5, Fable 5 and Opus 4.8 | 5-minute `cache_write_per_1m` and 1-hour `cache_write_1h_per_1m` |
-| `openai` | GPT-6 Astra, GPT-6.1 Sol and Terra, GPT-6 Sol and Luna, GPT-5.6 Sol, Terra and Luna, GPT-5.5, GPT-5.4 and GPT-5.4 mini | 30-minute `cache_write_per_1m` on GPT-6 Astra, GPT-6.1, GPT-6 and GPT-5.6; the others price a write as input |
+| `anthropic` | Claude Fable 5.2, Opus 5.5, Sonnet 5.5, Fable 5.1, Opus 5, Sonnet 5, Fable 5 and Opus 4.8 | 5-minute `cache_write_per_1m` and 1-hour `cache_write_1h_per_1m` |
+| `openai` | GPT-6 Astra, GPT-5.6 Sol, Terra and Luna, GPT-5.5, GPT-5.4 and GPT-5.4 mini | 30-minute `cache_write_per_1m` on GPT-6 Astra and GPT-5.6; the others price a write as input |
 
 The rates come from the [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing)
 and [OpenAI](https://developers.openai.com/api/docs/pricing) pricing pages and
@@ -82,11 +82,13 @@ of its default base URL (`api.anthropic.com`, `api.openai.com`), or
 `provider_model_id: claude-sonnet-5-5` on an `anthropic` backend is priced as
 Claude Sonnet 5.5, while a `vllm` backend serving the same ID, or an `openai`
 backend whose `endpoint` is an OpenAI-compatible server elsewhere, takes no
-price. Set `pricing` on a Model behind a proxy that bills at list price. A
-Provider can also list the price of a model ID that has no Model Card yet; a
-custom Model that calls it takes that price, and `catalog:` cannot name it. A
-cost uses the standard rates and leaves out long-context rates, such as Claude
-Haiku 5.5's five-times rate over 100,000 prompt tokens.
+price. Set `pricing` on a Model behind a proxy that bills at list price. Some
+model IDs have a list price but no Model Card yet: Claude Haiku 5.5
+(`claude-haiku-5-5`) and GPT-6.1 Sol, GPT-6.1 Terra, GPT-6 Sol and GPT-6 Luna
+(`gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-sol`, `gpt-6-luna`). A custom Model
+that calls one of them is priced at the standard rate, since a cost leaves out
+long-context rates such as Haiku 5.5's five-times rate over 100,000 prompt
+tokens. `catalog:` cannot name these IDs.
 
 ## MiniMax M3.1 Flash
 
