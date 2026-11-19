@@ -27,8 +27,12 @@ test('opens the Breakdown on three cards of one family, with money in one curren
   for (const gone of ['more currenc', 'Price units', '80.30']) {
     await expect(summary).not.toContainText(gone)
   }
-  // the comparison leads with its label, so a narrow tile cuts the share, not "Cost only"
-  await expect(summary.getByText('Cost only · 57.7% below the reference')).toBeVisible()
+  // the saving reads against what these requests compared with, and leads with "Cost only",
+  // so a narrow tile cuts the share; the Router's own calls sit on their own line
+  await expect(summary.getByText('Saved vs configured model', { exact: true })).toBeVisible()
+  await expect(summary).toContainText('$18.42')
+  await expect(summary.getByText('Cost only · 57.7% less than the configured model')).toBeVisible()
+  await expect(summary.getByText('Router’s own calls: $0.61')).toBeVisible()
   await summary.getByRole('button', { name: 'How the estimate is made' }).focus()
   await expect(page.getByRole('tooltip')).toContainText('Priced: 1,322 of 1,464 requests')
   await summary.getByRole('button', { name: 'How the estimate is made' }).blur()

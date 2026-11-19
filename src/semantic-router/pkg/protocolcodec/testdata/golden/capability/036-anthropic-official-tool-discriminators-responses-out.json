@@ -39,7 +39,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -49,7 +49,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -59,7 +59,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -69,7 +69,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -79,7 +79,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -89,7 +89,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -99,7 +99,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -109,7 +109,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -119,7 +119,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -129,7 +129,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -139,7 +139,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -149,7 +149,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -159,7 +159,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -169,7 +169,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -179,7 +179,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -189,7 +189,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -199,7 +199,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -209,7 +209,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -219,7 +219,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -229,7 +229,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_tool"
+          "code": "unsupported_capability"
         }
       }
     }

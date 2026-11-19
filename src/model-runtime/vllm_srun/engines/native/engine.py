@@ -201,7 +201,13 @@ class NativeEngineModel(EngineModel):
             if self.device.type == "cpu"
             else spec.dtype.approximate_kernels
         )
-        self.kernels.allow_approximate = not options.exact_kernels_only and consents
+        self.kernels.allow_approximate = not options.exact_kernels_only and bool(
+            consents
+        )
+        # A family may consent to some slots only (DtypePolicy.approximate_cpu_kernels).
+        self.kernels.approximate_slots = (
+            consents if isinstance(consents, frozenset) else None
+        )
         self.kernels.use_variants(spec.kernel_variants)
         fused_int4 = self.kernels.allow_approximate and torch.version.hip is None
         nvfp4: list[quantized.NVFP4Linear] = []

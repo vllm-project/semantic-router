@@ -236,7 +236,15 @@ test('summarizes traffic, recent requests and the routing configuration', async 
   await expect(page.getByRole('link', { name: 'p95 latency: open Requests' })).toContainText(
     '1.50s',
   )
-  await expect(page.getByTestId('home-saved')).toContainText('$0.00')
+  const saved = page.getByTestId('home-saved')
+  await expect(saved).toContainText('Saved vs priciest model')
+  await expect(saved).toContainText('$0.0040')
+  await expect(saved).not.toContainText('−')
+  await expect(saved).toContainText(
+    'Cost only: each request priced at the most expensive model in its pool for the same tokens',
+  )
+  await expect(saved).toContainText('Actual $0.0030')
+  await expect(saved).toContainText('Priciest model $0.0070')
 
   const agents = page.getByTestId('home-agents')
   await expect(agents).toContainText('Requests by harness · last 24 hours')
