@@ -22,6 +22,8 @@ const (
 	// prompt with this comment.
 	openClawTestUserAgent = "OpenAI/JS 7.39.0"
 	openClawTestSystem    = "<!-- openclaw:attempt:STABLE -->\nYou are a personal assistant running inside OpenClaw."
+	// The system prompt of its compaction, which carries no such comment.
+	openClawTestSummary = "You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant."
 	// A one-pixel PNG.
 	testImageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
@@ -72,6 +74,14 @@ func TestCursorAndOpenClawAreNamed(t *testing.T) {
 	other := &llmprotocol.Request{Messages: []llmprotocol.Message{
 		{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "You talk about OpenClaw."}}},
 	}}
+	summary := func(key string) *llmprotocol.Request {
+		return &llmprotocol.Request{PromptCacheKey: key, Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: openClawTestSummary}}},
+			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "The conversation."}}},
+		}}
+	}
+	summaryWithTools := summary("3b1d9a4e")
+	summaryWithTools.Tools = testTools
 	for name, test := range map[string]struct {
 		headers map[string]string
 		request *llmprotocol.Request
@@ -83,6 +93,10 @@ func TestCursorAndOpenClawAreNamed(t *testing.T) {
 		"openclaw's system prompt":     {map[string]string{headers.UserAgent: openClawTestUserAgent}, openClaw, config.AgentHarnessOpenClaw},
 		"openclaw as instructions":     {map[string]string{}, instructions, config.AgentHarnessOpenClaw},
 		"a prompt that names openclaw": {map[string]string{headers.UserAgent: openClawTestUserAgent}, other, ""},
+		"openclaw's compaction":        {map[string]string{headers.UserAgent: openClawTestUserAgent}, summary("3b1d9a4e"), config.AgentHarnessOpenClaw},
+		"a summary with no session":    {map[string]string{headers.UserAgent: openClawTestUserAgent}, summary(""), ""},
+		"a summary from another agent": {map[string]string{headers.UserAgent: "python-httpx/0.28.1"}, summary("3b1d9a4e"), ""},
+		"a summary with tools":         {map[string]string{headers.UserAgent: openClawTestUserAgent}, summaryWithTools, ""},
 		"claude code headers lead":     {map[string]string{headers.UserAgent: cursorTestUserAgent, headers.XClaudeCodeSessionID: "s1"}, nil, config.AgentHarnessClaudeCode},
 		"no user agent":                {map[string]string{}, nil, ""},
 	} {
@@ -252,4 +266,26 @@ func TestOpenClawSessionFromItsPromptCacheKey(t *testing.T) {
 	require.Equal(t, "openclaw-3b1d9a4e", session("3b1d9a4e"))
 	require.True(t, strings.HasPrefix(session(""), "openclaw-start-"))
 	require.True(t, strings.HasPrefix(session(strings.Repeat("k", maxOpenClawSessionBytes+1)), "openclaw-start-"))
+}
+
+// OpenClaw's compaction names OpenClaw only through its summary instructions,
+// its agent and the session in prompt_cache_key, so Replay files it in the
+// session of the turns it summarizes, as a compaction.
+func TestReplayFilesOpenClawsCompactionInItsSession(t *testing.T) {
+	router := memoryReplayRouter(t)
+	openClaw := map[string]string{headers.UserAgent: openClawTestUserAgent}
+	turn := recordReplayCall(t, router, openClaw, llmprotocol.OpenAIChatV1,
+		`{"model":"vllm-sr/auto","prompt_cache_key":"3b1d9a4e:0","messages":[`+
+			`{"role":"system","content":"<!-- openclaw:attempt:STABLE -->\nYou are a personal assistant running inside OpenClaw."},`+
+			`{"role":"user","content":"Run the tests."}]}`)
+	compaction := recordReplayCall(t, router, openClaw, llmprotocol.OpenAIChatV1,
+		`{"model":"vllm-sr/auto","prompt_cache_key":"3b1d9a4e","messages":[`+
+			`{"role":"system","content":"`+openClawTestSummary+`"},`+
+			`{"role":"user","content":"The conversation."}]}`)
+
+	require.Equal(t, store.HarnessOpenClaw, compaction.Agent.Harness)
+	require.Equal(t, config.AgentRequestClassCompaction, compaction.Agent.RequestClass)
+	require.Contains(t, compaction.SessionID, "openclaw-3b1d9a4e")
+	require.Equal(t, turn.SessionID, compaction.SessionID)
+	require.Equal(t, config.AgentRequestClassMain, turn.Agent.RequestClass)
 }
