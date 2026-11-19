@@ -146,6 +146,9 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
 	}
 	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
+	if err == nil {
+		err = llmprotocol.RefuseUnansweredToolCalls(request)
+	}
 	if err != nil {
 		return nil, r.ingressDecodeErrorResponse(ctx, err)
 	}

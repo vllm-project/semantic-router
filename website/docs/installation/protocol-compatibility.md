@@ -670,6 +670,22 @@ tools or error translation.
 
   Anthropic Messages clients get the same message in Anthropic's
   `invalid_request_error`, which has no code field.
+- A request whose history holds a tool call that no later tool result
+  answers fails with `400` `unanswered_tool_call` and reaches no backend,
+  which could otherwise answer in place of the tool. The message is the one
+  the client's API gives for such a history, naming the call:
+
+  | Client API | `param` | Message |
+  | --- | --- | --- |
+  | Chat Completions | `messages` | `An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'. The following tool_call_ids did not have response messages: call_1` |
+  | Responses | `input` | `No tool output found for function call call_1.`, or `custom tool call` for a custom tool |
+  | Anthropic Messages | none | ``messages.1: `tool_use` ids were found without `tool_result` blocks immediately after: toolu_1. Each `tool_use` block must have a corresponding `tool_result` block in the next message.`` |
+
+  A result anywhere later in the history answers a call, and a client that
+  interrupts or denies a call answers it with a result that says so. A
+  Responses request with `previous_response_id` is judged with the stored
+  history: a function call that the stored response ended with is answered by
+  a `function_call_output` in the request's `input`.
 - A backend's `4xx` error reaches the client in the client's error format,
   with the Router's codes and the field names the client sent; see
   [request budget errors](../api/router#request-budget-errors).

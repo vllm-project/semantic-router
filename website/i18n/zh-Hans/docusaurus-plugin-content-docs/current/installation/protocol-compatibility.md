@@ -312,6 +312,15 @@ providers:
   | Router 认识但无法承载的成员 | `unsupported_<field>` | 给出该字段 |
 
   Anthropic Messages 客户端在 Anthropic 的 `invalid_request_error` 中收到相同的消息，该信封没有 code 字段。
+- 请求历史中某个工具调用之后没有任何工具结果回答它时，请求以 `400` `unanswered_tool_call` 失败，不会到达任何后端，否则后端可能代替该工具作答。消息与客户端所用 API 对这种历史给出的消息一致，并给出该调用：
+
+  | 客户端 API | `param` | 消息 |
+  | --- | --- | --- |
+  | Chat Completions | `messages` | `An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'. The following tool_call_ids did not have response messages: call_1` |
+  | Responses | `input` | `No tool output found for function call call_1.`；自定义工具为 `custom tool call` |
+  | Anthropic Messages | 无 | ``messages.1: `tool_use` ids were found without `tool_result` blocks immediately after: toolu_1. Each `tool_use` block must have a corresponding `tool_result` block in the next message.`` |
+
+  历史中位于调用之后任意位置的结果都算作回答；客户端中断或拒绝某个调用时，会用一条说明这一点的结果回答它。带 `previous_response_id` 的 Responses 请求连同已存储的历史一起判断：已存储响应末尾的函数调用由该请求 `input` 中的 `function_call_output` 回答。
 - 后端的 `4xx` 错误以客户端的错误格式到达客户端，使用 Router 的错误码和客户端发送的字段名；见[请求预算错误](../api/router#request-budget-errors)。
 - Chat 请求接受但不转发客户端库在回放 assistant 消息时添加的字段：LiteLLM 的 `provider_specific_fields`（存放其消息类型没有的回复字段），以及 openai SDK 自己的解析结果 `parsed` 和 `tool_calls[].function.parsed_arguments`。取值不为 null 的字段报告为 `dropped`。与其他 Responses 输入项一样，reasoning 项可以带有 `status`，openai SDK 的流式辅助方法会设置它。
 - 函数工具的 `parameters` 为 `null` 时（OpenAI 的类型化客户端会为不带参数的工具这样发送），Router 将其视为没有 `parameters` 的工具，Responses 的 `tools[]` 和 Chat 的 `tools[].function` 均是如此：每种后端收到的都是 schema `{"type":"object"}`，而不是 `null`。
