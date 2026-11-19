@@ -35,6 +35,23 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 	return replayRecorders, globalRecorder, false, nil
 }
 
+// activateReplayStores gives the memory stores a generation shares with the
+// one it replaces the generation's max_records, once it serves.
+func (r *OpenAIRouter) activateReplayStores() {
+	activate := func(recorder *routerreplay.Recorder) {
+		if recorder == nil {
+			return
+		}
+		if shared, ok := recorder.Reader().(*store.SharedMemoryStore); ok {
+			shared.Activate()
+		}
+	}
+	activate(r.ReplayRecorder)
+	for _, recorder := range r.ReplayRecorders {
+		activate(recorder)
+	}
+}
+
 func shareReplayOutcomeQueueWithFallback(recorders map[string]*routerreplay.Recorder, fallback *routerreplay.Recorder) {
 	// A failed initialization and a config with no replay decisions both arrive
 	// here empty; neither should allocate a queue and its writer context.
@@ -66,7 +83,13 @@ func initializeMemoryReplayRecorders(
 	recorders := make(map[string]*routerreplay.Recorder)
 	var globalRecorder *routerreplay.Recorder
 	for _, plan := range cfg.RouterReplayMemoryStores() {
-		recorder, err := createReplayRecorder(plan.Name, backend, plan.Policy, cfg)
+		// A decision store's name never equals the fallback store's, whatever
+		// the decision is called, so a reload shares each with its own store.
+		name := "decision " + plan.Name
+		if plan.Global {
+			name = plan.Name
+		}
+		recorder, err := createReplayRecorder(name, backend, plan.Policy, cfg)
 		if err != nil {
 			_ = closeReplayRecorders(globalRecorder, recorders, false)
 			if plan.Global {
