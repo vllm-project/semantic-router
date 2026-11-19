@@ -209,9 +209,11 @@ export function HomeKpis({
             <Scale className="size-4 text-chart-2" />
             Cost vs reference
           </span>
-          <div className="flex items-baseline gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
             <span
-              className={cn('text-[26px] font-semibold leading-none tracking-[-0.03em] tabular')}
+              className={cn(
+                'whitespace-nowrap text-[26px] font-semibold leading-none tracking-[-0.03em] tabular',
+              )}
             >
               {money.saved === undefined ? (
                 <span

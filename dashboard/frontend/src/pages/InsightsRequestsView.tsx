@@ -201,6 +201,7 @@ function RequestsSummary({
   breakdown,
   onBreakdown,
   clientFiltered,
+  harnessCounts,
 }: {
   aggregate: InsightsAggregateResponse | null
   loading: boolean
@@ -209,6 +210,7 @@ function RequestsSummary({
   breakdown: boolean
   onBreakdown: (open: boolean) => void
   clientFiltered: boolean
+  harnessCounts: Record<string, number> | null
 }) {
   if (!aggregate) {
     if (error && !loading) {
@@ -309,7 +311,7 @@ function RequestsSummary({
       {breakdown ? (
         <div id="requests-breakdown" className="mt-4">
           <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
-            <InsightsCharts aggregate={aggregate} />
+            <InsightsCharts aggregate={aggregate} harnessCounts={harnessCounts} />
           </Suspense>
         </div>
       ) : null}
@@ -553,7 +555,7 @@ export default function InsightsRequestsView() {
     live,
     held,
     rules: agentRules,
-    withFacets: facets,
+    withFacets: facets || breakdown,
   })
   const clientMode = hasClientFilters(filters)
   const narrowed = hasAnyFilter(filters)
@@ -825,6 +827,7 @@ export default function InsightsRequestsView() {
           breakdown={breakdown}
           onBreakdown={setBreakdownOpen}
           clientFiltered={clientMode}
+          harnessCounts={data.harnessCounts}
         />
       )}
       <DataToolbar

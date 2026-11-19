@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
+import { TooltipProvider } from '../ui'
+
 import { ModelLabelsContext } from './insightsModelLabelSupport'
 import { RunCallDetails, RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
 import { buildRunTimeline } from './insightsRunTimeline'
@@ -72,9 +74,12 @@ const timeline = buildRunTimeline(response, 0, 2)
 describe('run diagram', () => {
   it('draws a lane per agent with the spawn and the failure marked', () => {
     const html = renderToStaticMarkup(
-      <RunDiagram run={response.run} timeline={timeline} onSelect={() => undefined} />,
+      <TooltipProvider>
+        <RunDiagram run={response.run} timeline={timeline} onSelect={() => undefined} />
+      </TooltipProvider>,
     )
-    expect(html).toContain('↳ subagent 1')
+    expect(html).toContain('↳')
+    expect(html).toContain('subagent 1')
     expect(html).toContain('collab_spawn')
     expect(html).toContain('title="Spawned by main"')
     expect(html).toContain('left:50%')
@@ -83,18 +88,21 @@ describe('run diagram', () => {
 
   it("lets a lane's agent be followed, and dims the agents not followed", () => {
     const html = renderToStaticMarkup(
-      <RunDiagram
-        run={response.run}
-        timeline={timeline}
-        agents={['subagent 1']}
-        onSelect={() => undefined}
-        onAgent={() => undefined}
-      />,
+      <TooltipProvider>
+        <RunDiagram
+          run={response.run}
+          timeline={timeline}
+          agents={['subagent 1']}
+          onSelect={() => undefined}
+          onAgent={() => undefined}
+        />
+      </TooltipProvider>,
     )
     expect(html).toContain('aria-pressed="true"')
     expect(html).toContain('aria-pressed="false"')
     expect(html).toContain('title="Follow subagent 1&#x27;s calls"')
-    expect(html.match(/opacity-45/g)).toHaveLength(1)
+    // the dimmed agent's label and its track
+    expect(html.match(/opacity-45/g)).toHaveLength(2)
   })
 
   it('folds a long idle stretch and says how long it lasted', () => {
@@ -106,11 +114,13 @@ describe('run diagram', () => {
       ],
     }
     const html = renderToStaticMarkup(
-      <RunDiagram
-        run={response.run}
-        timeline={buildRunTimeline(idle, 0, 2)}
-        onSelect={() => undefined}
-      />,
+      <TooltipProvider>
+        <RunDiagram
+          run={response.run}
+          timeline={buildRunTimeline(idle, 0, 2)}
+          onSelect={() => undefined}
+        />
+      </TooltipProvider>,
     )
     expect(html).toContain('9m 59s idle')
     expect(html).toContain('repeating-linear-gradient')
@@ -122,7 +132,7 @@ describe('run diagram', () => {
         <RunCallDetails call={failed} />
       </MemoryRouter>,
     )
-    expect(html).toContain('keyword:email')
+    expect(html).toContain('title="keyword:email"')
     expect(html).toContain('high')
     expect(html).toContain('failed 502')
     expect(html).toContain('Hidden from this viewer')
@@ -134,20 +144,22 @@ describe('run diagram', () => {
     const [, subagent] = timeline.lanes
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <ModelLabelsContext.Provider value={labels}>
-          <RunLegend run={response.run} />
-          <RunDiagram run={response.run} timeline={timeline} onSelect={() => undefined} />
-          <RunSegmentPanel
-            segment={subagent.blocks[0]}
-            call={failed}
-            onSelectCall={() => undefined}
-          />
-        </ModelLabelsContext.Provider>
+        <TooltipProvider>
+          <ModelLabelsContext.Provider value={labels}>
+            <RunLegend run={response.run} />
+            <RunDiagram run={response.run} timeline={timeline} onSelect={() => undefined} />
+            <RunSegmentPanel
+              segment={subagent.blocks[0]}
+              call={failed}
+              onSelectCall={() => undefined}
+            />
+          </ModelLabelsContext.Provider>
+        </TooltipProvider>
       </MemoryRouter>,
     )
     expect(html).toContain('Qwen3.6 35B A3B<small>qwen-msg</small>')
-    expect(html).toContain('title="Qwen3.6 35B A3B (qwen-msg) · 1 call"')
-    expect(html).toContain('subagent 1 · qwen36')
+    expect(html).toContain('aria-label="Qwen3.6 35B A3B (qwen-msg), 1 call"')
+    expect(html).toContain('aria-label="Step details"')
     expect(html).toContain('qwen36<small>qwen-chat</small>')
   })
 })

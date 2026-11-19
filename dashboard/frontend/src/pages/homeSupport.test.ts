@@ -327,6 +327,8 @@ describe('home traffic helpers', () => {
     expect(parseHomeSnapshot(JSON.stringify({ ...JSON.parse(text), rows: {} }), now)).toBeNull()
     expect(parseHomeSnapshot('{', now)).toBeNull()
     expect(parseHomeSnapshot(null, now)).toBeNull()
+    const counted = { ...snapshot, harnessCounts: { claude_code: 3, api_client: 1 } }
+    expect(parseHomeSnapshot(serializeHomeSnapshot(counted), now)).toEqual(counted)
     expect(homeSnapshotKey('user-1', '7d')).not.toBe(homeSnapshotKey('user-2', '7d'))
     expect(homeSnapshotKey('user-1', '7d')).not.toBe(homeSnapshotKey('user-1', '24h'))
   })
