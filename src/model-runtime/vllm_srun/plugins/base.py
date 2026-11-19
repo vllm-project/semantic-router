@@ -159,11 +159,13 @@ class DtypePolicy:
     approximate kernels on GPUs and NPUs, ``approximate_cpu_kernels`` to the
     CPU accelerator's (``EngineOptions.exact_kernels_only`` off), each on the
     strength of a record on that device class: a GPU record says nothing about
-    a CPU kernel, and the reverse. ``cpu_bf16_references`` names the CPU
-    hardware keys (``CPUAccelerator.golden_reference``) on which every golden
-    request has a BF16 reference: on such a host ``--dtype auto`` holds BF16
-    instead of ``cpu_weights`` (``dtypes.on_host``), checked against that
-    reference. Consented
+    a CPU kernel, and the reverse. ``approximate_cpu_kernels`` is True for every
+    slot, or the names of the slots (``linear``, ``sdpa``) the family's record
+    covers, so a kernel added to another slot later does not change its answers.
+    ``cpu_bf16_references`` names the CPU hardware keys
+    (``CPUAccelerator.golden_reference``) on which every golden request has a
+    BF16 reference: on such a host ``--dtype auto`` holds BF16 instead of
+    ``cpu_weights`` (``dtypes.on_host``), checked against that reference. Consented
     copies and kernels run by default at the published precision, so a family
     consents only where its records show no decision changed and at least 99%
     agreement per answer type against the model's own batches (embeddings:
@@ -179,7 +181,7 @@ class DtypePolicy:
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
-    approximate_cpu_kernels: bool = False
+    approximate_cpu_kernels: bool | frozenset[str] = False
     cpu_bf16_references: frozenset[str] = frozenset()
 
     @property

@@ -180,7 +180,7 @@ function spendOf(aggregate: InsightsAggregateResponse) {
         : `${difference > 0 ? '+' : ''}${formatInsightsCost(difference, lead.currency, { total: true })}`,
     differenceHint:
       compared && (lead.baseline ?? 0) > 0
-        ? `${formatInsightsShare(Math.abs(lead.saved ?? 0), lead.baseline ?? 0)} ${(lead.saved ?? 0) >= 0 ? 'below' : 'above'} the reference · cost only`
+        ? `Cost only · ${formatInsightsShare(Math.abs(lead.saved ?? 0), lead.baseline ?? 0)} ${(lead.saved ?? 0) >= 0 ? 'below' : 'above'} the reference`
         : 'Cost only, not a quality comparison',
     differenceWhy: compared ? undefined : (missing ?? NO_COMPARISON),
     unpriced,

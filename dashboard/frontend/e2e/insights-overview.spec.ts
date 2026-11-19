@@ -27,6 +27,8 @@ test('opens the Breakdown on three cards of one family, with money in one curren
   for (const gone of ['more currenc', 'Price units', '80.30']) {
     await expect(summary).not.toContainText(gone)
   }
+  // the comparison leads with its label, so a narrow tile cuts the share, not "Cost only"
+  await expect(summary.getByText('Cost only · 57.7% below the reference')).toBeVisible()
   await summary.getByRole('button', { name: 'How the estimate is made' }).focus()
   await expect(page.getByRole('tooltip')).toContainText('Priced: 1,322 of 1,464 requests')
   await summary.getByRole('button', { name: 'How the estimate is made' }).blur()
