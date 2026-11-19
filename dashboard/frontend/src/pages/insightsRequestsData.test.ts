@@ -11,6 +11,7 @@ import {
   readRequestFilters,
   requestRangeSince,
   serverQuery,
+  withSessionsOnly,
   writeRequestFilters,
 } from './insightsRequestsData'
 
@@ -93,6 +94,18 @@ describe('the harness filter', () => {
       offset: '0',
       showDetails: 'false',
     })
+  })
+
+  it('keeps the Sessions view’s reads to the requests that belong to a session', () => {
+    const since = '2026-11-18T09:42:00.000Z'
+    expect(withSessionsOnly(serverQuery(read('model=m'), since), true)).toBe(
+      `?model=m&since=${encodeURIComponent(since)}&has_session=true`,
+    )
+    expect(withSessionsOnly('', true)).toBe('?has_session=true')
+    expect(withSessionsOnly('?model=m', false)).toBe('?model=m')
+    const counts = new URLSearchParams(harnessCountsQuery(read('harness=codex'), since, true))
+    expect(counts.get('has_session')).toBe('true')
+    expect(counts.get('harness')).toBeNull()
   })
 
   it('offers every harness before the counts load, then the counted and the selected ones', () => {
