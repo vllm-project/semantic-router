@@ -34,7 +34,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		"provider":                                               wire.Provider != nil,
 		"choices.native_finish_reason":                           chatChoicesHaveNativeFinishReason(wire.Choices),
 		"kv_transfer":                                            wire.hasLegacyKVTransferMetadata(),
-		"metadata":                                               len(wire.Metadata) > 0,
+		"metadata":                                               wire.hasMetadata(),
 		"moderation":                                             len(wire.Moderation) > 0,
 		"x_groq":                                                 len(wire.XGroq) > 0,
 		"usage_breakdown":                                        wire.hasUsageBreakdown(),
@@ -60,12 +60,16 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
 	// not be replayed.
 	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices) || wire.hasDeepSeekDecorations()
-	replay := body
-	if needsReencode {
-		replay = nil
+	var replay []byte
+	public := false
+	if !needsReencode {
+		if replay, public, err = publicChatResponseBody(body); err != nil {
+			return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, invalidProviderResponse("invalid_upstream_json", "upstream response JSON is invalid")
+		}
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, replay, response.Generation, response.SourceStopReason, policy)
-	envelope.ResponseReencodeRequired = needsReencode
+	// Public bytes too large to keep are rendered again rather than forwarded.
+	envelope.ResponseReencodeRequired = needsReencode || public && len(envelope.Response) == 0
 	return response, envelope, diagnostics, nil
 }
 

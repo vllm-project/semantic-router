@@ -1,6 +1,10 @@
 package configsnapshot
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 // Kind is the type of a resource.
 type Kind string
@@ -22,7 +26,8 @@ const (
 	// KindProgram is one routing recipe: its signals, projections, decisions,
 	// algorithms and plugins (routing, recipes[]).
 	KindProgram Kind = "program"
-	// KindRoute maps one request-facing model name to a program (entrypoints).
+	// KindRoute maps one request-facing model name of one API to a program
+	// (entrypoints), named <api>/<model>.
 	KindRoute Kind = "route"
 	// KindListener is one client-facing listener (listeners[]).
 	KindListener Kind = "listener"
@@ -118,10 +123,11 @@ type ProgramSpec struct {
 	Decisions []string `json:"decisions,omitempty"`
 }
 
-// RouteSpec maps a request-facing model name to a program.
+// RouteSpec maps a request-facing model name of one API to a program.
 type RouteSpec struct {
-	Model   string `json:"model"`
-	Program string `json:"program"`
+	API     config.InferenceAPI `json:"api"`
+	Model   string              `json:"model"`
+	Program string              `json:"program"`
 }
 
 // ListenerSpec is one client-facing listener.

@@ -88,5 +88,5 @@ recipes:
 
 ## 依赖与限制 {#dependencies-and-limitations}
 
-token 估计取决于请求表示，并不保证后端会接受得到的提示。正文初始按约每 token 4 字节估算；之后 Router 依据提供方返回的提示 token 用量学习比例，但只采样正文至少 4 KiB 的请求，因为短请求的用量主要来自聊天模板开销。请保持模型卡上下文窗口准确，并为生成输出留出余量。选择前，Router 会移除已配置且为正、但上下文窗口小于估计请求的决策候选。缺少上下文元数据的候选仍可入选，以保持向后兼容；若每个候选的已知窗口都不足，Router 会拒绝请求，而不是转发给不合格后端。完整示例见：
+token 估计取决于请求表示，并不保证后端会接受得到的提示。正文初始按约每 token 4 字节估算。以 base64 内联发送的 PNG、JPEG、GIF 或 WebP 图片按尺寸计算，约每 28×28 像素一个 token，至少 4 个、至多 16,384 个，接近开放模型的视觉编码器实际读取的数量；Router 无法得知尺寸的图片（链接、文件 ID 或其他格式）按 8,192 个计算。之后 Router 依据提供方返回的提示 token 用量学习比例，但只采样正文至少 4 KiB 的请求，因为短请求的用量主要来自聊天模板开销。请保持模型卡上下文窗口准确，并为生成输出留出余量。选择前，Router 会移除已配置且为正、但上下文窗口小于估计请求的决策候选。缺少上下文元数据的候选仍可入选，以保持向后兼容；若每个候选的已知窗口都不足，Router 会拒绝请求，而不是转发给不合格后端。完整示例见：
 [`config/fragments/signal/context/long-context.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/context/long-context.yaml)。

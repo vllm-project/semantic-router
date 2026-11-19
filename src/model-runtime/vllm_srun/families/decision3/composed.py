@@ -180,16 +180,17 @@ def hoist_state(state: Any, refs: Sequence[str], front: int) -> tuple[Any, list[
     return walk(state), hoisted
 
 
-def to_text(parts: Sequence[Part]) -> tuple[str, list[str]]:
-    """``(text with one image placeholder per image part, the references in order)``."""
-    out, refs = [], []
+def to_prompt(parts: Sequence[Part]) -> tuple[prompt.Prompt, list[str]]:
+    """``(the prompt with one image placeholder per image part, the references in order)``."""
+    out: prompt.Prompt = []
+    refs = []
     for kind, item in parts:
         if kind == TEXT:
             out.append(item)
         else:
-            out.append(prompt.IMAGE_PLACEHOLDER)
+            out += prompt.IMAGE_PLACEHOLDER
             refs.append(item)
-    return "".join(out), refs
+    return out, refs
 
 
 def question_block(
@@ -198,8 +199,8 @@ def question_block(
     criteria: Any,
     codes: Sequence[str],
     refs: Sequence[str],
-) -> tuple[str, list[str]]:
-    """The question block's text (``prompt.question_block`` with inline images) and its images' references."""
+) -> tuple[prompt.Prompt, list[str]]:
+    """The question block (``prompt.question_block`` with inline images) and its images' references."""
     parts: list[Part] = [(TEXT, "Question:\n")]
     parts += describe_parts(instructions or prompt.DEFAULT_INSTRUCTIONS, refs)
     parts.append((TEXT, "\n\nOptions:"))
@@ -222,11 +223,8 @@ def question_block(
         parts.append((TEXT, f"\n{code}: "))
         parts += option
     parts.append((TEXT, "\n\nReply with only the code of the best option."))
-    parts.append((TEXT, GENERATION))
-    return to_text(parts)
-
-
-GENERATION = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    block, used = to_prompt(parts)
+    return [*block, *prompt.GENERATION], used
 
 
 def format_seconds(value: float) -> str:
@@ -267,13 +265,13 @@ def box_block(
     refs: Sequence[str],
     at: float | None = None,
     presence: bool = False,
-) -> tuple[str, list[str]]:
+) -> tuple[prompt.Prompt, list[str]]:
     """A Box question's block: its instructions, the Box lines, the generation prompt and the edge markers."""
     parts: list[Part] = [(TEXT, "Question:\n")]
     parts += describe_parts(instructions, refs)
     parts.append((TEXT, tail_text(codes, at, presence)))
-    parts.append((TEXT, GENERATION + suffix(presence)))
-    return to_text(parts)
+    block, used = to_prompt(parts)
+    return [*block, *prompt.GENERATION, suffix(presence)], used
 
 
 def marker_offsets(tokenizer: Any, presence: bool) -> list[int]:

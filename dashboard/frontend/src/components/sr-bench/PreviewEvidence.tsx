@@ -1,4 +1,5 @@
-import styles from './SrBench.module.css'
+import { Notice } from './benchUi'
+import { benchText, factsClass } from './benchStyles'
 
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -15,9 +16,9 @@ export default function PreviewEvidence({ routing: value }: { routing: unknown }
   const decision = record(routing.decision_result)
   const provenance = record(routing.selection_provenance)
   return (
-    <section aria-label="Routing preview evidence">
-      <h4>Routing preview</h4>
-      <dl className={styles.facts}>
+    <section aria-label="Routing preview evidence" className="mt-4 min-w-0">
+      <h4 className={benchText.h4}>Routing preview</h4>
+      <dl className={factsClass}>
         <div>
           <dt>Matched decision</dt>
           <dd>{text(decision.decision_name)}</dd>
@@ -37,17 +38,21 @@ export default function PreviewEvidence({ routing: value }: { routing: unknown }
         <div>
           <dt>Config snapshot</dt>
           <dd>
-            <code>{text(provenance.config_hash ?? routing.config_hash)}</code>
+            <code className="font-mono text-xs">
+              {text(provenance.config_hash ?? routing.config_hash)}
+            </code>
           </dd>
         </div>
       </dl>
       {typeof routing.selection_reason === 'string' && (
-        <p className={styles.notice}>{routing.selection_reason}</p>
+        <Notice tone="info" as="p">
+          {routing.selection_reason}
+        </Notice>
       )}
       {typeof provenance.mode === 'string' && (
         <>
-          <h4>Selection provenance</h4>
-          <dl className={styles.facts}>
+          <h4 className={`${benchText.h4} mt-4`}>Selection provenance</h4>
+          <dl className={factsClass}>
             <div>
               <dt>Selection mode</dt>
               <dd>{text(provenance.mode)}</dd>
@@ -66,7 +71,7 @@ export default function PreviewEvidence({ routing: value }: { routing: unknown }
               <div>
                 <dt>State snapshot</dt>
                 <dd>
-                  <code>{text(provenance.state_hash)}</code>
+                  <code className="font-mono text-xs">{text(provenance.state_hash)}</code>
                 </dd>
               </div>
             )}
@@ -94,7 +99,9 @@ export default function PreviewEvidence({ routing: value }: { routing: unknown }
             )}
           </dl>
           {typeof provenance.caveat === 'string' && (
-            <p className={styles.notice}>{provenance.caveat}</p>
+            <Notice tone="warning" as="p">
+              {provenance.caveat}
+            </Notice>
           )}
         </>
       )}

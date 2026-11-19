@@ -1079,6 +1079,11 @@
       "doc": "Provider wire protocol, such as `openai`."
     },
     {
+      "key": "requested_model",
+      "owner": "listener",
+      "doc": "The model the client named when the listener's `unserved_models` routed the request to one of its own models."
+    },
+    {
       "key": "effective_input_tokens",
       "owner": "automatic_output",
       "doc": "Rendered input tokens of the final automatic-output dispatch, chat template included."
@@ -1111,7 +1116,7 @@
     {
       "key": "reasoning",
       "owner": "classification",
-      "doc": "Reasoning mode chosen for the request: `on` or `off`."
+      "doc": "Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off, and `reason=stop_sequences` when the request's stop sequences did."
     },
     {
       "key": "modality",

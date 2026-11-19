@@ -1,7 +1,19 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { TriangleAlert } from 'lucide-react'
 
-import useAccessibleDialog from '../hooks/useAccessibleDialog'
-import styles from './ModelDeleteDialog.module.css'
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  Input,
+  Label,
+  useRetainedValue,
+} from '../ui'
+import { focusInitialDialogControl } from '../components/dialogFocusSupport'
+import { modelDeleteConfirmation } from './configPageModelInventory'
 
 interface ModelDeleteDialogProps {
   modelNames: string[]
@@ -10,98 +22,134 @@ interface ModelDeleteDialogProps {
   onConfirm: () => void
 }
 
+/** Confirms deleting backend models; several at once need a typed confirmation. */
 export default function ModelDeleteDialog({
   modelNames,
   pending,
   onCancel,
   onConfirm,
 }: ModelDeleteDialogProps) {
-  const titleId = useId()
-  const descriptionId = useId()
+  const confirmationId = useId()
+  const contentRef = useRef<HTMLDivElement>(null)
   const [confirmation, setConfirmation] = useState('')
-  const requiredConfirmation = modelNames.length > 1 ? `DELETE ${modelNames.length}` : ''
-  const confirmationReady = modelNames.length === 1 || confirmation === requiredConfirmation
   const isOpen = modelNames.length > 0
+  // Keep the names while the dialog animates out after a delete clears them.
+  const names = useRetainedValue(isOpen ? modelNames : null) ?? modelNames
+  const requiredConfirmation = modelDeleteConfirmation(names.length)
+  const confirmationReady = names.length === 1 || confirmation === requiredConfirmation
+  // Typed input is deliberate work; only the explicit Cancel button discards it.
   const dismissible = !pending && confirmation.length === 0
-  const dialogRef = useAccessibleDialog<HTMLElement>({
-    isOpen,
-    onClose: onCancel,
-    dismissible,
-  })
 
   useEffect(() => {
     setConfirmation('')
   }, [modelNames])
 
-  if (modelNames.length === 0) {
-    return null
-  }
-
   return (
-    <div
-      className={styles.overlay}
-      role="presentation"
-      onMouseDown={dismissible ? onCancel : undefined}
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && dismissible) onCancel()
+      }}
     >
-      <section
-        ref={dialogRef}
-        className={styles.dialog}
+      <DialogContent
+        ref={contentRef}
+        size="sm"
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
         aria-busy={pending}
-        tabIndex={-1}
-        onMouseDown={(event) => event.stopPropagation()}
+        hideClose
+        onOpenAutoFocus={(event) => focusInitialDialogControl(event, contentRef.current)}
+        onPointerDownOutside={(event) => {
+          if (!dismissible) event.preventDefault()
+        }}
       >
-        <div className={styles.signal} aria-hidden="true">!</div>
-        <div className={styles.copy}>
-          <span className={styles.eyebrow}>Destructive configuration change</span>
-          <h2 id={titleId}>Delete {modelNames.length} {modelNames.length === 1 ? 'model' : 'models'}?</h2>
-          <p id={descriptionId}>
-            The selected models are not defaults and are not referenced by routing decisions.
-            This operation writes the configuration once and cannot be undone from the dashboard.
-          </p>
-        </div>
+        <form
+          className="flex min-h-0 flex-col"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!pending && confirmationReady) onConfirm()
+          }}
+        >
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-5 pt-6">
+            <div className="flex items-start gap-3.5">
+              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-destructive-soft text-destructive-foreground">
+                <TriangleAlert className="size-[18px]" strokeWidth={2} />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-0.5">
+                <DialogTitle className="leading-6">
+                  Delete {names.length} {names.length === 1 ? 'model' : 'models'}?
+                </DialogTitle>
+                <DialogDescription className="leading-relaxed">
+                  The selected models are not defaults and are not referenced by routing decisions.
+                  This operation writes the configuration once and cannot be undone from the
+                  dashboard.
+                </DialogDescription>
+              </div>
+            </div>
 
-        <div className={styles.modelList}>
-          {modelNames.slice(0, 6).map((name) => <code key={name}>{name}</code>)}
-          {modelNames.length > 6 ? <span>+{modelNames.length - 6} more</span> : null}
-        </div>
+            <div className="flex flex-wrap gap-1.5 rounded-lg border border-border bg-surface-subtle px-3 py-2.5">
+              {names.slice(0, 6).map((name) => (
+                <code
+                  key={name}
+                  className="max-w-full truncate rounded-[5px] border border-border bg-surface px-1.5 py-0.5 font-mono text-[12px]"
+                >
+                  {name}
+                </code>
+              ))}
+              {names.length > 6 ? (
+                <span className="self-center text-xs text-muted-foreground">
+                  +{names.length - 6} more
+                </span>
+              ) : null}
+            </div>
 
-        {modelNames.length > 1 ? (
-          <label className={styles.confirmation}>
-            Type <strong>{requiredConfirmation}</strong> to confirm
-            <input
-              type="text"
-              value={confirmation}
-              onChange={(event) => setConfirmation(event.target.value)}
-              autoComplete="off"
-              data-dialog-initial-focus
-            />
-          </label>
-        ) : null}
+            {names.length > 1 ? (
+              <div className="grid gap-2">
+                <Label
+                  htmlFor={confirmationId}
+                  className="inline font-normal leading-5 text-muted-foreground"
+                >
+                  Type{' '}
+                  <strong className="font-mono font-semibold text-foreground">
+                    {requiredConfirmation}
+                  </strong>{' '}
+                  to confirm
+                </Label>
+                <Input
+                  id={confirmationId}
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="font-mono"
+                  disabled={pending}
+                  data-dialog-initial-focus
+                />
+              </div>
+            ) : null}
+          </div>
 
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className={styles.cancelButton}
-            onClick={onCancel}
-            disabled={pending}
-            data-dialog-initial-focus={modelNames.length === 1 ? true : undefined}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={styles.deleteButton}
-            onClick={onConfirm}
-            disabled={pending || !confirmationReady}
-          >
-            {pending ? 'Deleting…' : `Delete ${modelNames.length === 1 ? 'model' : 'models'}`}
-          </button>
-        </div>
-      </section>
-    </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onCancel}
+              disabled={pending}
+              data-dialog-initial-focus={names.length === 1 ? true : undefined}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="destructive"
+              disabled={pending || !confirmationReady}
+              loading={pending}
+            >
+              {pending ? 'Deleting…' : `Delete ${names.length === 1 ? 'model' : 'models'}`}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

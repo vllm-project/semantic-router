@@ -1,9 +1,8 @@
 import React from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
-import OnboardingGuide from '../components/OnboardingGuide'
 import { useSetup } from '../contexts/SetupContext'
 
-/** Setup-mode redirect + onboarding for normal routes. */
+/** Sends every route to the first-run wizard while setup mode is active, and away from it afterwards. */
 const AuthenticatedShell: React.FC = () => {
   const { setupState } = useSetup()
   const location = useLocation()
@@ -14,15 +13,10 @@ const AuthenticatedShell: React.FC = () => {
   }
 
   if (!isSetupMode && location.pathname === '/setup') {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/" replace />
   }
 
-  return (
-    <>
-      <Outlet />
-      {!isSetupMode && location.pathname !== '/setup' && <OnboardingGuide />}
-    </>
-  )
+  return <Outlet />
 }
 
 export default AuthenticatedShell

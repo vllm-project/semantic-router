@@ -1,12 +1,12 @@
 import { Link } from 'react-router-dom'
 
-import type { Column } from '../components/DataTable'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
+import { Badge, InlineCode, type Column } from '../ui'
 import { formatDateTime, formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost } from '../utils/insightsCost'
 
-import { ModelName } from './insightsModelLabelSupport'
-import styles from './InsightsPage.module.css'
+import { compactSessionId, displaySessionId } from './insightsAgentIdentity'
+import { ModelChip } from './insightsModelLabelSupport'
 import type { InsightsRecord } from './insightsPageTypes'
 import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
 import type { InsightsReview } from './insightsReviewTypes'
@@ -63,14 +63,19 @@ export function buildReviewQueryString(
 }
 
 export function getReviewsPath(session?: string) {
-  const params = new URLSearchParams({ view: 'reviews' })
+  const params = new URLSearchParams({ tab: 'reviews' })
   if (session) params.set('session', session)
-  return `/insights?${params.toString()}`
+  return `/observe/requests?${params.toString()}`
 }
 
 /** The request list filtered to one Codex turn: its calls, reviews and subagents' calls. */
 export function getTurnPath(turn: string) {
-  return `/insights?${new URLSearchParams({ turn }).toString()}`
+  return `/observe/requests?${new URLSearchParams({ turn }).toString()}`
+}
+
+/** The request list filtered to one session. */
+export function getSessionRequestsPath(session: string) {
+  return `/observe/requests?${new URLSearchParams({ session }).toString()}`
 }
 
 type ReviewTone = 'allow' | 'deny' | 'failed' | 'muted' | 'pending'
@@ -97,14 +102,24 @@ export function reviewResult(review?: InsightsReview): { label: string; tone: Re
   }
 }
 
+const RESULT_BADGE_TONE = {
+  allow: 'success',
+  deny: 'danger',
+  failed: 'warning',
+  muted: 'neutral',
+  pending: 'info',
+} as const
+
 export function ReviewResultBadge({ review }: { review?: InsightsReview }) {
   const result = reviewResult(review)
   return (
-    <span className={styles.reviewResult} data-tone={result.tone}>
+    <Badge tone={RESULT_BADGE_TONE[result.tone]} size="sm" dot data-tone={result.tone}>
       {result.label}
-    </span>
+    </Badge>
   )
 }
+
+const RISK_TONE = { low: 'neutral', medium: 'warning', high: 'danger', critical: 'danger' } as const
 
 export const compactID = (value: string) =>
   value.length <= 20 ? value : `${value.slice(0, 8)}…${value.slice(-8)}`
@@ -130,19 +145,22 @@ function reviewCost(record: InsightsRecord) {
 // Tokens and cost share a cell, so the table fits beside the action.
 function ReviewUsage({ record }: { record: InsightsRecord }) {
   return (
-    <span className={styles.reviewUsage}>
-      <span>{reviewCost(record)}</span>
-      <small>{reviewTokens(record)}</small>
+    <span className="flex flex-col items-end gap-0.5">
+      <span className="font-mono text-xs tabular">{reviewCost(record)}</span>
+      <small className="font-mono text-[11px] text-subtle-foreground tabular">
+        {reviewTokens(record)}
+      </small>
     </span>
   )
 }
 
 function ActionCell({ review }: { review?: InsightsReview }) {
   const action = review?.action
+  const summary = action?.summary || (review?.content_redacted ? 'Hidden from this viewer' : '')
   return (
-    <span className={styles.reviewAction} title={action?.summary || undefined}>
-      {action?.tool ? <code>{action.tool}</code> : null}
-      <span>{action?.summary || (review?.content_redacted ? 'Hidden from this viewer' : '')}</span>
+    <span className="flex min-w-0 items-center gap-2" title={action?.summary || undefined}>
+      {action?.tool ? <InlineCode className="shrink-0">{action.tool}</InlineCode> : null}
+      <span className="truncate text-[13px] text-foreground/85">{summary}</span>
     </span>
   )
 }
@@ -150,66 +168,81 @@ function ActionCell({ review }: { review?: InsightsReview }) {
 export function createReviewTableColumns(): Column<InsightsRecord>[] {
   return [
     {
-      key: 'timestamp',
+      id: 'timestamp',
       header: 'Time',
-      width: '135px',
-      render: (row) => (
-        <Link className={styles.requestIdLink} to={`/insights/${encodeURIComponent(row.id)}`}>
-          <span className={styles.timestamp}>{formatDateTime(row.timestamp)}</span>
+      width: '150px',
+      sortValue: (row) => Date.parse(row.timestamp),
+      cell: (row) => (
+        <Link
+          className="whitespace-nowrap text-xs text-muted-foreground hover:text-foreground hover:underline"
+          to={`/observe/requests/${encodeURIComponent(row.id)}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {formatDateTime(row.timestamp)}
         </Link>
       ),
     },
     {
-      key: 'result',
+      id: 'result',
       header: 'Result',
-      width: '95px',
-      render: (row) => <ReviewResultBadge review={row.review} />,
+      width: '120px',
+      cell: (row) => <ReviewResultBadge review={row.review} />,
     },
     {
-      key: 'risk',
+      id: 'risk',
       header: 'Risk',
-      width: '70px',
-      render: (row) => (
-        <span className={styles.reviewRisk} data-risk={row.review?.assessment?.risk_level}>
-          {row.review?.assessment?.risk_level || '-'}
-        </span>
-      ),
+      width: '80px',
+      cell: (row) => {
+        const risk = row.review?.assessment?.risk_level
+        return risk ? (
+          <Badge tone={RISK_TONE[risk]} size="sm" data-risk={risk}>
+            {risk}
+          </Badge>
+        ) : (
+          <span className="text-xs text-subtle-foreground">-</span>
+        )
+      },
     },
     {
-      key: 'action',
+      id: 'action',
       header: 'Action',
-      width: '240px',
-      render: (row) => <ActionCell review={row.review} />,
+      className: 'w-full max-w-0',
+      cell: (row) => <ActionCell review={row.review} />,
     },
     {
-      key: 'session_id',
+      id: 'session_id',
       header: 'Session',
-      width: '115px',
-      render: (row) =>
+      hideBelow: 'lg',
+      cell: (row) =>
         row.session_id ? (
-          <span className={styles.requestId} title={row.session_id}>
-            {compactID(row.session_id)}
+          <span
+            className="font-mono text-[12px] text-muted-foreground"
+            title={displaySessionId(row.session_id)}
+          >
+            {compactSessionId(row.session_id)}
           </span>
         ) : (
-          '-'
+          <span className="text-xs text-subtle-foreground">-</span>
         ),
     },
     {
-      key: 'selected_model',
+      id: 'selected_model',
       header: 'Model',
-      width: '135px',
-      render: (row) => (
-        <span className={styles.reviewModel}>
-          <ModelName name={row.selected_model} compact />
-        </span>
-      ),
+      hideBelow: 'md',
+      cell: (row) => <ModelChip name={row.selected_model} className="max-w-[170px] text-[13px]" />,
     },
-    { key: 'latency', header: 'Latency', width: '80px', render: reviewLatency },
     {
-      key: 'actual_cost',
+      id: 'latency',
+      header: 'Latency',
+      align: 'right',
+      hideBelow: 'sm',
+      cell: (row) => <span className="font-mono text-xs tabular">{reviewLatency(row)}</span>,
+    },
+    {
+      id: 'actual_cost',
       header: 'Cost',
-      width: '120px',
-      render: (record) => <ReviewUsage record={record} />,
+      align: 'right',
+      cell: (record) => <ReviewUsage record={record} />,
     },
   ]
 }
@@ -231,7 +264,7 @@ function reviewActionFields(review: InsightsReview): ViewField[] {
       label: 'Planned action',
       fullWidth: true,
       value: (
-        <pre className={styles.reviewArguments}>
+        <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-surface-sunken/60 px-3 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-all">
           {action.arguments}
           {action.arguments_truncated ? '\n… cut at the record limit' : ''}
         </pre>
@@ -264,7 +297,16 @@ export function buildReviewSection(record: InsightsRecord): ViewSection | null {
       ...reviewActionFields(review),
       {
         label: 'Reviewed session',
-        value: session ? <Link to={getReviewsPath(session)}>{compactID(session)}</Link> : '-',
+        value: session ? (
+          <Link
+            className="font-mono text-[12.5px] text-primary hover:underline"
+            to={getReviewsPath(session)}
+          >
+            {compactID(displaySessionId(session))}
+          </Link>
+        ) : (
+          '-'
+        ),
       },
       { label: 'Reviewer thread', value: review.thread_id || '-' },
       { label: 'Planned in turn', value: review.parent_turn_id || '-' },

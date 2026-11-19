@@ -19665,6 +19665,14 @@
             }
           },
           {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "since",
             "in": "query",
             "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
@@ -19808,6 +19816,12 @@
                                 "type": "string"
                               },
                               "parent_id": {
+                                "type": "string"
+                              },
+                              "request_class": {
+                                "type": "string"
+                              },
+                              "type": {
                                 "type": "string"
                               }
                             }
@@ -20061,8 +20075,14 @@
                               "type": "string"
                             }
                           },
+                          "history_image_count": {
+                            "type": "integer"
+                          },
                           "id": {
                             "type": "string"
+                          },
+                          "image_count": {
+                            "type": "integer"
                           },
                           "jailbreak_confidence": {
                             "nullable": true,
@@ -21334,6 +21354,9 @@
                           "request_kind": {
                             "type": "string"
                           },
+                          "requested_model": {
+                            "type": "string"
+                          },
                           "response_body": {
                             "type": "string"
                           },
@@ -22515,6 +22538,13 @@
                         ]
                       }
                     },
+                    "harness_counts": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    },
                     "has_more": {
                       "type": "boolean"
                     },
@@ -22542,6 +22572,7 @@
                     "limit",
                     "offset",
                     "has_more",
+                    "harness_counts",
                     "data"
                   ]
                 }
@@ -22852,6 +22883,14 @@
             }
           },
           {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "since",
             "in": "query",
             "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
@@ -22927,6 +22966,14 @@
                 "high",
                 "critical"
               ]
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "description": "With since, also return traffic: the records in contiguous intervals of this length from since to now, such as 5m or 1h; at least 1m and at most 1000 intervals.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -23612,6 +23659,116 @@
                         "total_tokens",
                         "excluded_record_count"
                       ]
+                    },
+                    "traffic": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "buckets": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "cached": {
+                                "type": "integer"
+                              },
+                              "cost": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "actual_spend": {
+                                      "type": "number"
+                                    },
+                                    "baseline_spend": {
+                                      "type": "number"
+                                    },
+                                    "cost_record_count": {
+                                      "type": "integer"
+                                    },
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "gross_saved": {
+                                      "type": "number"
+                                    },
+                                    "netted_router_call_spend": {
+                                      "type": "number"
+                                    },
+                                    "router_call_spend": {
+                                      "type": "number"
+                                    },
+                                    "total_saved": {
+                                      "type": "number"
+                                    },
+                                    "total_spend": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "currency",
+                                    "total_saved",
+                                    "gross_saved",
+                                    "netted_router_call_spend",
+                                    "baseline_spend",
+                                    "actual_spend",
+                                    "router_call_spend",
+                                    "total_spend",
+                                    "cost_record_count"
+                                  ]
+                                }
+                              },
+                              "failed": {
+                                "type": "integer"
+                              },
+                              "latency_p50_ms": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
+                              "latency_p95_ms": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
+                              "requests": {
+                                "type": "integer"
+                              },
+                              "start": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "start",
+                              "requests",
+                              "cached",
+                              "failed",
+                              "cost"
+                            ]
+                          }
+                        },
+                        "interval_seconds": {
+                          "type": "integer"
+                        },
+                        "latency_p50_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "latency_p95_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "since": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "since",
+                        "interval_seconds",
+                        "buckets"
+                      ]
                     }
                   },
                   "required": [
@@ -23932,6 +24089,14 @@
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -24546,6 +24711,14 @@
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -25338,6 +25511,9 @@
                           "agent": {
                             "type": "string"
                           },
+                          "agent_type": {
+                            "type": "string"
+                          },
                           "completion_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -25370,6 +25546,9 @@
                             "items": {
                               "type": "object"
                             }
+                          },
+                          "image_count": {
+                            "type": "integer"
                           },
                           "lifecycle_state": {
                             "type": "string"
@@ -25447,6 +25626,9 @@
                             "type": "string"
                           },
                           "record_id": {
+                            "type": "string"
+                          },
+                          "request_class": {
                             "type": "string"
                           },
                           "request_id": {
@@ -25628,6 +25810,9 @@
                                 "type": "string"
                               },
                               "spawned_after_record_id": {
+                                "type": "string"
+                              },
+                              "type": {
                                 "type": "string"
                               }
                             },
@@ -26145,6 +26330,14 @@
             }
           },
           {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "since",
             "in": "query",
             "description": "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.",
@@ -26345,6 +26538,9 @@
                                   "type": "string"
                                 },
                                 "spawned_after_record_id": {
+                                  "type": "string"
+                                },
+                                "type": {
                                   "type": "string"
                                 }
                               },
@@ -27337,6 +27533,12 @@
                         },
                         "parent_id": {
                           "type": "string"
+                        },
+                        "request_class": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
                         }
                       }
                     },
@@ -27589,8 +27791,14 @@
                         "type": "string"
                       }
                     },
+                    "history_image_count": {
+                      "type": "integer"
+                    },
                     "id": {
                       "type": "string"
+                    },
+                    "image_count": {
+                      "type": "integer"
                     },
                     "jailbreak_confidence": {
                       "nullable": true,
@@ -28860,6 +29068,9 @@
                       "type": "string"
                     },
                     "request_kind": {
+                      "type": "string"
+                    },
+                    "requested_model": {
                       "type": "string"
                     },
                     "response_body": {

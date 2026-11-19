@@ -92,32 +92,29 @@ async function setup(page: Page, count = 1) {
   return { reads, writes }
 }
 
-test('dataset library groups by mode, pages cards and hides storage identities', async ({
+test('dataset library lists prepared sets, pages rows and hides storage identities', async ({
   page,
 }) => {
-  const { writes } = await setup(page, 14)
-  await page.goto('/evaluation?view=datasets')
+  const { writes } = await setup(page, 24)
+  await page.goto('/observe/evaluations?view=datasets')
   const library = page.getByRole('region', { name: 'Dataset library' })
-  await expect(
-    library.getByRole('heading', { name: 'Capability suite', exact: true }),
-  ).toBeVisible()
-  await expect(library.getByRole('article')).toHaveCount(12)
-  await expect(library.getByText('1–12 of 14 datasets')).toBeVisible()
-  await expect(library.getByRole('button', { name: /^All datasets/ })).toContainText(
-    '392 total questions',
-  )
+  const rows = library.locator('tbody tr')
+  await expect(library.getByRole('button', { name: 'Capability suite', exact: true })).toBeVisible()
+  await expect(rows).toHaveCount(20)
+  await expect(library.getByText('1–20 of 24 · Page 1 of 2')).toBeVisible()
+  await expect(library.getByText('672 questions · 24 prepared sets')).toBeVisible()
   await expect(library.getByText(dataset.name, { exact: true })).toHaveCount(0)
   await expect(library.getByText(dataset.sha256)).toHaveCount(0)
   await expect(library.getByText(dataset.path)).toHaveCount(0)
-  await library.getByRole('button', { name: 'Next dataset page' }).click()
-  await expect(library.getByRole('article')).toHaveCount(2)
-  await expect(library.getByText('13–14 of 14 datasets')).toBeVisible()
-  await library.getByLabel('Search datasets').fill('Study 2')
-  await expect(library.getByRole('article')).toHaveCount(1)
+  await library.getByRole('button', { name: 'Next datasets' }).click()
+  await expect(rows).toHaveCount(4)
+  await expect(library.getByText('21–24 of 24 · Page 2 of 2')).toBeVisible()
+  await library.getByLabel('Search datasets').fill('Study 12')
+  await expect(rows).toHaveCount(1)
   expect(writes).toEqual([])
 })
 
-test('library mode cards summarize question counts across all prepared sets independently of filters', async ({
+test('library summary counts questions across all prepared sets independently of filters', async ({
   page,
 }) => {
   const { writes } = await setup(page)
@@ -132,25 +129,20 @@ test('library mode cards summarize question counts across all prepared sets inde
       },
     }),
   )
-  await page.goto('/evaluation?view=datasets')
-  const modes = page.getByRole('group', { name: 'Filter by evaluation mode' })
-  await expect(modes.getByRole('button', { name: /^All datasets/ })).toContainText(
-    '1,300 total questions',
-  )
-  await expect(modes.getByRole('button', { name: /^Smoke/ })).toContainText('12 total questions')
-  await expect(modes.getByRole('button', { name: /^Quick/ })).toContainText('1,000 total questions')
-  await expect(modes.getByRole('button', { name: /^Standard/ })).toContainText(
-    '288 total questions',
-  )
-  await modes.getByRole('button', { name: /^Quick/ }).click()
+  await page.goto('/observe/evaluations?view=datasets')
+  const summary = page.getByText('1,300 questions · 3 prepared sets', { exact: true })
+  await expect(summary).toBeVisible()
+  await page.getByRole('button', { name: 'Profile', exact: true }).click()
+  await page.getByRole('menuitemcheckbox', { name: /Quick/ }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('tbody tr')).toHaveCount(1)
   await page.getByLabel('Search datasets').fill('not a dataset')
   await expect(page.getByText('No matching datasets')).toBeVisible()
-  await expect(modes.getByRole('button', { name: /^All datasets/ })).toContainText(
-    '1,300 total questions',
+  await expect(summary).toBeVisible()
+  await summary.hover()
+  await expect(page.getByRole('tooltip')).toContainText(
+    'Question totals are across prepared sets. Sets may overlap.',
   )
-  await expect(
-    page.getByText('Question totals are across prepared sets. Sets may overlap.'),
-  ).toBeVisible()
   expect(writes).toEqual([])
 })
 
@@ -158,8 +150,8 @@ test('dataset details show real questions, options and server pagination; URL su
   page,
 }) => {
   const { reads, writes } = await setup(page)
-  await page.goto('/evaluation?view=datasets')
-  await page.getByRole('button', { name: 'Explore Capability suite, 28 questions' }).click()
+  await page.goto('/observe/evaluations?view=datasets')
+  await page.getByRole('button', { name: 'Capability suite', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`dataset=${id}`))
   await expect(page.getByRole('button', { name: 'Open question 1', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Next questions', exact: true }).click()
@@ -174,7 +166,8 @@ test('dataset details show real questions, options and server pagination; URL su
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Capability suite', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Open question 1', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Back to datasets', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page).not.toHaveURL(/dataset=/)
   await expect(page.getByRole('region', { name: 'Dataset library' })).toBeVisible()
   expect(writes).toEqual([])
 })
@@ -183,7 +176,7 @@ test('benchmark and subject filters request server strata; coverage shows aggreg
   page,
 }) => {
   const { reads } = await setup(page)
-  await page.goto(`/evaluation?view=datasets&dataset=${id}`)
+  await page.goto(`/observe/evaluations?view=datasets&dataset=${id}`)
   const questions = page.getByRole('region', { name: 'Dataset questions' })
   await questions.getByRole('combobox', { name: 'Benchmark', exact: true }).click()
   await page.getByRole('option', { name: 'MMLU-Pro (26)', exact: true }).click()
@@ -221,7 +214,7 @@ test('dataset reading failures offer explicit reload without dispatching and nar
     else await route.fallback()
   })
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto(`/evaluation?view=datasets&dataset=${id}`)
+  await page.goto(`/observe/evaluations?view=datasets&dataset=${id}`)
   await expect(page.getByRole('alert')).toContainText('Dataset service temporarily unavailable')
   fail = false
   await page.getByRole('button', { name: 'Retry loading dataset' }).click()

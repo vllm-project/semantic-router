@@ -2,7 +2,7 @@
   "container": null,
   "content": [
     {
-      "id": "call_weather_2",
+      "id": "toolu_238062f0d9b0fb56a471866c",
       "input": {
         "city": "Paris",
         "days": [
@@ -13,7 +13,7 @@
       "type": "tool_use"
     }
   ],
-  "id": "response_cut_2",
+  "id": "msg_deac0a1073f85a0f19941ab8",
   "model": "routed-model",
   "role": "assistant",
   "stop_details": null,
