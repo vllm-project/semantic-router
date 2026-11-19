@@ -15,10 +15,13 @@ type JailbreakInput struct {
 	History []JailbreakContent
 }
 
-func jailbreakInputTexts(contents []JailbreakContent) []string {
+// jailbreakInputTexts is the text of the contents in one role: "user" for the
+// turns a jailbreak rule reads, "tool" for the tool results it reads when its
+// input asks for them.
+func jailbreakInputTexts(contents []JailbreakContent, role string) []string {
 	texts := make([]string, 0, len(contents))
 	for _, content := range contents {
-		if content.Text != "" && (content.Role == "user" || content.Role == "tool") {
+		if content.Text != "" && content.Role == role {
 			texts = append(texts, content.Text)
 		}
 	}

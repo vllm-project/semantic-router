@@ -4,7 +4,7 @@
       "event": "response.created",
       "data": {
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_incomplete",
           "incomplete_details": null,
@@ -28,7 +28,7 @@
       "event": "response.in_progress",
       "data": {
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_incomplete",
           "incomplete_details": null,
@@ -128,7 +128,7 @@
           ],
           "id": "msg_268ed5e23ebd90e277f4857e",
           "role": "assistant",
-          "status": "completed",
+          "status": "incomplete",
           "type": "message"
         },
         "output_index": 0,
@@ -140,7 +140,7 @@
       "event": "response.incomplete",
       "data": {
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_incomplete",
           "incomplete_details": {
@@ -161,7 +161,7 @@
               ],
               "id": "msg_268ed5e23ebd90e277f4857e",
               "role": "assistant",
-              "status": "completed",
+              "status": "incomplete",
               "type": "message"
             }
           ],

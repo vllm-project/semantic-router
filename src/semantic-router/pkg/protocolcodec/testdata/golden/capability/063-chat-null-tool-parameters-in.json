@@ -1,0 +1,46 @@
+{
+  "operation": "request",
+  "cases": [
+    {
+      "name": "parameters_omitted",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What time is it?"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_time"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "parameters_null",
+      "body": {
+        "model": "client-model",
+        "messages": [
+          {
+            "role": "user",
+            "content": "What time is it?"
+          }
+        ],
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "get_time",
+              "parameters": null
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

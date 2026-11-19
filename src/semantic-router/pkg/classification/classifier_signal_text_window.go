@@ -6,12 +6,24 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// semanticSignalUnitLimit bounds one embedding/classifier forward pass. The
-// request's full text still reaches the keyword and context signals;
-// semantic signals receive representative head, middle, and tail views so a
-// model with a large context window cannot force internal routing models to
-// allocate against that same unbounded window. Units are quarter-token
-// estimates calibrated on the mmBERT tokenizer.
+// A model call made for a routing signal either samples the text or reads all
+// of it, chosen by what a missed part of the text would cost.
+//
+//   - Sample. A signal that labels the request as a whole may read a head,
+//     middle and tail view, which carries the request's purpose and bounds the
+//     forward pass. textForRoutingSignal does this for
+//     boundedSemanticSignalTypes and passes every other signal the full text.
+//   - Read all. A question about whether something appears anywhere (PII, an
+//     attack, an unsupported claim) must read all of the text, because a
+//     dropped part is a silent miss. A systemone rule asks for that with
+//     coverage: full, which reads the input in windows past one model input,
+//     and on_unscanned decides what an answer that still missed part of it
+//     means. coverage: truncate reads only the first tokens.
+//
+// semanticSignalUnitLimit bounds the three samples to 440 estimated tokens,
+// which leaves room in a 512-token forward for the two omission markers and
+// the special tokens. Units are quarter-token estimates calibrated on the
+// mmBERT tokenizer.
 const semanticSignalUnitLimit = 440 * 4
 
 const signalWindowOmissionMarker = "\n... [content sampled for routing signal evaluation] ...\n"

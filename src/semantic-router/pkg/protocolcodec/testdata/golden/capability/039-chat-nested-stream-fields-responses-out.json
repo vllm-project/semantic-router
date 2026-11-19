@@ -9,7 +9,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "chatcmpl_1",
                   "incomplete_details": null,
@@ -33,7 +33,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "chatcmpl_1",
                   "incomplete_details": null,
@@ -145,7 +145,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "chatcmpl_1",
                   "incomplete_details": null,

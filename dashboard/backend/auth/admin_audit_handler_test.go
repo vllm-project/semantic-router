@@ -52,6 +52,51 @@ func TestAdminAuditLogsHandlerReturnsFilteredPage(t *testing.T) {
 	}
 }
 
+func TestAdminAuditLogsHandlerAddsFacetsOnRequest(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	ctx := context.Background()
+	for _, fixture := range []AuditLog{
+		{UserID: "admin-a", Action: "user.create", StatusCode: 201, CreatedAt: 100},
+		{UserID: "admin-a", Action: "user.update", StatusCode: 204, CreatedAt: 200},
+		{UserID: "admin-b", Action: "router.deploy", StatusCode: 503, CreatedAt: 300},
+	} {
+		if err := svc.store.AddAuditLog(ctx, fixture); err != nil {
+			t.Fatalf("AddAuditLog() error = %v", err)
+		}
+	}
+
+	serve := func(path string) AuditLogPageResponse {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request = request.WithContext(WithAuthContext(request.Context(), AuthContext{
+			UserID: "admin-a",
+			Perms:  map[string]bool{PermUsersManage: true},
+		}))
+		recorder := httptest.NewRecorder()
+		adminAuditLogsHandler(svc).ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body = %q", path, recorder.Code, recorder.Body.String())
+		}
+		var payload AuditLogPageResponse
+		if err := json.NewDecoder(recorder.Body).Decode(&payload); err != nil {
+			t.Fatalf("%s: decode response: %v", path, err)
+		}
+		return payload
+	}
+
+	withFacets := serve("/api/admin/audit-logs?facets=1&limit=1")
+	if withFacets.Facets == nil || len(withFacets.Facets.Users) != 2 || withFacets.Facets.Users[0] != (AuditLogFacet{Value: "admin-a", Count: 2}) {
+		t.Fatalf("facets = %#v, want admin-a first with two entries", withFacets.Facets)
+	}
+	if len(withFacets.Logs) != 1 || withFacets.Total != 3 {
+		t.Fatalf("page = %#v, want one of three entries", withFacets)
+	}
+	if plain := serve("/api/admin/audit-logs?page=1&status=success,server_error"); plain.Facets != nil || plain.Total != 3 {
+		t.Fatalf("page without facets = %#v, want three entries and no facets", plain)
+	}
+}
+
 func TestAdminAuditLogsHandlerPreservesLegacyArrayResponse(t *testing.T) {
 	t.Parallel()
 

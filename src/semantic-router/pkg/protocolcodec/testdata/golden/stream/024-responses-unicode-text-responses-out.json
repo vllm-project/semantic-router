@@ -4,7 +4,7 @@
       "event": "response.created",
       "data": {
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_unicode_1",
           "incomplete_details": null,
@@ -28,7 +28,7 @@
       "event": "response.in_progress",
       "data": {
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_unicode_1",
           "incomplete_details": null,
@@ -140,7 +140,7 @@
       "event": "response.completed",
       "data": {
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_unicode_1",
           "incomplete_details": null,

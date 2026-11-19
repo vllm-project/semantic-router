@@ -19,6 +19,27 @@ func (m ListenerModels) Allows(model string) bool {
 
 type listenerModelsKey struct{}
 
+type unservedModelRouteKey struct{}
+
+// WithUnservedModelRoute returns ctx whose client request routes a model its
+// listener does not accept or the Router does not serve as route; an empty
+// route refuses such a request.
+func WithUnservedModelRoute(ctx context.Context, route string) context.Context {
+	if route == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, unservedModelRouteKey{}, route)
+}
+
+// UnservedModelRouteFrom returns the model ctx routes unserved models as.
+func UnservedModelRouteFrom(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	route, _ := ctx.Value(unservedModelRouteKey{}).(string)
+	return route
+}
+
 // WithListenerModels returns ctx restricted to models; an empty list
 // restricts nothing.
 func WithListenerModels(ctx context.Context, models []string) context.Context {

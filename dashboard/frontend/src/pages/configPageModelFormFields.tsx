@@ -1,5 +1,6 @@
-import styles from '../components/EditModal.module.css'
+import NativeSelect from '../components/NativeSelect'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
+import { Input } from '../ui'
 import { effectiveModelAPIFormat, modelAPIFormats } from './configPageModelCatalogSupport'
 import { normalizeModelBackendRefs, normalizeModelStringMap } from './configPageModelFormSupport'
 import type { FieldConfig } from '../components/EditModal'
@@ -19,6 +20,7 @@ export function getModelStructuredFormFields(): FieldConfig[] {
     {
       name: 'capabilities',
       label: 'Capabilities',
+      section: 'Routing metadata',
       type: 'custom',
       description: 'Capabilities exposed to model selection and routing policies.',
       customRender: (value, onChange) => (
@@ -28,26 +30,31 @@ export function getModelStructuredFormFields(): FieldConfig[] {
     {
       name: 'input_modalities',
       label: 'Input Modalities',
+      section: 'Routing metadata',
       type: 'custom',
+      fullWidth: false,
       description:
         'Media the model reads (text, image, audio, video), stored under providers.models[].modalities.input.',
       customRender: (value, onChange) => (
-        <ModelModalitiesEditor value={value} onChange={onChange} />
+        <ModelModalitiesEditor label="Input modalities" value={value} onChange={onChange} />
       ),
     },
     {
       name: 'output_modalities',
       label: 'Output Modalities',
+      section: 'Routing metadata',
       type: 'custom',
+      fullWidth: false,
       description:
         "Media the model writes, stored under providers.models[].modalities.output; a decision's output contract needs them.",
       customRender: (value, onChange) => (
-        <ModelModalitiesEditor value={value} onChange={onChange} />
+        <ModelModalitiesEditor label="Output modalities" value={value} onChange={onChange} />
       ),
     },
     {
       name: 'tags',
       label: 'Tags',
+      section: 'Routing metadata',
       type: 'custom',
       description: 'Structured routing labels used by filters, policies, and inventory search.',
       customRender: (value, onChange) => <ModelTagsEditor value={value} onChange={onChange} />,
@@ -55,12 +62,14 @@ export function getModelStructuredFormFields(): FieldConfig[] {
     {
       name: 'loras',
       label: 'LoRA Adapters',
+      section: 'Routing metadata',
       type: 'custom',
       customRender: (value, onChange) => <ModelLorasEditor value={value} onChange={onChange} />,
     },
     {
       name: 'backend_refs',
       label: 'Provider Backends',
+      section: 'Backends',
       type: 'custom',
       description: 'Physical inference targets stored under providers.models[].backend_refs.',
       customRender: (value, onChange) => (
@@ -70,6 +79,7 @@ export function getModelStructuredFormFields(): FieldConfig[] {
     {
       name: 'external_model_ids',
       label: 'External Model IDs',
+      section: 'Backends',
       type: 'custom',
       description:
         'Provider-to-model ID aliases stored under providers.models[].external_model_ids.',
@@ -80,6 +90,7 @@ export function getModelStructuredFormFields(): FieldConfig[] {
     {
       name: 'pricing',
       label: 'Token Pricing',
+      section: 'Pricing',
       type: 'custom',
       description: 'Per-million-token rates stored under providers.models[].pricing.',
       customRender: (value, onChange) => <ModelPricingEditor value={value} onChange={onChange} />,
@@ -87,6 +98,7 @@ export function getModelStructuredFormFields(): FieldConfig[] {
     {
       name: 'reliability',
       label: 'Delivery Policy',
+      section: 'Delivery',
       type: 'custom',
       description: 'Retry, health check, and load-balancing controls for this model.',
       customRender: (value, onChange) => (
@@ -100,6 +112,7 @@ export function modelAPIFormatField(catalog: BuiltInModelCatalog | null): FieldC
   return {
     name: 'api_format',
     label: 'API Format',
+    section: 'Identity',
     type: 'custom',
     fullWidth: false,
     description: 'Use the provider/model default or choose an explicit wire format.',
@@ -124,10 +137,9 @@ export function modelAPIFormatField(catalog: BuiltInModelCatalog | null): FieldC
         catalog,
       )
       return (
-        <>
-          <select
+        <div className="flex flex-col gap-1.5">
+          <NativeSelect
             aria-label="API Format"
-            className={styles.select}
             value={explicit}
             onChange={(event) => onChange(event.target.value)}
           >
@@ -139,9 +151,13 @@ export function modelAPIFormatField(catalog: BuiltInModelCatalog | null): FieldC
                 {format}
               </option>
             ))}
-          </select>
-          {effective.error && <small role="status">{effective.error}</small>}
-        </>
+          </NativeSelect>
+          {effective.error ? (
+            <small role="status" className="text-xs text-warning-foreground">
+              {effective.error}
+            </small>
+          ) : null}
+        </div>
       )
     },
   }
@@ -154,6 +170,7 @@ export function modelReasoningFamilyField(
   return {
     name: 'reasoning_family',
     label: 'Reasoning Family',
+    section: 'Reasoning',
     type: 'custom',
     fullWidth: false,
     description:
@@ -163,19 +180,11 @@ export function modelReasoningFamilyField(
       if (catalogID) {
         const builtIn = catalog?.models.find((model) => model.id === catalogID)
         const label = builtIn ? builtIn.reasoning_family || 'None' : 'Unknown catalog model'
-        return (
-          <input
-            aria-label="Reasoning Family"
-            className={styles.input}
-            readOnly
-            value={`${label} (inherited)`}
-          />
-        )
+        return <Input aria-label="Reasoning Family" readOnly value={`${label} (inherited)`} />
       }
       return (
-        <select
+        <NativeSelect
           aria-label="Reasoning Family"
-          className={styles.select}
           value={typeof value === 'string' ? value : ''}
           onChange={(event) => onChange(event.target.value)}
         >
@@ -185,7 +194,7 @@ export function modelReasoningFamilyField(
               {name}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       )
     },
   }
