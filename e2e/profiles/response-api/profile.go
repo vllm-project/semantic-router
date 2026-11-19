@@ -152,6 +152,8 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-ollama-empty-content",
 		"protocol-codec-vllm-stop-sequence",
 		"protocol-codec-vllm-reasoning-order",
+		"protocol-codec-vllm-reasoning-budget",
+		"protocol-codec-null-reasoning-budget-opt-in",
 		"protocol-codec-vllm-stream-error",
 		"protocol-codec-auto-unsupported-capability",
 		"protocol-codec-chat-backend-agent-client-replay",

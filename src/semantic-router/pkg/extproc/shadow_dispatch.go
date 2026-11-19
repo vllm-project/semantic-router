@@ -296,6 +296,13 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 				return nil, err
 			}
 		}
+		body, err = r.adaptChatReasoningBudget(body, &providerDispatch{
+			logicalModel: target.logicalModel, backendModel: target.logicalModel,
+			profile: target.profile, targetFormat: target.format,
+		})
+		if err != nil {
+			return nil, err
+		}
 		return adaptOllamaOutputLimit(body, target.format, target.profile)
 	}
 }

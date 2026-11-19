@@ -22,6 +22,12 @@ configOverride:
           - name: provider-mocker
             endpoint: provider-mocker.default.svc.cluster.local:8000
             provider: vllm
+      - name: mock/opt-in-ollama-chat
+        capabilities: [chat, image_input]
+        backend_refs:
+          - name: provider-mocker-ollama
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            provider: ollama
       - name: mock/opt-in-responses
         api_format: responses
         backend_refs:
@@ -47,6 +53,7 @@ configOverride:
         - messages[].role
         - content.file
         - tools.defer_loading
+        - reasoning_budget_tokens
 resources:
   limits:
     cpu: "1"

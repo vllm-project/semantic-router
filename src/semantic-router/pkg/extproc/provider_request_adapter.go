@@ -16,7 +16,10 @@ import (
 // layer reads the output limit only from max_tokens, and documents no
 // max_completion_tokens support:
 // https://github.com/ollama/ollama/blob/6383a0fa9cbf97494b847226e189f6e36b401a08/docs/api/openai-compatibility.mdx?plain=1#L224-L243
-const ollamaProviderType = "ollama"
+const (
+	ollamaProviderType = "ollama"
+	vllmProviderType   = "vllm"
+)
 
 // adaptProviderRequest applies backend-dialect extensions after the standard
 // wire codec has rendered the request. Official protocol semantics stay in
@@ -31,6 +34,10 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	body, mutation, err := r.projectProviderRequest(body, dispatch, ctx)
 	if err != nil {
 		return body, err
+	}
+	body, err = r.adaptChatReasoningBudget(body, dispatch)
+	if err != nil {
+		return nil, err
 	}
 	if explicitAnthropicReasoningDisabled(ctx, dispatch) &&
 		(mutation == nil || !mutation.reasoningApplied) {
@@ -70,6 +77,56 @@ func (r *OpenAIRouter) reportApproximatedReasoningDisplay(ctx *RequestContext, d
 	if !slices.Contains(ctx.ProtocolDiagnostics, diagnostic) {
 		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
 	}
+}
+
+// adaptChatReasoningBudget projects the Router-neutral Chat budget to vLLM's
+// native field. Other providers should have been rejected or projected by the
+// shared request projection before encoding. A null budget is equivalent to
+// an omitted field. An existing non-null native budget in the provider-bound
+// body takes precedence; public Chat ingress rejects client-supplied
+// thinking_token_budget.
+func (r *OpenAIRouter) adaptChatReasoningBudget(body []byte, dispatch *providerDispatch) ([]byte, error) {
+	if dispatch == nil || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+		return body, nil
+	}
+	neutralBudget := gjson.GetBytes(body, "reasoning_budget_tokens")
+	if !neutralBudget.Exists() {
+		return body, nil
+	}
+	if neutralBudget.Type == gjson.Null {
+		return sjson.DeleteBytes(body, "reasoning_budget_tokens")
+	}
+
+	providerType := ""
+	if dispatch.profile != nil {
+		providerType, _ = dispatch.profile.ProviderType()
+	}
+	if providerType == "" {
+		var err error
+		providerType, err = r.providerTypeForModel(dispatch.effectiveBackendModel())
+		if err != nil {
+			return nil, err
+		}
+	}
+	if providerType != vllmProviderType {
+		field := llmprotocol.LossyFieldReasoningBudget
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"lossy_translation",
+			"translation would lose "+field+llmprotocol.OptInHint(field),
+			nil,
+		)
+	}
+
+	nativeBudget := gjson.GetBytes(body, "thinking_token_budget")
+	if nativeBudget.Exists() && nativeBudget.Type != gjson.Null {
+		return sjson.DeleteBytes(body, "reasoning_budget_tokens")
+	}
+	body, err := sjson.SetRawBytes(body, "thinking_token_budget", []byte(neutralBudget.Raw))
+	if err != nil {
+		return nil, err
+	}
+	return sjson.DeleteBytes(body, "reasoning_budget_tokens")
 }
 
 // reportDroppedReasoningSummary records a Responses summary request removed by

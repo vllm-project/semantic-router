@@ -148,7 +148,11 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 		if onlyUnsupported && unsupported != nil {
 			return nil, unsupported
 		}
-		return nil, fmt.Errorf("%w: decision %q has no candidate supporting the request capabilities", selection.ErrNoEligibleCandidates, input.DecisionName)
+		message := fmt.Sprintf("decision %q has no candidate supporting the request capabilities", input.DecisionName)
+		if unsupported != nil {
+			message += "; candidate incompatibility: " + unsupported.Message
+		}
+		return nil, fmt.Errorf("%w: %s", selection.ErrNoEligibleCandidates, message)
 	}
 	decision := &config.Decision{Name: input.DecisionName, Algorithm: algorithm}
 	if err := validateMinimumEligibleDecisionModels(decision, eligible, ctx.VSRContextTokenCount); err != nil {

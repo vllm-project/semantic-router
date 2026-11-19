@@ -266,7 +266,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
+	appendRequestProjectionDiagnostics(ctx, projectionDiagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 	body, err := r.encodeKVHandoff(encoded.Body, format, ctx)
 	if err != nil {

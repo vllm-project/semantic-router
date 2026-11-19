@@ -768,7 +768,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	if encodeErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
 	}
-	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
+	appendRequestProjectionDiagnostics(ctx, projectionDiagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 
 	requestBody := encoded.Body

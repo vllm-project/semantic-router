@@ -115,6 +115,18 @@ config:
   recipes:
     - name: default
       decisions:
+        - name: reasoning_budget_projection_decision
+          description: Exercise the neutral reasoning budget at the vLLM Chat provider boundary.
+          priority: 115
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: reasoning_budget_projection_probe
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: true
+              reasoning_effort: medium
         - name: reasoning_summary_template_decision
           description: Exercise Responses summary projection through a chat template provider transport.
           priority: 110
@@ -184,6 +196,10 @@ config:
               use_reasoning: false
       signals:
         keywords:
+          - name: reasoning_budget_projection_probe
+            operator: OR
+            keywords:
+              - "__mock_vllm_reasoning_budget__"
           - name: reasoning_summary_template_probe
             operator: OR
             keywords:

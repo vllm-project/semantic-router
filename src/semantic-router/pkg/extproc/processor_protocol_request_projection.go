@@ -1,7 +1,9 @@
 package extproc
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount"
@@ -34,6 +36,10 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 		return request, nil, err
 	}
 	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(projected, model, target, shadows...)
+	projected, budgetDiagnostics, err := r.projectUnsupportedReasoningBudget(projected, model, target)
+	if err != nil {
+		return projected, nil, err
+	}
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
 	projected, toolChoiceDiagnostics := llmprotocol.ProjectToolChoiceNone(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
@@ -41,8 +47,82 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
 	projected = r.projectControlTokens(projected, model)
-	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, toolChoiceDiagnostics,
-		fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, budgetDiagnostics, verbosityDiagnostics,
+		toolChoiceDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+}
+
+// projectUnsupportedReasoningBudget follows the same projection path during
+// candidate qualification and final dispatch. A non-vLLM Chat provider fails
+// closed unless the operator explicitly accepts dropping its budget.
+func (r *OpenAIRouter) projectUnsupportedReasoningBudget(
+	request llmprotocol.Request,
+	model string,
+	target llmprotocol.WireFormat,
+) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
+	if request.ReasoningBudgetTokens == nil || target != llmprotocol.OpenAIChatV1 {
+		return request, nil, nil
+	}
+	providerType, err := r.providerTypeForModel(model)
+	if err != nil {
+		return request, nil, err
+	}
+	if providerType == vllmProviderType {
+		return request, nil, nil
+	}
+	field := llmprotocol.LossyFieldReasoningBudget
+	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, field) {
+		return request, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"lossy_translation",
+			"translation would lose "+field+llmprotocol.OptInHint(field),
+			nil,
+		)
+	}
+	projected, diagnostics := llmprotocol.ProjectUnsupportedReasoningBudget(request, target)
+	return projected, diagnostics, nil
+}
+
+// providerTypeForModel resolves the provider selected by the same primary
+// backend lookup used for dispatch. Legacy endpoints can still identify their
+// provider through VLLMEndpoint.Type.
+func (r *OpenAIRouter) providerTypeForModel(model string) (string, error) {
+	if r == nil || r.Config == nil {
+		return "", nil
+	}
+	_, endpointName, found, err := r.Config.ResolvePrimaryBackendForModel(model)
+	if err != nil {
+		return "", fmt.Errorf("resolve primary backend for model %q: %w", model, err)
+	}
+	if !found {
+		return "", fmt.Errorf("model %q has no configured backend", model)
+	}
+	profile, profileErr := r.Config.GetProviderProfileForEndpoint(endpointName)
+	if profileErr != nil {
+		return "", fmt.Errorf("resolve provider profile for model %q: %w", model, profileErr)
+	}
+	if profile != nil {
+		if providerType, typeErr := profile.ProviderType(); typeErr == nil {
+			return strings.ToLower(strings.TrimSpace(providerType)), nil
+		}
+		return strings.ToLower(strings.TrimSpace(profile.Type)), nil
+	}
+	if endpoint, exists := r.Config.GetEndpointByName(endpointName); exists {
+		return strings.ToLower(strings.TrimSpace(endpoint.Type)), nil
+	}
+	return "", fmt.Errorf("provider endpoint %q for model %q was not found", endpointName, model)
+}
+
+// appendRequestProjectionDiagnostics keeps a projection warning to one entry
+// when the same request is encoded again during a retry or fallback.
+func appendRequestProjectionDiagnostics(ctx *RequestContext, diagnostics llmprotocol.Diagnostics) {
+	if ctx == nil {
+		return
+	}
+	for _, diagnostic := range diagnostics {
+		if !slices.Contains(ctx.ProtocolDiagnostics, diagnostic) {
+			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
+		}
+	}
 }
 
 // projectControlTokens escapes the model's control tokens in the request's

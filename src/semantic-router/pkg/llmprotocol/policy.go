@@ -42,6 +42,10 @@ const LossyFieldToolDeferLoading = "tools.defer_loading"
 // on its thinking, which Chat Completions and Responses clients cannot carry.
 const LossyFieldReasoningSignature = "reasoning.signature"
 
+// LossyFieldReasoningBudget names a neutral Chat reasoning budget sent to a
+// provider that cannot honor it.
+const LossyFieldReasoningBudget = "reasoning_budget_tokens"
+
 // LossyFieldStore names a request's store: true, which asks the provider to
 // keep the completion. Accepting the loss sends the request without it to a
 // backend whose wire format keeps no completions, which ProjectUnstoredRequest
@@ -51,7 +55,7 @@ const LossyFieldStore = "store"
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolDeferLoading, LossyFieldReasoningSignature, LossyFieldStore}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolDeferLoading, LossyFieldReasoningSignature, LossyFieldReasoningBudget, LossyFieldStore}
 }
 
 // OptInHint is what a refusal of field adds when an operator may accept that
