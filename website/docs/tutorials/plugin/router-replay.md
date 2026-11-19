@@ -1050,7 +1050,11 @@ through a custom base URL, with the Router in the path or without it.
 Without `replay.detail` a run keeps its tree, labels, markers and counts, and
 loses what its records would: the session name, the prompt, the agent hashes,
 the reasons and the text of reported outcomes. The runs list reads the filtered
-records whole, so bound it with `since` on a large PostgreSQL store.
+records whole, so bound it with `since` on a large PostgreSQL store. On
+PostgreSQL the run read leaves each record's request and response bodies,
+prompt, tool definitions and tool payloads in the database, which for a long
+agent session are most of what its records hold, and reads one prompt, the
+task's.
 
 In **Requests**, the **Agent runs** tab lists one row per run: its session name or
 task, the harness, the agents, the models, the outcome, the cost and duration,
@@ -1060,8 +1064,16 @@ legend and step panel, and a record's route, routing, candidate scores, cost
 text and session history, with the configured name beside it, in its tooltip,
 or in parentheses after it. A run opens as a timeline: a lane per agent in
 tree order, a dashed tick where a subagent started, and consecutive calls of
-one agent on one model drawn as one segment with its calls' markers, so a run
-of hundreds of calls reads as a few blocks. A segment lists the tool calls its
+one agent on one model drawn as one segment, so a run of hundreds of calls
+reads as a few blocks, over an axis of round clock times. A strip above the
+lanes marks the calls' events, each kind with its own icon and color:
+compaction, which also rules a line through every lane and reads its name,
+subagent start, image, guard flag or refusal, failure, and model switch.
+Events of one kind too close to tell apart share a marker with a count, and
+markers of different kinds move apart instead of merging, so each kind keeps
+a marker at every zoom; each marker has a hover card and opens its call. The
+legend names every model and event in words, and an event in it moves the
+timeline to the next call that has it. A segment lists the tool calls its
 turns made, a line each with its arguments where they were kept, the time it
 took (see [Tool timing](#tool-timing)) and its result, a failed one in red,
 and then its calls. A call shows its decision and signals, model and effort,
@@ -1072,8 +1084,15 @@ whatever `prompt_capture` says; `capture_tool_names: false` keeps none, and a
 masking route never keeps them. A tool's arguments show only under `raw` with
 the request or response body that carried them captured, and a viewer without
 replay detail access sees tool names and results but no arguments. The table
-of every call is one click further. A record page opens its run with **Open
-run**.
+of every call is one click further, its events as the same labelled badges, and the request list and a
+session's turns show them too. A record page opens its run with **Open run**.
+
+Money on the **Requests** page reads in one currency: where a range holds
+records priced in a currency and in plain units (`XXX`, from rates set without
+a currency), the totals, a session's cost and a run's add the currency only,
+and count the rest as unpriced in a hint whose tooltip says which. The
+**Breakdown** opens the requests by agent harness, model and decision as three
+cards; the summary row above it holds the totals.
 
 With [tracing](../global/api-and-observability#observability) on, the
 Router's request span carries `session.id`, `vsr.harness`, `vsr.agent.id`,

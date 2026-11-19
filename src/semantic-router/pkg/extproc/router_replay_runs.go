@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const (
@@ -58,7 +59,7 @@ func (r *OpenAIRouter) handleRouterReplayRunAPI(ctx context.Context, method stri
 	if sessionID == "" {
 		return r.createErrorResponse(400, "session_id is required")
 	}
-	records, err := r.queryRouterReplaySession(ctx, sessionID, nil)
+	records, err := r.queryRouterReplayRun(ctx, sessionID)
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
@@ -71,7 +72,34 @@ func (r *OpenAIRouter) handleRouterReplayRunAPI(ctx context.Context, method stri
 	}
 	builder.toolReports = r.toolEvents.Session(sessionID)
 	summary, calls := builder.build()
+	// A lean read leaves the prompts out; the task is the first main call's.
+	if summary.Prompt == "" && builder.firstMain.recordID != "" {
+		if record, ok := r.findRouterReplayRecord(builder.firstMain.recordID); ok {
+			summary.Prompt = looper.WithoutSystemReminders(record.Prompt)
+		}
+	}
 	return r.createJSONResponse(200, routerreplay.RunResponse{Object: "router_replay.run", Run: summary, Calls: calls})
+}
+
+// queryRouterReplayRun reads one session's records for its run. A store that
+// can leaves out the bodies, the prompts and the tool payloads, which the run
+// does not show and which for a long agent session are most of what it holds;
+// any other store answers with full records.
+func (r *OpenAIRouter) queryRouterReplayRun(ctx context.Context, sessionID string) ([]routerreplay.RoutingRecord, error) {
+	var records []routerreplay.RoutingRecord
+	for _, reader := range r.routerReplayReaders() {
+		page, supported, err := reader.QueryRun(ctx, store.QueryFilters{SessionID: sessionID})
+		if err != nil {
+			return nil, err
+		}
+		if !supported {
+			if page, err = r.queryRouterReplaySessionIn(ctx, reader, sessionID); err != nil {
+				return nil, err
+			}
+		}
+		records = append(records, page...)
+	}
+	return sortRouterReplayRecords(records), nil
 }
 
 func (r *OpenAIRouter) queryRouterReplayRuns(ctx context.Context, filters routerReplayFilters) (replayRunList, error) {

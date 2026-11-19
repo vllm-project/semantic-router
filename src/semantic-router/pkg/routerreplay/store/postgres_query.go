@@ -133,6 +133,9 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 		// timestamp holds UTC wall-clock time without a zone.
 		add("timestamp >= ?", filters.Since.UTC())
 	}
+	if filters.HasSession {
+		clauses = append(clauses, "COALESCE(session_id, '') <> ''")
+	}
 	switch filters.CacheStatus {
 	case "cached":
 		clauses = append(clauses, "from_cache = TRUE")
@@ -145,7 +148,43 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 	return " WHERE " + strings.Join(clauses, " AND "), args
 }
 
+// postgresSummaryToolTraceColumn keeps a trace's tool names discoverable
+// without returning arguments or results.
+const postgresSummaryToolTraceColumn = `CASE WHEN tool_trace IS NULL OR tool_trace = 'null'::jsonb THEN NULL ELSE
+			jsonb_build_object('flow', tool_trace->'flow', 'stage', tool_trace->'stage', 'tool_names',
+			(SELECT jsonb_agg(name ORDER BY name) FROM (
+			SELECT DISTINCT name FROM (
+			SELECT jsonb_array_elements_text(COALESCE(NULLIF(tool_trace->'tool_names', 'null'::jsonb), '[]'::jsonb)) AS name
+			UNION ALL SELECT step->>'tool_name' FROM jsonb_array_elements(COALESCE(NULLIF(tool_trace->'steps', 'null'::jsonb), '[]'::jsonb)) AS step
+			) names WHERE name IS NOT NULL AND name <> '') distinct_names)) END`
+
+// postgresRunToolTraceColumn keeps of a trace what an agent run reads: each
+// step's type, source, tool, call id and status, in order, without the text,
+// arguments or output it carries.
+const postgresRunToolTraceColumn = `CASE WHEN tool_trace IS NULL OR tool_trace = 'null'::jsonb THEN NULL ELSE
+			jsonb_strip_nulls(jsonb_build_object('flow', tool_trace->'flow', 'stage', tool_trace->'stage',
+			'tool_names', tool_trace->'tool_names', 'steps_truncated', tool_trace->'steps_truncated',
+			'dropped_step_count', tool_trace->'dropped_step_count', 'steps',
+			(SELECT jsonb_agg(jsonb_strip_nulls(jsonb_build_object('type', step->'type', 'source', step->'source',
+			'tool_name', step->'tool_name', 'tool_call_id', step->'tool_call_id', 'status', step->'status'))
+			ORDER BY position)
+			FROM jsonb_array_elements(COALESCE(NULLIF(tool_trace->'steps', 'null'::jsonb), '[]'::jsonb))
+			WITH ORDINALITY AS steps(step, position)))) END`
+
 func postgresSummarySelectColumns() string {
+	return postgresLeanSelectColumns(postgresSummaryToolTraceColumn)
+}
+
+// postgresRunSelectColumns is the summary projection with each tool trace's
+// steps kept as an agent run reads them.
+func postgresRunSelectColumns() string {
+	return postgresLeanSelectColumns(postgresRunToolTraceColumn)
+}
+
+// postgresLeanSelectColumns reads a record without its request, response,
+// prompt and tool definitions, its projection trace, or its review's action
+// arguments, with the tool trace as toolTrace keeps it.
+func postgresLeanSelectColumns(toolTrace string) string {
 	columns := strings.Split(postgresRecordSelectColumns, ",")
 	for i, raw := range columns {
 		switch strings.TrimSpace(raw) {
@@ -156,17 +195,29 @@ func postgresSummarySelectColumns() string {
 		case "review":
 			columns[i] = postgresReviewSummaryColumn
 		case "tool_trace":
-			// Tool names remain discoverable without returning arguments/results.
-			columns[i] = `CASE WHEN tool_trace IS NULL OR tool_trace = 'null'::jsonb THEN NULL ELSE
-			jsonb_build_object('flow', tool_trace->'flow', 'stage', tool_trace->'stage', 'tool_names',
-			(SELECT jsonb_agg(name ORDER BY name) FROM (
-			SELECT DISTINCT name FROM (
-			SELECT jsonb_array_elements_text(COALESCE(NULLIF(tool_trace->'tool_names', 'null'::jsonb), '[]'::jsonb)) AS name
-			UNION ALL SELECT step->>'tool_name' FROM jsonb_array_elements(COALESCE(NULLIF(tool_trace->'steps', 'null'::jsonb), '[]'::jsonb)) AS step
-			) names WHERE name IS NOT NULL AND name <> '') distinct_names)) END`
+			columns[i] = toolTrace
 		}
 	}
 	return strings.Join(columns, ",")
+}
+
+// QueryRun reads the records the filters select, oldest first, as an agent
+// run reads them: without the request and response bodies, the prompt or the
+// tool payloads, which for a long coding session are megabytes per call.
+func (p *PostgresStore) QueryRun(ctx context.Context, filters QueryFilters) ([]Record, error) {
+	release, err := p.lifecycle.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	where, args := postgresReplayWhere(filters)
+	//nolint:gosec // tableName is validated; filters are parameters
+	query := fmt.Sprintf("SELECT %s FROM %s%s ORDER BY timestamp ASC, id ASC", postgresRunSelectColumns(), p.tableName, where)
+	rows, err := p.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	return scanPostgresRecordList(rows)
 }
 
 // ScanMetadata streams only the columns used by Insights, with each record's

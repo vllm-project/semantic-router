@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  callCostText,
   callSpan,
   countVerdicts,
   filterRunCalls,
@@ -11,8 +12,11 @@ import {
   orderRunAgents,
   outcomeWord,
   runAgentTreeText,
+  runCostView,
+  runCurrency,
   runHeadline,
   runTitle,
+  unpricedText,
   verdictLabel,
 } from './insightsRunSupport'
 import { compactID } from './insightsReviewSupport'
@@ -71,27 +75,52 @@ describe('run labels', () => {
     expect(formatRunCost({ ...cost, unpriced_records: 2 })).toBe('no price')
     // One call whose classifier call has no price counts once.
     expect(
-      formatRunCost({
-        ...cost,
-        by_currency: [{ currency: 'USD', total: 0.1031, router_call_spend: 0 }],
-        unpriced_records: 1,
-        unpriced_router_calls: 1,
-      }),
-    ).toBe('$0.1031 (1 unpriced)')
+      unpricedText(
+        runCostView({
+          ...cost,
+          by_currency: [{ currency: 'USD', total: 0.1031, router_call_spend: 0 }],
+          unpriced_records: 1,
+          unpriced_router_calls: 1,
+        }),
+      ),
+    ).toBe('1 unpriced')
   })
 
-  it('leaves a currency the run spent nothing in out of a mixed total', () => {
-    const mixed = (usd: number, units: number) =>
-      formatRunCost({
-        ...cost,
-        by_currency: [
-          { currency: 'USD', total: usd, router_call_spend: 0 },
-          { currency: 'XXX', total: units, router_call_spend: 0 },
-        ],
-      })
-    expect(mixed(0, 0.2882)).toBe('0.2882')
-    expect(mixed(0.5, 0.2882)).toBe('$0.50 + 0.2882')
-    expect(mixed(0, 0)).toBe('$0.0000')
+  it('reads a run in one currency and counts, never adds, what another unit priced', () => {
+    const mixed = (usd: number, units: number, unpriced = 0) => ({
+      ...cost,
+      unpriced_records: unpriced,
+      by_currency: [
+        { currency: 'USD', total: usd, router_call_spend: 0 },
+        { currency: 'XXX', total: units, router_call_spend: 0 },
+      ],
+    })
+    expect(formatRunCost(mixed(5.5497, 3.7639, 4))).toBe('$5.5497')
+    expect(formatRunCost(mixed(0, 0))).toBe('$0.0000')
+    expect(runCurrency(mixed(0, 0.2882))).toBe('USD')
+    expect(
+      runCurrency({ by_currency: [{ currency: 'XXX', total: 0.2882, router_call_spend: 0 }] }),
+    ).toBe('XXX')
+
+    const view = runCostView(mixed(5.5497, 3.7639, 4))
+    expect(view).toMatchObject({ text: '$5.5497', partial: true, unpriced: undefined })
+    expect(unpricedText(view)).toBe('partly unpriced')
+    expect(view.note).toBe(
+      'The total is in USD only. Not added: calls priced in plain units, by rates set without a currency; 4 calls without a price.',
+    )
+    // with the calls at hand the count is exact
+    const calls = [
+      { currency: 'XXX', cost: 0.01 },
+      { currency: 'XXX', cost: 0.02 },
+      { currency: 'USD', cost: 0.03 },
+    ]
+    expect(unpricedText(runCostView(mixed(5.5497, 3.7639, 4), calls))).toBe('6 unpriced')
+    expect(
+      runCostView({ ...cost, by_currency: [{ currency: 'USD', total: 1, router_call_spend: 0 }] }),
+    ).toEqual({ text: '$1.00', partial: false })
+    expect(callCostText({ currency: 'XXX', cost: 0.0055 }, 'USD')).toBe('—')
+    expect(callCostText({ currency: 'USD', cost: 0.0055 }, 'USD')).toBe('$0.0055')
+    expect(callCostText({ currency: 'XXX', cost: 0.0055 }, 'XXX')).toBe('0.0055')
   })
 
   it('names a run by its session name, else its task, else its session', () => {

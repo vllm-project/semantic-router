@@ -296,13 +296,13 @@ test('shows a dash with its reason instead of N/A in the totals and the breakdow
   await page.goto('/observe/requests')
   await expect(page.getByText('Cost vs reference')).toBeVisible()
   await expect(page.getByText('Saved by routing')).toHaveCount(0)
+  const summary = page.getByRole('region', { name: 'Requests summary' })
+  await expect(summary).toContainText(/cost only/i)
   await page.getByRole('button', { name: 'Breakdown' }).click()
   const breakdown = page.locator('#requests-breakdown')
-  const figures = breakdown.getByRole('group', { name: 'Breakdown figures' })
-  await expect(figures.getByLabel(/^Not available: No request in range/).first()).toBeVisible()
-  await expect(breakdown).toContainText(
-    'Cost-only estimate against a reference model’s list price.',
-  )
+  // the Breakdown holds the three cards only; the summary row above keeps the figures
+  await expect(breakdown.getByRole('group', { name: 'Breakdown figures' })).toHaveCount(0)
+  await expect(breakdown).not.toContainText('Cost-only estimate')
   const agents = breakdown.getByRole('list', { name: 'Requests by agent harness' })
   await expect(agents.getByRole('img', { name: 'Cursor' })).toBeVisible()
   await expect(agents.getByRole('img', { name: 'OpenClaw' })).toBeVisible()
