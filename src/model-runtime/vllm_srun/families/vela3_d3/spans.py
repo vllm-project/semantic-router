@@ -124,14 +124,16 @@ def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
     ]
 
 
-def over_budget(tokens: int) -> QuestionError | None:
-    """Why a span target of ``tokens`` tokens is refused (over ``SPAN_TARGET_TOKENS``), or None."""
-    if tokens <= SPAN_TARGET_TOKENS:
-        return None
+def over_budget() -> QuestionError:
+    """Why a span target of more than ``SPAN_TARGET_TOKENS`` tokens is refused.
+
+    The message names no token count: such a target is not tokenized to its
+    end, so its count is not known.
+    """
     return QuestionError(
         SCAN_BUDGET_EXCEEDED,
-        f"the span target has {tokens} tokens, over this model's span budget of "
-        f"{SPAN_TARGET_TOKENS} tokens; nothing was read",
+        f"the span target has more than {SPAN_TARGET_TOKENS} tokens, this model's "
+        "span budget; nothing was read",
         "scan_budget",
     )
 
@@ -154,8 +156,9 @@ class Spans:
         """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid.
 
         The target may hold at most ``SPAN_TARGET_TOKENS`` tokens
-        (``scan_budget_exceeded``, checked before it is laid out). Every window, whose other parts are not
-        windowed, must pass the base's ``length_error``.
+        (``scan_budget_exceeded``, checked before it is laid out). A longer one
+        is tokenized only as far as that check needs. Every window, whose other
+        parts are not windowed, must pass the base's ``length_error``.
         """
         if "preset" in question:
             question = expand_preset(question, self.policy.config.schemas)
@@ -181,13 +184,16 @@ class Spans:
             raise invalid("span instructions must be a string")
         override = threshold_of(question)
         routed = self.policy.resolve(labels, instructions)
-        windows, count = self.renderer.windows(
+        planned = self.renderer.windows(
             parts,
             target,
             routed.question,
             routed.labels,
-            over_budget,
+            SPAN_TARGET_TOKENS,
         )
+        if planned is None:
+            raise over_budget()
+        windows, count = planned
         refused = length_error(max(len(window.ids) for window in windows))
         if refused is not None:
             raise refused
