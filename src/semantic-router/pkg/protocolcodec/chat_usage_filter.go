@@ -24,6 +24,25 @@ type ChatUsageStreamFilter struct {
 	failure         error
 	finalized       bool
 	upstreamFailed  bool
+	// outputLimit is the output token limit the backend received, 0 for none.
+	// A frame that ends the choice for its tool calls is held with the frames
+	// after it until usage tells whether the output reached the limit, which
+	// the Router then reports as the stop, as the neutral stream decodes it.
+	outputLimit int64
+	held        *heldChatFinish
+}
+
+// heldChatFinish holds a frame that ends the choice for its tool calls and the
+// frames after it.
+type heldChatFinish struct {
+	frames [][]byte
+	first  bool // the finish frame opened the stream
+}
+
+// chatFrameEvidence is what a frame tells the output limit check.
+type chatFrameEvidence struct {
+	toolCallFinish bool   // the frame ends choice 0 for its tool calls
+	outputTokens   *int64 // the completion tokens of the frame's usage
 }
 
 // errChatUpstreamErrorFrame marks a provider error event. The filter drops it
@@ -86,6 +105,11 @@ func (filter *ChatUsageStreamFilter) Finalize() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	held, err := filter.releaseHeld(false)
+	if err != nil {
+		return nil, filter.poison(err)
+	}
+	output = append(output, held...)
 	output = append(output, filter.pendingTerminal...)
 	filter.pendingTerminal = nil
 	return output, nil
@@ -97,13 +121,23 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 		if filter.upstreamFailed {
 			continue
 		}
+		first := filter.frames == 0
+		var evidence *chatFrameEvidence
+		if filter.outputLimit > 0 {
+			evidence = &chatFrameEvidence{}
+		}
 		filtered, keep, hasData, terminal, err := filterChatUsageFrame(
-			frame, filter.framer.limit, filter.frames == 0, filter.stripUsage, filter.seenFinish,
+			frame, filter.framer.limit, first, filter.stripUsage, filter.seenFinish, evidence,
 		)
 		filter.frames++
 		if errors.Is(err, errChatUpstreamErrorFrame) {
 			if len(filter.pendingTerminal) == 0 {
 				filter.upstreamFailed = true
+				held, heldErr := filter.releaseHeld(false)
+				if heldErr != nil {
+					return nil, filter.poison(heldErr)
+				}
+				output.Write(held)
 				continue
 			}
 			// After [DONE], an error event is data after the terminal, as before.
@@ -119,14 +153,61 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 			))
 		}
 		if terminal {
+			held, heldErr := filter.releaseHeld(false)
+			if heldErr != nil {
+				return nil, filter.poison(heldErr)
+			}
+			output.Write(held)
 			filter.pendingTerminal = append(filter.pendingTerminal[:0], filtered...)
 			continue
 		}
-		if keep {
-			output.Write(filtered)
+		passed, err := filter.pass(filtered, keep, first, evidence)
+		if err != nil {
+			return nil, filter.poison(err)
 		}
+		output.Write(passed)
 	}
 	return output.Bytes(), nil
+}
+
+// pass returns what the client gets now of a filtered frame. A frame that
+// ends the choice for its tool calls waits, with the frames after it, for the
+// usage that tells whether the output reached the output limit.
+func (filter *ChatUsageStreamFilter) pass(frame []byte, keep, first bool, evidence *chatFrameEvidence) ([]byte, error) {
+	if evidence == nil || filter.held == nil && (!keep || !evidence.toolCallFinish) {
+		if !keep {
+			return nil, nil
+		}
+		return frame, nil
+	}
+	if filter.held == nil {
+		filter.held = &heldChatFinish{first: first}
+	}
+	if keep {
+		filter.held.frames = append(filter.held.frames, frame)
+	}
+	if evidence.outputTokens == nil {
+		return nil, nil
+	}
+	return filter.releaseHeld(*evidence.outputTokens >= filter.outputLimit)
+}
+
+// releaseHeld returns the held frames, with the finish frame reporting the
+// output limit stop when atLimit.
+func (filter *ChatUsageStreamFilter) releaseHeld(atLimit bool) ([]byte, error) {
+	held := filter.held
+	if held == nil {
+		return nil, nil
+	}
+	filter.held = nil
+	if atLimit {
+		finish, err := chatFinishAtOutputLimit(held.frames[0], filter.framer.limit, held.first)
+		if err != nil {
+			return nil, err
+		}
+		held.frames[0] = finish
+	}
+	return bytes.Join(held.frames, nil), nil
 }
 
 func (filter *ChatUsageStreamFilter) poison(err error) error {
@@ -134,10 +215,72 @@ func (filter *ChatUsageStreamFilter) poison(err error) error {
 		filter.failure = err
 	}
 	filter.pendingTerminal = nil
+	filter.held = nil
 	return filter.failure
 }
 
-func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool) ([]byte, bool, bool, bool, error) {
+// chatFinishAtOutputLimit rewrites the tool-call finish of choice 0 in a
+// frame as the output limit stop.
+func chatFinishAtOutputLimit(frame []byte, limit int, first bool) ([]byte, error) {
+	parsed, err := parseSSEFrameAtPosition(frame, limit, first)
+	if err != nil {
+		return nil, err
+	}
+	var object map[string]json.RawMessage
+	if err = json.Unmarshal(parsed.Data, &object); err != nil {
+		return nil, err
+	}
+	var choices []map[string]json.RawMessage
+	if err = json.Unmarshal(object["choices"], &choices); err != nil {
+		return nil, err
+	}
+	stop, err := json.Marshal(encodeChatStop(llmprotocol.StopMaxTokens))
+	if err != nil {
+		return nil, err
+	}
+	for _, choice := range choices {
+		var index int
+		var reason string
+		if json.Unmarshal(choice["index"], &index) == nil && index == 0 &&
+			json.Unmarshal(choice["finish_reason"], &reason) == nil && decodeChatStop(reason) == llmprotocol.StopToolCall {
+			choice["finish_reason"] = stop
+		}
+	}
+	if object["choices"], err = json.Marshal(choices); err != nil {
+		return nil, err
+	}
+	return encodeSSE(parsed.Event, object)
+}
+
+// chatChoicesEndForToolCalls reports choices that end choice 0 for its tool
+// calls.
+func chatChoicesEndForToolCalls(choices []json.RawMessage) bool {
+	for _, raw := range choices {
+		var choice struct {
+			Index        int     `json:"index"`
+			FinishReason *string `json:"finish_reason"`
+		}
+		if json.Unmarshal(raw, &choice) == nil && choice.Index == 0 && choice.FinishReason != nil &&
+			decodeChatStop(*choice.FinishReason) == llmprotocol.StopToolCall {
+			return true
+		}
+	}
+	return false
+}
+
+func chatUsageCompletionTokens(raw json.RawMessage) *int64 {
+	var usage struct {
+		CompletionTokens *int64 `json:"completion_tokens"`
+	}
+	if json.Unmarshal(raw, &usage) != nil {
+		return nil
+	}
+	return usage.CompletionTokens
+}
+
+func filterChatUsageFrame(
+	frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool, evidence *chatFrameEvidence,
+) ([]byte, bool, bool, bool, error) {
 	parsed, err := parseSSEFrameAtPosition(frame, limit, first)
 	if err != nil {
 		return nil, false, false, false, err
@@ -193,6 +336,12 @@ func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenF
 		object["choices"] = encoded
 	}
 	usage, hasUsage := object["usage"]
+	if evidence != nil {
+		evidence.toolCallFinish = chatChoicesEndForToolCalls(choices)
+		if hasUsage {
+			evidence.outputTokens = chatUsageCompletionTokens(usage)
+		}
+	}
 	if removedRepeatedFinish && len(choices) == 0 && (!hasUsage || bytes.Equal(bytes.TrimSpace(usage), []byte("null"))) {
 		return nil, false, true, false, nil
 	}

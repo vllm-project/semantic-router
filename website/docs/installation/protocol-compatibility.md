@@ -862,6 +862,21 @@ tools or error translation.
   diagnostic for `content.tool_use.input`. Only the reply's last call can be
   cut. Arguments that don't start a JSON object, or a cut call that more
   output follows, still fail the reply.
+- A backend can report a call the output limit cut as stopping for its tool
+  calls: vLLM's buffered Chat reply says `finish_reason: "tool_calls"`
+  whenever its tool parser found a call, and some parsers close the cut
+  arguments as `{}`. When a reply that stops for its tool calls counts at
+  least as many output tokens as the limit the backend received (the
+  request's `max_tokens`, `max_completion_tokens` or `max_output_tokens` as
+  the decision's `request_params` leave it), the Router reads it as stopped
+  at that limit: every client gets the limit stop and the call
+  exactly as described above, and the reply's `x-vsr-warnings` reports an
+  `approximated` diagnostic for `response.stop_reason`. A stream that ends with
+  `tool_calls` after that many tokens, as some vLLM tool parsers end one, ends
+  the same way; a Chat client of a Chat backend gets the stream as the backend
+  sent it with only that `finish_reason` changed to `length`. Without usage,
+  below the limit, or with several choices, whose usage counts them all, the
+  backend's stop stands.
 - A Chat stream chunk can carry several `tool_calls` entries with the same
   `index`, as vLLM's last chunk does when its tool parser flushes the rest of
   a call. They continue one call in order, as OpenAI's SDKs join them.
