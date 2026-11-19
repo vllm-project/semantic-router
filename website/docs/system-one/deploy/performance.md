@@ -234,6 +234,13 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
   is still read, each once, and a kept window that found an attack still
   refuses the request. A window's key includes all the text before it, so what
   one conversation's windows answered never serves, or speeds up, another.
+- Kept answers save the second read, not the first. The first request that
+  brings a long input to a Router still reads all of its windows: on one
+  deployment, with 2,048-token windows four at a time, a fresh 80K-token turn
+  took about 5.5 s to route and a 300K-token turn about 20 s, and the same turn
+  read again on that Router about 1 s. Each Router keeps its own answers, so a
+  session whose requests reach several Router replicas reads a long turn once
+  on each, and a restarted Router starts with none.
 - An input whose windows are all read by the signals' deadline is read at the
   configured size, as fast as its windows are read. A scan that falls behind,
   whose windows left would not all be read in time at the pace it read the
