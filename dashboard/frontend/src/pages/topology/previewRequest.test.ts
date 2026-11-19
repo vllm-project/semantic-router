@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { parsePreviewEnvelope } from './previewRequest'
+import { parsePreviewEnvelope, previewRecipeName } from './previewRequest'
+
+it('sends the named v0.5 recipe behind the default dashboard scope', () => {
+  expect(previewRecipeName('default', 'balanced')).toBe('balanced')
+  expect(previewRecipeName('unbound', 'balanced')).toBe('unbound')
+  expect(previewRecipeName('default')).toBe('default')
+})
 
 describe('Topology request context', () => {
   it('preserves multimodal messages, tools and metadata', () => {

@@ -9,6 +9,11 @@ export interface PreviewOptions extends PreviewEnvelope {
   recipe?: string
 }
 
+// The dashboard's synthetic default scope can represent a named v0.5 recipe.
+export function previewRecipeName(scopeId?: string, defaultRecipeName?: string): string | undefined {
+  return scopeId === 'default' ? (defaultRecipeName ?? 'default') : scopeId
+}
+
 export function parsePreviewEnvelope(value: string): PreviewEnvelope {
   if (!value.trim()) return {}
   const parsed: unknown = JSON.parse(value)

@@ -334,6 +334,7 @@ export interface FilterState {
 
 // ============== Config Data (from API) ==============
 export interface ConfigData {
+  default_recipe?: { name: string; description?: string }
   projections?: {
     scores?: Array<{
       name: string

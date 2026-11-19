@@ -24,17 +24,27 @@ import { TestQueryInput } from './components/ControlPanel'
 import { ResultCard } from './components/ResultCard'
 import { calculateFullLayout, type DecisionDensityMode } from './utils/layoutCalculator'
 import styles from './TopologyPageEnhanced.module.css'
+import { previewRecipeName } from './previewRequest'
 
 // ============== Inner Flow Component ==============
 const TopologyFlow: React.FC = () => {
-  const { data, loading, error, refresh, routingScopes, selectedScopeId, setSelectedScopeId } =
-    useTopologyData()
+  const {
+    data,
+    rawConfig,
+    loading,
+    error,
+    refresh,
+    routingScopes,
+    selectedScopeId,
+    setSelectedScopeId,
+  } = useTopologyData()
   const [searchParams, setSearchParams] = useSearchParams()
   const { collapseState } = useCollapseState()
   const { isDark } = useTheme()
   const selectedScope =
     routingScopes.find((scope) => scope.id === selectedScopeId) ?? routingScopes[0]
   const selectedRoutingModel = selectedScope?.entrypointModelNames[0]
+  const selectedRecipe = previewRecipeName(selectedScope?.id, rawConfig?.default_recipe?.name)
   const {
     requestContext,
     setRequestContext,
@@ -46,7 +56,7 @@ const TopologyFlow: React.FC = () => {
     isLoading: isTestLoading,
     runTest,
     clearResult,
-  } = useTestQuery(data, selectedRoutingModel, selectedScope?.id)
+  } = useTestQuery(data, selectedRoutingModel, selectedRecipe)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])

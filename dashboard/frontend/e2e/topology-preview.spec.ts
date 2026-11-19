@@ -74,8 +74,8 @@ test.beforeEach(async ({ page }) => {
   await mockAuthenticatedAppShell(page)
   await page.route('**/api/router/config/all', (route) => route.fulfill({ json: config }))
   await page.route('**/api/router/config/global', (route) => route.fulfill({ json: {} }))
-  await page.goto('/topology?scope=balanced')
-  await expect(page.getByLabel('Entrypoint / recipe')).toHaveValue('balanced')
+  await page.goto('/topology?scope=default')
+  await expect(page.getByLabel('Entrypoint / recipe')).toHaveValue('default')
 })
 
 test('forwards request context and displays the exact decision trace and selected model', async ({
@@ -180,7 +180,7 @@ test('blocks unbound recipes and invalid context without sending a preview', asy
   await expect(page.getByRole('status')).toContainText('no Chat entrypoint')
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
   await page.getByPlaceholder('Message...').press('Meta+Enter')
-  await page.getByLabel('Entrypoint / recipe').selectOption('balanced')
+  await page.getByLabel('Entrypoint / recipe').selectOption('default')
   await page.getByText('Request context (optional)', { exact: true }).click()
   await page.getByLabel('Messages, metadata and tools (JSON)').fill('{"model":"other"}')
   await expect(page.getByRole('status')).toContainText('Unsupported request context field: model')
@@ -211,7 +211,7 @@ test('discards an in-flight response after changing scope', async ({ page }) => 
   await handled
   await expect(page.getByRole('region', { name: 'Decision trace' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
-  await page.getByLabel('Entrypoint / recipe').selectOption('balanced')
+  await page.getByLabel('Entrypoint / recipe').selectOption('default')
   await expect(page.getByRole('region', { name: 'Decision trace' })).toHaveCount(0)
 })
 
