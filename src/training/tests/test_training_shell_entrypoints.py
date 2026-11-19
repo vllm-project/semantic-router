@@ -16,13 +16,16 @@ TASKS = (
     ("pii_model_fine_tuning_lora", "pii_bert_finetuning_lora.py"),
     ("modality_routing_classifier", "modality_routing_bert_finetuning_lora.py"),
 )
+FEEDBACK = ("user_feedback_classifier", "train_feedback_detector.py")
 UV_STUB = """import json, os, sys
 from pathlib import Path
 
 args = sys.argv[1:]
 with open(os.environ['UV_CALL_LOG'], 'a') as log:
     log.write(json.dumps({'args': args, 'cwd': os.getcwd()}) + '\\n')
-if '--mode' in args and args[args.index('--mode') + 1] == 'train':
+if args[5].endswith('train_feedback_detector.py') or (
+    '--mode' in args and args[args.index('--mode') + 1] == 'train'
+):
     if os.environ.get('FAIL_TRAINING'):
         sys.exit(23)
     if args[5].endswith('modality_routing_bert_finetuning_lora.py'):
@@ -52,7 +55,7 @@ class TrainingShellEntrypointsTest(unittest.TestCase):
         self.uv.chmod(0o755)
         self.projects = self.root / "classifier projects"
         self.projects.mkdir()
-        for area, trainer in TASKS:
+        for area, trainer in (*TASKS, FEEDBACK):
             project = self.projects / area
             project.mkdir()
             (project / trainer).touch()
@@ -69,6 +72,9 @@ class TrainingShellEntrypointsTest(unittest.TestCase):
         }
         self.bash = shutil.which("bash")
         self.make = shutil.which("make")
+        # Recursive $(MAKE) calls must load the same recipes in the fixture cwd.
+        makefile = str(REPO_ROOT / "tools/make/models.mk").replace(" ", r"\ ")
+        (self.root / "Makefile").write_text(f"include {makefile}\n")
 
     def run_script(self, script, **environment):
         return subprocess.run(
@@ -82,6 +88,23 @@ class TrainingShellEntrypointsTest(unittest.TestCase):
 
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()]
+
+    def run_make(self, target, *, environment=None, **variables):
+        if not self.make:
+            self.skipTest("make is unavailable")
+        return subprocess.run(
+            [
+                self.make,
+                target,
+                f"LORA_DIR={self.projects}",
+                *(f"{key}={value}" for key, value in variables.items()),
+            ],
+            cwd=self.root,
+            env={**self.env, **(environment or {})},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
     def assert_project(self, call, area):
         self.assertEqual(
@@ -176,6 +199,7 @@ class TrainingShellEntrypointsTest(unittest.TestCase):
         if not self.make:
             self.skipTest("make is unavailable")
         targets = {
+            "feedback": FEEDBACK,
             "intent": TASKS[0],
             "factcheck": TASKS[1],
             "pii": TASKS[2],
@@ -185,19 +209,10 @@ class TrainingShellEntrypointsTest(unittest.TestCase):
         for target, (area, trainer) in targets.items():
             with self.subTest(target=target):
                 self.log.write_text("")
-                result = subprocess.run(
-                    [
-                        self.make,
-                        "-f",
-                        str(REPO_ROOT / "tools/make/models.mk"),
-                        f"train-mmbert32k-{target}",
-                        f"LORA_DIR={self.projects}",
-                    ],
-                    cwd=self.root,
-                    env=self.env,
-                    capture_output=True,
-                    text=True,
-                    check=False,
+                result = self.run_make(
+                    f"train-mmbert32k-{target}",
+                    FEEDBACK_MODEL_REVISION="model-revision",
+                    FEEDBACK_DATASET_REVISION="dataset-revision",
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 (call,) = self.calls()
@@ -208,23 +223,109 @@ class TrainingShellEntrypointsTest(unittest.TestCase):
         if not self.make:
             self.skipTest("make is unavailable")
         self.uv.unlink()
-        result = subprocess.run(
-            [
-                self.make,
-                "-f",
-                str(REPO_ROOT / "tools/make/models.mk"),
-                "train-mmbert32k-intent",
-            ],
-            cwd=self.root,
-            env=self.env,
-            capture_output=True,
-            text=True,
-            check=False,
+        for target in ("intent", "feedback", "all"):
+            with self.subTest(target=target):
+                result = self.run_make(f"train-mmbert32k-{target}")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("uv is required", result.stderr)
+                self.assertIn("https://docs.astral.sh/uv/", result.stderr)
+                self.assertFalse((self.root / "models").exists())
+
+    def test_feedback_forwards_pinned_inputs_and_preserves_defaults(self):
+        result = self.run_make(
+            "train-mmbert32k-feedback",
+            FEEDBACK_MODEL_REVISION="model-revision",
+            FEEDBACK_DATASET_REVISION="dataset-revision",
         )
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("uv is required", result.stderr)
-        self.assertIn("https://docs.astral.sh/uv/", result.stderr)
-        self.assertFalse((self.root / "models").exists())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (call,) = self.calls()
+        self.assert_project(call, FEEDBACK[0])
+        self.assertEqual(call["cwd"], str(self.root))
+        args = call["args"]
+        for flag, value in (
+            ("--model_name", "vllm-sr/mmbert-32k-yarn"),
+            ("--model_revision", "model-revision"),
+            ("--data_source", "vllm-sr/feedback-detector-dataset"),
+            ("--dataset_revision", "dataset-revision"),
+            ("--output_dir", "models/mmbert32k-feedback-detector"),
+            ("--epochs", "10"),
+            ("--batch_size", "16"),
+            ("--lr", "2e-5"),
+            ("--lora_rank", "64"),
+            ("--lora_alpha", "128"),
+        ):
+            self.assertEqual(args[args.index(flag) + 1], value)
+        self.assertIn("--use_lora", args)
+        self.assertIn("--merge_lora", args)
+        self.assertNotIn("--max_samples", args)
+
+    def test_feedback_accepts_local_inputs_and_small_sample_overrides(self):
+        model = self.root / "local model"
+        data = self.root / "local data"
+        model.mkdir()
+        data.mkdir()
+        result = self.run_make(
+            "train-mmbert32k-feedback",
+            FEEDBACK_MODEL_NAME=model,
+            FEEDBACK_DATA_SOURCE=data,
+            FEEDBACK_MAX_SAMPLES=20,
+            FEEDBACK_EPOCHS=1,
+            TRAIN_BATCH_SIZE=2,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (call,) = self.calls()
+        args = call["args"]
+        for flag, value in (
+            ("--model_name", str(model)),
+            ("--data_source", str(data)),
+            ("--max_samples", "20"),
+            ("--epochs", "1"),
+            ("--batch_size", "2"),
+        ):
+            self.assertEqual(args[args.index(flag) + 1], value)
+        self.assertNotIn("--model_revision", args)
+        self.assertNotIn("--dataset_revision", args)
+
+    def test_feedback_rejects_unpinned_remote_inputs_before_creating_outputs(self):
+        for target in ("feedback", "all"):
+            for revisions, missing in (
+                ({}, "FEEDBACK_MODEL_REVISION"),
+                (
+                    {"FEEDBACK_MODEL_REVISION": "model-revision"},
+                    "FEEDBACK_DATASET_REVISION",
+                ),
+            ):
+                with self.subTest(target=target, missing=missing):
+                    result = self.run_make(f"train-mmbert32k-{target}", **revisions)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(missing, result.stderr)
+                    self.assertFalse(self.log.exists())
+                    self.assertFalse((self.root / "models").exists())
+
+    def test_all_targets_use_locked_projects_and_stop_on_feedback_failure(self):
+        revisions = {
+            "FEEDBACK_MODEL_REVISION": "model-revision",
+            "FEEDBACK_DATASET_REVISION": "dataset-revision",
+        }
+        result = self.run_make("train-mmbert32k-all", **revisions)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for call, (area, trainer) in zip(
+            self.calls(), (FEEDBACK, TASKS[0], TASKS[2], TASKS[1]), strict=True
+        ):
+            self.assert_project(call, area)
+            self.assertEqual(call["args"][5], str(self.projects / area / trainer))
+        for target in ("feedback", "all"):
+            with self.subTest(target=target):
+                self.log.write_text("")
+                result = self.run_make(
+                    f"train-mmbert32k-{target}",
+                    environment={"FAIL_TRAINING": "1"},
+                    **revisions,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("training complete", result.stdout)
+                (call,) = self.calls()
+                self.assert_project(call, FEEDBACK[0])
 
 
 if __name__ == "__main__":

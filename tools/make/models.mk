@@ -197,6 +197,12 @@ FEEDBACK_EPOCHS ?= 10
 FEEDBACK_LR ?= 2e-5
 FEEDBACK_LORA_RANK ?= 64
 FEEDBACK_LORA_ALPHA ?= 128
+# Remote inputs require immutable revisions; local paths need no revision.
+FEEDBACK_MODEL_NAME ?= vllm-sr/mmbert-32k-yarn
+FEEDBACK_MODEL_REVISION ?=
+FEEDBACK_DATA_SOURCE ?= vllm-sr/feedback-detector-dataset
+FEEDBACK_DATASET_REVISION ?=
+FEEDBACK_MAX_SAMPLES ?=
 
 # PII-specific training parameters (AI4Privacy + Presidio combined for best accuracy)
 # AI4Privacy provides 400K diverse multilingual PII samples
@@ -239,14 +245,26 @@ train-mmbert32k-all: ## Train remaining legacy mmBERT-32K tasks (Guard retired)
 	@echo ""
 	@$(MAKE) list-mmbert32k-models
 
-train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
+train-mmbert32k-feedback: training-uv-check ## Train Feedback Detector (4-class satisfaction)
 	@echo "📊 Training Feedback Detector with mmBERT-32K..."
 	@echo "   LoRA rank: $(FEEDBACK_LORA_RANK), alpha: $(FEEDBACK_LORA_ALPHA)"
 	@echo "   Epochs: $(FEEDBACK_EPOCHS), LR: $(FEEDBACK_LR)"
 	@echo "   (Higher rank needed for 4-class classification)"
+	@if [ ! -e "$(FEEDBACK_MODEL_NAME)" ] && [ -z "$(FEEDBACK_MODEL_REVISION)" ]; then \
+		echo "Error: set FEEDBACK_MODEL_REVISION for a remote model, or FEEDBACK_MODEL_NAME to a local model path." >&2; \
+		exit 1; \
+	fi
+	@if [ ! -e "$(FEEDBACK_DATA_SOURCE)" ] && [ -z "$(FEEDBACK_DATASET_REVISION)" ]; then \
+		echo "Error: set FEEDBACK_DATASET_REVISION for a remote dataset, or FEEDBACK_DATA_SOURCE to a local data directory." >&2; \
+		exit 1; \
+	fi
 	@mkdir -p models
-	python $(TRAINING_DIR)/model_classifier/user_feedback_classifier/train_feedback_detector.py \
-		--model_name vllm-sr/mmbert-32k-yarn \
+	uv run --locked --project "$(LORA_DIR)/user_feedback_classifier" python "$(LORA_DIR)/user_feedback_classifier/train_feedback_detector.py" \
+		--model_name "$(FEEDBACK_MODEL_NAME)" \
+		$(if $(FEEDBACK_MODEL_REVISION),--model_revision "$(FEEDBACK_MODEL_REVISION)") \
+		--data_source "$(FEEDBACK_DATA_SOURCE)" \
+		$(if $(FEEDBACK_DATASET_REVISION),--dataset_revision "$(FEEDBACK_DATASET_REVISION)") \
+		$(if $(FEEDBACK_MAX_SAMPLES),--max_samples "$(FEEDBACK_MAX_SAMPLES)") \
 		--output_dir models/mmbert32k-feedback-detector \
 		--epochs $(FEEDBACK_EPOCHS) \
 		--batch_size $(TRAIN_BATCH_SIZE) \
@@ -255,8 +273,8 @@ train-mmbert32k-feedback: ## Train Feedback Detector (4-class satisfaction)
 		--lora_rank $(FEEDBACK_LORA_RANK) \
 		--lora_alpha $(FEEDBACK_LORA_ALPHA) \
 		--merge_lora
-	@echo "Feedback Detector training complete (98.8% accuracy expected)"
-	@echo "   LoRA: models/mmbert32k-feedback-detector-lora"
+	@echo "Feedback Detector training complete"
+	@echo "   LoRA: models/mmbert32k-feedback-detector_lora"
 	@echo "   Merged: models/mmbert32k-feedback-detector-merged"
 
 train-mmbert32k-intent: training-uv-check ## Train Intent Classifier (MMLU-Pro categories + supplement data)
