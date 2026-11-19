@@ -75,6 +75,8 @@ interface RouterSectionContext {
   config: ConfigData | null
   routerConfig: RouterConfigSectionData
   routerDefaults: CanonicalGlobalConfig | null
+  /** Build only these curated cards, and none of the generated ones. */
+  only?: readonly RouterSystemKey[]
 }
 
 export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; description: string }> = {
@@ -422,7 +424,8 @@ function statusForKey(data: unknown): RouterSectionBadge {
   return enabledBadge(typeof section?.enabled === 'boolean' ? section.enabled : undefined)
 }
 
-function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
+/** The hand-tuned labels, hints and options of a legacy card's top-level fields. */
+export function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
   switch (key) {
     case 'router_core':
       return [
@@ -689,7 +692,9 @@ export function buildEffectiveRouterConfig(
 }
 
 export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectionCard[] {
-  const orderedKeys = Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]
+  const orderedKeys = (Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]).filter(
+    (key) => !ctx.only || ctx.only.includes(key),
+  )
   const decisionBindings = decisionBindingsState(
     ctx.routerConfig.system_models,
     ctx.config,
@@ -740,6 +745,8 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
   const curatedPaths = new Set(
     Object.values(CURATED_ROUTER_SECTIONS).map(({ path }) => path.join('.')),
   )
+  if (ctx.only) return curatedCards
+
   const generatedCards: RouterSectionCard[] = ROUTER_CONFIG_EXTENSION.global_sections
     // KB management is not a Dashboard surface; the canonical schema and raw editor retain it.
     .filter((surface) => surface.path.join('.') !== 'model_catalog.kbs')

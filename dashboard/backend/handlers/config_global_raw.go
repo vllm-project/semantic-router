@@ -131,15 +131,15 @@ func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
 		return nil, err
 	}
 
-	parsed, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(data)
-	if err != nil {
-		return nil, fmt.Errorf("parse config.yaml: %w", err)
-	}
-
-	global := routerconfig.CanonicalGlobalFromRouterConfig(parsed)
-	if global == nil {
-		defaults := routerconfig.DefaultCanonicalGlobal()
-		global = &defaults
+	defaults := routerconfig.DefaultCanonicalGlobal()
+	global := &defaults
+	// A field this build does not know elsewhere in config.yaml, such as a
+	// newer Router's capability, must not hide the global view: the defaults
+	// merged with what config.yaml writes under global still describe it.
+	if parsed, parseErr := routerconfig.ParseYAMLBytesWithoutEnvExpansion(data); parseErr != nil {
+		log.Printf("Global config view: config.yaml did not parse, showing its written global block: %v", parseErr)
+	} else if canonical := routerconfig.CanonicalGlobalFromRouterConfig(parsed); canonical != nil {
+		global = canonical
 	}
 
 	var effective yaml.Node

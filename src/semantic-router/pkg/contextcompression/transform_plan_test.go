@@ -59,6 +59,26 @@ func TestTransformationCompleteTurnAndStableIdentity(t *testing.T) {
 	}
 }
 
+// Removing a turn keeps the instructions a Chat client sent inside the
+// conversation after the messages they followed.
+func TestTransformationKeepsLaterInstructionsAfterTheirMessages(t *testing.T) {
+	request := historyFixture()
+	request.Instructions = append(request.Instructions,
+		llmprotocol.InstructionBlock{Role: llmprotocol.RoleSystem, Content: textMessage(llmprotocol.RoleSystem, "after another question").Content, Position: 3},
+		llmprotocol.InstructionBlock{Role: llmprotocol.RoleSystem, Content: textMessage(llmprotocol.RoleSystem, "after the live question").Content, Position: 5})
+	ir := ParseSemanticRequest(request, Provenance{})
+	if err := ir.ApplySteps(context.Background(), []TransformationStep{removalStep(TransformReset, 0, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	var positions []int
+	for _, instruction := range request.Instructions {
+		positions = append(positions, instruction.Position)
+	}
+	if !reflect.DeepEqual(positions, []int{0, 1, 3}) {
+		t.Fatalf("instruction positions = %v", positions)
+	}
+}
+
 func TestTransformationRejectsPartialAndProtectedEdits(t *testing.T) {
 	for _, tc := range []struct {
 		name       string

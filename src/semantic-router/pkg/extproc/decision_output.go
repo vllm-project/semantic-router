@@ -46,7 +46,7 @@ func (r *OpenAIRouter) applyDecisionOutput(ctx *RequestContext) error {
 	}
 	if supported, ok := r.codecCapabilitiesForFormat(client); !ok || !supported.Supports(llmprotocol.CapabilityImageGeneration) {
 		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
-			fmt.Sprintf("the matched route answers with a generated image, which the %s API cannot return; call the Responses API or the Images API", clientAPIName(client)))
+			fmt.Sprintf("the matched route answers with a generated image, which the %s API cannot return; call the Responses API or the Images API", client.APIName()))
 	}
 	if selection.ApplyDecisionOutput(request, decision) {
 		request.Generation++

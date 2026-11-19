@@ -1,25 +1,24 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
-test.describe('Users page', () => {
-  test('creates a personal invitation with a clear dashboard role', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
+const adminUser = {
+  id: 'user-admin-2',
+  email: 'ada@example.com',
+  name: 'Ada Lovelace',
+  role: 'admin',
+  permissions: ['users.manage', 'users.view', 'config.read', 'config.write'],
+}
 
-    await mockAuthenticatedAppShell(page, {
-      user: {
-        id: 'user-admin-2',
-        email: 'ada@example.com',
-        name: 'Ada Lovelace',
-        role: 'admin',
-        permissions: ['users.manage', 'users.view', 'config.read', 'config.write'],
-      },
-    })
+test.describe('Users and access', () => {
+  test('creates a personal invitation with a clear dashboard role and a copyable link', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockAuthenticatedAppShell(page, { user: adminUser })
 
     await page.route('**/api/admin/users**', async (route) => {
       await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        json: {
           users: [
             {
               id: 'user-1',
@@ -30,67 +29,378 @@ test.describe('Users page', () => {
               createdAt: 1734652800,
             },
           ],
-        }),
+        },
       })
     })
-
-    await page.goto('/users')
+    await page.route('**/api/admin/permissions', (route) =>
+      route.fulfill({
+        json: {
+          rolePermissions: {
+            admin: ['users.manage'],
+            write: ['config.write'],
+            read: ['config.read'],
+          },
+        },
+      }),
+    )
 
     let invitePayload: Record<string, unknown> | null = null
     await page.route('**/api/admin/invitations', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.fulfill({ json: { invitations: [] } })
+        return
+      }
       invitePayload = route.request().postDataJSON() as Record<string, unknown>
       await route.fulfill({
         status: 201,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        json: {
           invitation: {
             id: 'invite-1',
             kind: invitePayload.kind,
             email: invitePayload.email,
             name: invitePayload.name,
             role: invitePayload.role,
+            maxUses: 1,
+            usedCount: 0,
+            remainingUses: 1,
+            status: 'pending',
             expiresAt: 1893456000,
+            createdAt: 1893000000,
           },
           token: 'one-time-token',
-        }),
+        },
       })
     })
 
+    await page.goto('/users')
+    await expect(page).toHaveURL(/\/settings\/access$/)
+    await expect(page.getByRole('heading', { name: 'Users & access' })).toBeVisible()
+    await expect(page.getByRole('cell', { name: /Read User/ })).toBeVisible()
+
     const inviteUserButton = page.getByRole('button', { name: 'Invite user' })
-    const overflowBeforeDialog = await page.evaluate(() => document.body.style.overflow)
     await inviteUserButton.click()
 
     const dialog = page.getByRole('dialog', { name: 'Invite user' })
     const nameInput = dialog.getByLabel('Name')
     const emailInput = dialog.getByLabel('Email')
     await expect(nameInput).toBeFocused()
-    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
-    await expect(dialog.getByRole('radio', { name: /Read/ })).toBeChecked()
-    await dialog.getByText('Builder', { exact: true }).click()
+    await expect(dialog.getByRole('radio', { name: /^Read/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
+    await dialog.getByRole('radio', { name: /^Builder/ }).click()
+    await dialog.getByRole('button', { name: 'Create invitation' }).click()
+    await expect(dialog.getByText('Enter their name.')).toBeVisible()
+    expect(invitePayload).toBeNull()
+
     await nameInput.fill('Grace Hopper')
     await emailInput.fill('grace@example.com')
-
-    const closeButton = dialog.getByRole('button', { name: 'Close invitation' })
-    const submitButton = dialog.getByRole('button', { name: 'Create invitation' })
-    await closeButton.focus()
-    await page.keyboard.press('Shift+Tab')
-    await expect(submitButton).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(closeButton).toBeFocused()
-
-    await submitButton.click()
-    await expect.poll(() => invitePayload).toEqual({
-      kind: 'personal',
-      email: 'grace@example.com',
-      name: 'Grace Hopper',
-      role: 'write',
-    })
+    await dialog.getByRole('button', { name: 'Create invitation' }).click()
+    await expect
+      .poll(() => invitePayload)
+      .toEqual({
+        kind: 'personal',
+        email: 'grace@example.com',
+        name: 'Grace Hopper',
+        role: 'write',
+      })
     const readyDialog = page.getByRole('dialog', { name: 'Welcome Grace Hopper' })
-    await expect(readyDialog).toBeVisible()
     await expect(readyDialog.getByText('One-time invitation link')).toBeVisible()
+    await expect(readyDialog.getByText('/invite/one-time-token')).toBeVisible()
     await readyDialog.getByRole('button', { name: 'Done' }).click()
-    await expect(dialog).toBeHidden()
+    await expect(readyDialog).toBeHidden()
     await expect(inviteUserButton).toBeFocused()
-    expect(await page.evaluate(() => document.body.style.overflow)).toBe(overflowBeforeDialog)
   })
+
+  test('sorts by column header and filters by role on the server, without a refresh button', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockAuthenticatedAppShell(page, { user: adminUser })
+    const queries: URLSearchParams[] = []
+    await page.route('**/api/admin/users?**', (route) => {
+      queries.push(new URL(route.request().url()).searchParams)
+      return route.fulfill({
+        json: {
+          users: [
+            {
+              id: 'user-1',
+              email: 'reader@example.com',
+              name: 'Read User',
+              role: 'read',
+              status: 'active',
+              createdAt: 1734652800,
+            },
+          ],
+          total: 1,
+        },
+      })
+    })
+    await page.route('**/api/admin/permissions', (route) =>
+      route.fulfill({ json: { rolePermissions: { admin: [], write: [], read: [] } } }),
+    )
+    await page.route('**/api/admin/invitations', (route) =>
+      route.fulfill({ json: { invitations: [] } }),
+    )
+
+    await page.goto('/settings/access')
+    await expect(page.getByRole('cell', { name: /Read User/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /refresh/i })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveCount(0)
+    const latest = () => Object.fromEntries(queries.at(-1)?.entries() ?? [])
+    expect(latest()).toMatchObject({ sort: 'createdAt', order: 'desc' })
+
+    const person = page.getByRole('columnheader', { name: 'Person' })
+    await person.getByRole('button').click()
+    await expect.poll(latest).toMatchObject({ sort: 'name', order: 'desc', page: '1' })
+    await expect(person).toHaveAttribute('aria-sort', 'descending')
+    await person.getByRole('button').click()
+    await expect.poll(latest).toMatchObject({ sort: 'name', order: 'asc' })
+    await expect(person).toHaveAttribute('aria-sort', 'ascending')
+    await page.getByRole('columnheader', { name: 'Last sign-in' }).getByRole('button').click()
+    await expect.poll(latest).toMatchObject({ sort: 'lastLoginAt', order: 'desc' })
+
+    await page
+      .getByRole('button', { name: 'Role', exact: true })
+      .and(page.locator('[aria-haspopup="dialog"]'))
+      .click()
+    await page.getByRole('menuitemcheckbox', { name: /Admin/ }).click()
+    await expect.poll(() => latest().role).toBe('admin')
+    await page.getByRole('menuitemcheckbox', { name: /Builder/ }).click()
+    await expect.poll(() => latest().role).toBe('admin,write')
+  })
+
+  test('filters the audit log with chips and exports what matches', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockAuthenticatedAppShell(page, { user: adminUser })
+    await page.route('**/api/admin/users?**', (route) =>
+      route.fulfill({
+        json: {
+          users: [{ id: 'user-1', email: 'grace@example.com', name: 'Grace Hopper', role: 'read' }],
+          total: 1,
+        },
+      }),
+    )
+    await page.route('**/api/admin/permissions', (route) =>
+      route.fulfill({ json: { rolePermissions: { admin: [], write: [], read: [] } } }),
+    )
+    await page.route('**/api/admin/invitations', (route) =>
+      route.fulfill({ json: { invitations: [] } }),
+    )
+    const queries: URLSearchParams[] = []
+    await page.route('**/api/admin/audit-logs?**', (route) => {
+      const query = new URL(route.request().url()).searchParams
+      queries.push(query)
+      return route.fulfill({
+        json: {
+          logs: [
+            {
+              id: 7,
+              userId: 'user-1',
+              action: 'user.update',
+              resource: 'users/user-2',
+              method: 'PATCH',
+              path: '/api/admin/users/user-2',
+              ip: '192.0.2.1',
+              userAgent: 'console',
+              statusCode: 204,
+              createdAt: 1_893_456_000,
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: Number(query.get('limit') ?? 20),
+          ...(query.get('facets') === '1'
+            ? {
+                facets: {
+                  users: [{ value: 'user-1', count: 12 }],
+                  actions: [{ value: 'user.update', count: 4 }],
+                },
+              }
+            : {}),
+        },
+      })
+    })
+
+    await page.goto('/settings/access?tab=audit')
+    await expect(page.getByText('Grace Hopper').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /refresh/i })).toHaveCount(0)
+    expect(queries[0]?.get('facets')).toBe('1')
+    const latest = () => Object.fromEntries(queries.at(-1)?.entries() ?? [])
+
+    await page.getByRole('button', { name: 'Person' }).click()
+    await page.getByRole('menuitemcheckbox', { name: /Grace Hopper/ }).click()
+    await expect.poll(() => latest().user).toBe('user-1')
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Result' }).click()
+    await page.getByRole('menuitemcheckbox', { name: /Succeeded/ }).click()
+    await page.getByRole('menuitemcheckbox', { name: /Server error/ }).click()
+    await expect.poll(() => latest().status).toBe('success,server_error')
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Time' }).click()
+    await page.getByRole('menuitemradio', { name: 'Last 7 days' }).click()
+    await expect.poll(() => Number(latest().from)).toBeGreaterThan(0)
+    await page.keyboard.press('Escape')
+
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Export CSV' }).click()
+    expect((await download).suggestedFilename()).toMatch(/^audit-log-\d{4}-\d{2}-\d{2}\.csv$/)
+    expect(latest()).toMatchObject({ user: 'user-1', status: 'success,server_error', limit: '200' })
+  })
+
+  test('changes a role from the member sheet and keeps the change in the URL', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockAuthenticatedAppShell(page, { user: adminUser })
+    let reader = {
+      id: 'user-1',
+      email: 'reader@example.com',
+      name: 'Read User',
+      role: 'read',
+      status: 'active',
+      createdAt: 1734652800,
+    }
+    const patches: unknown[] = []
+    await page.route('**/api/admin/users?**', (route) =>
+      route.fulfill({ json: { users: [reader], total: 1 } }),
+    )
+    await page.route('**/api/admin/users/user-1', async (route) => {
+      const body = route.request().postDataJSON() as { role: string; status: string }
+      patches.push(body)
+      reader = { ...reader, ...body }
+      await route.fulfill({ json: reader })
+    })
+    await page.route('**/api/admin/permissions', (route) =>
+      route.fulfill({
+        json: {
+          rolePermissions: {
+            admin: ['users.manage'],
+            write: ['config.write'],
+            read: ['config.read'],
+          },
+        },
+      }),
+    )
+    await page.route('**/api/admin/invitations', (route) =>
+      route.fulfill({ json: { invitations: [] } }),
+    )
+
+    const passwords: unknown[] = []
+    await page.route('**/api/admin/users/password', async (route) => {
+      passwords.push(route.request().postDataJSON())
+      await route.fulfill({ json: { ok: true } })
+    })
+
+    await page.goto('/settings/access')
+    await page.getByRole('cell', { name: /Read User/ }).click()
+    await expect(page).toHaveURL(/user=user-1/)
+    const sheet = page.getByRole('dialog', { name: /Read User/ })
+    await sheet.getByRole('radio', { name: 'Builder' }).click()
+    await sheet.getByRole('button', { name: 'Save changes' }).click()
+    await expect.poll(() => patches).toEqual([{ role: 'write', status: 'active' }])
+    expect(passwords).toEqual([])
+
+    await sheet.getByRole('switch', { name: 'Can sign in' }).click()
+    await sheet.getByLabel('New password').fill('rotated-password')
+    await sheet.getByRole('button', { name: 'Save changes' }).click()
+    await expect
+      .poll(() => patches)
+      .toEqual([
+        { role: 'write', status: 'active' },
+        { role: 'write', status: 'inactive' },
+      ])
+    await expect.poll(() => passwords).toEqual([{ userId: 'user-1', password: 'rotated-password' }])
+    await expect(page.getByText('User updated and password rotated')).toBeVisible()
+  })
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`keeps long invitation links inside their dialogs at ${viewport.width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport)
+      await mockAuthenticatedAppShell(page, { user: adminUser })
+      await page.route('**/api/admin/users?**', (route) =>
+        route.fulfill({
+          json: {
+            users: [{ id: 'user-1', email: 'reader@example.com', name: 'Read User', role: 'read' }],
+            total: 1,
+          },
+        }),
+      )
+      await page.route('**/api/admin/permissions', (route) =>
+        route.fulfill({ json: { rolePermissions: { admin: [], write: [], read: [] } } }),
+      )
+      const sharedToken = 'hmas8JpU961_t_dMYVm1kTXMmDfTJOAMIYb2DwxayXU'.repeat(3)
+      const rotatedToken = 'rotated_0QWJmZ3RzbGlua3RoYXRrZWVwc2dvaW5nYW5kZ29pbmc'.repeat(3)
+      const shared = {
+        id: 'invite-shared',
+        kind: 'shared',
+        role: 'admin',
+        maxUses: 100,
+        usedCount: 0,
+        remainingUses: 100,
+        status: 'pending',
+        expiresAt: 1893456000,
+        createdAt: 1893000000,
+      }
+      await page.route('**/api/admin/invitations', async (route) => {
+        if (route.request().method() !== 'POST') {
+          await route.fulfill({ json: { invitations: [shared] } })
+          return
+        }
+        await route.fulfill({ status: 201, json: { invitation: shared, token: sharedToken } })
+      })
+      await page.route('**/api/admin/invitations/invite-shared/rotate', (route) =>
+        route.fulfill({ json: { invitation: shared, token: rotatedToken } }),
+      )
+
+      // The link truncates inside its field, and the field, copy button and
+      // footer all stay inside the dialog instead of widening it.
+      const expectLinkInside = async (dialog: Locator, token: string) => {
+        const link = dialog.getByText(`/invite/${token}`)
+        await expect(link).toBeVisible()
+        expect(await link.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
+          true,
+        )
+        expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+          true,
+        )
+        const frame = await dialog.boundingBox()
+        for (const control of [
+          dialog.getByRole('button', { name: 'Copy', exact: true }),
+          dialog.getByRole('button', { name: 'Done', exact: true }),
+        ]) {
+          const box = await control.boundingBox()
+          expect(box!.x + box!.width).toBeLessThanOrEqual(frame!.x + frame!.width - 12)
+        }
+      }
+
+      await page.goto('/settings/access')
+      await page.getByRole('button', { name: 'Invite user' }).click()
+      const form = page.getByRole('dialog', { name: 'Invite user' })
+      await form.getByRole('radio', { name: 'Shared link', exact: true }).click()
+      await form.getByRole('radio', { name: /^Admin/ }).click()
+      await form.getByRole('button', { name: 'Create shared link' }).click()
+
+      const ready = page.getByRole('dialog', { name: 'Shared invitation ready' })
+      await expect(ready).toContainText('100 tickets are ready')
+      await expect(ready).toContainText('with the Admin role')
+      await expect(ready.getByText('Copy it now', { exact: false })).toBeVisible()
+      await expectLinkInside(ready, sharedToken)
+      await ready.getByRole('button', { name: 'Done', exact: true }).click()
+      await expect(ready).toBeHidden()
+
+      await page.getByRole('tab', { name: /Invitations/ }).click()
+      await page
+        .getByRole('row', { name: /Shared invitation/ })
+        .getByRole('button', { name: 'Row actions' })
+        .click()
+      await page.getByRole('menuitem', { name: 'New link' }).click()
+      const rotated = page.getByRole('dialog', { name: 'New invitation link' })
+      await expect(rotated.getByText('Shared invitation link', { exact: true })).toBeVisible()
+      await expectLinkInside(rotated, rotatedToken)
+    })
+  }
 })

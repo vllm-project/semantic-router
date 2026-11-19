@@ -36,8 +36,8 @@ recipes:
 OpenAI-specific mapping from `catalog: openai/gpt-5.6-sol`; do not repeat its
 reasoning definition in YAML.
 
-Browse built-in identities and their Provider support in **Model Hub**, or
-choose a Provider in **Build → Routing → Models → Add Model**. The Dashboard labels
+Browse built-in identities and their Provider support in **Models → Model Hub**,
+or choose a Provider in **Models → Backend models → Connect model**. The Dashboard labels
 catalog choices as **Built-in** and saves both the local alias and canonical
 identity.
 
@@ -57,8 +57,9 @@ cache writes:
 The rates come from the [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing)
 and [OpenAI](https://developers.openai.com/api/docs/pricing) pricing pages and
 leave out long-context, data-residency, batch and service-tier adjustments.
-Insights marks such a cost as a list price estimate, and on a login it is what
-the tokens would cost at API prices, not what the plan charges. Set `pricing`
+The Dashboard's **Requests** page marks such a cost as a list price estimate,
+and on a login it is what the tokens would cost at API prices, not what the
+plan charges. Set `pricing`
 on the alias to use other rates. A written `pricing` block always wins,
 whatever its rates, and its `currency` defaults to `USD`, so
 `pricing: {prompt_per_1m: 0, completion_per_1m: 0}` marks a Model free: its

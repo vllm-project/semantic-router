@@ -352,6 +352,15 @@ Summary check shows the effective conditions, including inherited requirements.
   neutral. This is a controlled recovery path, not a guarantee that every
   branch update resolves every check conflict.
 
+- **Waiting Gate disappears after a Community rerun:** the trusted publisher
+  can restore a verified current-attempt pending Gate without another branch
+  push or manual Actions rerun. It keeps the check pending and preserves the
+  existing `/ci run` guidance; it does not authorize CI, publish success, or
+  replace a completed verdict. Recovery must confirm the replacement in the
+  latest check set before retiring the original pending check. An uncertain
+  write or visibility result stops repeated creation. Retain the qualification
+  run/attempt and check IDs for Maintainer investigation of #5866.
+
 To recover from a branch-update failure, merge upstream `main` into your PR
 branch and push it, or use GitHub's **Update branch** button when available.
 

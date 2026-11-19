@@ -127,10 +127,10 @@ decision choose between those aliases.
 
 ## Use the Dashboard
 
-Open **Build → Routing → Models → Add Model**:
+Open **Models → Backend models** and choose **Connect model**:
 
 - choose a Provider and enter the custom model ID in the connection flow; or
-- choose **Manual setup** to edit the complete identity, reasoning, Model Card,
+- choose **Add manually** to edit the complete identity, reasoning, Model Card,
   pricing, reliability, and backend-reference fields.
 
 Keep **Built-in Catalog Model** empty. **Reasoning Family** selects only a

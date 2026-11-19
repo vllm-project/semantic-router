@@ -43,27 +43,27 @@ An empty local workspace starts the Dashboard in setup mode. Use it to bind
 model endpoints, choose a baseline policy, preview the result, and activate a
 complete config; the waiting `vllm-sr serve` then starts the Router from it.
 
-After activation, open **Build → Routing → Models** to connect physical Chat
-backends. **Mixture-of-Models** has three tabs:
+After activation, open **Models → Backend models** to connect physical Chat
+backends. **Routing → Recipes** has three tabs:
 
-- **Models** publishes and manages public model entrypoints;
+- **Public models** publishes and manages public model entrypoints;
 - **Recipes** manages the policies those entrypoints select and lists the
   built-in Recipes installed with vLLM-SR; **Create model** on a built-in
   Recipe assigns your Models to its decisions and publishes it;
 - **Probes** inspects recipe scenarios and supports generation or routing-only
   validation.
 
-**Build → System One** separately provides **Decision Models**, **Decision
-Playground**, and **Decision Monitoring** for judgment deployments, typed
-questions, and their runtime observations.
+**Models → Decision models** separately provides **Deploy**, **Playground**,
+and **Monitoring** tabs for judgment deployments, typed questions, and their
+runtime observations.
 
 Verify provider generation separately from routing evaluation. A probe can
 select the expected route even when the selected backend cannot generate.
 
-The visual DSL editor owns routing semantics. It preserves listeners, providers,
-global settings, and setup state when replacing its routing surface. Multi-recipe
-lifecycle changes are managed from Mixture-of-Models or the management API so a
-visual edit cannot silently discard another recipe.
+The **Routing → Config editor** owns routing semantics. It preserves listeners,
+providers, global settings, and setup state when replacing its routing surface.
+Multi-recipe lifecycle changes are managed from **Routing → Recipes** or the
+management API so an editor change cannot silently discard another recipe.
 
 ## Helm
 
@@ -131,7 +131,9 @@ Helm values seed the Router ConfigMap at install:
   `configMap.applyValuesRevision` for that upgrade. Reusing the same revision
   later keeps subsequent live edits.
 - **Rollout.** A saved ConfigMap edit takes effect after the Router deployment
-  rolls out.
+  rolls out. The Dashboard reads the saved ConfigMap through the Kubernetes
+  API, so its configuration pages and model health show the edit within a few
+  seconds, without a restart.
 
 `vllm-sr serve --target kubernetes --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command

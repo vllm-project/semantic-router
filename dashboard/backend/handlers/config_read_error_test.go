@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,4 +64,32 @@ func TestUpdateGlobalConfigYAMLHandlerReadErrorHidesPath(t *testing.T) {
 	response := httptest.NewRecorder()
 	UpdateGlobalConfigYAMLHandler(configPath, false, "")(response, req)
 	assertFixedReadError(response, "Failed to read config", configPath, t)
+}
+
+func TestGlobalConfigYAMLHandlerShowsTheWrittenGlobalWhenAnotherFieldIsUnknown(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	config := `version: v0.5
+providers:
+  models:
+    - name: m1
+      unsupported_capabilities: [capability_from_a_newer_router]
+      backend_refs:
+        - name: b
+          endpoint: 127.0.0.1:8000
+global:
+  router:
+    drain_timeout_seconds: 321
+`
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/router/config/global/raw", nil)
+	response := httptest.NewRecorder()
+	GlobalConfigYAMLHandler(configPath)(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body: %s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), "drain_timeout_seconds: 321") {
+		t.Fatalf("the written global block is missing from the view:\n%s", response.Body.String())
+	}
 }

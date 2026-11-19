@@ -311,6 +311,9 @@ func (f *sessionFallback) succeeded(status int) {
 		ctx.InflightToken = 0
 	}
 	ctx.SemanticRequest = candidate.request
+	// A candidate's request carries its output format: only the primary
+	// dispatch held it back.
+	ctx.structuredOutputPass = nil
 	ctx.TargetFormat = candidate.dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(candidate.dispatch.profile)
 	ctx.RequestModel = candidate.model

@@ -279,34 +279,102 @@ async function mockComparisonOptions(
   })
 }
 
+type ComposerStep = 'What to measure' | 'What to compare' | 'Limits' | 'Review'
+
+/** The New evaluation sheet shows one step at a time; its stepper reaches any step. */
+async function goToStep(page: Page, name: ComposerStep) {
+  const step = page
+    .getByRole('navigation', { name: 'Steps' })
+    .getByRole('button', { name: new RegExp(`${name}$`) })
+  if ((await step.getAttribute('aria-current')) !== 'step') await step.click()
+}
+
+const firstStep = (page: Page) =>
+  page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: /What to measure$/ })
+
+const runFilterPills: Record<string, string> = {
+  'Run status': 'Status',
+  'Run profile': 'Profile',
+  'Run mode': 'Type',
+}
+const runFilterLabels: Record<string, string> = {
+  running: 'Running',
+  queued: 'Queued',
+  completed: 'Completed',
+  failed: 'Failed',
+  interrupted: 'Interrupted',
+  cancelled: 'Cancelled',
+  smoke: 'Smoke',
+  quick: 'Quick',
+  standard: 'Standard',
+  live: 'Live',
+  preview: 'Dry run',
+  replay: 'Offline estimate',
+}
+
 async function chooseOption(page: Page, label: string, value: string) {
+  if (label === 'Add configured target') {
+    await goToStep(page, 'What to compare')
+    await page.locator(`[data-target-id="${value}"]`).click()
+    return
+  }
+  if (runFilterPills[label]) {
+    await page.getByRole('button', { name: new RegExp(`^${runFilterPills[label]}`) }).click()
+    const option = page.getByRole('menuitemcheckbox', {
+      name: new RegExp(`^${runFilterLabels[value]}`),
+    })
+    await option.click()
+    await expect(option).toHaveAttribute('aria-checked', 'true')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('menuitemcheckbox')).toHaveCount(0)
+    return
+  }
   await page.getByRole('combobox', { name: label, exact: true }).click()
   await page.getByRole('listbox').locator(`[data-value="${value}"]`).click()
 }
 
+async function reviewPlan(page: Page) {
+  await goToStep(page, 'Limits')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+}
+
+async function openAdvanced(page: Page) {
+  await goToStep(page, 'Limits')
+  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+}
+
 async function chooseDataset(page: Page, id: string) {
+  await goToStep(page, 'What to measure')
   await page.getByRole('button', { name: 'Use a specific dataset', exact: true }).click()
   await chooseOption(page, 'Specific dataset', id)
   if (!(await page.getByRole('checkbox', { checked: true }).count()))
     await page.getByRole('button', { name: 'Select all benchmarks' }).click()
 }
 
+const runSections: Record<string, string> = { Evidence: 'Activity', Recipe: 'Protocol' }
+
+async function reloadEvidence(page: Page) {
+  await page.getByRole('button', { name: 'More run actions', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Reload evidence', exact: true }).click()
+}
+
 async function section(page: Page, name: string) {
-  await page.getByRole('tab', { name, exact: true }).click()
+  await page.getByRole('tab', { name: runSections[name] ?? name, exact: true }).click()
 }
 
 test('plans and launches a reusable frozen dataset from the normal form', async ({ page }) => {
   const requests = await mockBench(page)
-  await page.goto('/evaluation?view=new')
-  await expect(page.getByRole('heading', { name: 'sr-bench 1.0' })).toBeVisible()
+  await page.goto('/observe/evaluations?view=new')
+  await expect(page.getByRole('dialog', { name: 'New evaluation' })).toBeVisible()
   await chooseDataset(page, 'quick-v1')
   await chooseOption(page, 'Add configured target', 'single')
-  await expect(page.getByRole('button', { name: 'Start evaluation' })).toBeDisabled()
-  await page.getByRole('button', { name: 'Review plan' }).click()
+  await expect(page.getByRole('button', { name: 'Start evaluation' })).toHaveCount(0)
+  await reviewPlan(page)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
+  await goToStep(page, 'Limits')
   await page.getByLabel('Budget (USD)').fill('6')
-  await expect(page.getByRole('button', { name: 'Start evaluation' })).toBeDisabled()
-  await page.getByRole('button', { name: 'Review plan' }).click()
+  await expect(page.getByRole('button', { name: 'Start evaluation' })).toHaveCount(0)
+  await reviewPlan(page)
   await page.getByRole('button', { name: 'Start evaluation' }).click()
   await expect(page).toHaveURL(/run=run-1/)
   expect(requests).toHaveLength(3)
@@ -335,9 +403,9 @@ test('preserves registered profiles and blocks output cap conflicts before plann
   await page.route('**/api/sr-bench/v1/targets', (route) =>
     route.fulfill({ json: { targets: [{ ...target, request_params: requestParams }] } }),
   )
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseDataset(page, 'quick-v1')
-  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await openAdvanced(page)
   await page.getByLabel('Temperature', { exact: true }).fill('3')
   await chooseOption(page, 'Add configured target', 'single')
   const profile = page.getByRole('region', { name: 'model-a request profile', exact: true })
@@ -347,10 +415,6 @@ test('preserves registered profiles and blocks output cap conflicts before plann
   await expect(profile.locator('dl > div').filter({ hasText: 'Temperature' })).toContainText(
     '1Fixed',
   )
-  await expect(page.getByLabel('Temperature', { exact: true })).toBeDisabled()
-  await expect(page.getByLabel('Temperature', { exact: true })).toHaveValue('1')
-  await expect(page.getByLabel('Top P', { exact: true })).toHaveValue('0.95')
-  await expect(page.getByLabel('Sampling seed', { exact: true })).toHaveValue('42')
   await profile.getByText('Other fixed settings', { exact: true }).click()
   await expect(profile.getByText('Top K', { exact: true })).toBeVisible()
   await expect(profile.getByText('Min P', { exact: true })).toBeVisible()
@@ -358,15 +422,21 @@ test('preserves registered profiles and blocks output cap conflicts before plann
   await expect(profile.getByText('Enabled', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Manifest JSON')).toHaveCount(0)
   await expect(page.getByLabel('Use edited manifest')).toHaveCount(0)
+  await openAdvanced(page)
+  await expect(page.getByLabel('Temperature', { exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Temperature', { exact: true })).toHaveValue('1')
+  await expect(page.getByLabel('Top P', { exact: true })).toHaveValue('0.95')
+  await expect(page.getByLabel('Sampling seed', { exact: true })).toHaveValue('42')
   await page.getByLabel('Max output tokens', { exact: true }).fill('512')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('alert')).toContainText(
     'Target model-a has a registered output limit of 4096 tokens, above the run cap of 512',
   )
   expect(requests).toHaveLength(0)
+  await goToStep(page, 'Limits')
   await expect(page.getByLabel('Max output tokens', { exact: true })).toHaveValue('512')
   await page.getByLabel('Max output tokens', { exact: true }).fill('4096')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(
     page.getByRole('heading', { name: 'Plan ready for review', exact: true }),
   ).toBeVisible()
@@ -380,9 +450,9 @@ test('reviews typed sampling and case limits and invalidates a plan after settin
   page,
 }) => {
   const requests = await mockBench(page)
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await openAdvanced(page)
   await expect(page.locator('textarea')).toHaveCount(0)
   await expect(page.getByText('Advanced manifest', { exact: true })).toHaveCount(0)
   for (const [label, value] of [
@@ -402,7 +472,7 @@ test('reviews typed sampling and case limits and invalidates a plan after settin
     'placeholder',
     'Not applied',
   )
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeEnabled()
   expect(requests[0]).toMatchObject({
     manifest: {
@@ -418,13 +488,15 @@ test('reviews typed sampling and case limits and invalidates a plan after settin
       },
     },
   })
+  await openAdvanced(page)
   await page.getByLabel('Temperature', { exact: true }).fill('3')
-  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toHaveCount(0)
+  await reviewPlan(page)
   await expect(page.getByRole('alert')).toContainText('Temperature must be between 0 and 2')
   expect(requests).toHaveLength(1)
+  await openAdvanced(page)
   await page.getByLabel('Temperature', { exact: true }).fill('0.5')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   expect(requests[2]).toMatchObject({
@@ -444,23 +516,23 @@ test('freezes optional learning-session context only for route preview', async (
   await page.route('**/api/sr-bench/v1/targets', (route) =>
     route.fulfill({ json: { targets: [mom] } }),
   )
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseOption(page, 'Add configured target', 'balance')
-  await page.getByRole('button', { name: 'Preview routing', exact: true }).click()
+  await page.getByRole('radio', { name: 'Dry run', exact: true }).click()
+  await expect(firstStep(page)).toHaveAttribute('aria-current', 'step')
   await chooseOption(page, 'Add configured target', 'balance')
-  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await openAdvanced(page)
   await expect(page.getByLabel('Preview sampling seed', { exact: true })).toHaveValue('42')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
   expect(requests[0]).toMatchObject({ manifest: { mode: 'preview', seed: 42 } })
   expect((requests[0] as { manifest: object }).manifest).not.toHaveProperty('preview_context')
+  await openAdvanced(page)
   await page.getByLabel('Session ID', { exact: true }).fill('session-alpha')
   await page.getByLabel('Conversation ID', { exact: true }).fill('conversation-beta')
   await page.getByLabel('Preview sampling seed', { exact: true }).fill('73')
-  await expect(
-    page.getByRole('button', { name: 'Start route preview', exact: true }),
-  ).toBeDisabled()
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Start dry run', exact: true })).toHaveCount(0)
+  await reviewPlan(page)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
   expect(requests[1]).toMatchObject({
     manifest: {
@@ -473,11 +545,13 @@ test('freezes optional learning-session context only for route preview', async (
       },
     },
   })
-  await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
+  await page.getByRole('radio', { name: 'Evaluate', exact: true }).click()
+  await expect(firstStep(page)).toHaveAttribute('aria-current', 'step')
   await chooseOption(page, 'Add configured target', 'balance')
+  await openAdvanced(page)
   await expect(page.getByLabel('Session ID', { exact: true })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toHaveCount(0)
+  await reviewPlan(page)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
   expect((requests[2] as { manifest: object }).manifest).not.toHaveProperty('preview_context')
 })
@@ -486,8 +560,8 @@ test('supports keyboard selection, search and escape without reopening custom co
   page,
 }) => {
   await mockBench(page)
-  await page.goto('/evaluation?view=new')
-  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await page.goto('/observe/evaluations?view=new')
+  await openAdvanced(page)
   const mode = page.getByRole('combobox', { name: 'Cost accounting', exact: true })
   await mode.focus()
   await mode.press('ArrowDown')
@@ -503,16 +577,14 @@ test('supports keyboard selection, search and escape without reopening custom co
   await expect(mode).toBeFocused()
   await expect(mode).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByRole('listbox')).toHaveCount(0)
-  const targets = page.getByRole('combobox', { name: 'Add configured target', exact: true })
-  await targets.click()
-  await page.getByRole('searchbox', { name: 'Search add configured target' }).fill('no-such-target')
-  await expect(page.getByText('No matching options.', { exact: true })).toBeVisible()
-  await page.getByRole('searchbox', { name: 'Search add configured target' }).fill('model-a')
-  await page.getByRole('searchbox', { name: 'Search add configured target' }).press('ArrowDown')
-  await expect(page.getByRole('option')).toBeFocused()
-  await page.getByRole('option').press('Escape')
-  await expect(targets).toBeFocused()
-  await expect(targets).toHaveAttribute('aria-expanded', 'false')
+  await goToStep(page, 'What to compare')
+  const choice = page.getByRole('checkbox', { name: 'model-a', exact: true })
+  await choice.focus()
+  await choice.press('Space')
+  await expect(choice).toBeChecked()
+  await expect(choice).toBeFocused()
+  await choice.press('Space')
+  await expect(choice).not.toBeChecked()
 })
 
 test('keeps mixed fixed and editable sampling profiles explicit', async ({ page }) => {
@@ -526,15 +598,16 @@ test('keeps mixed fixed and editable sampling profiles explicit', async ({ page 
   await page.route('**/api/sr-bench/v1/targets', (route) =>
     route.fulfill({ json: { targets: [target, fixed] } }),
   )
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseOption(page, 'Add configured target', 'single')
   await chooseOption(page, 'Add configured target', 'fixed')
-  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await openAdvanced(page)
   await expect(page.getByLabel('Temperature', { exact: true })).toBeEnabled()
   await page.getByLabel('Temperature', { exact: true }).fill('0.3')
   await expect(
     page.getByText('Applies to 1 of 2 targets; fixed profiles keep their own values.'),
   ).toHaveCount(2)
+  await goToStep(page, 'What to compare')
   await expect(
     page
       .getByRole('region', { name: 'model-fixed request profile', exact: true })
@@ -547,7 +620,7 @@ test('keeps mixed fixed and editable sampling profiles explicit', async ({ page 
       .locator('dl > div')
       .filter({ hasText: 'Temperature' }),
   ).toContainText('0.3')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
   expect(requests[0]).toMatchObject({
     manifest: { sampling: { temperature: 0.3 }, targets: [target, fixed] },
@@ -559,7 +632,7 @@ test('keeps comparison and create controls compact on desktop and within mobile 
 }, testInfo) => {
   await mockBench(page)
   await page.setViewportSize({ width: 1280, height: 900 })
-  await page.goto('/evaluation?view=compare')
+  await page.goto('/observe/evaluations?view=compare')
   const baseline = page.getByRole('combobox', { name: 'Reference run', exact: true })
   await expect(baseline).toBeVisible()
   expect((await baseline.boundingBox())!.width).toBeLessThanOrEqual(400)
@@ -571,9 +644,9 @@ test('keeps comparison and create controls compact on desktop and within mobile 
   await expect(page.getByRole('listbox')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('compare-dropdown-desktop.png') })
   await page.getByRole('searchbox', { name: 'Search reference run' }).press('Escape')
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await openAdvanced(page)
   await page
     .getByText('Sampling and advanced limits', { exact: true })
     .evaluate((element) => element.scrollIntoView({ block: 'start' }))
@@ -590,8 +663,8 @@ test('keeps comparison and create controls compact on desktop and within mobile 
   expect(menuBounds.y).toBeGreaterThanOrEqual(0)
   expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(844)
   await page.screenshot({ path: testInfo.outputPath('create-accounting-mobile.png') })
-  await page.goto('/evaluation?view=datasets')
-  await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
+  await page.goto('/observe/evaluations?view=datasets')
+  await expect(page.getByRole('region', { name: 'Dataset library', exact: true })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('library-mobile.png') })
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.screenshot({ path: testInfo.outputPath('library-desktop.png') })
@@ -599,7 +672,7 @@ test('keeps comparison and create controls compact on desktop and within mobile 
 
 test('shows truthful metrics, routing distribution and case evidence', async ({ page }) => {
   await mockBench(page)
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await expect(page.getByRole('heading', { name: 'Target comparison' })).toBeVisible()
   await expect(page.getByRole('cell', { name: '50%', exact: true })).toBeVisible()
   await expect(
@@ -613,7 +686,7 @@ test('shows truthful metrics, routing distribution and case evidence', async ({ 
   await section(page, 'Questions')
   await page.getByRole('button', { name: 'case-a' }).click()
   await expect(page.getByRole('heading', { name: 'Parsed answer' })).toBeVisible()
-  await section(page, 'Evidence')
+  await section(page, 'Protocol')
   await expect(page.getByRole('link', { name: 'Open report JSON' })).toHaveAttribute(
     'href',
     '/api/sr-bench/v1/runs/run-1/report',
@@ -645,10 +718,10 @@ test('reconciles a lost initial submission after reload with the same identity a
     if (submissions.length === 1) return route.abort('failed')
     await route.fulfill({ json: run })
   })
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseDataset(page, 'quick-v1')
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Evaluation submission needs reconciliation' }),
@@ -661,7 +734,7 @@ test('reconciles a lost initial submission after reload with the same identity a
   expect(submissions).toHaveLength(1)
   actorID = 'another-user'
   await page.reload()
-  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Steps' })).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Check or submit same evaluation', exact: true }),
   ).toHaveCount(0)
@@ -697,22 +770,27 @@ test('ignores an old response after remount without clearing a newer submission'
     if (index === 3) await newPending
     await route.fulfill({ json: { ...run, id: index === 3 ? 'run-2' : 'run-1' } })
   })
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseDataset(page, 'quick-v1')
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect.poll(() => submissions.length).toBe(1)
-  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
-  await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('button', { name: 'New evaluation', exact: true }).first().click()
   await page.getByRole('button', { name: 'Check or submit same evaluation', exact: true }).click()
   await expect(page).toHaveURL(/run=run-1/)
   expect(submissions[1]).toEqual(submissions[0])
-  await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
-  await page.getByLabel('Run name', { exact: true }).fill('Newer submission')
+  await expect(page.getByRole('tablist', { name: 'Run sections' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('button', { name: 'New evaluation', exact: true }).first().click()
   await chooseDataset(page, 'quick-v1')
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await goToStep(page, 'Limits')
+  await page.getByLabel('Run name', { exact: true }).fill('Newer submission')
+  await reviewPlan(page)
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect.poll(() => submissions.length).toBe(3)
   const oldResponse = page.waitForResponse(
@@ -763,26 +841,26 @@ test('does not navigate a new account from a prior account delayed submission', 
       },
     }),
   )
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseDataset(page, 'quick-v1')
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect.poll(() => submitted).toBe(true)
-  await page.getByRole('button', { name: 'Open account menu for Admin User', exact: true }).click()
-  await page.getByRole('button', { name: 'Logout', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('button', { name: /Admin User/ }).click()
+  await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click()
   await expect(page).toHaveURL(/\/login/)
   await page.getByLabel('Email', { exact: true }).fill('second@example.com')
   await page.getByLabel('Password', { exact: true }).fill('fixture-password')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
-  await expect(
-    page.getByRole('button', { name: 'Open account menu for Second account', exact: true }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: /Second account/ })).toBeVisible()
   await page.evaluate(() => {
-    history.pushState({}, '', '/evaluation?view=new')
+    history.pushState({}, '', '/observe/evaluations?view=new')
     window.dispatchEvent(new PopStateEvent('popstate'))
   })
-  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Steps' })).toBeVisible()
   const oldResponse = page.waitForResponse(
     (response) =>
       response.request().method() === 'POST' && new URL(response.url()).pathname.endsWith('/runs'),
@@ -813,10 +891,10 @@ test('fails closed when an initial submission cannot be preserved in session sto
       original.call(this, key, value)
     }
   })
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseDataset(page, 'quick-v1')
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('No request was sent')
   expect(requests).toHaveLength(1)
@@ -833,14 +911,14 @@ test('clears an initial submission only after the service proves no dispatch occ
       json: { error: 'Frozen plan rejected before dispatch', dispatch_started: false },
     })
   })
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await chooseDataset(page, 'quick-v1')
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Frozen plan rejected before dispatch')
   await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeEnabled()
-  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toHaveCount(0)
   expect(
     await page.evaluate(() => sessionStorage.getItem('sr-bench-submission:user-admin-1')),
   ).toBeNull()
@@ -926,7 +1004,7 @@ test('shows learning preview selection and snapshot evidence without a capabilit
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await expect(page.getByRole('heading', { name: 'Selection status', exact: true })).toBeVisible()
   await expect(
     page.getByText('Some model selections require live execution.', { exact: false }),
@@ -971,7 +1049,7 @@ test('distinguishes pending, unavailable and genuinely empty run evidence', asyn
       })
     })
   }
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await expect(page.getByText('Loading report metrics…', { exact: true })).toBeVisible()
   await expect(
     page.getByText('Complete quality and cost evidence is needed for this chart.', { exact: true }),
@@ -988,9 +1066,7 @@ test('distinguishes pending, unavailable and genuinely empty run evidence', asyn
   mode = 'failed'
   release()
   await section(page, 'Results')
-  await expect(
-    page.getByText('Report metrics are unavailable. Refresh evidence to retry.', { exact: true }),
-  ).toBeVisible()
+  await expect(page.getByText('Report metrics are unavailable.', { exact: true })).toBeVisible()
   await section(page, 'Questions')
   await expect(
     page.getByText('Case results are unavailable: Saved evidence read failed', { exact: true }),
@@ -1002,7 +1078,7 @@ test('distinguishes pending, unavailable and genuinely empty run evidence', asyn
   await expect(page.getByText('No persisted case results yet.', { exact: true })).toHaveCount(0)
   await expect(page.getByText('No persisted call records yet.', { exact: true })).toHaveCount(0)
   mode = 'empty'
-  await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click()
+  await reloadEvidence(page)
   await section(page, 'Questions')
   await expect(page.getByText('No persisted case results yet.', { exact: true })).toBeVisible()
   await section(page, 'Calls')
@@ -1042,7 +1118,7 @@ test('bounds event reads and recovers an explicitly requested page without advan
       },
     })
   })
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await section(page, 'Evidence')
   await expect(
     page.getByRole('heading', { name: 'Run events (1000 loaded)', exact: true }),
@@ -1150,7 +1226,7 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
       },
     })
   })
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await section(page, 'Questions')
   await expect(
     page.getByText('Loaded 100 of 250 persisted results.', { exact: false }),
@@ -1226,7 +1302,7 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
 
 test('compares complete runs using paired results', async ({ page }) => {
   await mockBench(page)
-  await page.goto('/evaluation?view=compare')
+  await page.goto('/observe/evaluations?view=compare')
   await chooseOption(page, 'Reference run', 'run-1')
   await page.getByRole('checkbox', { name: /Candidate test/ }).check()
   await page.getByRole('button', { name: 'Compare runs' }).click()
@@ -1248,7 +1324,8 @@ test('compares complete runs using paired results', async ({ page }) => {
 
 test('keeps actions disabled in a server readonly session', async ({ page }) => {
   await mockBench(page, { serverReadonly: true })
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
+  await goToStep(page, 'Limits')
   await expect(page.getByRole('button', { name: 'Review plan' })).toBeDisabled()
   await expect(
     page.getByText('Run controls require evaluation permissions and a writable Dashboard session.'),
@@ -1257,7 +1334,7 @@ test('keeps actions disabled in a server readonly session', async ({ page }) => 
 
 test('explains an unavailable worker without exposing a broken workspace', async ({ page }) => {
   await mockBench(page, {}, { evaluation: unavailableCapability('Start the sr-bench service.') })
-  await page.goto('/evaluation')
+  await page.goto('/observe/evaluations')
   await expect(page.getByText('Start the sr-bench service.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start evaluation' })).toHaveCount(0)
 })
@@ -1290,7 +1367,7 @@ test('explains a failed run from saved case evidence when its terminal error is 
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await expect(page.getByRole('alert')).toContainText('Runtime identity acknowledgement mismatched')
   await expect(page.getByRole('alert')).toContainText(
     'Model Unknown model · case case-a · from saved case evidence',
@@ -1311,11 +1388,11 @@ test('explains a failed run from saved case evidence when its terminal error is 
 test('removes the Benchmarks tab while keeping benchmark selection in Create', async ({ page }) => {
   await mockBench(page)
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/evaluation')
-  const navigation = page.getByRole('navigation', { name: 'Evaluation views' })
-  await expect(navigation.getByRole('button')).toHaveCount(4)
-  await expect(navigation.getByRole('button', { name: 'Benchmarks', exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
+  await page.goto('/observe/evaluations')
+  const navigation = page.getByRole('tablist', { name: 'Evaluation views' })
+  await expect(navigation.getByRole('tab')).toHaveCount(2)
+  await expect(navigation.getByRole('tab', { name: /Benchmarks/ })).toHaveCount(0)
+  await page.getByRole('button', { name: 'New evaluation', exact: true }).click()
   await expect(
     page.getByRole('group', { name: 'Included benchmarks' }).getByRole('checkbox'),
   ).toHaveCount(9)
@@ -1323,8 +1400,8 @@ test('removes the Benchmarks tab while keeping benchmark selection in Create', a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
-  await page.goto('/evaluation?view=unknown')
-  await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
+  await page.goto('/observe/evaluations?view=unknown')
+  await expect(page.getByRole('region', { name: 'Evaluation runs' })).toBeVisible()
 })
 
 test('replays saved answers and labels estimated metrics separately', async ({ page }) => {
@@ -1404,11 +1481,7 @@ test('replays saved answers and labels estimated metrics separately', async ({ p
             : replayRun
     return route.fulfill({ json: body })
   })
-  await page.goto('/evaluation?view=compare')
-  await page
-    .locator('summary')
-    .filter({ hasText: /^Estimate a routing change$/ })
-    .click()
+  await page.goto('/observe/evaluations?view=estimate')
   await chooseOption(page, 'Saved single-model baseline', 'run-1')
   await chooseOption(page, 'Routing preview', 'preview-1')
   await page.getByRole('button', { name: 'Create offline estimate' }).click()
@@ -1434,8 +1507,8 @@ test('regrades saved answers and exports development evidence with holdout error
   await page.route('**/api/sr-bench/v1/runs/run-1/export', (route) =>
     route.fulfill({ status: 400, json: { error: 'Holdout rows cannot be exported for training' } }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
-  await section(page, 'Evidence')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
+  await section(page, 'Protocol')
   await page.getByRole('button', { name: 'Regrade saved answers' }).click()
   await expect(page.getByText('0 changed grades · 0 model requests')).toBeVisible()
   const download = page.waitForEvent('download')
@@ -1449,41 +1522,28 @@ test('regrades saved answers and exports development evidence with holdout error
 
 test('manages long-lived runs and uses a dataset from its frozen inventory', async ({ page }) => {
   await mockBench(page)
-  await page.goto('/evaluation')
-  await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
+  await page.goto('/observe/evaluations')
   const table = page
     .getByRole('region', { name: 'Evaluation runs', exact: true })
     .getByRole('table')
-  await expect(table.getByRole('columnheader')).toHaveText([
-    'Run / targets',
-    'Mode',
-    'Profile',
+  await expect(table.getByRole('columnheader')).toContainText([
+    'Run',
+    'Benchmarks',
+    'Targets',
     'Status',
-    'Progress',
-    'Last update',
   ])
   const firstRow = table.getByRole('row').nth(1)
-  await expect(firstRow.getByRole('cell').nth(1)).toHaveText('Live')
-  await expect(firstRow.getByRole('cell').nth(2)).toHaveText('Quick')
-  const bars = page
-    .getByRole('region', { name: 'Evaluation runs', exact: true })
-    .getByRole('progressbar')
-  await expect(bars).toHaveCount(2)
+  await expect(firstRow.getByRole('cell').nth(1)).toContainText('Quick')
+  await expect(firstRow.getByRole('cell').nth(1)).not.toContainText('Dry run')
+  await expect(firstRow.getByRole('cell').nth(4)).toHaveText('Completed')
+  // Progress bars are reserved for running runs; finished runs show one status value.
+  await expect(
+    page.getByRole('region', { name: 'Evaluation runs', exact: true }).getByRole('progressbar'),
+  ).toHaveCount(0)
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
     expect(
-      await bars.evaluateAll((elements) =>
-        elements.every((element) => {
-          const bar = element.getBoundingClientRect()
-          const cell = element.closest('td')!.getBoundingClientRect()
-          return (
-            bar.left >= cell.left &&
-            bar.right <= cell.right + 0.5 &&
-            bar.top >= cell.top &&
-            bar.bottom <= cell.bottom + 0.5
-          )
-        }),
-      ),
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
   }
   await page.setViewportSize({ width: 1280, height: 844 })
@@ -1491,10 +1551,12 @@ test('manages long-lived runs and uses a dataset from its frozen inventory', asy
   await expect(page.getByRole('button', { name: 'Baseline test', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Candidate test', exact: true })).toBeVisible()
   await chooseOption(page, 'Run status', 'failed')
-  await expect(page.getByText('No runs match these filters.')).toBeVisible()
-  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Dataset library' })).toBeVisible()
-  await page.getByRole('button', { name: 'Evaluate' }).click()
+  await expect(page.getByText('No runs match these filters', { exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: /^Datasets/ }).click()
+  const library = page.getByRole('region', { name: 'Dataset library' })
+  await expect(library).toBeVisible()
+  await library.getByRole('button', { name: 'Row actions' }).first().click()
+  await page.getByRole('menuitem', { name: 'Evaluate' }).click()
   await expect(page.getByRole('radio', { name: /^Quick/ })).toBeChecked()
   await expect(page).toHaveURL(/dataset=quick-v1/)
 })
@@ -1511,7 +1573,7 @@ test('automatically reconnects the task list without submitting evaluations', as
         : { json: { runs: [run] } },
     )
   })
-  await page.goto('/evaluation')
+  await page.goto('/observe/evaluations')
   await expect(page.getByRole('alert')).toContainText('Temporary disconnect')
   recovered = true
   await expect(page.getByRole('button', { name: 'Baseline test', exact: true })).toBeVisible({
@@ -1563,7 +1625,7 @@ test('reopens arbitrary optimization comparisons from the saved URL', async ({
     })
   })
   await mockComparisonOptions(page, run, iterations)
-  await page.goto('/evaluation?view=compare')
+  await page.goto('/observe/evaluations?view=compare')
   await chooseOption(page, 'Reference run', 'run-1')
   await page.getByRole('button', { name: 'Select all', exact: true }).click()
   await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(4)
@@ -1596,7 +1658,7 @@ test('reopens arbitrary optimization comparisons from the saved URL', async ({
   await expect
     .poll(() =>
       page
-        .getByRole('region', { name: 'sr-bench workspace' })
+        .locator('section[aria-label="sr-bench workspace"]')
         .evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth),
     )
     .toBe(true)
@@ -1615,21 +1677,26 @@ test('shows available datasets while a run read stalls and recovers without fals
   await page.route('**/api/sr-bench/v1/runs', async (route) => {
     if (!stalled) await route.fulfill({ json: { runs: [run] } })
   })
-  await page.goto('/evaluation?view=datasets')
-  await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Evaluate', exact: true })).toBeVisible()
-  await expect(page.getByText('Runs loading', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Runs (0)', exact: true })).toHaveCount(0)
+  await page.goto('/observe/evaluations?view=datasets')
+  const library = page.getByRole('region', { name: 'Dataset library', exact: true })
+  await expect(library).toBeVisible()
+  await expect(
+    library.getByRole('button', { name: 'Frozen quick suite', exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Runs', exact: true })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Runs 0', exact: true })).toHaveCount(0)
   await page.clock.fastForward(30001)
   await expect(page.getByRole('alert')).toContainText(
     'runs: Reading saved sr-bench evidence timed out',
   )
-  await expect(page.getByRole('button', { name: 'Evaluate', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Runs', exact: true }).click()
-  await expect(page.getByText('Run inventory is unavailable.', { exact: true })).toBeVisible()
-  await expect(page.getByText('No evaluation runs yet.', { exact: true })).toHaveCount(0)
+  await expect(
+    library.getByRole('button', { name: 'Frozen quick suite', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('tab', { name: 'Runs', exact: true }).click()
+  await expect(page.getByText('Run inventory is unavailable', { exact: true })).toBeVisible()
+  await expect(page.getByText('No evaluations yet', { exact: true })).toHaveCount(0)
   stalled = false
-  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await page.getByRole('button', { name: 'Retry now', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Baseline test', exact: true })).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
   expect(submissions).toHaveLength(0)
@@ -1672,7 +1739,7 @@ test('requires explicit recovery scope and reuses a lost-response submission aft
         : { json: { ...run, id: 'child-1' } },
     )
   })
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await chooseOption(page, 'Recovery scope', 'failed')
   await page.getByRole('button', { name: 'Review recovery plan' }).click()
   await page.getByText('Excluded cases and reasons', { exact: true }).click()
@@ -1727,7 +1794,7 @@ async function mockUndispatchedRecovery(page: Page) {
 
 async function openParentInSameDocument(page: Page) {
   await page.evaluate(() => {
-    history.pushState({}, '', '/evaluation?view=runs&run=run-1')
+    history.pushState({}, '', '/observe/evaluations?view=runs&run=run-1')
     window.dispatchEvent(new PopStateEvent('popstate'))
   })
 }
@@ -1750,12 +1817,13 @@ test('keeps a newer recovery intent when an unmounted recovery responds late', a
     if (index === 3) await newPending
     await route.fulfill({ json: { ...run, id: index === 3 ? 'child-2' : 'child-1' } })
   })
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await page.getByRole('button', { name: 'Review recovery plan', exact: true }).click()
   await page.getByLabel('Recover model-a unstarted', { exact: true }).check()
   await page.getByRole('button', { name: 'Create recovery run (1 cases)', exact: true }).click()
   await expect.poll(() => submissions.length).toBe(1)
-  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(
     page.getByRole('heading', { name: 'Recover unfinished work', exact: true }),
   ).toHaveCount(0)
@@ -1815,20 +1883,20 @@ test('isolates recovery intent across logout and ignores the old account respons
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await page.getByRole('button', { name: 'Review recovery plan', exact: true }).click()
   await page.getByLabel('Recover model-a unstarted', { exact: true }).check()
   await page.getByRole('button', { name: 'Create recovery run (1 cases)', exact: true }).click()
   await expect.poll(() => submitted).toBe(true)
-  await page.getByRole('button', { name: 'Open account menu for Admin User', exact: true }).click()
-  await page.getByRole('button', { name: 'Logout', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('button', { name: /Admin User/ }).click()
+  await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click()
   await expect(page).toHaveURL(/\/login/)
   await page.getByLabel('Email', { exact: true }).fill('second@example.com')
   await page.getByLabel('Password', { exact: true }).fill('fixture-password')
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
-  await expect(
-    page.getByRole('button', { name: 'Open account menu for Second account', exact: true }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: /Second account/ })).toBeVisible()
   await openParentInSameDocument(page)
   await expect(
     page.getByRole('button', { name: 'Review recovery plan', exact: true }),
@@ -1864,7 +1932,7 @@ test('blocks recovery when its saved scope is corrupted', async ({ page }) => {
   page.on('request', (request) => {
     if (request.method() === 'POST') submissions.push(request.url())
   })
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await expect(page.getByRole('alert')).toContainText('saved recovery cannot be read safely')
   await expect(page.getByRole('button', { name: 'Review recovery plan', exact: true })).toHaveCount(
     0,
@@ -1914,7 +1982,7 @@ test('displays and downloads a matching server-captured recipe', async ({ page }
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await section(page, 'Recipe')
   await expect(
     page.getByRole('heading', { name: 'model-a · Verified config snapshot' }),
@@ -1961,7 +2029,7 @@ test('replans a definitely undispatched recovery after eligibility changes', asy
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await page.getByRole('button', { name: 'Review recovery plan' }).click()
   await page.getByLabel('Recover model-a unstarted', { exact: true }).check()
   await page.getByRole('button', { name: 'Create recovery run (1 cases)' }).click()
@@ -1995,7 +2063,7 @@ test('keeps recovery lineage separate from the child denominator and spend', asy
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await section(page, 'Evidence')
   await expect(page.getByRole('heading', { name: 'Recovery lineage' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Open parent run' })).toHaveAttribute(
@@ -2077,7 +2145,7 @@ test('distinguishes corrected report accounting from unchanged call and case rec
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   const notice = page.getByRole('note', { name: 'Accounting correction' })
   await expect(notice.getByText('Accounting verified', { exact: true })).toBeVisible()
   await expect(notice.getByText('New model requests', { exact: true })).toBeVisible()
@@ -2113,7 +2181,7 @@ test('keeps accounting correction provenance visible for both sides of a compari
       json: { ...report, provenance: { accounting_correction: accountingCorrection } },
     }),
   )
-  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await page.goto('/observe/evaluations?view=compare&baseline=run-1&candidate=run-2')
   await expect(
     page.getByRole('article').getByText('Accounting verified', { exact: false }),
   ).toBeVisible()
@@ -2155,7 +2223,7 @@ test('uses conservative quality uncertainty and identifies a zero-width bootstra
       },
     }),
   )
-  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await page.goto('/observe/evaluations?view=compare&baseline=run-1&candidate=run-2')
   await page.getByText('Detailed iteration metrics and uncertainty', { exact: true }).click()
   const uncertainty = page.getByRole('cell').filter({ hasText: 'Conservative weighted Hoeffding' })
   await expect(uncertainty).toContainText('−47 pp to +47 pp')
@@ -2221,12 +2289,11 @@ test('separates observed savings from cache-neutral estimates and preserves unkn
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await expect(
     page.getByRole('columnheader', { name: 'Observed model cost', exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('cell', { name: '$1.00000', exact: true })).toBeVisible()
-  await section(page, 'Evidence')
   await page.getByText('Token buckets and evaluation overhead', { exact: true }).click()
   await expect(page.getByRole('cell', { name: '$2.00000', exact: true })).toBeVisible()
   await section(page, 'Results')
@@ -2234,7 +2301,7 @@ test('separates observed savings from cache-neutral estimates and preserves unkn
   await expect(
     page.getByText('neither billed spend nor a measured cache-free run.', { exact: false }),
   ).toBeVisible()
-  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await page.goto('/observe/evaluations?view=compare&baseline=run-1&candidate=run-2')
   await page.getByText('Detailed iteration metrics and uncertainty', { exact: true }).click()
   await expect(
     page.getByRole('cell').filter({ hasText: '$0.80000' }).filter({ hasText: '+20% saving' }),
@@ -2306,7 +2373,7 @@ test('total-cost comparison includes evaluation overhead and withholds unknown a
       },
     }),
   )
-  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await page.goto('/observe/evaluations?view=compare&baseline=run-1&candidate=run-2')
   const card = page.getByRole('article')
   await expect(card.getByText('Total cost saving', { exact: true })).toBeVisible()
   const headline = card.locator('strong > [data-direction]').nth(1)
@@ -2455,8 +2522,10 @@ test('composes selected benchmarks under one size without resampling or generati
       },
     })
   })
-  await page.goto('/evaluation?view=new')
-  await expect(page.getByRole('radio')).toHaveCount(3)
+  await page.goto('/observe/evaluations?view=new')
+  await expect(
+    page.getByRole('radiogroup', { name: 'Evaluation size' }).getByRole('radio'),
+  ).toHaveCount(3)
   await page.getByRole('radio', { name: /^Smoke/ }).check()
   await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
   await page.getByRole('radio', { name: /^Standard/ }).check()
@@ -2468,7 +2537,7 @@ test('composes selected benchmarks under one size without resampling or generati
   await page.getByRole('checkbox', { name: /GPQA Diamond/ }).uncheck()
   await expect(page.getByRole('checkbox', { name: /Humanity/ })).toBeDisabled()
   await chooseOption(page, 'Add configured target', 'single')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
   expect(compositions).toEqual([{ dataset_ids: ['quick-suite'], benchmarks: ['mmlu-pro'] }])
   expect(submissions).toHaveLength(1)
@@ -2497,7 +2566,7 @@ test('navigates paginated runs to a dedicated detail view with persistent tabs a
   page,
 }, testInfo) => {
   await mockBench(page)
-  const runs = Array.from({ length: 15 }, (_, index) => ({
+  const runs = Array.from({ length: 25 }, (_, index) => ({
     ...run,
     id: `run-${index + 1}`,
     manifest: { ...manifest, name: `Evaluation ${index + 1}` },
@@ -2515,13 +2584,13 @@ test('navigates paginated runs to a dedicated detail view with persistent tabs a
       },
     }),
   )
-  await page.goto('/evaluation')
-  await expect(page.getByRole('button', { name: 'Evaluation 11', exact: true })).toHaveCount(0)
+  await page.goto('/observe/evaluations')
+  await expect(page.getByRole('button', { name: 'Evaluation 21', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Next runs', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Evaluation 11', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Evaluation 21', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Previous runs', exact: true }).click()
   await page.getByRole('button', { name: 'Evaluation 1', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Evaluation runs', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Evaluation runs', exact: true })).toHaveCount(0)
   await expect(
     page.getByRole('region', { name: 'Quality and cost chart', exact: true }),
   ).toContainText('$0.01200')
@@ -2549,8 +2618,8 @@ test('navigates paginated runs to a dedicated detail view with persistent tabs a
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     .toBe(true)
   await page.screenshot({ path: testInfo.outputPath('run-summary-mobile.png'), fullPage: true })
-  await page.getByRole('button', { name: 'Back to runs', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Evaluation runs', exact: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('region', { name: 'Evaluation runs', exact: true })).toBeVisible()
 })
 
 test('withholds trend charts for incompatible comparisons and never plots unknown cost', async ({
@@ -2587,7 +2656,7 @@ test('withholds trend charts for incompatible comparisons and never plots unknow
           },
     ),
   )
-  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await page.goto('/observe/evaluations?view=compare&baseline=run-1&candidate=run-2')
   await expect(
     page.getByText('Complete quality and cost evidence is needed for this chart.', { exact: true }),
   ).toBeVisible()
@@ -2637,7 +2706,7 @@ test('presents readable paginated events and removes the generic limitations dis
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await expect(page.getByText(report.limitations[0], { exact: true })).toBeVisible()
   await expect(page.getByText('More limitations', { exact: false })).toHaveCount(0)
   await expect(page.getByText('Generic limitation', { exact: false })).toHaveCount(0)
@@ -2721,7 +2790,7 @@ test('shows only server-qualified comparison baselines and paginates arbitrary i
       comparisons.push(request.postDataJSON())
   })
   await mockComparisonOptions(page, baseline, candidates)
-  await page.goto('/evaluation?view=compare')
+  await page.goto('/observe/evaluations?view=compare')
   await expect(page.getByRole('group', { name: 'Comparison runs', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
   await page.getByRole('combobox', { name: 'Reference run', exact: true }).click()
@@ -2805,26 +2874,30 @@ test('preserves selected benchmarks across profiles and blocks conflicting serve
       json: { dataset: { path: '/prepared/canonical.json', sha256: 'a'.repeat(64) } },
     })
   })
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await expect(page.getByRole('combobox', { name: 'Mode', exact: true })).toHaveCount(0)
   await expect(page.getByRole('combobox', { name: 'Prepared dataset', exact: true })).toHaveCount(0)
   await expect(page.getByRole('combobox', { name: 'Cost accounting', exact: true })).toBeHidden()
   await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
   await chooseOption(page, 'Add configured target', 'single')
+  await goToStep(page, 'What to measure')
   await page.getByRole('radio', { name: /^Standard/ }).check()
   await expect(
     page.getByText('Conflicting frozen revisions. Choose a specific dataset.', { exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
+  await goToStep(page, 'Limits')
   await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeDisabled()
+  await goToStep(page, 'What to measure')
   await page.getByRole('checkbox', { name: /MMLU-Pro/ }).uncheck()
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
   expect(compositions).toEqual([{ dataset_ids: ['canonical-gpqa'], benchmarks: ['gpqa-diamond'] }])
   expect(submissions).toHaveLength(1)
   expect(submissions[0]).toMatchObject({
     manifest: { profile: 'standard', mode: 'live', cost_policy: 'require_priced' },
   })
+  await goToStep(page, 'What to measure')
   await page
     .getByRole('radiogroup', { name: 'Evaluation size' })
     .evaluate((element) => element.scrollIntoView({ block: 'start' }))
@@ -2863,9 +2936,11 @@ test('does not fall back to inventory guesses when canonical dataset resolution 
           },
         })
   })
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await expect(page.getByRole('alert')).toContainText('Dataset resolution unavailable')
+  await goToStep(page, 'Limits')
   await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeDisabled()
+  await goToStep(page, 'What to measure')
   await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeDisabled()
   recovered = true
   await page.getByRole('button', { name: 'Retry benchmark check' }).click()
@@ -2892,7 +2967,7 @@ test('persists profile, status and search filters across reload and run details'
       },
     }),
   )
-  await page.goto('/evaluation?view=runs')
+  await page.goto('/observe/evaluations?view=runs')
   await chooseOption(page, 'Run profile', 'quick')
   await chooseOption(page, 'Run status', 'completed')
   await chooseOption(page, 'Run mode', 'live')
@@ -2906,11 +2981,13 @@ test('persists profile, status and search filters across reload and run details'
       url.searchParams.get('q') === 'Baseline',
   )
   await page.reload()
-  await expect(page.getByRole('combobox', { name: 'Run profile', exact: true })).toHaveText('Quick')
+  const profilePill = page.getByRole('button', { name: /^Profile/ })
+  await expect(profilePill).toContainText('Quick')
   await expect(page.getByLabel('Search runs')).toHaveValue('Baseline')
   await page.getByRole('button', { name: 'Baseline test', exact: true }).click()
-  await page.getByRole('button', { name: 'Back to runs', exact: true }).click()
-  await expect(page.getByRole('combobox', { name: 'Run profile', exact: true })).toHaveText('Quick')
+  await expect(page.getByRole('tablist', { name: 'Run sections' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(profilePill).toContainText('Quick')
   await expect(page.getByLabel('Search runs')).toHaveValue('Baseline')
   await expect(page.getByRole('button', { name: 'Smoke baseline', exact: true })).toHaveCount(0)
 })
@@ -2919,18 +2996,15 @@ test('keeps same-event filter changes and restores the URL after history navigat
   page,
 }) => {
   await mockBench(page)
-  await page.goto('/evaluation?view=runs&profile=quick&status=completed&context=kept')
-  await page.getByRole('combobox', { name: 'Run mode', exact: true }).click()
-  await page
-    .getByRole('listbox')
-    .locator('[data-value="live"]')
-    .evaluate((option) => {
-      ;(option as HTMLButtonElement).click()
-      const input = document.querySelector<HTMLInputElement>('input[type="search"]')!
-      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-      setValue.call(input, 'Baseline')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
+  await page.goto('/observe/evaluations?view=runs&profile=quick&status=completed&context=kept')
+  await page.getByRole('button', { name: /^Type/ }).click()
+  await page.getByRole('menuitemcheckbox', { name: /^Live/ }).evaluate((option) => {
+    ;(option as HTMLButtonElement).click()
+    const input = document.querySelector<HTMLInputElement>('input[type="search"]')!
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setValue.call(input, 'Baseline')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
   const expected = (url: URL) =>
     url.searchParams.get('profile') === 'quick' &&
     url.searchParams.get('status') === 'completed' &&
@@ -2938,12 +3012,16 @@ test('keeps same-event filter changes and restores the URL after history navigat
     url.searchParams.get('q') === 'Baseline' &&
     url.searchParams.get('context') === 'kept'
   await expect(page).toHaveURL(expected)
-  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await page.getByRole('tab', { name: /^Datasets/ }).click()
   await expect(page).toHaveURL(/view=datasets/)
   await page.goBack()
   await expect(page).toHaveURL(expected)
   await expect(page.getByLabel('Search runs')).toHaveValue('Baseline')
-  await chooseOption(page, 'Run profile', 'smoke')
+  await page.getByRole('button', { name: /^Profile/ }).click()
+  await page.getByRole('menuitemcheckbox', { name: /^Quick/ }).click()
+  await page.getByRole('menuitemcheckbox', { name: /^Smoke/ }).click()
+  await page.keyboard.press('Escape')
   await expect(page).toHaveURL(
     (url) =>
       url.searchParams.get('profile') === 'smoke' && url.searchParams.get('context') === 'kept',
@@ -2951,7 +3029,7 @@ test('keeps same-event filter changes and restores the URL after history navigat
   await page.goForward()
   await expect(page).toHaveURL(/view=datasets/)
   await page.goBack()
-  await expect(page.getByRole('combobox', { name: 'Run profile', exact: true })).toHaveText('Smoke')
+  await expect(page.getByRole('button', { name: /^Profile/ })).toContainText('Smoke')
   await page.getByLabel('Search runs').fill('model-a')
   await expect(page).toHaveURL(
     (url) =>
@@ -3042,7 +3120,7 @@ test('derives a MoM candidate from a failed 42-result frozen baseline without ch
     route.fulfill({ json: { ...run, id: 'run-derived', manifest: submissions[0].manifest } }),
   )
   await page.goto(
-    '/evaluation?view=new&baseline=run-1&experiment=exp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&role=candidate',
+    '/observe/evaluations?view=new&baseline=run-1&experiment=exp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&role=candidate',
   )
   await expect(page.getByRole('region', { name: 'Frozen baseline protocol' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Frozen baseline protocol' })).toContainText(
@@ -3057,14 +3135,15 @@ test('derives a MoM candidate from a failed 42-result frozen baseline without ch
   await expect(page.getByRole('radiogroup', { name: 'Evaluation size' })).toHaveCount(0)
   await expect(page.getByLabel('Budget (USD)', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('Temperature', { exact: true })).toHaveCount(0)
-  await page.getByRole('combobox', { name: 'Add configured target', exact: true }).click()
-  await expect(page.getByRole('listbox').locator('[data-value="single"]')).toHaveCount(0)
-  await page.getByRole('listbox').locator('[data-value="balance"]').click()
+  await goToStep(page, 'What to compare')
+  await expect(page.locator('[data-target-id="single"]')).toHaveCount(0)
+  await page.locator('[data-target-id="balance"]').click()
+  await goToStep(page, 'Limits')
   await page.getByLabel('Run name', { exact: true }).fill('Candidate with frozen protocol')
   await page
     .getByLabel('What changed? (optional)', { exact: true })
     .fill('Reduce cost without changing the question set.')
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeEnabled()
   expect(candidateRequests).toEqual([
     {
@@ -3196,12 +3275,12 @@ test('uses authoritative failed-baseline comparisons without masking failed resu
       },
     }),
   )
-  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.goto('/observe/evaluations?view=runs&run=run-1')
   await expect(page.getByRole('button', { name: 'Evaluate candidate', exact: true })).toBeEnabled()
   await expect(page.getByText('This run is failed.', { exact: false })).toBeVisible()
   await page.getByRole('button', { name: 'Evaluate candidate', exact: true }).click()
   await expect(page).toHaveURL(/view=new&baseline=run-1/)
-  await page.goto('/evaluation?view=compare')
+  await page.goto('/observe/evaluations?view=compare')
   await chooseOption(page, 'Reference run', 'run-1')
   await page.getByRole('checkbox', { name: /Balance terminal comparison/ }).check()
   await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
@@ -3244,7 +3323,7 @@ test('does not enable active baseline derivation or comparisons with missing ter
     candidatePlans++
     return route.abort()
   })
-  await page.goto('/evaluation?view=new&baseline=run-1')
+  await page.goto('/observe/evaluations?view=new&baseline=run-1')
   await expect(
     page.getByText('Choose a finished live single-model baseline with its full plan.', {
       exact: true,
@@ -3274,11 +3353,11 @@ test('does not enable active baseline derivation or comparisons with missing ter
       json: { error: 'Baseline quality results are incomplete' },
     })
   })
-  await page.goto('/evaluation?view=compare')
+  await page.goto('/observe/evaluations?view=compare')
   await expect(page.getByText('No comparable results yet.', { exact: false })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
   expect(comparisons).toBe(0)
-  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await page.goto('/observe/evaluations?view=compare&baseline=run-1&candidate=run-2')
   await expect(page.getByText('No comparable results yet.', { exact: false })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
   await expect(page.getByText('Quality Δ', { exact: true })).toHaveCount(0)
@@ -3302,14 +3381,16 @@ test('an explicit dataset can be selected while automatic resolution is stalled 
       })
       .catch(() => {})
   })
-  await page.goto('/evaluation?view=new')
+  await page.goto('/observe/evaluations?view=new')
   await expect(page.getByText('Checking prepared benchmarks…', { exact: true })).toBeVisible()
   await chooseDataset(page, 'quick-v1')
   await chooseOption(page, 'Add configured target', 'single')
+  await goToStep(page, 'What to measure')
   await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
+  await goToStep(page, 'Limits')
   await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeEnabled()
   release()
-  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await reviewPlan(page)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
 })
 
@@ -3366,7 +3447,7 @@ test('renders signed quality and cost changes with truthful positive negative an
     })
   })
   await page.goto(
-    '/evaluation?view=compare&baseline=run-1&candidate=positive&candidate=negative&candidate=zero&candidate=tiny',
+    '/observe/evaluations?view=compare&baseline=run-1&candidate=positive&candidate=negative&candidate=zero&candidate=tiny',
   )
   await expect(page.getByRole('article')).toHaveCount(4)
   await expect(
@@ -3382,9 +3463,9 @@ test('renders signed quality and cost changes with truthful positive negative an
       return getComputedStyle(probe).color
     }
     const output = {
-      positive: color('var(--color-success, #60c98c)'),
-      negative: color('var(--color-danger, #ff7b7b)'),
-      neutral: color('var(--text-primary)'),
+      positive: color('var(--success-foreground)'),
+      negative: color('var(--destructive-foreground)'),
+      neutral: color('var(--foreground)'),
     }
     probe.remove()
     return output
@@ -3459,7 +3540,7 @@ test('a deep link cannot promote a baseline until its first compatible child is 
       },
     })
   })
-  await page.goto('/evaluation?view=compare&baseline=deep-baseline')
+  await page.goto('/observe/evaluations?view=compare&baseline=deep-baseline')
   await expect(
     page.getByRole('button', { name: 'Load more comparison runs', exact: true }),
   ).toBeVisible()

@@ -64,22 +64,20 @@ describe('ChatComponentErrors', () => {
   })
 
   it('anchors the error region to the top of the chat content', () => {
-    const chatStyles = readFileSync(new URL('./ChatComponent.module.css', import.meta.url), 'utf8')
-    const errorStyles = readFileSync(
-      new URL('./ChatComponentErrors.module.css', import.meta.url),
-      'utf8',
-    )
+    const chat = readFileSync(new URL('./ChatComponent.tsx', import.meta.url), 'utf8')
+    const regionClass = (markup: string) =>
+      markup.match(/<div class="([^"]+)" data-testid="playground-error-region"/)?.[1] ?? ''
 
-    expect(chatStyles).toMatch(/\.chatArea\s*{[^}]*position:\s*relative;/s)
-    expect(errorStyles).toMatch(
-      /\.region\s*{[^}]*position:\s*relative;[^}]*flex:\s*0 0 auto;[^}]*width:\s*100%;/s,
+    // The region's parent is the chat body below the header, positioned for the overlay.
+    expect(chat).toMatch(
+      /className="relative flex min-h-0 flex-1 flex-col">\s*<ChatComponentErrors/,
     )
-    expect(errorStyles).toMatch(
-      /\.regionOverlay\s*{[^}]*position:\s*absolute;[^}]*inset:\s*0 0 auto;/s,
+    expect(regionClass(renderErrors('error', null))).toMatch(
+      /\brelative\b.*\bw-full\b|\bw-full\b.*\brelative\b/,
     )
-    expect(errorStyles).toMatch(
-      /\.alert\s*{[^}]*box-sizing:\s*border-box;[^}]*max-width:\s*var\(--chat-rail-width\);/s,
-    )
-    expect(renderErrors('error', null, true)).toMatch(/class="[^"]+ [^"]+"/)
+    expect(regionClass(renderErrors('error', null, true))).toMatch(/\babsolute\b/)
+    expect(regionClass(renderErrors('error', null, true))).toMatch(/\binset-x-0\b/)
+    expect(regionClass(renderErrors('error', null, true))).toMatch(/\btop-0\b/)
+    expect(renderErrors('error', null)).toContain('max-w-3xl')
   })
 })

@@ -133,10 +133,12 @@ listeners:
   aliases are not expanded: list every name clients may send. Empty or absent,
   the listener accepts every model.
 - The check runs after the API key check and before any signal, cache or
-  decision, on the model the Router parsed for routing. Any other model,
-  including a provider model that would otherwise pass through, gets
-  `403` with `{"error": {"code": "model_not_allowed", ...}}` in the client's
-  protocol. A request without a model gets `400 model_required`.
+  decision, on the model the Router parsed for routing. Any other model the
+  Router serves, including a provider model that would otherwise pass
+  through, gets `403` with `{"error": {"code": "model_not_allowed", ...}}` in
+  the client's protocol. A model it serves on no listener gets `404`
+  `model_not_found`, as OpenAI SDKs expect. A request without a model gets
+  `400 model_required`.
 - `GET /v1/models` on the listener lists only the allowed names the catalog
   has.
 - The model calls a decision makes in process (Looper and request-graph hops)
