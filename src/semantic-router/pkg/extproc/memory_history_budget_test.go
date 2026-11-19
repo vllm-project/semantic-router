@@ -141,8 +141,10 @@ func TestMemorySnapshotBudgetRejectsOversizedToolCallOnlyResponse(t *testing.T) 
 	}
 	withinBudget := &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
 		Role: llmprotocol.RoleAssistant,
-		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall,
-			ToolCall: &llmprotocol.ToolCall{Namespace: "fs", Name: "write", Arguments: `{"path":"notes.txt"}`}}},
+		Content: []llmprotocol.Content{{
+			Kind:     llmprotocol.ContentToolCall,
+			ToolCall: &llmprotocol.ToolCall{Namespace: "fs", Name: "write", Arguments: `{"path":"notes.txt"}`},
+		}},
 	}}}
 	require.NoError(t, validateMemorySnapshotBudget(nil, nil, withinBudget))
 }
