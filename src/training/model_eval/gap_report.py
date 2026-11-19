@@ -73,9 +73,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _is_comparable(baseline: dict[str, Any]) -> bool:
+    """Treat missing ``comparable`` as comparable for backward compatibility."""
+    return baseline.get("comparable") is not False
+
+
+def _format_non_comparable_details(baseline: dict[str, Any]) -> tuple[str, str, int]:
+    comparability = baseline.get("comparability")
+    if not isinstance(comparability, dict):
+        return "non_comparable", "unknown", 0
+    reason = str(comparability.get("reason") or "non_comparable")
+    surviving = comparability.get("surviving_gold_classes")
+    if not isinstance(surviving, list):
+        surviving = []
+    rendered: list[str] = []
+    for entry in surviving:
+        if not isinstance(entry, dict):
+            continue
+        label = entry.get("label")
+        class_id = entry.get("class_id")
+        class_label = "unknown" if class_id is None else class_id
+        name = f"`{label}`" if label else f"class_id={class_label}"
+        support = entry.get("support")
+        rendered.append(f"{name} ({support})" if support is not None else name)
+    return reason, (", ".join(rendered) if rendered else "unknown"), len(rendered)
+
+
 def render(baselines: list[dict[str, Any]], config_path: Path) -> str:
     config = load_config(config_path)
     inventory = served_artifacts(config)
+    comparable_baselines = [
+        baseline for baseline in baselines if _is_comparable(baseline)
+    ]
+    non_comparable_baselines = [
+        baseline for baseline in baselines if not _is_comparable(baseline)
+    ]
 
     lines: list[str] = [
         f"# Router Model quality baseline and gap report ({REPORT_VERSION})",
@@ -101,13 +133,13 @@ def render(baselines: list[dict[str, Any]], config_path: Path) -> str:
         )
 
     lines += ["", "## Measured baselines", ""]
-    if baselines:
+    if comparable_baselines:
         lines += [
             "| Task | Artifact | Served | Rows | Accuracy | Macro F1 | ECE | "
             "AUC | R@1%FPR | Unsafe recall | Safe recall |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
-        for baseline in baselines:
+        for baseline in comparable_baselines:
             metrics = baseline["metrics"]
             calibration = baseline["calibration"]
             artifact = baseline["artifact"]
@@ -129,8 +161,36 @@ def render(baselines: list[dict[str, Any]], config_path: Path) -> str:
             "to different threshold conventions. Safe recall is one minus the "
             "false-positive rate at the configured threshold.",
         ]
+    elif non_comparable_baselines:
+        lines.append("No comparable baseline was supplied.")
     else:
         lines.append("No baseline was supplied.")
+
+    if non_comparable_baselines:
+        lines += [
+            "",
+            "## Non-comparable diagnostics",
+            "",
+            "Runs below recorded `comparable: false` and are excluded from "
+            "comparative tables and rankings.",
+            "",
+            "| Task | Artifact | Served | Reason | Surviving gold classes | "
+            "Rows | Accuracy | Macro F1 | ECE | Unsafe recall | Safe recall |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for baseline in non_comparable_baselines:
+            metrics = baseline["metrics"]
+            calibration = baseline["calibration"]
+            artifact = baseline["artifact"]
+            served = "yes" if artifact.get("is_served_artifact", True) else "no"
+            reason, surviving, _ = _format_non_comparable_details(baseline)
+            _, _, unsafe_recall, safe_recall = _gate_columns(baseline)
+            lines.append(
+                f"| {baseline['task']} | `{artifact['repo'].split('/')[-1]}` | "
+                f"{served} | `{reason}` | {surviving} | {metrics['rows']} | "
+                f"{metrics['accuracy']:.4f} | {metrics['macro_f1']:.4f} | "
+                f"{calibration['ece']:.4f} | {unsafe_recall} | {safe_recall} |"
+            )
 
     findings = _dedupe(_collect(baselines, config, inventory))
     lines += ["", "## Gaps", ""]
@@ -184,14 +244,33 @@ def _collect(
     ]
     findings += [("coverage", text) for text in uncovered_artifacts(config)]
 
+    comparable_baselines = [
+        baseline for baseline in baselines if _is_comparable(baseline)
+    ]
+    non_comparable_measured = {
+        (baseline["task"], baseline["artifact"]["repo"])
+        for baseline in baselines
+        if not _is_comparable(baseline)
+    }
     measured = {
         (baseline["task"], baseline["artifact"]["repo"]): baseline
-        for baseline in baselines
+        for baseline in comparable_baselines
     }
     # A baseline of another artifact, such as the legacy checkpoint a split is
     # restricted to, does not measure the one the router serves.
     for task, artifact in sorted(inventory.items()):
-        if (task, artifact.hf_repo) not in measured:
+        if (task, artifact.hf_repo) in measured:
+            continue
+        if (task, artifact.hf_repo) in non_comparable_measured:
+            findings.append(
+                (
+                    "coverage",
+                    f"{task}: no comparable baseline has been measured for the served "
+                    f"`{artifact.artifact_name}` (only non-comparable diagnostics "
+                    "were supplied)",
+                )
+            )
+        else:
             findings.append(
                 (
                     "coverage",
@@ -217,16 +296,16 @@ def _collect(
 
     # A served artifact and an unserved one measured on the same split is the
     # comparison that separates an identity gap from a quality gap.
-    for task in sorted({baseline["task"] for baseline in baselines}):
+    for task in sorted({baseline["task"] for baseline in comparable_baselines}):
         served = [
             baseline
-            for baseline in baselines
+            for baseline in comparable_baselines
             if baseline["task"] == task
             and baseline["artifact"].get("is_served_artifact", True)
         ]
         others = [
             baseline
-            for baseline in baselines
+            for baseline in comparable_baselines
             if baseline["task"] == task
             and not baseline["artifact"].get("is_served_artifact", True)
         ]
@@ -412,6 +491,32 @@ def _baseline_findings(baseline: dict[str, Any]) -> list[tuple[str, str]]:
         if "different order than the artifact" in text
         or "do not match the artifact labels" in text
     ]
+
+    if baseline.get("comparable") is False:
+        reason, surviving, count = _format_non_comparable_details(baseline)
+        noun = "class" if count == 1 else "classes"
+        detail = f" (surviving mapped gold {noun}: {surviving})" if count > 0 else ""
+        findings.append(
+            (
+                "coverage",
+                f"{task}: `{name}` is marked non-comparable (`{reason}`){detail} "
+                "and is excluded from comparative rankings",
+            )
+        )
+        per_label = baseline["metrics"]["per_label"]
+        unmeasured = sorted(
+            label for label, entry in per_label.items() if not entry["support"]
+        )
+        if unmeasured:
+            findings.append(
+                (
+                    "coverage",
+                    f"{task}: `{name}` was scored on a split with no rows for "
+                    f"{', '.join(f'`{label}`' for label in unmeasured)}; those labels "
+                    "are unmeasured and left out of macro F1",
+                )
+            )
+        return findings
 
     if calibration["ece"] > ECE_BUDGET:
         findings.append(

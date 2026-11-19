@@ -39,6 +39,7 @@ from provenance.metrics import (  # noqa: E402
     abstention_curve,
     calibration_metrics,
     classification_metrics,
+    gold_class_comparability,
     latency_percentiles,
 )
 
@@ -191,6 +192,7 @@ def emit_evaluation_manifest(
     dataset = load_manifest(Path(dataset_manifest_path), expected_kind="dataset")
     label_mapping = dict(label_to_id)
     evaluation_id = f"{artifact['id']}-validation"
+    comparability = gold_class_comparability(y_true, label_mapping)
 
     evaluation = build_evaluation_manifest(
         manifest_id=evaluation_id,
@@ -222,6 +224,8 @@ def emit_evaluation_manifest(
             "latency_ms": latency_percentiles(latencies_ms),
             "peak_memory_mb": peak_memory_mb,
         },
+        comparable=comparability.get("comparable"),
+        comparability=comparability.get("comparability"),
         description=(
             "Validation of the adapter this run produced, on the split it held out."
         ),

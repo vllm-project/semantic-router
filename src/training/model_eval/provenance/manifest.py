@@ -88,6 +88,8 @@ def load_manifest(path: Path, expected_kind: str | None = None) -> dict[str, Any
     assert_publishable(manifest, path)
     _validate_against_schema(manifest, kind, path)
     _validate_label_mapping(manifest, path)
+    if kind == "evaluation":
+        _validate_evaluation_comparability(manifest, path)
     return manifest
 
 
@@ -148,6 +150,89 @@ def _validate_label_mapping(manifest: dict[str, Any], path: Path) -> None:
             f"{path} label_mapping must cover indices 0..{len(mapping) - 1} exactly "
             f"once, got {indices}"
         )
+
+
+def _validate_evaluation_comparability(manifest: dict[str, Any], path: Path) -> None:
+    """Ensure evaluation comparability metadata agrees with label_mapping and metrics."""
+    mapping = manifest.get("label_mapping")
+    metrics = manifest.get("metrics")
+    per_label = metrics.get("per_label") if isinstance(metrics, dict) else None
+    if not isinstance(mapping, dict) or not isinstance(per_label, dict):
+        return
+
+    index_to_label = {int(index): name for name, index in mapping.items()}
+    per_label_complete = set(per_label) == set(mapping)
+    positive_labels = {
+        name: int(entry["support"])
+        for name, entry in per_label.items()
+        if isinstance(entry, dict) and entry.get("support", 0) > 0
+    }
+    if (
+        per_label_complete
+        and len(positive_labels) == 1
+        and manifest.get("comparable") is not False
+    ):
+        raise ManifestError(
+            f"{path} metrics.per_label has only one surviving mapped gold class; "
+            "comparable must be false with comparability metadata"
+        )
+
+    comparability = manifest.get("comparability")
+    if comparability is None:
+        return
+
+    surviving = comparability["surviving_gold_classes"]
+    declared_count = int(comparability["surviving_gold_class_count"])
+    if declared_count != len(surviving):
+        raise ManifestError(
+            f"{path} comparability.surviving_gold_class_count ({declared_count}) "
+            f"does not match surviving_gold_classes length ({len(surviving)})"
+        )
+
+    seen_ids: set[int] = set()
+    recorded_classes: dict[str, int] = {}
+    for entry in surviving:
+        class_id = int(entry["class_id"])
+        if class_id in seen_ids:
+            raise ManifestError(
+                f"{path} comparability.surviving_gold_classes repeats class_id "
+                f"{class_id}"
+            )
+        seen_ids.add(class_id)
+        if class_id not in index_to_label:
+            raise ManifestError(
+                f"{path} comparability.surviving_gold_classes class_id {class_id} "
+                "is not defined in label_mapping"
+            )
+        expected_label = index_to_label[class_id]
+        if "label" in entry and entry["label"] != expected_label:
+            raise ManifestError(
+                f"{path} comparability.surviving_gold_classes class_id {class_id} "
+                f"maps to {expected_label!r}, not {entry['label']!r}"
+            )
+        support = int(entry["support"])
+        if expected_label in per_label:
+            expected_support = int(per_label[expected_label]["support"])
+            if support != expected_support:
+                raise ManifestError(
+                    f"{path} comparability support {support} for "
+                    f"{expected_label!r} does not match metrics.per_label "
+                    f"support {expected_support}"
+                )
+        recorded_classes[expected_label] = support
+
+    if comparability["reason"] == "single_mapped_gold_class":
+        if declared_count != 1:
+            raise ManifestError(
+                f"{path} comparability reason 'single_mapped_gold_class' requires "
+                f"surviving_gold_class_count == 1, got {declared_count}"
+            )
+        if per_label_complete and recorded_classes != positive_labels:
+            raise ManifestError(
+                f"{path} comparability.surviving_gold_classes {recorded_classes} "
+                f"does not match positive-support labels in metrics.per_label "
+                f"{positive_labels}"
+            )
 
 
 def _reject_yaml_indirection(document: str, path: Path) -> None:

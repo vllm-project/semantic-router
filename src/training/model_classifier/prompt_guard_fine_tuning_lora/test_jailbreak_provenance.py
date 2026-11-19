@@ -316,3 +316,32 @@ def test_the_run_leaves_a_bundle_that_cross_references(emitted):
     summary = validate_bundle(emitted)
     assert summary["evaluations"] == ["prompt-guard-mmbert-base-r8-lora-validation"]
     assert summary["artifacts"] == ["prompt-guard-mmbert-base-r8-lora"]
+
+
+def test_single_class_validation_evaluation_manifest_is_marked_non_comparable(emitted):
+    path = jailbreak_provenance.emit_evaluation_manifest(
+        manifest_dir=emitted,
+        artifact_manifest_path=emitted
+        / "prompt-guard-mmbert-base-r8-lora.manifest.yaml",
+        dataset_manifest_path=emitted / "prompt-guard-mixture-max200.manifest.yaml",
+        label_to_id={"benign": 0, "jailbreak": 1},
+        seed=SEED,
+        batch_size=8,
+        max_length=512,
+        device="cpu",
+        device_name=None,
+        sample_limit=2,
+        y_true=[1, 1],
+        y_pred=[1, 1],
+        confidences=[0.95, 0.92],
+        latencies_ms=[3.0, 3.2],
+        peak_memory_mb=512.0,
+        logger=types.SimpleNamespace(info=lambda *a, **k: None),
+    )
+    evaluation = load_manifest(path, expected_kind="evaluation")
+    assert evaluation["comparable"] is False
+    assert evaluation["comparability"] == {
+        "reason": "single_mapped_gold_class",
+        "surviving_gold_class_count": 1,
+        "surviving_gold_classes": [{"class_id": 1, "label": "jailbreak", "support": 2}],
+    }
