@@ -155,6 +155,11 @@ Chat Completions 和 Responses 后端仍按客户端发送的原样收到 `store
 
 Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。存储输入中的 developer 和 system 项按轮次顺序作为指令重放：位于当前请求的顶层 `instructions` 之后，并位于当前请求自身输入中的 developer 和 system 项之前。之前请求的顶层 `instructions` 不会沿用。
 
+Router 不保存 Conversations 对象，既无法加载会话中的项，也无法把响应加入会话。指定 `conversation`
+的请求（无论是 ID 还是对象）在到达任何后端之前就会以 `400` `unsupported_conversation` 失败，
+`param` 为 `"conversation"`；`conversation: null` 表示未指定会话。请改用 `previous_response_id`
+延续已存储的响应。
+
 Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它们的
 `custom_tool_call` 和 `custom_tool_call_output` 项在 Chat 或 Responses 后端上保留
 自由格式输入、工具结果和调用 ID，同时支持缓冲与流式响应。Messages 后端会以
@@ -192,7 +197,7 @@ Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它�
 | `text`、`json_object`、`json_schema` 以外的 `response_format` | `unsupported_output_format` | 无 |
 
 Responses 请求的 `service_tier` 和 `safety_identifier` 遵循同样的规则。它的其他 Router 无法承载的顶层字段，即
-`background`、`context_management`、`max_tool_calls`、`moderation`、`prompt`、`prompt_cache_options`、
+`background`、`context_management`、`conversation`、`max_tool_calls`、`moderation`、`prompt`、`prompt_cache_options`、
 `prompt_cache_retention` 和 `top_logprobs`，会以 `unsupported_<field>` 失败。
 
 Responses 的响应对象（缓冲响应以及流式的每个 `response.*` 事件）按客户端发送的原样重复请求的
@@ -201,6 +206,20 @@ Responses 的响应对象（缓冲响应以及流式的每个 `response.*` 事�
 不受路由为后端所做改动的影响。请求未提供或设为 `null` 的成员保留默认值。`created_at`
 是后端的创建时间；后端未报告时（例如 Messages 后端）使用 Router 的时间。输出上限截断回答时，
 其 message 项在 `response.output_item.done` 和终止响应中均为 `incomplete`。
+
+流式响应在下一个输出项开始之前关闭当前项，与 OpenAI 的流一致：该项的 `response.output_text.done`
+或 `response.reasoning_text.done`、`response.content_part.done` 和 `response.output_item.done`
+都先于下一个 `response.output_item.added` 发出，`response.completed` 或 `response.incomplete`
+包含所有项。Chat Completions 后端只在流结束时才结束其输出，因此 Router 在后端转向另一个输出时
+关闭当前项：从推理到回答、从回答到函数调用、从一个调用到下一个调用。参数尚未构成 JSON 对象的
+函数调用会保持打开，直到参数完整，因此交错发送调用的后端仍可流式输出；回到已关闭项的内容
+（例如推理之后再次出现的回答文本）会进入同类的新项。Responses 和 Messages 后端自行结束每个项，
+其顺序保持不变。
+
+推理文本是推理项的内容部分：无论后端格式如何，带 `reasoning_text` 部分的
+`response.content_part.added` 和 `response.content_part.done` 都包围其
+`response.reasoning_text.delta` 和 `response.reasoning_text.done` 事件。推理摘要保留其自身的
+`response.reasoning_summary_part.added` 和 `response.reasoning_summary_part.done` 事件。
 
 ### 后端拒绝的采样控制 {#sampling-controls-a-backend-rejects}
 

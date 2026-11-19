@@ -88,13 +88,27 @@
       }
     },
     {
+      "event": "response.content_part.added",
+      "data": {
+        "content_index": 0,
+        "item_id": "reasoning_scopes",
+        "output_index": 0,
+        "part": {
+          "text": "",
+          "type": "reasoning_text"
+        },
+        "sequence_number": 5,
+        "type": "response.content_part.added"
+      }
+    },
+    {
       "event": "response.reasoning_text.delta",
       "data": {
         "content_index": 0,
         "delta": "Full reasoning.",
         "item_id": "reasoning_scopes",
         "output_index": 0,
-        "sequence_number": 5,
+        "sequence_number": 6,
         "type": "response.reasoning_text.delta"
       }
     },
@@ -103,7 +117,7 @@
       "data": {
         "item_id": "reasoning_scopes",
         "output_index": 0,
-        "sequence_number": 6,
+        "sequence_number": 7,
         "summary_index": 0,
         "text": "Short summary.",
         "type": "response.reasoning_summary_text.done"
@@ -118,7 +132,7 @@
           "text": "Short summary.",
           "type": "summary_text"
         },
-        "sequence_number": 7,
+        "sequence_number": 8,
         "summary_index": 0,
         "type": "response.reasoning_summary_part.done"
       }
@@ -129,9 +143,23 @@
         "content_index": 0,
         "item_id": "reasoning_scopes",
         "output_index": 0,
-        "sequence_number": 8,
+        "sequence_number": 9,
         "text": "Full reasoning.",
         "type": "response.reasoning_text.done"
+      }
+    },
+    {
+      "event": "response.content_part.done",
+      "data": {
+        "content_index": 0,
+        "item_id": "reasoning_scopes",
+        "output_index": 0,
+        "part": {
+          "text": "Full reasoning.",
+          "type": "reasoning_text"
+        },
+        "sequence_number": 10,
+        "type": "response.content_part.done"
       }
     },
     {
@@ -155,7 +183,7 @@
           "type": "reasoning"
         },
         "output_index": 0,
-        "sequence_number": 9,
+        "sequence_number": 11,
         "type": "response.output_item.done"
       }
     },
@@ -209,7 +237,7 @@
             "total_tokens": 10
           }
         },
-        "sequence_number": 10,
+        "sequence_number": 12,
         "type": "response.completed"
       }
     }

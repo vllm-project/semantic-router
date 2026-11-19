@@ -37,6 +37,9 @@ const (
 type responsesOutputKey struct {
 	item int
 	kind responsesOutputKind
+	// segment numbers the outputs an item's content of one kind streams into:
+	// content that resumes after its output closed starts the next one.
+	segment int
 }
 
 type responsesContentScope string
@@ -77,6 +80,7 @@ type responsesStreamEncoder struct {
 	outputIndexes          map[responsesOutputKey]int
 	outputIDs              map[responsesOutputKey]string
 	outputStarted          map[responsesOutputKey]bool
+	outputDone             map[responsesOutputKey]bool
 	toolArgumentsEmitted   map[int]int
 	itemOutputKeys         map[int][]responsesOutputKey
 	neutralItemIDs         map[int]string
@@ -92,8 +96,19 @@ type responsesStreamEncoder struct {
 	imageProgressCompleted map[responsesOutputKey]bool
 	responseStarted        bool
 	createdAt              int64
+	// outputSegments is the latest segment of an item's outputs of one kind,
+	// keyed by the first of them; contentSegments is the segment each content
+	// block last streamed into.
+	outputSegments  map[responsesOutputKey]int
+	contentSegments map[streamContentKey]int
+	// openOutputs are the started outputs that are not done, in output order;
+	// activeOutput is the one the stream is in.
+	openOutputs     []responsesOutputKey
+	activeOutput    responsesOutputKey
+	hasActiveOutput bool
 	// heldMessage is the last completed message, whose done event waits for
-	// the next event to show whether the output limit ended it.
+	// the next output or the end of the stream to show whether the output
+	// limit ended it.
 	heldMessage  *responsesHeldItem
 	wireSequence uint64
 }
@@ -126,6 +141,9 @@ func (OpenAIResponsesCodec) NewEncoder(context llmprotocol.StreamContext, policy
 		outputIndexes:          make(map[responsesOutputKey]int),
 		outputIDs:              make(map[responsesOutputKey]string),
 		outputStarted:          make(map[responsesOutputKey]bool),
+		outputDone:             make(map[responsesOutputKey]bool),
+		outputSegments:         make(map[responsesOutputKey]int),
+		contentSegments:        make(map[streamContentKey]int),
 		toolArgumentsEmitted:   make(map[int]int),
 		itemOutputKeys:         make(map[int][]responsesOutputKey),
 		neutralItemIDs:         make(map[int]string),

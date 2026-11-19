@@ -63,13 +63,27 @@
       }
     },
     {
+      "event": "response.content_part.added",
+      "data": {
+        "content_index": 0,
+        "item_id": "reasoning_1",
+        "output_index": 0,
+        "part": {
+          "text": "",
+          "type": "reasoning_text"
+        },
+        "sequence_number": 3,
+        "type": "response.content_part.added"
+      }
+    },
+    {
       "event": "response.reasoning_text.delta",
       "data": {
         "content_index": 0,
         "delta": "I should inspect the weather first.",
         "item_id": "reasoning_1",
         "output_index": 0,
-        "sequence_number": 3,
+        "sequence_number": 4,
         "type": "response.reasoning_text.delta"
       }
     },
@@ -79,9 +93,23 @@
         "content_index": 0,
         "item_id": "reasoning_1",
         "output_index": 0,
-        "sequence_number": 4,
+        "sequence_number": 5,
         "text": "I should inspect the weather first.",
         "type": "response.reasoning_text.done"
+      }
+    },
+    {
+      "event": "response.content_part.done",
+      "data": {
+        "content_index": 0,
+        "item_id": "reasoning_1",
+        "output_index": 0,
+        "part": {
+          "text": "I should inspect the weather first.",
+          "type": "reasoning_text"
+        },
+        "sequence_number": 6,
+        "type": "response.content_part.done"
       }
     },
     {
@@ -100,7 +128,7 @@
           "type": "reasoning"
         },
         "output_index": 0,
-        "sequence_number": 5,
+        "sequence_number": 7,
         "type": "response.output_item.done"
       }
     },
@@ -116,7 +144,7 @@
           "type": "function_call"
         },
         "output_index": 1,
-        "sequence_number": 6,
+        "sequence_number": 8,
         "type": "response.output_item.added"
       }
     },
@@ -126,7 +154,7 @@
         "delta": "{\"city\":\"Paris\"}",
         "item_id": "item_weather",
         "output_index": 1,
-        "sequence_number": 7,
+        "sequence_number": 9,
         "type": "response.function_call_arguments.delta"
       }
     },
@@ -137,7 +165,7 @@
         "item_id": "item_weather",
         "name": "lookup_weather",
         "output_index": 1,
-        "sequence_number": 8,
+        "sequence_number": 10,
         "type": "response.function_call_arguments.done"
       }
     },
@@ -153,7 +181,7 @@
           "type": "function_call"
         },
         "output_index": 1,
-        "sequence_number": 9,
+        "sequence_number": 11,
         "type": "response.output_item.done"
       }
     },
@@ -168,7 +196,7 @@
           "type": "message"
         },
         "output_index": 2,
-        "sequence_number": 10,
+        "sequence_number": 12,
         "type": "response.output_item.added"
       }
     },
@@ -183,7 +211,7 @@
           "text": "",
           "type": "output_text"
         },
-        "sequence_number": 11,
+        "sequence_number": 13,
         "type": "response.content_part.added"
       }
     },
@@ -194,7 +222,7 @@
         "delta": "The lookup is ready.",
         "item_id": "message_1",
         "output_index": 2,
-        "sequence_number": 12,
+        "sequence_number": 14,
         "type": "response.output_text.delta"
       }
     },
@@ -204,7 +232,7 @@
         "content_index": 0,
         "item_id": "message_1",
         "output_index": 2,
-        "sequence_number": 13,
+        "sequence_number": 15,
         "text": "The lookup is ready.",
         "type": "response.output_text.done"
       }
@@ -220,7 +248,7 @@
           "text": "The lookup is ready.",
           "type": "output_text"
         },
-        "sequence_number": 14,
+        "sequence_number": 16,
         "type": "response.content_part.done"
       }
     },
@@ -241,7 +269,7 @@
           "type": "message"
         },
         "output_index": 2,
-        "sequence_number": 15,
+        "sequence_number": 17,
         "type": "response.output_item.done"
       }
     },
@@ -311,7 +339,7 @@
             "total_tokens": 20
           }
         },
-        "sequence_number": 16,
+        "sequence_number": 18,
         "type": "response.completed"
       }
     }

@@ -132,26 +132,23 @@ func TestPrepareObjectStateRejectsUnavailableAndMissingPreviousResponse(t *testi
 }
 
 // TestPrepareObjectStateConversationMembershipIsStrictlyExplicit covers the
-// three ConversationID/SessionTrackingID sources: explicit conversation_id
-// (external membership + a namespaced tracking id), previous_response_id
+// ConversationID/SessionTrackingID sources: a conversation, which the Router
+// refuses because it keeps no Conversations objects; previous_response_id
 // only (lineage: no membership, but tracking continuity is preserved via a
-// separate internal key), and neither field (standalone: no membership, a
+// separate internal key); and neither field (standalone: no membership, a
 // fresh tracking id). Conversation and lineage must never blend: a
 // previous_response_id-only continuation of a conversation-tagged response
 // must not inherit that conversation's ID (see issue #2999 discussion on
 // why chain-only forks must not silently join a Conversation's history).
 func TestPrepareObjectStateConversationMembershipIsStrictlyExplicit(t *testing.T) {
-	t.Run("explicit conversation_id is external membership and namespaces the tracking id", func(t *testing.T) {
-		filter := NewResponseAPIFilter(NewMockResponseStore())
-		state, err := filter.PrepareObjectState(t.Context(), llmprotocol.Request{ConversationID: "conv_y"}, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if state.ConversationID != "conv_y" {
-			t.Fatalf("ConversationID = %q, want explicit value", state.ConversationID)
-		}
-		if state.SessionTrackingID != "respapi:conversation:conv_y" {
-			t.Fatalf("SessionTrackingID = %q", state.SessionTrackingID)
+	t.Run("a conversation is refused with or without a store", func(t *testing.T) {
+		for _, filter := range []*ResponseAPIFilter{nil, NewResponseAPIFilter(NewMockResponseStore())} {
+			state, err := filter.PrepareObjectState(t.Context(), llmprotocol.Request{ConversationID: "conv_y"}, nil)
+			assertResponseObjectStateError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_conversation")
+			var protocolError *llmprotocol.ProtocolError
+			if !errors.As(err, &protocolError) || protocolError.Parameter != "conversation" || state != nil {
+				t.Fatalf("error = %v, state = %+v; want the conversation named", err, state)
+			}
 		}
 	})
 
