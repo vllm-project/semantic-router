@@ -171,7 +171,7 @@ func TestRouterReplayFilterCacheKeyNamesEveryFilter(t *testing.T) {
 	filters, err := parseRouterReplayFilters(url.Values{
 		"search": {"Request-1"}, "recipe": {"agents"}, "decision": {"code"}, "model": {"model-a"},
 		"cache_status": {"cached"}, "session_id": {"session-1"}, "turn_id": {"turn-1"},
-		"harness": {"codex,api_client"}, "since": {"2026-11-15T15:00:00Z"},
+		"has_session": {"true"}, "harness": {"codex,api_client"}, "since": {"2026-11-15T15:00:00Z"},
 		"request_kind":  {store.RequestKindCodexApprovalReview},
 		"review_status": {store.ReviewStatusCompleted}, "review_outcome": {store.ReviewOutcomeDeny},
 		"review_risk": {"high"},
@@ -186,7 +186,7 @@ func TestRouterReplayFilterCacheKeyNamesEveryFilter(t *testing.T) {
 	if again, err := parseRouterReplayFilters(keyed); err != nil || again != filters {
 		t.Fatalf("cache key %q reads back as %+v, %v; want %+v", filters.cacheKey(), again, err, filters)
 	}
-	if reflect.TypeOf(filters).NumField() != 10 || reflect.TypeOf(filters.review).NumField() != 4 {
+	if reflect.TypeOf(filters).NumField() != 11 || reflect.TypeOf(filters.review).NumField() != 4 {
 		t.Fatal("a new replay filter needs a place in cacheKey and in this test")
 	}
 	if (routerReplayFilters{}).cacheKey() != "" {

@@ -1,4 +1,4 @@
-"""zentorch's CPU linear with the ops faked: the gates, consent and layout, without zentorch."""
+"""zentorch's CPU kernels with the ops faked: the gates, per-slot consent, the linear layout and SDPA."""
 
 from __future__ import annotations
 
@@ -17,6 +17,22 @@ ZEN4 = "vendor_id\t: AuthenticAMD\ncpu family\t: 25\nmodel\t\t: 17\n"
 INTEL = "vendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 207\n"
 
 
+def fake_sdpa(query, key, value, dropout_p, is_causal, *, attn_mask=None, scale=None):
+    """Like ``zentorch_sdpa``: grouped heads natively, additive masks only, a tuple back."""
+    if attn_mask is not None and attn_mask.dtype == torch.bool:
+        raise RuntimeError("zentorch_sdpa: boolean masks are not supported")
+    out = F.scaled_dot_product_attention(
+        query,
+        key,
+        value,
+        attn_mask=attn_mask,
+        is_causal=is_causal,
+        scale=scale,
+        enable_gqa=key.shape[1] != query.shape[1],
+    )
+    return out, None
+
+
 def fake_ops() -> SimpleNamespace:
     """Stand-ins: the reorder copies the weight, the product is ``F.linear`` on it."""
     return SimpleNamespace(
@@ -24,6 +40,7 @@ def fake_ops() -> SimpleNamespace:
         zentorch_linear_unary=lambda x, weight, bias, is_weight_prepacked: F.linear(
             x, weight, bias
         ),
+        zentorch_sdpa=fake_sdpa,
     )
 
 
@@ -91,7 +108,10 @@ def test_zentorch_without_the_ops_is_not_used(monkeypatch):
     monkeypatch.setitem(sys.modules, "zentorch", module)
     monkeypatch.setattr(zentorch, "_ops", SimpleNamespace)
     monkeypatch.setattr(zentorch, "_CACHE", {})
-    assert zentorch.available() is False
+    monkeypatch.setattr(zentorch, "measured", lambda: True)
+    monkeypatch.setenv("VLLM_SRUN_ZENTORCH", "1")
+    assert zentorch.available() is True
+    assert zentorch.enabled() == frozenset()
 
 
 def test_layout_holds_one_copy_and_matches_the_reference(gates):
@@ -222,3 +242,100 @@ def test_linears_sharing_a_weight_are_laid_out_once(gates):
     lay_out_linears(second, zentorch.lay_out, memo)
     assert first[0] is second[0][0]
     assert second[1] is not first[0]
+
+
+def sources(slot):
+    accelerator = CPUAccelerator()
+    kernels = accelerator.kernels(accelerator.devices()[0])
+    return [(k.source, k.exact, k.variant) for k in kernels.available[slot]]
+
+
+def test_each_slot_registers_only_with_its_ops(gates, monkeypatch):
+    monkeypatch.setenv("VLLM_SRUN_ZENTORCH", "1")
+    assert sources("sdpa")[0] == ("zentorch", False, None)
+    linear_only = fake_ops()
+    del linear_only.zentorch_sdpa
+    monkeypatch.setattr(zentorch, "_ops", lambda: linear_only)
+    monkeypatch.setattr(zentorch, "_CACHE", {"available": True})
+    assert ("zentorch", False, None) not in sources("sdpa")
+    assert sources("linear")[0] == ("zentorch", False, None)
+
+
+def _qkv(heads=8, kv_heads=8, rows=3, width=40, dim=32):
+    torch.manual_seed(0)
+    return (
+        torch.randn(rows, heads, width, dim),
+        torch.randn(rows, kv_heads, width, dim),
+        torch.randn(rows, kv_heads, width, dim),
+    )
+
+
+@pytest.mark.parametrize("shape", ["key", "square"])
+def test_sdpa_turns_a_boolean_mask_additive(gates, shape):
+    query, key, value = _qkv()
+    keep = torch.ones(3, 1, 1, 40, dtype=torch.bool)
+    keep[1:, ..., 30:] = False
+    mask = keep if shape == "key" else keep.expand(3, 1, 40, 40)
+    expected = F.scaled_dot_product_attention(
+        query, key, value, attn_mask=mask, scale=0.1
+    )
+    got = zentorch.sdpa(
+        query, key, value, mask, scale=0.1, is_causal=False, enable_gqa=False
+    )
+    torch.testing.assert_close(got, expected)
+
+
+def test_sdpa_takes_query_slices_and_grouped_heads(gates):
+    query, key, value = _qkv(heads=8, kv_heads=2)
+    part = query[:, :, 8:24]  # ultrabert's local attention passes a strided slice
+    expected = F.scaled_dot_product_attention(
+        part, key, value, scale=0.2, enable_gqa=True
+    )
+    got = zentorch.sdpa(
+        part, key, value, None, scale=0.2, is_causal=False, enable_gqa=True
+    )
+    torch.testing.assert_close(got, expected)
+
+
+def test_sdpa_falls_back_to_the_reference(gates, monkeypatch, caplog):
+    def broken(*args, **kwargs):
+        raise RuntimeError("unsupported shape")
+
+    monkeypatch.setattr(zentorch, "_ops", lambda: SimpleNamespace(zentorch_sdpa=broken))
+    monkeypatch.setattr(zentorch, "_SDPA_FALLBACKS", set())
+    query, key, value = _qkv()
+    for _ in range(2):
+        got = zentorch.sdpa(
+            query, key, value, None, scale=0.1, is_causal=True, enable_gqa=False
+        )
+    expected = F.scaled_dot_product_attention(
+        query, key, value, scale=0.1, is_causal=True
+    )
+    torch.testing.assert_close(got, expected)
+    assert sum("fell back" in r.message for r in caplog.records) == 1
+
+
+@pytest.mark.parametrize(
+    ("consent", "linear", "sdpa"),
+    [
+        (frozenset({"linear"}), "zentorch", "torch-reference"),
+        (frozenset({"linear", "sdpa"}), "zentorch", "zentorch"),
+        (True, "zentorch", "zentorch"),
+        (False, "torch-reference", "torch-reference"),
+    ],
+)
+def test_a_family_consents_slot_by_slot(
+    tmp_path, gates, monkeypatch, consent, linear, sdpa
+):
+    """A family gets zentorch in the slots it names; vela3 and Decision 3.0 name the linear."""
+    from vllm_srun.plugins.base import DtypePolicy
+
+    monkeypatch.setenv("VLLM_SRUN_ZENTORCH", "1")
+    model = _load_tiny(
+        tmp_path,
+        DtypePolicy(
+            autocast=None, bf16_resident=False, approximate_cpu_kernels=consent
+        ),
+    )
+    assert model.kernels.select("linear").source == linear
+    assert model.kernels.select("sdpa").source == sdpa

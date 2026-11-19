@@ -233,6 +233,32 @@ export function buildCostCoverageLines(
   return lines
 }
 
+/** How the cost-only estimate is made and what it leaves out, for one tooltip. */
+export function describeEstimateMethod(
+  summary: { coverage?: InsightsAggregateCostCoverage; excluded_record_count: number },
+  recordCount: number,
+): string {
+  const coverage = summary.coverage
+  const parts = [
+    'Each request is priced twice from its recorded tokens: at the selected model’s list price and at the reference model’s.',
+    'The reference is the route’s cost_baseline_model, else the dearest model of its recipe’s pool.',
+    'Router calls are costed apart; nothing here is a GPU bill, an invoice or a quality comparison.',
+  ]
+  if (coverage) {
+    parts.push(
+      `Priced: ${coverage.priced_records.toLocaleString('en-US')} of ${recordCount.toLocaleString('en-US')} requests` +
+        (coverage.partly_priced_records
+          ? `, ${coverage.partly_priced_records.toLocaleString('en-US')} partly`
+          : '') +
+        '.',
+    )
+  }
+  if (summary.excluded_record_count > 0) {
+    parts.push(`${plural(summary.excluded_record_count, 'request')} left out of the comparison.`)
+  }
+  return parts.join(' ')
+}
+
 /** Why no cost shows at all, when every request is unpriced, and how to set it. */
 export function describeMissingAggregateCost(
   coverage: InsightsAggregateCostCoverage,

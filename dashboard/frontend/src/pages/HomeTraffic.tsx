@@ -63,10 +63,10 @@ import {
   carriedP95,
   HOME_RANGE_LABEL,
   HOME_RECENT_LIMIT,
-  moreCurrenciesLabel,
   needsTrafficWindow,
   spendSummary,
   TRAFFIC_UNAVAILABLE,
+  unpricedHint,
   type HomeRange,
   type TrafficView,
 } from './homeSupport'
@@ -197,7 +197,7 @@ export function HomeKpis({
           icon={<CircleDollarSign className="size-4 text-chart-6" />}
           value={money.spend}
           format={(value) => formatInsightsCost(value, money.currency, { total: true })}
-          hint={moreCurrenciesLabel(money.otherCurrencies) ?? perThousand}
+          hint={unpricedHint(money) ?? perThousand}
           spark={series?.map((point) => point.cost)}
           sparkColor="var(--chart-6)"
         />
