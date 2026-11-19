@@ -877,6 +877,18 @@ tools or error translation.
   sent it with only that `finish_reason` changed to `length`. Without usage,
   below the limit, or with several choices, whose usage counts them all, the
   backend's stop stands.
+- A Chat or Responses client can send such a cut call back in the history of
+  its next request, as agents keep it. A function call whose arguments stop
+  before their JSON object closes is accepted as the last call of its
+  assistant turn: the last of an assistant message's `tool_calls`, or the
+  last `function_call` item before a tool result, a user message or the end
+  of the input. Every backend receives the members the model completed before
+  the cut, as for a Messages client above, and `x-vsr-warnings` reports an
+  `approximated` diagnostic for `tool_call.arguments`. A cut call that
+  another call or text of its turn follows, and arguments that don't start a
+  JSON object or break JSON before the cut, still fail with
+  `invalid_tool_call`. A Messages client's history carries `tool_use.input`
+  as an object, so it never holds a cut call.
 - A Chat stream chunk can carry several `tool_calls` entries with the same
   `index`, as vLLM's last chunk does when its tool parser flushes the rest of
   a call. They continue one call in order, as OpenAI's SDKs join them.
