@@ -87,7 +87,14 @@ import {
 import { spendSummary, unpricedHint, unpricedNote } from './homeSupport'
 import { recordEvents } from './insightsAgentEvents'
 import { AgentEventChips } from './InsightsAgentEvents'
-import { describeEstimateMethod, describeMissingAggregateCost } from './insightsCostAccounting'
+import {
+  describeEstimateMethod,
+  describeMissingAggregateCost,
+  describeRecordSaving,
+  formatSaving,
+  savingsReference,
+  type SavingsReference,
+} from './insightsCostAccounting'
 import { HarnessLogo, ToolChips } from './InsightsHarness'
 import { API_CLIENT_LABEL, harnessInfo } from './insightsHarness'
 import { readPage, readPageSize, writePage } from './insightsListData'
@@ -163,26 +170,29 @@ const SUMMARY_GRID = 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0
 const NO_COMPARISON =
   'No request in range has both a priced model cost and a priced reference model, so there is nothing to compare.'
 
-function spendOf(aggregate: InsightsAggregateResponse) {
+function spendOf(aggregate: InsightsAggregateResponse, reference: SavingsReference) {
   const lead = spendSummary(aggregate)
   const compared = lead.saved !== undefined
-  const difference = compared ? -(lead.saved ?? 0) : undefined
   const unpriced = unpricedHint(lead)
   const missing = aggregate.summary.coverage
     ? describeMissingAggregateCost(aggregate.summary.coverage)
     : undefined
+  const share =
+    compared && (lead.baseline ?? 0) > 0
+      ? `${formatInsightsShare(Math.abs(lead.saved ?? 0), lead.baseline ?? 0)} ${(lead.saved ?? 0) >= 0 ? 'less' : 'more'}`
+      : undefined
   return {
     spend: formatInsightsCost(lead.spend, lead.currency, { total: true }),
     spendWhy: lead.currency ? undefined : (missing ?? 'No request in range has a price.'),
-    difference:
-      difference === undefined
-        ? '—'
-        : `${difference > 0 ? '+' : ''}${formatInsightsCost(difference, lead.currency, { total: true })}`,
-    differenceHint:
-      compared && (lead.baseline ?? 0) > 0
-        ? `Cost only · ${formatInsightsShare(Math.abs(lead.saved ?? 0), lead.baseline ?? 0)} ${(lead.saved ?? 0) >= 0 ? 'below' : 'above'} the reference`
-        : 'Cost only, not a quality comparison',
-    differenceWhy: compared ? undefined : (missing ?? NO_COMPARISON),
+    saved: compared ? formatSaving(lead.saved ?? 0, lead.currency) : '—',
+    savedHint: share
+      ? `Cost only · ${share} than ${reference.noun}`
+      : 'Cost only, not a quality comparison',
+    savedWhy: compared ? undefined : (missing ?? NO_COMPARISON),
+    routerCalls:
+      aggregate.summary.coverage?.router_calls || lead.routerCalls
+        ? `Router’s own calls: ${formatInsightsCost(lead.routerCalls, lead.currency, { total: true })}`
+        : undefined,
     unpriced,
     unpricedWhy: unpriced ? unpricedNote(lead) : undefined,
   }
@@ -250,6 +260,8 @@ export function RequestsSummary({
   sessionsOnly?: boolean
   harnessCounts: Record<string, number> | null
 }) {
+  const labels = useModelLabels()
+  const { costBaselineModel } = useInsightsConfig()
   if (!aggregate) {
     if (error && !loading) {
       return (
@@ -278,7 +290,8 @@ export function RequestsSummary({
   }
   const lifecycle = aggregate.lifecycle
   const failed = lifecycle.failed + lifecycle.aborted
-  const money = spendOf(aggregate)
+  const reference = savingsReference(aggregate.summary.coverage, costBaselineModel, labels)
+  const money = spendOf(aggregate, reference)
   const tokens = aggregate.token_volume
   return (
     <section aria-label="Requests summary" className="mb-4">
@@ -306,12 +319,13 @@ export function RequestsSummary({
           }
         />
         <SummaryTile
-          label="Cost vs reference"
+          label={reference.label}
           icon={<Scale className="text-chart-2" />}
-          info={describeEstimateMethod(aggregate.summary, aggregate.record_count)}
+          info={describeEstimateMethod(aggregate.summary, aggregate.record_count, reference)}
           infoLabel="How the estimate is made"
-          value={money.differenceWhy ? <Unavailable why={money.differenceWhy} /> : money.difference}
-          hint={money.differenceHint}
+          value={money.savedWhy ? <Unavailable why={money.savedWhy} /> : money.saved}
+          hint={money.savedHint}
+          detail={money.routerCalls}
         />
         <SummaryTile
           label="Tokens"
@@ -531,11 +545,8 @@ function CostCell({ record, currency }: { record: InsightsRecord; currency?: str
       </Tooltip>
     )
   }
-  const saved = record.cost_savings ?? 0
   return (
-    <Tooltip
-      content={`Saved ${formatInsightsCost(saved, record.currency)} against ${modelText(labels, record.baseline_model ?? '')}`}
-    >
+    <Tooltip content={describeRecordSaving(record, labels)}>
       <span className="font-mono text-xs tabular">
         {formatInsightsCost(record.actual_cost, record.currency)}
       </span>
