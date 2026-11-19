@@ -108,6 +108,9 @@ def test_thresholds_follow_the_label_set_and_the_route() -> None:
         ({"type": "span", "criteria": ["a"], "threshold": True}, "threshold"),
         ({"type": "span", "criteria": ["a"], "over": "context"}, "over"),
         ({"type": "span", "criteria": ["a", "a"]}, "distinct"),
+        ({"type": "span", "criteria": [None, "a"]}, "labels as strings"),
+        ({"type": "span", "criteria": [{"a": 1}]}, "labels as strings"),
+        ({"type": "span", "criteria": [5]}, "labels as strings"),
         ({"type": "span", "criteria": [f"l{i}" for i in range(256)]}, "1 to 255"),
         ({"type": "span"}, "criteria"),
         ({"type": "span", "criteria": ["a"], "instructions": 3}, "string"),
@@ -262,6 +265,19 @@ def test_span_answers_follow_the_contract(runtime) -> None:
     assert 0 < whole["probability"] < 1
     assert body["answers"]["all"]["type"] == "noul"
     assert body["answers"]["all"]["noul"] == body["answers"]["none"]["noul"] > 0
+
+
+def test_a_raised_threshold_decodes_at_the_packages_own(model) -> None:
+    question = {"type": "span", "criteria": ["dose"]}
+    own = model.spans.plan("q", question, STATE, no_limit).threshold
+    raised = model.spans.plan(
+        "q", {**question, "threshold": own + 0.2}, STATE, no_limit
+    )
+    lowered = model.spans.plan(
+        "q", {**question, "threshold": own - 0.2}, STATE, no_limit
+    )
+    assert (raised.threshold, raised.decode_threshold) == (own + 0.2, own)
+    assert (lowered.threshold, lowered.decode_threshold) == (own - 0.2, None)
 
 
 def test_personal_data_outside_the_last_part_is_read(runtime) -> None:

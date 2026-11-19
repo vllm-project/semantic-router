@@ -57,14 +57,32 @@ func unstatedReasoningOutputLimit(request llmprotocol.Request) *int64 {
 // counts reasoning against the output limit, so a request that states no
 // reasoning preference and sets a limit below
 // providers.defaults.reasoning_min_output_tokens would end with no answer.
-// Only a model whose reasoning family has an off control, which every one of
-// its Provider bindings can send, is changed.
 func (r *OpenAIRouter) outputBudgetTurnsReasoningOff(ctx *RequestContext, model string) bool {
 	if r == nil || r.Config == nil || ctx == nil || ctx.unstatedReasoningOutputLimit == nil {
 		return false
 	}
 	minimum := int64(r.Config.ReasoningMinOutputTokens)
-	return minimum > 0 && *ctx.unstatedReasoningOutputLimit < minimum &&
-		anthropicBackendCanDisableReasoning(r.getModelReasoningFamily(model)) &&
+	return minimum > 0 && *ctx.unstatedReasoningOutputLimit < minimum && r.canTurnReasoningOff(model)
+}
+
+// canTurnReasoningOff reports whether model's reasoning family has an off
+// control that every one of its Provider bindings can send. The rules for
+// requests that state no reasoning preference change only such a model.
+func (r *OpenAIRouter) canTurnReasoningOff(model string) bool {
+	return anthropicBackendCanDisableReasoning(r.getModelReasoningFamily(model)) &&
 		r.Config.CanProjectReasoningOff(model)
+}
+
+// unstatedReasoningOffReason is the trace reason for which model runs a
+// request that states no reasoning preference with its reasoning off instead
+// of the reasoning its decision chose, or "" when it keeps that reasoning.
+func (r *OpenAIRouter) unstatedReasoningOffReason(ctx *RequestContext, model string) string {
+	switch {
+	case r.outputBudgetTurnsReasoningOff(ctx, model):
+		return reasoningOffForOutputBudget
+	case r.stopSequencesTurnReasoningOff(ctx, model):
+		return reasoningOffForStopSequences
+	default:
+		return ""
+	}
 }

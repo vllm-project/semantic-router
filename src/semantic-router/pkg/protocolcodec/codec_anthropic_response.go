@@ -254,17 +254,42 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	if err != nil {
 		return nil, diagnostics, err
 	}
-	content, err := encodeAnthropicContent(contents)
+	content, err := encodeAnthropicReplyContent(contents, envelope.Format)
 	if err != nil {
 		return nil, diagnostics, err
 	}
 	stop := encodeAnthropicStop(response.StopReason, responsesOutputHasToolCall(response.Output))
-	wire := anthropicResponseWire{ID: response.ID, Type: "message", Role: "assistant", Model: response.Model, Content: content, StopReason: &stop, Usage: encodeAnthropicUsage(response.Usage)}
+	wire := anthropicResponseWire{
+		ID:   anthropicReplyID(envelope.Format, anthropicMessageIDPrefix, response.ID),
+		Type: "message", Role: "assistant", Model: response.Model, Content: content, StopReason: &stop, Usage: encodeAnthropicUsage(response.Usage),
+	}
 	if response.StopReason == llmprotocol.StopSequence {
 		wire.StopSequence = &response.MatchedStopSequence
 	}
 	body, err := marshalWire(wire)
 	return body, diagnostics, err
+}
+
+// encodeAnthropicReplyContent renders the content of a reply from a source
+// backend as a Messages client reads it: a thinking block carries a
+// signature, empty when the backend gave none, and a tool call the identifier
+// anthropicReplyID gives it.
+func encodeAnthropicReplyContent(contents []llmprotocol.Content, source llmprotocol.WireFormat) (json.RawMessage, error) {
+	blocks := make([]anthropicContentWire, 0, len(contents))
+	for _, content := range contents {
+		block, err := encodeAnthropicContentBlock(content)
+		if err != nil {
+			return nil, err
+		}
+		switch block.Type {
+		case "thinking":
+			block.signed = true
+		case "tool_use":
+			block.ID = anthropicReplyID(source, anthropicToolUseIDPrefix, block.ID)
+		}
+		blocks = append(blocks, block)
+	}
+	return json.Marshal(blocks)
 }
 
 func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {

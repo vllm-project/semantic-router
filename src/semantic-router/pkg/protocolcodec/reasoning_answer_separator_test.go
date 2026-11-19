@@ -624,6 +624,8 @@ func TestChatPublicStreamFilterTrimsChunksThatCarryServerMembers(t *testing.T) {
 	require.Equal(t, 2, strings.Count(out, `"logprobs":null`), "the provider's other members stay")
 }
 
+// Streams with nothing to trim keep their bytes, apart from the null usage a
+// client that asked for usage receives on every chunk.
 func TestChatPublicStreamFilterLeavesOtherStreamsAlone(t *testing.T) {
 	for name, test := range map[string][]string{
 		"deepseek style, clean answer after reasoning": {`{"reasoning":"thought"}`, `{"content":"Re"}`, `{"content":"d"}`},
@@ -632,9 +634,24 @@ func TestChatPublicStreamFilterLeavesOtherStreamsAlone(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			frames := separatorFrames(append(test, `{}`)...)
-			require.Equal(t, strings.Join(frames, ""), filterSeparatorStream(t, frames...))
+			var want strings.Builder
+			for _, frame := range frames[:len(frames)-1] {
+				want.Write(withNullUsage([]byte(frame)))
+			}
+			want.WriteString(frames[len(frames)-1])
+			require.Equal(t, want.String(), filterSeparatorStream(t, frames...))
 		})
 	}
+}
+
+// A chunk whose separator the filter trims carries the null usage too.
+func TestChatPublicStreamFilterTrimmedChunksCarryNullUsage(t *testing.T) {
+	out := filterSeparatorStream(t, separatorFrames(`{"reasoning":"thought"}`, `{"content":"\n\nRed"}`, `{}`)...)
+	for index, usage := range chunkUsages(t, []byte(out)) {
+		require.Equal(t, "null", usage, "chunk %d of %s", index, out)
+	}
+	answer, _ := clientStreamText(t, llmprotocol.OpenAIChatV1, out)
+	require.Equal(t, "Red", answer, out)
 }
 
 func TestChatPublicStreamFilterShiftsLateAnnotations(t *testing.T) {

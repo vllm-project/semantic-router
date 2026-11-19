@@ -103,10 +103,14 @@ export function describeBudget(accounting?: InsightsCostAccounting): string | un
   }
   const cost = (value?: number) => formatInsightsCost(value, budget.currency)
   const left = `${budget.scope}: ${cost(budget.remaining)} of ${cost(budget.limit)} left`
-  const unpriced = budget.unpriced_calls ? `; ${plural(budget.unpriced_calls, 'unpriced call')}` : ''
+  const unpriced = budget.unpriced_calls
+    ? `; ${plural(budget.unpriced_calls, 'unpriced call')}`
+    : ''
   if (!budget.settlement) {
     const refused =
-      budget.remaining > 0 ? `the call was estimated at ${cost(budget.estimate)}` : 'nothing was left'
+      budget.remaining > 0
+        ? `the call was estimated at ${cost(budget.estimate)}`
+        : 'nothing was left'
     return `${left}; refused: ${refused}${unpriced}`
   }
   const settled = BUDGET_SETTLEMENTS[budget.settlement] ?? budget.settlement
@@ -159,7 +163,7 @@ function buildNetSavingsLines(coverage: InsightsAggregateCostCoverage): string[]
   const netted = sortedCounts(coverage.netted_router_calls)
   if (netted.length > 0) {
     lines.push(
-      `Savings are net of the Router’s own calls for these requests: ${netted
+      `The difference includes the Router’s own calls for these requests: ${netted
         .map(([kind, count]) => plural(count, `${ROUTER_CALL_LABELS[kind] ?? kind} call`))
         .join(', ')}.`,
     )
@@ -205,7 +209,7 @@ export function buildCostCoverageLines(
   const baselines = Object.entries(coverage.baseline_sources ?? {})
   if (baselines.length > 0) {
     lines.push(
-      `Savings compare ${plural(costRecordCount, 'request')} with ${baselines
+      `Differences compare ${plural(costRecordCount, 'request')} with ${baselines
         .map(([source, count]) => `${describeBaselineRule(source)} (${count})`)
         .join(', ')}.`,
     )

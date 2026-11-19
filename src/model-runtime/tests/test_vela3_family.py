@@ -106,6 +106,20 @@ def test_typed_added_tokens_are_text(model, package) -> None:
     assert model.tokens.ids(plain) == full.encode(plain, add_special_tokens=False).ids
 
 
+def test_span_labels_that_are_not_strings_are_refused(model) -> None:
+    questions = {
+        "null": {"type": "span", "criteria": [None, "PERSON"], "over": "user"},
+        "object": {"type": "span", "criteria": [{"a": 1}], "over": "user"},
+        "names": {"type": "span", "criteria": ["PERSON"], "over": "user"},
+    }
+    request = model.reader.read(STATE, questions)
+    for key in ("null", "object"):
+        error = request.errors[key]
+        assert error["error"] == "invalid_question", error
+        assert "labels as strings" in error["message"]
+    assert [asked.question.id for asked in request.asked] == ["names"]
+
+
 def test_a_missing_adapter_routes_off(package, tmp_path) -> None:
     copy = Path(shutil.copytree(package, tmp_path / "no-relation"))
     (copy / "relation_adapter.safetensors").unlink()
@@ -762,6 +776,43 @@ def test_pii_missing_threshold_bucket_returns_invalid_model_output(model) -> Non
         }
     finally:
         overrides["pii_buckets"] = original_buckets
+
+
+def test_a_raised_span_threshold_keeps_the_packages_spans_whole(model) -> None:
+    """A threshold above the package's decodes words at the package's and keeps the spans that reach it, whole; one
+    below decodes at itself."""
+    from vllm_srun.families.vela2.words import split_words
+
+    text = "Card 4111 1111 1111 1111 expires soon."
+    words = np.asarray(split_words(text), dtype=np.int32)
+
+    def spans(threshold, card):
+        question = {"type": "span", "criteria": ["CARD"], "over": "user"}
+        request = model.reader.read(
+            {"user": text}, {"q": {**question, "threshold": threshold}}
+        )
+        (asked,) = request.asked
+        own, temperature = model.router.span_threshold(asked.route, len(words))
+        p = np.asarray([[card.get(i, 0.01)] for i in range(len(words))])
+        raw = RawRow(
+            span=RawSpan(
+                labels=["CARD"],
+                offsets=words,
+                logits=np.log(p / (1 - p)) * temperature,
+            ),
+            tokens={"user": len(words)},
+        )
+        response = {"answers": {}}
+        model.answerer.answer(
+            asked, logits=None, raw=raw, state=request.state, response=response
+        )
+        return own, [s["text"] for s in response["spans"]["q"]]
+
+    own, whole = spans(0.97, {1: 0.99, 2: 0.95, 3: 0.99, 4: 0.99})
+    assert own < 0.95 and whole == ["4111 1111 1111 1111"]
+    assert spans(0.985, {1: 0.99, 2: 0.95, 3: 0.99, 4: 0.99})[1] == []
+    lowered = spans(own - 0.2, {1: 0.99, 2: own - 0.1, 3: 0.99, 4: 0.99})[1]
+    assert lowered == ["4111 1111 1111 1111"]
 
 
 def test_pii_threshold_selects_matching_bucket(model):

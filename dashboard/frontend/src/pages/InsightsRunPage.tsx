@@ -504,7 +504,7 @@ function AgentRun() {
       <Card id="run-timeline" className="mb-5 scroll-mt-6">
         <CardHeader>
           <CardTitle>Timeline</CardTitle>
-          <CardDescription>
+          <CardDescription className="col-start-1">
             One lane per agent; a block is a stretch of calls on one model. Click a block for its
             calls, an agent to follow its calls below.
           </CardDescription>
