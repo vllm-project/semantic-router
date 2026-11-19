@@ -757,6 +757,121 @@ def test_decision3_reads_no_more_of_a_long_state_than_a_question_may_hold(
     assert 0 < longest < len(over) // 2 and reads == len(questions)
 
 
+@pytest.fixture(scope="module")
+def state_once_runtime(tmp_path_factory):
+    """A Decision 3.0 package whose layout reads a request's state once (``state_once.py``)."""
+    package = write_fixture(
+        tmp_path_factory.mktemp("bounded-state-once") / "prefix_bidir",
+        family="decision3",
+        variant="prefix_bidir",
+    )
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), name="state-once", device="cpu"),),
+            result_cache_entries=0,
+        )
+    )
+    runtime.start(background=False)
+    yield runtime
+    runtime.stop()
+
+
+def test_state_once_fails_a_long_state_as_it_fails_it_read_whole(
+    state_once_runtime, monkeypatch
+):
+    model = state_once_runtime.lookup(None).model
+    limit = model.limit
+    states = decision3_states(model)
+    client = TestClient(create_app(state_once_runtime))
+    outcomes = {}
+    for name, state in states.items():
+        body = {"state": state, "questions": questions_for("decision3")}
+        bounded, whole = answers(
+            client, monkeypatch, "/v1/decisions", body, "DecisionResponse"
+        )
+        assert bounded == whole
+        outcomes[name] = {
+            (answer.get("error"), answer.get("reason"))
+            for answer in bounded["answers"].values()
+        }
+    answered = {(None, None)}
+    over = {("max_length_exceeded", "question_tokens")}
+    assert outcomes == {
+        "short": answered,
+        "fits": answered,
+        "typed added tokens": over,
+        "just over": over,
+        "over": over,
+        "certainly over": over,
+    }
+    # The cap is exact: a state and a question of as many tokens are planned,
+    # and one token more fails the question. The tokenizer reads each "!" as
+    # one token.
+    question = {"reasoning": questions_for("decision3")["reasoning"]}
+    left = limit - len(model.plan(states["fits"], question).items[0].ids)
+    full = model.plan(states["fits"] + "!" * left, question)
+    assert len(full.items[0].ids) == limit and not full.errors
+    past = model.plan(states["fits"] + "!" * (left + 1), question)
+    assert not past.items
+    assert past.errors["reasoning"]["reason"] == "question_tokens"
+    # That state is within the cap, so it was read whole and the question is
+    # told its count. A state over the cap by itself is not read to its end.
+    assert f"has {limit + 1} tokens" in past.errors["reasoning"]["message"]
+    unread = model.plan(states["over"], question).errors["reasoning"]
+    assert f"has more than {limit} tokens" in unread["message"]
+
+
+def test_state_once_counts_the_tokens_of_an_image_in_the_cap(
+    state_once_runtime, png_url
+):
+    model = state_once_runtime.lookup(None).model
+    limit = model.limit
+    question = {"reasoning": questions_for("decision3")["reasoning"]}
+    images = [png_url(80, 60, 21)]
+    state = SENTENCE * 40
+    item = model.plan_images(state, question, images).items[0]
+    # The state is read as far as the cap less the image's tokens allows.
+    assert item.media.images[0].tokens > 1
+    left = limit - len(item.ids)
+    full = model.plan_images(state + "!" * left, question, images)
+    assert len(full.items[0].ids) == limit and not full.errors
+    past = model.plan_images(state + "!" * (left + 1), question, images)
+    assert not past.items
+    assert f"has {limit + 1} tokens" in past.errors["reasoning"]["message"]
+
+
+def test_state_once_reads_no_more_of_a_long_state_than_a_question_may_hold(
+    state_once_runtime, monkeypatch
+):
+    model = state_once_runtime.lookup(None).model
+    states = decision3_states(model)
+    recorder = PromptRecorder(model.prompts.text)
+    monkeypatch.setattr(model.prompts, "text", recorder)
+    # The probe that tells which cuts this tokenizer keeps exact is not a read
+    # of a state.
+    bounds.facts(recorder)
+    over, certain = states["over"], states["certainly over"]
+    questions = questions_for("decision3")
+
+    def read_of(state):
+        """Characters of the longest text holding the refused ``state`` that the tokenizer encoded, and the reads of it."""
+        recorder.texts.clear()
+        plan = model.plan(state, questions)
+        assert not plan.items and set(plan.errors) == set(questions)
+        assert {error["error"] for error in plan.errors.values()} == {
+            "max_length_exceeded"
+        }
+        reads = [len(text) for text in recorder.texts if SENTENCE in text]
+        return max(reads, default=0), len(reads)
+
+    # A state certainly over the cap is refused unread.
+    assert read_of(certain) == (0, 0)
+    # Any other is read one token past the cap and no further, once for the
+    # request's questions.
+    longest, reads = read_of(over)
+    assert 0 < longest < len(over) // 2 and reads == 1
+
+
 @pytest.mark.parametrize("name", ["decision2", "decision1-qwen", "decision1-vela"])
 def test_decisions_fail_a_long_state_as_they_fail_it_read_whole(
     decision_runtimes, monkeypatch, name
