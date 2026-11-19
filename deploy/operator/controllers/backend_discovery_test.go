@@ -223,6 +223,41 @@ func TestBackendDiscoveryStatusIsReportedAndCleared(t *testing.T) {
 	}
 }
 
+func TestBackendDiscoveryStatusIgnoresStaleGeneration(t *testing.T) {
+	s := backendDiscoveryTestScheme(t)
+	sr := backendDiscoveryTestRouter()
+	sr.Generation = 1
+	r := &SemanticRouterReconciler{
+		Client: fake.NewClientBuilder().WithScheme(s).WithObjects(sr).WithStatusSubresource(sr).Build(),
+		Scheme: s,
+	}
+	current := &vllmv1alpha1.SemanticRouter{}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sr), current); err != nil {
+		t.Fatal(err)
+	}
+	current.Generation = 2
+	if err := r.Update(context.Background(), current); err != nil {
+		t.Fatal(err)
+	}
+
+	discoveryErr := &backendDiscoveryError{Failures: []backendDiscoveryFailure{{
+		EndpointName: "missing-kserve",
+		Dependency:   "InferenceService default/missing-isvc",
+		Err:          errors.New("not found"),
+	}}}
+	if err := r.updateBackendDiscoveryStatus(context.Background(), sr, discoveryErr); err != nil {
+		t.Fatal(err)
+	}
+
+	got := &vllmv1alpha1.SemanticRouter{}
+	if err := r.Get(context.Background(), client.ObjectKeyFromObject(sr), got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Status.Conditions) != 0 || got.Status.ObservedGeneration != 0 || got.Status.Phase != "" {
+		t.Fatalf("stale discovery result changed newer status: %+v", got.Status)
+	}
+}
+
 func backendDiscoveryTestScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()

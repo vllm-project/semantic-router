@@ -227,6 +227,9 @@ func (r *SemanticRouterReconciler) updateBackendDiscoveryStatus(
 		if err := r.Get(ctx, client.ObjectKeyFromObject(sr), current); err != nil {
 			return err
 		}
+		if current.Generation != sr.Generation {
+			return nil
+		}
 
 		condition := meta.FindStatusCondition(current.Status.Conditions, typeDegradedSemanticRouter)
 		if condition != nil &&
@@ -238,10 +241,10 @@ func (r *SemanticRouterReconciler) updateBackendDiscoveryStatus(
 			return nil
 		}
 
-		current.Status.ObservedGeneration = current.Generation
+		current.Status.ObservedGeneration = sr.Generation
 		current.Status.Phase = "Degraded"
 		meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
-			ObservedGeneration: current.Generation,
+			ObservedGeneration: sr.Generation,
 			Type:               typeDegradedSemanticRouter,
 			Status:             metav1.ConditionTrue,
 			Reason:             "BackendDiscoveryFailed",
