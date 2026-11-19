@@ -937,6 +937,34 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 	body []byte,
 	orch *fallback.Orchestrator,
 ) ([]byte, int, error) {
+	timeout := 30 * time.Second
+	if orch != nil && orch.Policy().PerAttemptTimeout > 0 {
+		timeout = orch.Policy().PerAttemptTimeout
+	}
+	return r.dispatchProviderHTTP(ctx, reqCtx, dispatch, providerCall{
+		name: "fallback_dispatch", body: body,
+		headers: fallbackRequestHeaders(reqCtx, dispatch.profile, orch), timeout: timeout,
+	})
+}
+
+// providerCall is a call the Router sends a backend itself, besides the
+// credential the connector sets last.
+type providerCall struct {
+	name    string
+	body    []byte
+	headers map[string]string
+	timeout time.Duration
+}
+
+// dispatchProviderHTTP sends call to dispatch's backend through the
+// connector, with the request's credential for that backend, within
+// call.timeout and ctx's deadline.
+func (r *OpenAIRouter) dispatchProviderHTTP(
+	ctx context.Context,
+	reqCtx *RequestContext,
+	dispatch *providerDispatch,
+	call providerCall,
+) ([]byte, int, error) {
 	endpoint, query, err := splitProviderEndpoint(providerEndpointPath(dispatch.profile, dispatch.targetFormat))
 	if err != nil {
 		return nil, 0, err
@@ -946,10 +974,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		return nil, 0, err
 	}
 	base := providerEndpointScheme(r.Config, dispatch.backendName, dispatch.profile) + "://" + dispatch.backendAddress
-	timeout := 30 * time.Second
-	if orch != nil && orch.Policy().PerAttemptTimeout > 0 {
-		timeout = orch.Policy().PerAttemptTimeout
-	}
+	timeout := call.timeout
 	if deadline, ok := ctx.Deadline(); ok {
 		if remaining := time.Until(deadline); remaining > 0 && remaining < timeout {
 			timeout = remaining
@@ -975,16 +1000,15 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		ctx = context.Background()
 	}
 	operation := connector.Operation{
-		Name:              "fallback_dispatch",
+		Name:              call.name,
 		Method:            http.MethodPost,
 		Path:              endpoint,
 		Query:             query,
 		SuccessStatusCode: http.StatusOK,
 	}
-	reqHeaders := fallbackRequestHeaders(reqCtx, dispatch.profile, orch)
 	resp, err := client.DoRequest(ctx, operation, connector.Request{
-		Body:    body,
-		Headers: reqHeaders,
+		Body:    call.body,
+		Headers: call.headers,
 	})
 	if err != nil {
 		var connErr *connector.Error

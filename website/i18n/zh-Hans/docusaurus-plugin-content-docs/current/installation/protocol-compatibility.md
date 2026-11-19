@@ -294,6 +294,24 @@ providers:
 
 列出 `messages[].role` 后，Chat 后端会在那一条 system 消息中收到开头的 developer 消息（[见上文](#system-messages-a-chat-template-refuses)），请求只报告这一条诊断。
 
+### 结构化输出与工具 {#structured-output-with-tools}
+
+vLLM 等模型服务器会把输出格式（Chat 的 `response_format`、Responses 的 `text.format`、Messages 的 `output_config.format`）应用到整个补全上。模型同时拿到可调用的工具和 JSON Schema 时就无法调用工具，只会按 schema 编造一段 JSON。对于这样的轮次，Router 沿用 OpenAI 的约定：模型可以调用工具，只有不含工具调用的最终回答才受 schema 约束。
+
+这适用于输出为 `json_schema` 或 `json_object`、至少带一个工具且 `tool_choice` 不为 `none` 的请求：
+
+- **第一次调用不带格式。** 后端收到的这一轮带有客户端发送的工具和 `tool_choice`，但不带输出格式。
+- **工具调用即为回答。** 调用了工具的回答按后端给出的原样到达客户端；拒绝回答或没有自行结束的回答（达到输出上限、被过滤或失败）也是如此。
+- **最终回答会再请求一次。** 对于不含工具调用的回答，Router 用同一请求、`tool_choice: none` 和输出格式向同一后端发起第二次调用，并返回这次调用的回答。Chat Completions 后端收到的这次调用不带工具，与任何 `tool_choice: none` 请求一样；Messages 和 Responses 后端会保留工具。第一次回答的文本和推理会被丢弃。
+- **用量计入两次调用。** 回答的用量、`x-vsr-cost`、花费、限流器的 token 计数和 Router Replay 记录都把两次调用相加。回放记录还带有一个 `structured_output` 结果，记录每次调用的输出 token 数。
+- **流式请求等待回答。** 流式请求会被保持到第一次调用结束。随后工具调用按后端发送的流到达，最终回答则作为第二次调用的回答一次性到达。这样的轮次不会逐步流式输出。
+- **失败。** 第二次调用失败时，客户端收到后端的错误及其状态码；没有后端应答时收到 `503`（超时为 `504`）。流式请求在流的错误事件中收到该错误。第一次回答不会代为发送，因为它不符合格式。
+- **超时。** 第二次调用的上限是决策和模型的 `reliability` 所设 `total_timeout` 或 `per_try_timeout` 中最短的一个，未设置时为 300 秒，并且始终受请求自身截止时间约束。在 Envoy 之后，ext_proc 的 `message_timeout` 也会限制它。
+
+所有后端格式都会进行这两次调用，包括本身已允许在输出格式之外调用工具的 API。尽管第一次调用不带格式，`x-vsr-warnings` 仍会报告格式发往后端时的损失，例如发往 Messages 时的 `output_format.name`。后端无法承载的格式会在任何调用之前被拒绝，与不带工具时相同。
+
+以下请求仍以一次调用携带格式：`tool_choice: none`、没有工具、多个候选（`n` 大于 1）、回退候选、Looper 决策，以及传输由外部网关负责的仅元数据模型。
+
 ## 配置后端格式
 
 客户端可以使用任何受支持的面向客户端端点；`api_format` 控制所选后端接收的内容：
