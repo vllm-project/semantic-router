@@ -1,40 +1,16 @@
 import type { BadgeProps, StatusTone } from '../ui'
-import { formatInsightsCost } from '../utils/insightsCost'
+import { formatInsightsCost, isInsightsNoCurrency } from '../utils/insightsCost'
 
 import { displaySessionId, sessionParam } from './insightsAgentIdentity'
 import { compactID } from './insightsReviewSupport'
-import type { RunAgent, RunCall, RunCost, RunReportedOutcome, RunSummary } from './insightsRunTypes'
-
-export const RUN_MARKER_LABELS: Record<string, string> = {
-  subagent_start: 'Subagent started',
-  compaction: 'Compaction',
-  housekeeping: 'Housekeeping',
-  tool_loop: 'Tool loop',
-  image: 'Image',
-  switch: 'Model switched',
-  escalation: 'Escalated',
-  guard: 'Guard flagged',
-  block: 'Guard refusal',
-  fallback: 'Fell back',
-  failure: 'Failed',
-  tool_failure: 'Tool failed',
-}
-
-// A marker's one-character glyph in the diagram, its label in the title.
-export const RUN_MARKER_GLYPHS: Record<string, string> = {
-  subagent_start: '⑂',
-  compaction: '⇊',
-  housekeeping: '#',
-  tool_loop: '↻',
-  image: '▣',
-  switch: '⇄',
-  escalation: '↑',
-  guard: '⚑',
-  block: '⊘',
-  fallback: '↺',
-  failure: '✕',
-  tool_failure: '⚠',
-}
+import type {
+  RunAgent,
+  RunCall,
+  RunCost,
+  RunCurrencyCost,
+  RunReportedOutcome,
+  RunSummary,
+} from './insightsRunTypes'
 
 // How a run ended, as a status: only state is colored.
 export const RUN_STATUS_TONES: Record<string, StatusTone> = {
@@ -123,17 +99,91 @@ export function getRunPath(sessionId: string, step?: string) {
   return `/observe/runs?${query.toString()}`
 }
 
-export function formatRunCost(cost: RunCost): string {
+const isCurrency = (currency?: string) =>
+  Boolean(currency?.trim()) && !isInsightsNoCurrency(currency)
+
+/**
+ * The one currency a run's money reads in: the real currency that carries
+ * the most, else the plain price units when nothing else priced its calls.
+ */
+export function runCurrency(cost: Pick<RunCost, 'by_currency'>): string | undefined {
   const entries = cost.by_currency ?? []
-  const charged = entries.filter((entry) => entry.total !== 0)
-  const amounts = (charged.length > 0 ? charged : entries.slice(0, 1)).map((entry) =>
-    formatInsightsCost(entry.total, entry.currency),
+  const real = entries.filter((entry) => isCurrency(entry.currency))
+  let lead: RunCurrencyCost | undefined
+  for (const entry of real.length ? real : entries) {
+    if (!lead || Math.abs(entry.total) > Math.abs(lead.total)) lead = entry
+  }
+  return lead?.currency
+}
+
+export interface RunCostView {
+  /** The total in the run's one currency, or "no price". */
+  text: string
+  /** Whether the total leaves calls out: priced in another unit, or not priced. */
+  partial: boolean
+  /** How many calls it leaves out, when they can be counted. */
+  unpriced?: number
+  /** Why, in words, for a tooltip. */
+  note?: string
+}
+
+/**
+ * A run's or an agent's cost in one currency. Calls priced in anything else
+ * are left out and counted, never added; with the calls at hand the count is
+ * exact.
+ */
+export function runCostView(
+  cost: RunCost,
+  calls?: Pick<RunCall, 'currency' | 'cost'>[],
+): RunCostView {
+  const currency = runCurrency(cost)
+  const lead = (cost.by_currency ?? []).find((entry) => entry.currency === currency)
+  const others = (cost.by_currency ?? []).filter(
+    (entry) => entry.currency !== currency && entry.total !== 0,
   )
-  if (amounts.length === 0) return 'no price'
   // An unpriced Router call leaves its record unpriced or partly priced, so
   // the records count it already.
-  const unpriced = cost.unpriced_records
-  return amounts.join(' + ') + (unpriced > 0 ? ` (${unpriced} unpriced)` : '')
+  const missing = cost.unpriced_records
+  const text = lead ? formatInsightsCost(lead.total, lead.currency) : 'no price'
+  const counted = calls
+    ? calls.filter((call) => call.cost !== undefined && call.currency !== currency).length
+    : undefined
+  const unpriced =
+    others.length === 0 ? missing : counted !== undefined ? counted + missing : undefined
+  if (others.length === 0 && missing === 0) return { text, partial: false }
+  const parts = others.map((entry) =>
+    isCurrency(entry.currency)
+      ? `calls priced in ${entry.currency}`
+      : 'calls priced in plain units, by rates set without a currency',
+  )
+  if (cost.unpriced_records)
+    parts.push(countText(cost.unpriced_records, 'call') + ' without a price')
+  if (cost.unpriced_router_calls)
+    parts.push(countText(cost.unpriced_router_calls, 'Router call') + ' without a price')
+  return {
+    text,
+    partial: true,
+    unpriced,
+    note: `${lead ? `The total is in ${isCurrency(currency) ? currency : 'plain units'} only.` : 'No call has a price in one currency.'} Not added: ${parts.join('; ')}.`,
+  }
+}
+
+/** A run's cost as one figure in one currency: what tables and lane labels show. */
+export function formatRunCost(cost: RunCost): string {
+  return runCostView(cost).text
+}
+
+/** The calls a cost leaves out, as a short hint. */
+export function unpricedText(view: Pick<RunCostView, 'partial' | 'unpriced'>): string | undefined {
+  if (!view.partial) return undefined
+  return view.unpriced ? `${view.unpriced.toLocaleString()} unpriced` : 'partly unpriced'
+}
+
+/** A call's cost when it is in the run's currency; the plain units of an older price read as none. */
+export function callCostText(call: Pick<RunCall, 'cost' | 'currency'>, currency?: string): string {
+  if (call.cost === undefined) return '—'
+  if (currency && call.currency !== currency) return '—'
+  return formatInsightsCost(call.cost, call.currency)
 }
 
 export function formatRunDuration(ms: number): string {

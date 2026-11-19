@@ -16,8 +16,9 @@ import {
   type FilterOption,
 } from '../ui'
 import { formatDateTime } from '../utils/dateTime'
-import { formatInsightsCost } from '../utils/insightsCost'
 
+import { AGENT_EVENT_INFO, AGENT_EVENTS, callEvents } from './insightsAgentEvents'
+import { AgentEventChips, AgentEventIcon } from './InsightsAgentEvents'
 import { subagentKindLabel } from './insightsAgentIdentity'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { formatLatency, formatTokenCount } from './insightsDisplayFormat'
@@ -26,6 +27,7 @@ import { DEFAULT_PAGE_SIZE, pageOf } from './insightsListData'
 import { ModelChip } from './insightsModelLabelSupport'
 import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
 import {
+  callCostText,
   countText,
   countVerdicts,
   describeCallStatus,
@@ -35,26 +37,20 @@ import {
   OUTCOME_VERDICTS,
   orderRunAgents,
   outcomeWord,
-  RUN_MARKER_GLYPHS,
-  RUN_MARKER_LABELS,
   RUN_OUTCOME_LABELS,
   RUN_STATUS_TONES,
+  runCurrency,
   verdictLabel,
   type CallsView,
 } from './insightsRunSupport'
 import type { RunAgent, RunCall, RunReportedOutcome, RunSummary } from './insightsRunTypes'
 
-function CallMarkers({ markers }: { markers?: string[] }) {
-  if (!markers?.length) return <span className="text-xs text-subtle-foreground">—</span>
-  return (
-    <span className="inline-flex gap-1.5 text-xs">
-      {markers.map((marker) => (
-        <span key={marker} title={RUN_MARKER_LABELS[marker] ?? marker} data-marker={marker}>
-          {RUN_MARKER_GLYPHS[marker] ?? '•'}
-        </span>
-      ))}
-    </span>
-  )
+// A call's events as the Timeline marks them, the ones the table is filtered
+// by first and solid.
+function CallEvents({ call, filtered }: { call: RunCall; filtered: string[] }) {
+  const events = callEvents(call)
+  if (!events.length) return <span className="text-xs text-subtle-foreground">—</span>
+  return <AgentEventChips events={events} emphasize={filtered} />
 }
 
 function AgentName({ label }: { label: string }) {
@@ -99,14 +95,15 @@ export function RunCallsPanel({
     label: agent.label,
     count: agent.calls,
   }))
-  const markerOptions: FilterOption[] = Object.entries(RUN_MARKER_LABELS)
-    .filter(([marker]) => run.events?.[marker] || view.markers.includes(marker))
-    .map(([marker, label]) => ({
-      value: marker,
-      label,
-      icon: <span aria-hidden>{RUN_MARKER_GLYPHS[marker]}</span>,
-      count: run.events?.[marker] ?? 0,
-    }))
+  const currency = runCurrency(run.cost)
+  const markerOptions: FilterOption[] = AGENT_EVENTS.filter(
+    (event) => run.events?.[event] || view.markers.includes(event),
+  ).map((event) => ({
+    value: event,
+    label: AGENT_EVENT_INFO[event].label,
+    icon: <AgentEventIcon event={event} className="size-3.5" />,
+    count: run.events?.[event] ?? 0,
+  }))
   const columns: Column<RunCall>[] = [
     {
       id: 'index',
@@ -221,16 +218,13 @@ export function RunCallsPanel({
       align: 'right',
       hideBelow: 'md',
       cell: (entry) => (
-        <span className="font-mono text-xs tabular">
-          {entry.cost !== undefined ? formatInsightsCost(entry.cost, entry.currency) : '—'}
-        </span>
+        <span className="font-mono text-xs tabular">{callCostText(entry, currency)}</span>
       ),
     },
     {
       id: 'events',
       header: 'Events',
-      width: '72px',
-      cell: (entry) => <CallMarkers markers={entry.markers} />,
+      cell: (entry) => <CallEvents call={entry} filtered={view.markers} />,
     },
   ]
   return (

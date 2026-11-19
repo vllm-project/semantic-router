@@ -19657,6 +19657,14 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
@@ -22882,6 +22890,14 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
@@ -24101,6 +24117,14 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
@@ -24720,6 +24744,14 @@
             "description": "Filter by logical session identifier.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -26425,6 +26457,14 @@
             "description": "Filter by logical session identifier.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
             }
           },
           {

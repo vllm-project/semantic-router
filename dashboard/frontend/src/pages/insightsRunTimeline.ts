@@ -1,3 +1,9 @@
+import {
+  callEvents,
+  isTimelineEvent,
+  TIMELINE_EVENTS,
+  type TimelineEvent,
+} from './insightsAgentEvents'
 import { callSpan, orderRunAgents } from './insightsRunSupport'
 import type { RunAgent, RunCall, RunResponse } from './insightsRunTypes'
 
@@ -32,9 +38,29 @@ export interface TimelineBreak {
   ms: number
 }
 
+/** One event of one call in view, where the events strip marks it. */
+export interface TimelineMark {
+  key: string
+  event: TimelineEvent
+  call: RunCall
+  /** Percent of the axis where the call starts. */
+  at: number
+}
+
+/** A stretch of the axis drawn to scale, between folded idle stretches. */
+export interface TimelineSegment {
+  start: number
+  end: number
+  left: number
+  width: number
+}
+
 export interface RunTimeline {
   lanes: TimelineLane[]
   breaks: TimelineBreak[]
+  /** The calls' events the strip above the lanes marks, in time order. */
+  marks: TimelineMark[]
+  segments: TimelineSegment[]
   /** The first and last instants on the axis, in ms since the epoch. */
   begin: number
   end: number
@@ -79,7 +105,17 @@ export function buildRunTimeline(response: RunResponse, from: number, to: number
   const calls = response.calls.slice(from, to)
   const spans = calls.map(callSpan)
   if (calls.length === 0) {
-    return { lanes: [], breaks: [], begin: 0, end: 0, activeMs: 0, from, to: from }
+    return {
+      lanes: [],
+      breaks: [],
+      marks: [],
+      segments: [],
+      begin: 0,
+      end: 0,
+      activeMs: 0,
+      from,
+      to: from,
+    }
   }
   const begin = Math.min(...spans.map(([start]) => start))
   const end = Math.max(begin + 1, ...spans.map(([, finish]) => finish))
@@ -164,6 +200,27 @@ export function buildRunTimeline(response: RunResponse, from: number, to: number
       ? [{ ...lane, spawnAt: place(callSpan(response.calls[first])[0]) }]
       : [lane]
   })
+  const marks: TimelineMark[] = []
+  calls.forEach((call, offset) => {
+    if (!known.has(call.agent)) return
+    for (const event of callEvents(call).filter(isTimelineEvent)) {
+      marks.push({ key: `${call.record_id}-${event}`, event, call, at: place(spans[offset][0]) })
+    }
+  })
+  marks.sort(
+    (left, right) =>
+      left.at - right.at ||
+      TIMELINE_EVENTS.indexOf(left.event) - TIMELINE_EVENTS.indexOf(right.event),
+  )
+  const segments: TimelineSegment[] = []
+  let cursor = begin
+  for (const [start, finish] of [...folded, [end, end] as [number, number]]) {
+    if (start > cursor) {
+      const left = place(cursor)
+      segments.push({ start: cursor, end: start, left, width: place(start) - left })
+    }
+    cursor = finish
+  }
   return {
     lanes: ordered,
     breaks: folded.map(([start, finish]) => ({
@@ -171,12 +228,80 @@ export function buildRunTimeline(response: RunResponse, from: number, to: number
       width: breakWidth,
       ms: finish - start,
     })),
+    marks,
+    segments,
     begin,
     end,
     activeMs,
     from,
     to: from + calls.length,
   }
+}
+
+const SECOND = 1_000
+const MINUTE = 60 * SECOND
+const HOUR = 60 * MINUTE
+/** The steps the axis ticks at: round clock times. */
+const TICK_STEPS = [
+  SECOND,
+  2 * SECOND,
+  5 * SECOND,
+  10 * SECOND,
+  15 * SECOND,
+  30 * SECOND,
+  MINUTE,
+  2 * MINUTE,
+  5 * MINUTE,
+  10 * MINUTE,
+  15 * MINUTE,
+  30 * MINUTE,
+  HOUR,
+  2 * HOUR,
+  3 * HOUR,
+  6 * HOUR,
+  12 * HOUR,
+  24 * HOUR,
+]
+
+export interface TimelineTick {
+  /** Percent of the axis. */
+  at: number
+  time: number
+  /** Whether the step is under a minute, so the label needs its seconds. */
+  seconds: boolean
+}
+
+/**
+ * Round clock times along the parts of the axis drawn to scale, at the finest
+ * step that keeps about `most` of them; folded idle stretches get none.
+ */
+export function timelineTicks(
+  timeline: Pick<RunTimeline, 'segments' | 'activeMs'>,
+  most: number,
+): TimelineTick[] {
+  if (timeline.segments.length === 0 || most < 1) return []
+  const step =
+    TICK_STEPS.find((candidate) => timeline.activeMs / candidate <= most) ??
+    TICK_STEPS[TICK_STEPS.length - 1]
+  // Steps of an hour and more tick on the local clock's hours.
+  const offset = step >= HOUR ? new Date().getTimezoneOffset() * MINUTE : 0
+  const ticks: TimelineTick[] = []
+  for (const segment of timeline.segments) {
+    const span = segment.end - segment.start
+    if (span <= 0) continue
+    for (
+      let time = Math.ceil((segment.start - offset) / step) * step + offset;
+      time <= segment.end;
+      time += step
+    ) {
+      ticks.push({
+        at: segment.left + ((time - segment.start) / span) * segment.width,
+        time,
+        seconds: step < MINUTE,
+      })
+    }
+  }
+  return ticks
 }
 
 /** The time at a position of the folded axis: idle stretches keep their own length. */
