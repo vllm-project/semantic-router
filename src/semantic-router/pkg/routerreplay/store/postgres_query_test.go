@@ -25,6 +25,14 @@ func TestPostgresReplayWhereParameters(t *testing.T) {
 	}
 }
 
+// has_session keeps the records with a session id, with no parameter.
+func TestPostgresReplayWhereHasSession(t *testing.T) {
+	where, args := postgresReplayWhere(QueryFilters{HasSession: true})
+	if where != " WHERE COALESCE(session_id, '') <> ''" || len(args) != 0 {
+		t.Fatalf("where = %q args = %v", where, args)
+	}
+}
+
 // The run projection keeps every column of a full record, in order, but
 // reads the bodies, prompt and tool definitions as empty and each tool step
 // without its payload.

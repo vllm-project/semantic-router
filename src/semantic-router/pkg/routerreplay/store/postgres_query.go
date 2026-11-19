@@ -133,6 +133,9 @@ func postgresReplayWhere(filters QueryFilters) (string, []interface{}) {
 		// timestamp holds UTC wall-clock time without a zone.
 		add("timestamp >= ?", filters.Since.UTC())
 	}
+	if filters.HasSession {
+		clauses = append(clauses, "COALESCE(session_id, '') <> ''")
+	}
 	switch filters.CacheStatus {
 	case "cached":
 		clauses = append(clauses, "from_cache = TRUE")

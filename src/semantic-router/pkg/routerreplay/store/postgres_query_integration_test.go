@@ -212,6 +212,17 @@ func TestPostgresQueryRunIntegration(t *testing.T) {
 		record.ToolTrace.Flow != "client" || !reflect.DeepEqual(record.ToolTrace.ToolNames, []string{"read"}) {
 		t.Fatalf("tool trace = %+v, want the steps without their payloads", record.ToolTrace)
 	}
+
+	// A plain API call belongs to no session: has_session leaves it out of the page and its count.
+	plain := postgresMetadataFixture()
+	plain.ID, plain.RequestID, plain.SessionID, plain.Timestamp = "plain", "plain", "", start.Add(time.Minute)
+	if _, err = postgres.Add(ctx, plain); err != nil {
+		t.Fatal(err)
+	}
+	page, err := postgres.QueryPage(ctx, QueryFilters{HasSession: true}, 10, 0, false)
+	if err != nil || page.Total != 3 || len(page.Records) != 3 {
+		t.Fatalf("sessions page total=%d records=%d err=%v, want the 3 records with a session", page.Total, len(page.Records), err)
+	}
 }
 
 func TestPostgresHarnessQueriesIntegration(t *testing.T) {

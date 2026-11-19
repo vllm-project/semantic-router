@@ -23,6 +23,8 @@ type QueryFilters struct {
 	Harness string
 	// Since keeps the records at or after an instant; zero keeps every one.
 	Since time.Time
+	// HasSession keeps the records that belong to a session.
+	HasSession bool
 	// RecipeSet distinguishes an explicit legacy empty recipe from no filter.
 	RecipeSet bool
 }
