@@ -88,7 +88,6 @@ recipes:
 | `flow_tool_state` | — | 仅当请求以携带可恢复工作流状态的 Router Flow 工具结果结尾时返回 1。历史 Flow 工具结果不匹配。 |
 | `invalid_tool_call` | — | 统计最后一条 assistant 消息中参数缺少所声明工具 schema 必填属性（或根本不是 JSON 对象）的工具调用数。 |
 
-
 要按请求中的图像路由，请使用 `modality: image` 的 [`input_modality`](./input-modality) 规则。
 
 ## 决策用法 {#decision-usage}
