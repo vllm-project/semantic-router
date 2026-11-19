@@ -9,21 +9,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func textMessage(role llmprotocol.Role, text string) llmprotocol.Message {
+func sessionTransitionTextMessage(role llmprotocol.Role, text string) llmprotocol.Message {
 	return llmprotocol.Message{Role: role, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}}
 }
 
 func TestSessionPositionFactsGroupToolContinuations(t *testing.T) {
 	ctx := &RequestContext{SemanticRequest: &llmprotocol.Request{Messages: []llmprotocol.Message{
-		textMessage(llmprotocol.RoleUser, "first question"),
-		textMessage(llmprotocol.RoleAssistant, "calling tool"),
+		sessionTransitionTextMessage(llmprotocol.RoleUser, "first question"),
+		sessionTransitionTextMessage(llmprotocol.RoleAssistant, "calling tool"),
 		// Tool output text the client sent as user content continues the
 		// tool loop; it must not advance the turn index.
 		{
 			Role: llmprotocol.RoleUser, WithToolResults: true,
 			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "tool output"}},
 		},
-		textMessage(llmprotocol.RoleUser, "second question"),
+		sessionTransitionTextMessage(llmprotocol.RoleUser, "second question"),
 	}}}
 
 	turnIndex, historyTokens := sessionPositionFacts(ctx)
@@ -35,14 +35,14 @@ func TestSessionPositionFactsGroupToolContinuations(t *testing.T) {
 
 func TestSessionPositionFactsPreferOriginalSnapshot(t *testing.T) {
 	original := contextcompression.CaptureHistory(&llmprotocol.Request{Messages: []llmprotocol.Message{
-		textMessage(llmprotocol.RoleUser, "original turn one"),
-		textMessage(llmprotocol.RoleAssistant, "original reply"),
-		textMessage(llmprotocol.RoleUser, "original turn two"),
+		sessionTransitionTextMessage(llmprotocol.RoleUser, "original turn one"),
+		sessionTransitionTextMessage(llmprotocol.RoleAssistant, "original reply"),
+		sessionTransitionTextMessage(llmprotocol.RoleUser, "original turn two"),
 	}})
 	ctx := &RequestContext{
 		OriginalContextHistory: original,
 		SemanticRequest: &llmprotocol.Request{Messages: []llmprotocol.Message{
-			textMessage(llmprotocol.RoleUser, "edited"),
+			sessionTransitionTextMessage(llmprotocol.RoleUser, "edited"),
 		}},
 	}
 
