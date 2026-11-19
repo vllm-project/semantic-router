@@ -125,6 +125,10 @@ thinking 块都带有 `signature`，后端没有给出时为空；流式响应�
 `providers.defaults.reasoning_min_output_tokens` 后，`max_tokens` 低于该值的这类请求
 会以模型推理关闭的方式发往后端；参见[模型推理](model-reasoning#turn-reasoning-off-for-small-output-limits)。
 
+停止序列也可能让这类请求在返回任何文本之前结束，因为 vLLM 等后端会用 `stop_sequences`
+同时匹配思考和回答。因此，这类设置了 `stop_sequences` 的请求会以模型推理关闭的方式
+发往后端；参见[模型推理](model-reasoning#turn-reasoning-off-for-requests-with-stop-sequences)。
+
 从 Anthropic 后端转换推理内容时，如果后端附带推理签名，转换会失败；其 thinking
 响应默认携带签名。Chat Completions 或 Responses 客户端的缓冲请求会收到类型化的
 `unsupported_capability` 错误；流式请求则会在流中途、响应头和可能的早期增量已经

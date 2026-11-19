@@ -487,9 +487,11 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, decisionName, selectedModel)
 	}
 	reasoning = applyReasoningModeFromSelectedModel(selectedModelRef, decisionName, evaluationConfidence, ctx)
-	if reasoning.UseReasoning && r.outputBudgetTurnsReasoningOff(ctx, selectedModelRef.Model) {
-		reasoning.UseReasoning = false
-		ctx.VSRReasoningMode, ctx.VSRReasoningReason = "off", reasoningOffForOutputBudget
+	if reasoning.UseReasoning {
+		if reason := r.unstatedReasoningOffReason(ctx, selectedModelRef.Model); reason != "" {
+			reasoning.UseReasoning = false
+			ctx.VSRReasoningMode, ctx.VSRReasoningReason = "off", reason
+		}
 	}
 	return selectedModel, reasoning, nil
 }
