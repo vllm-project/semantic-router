@@ -426,9 +426,12 @@ oneDNN-packed FP32 copy on x86 CPUs (Decision 1.0 Kai, Lex and Route, Vela
 follow the same rule per question type (`DtypePolicy.approximate_kernels`):
 Decision 2.0 consents to CUDA's approximate fused kernels, and Vela 2.0 does
 not, because they change 7% of its span answers. Consent is per device class,
-since a record on one says nothing about the other: vela3-fast consents on CPUs
-only, to zentorch's FP32 linear (`cpu-zentorch-linear-vela3.md`), and its GPU
-path stays exact. Another `--dtype` holds every
+since a record on one says nothing about the other, and on CPUs per slot, since
+a record covers the kernels it measured: vela3-fast consents on CPUs to
+zentorch's FP32 linear only (`cpu-zentorch-linear-vela3.md`), and so do
+Decision 3.0 and the Vela 3.0 d3 sizes (`cpu-zentorch-d3.md`, which also
+measured zentorch's SDPA: no decision changed, but at most 2% faster than the
+linear alone, so no family consents to it yet); their GPU paths stay exact. Another `--dtype` holds every
 backbone weight in that dtype and runs the reference kernels without copies;
 only references recorded at that dtype check it (Decision 3.0's BF16 on CPUs),
 so elsewhere its golden status is `unverified` (`dtypes.py`). Each family records the accuracy (label
@@ -506,7 +509,8 @@ declare them:
   `user` / `prompt` are the user part; `answer` / `response` the answer part;
   everything else the context part. A question's `over` names the field it
   reads (default the whole state; for a span, the answer if present, else the
-  request).
+  request; a Vela 3.0 d3 span reads one key, so over a state of several keys
+  with neither it must name one).
 - **Thresholds.** A Set or Span question may carry `threshold`; the response
   always reports the applied one in `thresholds.<id>`, including
   length-dependent rules.
@@ -807,7 +811,10 @@ option logits (cosine plus MLP terms), softmax or sigmoid, word-level span
 scores with code-point offsets, per-type temperatures, and the thresholds in
 `calibration.json` (constant, per question, the PII length rule and its
 sparse-document gate). It serves `/v1/decisions` with Set and Span, plus the
-packages' presets (`pii`, `halu`, `toxic`, relevance) as named questions.
+packages' presets (`pii`, `halu`, `toxic`, relevance) as named questions. The
+span decoder follows the engine except for two boundary rules the engine gets
+wrong: a span keeps an edge bracket whose partner lies inside it (the `(` of
+`(415) 555-0100`), and its end takes in the combining marks that follow it.
 
 A question reads a part whole up to a scan budget (`limits.max_scan_tokens`):
 four inputs on a CPU, 32 on a GPU, or the model option `max_scan_tokens`; a
@@ -845,7 +852,12 @@ The family owns the published readouts (text pooling, the image and speech
 projections, the frozen CLAP residual and the unit normalisations) and the
 processors: the tokenizer, SigLIP's resize and normalisation, and the Whisper
 and CLAP log-mel features, with the Slaney filter banks computed as
-Transformers computes them. Verification checks the SHA-256 of every file it
+Transformers computes them. Mini's contract pins no input sample rate (Nano
+pins 16, 44.1 and 48 kHz), so the resampler refuses a rate whose reduced
+ratio to 16 or 48 kHz would need a sinc kernel above `MAX_KERNEL_ELEMENTS`
+(4M float64 elements, 32 MiB): every standard rate from 8 to 384 kHz reduces
+to under 300K elements, while 8,001 Hz, coprime with both, would need 128M
+per target and the float64 temporaries to build it. Verification checks the SHA-256 of every file it
 reads against the pinned table, that the safetensors header holds exactly the
 tensors the towers and readouts read, and the declared parameter count. The
 towers equal the reference Transformers modules bit for bit on CPU, SigLIP
@@ -877,6 +889,14 @@ thinking off. The family renders the chat format itself for the templates it
 knows by digest, and builds the tokenizer as Transformers 5.17 builds
 `Qwen2Tokenizer` (the Qwen2 pre-tokenizer pattern and every special token of
 `tokenizer_config.json`), which the released runtime tokenized with. The
+template's own tokens are the only added tokens of a prompt: the family places
+them by ID and reads every other part, the request's state, instructions and
+options among them, with no added token matched (`prompt.PromptEncoder`), so a
+typed `<|im_end|>`, `<think>` or `<|image_pad|>` is read as its characters and
+never becomes a control token or an image placeholder. A prompt whose text
+holds no added token's string tokenizes as the released runtime tokenized it,
+and media placeholders that do not match a request's media one for one refuse
+it (400) before any is expanded. The
 backbone holds BF16 parameters on every device and runs without autocast; its
 full-attention layers see the whole left-padded prompt (`attention_mode:
 noncausal_full_attention`) while the Gated DeltaNet layers stay causal. The
@@ -1037,7 +1057,10 @@ positions, each layer at its own rope base) with adapter networks over it.
 A string state is one user part as it is, even when it parses as JSON
 (`vela3_encoder._parts`), so span offsets index the text the caller sent; only
 a JSON-object state is read as typed parts. Vela 2.0 reads a string that holds
-a JSON object as that object.
+a JSON object as that object. Text is tokenized without any of the tokenizer's
+added tokens (`vela3_shared.tokens`, the picos' too): the layouts place BOS,
+EOS and the markers by ID, so a typed `<|endoftext|>` is read as its
+characters.
 
 Each adapter file holds LoRA factors for every projection of every layer, its
 own copies of the top layers it trained and the readout tensors it trained.
@@ -1063,7 +1086,11 @@ per SDPA call over every key with their rows of the dense mask. A tail under
 calls differently, so each query's reduction, and every answer, stays
 unchanged.
 The span and router layout, word units and span decoder are the Vela 2.0
-family's, which the package copies verbatim.
+family's, which the package copies verbatim. A span question whose `threshold`
+is above the package's decodes the words at the package's threshold and keeps
+the spans whose probability reaches its own, each whole (words decoded at the
+higher threshold would split an entity at its weaker words); a lower
+`threshold` decodes at itself. The picos read thresholds the same way.
 
 ### 8.8 Vela 3.0 d3 sizes (`vela3_d3`)
 
@@ -1096,9 +1123,10 @@ the usage. Span passes add nothing to `usage.input_tokens` on any size, on
 purpose: the packages' runtime does not count them either, and every
 parity request's input tokens agree with it (the vela3 family counts its
 span windows). Requests with images, videos or assets and Box / track
-questions take the base alone; those with media refuse span questions. On
-every path a blank state is refused and span questions are planned before
-the base sees the rest.
+questions take the base alone; those with media refuse span questions. A
+blank state is refused unless the request has images, videos or assets (the
+base then reads an image-only state, as the d3 models do), and span questions
+are planned before the base sees the rest.
 A span question reads its whole target in windows, so `overflow` takes only
 `window`. The target holds at most 32,768 tokens on every size (the vela3
 family's default scan budget on a CPU; it does not follow the base's question
@@ -1110,14 +1138,20 @@ through the base's length check (`max_length_exceeded`).
 trained question and label set, as on the vela3 family; the card lists the
 presets the package's span schemas hold. Span answers follow the contract (`spans`, `thresholds`, a Noul of
 the most probable word); the decoder is the package's (its unit class starts
-its compatibility block at U+F900, unlike the word splitter's). Open labels
+its compatibility block at U+F900, unlike the word splitter's) with the Vela
+2.0 decoder's two boundary corrections, and evidence spans lose the white
+space at their edges. A `threshold` above the package's decodes at the
+package's and keeps the spans whose probability reaches it, each whole, as on
+the vela3 family. Open labels
 without a description are defined before the span pass when
 `definitions.writer` is `base` (vela3-mini: the tied input embedding is the
 LM head) or `grafted_head` (vela3-flash: `labeldef_lm_head.safetensors`, cast
 to the embedding dtype). The native engine generates each definition with
 every adapter off and causal attention: a user turn, thinking off, the label
 set as context for at most 60 labels, greedy, at most 40 new tokens, ending
-at the checkpoint's `eos_token_id`. The family keeps the first line and
+at the checkpoint's `eos_token_id`; span windows and definition prompts go
+through the base's prompt encoder, so labels and states are read as text. The
+family keeps the first line and
 caches it per label set (per label above 60). Generated definitions live in a
 4,096-entry least-recently-used cache; the entries of `label_definitions.json`
 are never evicted. Rows are right-padded in batches of at most 64. A row's positions are its attention-mask
@@ -1326,7 +1360,7 @@ Section 13.4.
 
 | Accelerator | Status | Kernels |
 | --- | --- | --- |
-| `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`); with `VLLM_SRUN_ZENTORCH` set on AMD EPYC Turin onwards (CPU family 1Ah), zentorch's prepacked FP32 linear as an approximate kernel for families that consent on CPUs (vela3-fast; `cpu-zentorch-linear-vela3.md`) |
+| `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`); with `VLLM_SRUN_ZENTORCH` set on AMD EPYC Turin onwards (CPU family 1Ah), zentorch's prepacked FP32 linear and `zentorch_sdpa` as approximate kernels for families that consent to those slots on CPUs (vela3-fast: linear, `cpu-zentorch-linear-vela3.md`; Decision 3.0 and Vela 3.0 d3: linear, `cpu-zentorch-d3.md`; no family consents to SDPA yet) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
 | `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`); fused gated-delta prep (`gdn_prep`) needs FLA but does not require causal-conv1d to be installed; optional causal-conv1d is approximate on CUDA, so exact-only/non-consenting models use torch reference even when it is installed; [convolution evidence and released-runtime impact](records/cuda-causal-conv1d-exactness.md); [A/B model comparison](records/cuda-gdn-prep-without-causal-conv1d.md) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |

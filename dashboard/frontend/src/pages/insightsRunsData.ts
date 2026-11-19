@@ -27,6 +27,8 @@ export interface RunFilters {
   range: RequestRange
   harness: string[]
   status: string[]
+  /** One session's full id, as the Requests page's session filter names it. */
+  session?: string
 }
 
 const csv = (value: string | null) =>
@@ -74,11 +76,15 @@ export function matchesRunFilters(run: RunSummary, filters: RunFilters): boolean
   )
 }
 
-/** The runs query: the search, and with a range the runs that made a call since it began. */
-export function runsQuery(filters: Pick<RunFilters, 'search' | 'range'>, minute: number): string {
+/** The runs query: the search or session, and with a range the runs that made a call since it began. */
+export function runsQuery(
+  filters: Pick<RunFilters, 'search' | 'range' | 'session'>,
+  minute: number,
+): string {
   const query = new URLSearchParams()
   const search = filters.search.trim()
   if (search) query.set('search', search)
+  if (filters.session) query.set('session_id', filters.session)
   const since = requestRangeSince(filters.range, minute)
   if (since) query.set('since', since)
   return query.toString()
@@ -121,6 +127,7 @@ export function useRunsData({
   live,
   held,
   withWindow,
+  paused = false,
 }: {
   filters: RunFilters
   page: number
@@ -128,19 +135,21 @@ export function useRunsData({
   live: boolean
   held: boolean
   withWindow: boolean
+  /** Reads nothing yet, as while a session filter is matched with its full id. */
+  paused?: boolean
 }): RunsData {
   const [minute, setMinute] = useState(() => Math.floor(Date.now() / MINUTE))
   const query = runsQuery(filters, minute)
-  const scope = `${filters.search.trim()}|${filters.range}`
+  const scope = `${filters.search.trim()}|${filters.session ?? ''}|${filters.range}`
   const clientMode = hasRunClientFilters(filters)
 
   const listRead = useReplayRead<RunListResponse>(
-    clientMode ? null : pageUrl(query, pageSize, (page - 1) * pageSize),
+    clientMode || paused ? null : pageUrl(query, pageSize, (page - 1) * pageSize),
     'agent runs',
     `${scope}|${page}|${pageSize}`,
   )
   const [windowQuery, releaseWindow] = useWindowQuery(
-    clientMode ? 'live' : withWindow ? 'counts' : 'off',
+    paused ? 'off' : clientMode ? 'live' : withWindow ? 'counts' : 'off',
     scope,
     query,
   )
@@ -193,9 +202,11 @@ export function useRunsData({
     window: windowRead.rows,
     windowTotal: windowRead.total,
     windowLoaded: windowRead.loaded,
-    loading: clientMode
-      ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
-      : listRead.loading && (list === null || listRead.stale),
+    loading:
+      paused ||
+      (clientMode
+        ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
+        : listRead.loading && (list === null || listRead.stale)),
     stale: clientMode ? false : listRead.stale && list !== null,
     error: clientMode ? windowRead.error : listRead.error,
     unavailable: clientMode ? windowRead.unavailable : listRead.unavailable,
