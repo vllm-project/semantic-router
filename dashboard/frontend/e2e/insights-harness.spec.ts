@@ -325,7 +325,9 @@ test("a session is a pivot: its requests, then its run's agent tree", async ({ p
     .filter({ hasText: 'Codex' })
     .getByRole('button', { name: '01a1ea71…9e9851' })
     .click()
-  await expect(page).toHaveURL(/session=key_3fa9c2%3A01a1ea71/)
+  // the URL names the session by the id Codex sent, never the key it was scoped to
+  await expect(page).toHaveURL(/session=01a1ea71-6532-7fc1-9137-1fd7cf9e9851/)
+  await expect(page).not.toHaveURL(/key_/)
   const chip = page.getByRole('button', { name: 'Clear session filter' }).locator('..')
   await expect(chip).toContainText('Add a histogram for selection latency')
   await expect(chip.getByRole('button', { name: 'Open run' })).toBeVisible()

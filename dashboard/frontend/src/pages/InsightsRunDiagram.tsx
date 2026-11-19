@@ -511,15 +511,31 @@ function signalParts(signal: string): [string, string] {
     : [signal.slice(0, at).replace(/_/g, ' '), signal.slice(at + 1).replace(/_/g, ' ')]
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({
+  title,
+  action,
+  className,
+  children,
+}: {
+  title: string
+  action?: ReactNode
+  className?: string
+  children: ReactNode
+}) {
   return (
     <section
-      className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-border bg-surface/60 p-3.5"
+      className={cn(
+        'flex min-w-0 flex-col gap-2.5 rounded-xl border border-border bg-surface/60 p-3.5',
+        className,
+      )}
       aria-label={title}
     >
-      <h4 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle-foreground">
-        {title}
-      </h4>
+      <header className="flex items-center justify-between gap-3">
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-subtle-foreground">
+          {title}
+        </h4>
+        {action}
+      </header>
       {children}
     </section>
   )
@@ -543,15 +559,15 @@ const statusTone = (call: RunCall) =>
       ? 'info'
       : 'danger'
 
-// One call as a card: how it was routed and why, what it used and cost, and
-// how it ended, with internal codes in words and the raw value on hover.
+// One call as a card: how it was routed and why beside what it used and cost
+// over how it ended, with internal codes in words and the raw value on hover.
 export function RunCallDetails({ call }: { call: RunCall }) {
   const labels = useModelLabels()
   const method = [call.selection_method, call.session_action].filter(Boolean).join(' · ')
   const reason = call.reason === '' ? 'Hidden from this viewer' : call.reason
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-      <Section title="Routing">
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <Section title="Routing" className="lg:row-span-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px]">
           {call.previous_model ? (
             <>
@@ -577,7 +593,7 @@ export function RunCallDetails({ call }: { call: RunCall }) {
           </Row>
         ) : null}
         {call.signals?.length ? (
-          <div className="flex flex-wrap gap-1 pt-0.5" aria-label="Signals">
+          <div className="mt-auto flex flex-wrap gap-1 pt-0.5" aria-label="Signals">
             {call.signals.map((signal) => {
               const [type, rule] = signalParts(signal)
               return (
@@ -626,7 +642,18 @@ export function RunCallDetails({ call }: { call: RunCall }) {
           <Row label="Looper">{countText(call.looper_attempts, 'attempt')}</Row>
         ) : null}
       </Section>
-      <Section title="Outcome">
+      <Section
+        title="Outcome"
+        action={
+          <Link
+            to={getInsightsRecordPath(call.record_id)}
+            className="inline-flex items-center gap-1 text-[12.5px] font-medium text-primary hover:underline"
+          >
+            Open the replay record
+            <ArrowUpRight className="size-3.5" />
+          </Link>
+        }
+      >
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone={statusTone(call)} title={call.terminal_reason}>
             {describeCallStatus(call)}
@@ -670,13 +697,6 @@ export function RunCallDetails({ call }: { call: RunCall }) {
             ))}
           </div>
         ) : null}
-        <Link
-          to={getInsightsRecordPath(call.record_id)}
-          className="mt-auto inline-flex w-fit items-center gap-1 text-[13px] font-medium text-primary hover:underline"
-        >
-          Open the replay record
-          <ArrowUpRight className="size-3.5" />
-        </Link>
       </Section>
     </div>
   )
