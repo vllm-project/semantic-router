@@ -1022,6 +1022,17 @@ def _restored(item: dict, probe: Change, text: str, report: list[str]) -> str | 
     restore = {}
     for key, entry in item["keys"].items():
         now, written = current[key], entry["written"]
+        if key == CLAUDE_DENY:
+            # connect owns the deny rules it added, not the list they are in
+            before = entry["before"] or []
+            ours = [
+                tool
+                for tool in CLAUDE_DENIED_TOOLS
+                if tool in (written or []) and tool not in before
+            ]
+            if any(rule in ours for rule in now or []):
+                restore[key] = [rule for rule in now if rule not in ours] or None
+            continue
         if not still_written(key, now, written):
             what = path if key == "file" else f"{key} in {path}"
             report.append(f"kept {what}: it was changed after vllm-sr connect")

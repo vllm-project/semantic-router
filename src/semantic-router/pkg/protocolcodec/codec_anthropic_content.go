@@ -711,7 +711,11 @@ func appendAnthropicTools(wire *anthropicRequestWire, tools []llmprotocol.Tool) 
 	encoded := make([]any, 0, len(tools))
 	for _, tool := range tools {
 		if tool.Kind == llmprotocol.ToolKindServer {
-			encoded = append(encoded, tool.Raw)
+			raw, err := encodeAnthropicServerTool(tool)
+			if err != nil {
+				return err
+			}
+			encoded = append(encoded, raw)
 			continue
 		}
 		encoded = append(encoded, anthropicToolWire{Name: tool.Name, Description: tool.Description, InputSchema: tool.InputSchema, Strict: tool.Strict, CacheControl: encodeAnthropicCacheControl(tool.Cache)})

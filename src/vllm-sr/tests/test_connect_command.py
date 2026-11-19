@@ -978,6 +978,30 @@ def test_claude_code_web_search_deny_goes_once_a_backend_runs_it(tmp_path, gatew
     assert json.loads(path.read_text()) == mine
 
 
+def test_claude_code_undo_takes_out_only_its_web_search_rule(tmp_path, gateway):
+    # a rule the user adds after connect denied WebSearch stays through a second
+    # connect and --undo, which take out only the rule connect added
+    url, _, _ = gateway
+    path = tmp_path / "settings.json"
+    mine = {"permissions": {"deny": ["Bash(rm:*)"]}}
+    path.write_text(json.dumps(mine))
+    env = {"CLAUDE_CONFIG_DIR": str(tmp_path), "VLLM_SR_API_KEY": "sk-test"}
+    config = _web_search_config(tmp_path)
+    args = ["connect", "claude-code", "--config", str(config), "--base-url", url]
+    result = CliRunner().invoke(main, [*args, "--yes"], env=env)
+    assert result.exit_code == 0, result.output
+    edited = json.loads(path.read_text())
+    edited["permissions"]["deny"].append("Read(./private/**)")
+    path.write_text(json.dumps(edited))
+    result = CliRunner().invoke(main, [*args, "--yes"], env=env)
+    assert result.exit_code == 0, result.output
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo"], env=env)
+    assert result.exit_code == 0, result.output
+    assert json.loads(path.read_text())["permissions"] == {
+        "deny": ["Bash(rm:*)", "Read(./private/**)"]
+    }
+
+
 def test_claude_code_never_takes_out_a_web_search_rule_the_user_wrote(
     tmp_path, gateway
 ):

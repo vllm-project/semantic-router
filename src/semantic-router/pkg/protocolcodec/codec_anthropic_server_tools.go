@@ -20,15 +20,56 @@ func isAnthropicServerToolBlock(typeName string) bool {
 		typeName != "tool_result" && strings.HasSuffix(typeName, "_tool_result")
 }
 
+// decodeAnthropicServerTool keeps a server tool's definition as sent, except
+// its cache_control, which becomes the tool's Cache so the prompt cache policy
+// sees and counts it like any tool's marker.
 func decodeAnthropicServerTool(body json.RawMessage, typeName string) (llmprotocol.Tool, error) {
 	var definition struct {
-		Name string `json:"name"`
+		Name         string                     `json:"name"`
+		CacheControl *anthropicCacheControlWire `json:"cache_control"`
 	}
 	if err := json.Unmarshal(body, &definition); err != nil || definition.Name == "" {
 		return llmprotocol.Tool{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool",
 			"Anthropic tool "+typeName+" requires a name", err)
 	}
-	return llmprotocol.Tool{Kind: llmprotocol.ToolKindServer, Name: definition.Name, Raw: append(json.RawMessage(nil), body...)}, nil
+	raw := append(json.RawMessage(nil), body...)
+	if definition.CacheControl != nil {
+		var err error
+		if raw, err = setAnthropicServerToolCache(raw, nil); err != nil {
+			return llmprotocol.Tool{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Anthropic tool is invalid", err)
+		}
+	}
+	return llmprotocol.Tool{
+		Kind: llmprotocol.ToolKindServer, Name: definition.Name, Raw: raw,
+		Cache: decodeAnthropicCacheControl(definition.CacheControl),
+	}, nil
+}
+
+// encodeAnthropicServerTool is a server tool's definition as sent, with the
+// tool's Cache as its cache_control.
+func encodeAnthropicServerTool(tool llmprotocol.Tool) (json.RawMessage, error) {
+	if tool.Cache == nil {
+		return tool.Raw, nil
+	}
+	return setAnthropicServerToolCache(tool.Raw, encodeAnthropicCacheControl(tool.Cache))
+}
+
+// setAnthropicServerToolCache sets a definition's cache_control, or removes it
+// when cache is nil, leaving every other field as it was.
+func setAnthropicServerToolCache(raw json.RawMessage, cache *anthropicCacheControlWire) (json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	delete(fields, "cache_control")
+	if cache != nil {
+		encoded, err := json.Marshal(cache)
+		if err != nil {
+			return nil, err
+		}
+		fields["cache_control"] = encoded
+	}
+	return json.Marshal(fields)
 }
 
 // decodeAnthropicServerToolBlock reads a server tool block, reporting false

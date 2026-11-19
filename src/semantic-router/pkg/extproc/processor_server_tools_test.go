@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -273,4 +275,63 @@ func TestServerToolReplyReachesTheClient(t *testing.T) {
 		require.Equal(t, llmprotocol.ContentServerTool, answer[1].Kind)
 		require.JSONEq(t, `[`+serverToolCitation+`]`, string(answer[2].Raw))
 	})
+}
+
+// A prompt cache marker on a server tool, the policy's or the caller's,
+// reaches Anthropic on that tool and counts as the request's marker.
+func TestServerToolKeepsPromptCacheMarkers(t *testing.T) {
+	for name, marker := range map[string]string{"policy": "", "caller": `,"cache_control":{"type":"ephemeral"}`} {
+		t.Run(name, func(t *testing.T) {
+			body := `{"model":"vllm-sr/auto","max_tokens":256,"tools":[{"name":"lookup","input_schema":{"type":"object"}},` +
+				`{"type":"web_search_20250305","name":"web_search","max_uses":8` + marker + `}],` +
+				`"messages":[{"role":"user","content":"Which Go release is current?"}]}`
+			request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(body))
+			require.NoError(t, err)
+			ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+			ctx.VSRSelectedDecision = promptCacheTestDecision(map[string]interface{}{"enabled": true, "ttl": "1h"})
+
+			response, err := serverToolRouter().handleSpecifiedModelRouting(&request, "claude", "", ctx)
+			require.NoError(t, err)
+			var wire promptCacheWireRequest
+			require.NoError(t, json.Unmarshal([]byte(dispatchedBody(t, response)), &wire))
+			require.Len(t, wire.Tools, 2)
+			require.Nil(t, wire.Tools[0].CacheControl)
+			require.NotNil(t, wire.Tools[1].CacheControl)
+			require.Equal(t, "web_search", wire.Tools[1].Name)
+			if name == "policy" {
+				require.Equal(t, "1h", wire.Tools[1].CacheControl.TTL)
+				assertPromptCacheReceipt(t, ctx, promptCacheActionInserted, 1, 0)
+			} else {
+				require.Empty(t, wire.Tools[1].CacheControl.TTL)
+				assertPromptCacheReceipt(t, ctx, promptCacheActionPreserved, 0, 1)
+			}
+		})
+	}
+}
+
+// A fallback that a search answers reaches a streaming client with the
+// search's blocks, rendered from the buffered reply.
+func TestServerToolFallbackReplyStreamsToTheClient(t *testing.T) {
+	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-2"})
+	ctx.SemanticRequest = serverToolRequest(t, true, false)
+	ctx.SemanticRequest.Stream = true
+	ctx.SourceFormat, ctx.TargetFormat = llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1
+	ctx.UpstreamStatusCode = http.StatusBadGateway
+	ctx.ExpectStreamingResponse = true
+	reply := `{"id":"msg_1","type":"message","role":"assistant","model":"model-fallback-2","content":[` +
+		serverToolCall + `,` + serverToolResult + `,` + serverToolCited + `],"stop_reason":"end_turn","stop_sequence":null,` +
+		`"usage":{"input_tokens":2908,"output_tokens":57,"server_tool_use":{"web_search_requests":1}}}`
+	router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+		return []byte(reply), http.StatusOK, nil
+	}
+
+	immediate := router.handleUpstreamTransportError([]byte("upstream 502"), ctx).GetImmediateResponse()
+	require.NotNil(t, immediate)
+	require.EqualValues(t, http.StatusOK, immediate.GetStatus().GetCode(), string(immediate.GetBody()))
+	body := string(immediate.GetBody())
+	for _, sent := range []string{`"type":"server_tool_use"`, `"type":"web_search_tool_result"`, `"encrypted_content":"EqQBCioIBxgC"`, `"type":"citations_delta"`} {
+		require.Contains(t, body, sent)
+	}
+	assertClientStreamDecodes(t, protocolcodec.NewBuiltinEngine(), llmprotocol.AnthropicMessagesV1, immediate.GetBody())
 }

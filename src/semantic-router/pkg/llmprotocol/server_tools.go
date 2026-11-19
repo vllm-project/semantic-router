@@ -20,7 +20,7 @@ func IsServerToolContent(content Content) bool {
 
 func validateServerTool(tool Tool, limits Limits) error {
 	if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) != 0 || tool.Strict != nil ||
-		tool.CustomFormat != nil || tool.Description != "" || tool.Cache != nil {
+		tool.CustomFormat != nil || tool.Description != "" {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "a server tool needs a name and keeps the rest of its definition as sent", nil)
 	}
 	if exceeds(tool.Name, limits.ToolNameBytes) {
@@ -29,7 +29,7 @@ func validateServerTool(tool Tool, limits Limits) error {
 	if ValidateJSONObject(tool.Raw, limits.JSONDepth) != nil {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "a server tool definition must be a JSON object", nil)
 	}
-	return nil
+	return validateCacheDirective(tool.Cache)
 }
 
 // validateRawContent keeps Raw to the two kinds that carry it: a server tool
