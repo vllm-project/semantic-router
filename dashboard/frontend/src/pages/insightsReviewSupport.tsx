@@ -5,7 +5,7 @@ import { Badge, InlineCode, type Column } from '../ui'
 import { formatDateTime, formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost } from '../utils/insightsCost'
 
-import { compactSessionId, displaySessionId } from './insightsAgentIdentity'
+import { compactSessionId, displaySessionId, sessionParam } from './insightsAgentIdentity'
 import { ModelChip } from './insightsModelLabelSupport'
 import type { InsightsRecord } from './insightsPageTypes'
 import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
@@ -64,7 +64,7 @@ export function buildReviewQueryString(
 
 export function getReviewsPath(session?: string) {
   const params = new URLSearchParams({ tab: 'reviews' })
-  if (session) params.set('session', session)
+  if (session) params.set('session', sessionParam(session))
   return `/observe/requests?${params.toString()}`
 }
 
@@ -75,7 +75,7 @@ export function getTurnPath(turn: string) {
 
 /** The request list filtered to one session. */
 export function getSessionRequestsPath(session: string) {
-  return `/observe/requests?${new URLSearchParams({ session }).toString()}`
+  return `/observe/requests?${new URLSearchParams({ session: sessionParam(session) }).toString()}`
 }
 
 type ReviewTone = 'allow' | 'deny' | 'failed' | 'muted' | 'pending'

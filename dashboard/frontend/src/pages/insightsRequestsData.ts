@@ -322,6 +322,7 @@ export function useRequestsData({
   rules,
   interval,
   withFacets = true,
+  paused = false,
 }: {
   filters: RequestFilters
   page: number
@@ -332,6 +333,8 @@ export function useRequestsData({
   /** With a range, asks the aggregate for its traffic in intervals of this length, such as 1h. */
   interval?: string
   withFacets?: boolean
+  /** Reads nothing yet, as while a session filter is matched with its full id. */
+  paused?: boolean
 }): RequestsData {
   const [minute, setMinute] = useState(() => Math.floor(Date.now() / MINUTE))
   const since = requestRangeSince(filters.range, minute)
@@ -340,23 +343,27 @@ export function useRequestsData({
   const clientMode = hasClientFilters(filters)
 
   const listRead = useReplayRead<InsightsListResponse>(
-    clientMode ? null : `${REPLAYS}${withPage(baseQuery, pageSize, (page - 1) * pageSize)}`,
+    clientMode || paused
+      ? null
+      : `${REPLAYS}${withPage(baseQuery, pageSize, (page - 1) * pageSize)}`,
     'insight records',
     `${scope}|${page}|${pageSize}`,
   )
   const aggregateRead = useReplayRead<InsightsAggregateResponse>(
-    `${REPLAYS}/aggregate${withInterval(baseQuery, filters.range === 'all' ? undefined : interval)}`,
+    paused
+      ? null
+      : `${REPLAYS}/aggregate${withInterval(baseQuery, filters.range === 'all' ? undefined : interval)}`,
     'insight aggregates',
     `${scope}|${interval ?? ''}`,
   )
   const harnessRead = useReplayRead<InsightsListResponse>(
-    withFacets ? `${REPLAYS}${harnessCountsQuery(filters, since)}` : null,
+    withFacets && !paused ? `${REPLAYS}${harnessCountsQuery(filters, since)}` : null,
     'harness counts',
     `${serverQuery({ ...filters, harness: [] }, undefined)}|${filters.range}`,
   )
 
   const [windowQuery, releaseWindow] = useWindowQuery(
-    clientMode ? 'live' : withFacets ? 'counts' : 'off',
+    paused ? 'off' : clientMode ? 'live' : withFacets ? 'counts' : 'off',
     scope,
     baseQuery,
   )
@@ -445,11 +452,13 @@ export function useRequestsData({
     windowTotal: windowRead.total,
     windowLoaded: windowRead.loaded,
     windowLoading: windowRead.loading,
-    loading: clientMode
-      ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
-      : listRead.loading && (listResponse === null || listRead.stale),
+    loading:
+      paused ||
+      (clientMode
+        ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
+        : listRead.loading && (listResponse === null || listRead.stale)),
     stale: clientMode ? false : listRead.stale && listResponse !== null,
-    aggregateLoading: aggregateRead.loading,
+    aggregateLoading: paused || aggregateRead.loading,
     error: listError ?? aggregateError,
     listError,
     aggregateError,
