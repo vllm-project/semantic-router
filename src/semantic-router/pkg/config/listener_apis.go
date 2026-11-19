@@ -109,6 +109,20 @@ func (c *RouterConfig) APIPath(path string) string {
 	return path
 }
 
+// APIRequestTarget is APIPath of a request target, a path with its query: the
+// query is kept as the client sent it.
+func (c *RouterConfig) APIRequestTarget(target string) string {
+	path, query, hasQuery := strings.Cut(target, "?")
+	canonical := c.APIPath(path)
+	if canonical == path {
+		return target
+	}
+	if hasQuery {
+		return canonical + "?" + query
+	}
+	return canonical
+}
+
 // settingValues are the settings an entry sets, by name, for the registry's
 // check of which settings the API takes.
 func (a ListenerAPI) settingValues() []string {

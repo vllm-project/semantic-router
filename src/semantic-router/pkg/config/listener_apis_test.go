@@ -317,3 +317,24 @@ func TestEveryAPIMountsUnderItsPrefix(t *testing.T) {
 		t.Fatalf("covered %v of %v", covered, mounts)
 	}
 }
+
+func TestAPIPrefixKeepsTheQuery(t *testing.T) {
+	cfg, err := loadListenerAPIs(t, "      anthropic: {prefix: /anthropic}\n      openai: {prefix: /openai-root}", "openai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for target, want := range map[string]string{
+		"/anthropic/v1/messages?beta=true":                      "/v1/messages?beta=true",
+		"/anthropic/v1/messages/count_tokens?a=1&b=2":           "/v1/messages/count_tokens?a=1&b=2",
+		"/openai-root/openai/v1/chat/completions?api-version=x": "/openai/v1/chat/completions?api-version=x",
+		"/anthropic/v1/messages?":                               "/v1/messages?",
+		"/anthropic/v1/messages":                                "/v1/messages",
+		"/v1/messages?beta=true":                                "/v1/messages?beta=true",
+		"/anthropic/v1/messagesx?beta=true":                     "/anthropic/v1/messagesx?beta=true",
+		"/anthropic/v1/messages/?beta=true":                     "/v1/messages?beta=true",
+	} {
+		if got := cfg.APIRequestTarget(target); got != want {
+			t.Errorf("APIRequestTarget(%q) = %q, want %q", target, got, want)
+		}
+	}
+}
