@@ -621,9 +621,11 @@ def render_page(model: Model) -> str:
         + (
             f"{gpu} on every device"
             if gpu == cpu
-            else f"{gpu} on a GPU and on {' or '.join(f'an {DEVICES[key]}' for key in model.cpu_bf16)}, {cpu} on other CPUs"
-            if model.cpu_bf16
-            else f"{gpu} on a GPU, {cpu} on a CPU"
+            else (
+                f"{gpu} on a GPU and on {' or '.join(f'an {DEVICES[key]}' for key in model.cpu_bf16)}, {cpu} on other CPUs"
+                if model.cpu_bf16
+                else f"{gpu} on a GPU, {cpu} on a CPU"
+            )
         )
         + " |",
         f"| Weights | about {gigabytes(model.parameters, gpu)} at {gpu}"
