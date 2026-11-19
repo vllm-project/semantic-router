@@ -47,10 +47,15 @@ type responseStageDecider struct {
 	fail      bool
 	delegated bool
 	calls     atomic.Int32
+	// canary, when set, scores jailbreak from whether the answer contains it
+	// (0.95 if it does, 0.01 if it does not) instead of the jailbreak field.
+	canary string
+	answer atomic.Value
 }
 
 func (d *responseStageDecider) Decide(ctx context.Context, _ string, request modelservice.Request) (modelservice.Response, error) {
 	d.calls.Add(1)
+	d.answer.Store(request.Parts["answer"])
 	if d.fail {
 		return modelservice.Response{}, modelservice.ErrUnavailable
 	}
@@ -64,6 +69,12 @@ func (d *responseStageDecider) Decide(ctx context.Context, _ string, request mod
 		switch question.ID {
 		case "preset:jailbreak":
 			attack := float64(d.jailbreak)
+			if d.canary != "" {
+				attack = 0.01
+				if strings.Contains(request.Parts["answer"], d.canary) {
+					attack = 0.95
+				}
+			}
 			answer := modelservice.Answer{Type: "choice", Choice: "benign", Probabilities: map[string]float64{"jailbreak": attack, "benign": 1 - attack}, InputCoverage: "complete"}
 			if attack >= 0.5 {
 				answer.Choice = "jailbreak"
@@ -82,6 +93,11 @@ func (d *responseStageDecider) Decide(ctx context.Context, _ string, request mod
 		}
 	}
 	return modelservice.Response{Answers: answers}, nil
+}
+
+func (d *responseStageDecider) lastAnswer() string {
+	text, _ := d.answer.Load().(string)
+	return text
 }
 
 // newJailbreakDecider is a decision model that answers the jailbreak

@@ -21,7 +21,9 @@ decision's rules do, and applies its action when its condition holds.
 Routing picks a model before it answers, so a decision cannot act on what the
 model said. `response_guard` is the step after the answer: it reads the
 response-stage signals over the answer and the request-stage ones over the
-request, and refuses, flags or passes the answer accordingly.
+request, and refuses, flags or passes the answer accordingly. The answer is
+the client-visible assistant output: text, refusals, and each tool call's
+name and arguments. Hidden reasoning is not included.
 
 ## When to Use
 
