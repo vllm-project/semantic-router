@@ -791,6 +791,11 @@ tools or error translation.
   a call. They continue one call in order, as OpenAI's SDKs join them.
   Entries with the same index that name different calls fail with
   `duplicate_stream_tool_index`.
+- A Chat Completions stream whose request sets `stream_options.include_usage`
+  carries `"usage": null` on every chunk before its final usage chunk, as
+  OpenAI's does, whatever the backend's format. The final chunk carries the
+  totals and `choices: []`. A Chat backend's chunks keep their other bytes.
+  Without `include_usage`, no chunk carries `usage`.
 - An Anthropic `model_context_window_exceeded` stop reaches Chat clients as
   `finish_reason: "length"` and Responses clients as an incomplete response
   with reason `max_output_tokens`, as vLLM reports output that reaches
