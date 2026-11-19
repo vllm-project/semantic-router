@@ -20,7 +20,12 @@ from vllm_srun.testing.fixtures import write_fixture
 from .conftest import QUESTIONS, STATE
 
 DECISION2_GPU = DtypePolicy(approximate_kernels=True)
-DECISION3 = DtypePolicy(autocast=None, bf16_resident=False, gpu_weights="bfloat16")
+DECISION3 = DtypePolicy(
+    autocast=None,
+    bf16_resident=False,
+    gpu_weights="bfloat16",
+    approximate_cpu_kernels=frozenset({"linear"}),
+)
 TASK_HEADS = DtypePolicy(
     weights="float32", autocast=None, head="float32", bf16_resident=False
 )
@@ -97,6 +102,7 @@ def test_decision3_runs_bf16_on_a_gpu_and_fp32_on_a_cpu(d3_text_package, tmp_pat
     # A quantized package's format holds BF16 activations on a CPU too.
     int4 = policy(write_quantized_fixture(d3_text_package, tmp_path / "int4"))
     assert dtypes.published(int4, True) == dtypes.published(int4, False) == "bfloat16"
+    assert int4.approximate_cpu_kernels is False
 
 
 def serve(package, **args):
