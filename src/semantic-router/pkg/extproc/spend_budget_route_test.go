@@ -27,9 +27,11 @@ import (
 // spendRouteConfig is a priced Router with a Looper escalation (small-model,
 // then big-model), a Looper panel that calls three models at once, a
 // fallback chain whose models both fail, a model whose
-// answer cannot be read, and a plain route. Every answer reports 2000 input
-// tokens, 1500 of them cache reads and 300 cache writes, and 100 output
-// tokens: far more than a short request's estimate.
+// answer cannot be read, a Looper panel of three Messages models, and a
+// plain route. Every Chat answer reports 2000 input tokens, 1500 of them
+// cache reads and 300 cache writes, and 100 output tokens: far more than a
+// short request's estimate. Every Messages answer reports 10000 one-hour
+// cache writes and nothing else.
 const spendRouteConfig = `
 version: v0.5
 listeners:
@@ -73,6 +75,24 @@ providers:
       max_output_tokens: 1000
       pricing: {currency: USD, prompt_per_1m: 4.0, completion_per_1m: 20.0}
       backend_refs: [{name: fake, endpoint: BACKEND, protocol: http, provider: vllm}]
+    - name: tier-a
+      provider_model_id: tier-a
+      api_format: anthropic
+      max_output_tokens: 1000
+      pricing: {currency: USD, prompt_per_1m: 3.0, cache_write_per_1m: 3.75, cache_write_1h_per_1m: 6.0, completion_per_1m: 15.0}
+      backend_refs: [{name: fake, endpoint: BACKEND, protocol: http, provider: vllm}]
+    - name: tier-b
+      provider_model_id: tier-b
+      api_format: anthropic
+      max_output_tokens: 1000
+      pricing: {currency: USD, prompt_per_1m: 3.0, cache_write_per_1m: 3.75, cache_write_1h_per_1m: 6.0, completion_per_1m: 15.0}
+      backend_refs: [{name: fake, endpoint: BACKEND, protocol: http, provider: vllm}]
+    - name: tier-c
+      provider_model_id: tier-c
+      api_format: anthropic
+      max_output_tokens: 1000
+      pricing: {currency: USD, prompt_per_1m: 3.0, cache_write_per_1m: 3.75, cache_write_1h_per_1m: 6.0, completion_per_1m: 15.0}
+      backend_refs: [{name: fake, endpoint: BACKEND, protocol: http, provider: vllm}]
     - name: broken-model
       provider_model_id: broken-model
       api_format: openai
@@ -92,6 +112,7 @@ recipes:
         - {name: failover_kw, operator: OR, keywords: ["FAILOVER"], case_sensitive: true}
         - {name: fail_kw, operator: OR, keywords: ["FAILONLY"], case_sensitive: true}
         - {name: broken_kw, operator: OR, keywords: ["BROKEN"], case_sensitive: true}
+        - {name: tiered_kw, operator: OR, keywords: ["TIERED"], case_sensitive: true}
     decisions:
       - name: looper
         priority: 200
@@ -109,6 +130,14 @@ recipes:
         priority: 200
         rules: {operator: AND, conditions: [{type: keyword, name: panel_kw}]}
         modelRefs: [{model: small-model}, {model: big-model}, {model: main-model}]
+        algorithm:
+          type: ratings
+          on_error: skip
+          ratings: {max_concurrent: 3}
+      - name: tiered
+        priority: 200
+        rules: {operator: AND, conditions: [{type: keyword, name: tiered_kw}]}
+        modelRefs: [{model: tier-a}, {model: tier-b}, {model: tier-c}]
         algorithm:
           type: ratings
           on_error: skip
@@ -156,6 +185,18 @@ func spendBackend(t *testing.T) *httptest.Server {
 			return
 		}
 		w.Header().Set("content-type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/messages") {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id": "msg_1", "type": "message", "role": "assistant", "model": req.Model,
+				"content":     []any{map[string]any{"type": "text", "text": "ok from " + req.Model}},
+				"stop_reason": "end_turn",
+				"usage": map[string]any{
+					"input_tokens": 0, "output_tokens": 0, "cache_creation_input_tokens": 10000,
+					"cache_creation": map[string]any{"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 10000},
+				},
+			})
+			return
+		}
 		switch req.Model {
 		case "fail-a", "fail-b":
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -320,6 +361,26 @@ func TestALooperRunSpendsWhatItsRecordPrices(t *testing.T) {
 	}})
 	status, _ := spendbudget.Process().Tightest(limits)
 	require.InDelta(t, 1-spent, status.Remaining, 1e-9, "the budget charged other than the run's calls cost")
+}
+
+// A Looper hop is priced at what its budget charge settled, so a tier the
+// Chat projection of its usage has no field for, such as one-hour cache
+// writes, counts in the answer's cost and its record as in the budget.
+func TestALooperHopCostsWhatItsBudgetChargeSettled(t *testing.T) {
+	h := newSpendRoute(t, "    budgets: {currency: USD, run: {limit: 1}}")
+	response := h.chat("TIERED question", "tier")
+	require.Equal(t, http.StatusOK, response.Status, string(response.Body))
+	// Three hops of 10000 one-hour cache writes at 6 per million.
+	require.InDelta(t, 0.18, headerAmount(t, response, headers.VSRCost), 1e-9)
+	record := h.record(response)
+	require.Len(t, record.CostAccounting.RouterCalls, 1)
+	looper := record.CostAccounting.RouterCalls[0]
+	require.Equal(t, 3, looper.Calls)
+	require.NotNil(t, looper.Cost)
+	require.InDelta(t, 0.18, *looper.Cost, 1e-9)
+	require.NotNil(t, record.CostAccounting.Budget.Charged)
+	require.InDelta(t, 0.18, *record.CostAccounting.Budget.Charged, 1e-9)
+	require.InDelta(t, 0.82, headerAmount(t, response, headers.VSRBudgetRemaining), 1e-6)
 }
 
 // A Looper run a budget stops answers as a refused call does alone: 429

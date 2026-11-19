@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
@@ -70,6 +71,7 @@ func (c *Client) callModelAsHop(
 	if int64(len(resp.Body)) > c.maxResponseBytes {
 		return nil, fmt.Errorf("failed to read response: %w", hopError(fmt.Errorf("response body exceeds %d bytes", c.maxResponseBytes)))
 	}
+	recordAttemptSettledCost(ctx, resp.Header.Get(headers.VSRCost), resp.Header.Get(headers.VSRCostCurrency))
 	return resp.Body, nil
 }
 

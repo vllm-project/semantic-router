@@ -236,35 +236,45 @@ func (r *OpenAIRouter) settleRequestSpend(ctx *RequestContext, replayUsage *rout
 }
 
 // settleHopSpend charges a Looper hop's answered call its priced usage, as
-// a client request's call is charged. The hop's record leaves the price to
-// the request that made it, whose record prices the call from the same
-// usage and rates. response is the decoded answer, or nil to decode body.
-func (r *OpenAIRouter) settleHopSpend(ctx *RequestContext, response *llmprotocol.Response, body []byte) {
+// a client request's call is charged, and returns that price and its
+// currency, which the Looper records as the call's cost. response is the
+// decoded answer, or nil to decode body.
+func (r *OpenAIRouter) settleHopSpend(ctx *RequestContext, response *llmprotocol.Response, body []byte) (float64, string, bool) {
+	cost, currency, priced := r.hopCost(ctx, response, body)
 	spend := ctx.spend
-	if spend == nil || spend.hold == nil {
-		return
+	if spend == nil || spend.hold == nil || !priced || currency != spend.currency {
+		// The hop's end charges the estimate.
+		return cost, currency, priced
+	}
+	spend.settle(cost, store.BudgetSettledUsage)
+	r.refreshReplayBudget(ctx)
+	return cost, currency, priced
+}
+
+// hopCost prices a Looper hop's answer from its full usage, with the tiers,
+// such as one-hour cache writes, that its Chat projection has no field for.
+func (r *OpenAIRouter) hopCost(ctx *RequestContext, response *llmprotocol.Response, body []byte) (float64, string, bool) {
+	if r.Config == nil {
+		return 0, "", false
 	}
 	if response == nil {
 		engine, err := r.protocolEngineForBackend(ctx)
 		if err != nil {
-			return
+			return 0, "", false
 		}
 		source, _ := responseWireFormats(ctx)
 		decoded, _, _, err := engine.DecodeResponse(source, body)
 		if err != nil {
-			return
+			return 0, "", false
 		}
 		response = &decoded
 	}
 	usage := responseUsageFromSemanticUsage(response.Usage)
 	pricing, priced := r.Config.GetFullModelPricing(ctx.RequestModel)
-	if usage.invalid || !priced || !responseUsageHasPricableBreakdown(usage) ||
-		normalizeReplayCurrency(pricing.Currency) != spend.currency {
-		// The hop's end charges the estimate.
-		return
+	if usage.invalid || !priced || !responseUsageHasPricableBreakdown(usage) {
+		return 0, "", false
 	}
-	spend.settle(costForResponseUsage(usage, pricing), store.BudgetSettledUsage)
-	r.refreshReplayBudget(ctx)
+	return costForResponseUsage(usage, pricing), normalizeReplayCurrency(pricing.Currency), true
 }
 
 // releaseFailedSpend ends the reservation of a call no provider answered as

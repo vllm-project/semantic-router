@@ -1,8 +1,11 @@
 package extproc
 
 import (
+	"strconv"
+
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
@@ -38,7 +41,11 @@ func (r *OpenAIRouter) handleLooperResponseBody(
 		setResponseBodyMutation(response, responseBody)
 		setResponseContentType(response, "application/json")
 	}
-	r.settleHopSpend(ctx, semantic, responseBody)
+	if cost, currency, priced := r.settleHopSpend(ctx, semantic, responseBody); priced {
+		// The Looper prices the call at this, not at its Chat projection.
+		setResponseBodyHeader(response, headers.VSRCost, strconv.FormatFloat(cost, 'f', -1, 64))
+		setResponseBodyHeader(response, headers.VSRCostCurrency, currency)
+	}
 	// Same-wire Chat remains byte-preserving. An empty completion can still
 	// carry paid usage, which the calling algorithm classifies and accounts.
 	r.attachRouterReplayResponse(ctx, responseBody, true)

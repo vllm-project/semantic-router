@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -157,7 +158,11 @@ type attemptHandle struct {
 
 	mu          sync.Mutex
 	firstByteAt time.Time
-	once        sync.Once
+	// settled is what the Router priced the call at from its full usage, in
+	// settledCurrency, when the call was a hop.
+	settled         *float64
+	settledCurrency string
+	once            sync.Once
 }
 
 // newAttemptTracker starts the parent execution span and attaches its tracker to context.
@@ -283,7 +288,7 @@ func (a *attemptHandle) finish(result attemptResult) {
 			reason = result.reason
 		}
 		a.mu.Lock()
-		firstByteAt := a.firstByteAt
+		firstByteAt, settled, settledCurrency := a.firstByteAt, a.settled, a.settledCurrency
 		a.mu.Unlock()
 		totalLatency := time.Since(a.startedAt).Milliseconds()
 
@@ -309,6 +314,9 @@ func (a *attemptHandle) finish(result attemptResult) {
 			if result.response != nil {
 				attempt.Usage = result.response.Usage
 				attempt.ActualCost = actualAttemptCost(a.pricing, result.response.Usage)
+				if settled != nil && settledCurrency == attempt.Currency {
+					attempt.ActualCost = settled
+				}
 			}
 			attempt.Discarded = (result.usable != nil && !*result.usable) ||
 				(result.accepted != nil && !*result.accepted)
@@ -415,6 +423,20 @@ func recordAttemptFirstByte(ctx context.Context) {
 	if handle.firstByteAt.IsZero() {
 		handle.firstByteAt = time.Now()
 	}
+	handle.mu.Unlock()
+}
+
+// recordAttemptSettledCost records, for the active attempt, the price the
+// Router gave a hop's answer from its full usage, which keeps tiers, such as
+// one-hour cache writes, that the Chat usage the Looper reads has no field for.
+func recordAttemptSettledCost(ctx context.Context, cost, currency string) {
+	handle, _ := ctx.Value(attemptTimingKey{}).(*attemptHandle)
+	value, err := strconv.ParseFloat(cost, 64)
+	if handle == nil || err != nil || currency == "" {
+		return
+	}
+	handle.mu.Lock()
+	handle.settled, handle.settledCurrency = &value, currency
 	handle.mu.Unlock()
 }
 
