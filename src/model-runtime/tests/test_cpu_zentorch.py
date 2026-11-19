@@ -327,7 +327,7 @@ def test_sdpa_falls_back_to_the_reference(gates, monkeypatch, caplog):
 def test_a_family_consents_slot_by_slot(
     tmp_path, gates, monkeypatch, consent, linear, sdpa
 ):
-    """vela3-fast consents to the linear only, d3 to the linear and SDPA."""
+    """A family gets zentorch in the slots it names; vela3 and Decision 3.0 name the linear."""
     from vllm_srun.plugins.base import DtypePolicy
 
     monkeypatch.setenv("VLLM_SRUN_ZENTORCH", "1")

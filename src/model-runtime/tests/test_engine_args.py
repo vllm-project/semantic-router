@@ -24,7 +24,7 @@ DECISION3 = DtypePolicy(
     autocast=None,
     bf16_resident=False,
     gpu_weights="bfloat16",
-    approximate_cpu_kernels=frozenset({"linear", "sdpa"}),
+    approximate_cpu_kernels=frozenset({"linear"}),
 )
 TASK_HEADS = DtypePolicy(
     weights="float32", autocast=None, head="float32", bf16_resident=False

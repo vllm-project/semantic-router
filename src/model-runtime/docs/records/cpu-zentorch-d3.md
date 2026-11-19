@@ -4,11 +4,14 @@
 FP32 linear as the CPU accelerator's approximate `linear` kernel, run where
 `VLLM_SRUN_ZENTORCH` is set on AMD EPYC Turin onwards, at `--dtype auto`, for a
 family that consents on CPUs. This record adds zentorch's `zentorch_sdpa` in the
-`sdpa` slot, and is the evidence for Decision 3.0's consent on CPUs to both
-slots. The Vela 3.0 d3 sizes (vela3-lite, -mini, -flash, -turbo) share that
-policy. Consent is now per slot (`DtypePolicy.approximate_cpu_kernels` names
-the slots a record covers), so the vela3 family keeps the linear only, as its
-records measured: vela3-fast in its own record, vela3.1-fast below. Quantized
+`sdpa` slot and measures both kernels on Decision 3.0 and the Vela 3.0 d3 sizes
+(vela3-lite, -mini, -flash, -turbo). It is the evidence for Decision 3.0's
+consent on CPUs to the linear, which the Vela 3.0 d3 sizes share; SDPA changed
+no decision either, but no family consents to it yet
+([Decision 3.0 consents to the linear](#decision-30-consents-to-the-linear)).
+Consent is now per slot (`DtypePolicy.approximate_cpu_kernels` names the slots
+a record covers), so the vela3 family keeps the linear only, as its records
+measured: vela3-fast in its own record, vela3.1-fast below. Quantized
 Decision 3.0 packages keep exact kernels. Issue: #6022.
 
 - **Date:** 2026-11-17 and 2026-11-18.
@@ -213,6 +216,20 @@ These run the vision tower's attention through the `sdpa` slot.
 
 Every image and video request was answered under both kernel sets, identically
 on its repeat.
+
+## Decision 3.0 consents to the linear
+
+Decision 3.0 and the Vela 3.0 d3 sizes consent on CPUs to zentorch's linear
+only; the `sdpa` slot keeps the reference. On the TEST set, linear and SDPA
+together are within 2% of the linear alone at every size, and on vela3-mini's
+routed paths a little slower (10,133 against 9,889 ms): Decision 3.0 runs full
+attention in one layer of four, and at these input lengths attention is a small
+part of a forward. The linear alone changed no decision on the TEST set or the
+routed paths. The larger sizes, images and video and the batched runs were
+measured with both slots, not the linear alone; they changed no decision
+either. `zentorch_sdpa` stays registered in the `sdpa` slot, so a family can
+consent to it once a record shows it pays, e.g. on long inputs where full
+attention costs more.
 
 ## Why consent per slot
 
