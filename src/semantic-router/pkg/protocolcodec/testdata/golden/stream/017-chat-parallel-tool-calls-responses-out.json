@@ -111,50 +111,13 @@
       }
     },
     {
-      "event": "response.function_call_arguments.delta",
-      "data": {
-        "delta": "\"Paris\"}",
-        "item_id": "item_10798a15fb46cbab3a11eb05",
-        "output_index": 0,
-        "sequence_number": 7,
-        "type": "response.function_call_arguments.delta"
-      }
-    },
-    {
-      "event": "response.function_call_arguments.done",
-      "data": {
-        "arguments": "{\"city\":\"Paris\"}",
-        "item_id": "item_10798a15fb46cbab3a11eb05",
-        "name": "lookup_weather",
-        "output_index": 0,
-        "sequence_number": 8,
-        "type": "response.function_call_arguments.done"
-      }
-    },
-    {
-      "event": "response.output_item.done",
-      "data": {
-        "item": {
-          "arguments": "{\"city\":\"Paris\"}",
-          "call_id": "call_weather",
-          "id": "item_10798a15fb46cbab3a11eb05",
-          "name": "lookup_weather",
-          "status": "completed",
-          "type": "function_call"
-        },
-        "output_index": 0,
-        "sequence_number": 9,
-        "type": "response.output_item.done"
-      }
-    },
-    {
       "event": "response.function_call_arguments.done",
       "data": {
         "arguments": "{\"zone\":\"UTC\"}",
         "item_id": "item_9c59921a0d7ddecda22ea89e",
         "name": "lookup_time",
         "output_index": 1,
-        "sequence_number": 10,
+        "sequence_number": 7,
         "type": "response.function_call_arguments.done"
       }
     },
@@ -170,6 +133,43 @@
           "type": "function_call"
         },
         "output_index": 1,
+        "sequence_number": 8,
+        "type": "response.output_item.done"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.delta",
+      "data": {
+        "delta": "\"Paris\"}",
+        "item_id": "item_10798a15fb46cbab3a11eb05",
+        "output_index": 0,
+        "sequence_number": 9,
+        "type": "response.function_call_arguments.delta"
+      }
+    },
+    {
+      "event": "response.function_call_arguments.done",
+      "data": {
+        "arguments": "{\"city\":\"Paris\"}",
+        "item_id": "item_10798a15fb46cbab3a11eb05",
+        "name": "lookup_weather",
+        "output_index": 0,
+        "sequence_number": 10,
+        "type": "response.function_call_arguments.done"
+      }
+    },
+    {
+      "event": "response.output_item.done",
+      "data": {
+        "item": {
+          "arguments": "{\"city\":\"Paris\"}",
+          "call_id": "call_weather",
+          "id": "item_10798a15fb46cbab3a11eb05",
+          "name": "lookup_weather",
+          "status": "completed",
+          "type": "function_call"
+        },
+        "output_index": 0,
         "sequence_number": 11,
         "type": "response.output_item.done"
       }

@@ -106,10 +106,12 @@ spawned it, Codex's `x-codex-parent-thread-id`: see
 conversation ID does not change the protection scope or reset model ownership
 under session scope.
 
-The Responses API keeps explicit conversation membership separate from response
-lineage. A request's `conversation` value identifies that membership;
+The Responses API keeps conversations separate from response lineage. The
+Router keeps no Conversations objects and refuses a request that names a
+`conversation` with `unsupported_conversation`; see
+[Responses state](../installation/protocol-compatibility#responses-state-custom-tools-and-verbosity).
 `previous_response_id` retrieves retained history and provides an internal
-lineage tracking key, without joining or creating a conversation. With neither,
+lineage tracking key, without joining or creating a conversation. Without it,
 the router generates an internal tracking identity. These telemetry identities
 do not replace the configured identity headers required by Router Learning
 protection.

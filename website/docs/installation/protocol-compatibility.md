@@ -286,9 +286,9 @@ reported.
 
 A Responses request's `service_tier` and `safety_identifier` follow the same
 rule. Its other top-level fields the Router can't carry, `background`,
-`context_management`, `max_tool_calls`, `moderation`, `prompt`,
-`prompt_cache_options`, `prompt_cache_retention` and `top_logprobs`, fail with
-`unsupported_<field>`.
+`context_management`, `conversation`, `max_tool_calls`, `moderation`,
+`prompt`, `prompt_cache_options`, `prompt_cache_retention` and
+`top_logprobs`, fail with `unsupported_<field>`.
 
 ### Anthropic Messages clients on other backends
 
@@ -596,6 +596,12 @@ request without `store` and reports a `dropped` diagnostic for `store` in
   turn order: after the current request's top-level `instructions` and before
   the developer and system items of its own input. The earlier request's
   top-level `instructions` are not carried over.
+- **Conversations.** The Router keeps no Conversations objects, so it can
+  neither load a conversation's items nor add a response to them. A request
+  that names a `conversation`, as an ID or an object, fails with `400`
+  `unsupported_conversation` and `param: "conversation"` before it reaches a
+  backend; `conversation: null` names none. Continue a stored response with
+  `previous_response_id` instead.
 - **Custom tools.** Responses custom tools use `type: custom` with a flattened
   `format` object. Their `custom_tool_call` and `custom_tool_call_output`
   items keep free-form input, tool results and call IDs through Chat or
@@ -614,6 +620,26 @@ request without `store` and reports a `dropped` diagnostic for `store` in
   the backend reports none, as Messages backends don't. When the output limit
   ends the answer, its message item is `incomplete`, in
   `response.output_item.done` and in the terminal response.
+- **Streamed items.** A stream closes each output item before the next one
+  starts, as OpenAI's streams do: the item's `response.output_text.done` or
+  `response.reasoning_text.done`, its `response.content_part.done` and its
+  `response.output_item.done` come before the next
+  `response.output_item.added`, and `response.completed` or
+  `response.incomplete` holds every item. A Chat Completions backend ends its
+  outputs only when its stream ends, so the Router closes an item when the
+  backend moves on to another one: from reasoning to the answer, from the
+  answer to a function call, from one call to the next. A function call whose
+  arguments don't form a JSON object yet stays open until they do, so a
+  backend that interleaves calls still streams them, and content that comes
+  back to an item already closed, such as answer text after reasoning that
+  followed it, goes into a new item of its kind. Responses and Messages
+  backends end each item themselves, and their order is kept.
+- **Reasoning text.** Reasoning text is a content part of its reasoning item:
+  `response.content_part.added` and `response.content_part.done` with a
+  `reasoning_text` part bracket its `response.reasoning_text.delta` and
+  `response.reasoning_text.done` events, whatever the backend format. A
+  reasoning summary keeps its own `response.reasoning_summary_part.added` and
+  `response.reasoning_summary_part.done` events.
 
 ## Configure a backend format
 

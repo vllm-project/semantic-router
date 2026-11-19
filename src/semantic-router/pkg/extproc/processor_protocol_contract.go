@@ -195,8 +195,13 @@ func (r *OpenAIRouter) ingressDecodeErrorResponse(ctx *RequestContext, err error
 }
 
 func responseObjectStateHTTPStatus(protocolError *llmprotocol.ProtocolError) int {
-	if protocolError != nil && protocolError.Category == llmprotocol.ErrorNotFound {
+	switch {
+	case protocolError == nil:
+		return 503
+	case protocolError.Category == llmprotocol.ErrorNotFound:
 		return 404
+	case protocolError.Category == llmprotocol.ErrorUnsupportedFeature:
+		return 400
 	}
 	return 503
 }
