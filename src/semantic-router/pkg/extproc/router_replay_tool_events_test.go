@@ -167,10 +167,10 @@ func TestReplayRunCountsFailuresAsThePluginReported(t *testing.T) {
 	require.Equal(t, 4, run.Run.Outcome.ToolResults)
 	require.Equal(t, 2, run.Run.Outcome.ToolFailures)
 	require.Equal(t, 2, run.Calls[1].ToolFailures)
-	require.Equal(t, map[string]int{routerreplay.RunMarkerToolFailure: 1}, run.Run.Events)
+	require.Equal(t, map[string]int{routerreplay.RunMarkerToolLoop: 1, routerreplay.RunMarkerToolFailure: 1}, run.Run.Events)
 	var runs routerreplay.RunListResponse
 	require.Equal(t, 200, replayAPIJSON(t, router, "/api/v1/observability/replays/runs", &runs))
 	require.Len(t, runs.Data, 1)
 	require.Equal(t, 2, runs.Data[0].Outcome.ToolFailures)
-	require.Equal(t, map[string]int{routerreplay.RunMarkerToolFailure: 1}, runs.Data[0].Events)
+	require.Equal(t, map[string]int{routerreplay.RunMarkerToolLoop: 1, routerreplay.RunMarkerToolFailure: 1}, runs.Data[0].Events)
 }
