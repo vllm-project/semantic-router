@@ -333,7 +333,7 @@ function RecordInsight() {
                 <Link
                   to={getRunPath(record.session_id, record.id)}
                   className="font-mono hover:text-primary hover:underline"
-                  title={record.session_id}
+                  title={displaySessionId(record.session_id)}
                 >
                   {compactIdentifier(displaySessionId(record.session_id), 10, 6)}
                 </Link>

@@ -17,8 +17,13 @@ const cursorUserAgentPrefix = "cursor/"
 
 // OpenClaw sends the generic agent of the OpenAI SDK it calls through and
 // opens its system prompt with an HTML comment that names it, such as
-// <!-- openclaw:attempt:STABLE -->.
-const openClawInstructionPrefix = "<!-- openclaw:"
+// <!-- openclaw:attempt:STABLE -->. Its compaction carries no such comment:
+// a tool-less call whose system prompt is its summary instructions, with its
+// session in prompt_cache_key and that SDK's agent.
+const (
+	openClawInstructionPrefix = "<!-- openclaw:"
+	openClawUserAgentPrefix   = "openai/js "
+)
 
 func isCursor(ctx *RequestContext) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(headerValueCI(ctx, headers.UserAgent))), cursorUserAgentPrefix)
@@ -28,7 +33,13 @@ func isOpenClaw(ctx *RequestContext) bool {
 	if ctx == nil || ctx.SemanticRequest == nil {
 		return false
 	}
-	return strings.HasPrefix(strings.ToLower(leadingInstructionText(ctx.SemanticRequest)), openClawInstructionPrefix)
+	request := ctx.SemanticRequest
+	instructions := leadingInstructionText(request)
+	if strings.HasPrefix(strings.ToLower(instructions), openClawInstructionPrefix) {
+		return true
+	}
+	return len(request.Tools) == 0 && strings.HasPrefix(instructions, openClawCompactionPrompt) && openClawSession(ctx) != "" &&
+		strings.HasPrefix(strings.ToLower(strings.TrimSpace(headerValueCI(ctx, headers.UserAgent))), openClawUserAgentPrefix)
 }
 
 // maxOpenClawSessionBytes bounds the session OpenClaw names in its

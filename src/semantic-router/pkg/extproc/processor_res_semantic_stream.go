@@ -351,9 +351,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	}
 	ctx.ProtocolResponseStream = stream
 	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
-			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
-		)
+		ctx.PublicChatUsageFilter = engine.NewChatPublicStreamFilter(streamUsageRequestedByClient(ctx))
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -565,6 +563,15 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 // and inflight admission. It returns the answer the stream reconstructs, or
 // nil when the stream ended without one or was settled before.
 func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr error) *llmprotocol.Response {
+	return r.completeSemanticStreamWith(ctx, streamErr, nil)
+}
+
+// completeSemanticStreamWith settles a stream as completeSemanticStream does,
+// with the answer replace makes of the whole answer the stream reconstructs
+// in place of that answer, when replace is set.
+func (r *OpenAIRouter) completeSemanticStreamWith(
+	ctx *RequestContext, streamErr error, replace func(*llmprotocol.Response) *llmprotocol.Response,
+) *llmprotocol.Response {
 	if ctx == nil || ctx.StreamingComplete {
 		return nil
 	}
@@ -580,6 +587,9 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 			*semanticResponse = protocolcodec.AnthropicReplyIdentifiers(source, *semanticResponse)
 		}
 		ctx.SemanticResponse = semanticResponse
+		if replace != nil && !ctx.StreamingAborted {
+			semanticResponse = replace(semanticResponse)
+		}
 	} else {
 		ctx.StreamingAborted = true
 	}

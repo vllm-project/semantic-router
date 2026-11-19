@@ -286,9 +286,9 @@ reported.
 
 A Responses request's `service_tier` and `safety_identifier` follow the same
 rule. Its other top-level fields the Router can't carry, `background`,
-`context_management`, `max_tool_calls`, `moderation`, `prompt`,
-`prompt_cache_options`, `prompt_cache_retention` and `top_logprobs`, fail with
-`unsupported_<field>`.
+`context_management`, `conversation`, `max_tool_calls`, `moderation`,
+`prompt`, `prompt_cache_options`, `prompt_cache_retention` and
+`top_logprobs`, fail with `unsupported_<field>`.
 
 ### Anthropic Messages clients on other backends
 
@@ -312,6 +312,12 @@ request without `thinking` whose decision turns reasoning on can spend a small
 `providers.defaults.reasoning_min_output_tokens` set, such a request below that
 limit reaches the backend with the model's reasoning off; see
 [Model reasoning](model-reasoning#turn-reasoning-off-for-small-output-limits).
+
+A stop sequence can also end such a request before any text, because
+backends such as vLLM match `stop_sequences` against the thinking as well as
+the answer. Such a request that sets `stop_sequences` therefore reaches the
+backend with the model's reasoning off; see
+[Model reasoning](model-reasoning#turn-reasoning-off-for-requests-with-stop-sequences).
 
 A `system` message inside `messages`, such as the environment section and the
 file-change notices Claude Code inserts during a session, reaches these
@@ -606,6 +612,12 @@ Chat provider.
   turn order: after the current request's top-level `instructions` and before
   the developer and system items of its own input. The earlier request's
   top-level `instructions` are not carried over.
+- **Conversations.** The Router keeps no Conversations objects, so it can
+  neither load a conversation's items nor add a response to them. A request
+  that names a `conversation`, as an ID or an object, fails with `400`
+  `unsupported_conversation` and `param: "conversation"` before it reaches a
+  backend; `conversation: null` names none. Continue a stored response with
+  `previous_response_id` instead.
 - **Custom tools.** Responses custom tools use `type: custom` with a flattened
   `format` object. Their `custom_tool_call` and `custom_tool_call_output`
   items keep free-form input, tool results and call IDs through Chat or
@@ -624,6 +636,76 @@ Chat provider.
   the backend reports none, as Messages backends don't. When the output limit
   ends the answer, its message item is `incomplete`, in
   `response.output_item.done` and in the terminal response.
+- **Streamed items.** A stream closes each output item before the next one
+  starts, as OpenAI's streams do: the item's `response.output_text.done` or
+  `response.reasoning_text.done`, its `response.content_part.done` and its
+  `response.output_item.done` come before the next
+  `response.output_item.added`, and `response.completed` or
+  `response.incomplete` holds every item. A Chat Completions backend ends its
+  outputs only when its stream ends, so the Router closes an item when the
+  backend moves on to another one: from reasoning to the answer, from the
+  answer to a function call, from one call to the next. A function call whose
+  arguments don't form a JSON object yet stays open until they do, so a
+  backend that interleaves calls still streams them, and content that comes
+  back to an item already closed, such as answer text after reasoning that
+  followed it, goes into a new item of its kind. Responses and Messages
+  backends end each item themselves, and their order is kept.
+- **Reasoning text.** Reasoning text is a content part of its reasoning item:
+  `response.content_part.added` and `response.content_part.done` with a
+  `reasoning_text` part bracket its `response.reasoning_text.delta` and
+  `response.reasoning_text.done` events, whatever the backend format. A
+  reasoning summary keeps its own `response.reasoning_summary_part.added` and
+  `response.reasoning_summary_part.done` events.
+
+### Structured output with tools
+
+Model servers such as vLLM apply an output format (Chat `response_format`,
+Responses `text.format`, Messages `output_config.format`) to the whole
+completion. A model given callable tools and a JSON Schema then can't call
+them; it answers with made-up JSON in the schema. The Router keeps the OpenAI
+contract for such a turn: the model may call tools, and only a final answer
+without tool calls is held to the schema.
+
+This applies to a request with `json_schema` or `json_object` output, at least
+one tool, and a `tool_choice` other than `none`:
+
+- **First call without the format.** The backend receives the turn with its
+  tools and `tool_choice` as the client sent them, without the output format.
+- **A tool call is the answer.** An answer that calls a tool reaches the client
+  as the backend gave it. So does one that refuses or doesn't end on its own:
+  cut at the output limit, filtered, or failed.
+- **A final answer is asked for again.** For an answer without tool calls, the
+  Router sends the same backend a second call with the same request,
+  `tool_choice: none` and the output format, and returns that call's answer. A
+  Chat Completions backend receives this call without its tools, like any
+  `tool_choice: none` request; Messages and Responses backends keep them. The
+  first answer's text and reasoning are discarded.
+- **Usage counts both calls.** The answer's usage, `x-vsr-cost`, spend, the
+  rate limiter's token counts and the Router Replay record add up the two
+  calls. The replay record also carries a `structured_output` outcome with
+  each call's output tokens.
+- **Streams wait for the answer.** A streamed request is held until the first
+  call ends. A tool call then arrives as the stream the backend sent, and a
+  final answer arrives as the second call's answer, all at once. Such a turn
+  doesn't stream incrementally.
+- **Failure.** When the second call fails, the client receives the backend's
+  error with its status, or `503` (`504` on timeout) when no backend
+  answered. A streamed request receives it as the stream's error event. The
+  first answer isn't sent instead, because it doesn't follow the format.
+- **Timeout.** The second call is bounded by the shortest `total_timeout` or
+  `per_try_timeout` that the decision's and the model's `reliability` set,
+  else by 300 seconds, and always by the request's own deadline. Behind
+  Envoy, the ext_proc `message_timeout` bounds it too.
+
+Every backend format takes the two calls, including APIs that already allow
+tool calls beside an output format. `x-vsr-warnings` still reports what the
+format loses toward the backend, such as `output_format.name` toward Messages,
+although the first call carries no format. A format the backend can't carry is
+refused before any call, as without tools.
+
+These requests keep one call with the format: `tool_choice: none`, no tools,
+several candidates (`n` above 1), fallback candidates, Looper decisions, and
+metadata-only models whose transport an external gateway owns.
 
 ## Configure a backend format
 
@@ -680,6 +762,22 @@ tools or error translation.
 
   Anthropic Messages clients get the same message in Anthropic's
   `invalid_request_error`, which has no code field.
+- A request whose history holds a tool call that no later tool result
+  answers fails with `400` `unanswered_tool_call` and reaches no backend,
+  which could otherwise answer in place of the tool. The message is the one
+  the client's API gives for such a history, naming the call:
+
+  | Client API | `param` | Message |
+  | --- | --- | --- |
+  | Chat Completions | `messages` | `An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'. The following tool_call_ids did not have response messages: call_1` |
+  | Responses | `input` | `No tool output found for function call call_1.`, or `custom tool call` for a custom tool |
+  | Anthropic Messages | none | ``messages.1: `tool_use` ids were found without `tool_result` blocks immediately after: toolu_1. Each `tool_use` block must have a corresponding `tool_result` block in the next message.`` |
+
+  A result anywhere later in the history answers a call, and a client that
+  interrupts or denies a call answers it with a result that says so. A
+  Responses request with `previous_response_id` is judged with the stored
+  history: a function call that the stored response ended with is answered by
+  a `function_call_output` in the request's `input`.
 - A backend's `4xx` error reaches the client in the client's error format,
   with the Router's codes and the field names the client sent; see
   [request budget errors](../api/router#request-budget-errors).
@@ -781,11 +879,43 @@ tools or error translation.
   diagnostic for `content.tool_use.input`. Only the reply's last call can be
   cut. Arguments that don't start a JSON object, or a cut call that more
   output follows, still fail the reply.
+- A backend can report a call the output limit cut as stopping for its tool
+  calls: vLLM's buffered Chat reply says `finish_reason: "tool_calls"`
+  whenever its tool parser found a call, and some parsers close the cut
+  arguments as `{}`. When a reply that stops for its tool calls counts at
+  least as many output tokens as the limit the backend received (the
+  request's `max_tokens`, `max_completion_tokens` or `max_output_tokens` as
+  the decision's `request_params` leave it), the Router reads it as stopped
+  at that limit: every client gets the limit stop and the call
+  exactly as described above, and the reply's `x-vsr-warnings` reports an
+  `approximated` diagnostic for `response.stop_reason`. A stream that ends with
+  `tool_calls` after that many tokens, as some vLLM tool parsers end one, ends
+  the same way; a Chat client of a Chat backend gets the stream as the backend
+  sent it with only that `finish_reason` changed to `length`. Without usage,
+  below the limit, or with several choices, whose usage counts them all, the
+  backend's stop stands.
+- A Chat or Responses client can send such a cut call back in the history of
+  its next request, as agents keep it. A function call whose arguments stop
+  before their JSON object closes is accepted as the last call of its
+  assistant turn: the last of an assistant message's `tool_calls`, or the
+  last `function_call` item before a tool result, a user message or the end
+  of the input. Every backend receives the members the model completed before
+  the cut, as for a Messages client above, and `x-vsr-warnings` reports an
+  `approximated` diagnostic for `tool_call.arguments`. A cut call that
+  another call or text of its turn follows, and arguments that don't start a
+  JSON object or break JSON before the cut, still fail with
+  `invalid_tool_call`. A Messages client's history carries `tool_use.input`
+  as an object, so it never holds a cut call.
 - A Chat stream chunk can carry several `tool_calls` entries with the same
   `index`, as vLLM's last chunk does when its tool parser flushes the rest of
   a call. They continue one call in order, as OpenAI's SDKs join them.
   Entries with the same index that name different calls fail with
   `duplicate_stream_tool_index`.
+- A Chat Completions stream whose request sets `stream_options.include_usage`
+  carries `"usage": null` on every chunk before its final usage chunk, as
+  OpenAI's does, whatever the backend's format. The final chunk carries the
+  totals and `choices: []`. A Chat backend's chunks keep their other bytes.
+  Without `include_usage`, no chunk carries `usage`.
 - An Anthropic `model_context_window_exceeded` stop reaches Chat clients as
   `finish_reason: "length"` and Responses clients as an incomplete response
   with reason `max_output_tokens`, as vLLM reports output that reaches

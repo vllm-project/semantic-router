@@ -54,6 +54,7 @@ import {
   formatInsightsCost,
   formatInsightsCount,
   formatInsightsShare,
+  isInsightsNoCurrency,
 } from '../utils/insightsCost'
 
 import {
@@ -64,6 +65,7 @@ import {
   REQUEST_CLASSES,
   REQUEST_CLASS_LABELS,
   requestClassOf,
+  sessionParam,
   spawnsSubagent,
   subagentKindLabel,
   traceToolNames,
@@ -82,9 +84,10 @@ import {
   SummaryStrip,
   SummaryTile,
 } from './InsightsDisplay'
-import { moreCurrenciesLabel, spendSummary } from './homeSupport'
+import { spendSummary, unpricedHint, unpricedNote } from './homeSupport'
 import { recordEvents } from './insightsAgentEvents'
 import { AgentEventChips } from './InsightsAgentEvents'
+import { describeEstimateMethod, describeMissingAggregateCost } from './insightsCostAccounting'
 import { HarnessLogo, ToolChips } from './InsightsHarness'
 import { API_CLIENT_LABEL, harnessInfo } from './insightsHarness'
 import { readPage, readPageSize, writePage } from './insightsListData'
@@ -114,6 +117,8 @@ import {
 import { compactID } from './insightsReviewSupport'
 import { useSessionRun } from './insightsRunsData'
 import { getRunPath, oneLine, runHeadline } from './insightsRunSupport'
+import { SessionChoice } from './InsightsSessionChoice'
+import { useSessionScope } from './insightsSessionScope'
 
 const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
 const InsightsSessionsView = lazy(() => import('./InsightsSessionsView'))
@@ -155,25 +160,55 @@ function copyText(value: string, label: string) {
 
 const SUMMARY_GRID = 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto]'
 
+const NO_COMPARISON =
+  'No request in range has both a priced model cost and a priced reference model, so there is nothing to compare.'
+
 function spendOf(aggregate: InsightsAggregateResponse) {
   const lead = spendSummary(aggregate)
   const compared = lead.saved !== undefined
   const difference = compared ? -(lead.saved ?? 0) : undefined
+  const unpriced = unpricedHint(lead)
+  const missing = aggregate.summary.coverage
+    ? describeMissingAggregateCost(aggregate.summary.coverage)
+    : undefined
   return {
     spend: formatInsightsCost(lead.spend, lead.currency, { total: true }),
+    spendWhy: lead.currency ? undefined : (missing ?? 'No request in range has a price.'),
     difference:
       difference === undefined
         ? '—'
         : `${difference > 0 ? '+' : ''}${formatInsightsCost(difference, lead.currency, { total: true })}`,
     differenceHint:
       compared && (lead.baseline ?? 0) > 0
-        ? `${formatInsightsShare(Math.abs(lead.saved ?? 0), lead.baseline ?? 0)} ${(lead.saved ?? 0) >= 0 ? 'below' : 'above'} the reference · cost only`
+        ? `Cost only · ${formatInsightsShare(Math.abs(lead.saved ?? 0), lead.baseline ?? 0)} ${(lead.saved ?? 0) >= 0 ? 'below' : 'above'} the reference`
         : 'Cost only, not a quality comparison',
-    differenceWhy: compared
-      ? undefined
-      : 'No request in range has both a priced cost and a priced reference model',
-    more: moreCurrenciesLabel(lead.otherCurrencies),
+    differenceWhy: compared ? undefined : (missing ?? NO_COMPARISON),
+    unpriced,
+    unpricedWhy: unpriced ? unpricedNote(lead) : undefined,
   }
+}
+
+/** A figure that cannot be shown: a dash whose reason reads on hover and to a screen reader. */
+function Unavailable({ why }: { why: string }) {
+  return (
+    <Tooltip content={<span className="block max-w-80 whitespace-normal">{why}</span>}>
+      <span className="cursor-help text-subtle-foreground" aria-label={`Not available: ${why}`}>
+        —
+      </span>
+    </Tooltip>
+  )
+}
+
+/** A hint with an info mark whose tooltip says more. */
+function HintWithInfo({ text, info }: { text: string; info: string }) {
+  return (
+    <Tooltip content={<span className="block max-w-80 whitespace-normal">{info}</span>}>
+      <span className="inline-flex max-w-full cursor-help items-center gap-1">
+        <span className="truncate">{text}</span>
+        <Info className="size-3 shrink-0" aria-hidden />
+      </span>
+    </Tooltip>
+  )
 }
 
 function SummarySkeleton() {
@@ -193,7 +228,7 @@ function SummarySkeleton() {
 
 // The totals of every request the server filters select, loaded on their own:
 // the list never waits for them.
-function RequestsSummary({
+export function RequestsSummary({
   aggregate,
   loading,
   error,
@@ -201,6 +236,8 @@ function RequestsSummary({
   breakdown,
   onBreakdown,
   clientFiltered,
+  sessionsOnly = false,
+  harnessCounts,
 }: {
   aggregate: InsightsAggregateResponse | null
   loading: boolean
@@ -209,6 +246,9 @@ function RequestsSummary({
   breakdown: boolean
   onBreakdown: (open: boolean) => void
   clientFiltered: boolean
+  /** The totals read only the requests that belong to a session, as the Sessions view lists. */
+  sessionsOnly?: boolean
+  harnessCounts: Record<string, number> | null
 }) {
   if (!aggregate) {
     if (error && !loading) {
@@ -256,21 +296,21 @@ function RequestsSummary({
         <SummaryTile
           label="Estimated spend"
           icon={<CircleDollarSign className="text-chart-6" />}
-          value={money.spend}
-          hint={money.more ?? 'Recorded tokens × configured rates'}
+          value={money.spendWhy ? <Unavailable why={money.spendWhy} /> : money.spend}
+          hint={
+            money.unpriced && money.unpricedWhy ? (
+              <HintWithInfo text={money.unpriced} info={money.unpricedWhy} />
+            ) : (
+              'Recorded tokens × configured rates'
+            )
+          }
         />
         <SummaryTile
           label="Cost vs reference"
           icon={<Scale className="text-chart-2" />}
-          value={
-            money.differenceWhy ? (
-              <Tooltip content={money.differenceWhy}>
-                <span>{money.difference}</span>
-              </Tooltip>
-            ) : (
-              money.difference
-            )
-          }
+          info={describeEstimateMethod(aggregate.summary, aggregate.record_count)}
+          infoLabel="How the estimate is made"
+          value={money.differenceWhy ? <Unavailable why={money.differenceWhy} /> : money.difference}
           hint={money.differenceHint}
         />
         <SummaryTile
@@ -305,11 +345,15 @@ function RequestsSummary({
         <p className="mt-1.5 text-[11.5px] text-subtle-foreground">
           Totals cover every request class the other filters select.
         </p>
+      ) : sessionsOnly ? (
+        <p className="mt-1.5 text-[11.5px] text-subtle-foreground">
+          Totals cover the requests that belong to a session, as the list does.
+        </p>
       ) : null}
       {breakdown ? (
         <div id="requests-breakdown" className="mt-4">
           <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
-            <InsightsCharts aggregate={aggregate} />
+            <InsightsCharts aggregate={aggregate} harnessCounts={harnessCounts} />
           </Suspense>
         </div>
       ) : null}
@@ -373,7 +417,6 @@ function ClientCell({
           <span className="truncate" data-request-class={requestClass}>
             {classLine(record, requestClass, detail)}
           </span>
-          <AgentEventChips events={recordEvents(record)} compact />
           {spawned ? (
             <Tooltip content="This call started a subagent">
               <Workflow aria-label="Started a subagent" className="size-3 shrink-0 text-chart-3" />
@@ -385,8 +428,16 @@ function ClientCell({
   )
 }
 
+/** The record's events as labelled badges, the ones the Timeline marks. */
+function RecordEvents({ record }: { record: InsightsRecord }) {
+  const events = recordEvents(record).filter((event) => event !== 'housekeeping')
+  if (events.length === 0) return null
+  return <AgentEventChips events={events} className="shrink-0 flex-nowrap" />
+}
+
 // A session reads by the name its harness gave it when this record carries
-// one, else by its id; the run page holds the rest.
+// one, else by its id; the run page holds the rest. The record's events lead
+// the second line, as the Timeline's markers do.
 function SessionCell({
   record,
   onFilter,
@@ -404,8 +455,9 @@ function SessionCell({
         >
           {compactIdentifier(record.request_id || record.id, 10, 6)}
         </span>
-        <span className="text-xs text-subtle-foreground">
-          {record.recipe || 'default'} · no session
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-subtle-foreground">
+          <RecordEvents record={record} />
+          <span className="truncate">{record.recipe || 'default'} · no session</span>
         </span>
       </div>
     )
@@ -426,6 +478,7 @@ function SessionCell({
         {title ? title : <span className="font-mono text-[12px]">{compactSessionId(session)}</span>}
       </button>
       <span className="flex min-w-0 items-center gap-1.5 text-xs text-subtle-foreground">
+        <RecordEvents record={record} />
         <span className="truncate font-mono text-[11.5px]">
           {title ? compactSessionId(session) : record.recipe || 'default'}
         </span>
@@ -440,8 +493,27 @@ function SessionCell({
   )
 }
 
-function CostCell({ record }: { record: InsightsRecord }) {
+// A cost reads in the page's one currency; a cost in another unit, such as
+// the plain units of rates set without a currency, is left out as the totals
+// leave it out.
+function CostCell({ record, currency }: { record: InsightsRecord; currency?: string }) {
   const labels = useModelLabels()
+  const own = record.currency?.trim().toUpperCase()
+  if (
+    currency &&
+    own &&
+    own !== currency.trim().toUpperCase() &&
+    typeof record.actual_cost === 'number'
+  ) {
+    const unit = isInsightsNoCurrency(own) ? 'plain units' : own
+    return (
+      <Tooltip
+        content={`Priced in ${unit} (${formatInsightsCost(record.actual_cost, record.currency)}), not in ${isInsightsNoCurrency(currency) ? 'plain units' : currency}: left out of the totals`}
+      >
+        <span className="text-xs text-subtle-foreground">—</span>
+      </Tooltip>
+    )
+  }
   if (!hasCompleteCostData(record)) {
     const reason = getInsightsCostUnavailableReason(record, labels)
     if (typeof record.actual_cost === 'number' && record.currency) {
@@ -546,18 +618,28 @@ export default function InsightsRequestsView() {
   const [searchDraft, setSearchDraft] = useState(filters.search)
   const now = useNow(live ? 5_000 : 30_000)
 
+  // a session filter may name the id its harness sent; the reads match the full id
+  const sessionScope = useSessionScope(filters.session)
+  const scopedFilters = useMemo(
+    () => (filters.session ? { ...filters, session: sessionScope.id } : filters),
+    [filters, sessionScope.id],
+  )
   const data = useRequestsData({
-    filters,
+    filters: scopedFilters,
     page,
     pageSize,
     live,
     held,
     rules: agentRules,
-    withFacets: facets,
+    withFacets: facets || breakdown,
+    paused: sessionScope.resolving,
+    sessionsOnly: view === 'sessions',
   })
   const clientMode = hasClientFilters(filters)
   const narrowed = hasAnyFilter(filters)
-  const sessionRun = useSessionRun(filters.session || undefined)
+  const sessionRun = useSessionRun(
+    sessionScope.resolving ? undefined : scopedFilters.session || undefined,
+  )
   const quiet =
     !data.loading && !narrowed && data.total === 0 && !data.listError && !data.unavailable
   const anyRecord = useAnyRecord(quiet && filters.range !== 'all')
@@ -644,6 +726,7 @@ export default function InsightsRequestsView() {
   }))
 
   const aggregate = data.aggregate
+  const pageCurrency = aggregate ? spendSummary(aggregate).currency : undefined
   const columns: Column<InsightsRecord>[] = [
     {
       id: 'time',
@@ -681,7 +764,10 @@ export default function InsightsRequestsView() {
       className: 'w-full max-w-0 min-w-[180px]',
       cell: (row) => (
         <Dim on={requestClassOf(row, agentRules) === 'housekeeping'}>
-          <SessionCell record={row} onFilter={(session) => update({ session })} />
+          <SessionCell
+            record={row}
+            onFilter={(session) => update({ session: sessionParam(session) })}
+          />
         </Dim>
       ),
     },
@@ -773,7 +859,7 @@ export default function InsightsRequestsView() {
       align: 'right',
       hideBelow: 'xl',
       sortValue: (row) => row.actual_cost ?? -1,
-      cell: (row) => <CostCell record={row} />,
+      cell: (row) => <CostCell record={row} currency={pageCurrency} />,
     },
     {
       id: 'status',
@@ -825,6 +911,8 @@ export default function InsightsRequestsView() {
           breakdown={breakdown}
           onBreakdown={setBreakdownOpen}
           clientFiltered={clientMode}
+          sessionsOnly={view === 'sessions' && !filters.session}
+          harnessCounts={data.harnessCounts}
         />
       )}
       <DataToolbar
@@ -936,7 +1024,7 @@ export default function InsightsRequestsView() {
                 variant="ghost"
                 size="xs"
                 className="h-5 shrink-0 px-1.5"
-                onClick={() => navigate(getRunPath(filters.session))}
+                onClick={() => navigate(getRunPath(scopedFilters.session))}
               >
                 <Bot />
                 Open run
@@ -944,6 +1032,7 @@ export default function InsightsRequestsView() {
             }
           />
         ) : null}
+        <SessionChoice scope={sessionScope} />
         {filters.turn ? (
           <ActiveChip
             label="Codex turn"
@@ -987,7 +1076,11 @@ export default function InsightsRequestsView() {
       </div>
       {view === 'sessions' ? (
         <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
-          <InsightsSessionsView filters={filters} live={live} />
+          <InsightsSessionsView
+            filters={scopedFilters}
+            live={live}
+            paused={sessionScope.resolving}
+          />
         </Suspense>
       ) : (
         <>
@@ -1017,7 +1110,9 @@ export default function InsightsRequestsView() {
                         <Bot />
                         Open agent run
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => update({ session: row.session_id })}>
+                      <DropdownMenuItem
+                        onSelect={() => update({ session: sessionParam(row.session_id ?? '') })}
+                      >
                         <Filter />
                         Only this session
                       </DropdownMenuItem>
@@ -1029,7 +1124,9 @@ export default function InsightsRequestsView() {
                     Copy record ID
                   </DropdownMenuItem>
                   {row.session_id ? (
-                    <DropdownMenuItem onSelect={() => copyText(row.session_id ?? '', 'Session ID')}>
+                    <DropdownMenuItem
+                      onSelect={() => copyText(displaySessionId(row.session_id), 'Session ID')}
+                    >
                       <Copy />
                       Copy session ID
                     </DropdownMenuItem>

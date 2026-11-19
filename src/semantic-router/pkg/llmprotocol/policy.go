@@ -123,6 +123,11 @@ type Policy struct {
 	// terminal. TranslateResponse and NewStreamWithMutation set it only when
 	// the target wire format can carry a matched stop sequence.
 	ProviderStopSequences bool
+	// RequestOutputLimit is the output token limit the backend received with
+	// the request whose reply this policy decodes, 0 when the request set
+	// none. A reply that stopped for its tool calls once its output reached
+	// the limit decodes as stopped at the limit (ToolCallStopAtOutputLimit).
+	RequestOutputLimit int64
 	// AllowedLossyFields are translated with a diagnostic even under
 	// LossyReject. Entries come from OptInLossyFields.
 	AllowedLossyFields []string
