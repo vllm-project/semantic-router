@@ -118,6 +118,35 @@ func TestMemorySnapshotBudgetSharesResponseAndHistoryBytes(t *testing.T) {
 	require.NoError(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, nil))
 }
 
+// A tool-call-only response charges the answer's tool names, namespaces, and
+// arguments, so an oversized argument is rejected before it reaches the
+// memory job instead of passing validation as a textless turn.
+func TestMemorySnapshotBudgetRejectsOversizedToolCallOnlyResponse(t *testing.T) {
+	oversized := strings.Repeat("x", maxMemorySnapshotBytes+1)
+	for _, field := range []string{"arguments", "name", "namespace"} {
+		call := &llmprotocol.ToolCall{Namespace: "fs", Name: "write", Arguments: `{"path":"notes.txt"}`}
+		switch field {
+		case "arguments":
+			call.Arguments = oversized
+		case "name":
+			call.Name = oversized
+		case "namespace":
+			call.Namespace = oversized
+		}
+		response := &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+			Role:    llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: call}},
+		}}}
+		require.ErrorIs(t, validateMemorySnapshotBudget(nil, nil, response), errMemoryHistoryTooLarge, field)
+	}
+	withinBudget := &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall,
+			ToolCall: &llmprotocol.ToolCall{Namespace: "fs", Name: "write", Arguments: `{"path":"notes.txt"}`}}},
+	}}}
+	require.NoError(t, validateMemorySnapshotBudget(nil, nil, withinBudget))
+}
+
 type budgetHistory struct {
 	messages []llmprotocol.Message
 	retained []*responseapi.StoredResponse

@@ -17,12 +17,23 @@ import (
 // name and arguments. Reasoning stays separate: guardrails and memory must
 // not mistake hidden chain-of-thought for the delivered answer.
 func semanticAssistantContent(response *llmprotocol.Response) string {
+	return renderSemanticAssistantContent(response, nil)
+}
+
+// renderSemanticAssistantContent joins the answer with an optional transform
+// applied to prose (text and refusal) parts only. Tool names and arguments
+// are payload, not prose: they pass through verbatim so reasoning-tag cleanup
+// cannot truncate a literal <think> an argument legitimately carries.
+func renderSemanticAssistantContent(response *llmprotocol.Response, transform func(string) string) string {
 	if response == nil {
 		return ""
 	}
 	var text strings.Builder
 	afterTool := false
 	write := func(part string, isTool bool) {
+		if !isTool && transform != nil {
+			part = transform(part)
+		}
 		if part == "" {
 			return
 		}

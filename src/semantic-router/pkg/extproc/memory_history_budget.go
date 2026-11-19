@@ -112,8 +112,9 @@ func (b *memoryHistoryBudget) storedOutput(stored *responseapi.StoredResponse) b
 	return true
 }
 
-// Count the same primary assistant text consumed by semanticAssistantContent.
-// Charge raw bytes so stripping think tags cannot hide unbounded preparation.
+// Count the same primary assistant answer consumed by semanticAssistantContent:
+// text, refusals, and each tool call's name, namespace, and arguments. Charge
+// raw bytes so stripping think tags cannot hide unbounded preparation.
 func (b *memoryHistoryBudget) assistantResponse(response *llmprotocol.Response) bool {
 	if response == nil {
 		return true
@@ -129,8 +130,15 @@ func (b *memoryHistoryBudget) assistantResponse(response *llmprotocol.Response) 
 			return false
 		}
 		for _, content := range item.Content {
-			if (content.Kind == llmprotocol.ContentText || content.Kind == llmprotocol.ContentRefusal) && !b.strings(content.Text) {
-				return false
+			switch content.Kind {
+			case llmprotocol.ContentText, llmprotocol.ContentRefusal:
+				if !b.strings(content.Text) {
+					return false
+				}
+			case llmprotocol.ContentToolCall:
+				if content.ToolCall != nil && !b.strings(content.ToolCall.Name, content.ToolCall.Namespace, content.ToolCall.Arguments) {
+					return false
+				}
 			}
 		}
 	}

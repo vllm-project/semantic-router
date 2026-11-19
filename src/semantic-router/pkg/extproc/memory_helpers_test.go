@@ -80,6 +80,27 @@ func TestNeutralMemoryMessageAndCurrentUserExtraction(t *testing.T) {
 	}
 }
 
+// Tool arguments are payload, not prose: reasoning-tag cleanup strips the
+// text parts of the answer but keeps a literal <think> an argument carries,
+// so valid arguments such as {"path":"<think>.txt"} reach memory intact.
+func TestExtractSemanticAssistantResponseTextPreservesToolCallArguments(t *testing.T) {
+	arguments := `{"path":"<think>.txt","contents":"keep me"}`
+	response := &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "Saving your notes. <think>plan the write</think>"},
+			{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Namespace: "fs", Name: "write", Arguments: arguments}},
+		},
+	}}}
+	want := "Saving your notes.\ntool fs.write\n" + arguments
+	if got := extractSemanticAssistantResponseText(response); got != want {
+		t.Fatalf("extract = %q, want %q", got, want)
+	}
+	if got := extractSemanticAssistantResponseText(hallucinationAssistantResponse("<think>reasoning only</think>")); got != "" {
+		t.Fatalf("a pure-reasoning text part still strips to empty, got %q", got)
+	}
+}
+
 func neutralTextMessage(role llmprotocol.Role, text string) llmprotocol.Message {
 	return llmprotocol.Message{Role: role, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}}
 }
