@@ -61,15 +61,28 @@ func (r *OpenAIRouter) failedAttemptResponse(ctx *RequestContext, attempt *faile
 	if attempt == nil {
 		return nil
 	}
-	protocolError := r.failedAttemptError(ctx, attempt)
+	return r.answerFailedCall(ctx, attempt.status, r.failedAttemptError(ctx, attempt), attempt.replayReason())
+}
+
+// answerFailedCall answers the client with protocolError and status for an
+// upstream call that gave it no answer, and ends the record with it for
+// reason.
+func (r *OpenAIRouter) answerFailedCall(
+	ctx *RequestContext, status int, protocolError *llmprotocol.ProtocolError, reason string,
+) *ext_proc.ProcessingResponse {
 	ctx.ImmediateProtocolError = protocolError
-	response := r.encodeImmediateResponseForClient(r.createErrorResponse(attempt.status, protocolError.Message), ctx)
-	reason := "upstream_error_response"
-	if attempt.transport {
-		reason = "upstream_" + cmp.Or(attempt.failure, "unavailable")
-	}
-	r.failAnsweredRouterReplay(ctx, attempt.status, response.GetImmediateResponse().GetBody(), reason)
+	response := r.encodeImmediateResponseForClient(r.createErrorResponse(status, protocolError.Message), ctx)
+	r.failAnsweredRouterReplay(ctx, status, response.GetImmediateResponse().GetBody(), reason)
 	return response
+}
+
+// replayReason is why the record of a request answered with the attempt's
+// failure fails.
+func (attempt *failedAttempt) replayReason() string {
+	if attempt.transport {
+		return "upstream_" + cmp.Or(attempt.failure, "unavailable")
+	}
+	return "upstream_error_response"
 }
 
 // fallbackCredentialRefusal is the request's 401 when a chain ended at a

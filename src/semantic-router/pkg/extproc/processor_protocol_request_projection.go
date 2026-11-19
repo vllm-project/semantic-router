@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount"
 )
 
 // projectRequestForBackend applies portable request projections before model
@@ -34,11 +35,35 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	}
 	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(projected, model, target, shadows...)
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
+	projected, toolChoiceDiagnostics := llmprotocol.ProjectToolChoiceNone(projected, target)
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
+	projected, serverToolDiagnostics, err := r.projectServerToolsForBackend(projected, model, target)
+	if err != nil {
+		return projected, nil, err
+	}
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
-	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+	projected = r.projectControlTokens(projected, model)
+	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, toolChoiceDiagnostics,
+		fileDiagnostics, storeDiagnostics, capabilityDiagnostics, serverToolDiagnostics, otherDiagnostics), err
+}
+
+// projectControlTokens escapes the model's control tokens in the request's
+// user and tool text (llmprotocol.ProjectControlTokens), so that its model
+// server reads them as text. Only the model's own Hugging Face tokenizer
+// lists the added tokens that server matches: a model counted with the proxy
+// tokenizer gets the request as it is.
+func (r *OpenAIRouter) projectControlTokens(request llmprotocol.Request, model string) llmprotocol.Request {
+	if r == nil || r.Config == nil {
+		return request
+	}
+	tokenizer := r.promptTokenizer(model)
+	if tokenizer.kind != contextCountExact || !tokenizer.encoding.AddedTokens() {
+		return request
+	}
+	projected, _ := llmprotocol.ProjectControlTokens(request, tokenizer.encoding, tokencount.WordJoiner)
+	return projected
 }
 
 // projectReasoningSignatures sends signed thinking in the history to a backend

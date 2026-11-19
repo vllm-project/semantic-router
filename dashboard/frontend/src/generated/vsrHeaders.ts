@@ -297,6 +297,9 @@ export const TRACE_CLIENT_PROTOCOL = 'client_protocol'
 /** Provider wire protocol, such as `openai`. */
 export const TRACE_UPSTREAM_PROTOCOL = 'upstream_protocol'
 
+/** The model the client named when the listener's `unserved_models` routed the request to one of its own models. */
+export const TRACE_REQUESTED_MODEL = 'requested_model'
+
 /** Rendered input tokens of the final automatic-output dispatch, chat template included. */
 export const TRACE_EFFECTIVE_INPUT_TOKENS = 'effective_input_tokens'
 
@@ -315,7 +318,7 @@ export const TRACE_CONTEXT_TOKENS = 'context_tokens'
 /** Domain category the classifier chose, such as `math`. */
 export const TRACE_CATEGORY = 'category'
 
-/** Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off. */
+/** Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off, and `reason=stop_sequences` when the request's stop sequences did. */
 export const TRACE_REASONING = 'reasoning'
 
 /** Output kinds of the selected decision's output contract, such as `(image)` or `(text image)`; omitted for a decision that declares none. */
@@ -366,6 +369,7 @@ export const TRACE_MEMBERS = [
   TRACE_ON_UNKNOWN,
   TRACE_CLIENT_PROTOCOL,
   TRACE_UPSTREAM_PROTOCOL,
+  TRACE_REQUESTED_MODEL,
   TRACE_EFFECTIVE_INPUT_TOKENS,
   TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS,
   TRACE_SIGNALS,

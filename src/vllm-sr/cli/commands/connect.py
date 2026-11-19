@@ -279,6 +279,7 @@ def claude_code(
     context_window, notes = _context_window(doc, model, context_window)
     values = hc.claude_env(gateway, model, token, key_command)
     values["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(rc.output_limit(doc, model))
+    values, notes = _web_search(path, doc, model, values, notes)
     if context_window:
         values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
     if launch:
@@ -1198,6 +1199,35 @@ def _check(
             )
         )
     success(f"{name} works through the gateway.")
+
+
+def _web_search(path, doc, model, values, notes) -> tuple[dict, list[str]]:
+    """Claude Code's settings values and notes with WebSearch denied when no model
+    the entrypoint reaches has a backend that runs Anthropic's web search, since
+    every search would fail, and with the rule taken out again once one does,
+    when connect added it. A rule the user wrote stays."""
+    served = rc.web_search_served(doc, model)
+    text = hc.read(path) or ""
+    needs = (
+        "an anthropic or anthropic-compatible backend,"
+        " which Anthropic's web search needs"
+    )
+    if served is False:
+        values = {**values, hc.CLAUDE_DENY: hc.claude_denied(text)}
+        return values, [
+            *notes,
+            f"WebSearch: denied, since no model {model} reaches has {needs}.",
+        ]
+    denied = set(hc.CLAUDE_DENIED_TOOLS) & set(hc.claude_deny_rules(text))
+    if served and denied and hc.claude_denial_owned(path):
+        values = {**values, hc.CLAUDE_DENY: hc.claude_denied(text, deny=False)}
+        note = (
+            f"WebSearch: allowed again, since {model} now reaches a model with"
+            f" {needs}, so the deny rule an earlier vllm-sr connect added is taken"
+            " out."
+        )
+        return values, [*notes, note]
+    return values, notes
 
 
 def _context_window(doc, model, given) -> tuple[int | None, list[str]]:

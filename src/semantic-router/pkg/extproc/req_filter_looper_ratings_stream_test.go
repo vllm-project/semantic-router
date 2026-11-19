@@ -50,6 +50,7 @@ func assertRatingsStreamingBoundary(t *testing.T, includeUsage bool) {
 	require.Contains(t, string(immediate.GetBody()), "data: [DONE]\n\n")
 	if includeUsage {
 		require.Contains(t, string(immediate.GetBody()), `"total_tokens":6`)
+		requireNullUsageUntilTheUsageChunk(t, immediate.GetBody())
 	} else {
 		require.NotContains(t, string(immediate.GetBody()), `"usage"`)
 	}

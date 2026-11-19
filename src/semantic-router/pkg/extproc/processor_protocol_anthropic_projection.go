@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -153,7 +154,12 @@ func clientResponseMutation(ctx *RequestContext, backend llmprotocol.WireFormat)
 	}
 	return func(response *llmprotocol.Response) error {
 		if responseID != "" {
+			// The Router owns the Responses object: its ID, and its creation
+			// time when the backend reports none, as Messages backends don't.
 			response.ID = responseID
+			if response.CreatedAt.IsZero() {
+				response.CreatedAt = time.Now().UTC()
+			}
 		}
 		namespaces.RestoreResponse(response)
 		if omitReasoning {
@@ -174,6 +180,9 @@ func clientStreamMutation(ctx *RequestContext, backend llmprotocol.WireFormat) p
 	return func(event *llmprotocol.Event) error {
 		if responseID != "" {
 			event.ResponseID = responseID
+			if event.CreatedAt.IsZero() && (event.Type == llmprotocol.EventResponseStarted || event.Type == llmprotocol.EventResponseFailed) {
+				event.CreatedAt = time.Now().UTC()
+			}
 		}
 		event.ToolCall = namespaces.RestoreCall(event.ToolCall)
 		if !omitReasoning {

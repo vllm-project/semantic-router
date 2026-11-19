@@ -21,6 +21,7 @@ const (
 	TraceOnUnknown                = "on_unknown"
 	TraceClientProtocol           = "client_protocol"
 	TraceUpstreamProtocol         = "upstream_protocol"
+	TraceRequestedModel           = "requested_model"
 	TraceEffectiveInputTokens     = "effective_input_tokens"
 	TraceEffectiveMaxOutputTokens = "effective_max_output_tokens"
 	TraceSignals                  = "signals"
@@ -65,13 +66,14 @@ var traceMembers = []TraceMember{
 	{TraceOnUnknown, "routing", "Decisions whose unknown result `rules.on_unknown` resolved, each with its `policy`."},
 	{TraceClientProtocol, "protocol", "Client wire protocol, such as `anthropic`."},
 	{TraceUpstreamProtocol, "protocol", "Provider wire protocol, such as `openai`."},
+	{TraceRequestedModel, "listener", "The model the client named when the listener's `unserved_models` routed the request to one of its own models."},
 	{TraceEffectiveInputTokens, "automatic_output", "Rendered input tokens of the final automatic-output dispatch, chat template included."},
 	{TraceEffectiveMaxOutputTokens, "automatic_output", "Output token limit of the final automatic-output dispatch, reasoning included."},
 	{TraceSignals, "signals", "Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`."},
 	{TraceScanCoverage, "signals", "Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts."},
 	{TraceContextTokens, "signals", "Token count the `context` signal measured."},
 	{TraceCategory, "classification", "Domain category the classifier chose, such as `math`."},
-	{TraceReasoning, "classification", "Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off."},
+	{TraceReasoning, "classification", "Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off, and `reason=stop_sequences` when the request's stop sequences did."},
 	{TraceModality, "routing", "Output kinds of the selected decision's output contract, such as `(image)` or `(text image)`; omitted for a decision that declares none."},
 	{TraceSystemPrompt, "system_prompt", "Present when a `system_prompt` plugin injected text into the request."},
 	{TraceCacheSimilarity, "response_cache", "Similarity score of the response-cache lookup."},

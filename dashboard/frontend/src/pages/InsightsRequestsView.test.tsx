@@ -94,6 +94,14 @@ describe('the requests list', () => {
     expect(html).not.toContain('in your browser')
   })
 
+  it('reads the totals of the Sessions view over the requests that belong to a session', () => {
+    requests.data = requestsData({ rows: [codexSubagentCall], total: 1 })
+    render('/observe/requests?view=sessions')
+    expect(requests.options?.sessionsOnly).toBe(true)
+    render('/observe/requests')
+    expect(requests.options?.sessionsOnly).toBe(false)
+  })
+
   it('offers every harness before the counts arrive, and names the class filters the browser runs', () => {
     requests.data = requestsData({ rows: [codexSubagentCall], total: 1 })
     const html = render('/observe/requests?harness=api&class=main')

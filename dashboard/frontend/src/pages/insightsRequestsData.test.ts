@@ -11,6 +11,7 @@ import {
   readRequestFilters,
   requestRangeSince,
   serverQuery,
+  withSessionsOnly,
   writeRequestFilters,
 } from './insightsRequestsData'
 
@@ -63,10 +64,11 @@ describe('request list filters', () => {
 describe('the harness filter', () => {
   it('reads the harnesses the replay API filters by, and API clients as api_client', () => {
     // "api" names API clients in links from before the server filtered harnesses
-    expect(read('harness=codex,claudecode,api,cursor,codex').harness).toEqual([
+    expect(read('harness=codex,claudecode,api,cursor,gemini,codex').harness).toEqual([
       'codex',
       'claude_code',
       'api_client',
+      'cursor',
     ])
     expect(read('harness=api_client').harness).toEqual(['api_client'])
   })
@@ -94,11 +96,25 @@ describe('the harness filter', () => {
     })
   })
 
+  it('keeps the Sessions view’s reads to the requests that belong to a session', () => {
+    const since = '2026-11-18T09:42:00.000Z'
+    expect(withSessionsOnly(serverQuery(read('model=m'), since), true)).toBe(
+      `?model=m&since=${encodeURIComponent(since)}&has_session=true`,
+    )
+    expect(withSessionsOnly('', true)).toBe('?has_session=true')
+    expect(withSessionsOnly('?model=m', false)).toBe('?model=m')
+    const counts = new URLSearchParams(harnessCountsQuery(read('harness=codex'), since, true))
+    expect(counts.get('has_session')).toBe('true')
+    expect(counts.get('harness')).toBeNull()
+  })
+
   it('offers every harness before the counts load, then the counted and the selected ones', () => {
     expect(harnessFilterValues(null, []).map((option) => option.value)).toEqual([
       'claude_code',
       'codex',
       'opencode',
+      'cursor',
+      'openclaw',
       'deepseek_harness',
       'api_client',
     ])

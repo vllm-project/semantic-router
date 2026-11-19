@@ -2,7 +2,6 @@ package protocolcodec
 
 import (
 	"encoding/json"
-	"errors"
 	"reflect"
 	"testing"
 
@@ -229,8 +228,10 @@ func assertResponsesReasoningContent(t *testing.T, response llmprotocol.Response
 	}
 }
 
-func TestOfficialUnsupportedAnthropicToolDiscriminatorsAreTyped(t *testing.T) {
-	unsupported := fields(
+// Every typed Anthropic tool is one only Anthropic knows, so its definition is
+// carried as written for an Anthropic backend.
+func TestOfficialAnthropicServerToolDiscriminatorsAreCarried(t *testing.T) {
+	serverTools := fields(
 		"bash_20250124", "browser_toolset_20260801",
 		"code_execution_20250522", "code_execution_20250825", "code_execution_20260120", "code_execution_20260521",
 		"computer_toolset_20260801", "memory_20250818",
@@ -239,28 +240,23 @@ func TestOfficialUnsupportedAnthropicToolDiscriminatorsAreTyped(t *testing.T) {
 		"web_fetch_20250910", "web_fetch_20260209", "web_fetch_20260309", "web_fetch_20260318",
 		"web_search_20250305", "web_search_20260209", "web_search_20260318",
 	)
-	assertClosedDiscriminatorInventory(t, "Anthropic tool", 21, fields("custom"), unsupported)
+	assertClosedDiscriminatorInventory(t, "Anthropic tool", 21, append(fields("custom"), serverTools...), nil)
 	engine := NewBuiltinEngine()
-	for _, toolType := range unsupported {
+	for _, toolType := range serverTools {
 		t.Run(toolType, func(t *testing.T) {
-			body, err := json.Marshal(map[string]any{
-				"model":      "m",
-				"max_tokens": 16,
-				"messages":   []map[string]any{{"role": "user", "content": "hello"}},
-				"tools": []map[string]any{{
-					"type":                   toolType,
-					"name":                   "server_tool",
-					"input_schema":           map[string]any{"type": "object"},
-					"variant_specific_field": true,
-				}},
+			definition, err := json.Marshal(map[string]any{
+				"type": toolType, "name": "server_tool", "variant_specific_field": true,
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, _, _, err = engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, body)
-			var protocolError *llmprotocol.ProtocolError
-			if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature || protocolError.Code != "unsupported_tool" {
-				t.Fatalf("tool %q returned %T %v, want unsupported_feature/unsupported_tool", toolType, err, err)
+			body := []byte(`{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"hello"}],"tools":[` + string(definition) + `]}`)
+			request, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tool := request.Tools[0]; tool.Kind != llmprotocol.ToolKindServer || tool.Name != "server_tool" || string(tool.Raw) != string(definition) {
+				t.Fatalf("tool %q decoded as %+v", toolType, tool)
 			}
 		})
 	}
@@ -501,22 +497,35 @@ func TestOfficialAnthropicToolChoiceUnionIsClosedAndPositionScoped(t *testing.T)
 }
 
 func TestOfficialAnthropicContentBlockUnionsAreClosed(t *testing.T) {
-	requestSupported := fields("document", "image", "text", "thinking", "tool_result", "tool_use")
-	requestUnsupported := fields(
-		"bash_code_execution_tool_result", "code_execution_tool_result", "container_upload",
-		"redacted_thinking", "search_result", "server_tool_use",
+	serverTool := fields(
+		"bash_code_execution_tool_result", "code_execution_tool_result", "server_tool_use",
 		"text_editor_code_execution_tool_result", "tool_search_tool_result",
 		"web_fetch_tool_result", "web_search_tool_result",
 	)
-	responseSupported := fields("text", "thinking", "tool_use")
-	responseUnsupported := fields(
-		"bash_code_execution_tool_result", "code_execution_tool_result", "container_upload",
-		"redacted_thinking", "server_tool_use", "text_editor_code_execution_tool_result",
-		"tool_search_tool_result", "web_fetch_tool_result", "web_search_tool_result",
-	)
+	requestSupported := append(fields("document", "image", "text", "thinking", "tool_result", "tool_use"), serverTool...)
+	requestUnsupported := fields("container_upload", "redacted_thinking", "search_result")
+	responseSupported := append(fields("text", "thinking", "tool_use"), serverTool...)
+	responseUnsupported := fields("container_upload", "redacted_thinking")
 	assertClosedDiscriminatorInventory(t, "Anthropic request content block", 16, requestSupported, requestUnsupported)
 	assertClosedDiscriminatorInventory(t, "Anthropic response content block", 12, responseSupported, responseUnsupported)
 	engine := NewBuiltinEngine()
+	// A server tool's blocks are part of the assistant turn and are carried as
+	// written, in a request's history as in a reply.
+	for _, blockType := range serverTool {
+		t.Run("carried/"+blockType, func(t *testing.T) {
+			block := `{"type":"` + blockType + `","tool_use_id":"srvtoolu_1","content":[]}`
+			request, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(`{"model":"m","max_tokens":16,"messages":[`+
+				`{"role":"user","content":"hello"},{"role":"assistant","content":[`+block+`]}]}`))
+			if err != nil || request.Messages[1].Content[0].Kind != llmprotocol.ContentServerTool || string(request.Messages[1].Content[0].Raw) != block {
+				t.Fatalf("request history: %+v, %v", request.Messages, err)
+			}
+			response, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"m",`+
+				`"content":[`+block+`],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`))
+			if err != nil || response.Output[0].Content[0].Kind != llmprotocol.ContentServerTool {
+				t.Fatalf("reply: %+v, %v", response.Output, err)
+			}
+		})
+	}
 	for _, blockType := range requestUnsupported {
 		t.Run("request/"+blockType, func(t *testing.T) {
 			body, err := json.Marshal(map[string]any{
