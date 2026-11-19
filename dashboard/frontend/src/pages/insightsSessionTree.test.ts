@@ -122,6 +122,32 @@ describe('agent events', () => {
     expect(recordEvents({ request_kind: 'session_title' })).toEqual(['housekeeping'])
     expect(recordEvents({ agent: { harness: 'codex' }, image_count: 0 })).toEqual([])
   })
+
+  it('reads a guard refusal, a guard flag and a failure from a record as the Router marks a call', () => {
+    // the guard's fast response refuses with a 200 and no model
+    expect(
+      recordEvents({
+        jailbreak_detected: true,
+        selection_method: 'fast_response',
+        response_status: 200,
+      }),
+    ).toEqual(['block'])
+    expect(recordEvents({ pii_blocked: true, response_status: 403 })).toEqual(['block'])
+    expect(
+      recordEvents({ hallucination_detected: true, selected_model: 'qwen', response_status: 200 }),
+    ).toEqual(['guard'])
+    expect(
+      recordEvents({ lifecycle_state: 'failed', selected_model: 'qwen', response_status: 502 }),
+    ).toEqual(['failure'])
+    expect(
+      recordEvents({
+        agent: { request_class: 'compaction' },
+        lifecycle_state: 'completed',
+        response_status: 200,
+        selected_model: 'qwen',
+      }),
+    ).toEqual(['compaction'])
+  })
 })
 
 describe('signals by harness', () => {

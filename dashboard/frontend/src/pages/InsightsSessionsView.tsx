@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Bot, ChevronRight, ExternalLink, GitBranch, KeyRound, ListTree } from 'lucide-react'
+import { Bot, ChevronRight, ExternalLink, GitBranch, Info, KeyRound, ListTree } from 'lucide-react'
 
 import { Badge, Button, Card, EmptyState, Skeleton, Tooltip, cn } from '../ui'
 
@@ -14,9 +14,9 @@ import { HarnessLogo } from './InsightsHarness'
 import { API_CLIENT_LABEL, harnessInfo, HARNESS_SIGNALS } from './insightsHarness'
 import { readPage, readPageSize, writePage } from './insightsListData'
 import { ModelChip } from './insightsModelLabelSupport'
-import { fetchInsightsJSON } from './insightsPageApi'
 import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
 import { API_CLIENT_FILTER, type RequestFilters } from './insightsRequestsData'
+import { loadRun, prefetchRun } from './insightsRunCache'
 import { API_RUN_FILTER, useRunsData, type RunFilters } from './insightsRunsData'
 import { RunStatus } from './InsightsRunsView'
 import {
@@ -25,7 +25,9 @@ import {
   formatRunDuration,
   getRunPath,
   runAgentTreeText,
+  runCostView,
   runHeadline,
+  unpricedText,
 } from './insightsRunSupport'
 import type { RunCall, RunResponse, RunSummary } from './insightsRunTypes'
 import {
@@ -38,8 +40,8 @@ import {
   type SignalCell,
 } from './insightsSessionTree'
 
-/** Calls an expanded agent lists before "Show all". */
-const AGENT_CALL_LIMIT = 200
+/** Calls an expanded agent lists at first, and how many more each "Show more" adds. */
+const AGENT_CALL_PAGE = 50
 
 function runFiltersOf(filters: RequestFilters): RunFilters {
   return {
@@ -173,6 +175,8 @@ const clock = (iso: string) =>
     hour12: false,
   })
 
+// A turn is one light row: a long session lists hundreds, so its tooltips are
+// native titles and only its events carry hover cards.
 function TurnRow({
   call,
   index,
@@ -213,9 +217,7 @@ function TurnRow({
       </span>
       <span className="flex items-center justify-end gap-3 font-mono tabular text-muted-foreground max-lg:col-span-full max-lg:justify-start">
         <span>{formatLatency(call.duration_ms)}</span>
-        <Tooltip content="Input / output tokens">
-          <span>{tokens}</span>
-        </Tooltip>
+        <span title="Input / output tokens">{tokens}</span>
         <Button
           variant="ghost"
           size="xs"
@@ -245,12 +247,23 @@ function TurnRow({
   )
 }
 
-function AgentBranch({ node }: { node: AgentNode }) {
-  const [all, setAll] = useState(false)
+function TurnsLoading({ calls }: { calls: number }) {
+  return (
+    <div className="flex flex-col gap-1.5 px-3 py-2" aria-busy aria-label="Loading the turns">
+      {Array.from({ length: Math.min(3, Math.max(1, calls)) }, (_, index) => (
+        <Skeleton key={index} className="h-5 w-full" />
+      ))}
+    </div>
+  )
+}
+
+function AgentBranch({ node, loading }: { node: AgentNode; loading: boolean }) {
+  const [limit, setLimit] = useState(AGENT_CALL_PAGE)
   const { agent } = node
   const main = agent.label === 'main'
   const type = agentTypeText(agent)
-  const shown = all ? node.calls : node.calls.slice(0, AGENT_CALL_LIMIT)
+  const shown = node.calls.slice(0, limit)
+  const rest = node.calls.length - shown.length
   return (
     <li className="flex flex-col gap-1" data-agent={agent.label}>
       <div className="flex flex-wrap items-center gap-2 text-[13px]">
@@ -276,18 +289,44 @@ function AgentBranch({ node }: { node: AgentNode }) {
           {` · ${formatRunCost(agent.cost)}`}
         </span>
       </div>
-      <ol
-        className="ml-[7px] rounded-md border border-border bg-surface"
-        aria-label={`${main ? 'Main agent' : agent.label} turns`}
-      >
-        {shown.map((call, index) => (
-          <TurnRow key={call.record_id} call={call} index={index} agentLabel={agent.label} />
-        ))}
-      </ol>
-      {!all && node.calls.length > AGENT_CALL_LIMIT ? (
-        <Button variant="ghost" size="xs" className="w-fit" onClick={() => setAll(true)}>
-          Show all {node.calls.length.toLocaleString()} turns
-        </Button>
+      {loading ? (
+        <div className="ml-[7px] rounded-md border border-border bg-surface">
+          <TurnsLoading calls={agent.calls} />
+        </div>
+      ) : (
+        <ol
+          className="ml-[7px] rounded-md border border-border bg-surface"
+          aria-label={`${main ? 'Main agent' : agent.label} turns`}
+        >
+          {shown.map((call, index) => (
+            <TurnRow key={call.record_id} call={call} index={index} agentLabel={agent.label} />
+          ))}
+        </ol>
+      )}
+      {rest > 0 ? (
+        <span className="flex flex-wrap items-center gap-1">
+          <Button
+            variant="ghost"
+            size="xs"
+            className="w-fit"
+            onClick={() => setLimit((value) => value + AGENT_CALL_PAGE)}
+          >
+            Show {Math.min(rest, AGENT_CALL_PAGE).toLocaleString()} more
+          </Button>
+          {rest > AGENT_CALL_PAGE ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="w-fit text-muted-foreground"
+              onClick={() => setLimit(node.calls.length)}
+            >
+              Show all {node.calls.length.toLocaleString()} turns
+            </Button>
+          ) : null}
+          <span className="text-xs text-subtle-foreground">
+            {shown.length.toLocaleString()} of {node.calls.length.toLocaleString()} shown
+          </span>
+        </span>
       ) : null}
       {node.children.length > 0 ? (
         <ul
@@ -295,7 +334,7 @@ function AgentBranch({ node }: { node: AgentNode }) {
           aria-label={`Agents started by ${agent.label}`}
         >
           {node.children.map((child) => (
-            <AgentBranch key={child.agent.label} node={child} />
+            <AgentBranch key={child.agent.label} node={child} loading={loading} />
           ))}
         </ul>
       ) : null}
@@ -303,39 +342,42 @@ function AgentBranch({ node }: { node: AgentNode }) {
   )
 }
 
-function SessionTree({ sessionId }: { sessionId: string }) {
-  const [state, setState] = useState<{ run?: RunResponse; error?: string }>({})
-  const load = useCallback(() => {
-    setState({})
-    const query = new URLSearchParams({ session_id: sessionId })
-    fetchInsightsJSON<RunResponse>(
-      `/api/router/api/v1/observability/replays/run?${query.toString()}`,
-      'agent run',
-    )
-      .then((run) => setState({ run }))
-      .catch((error: unknown) =>
-        setState({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      )
-  }, [sessionId])
+const NO_CALLS: RunCall[] = []
+
+// The session's agents paint at once from the summary its row already holds;
+// their turns follow when the run's calls arrive, a page per agent.
+function SessionTree({ run }: { run: RunSummary }) {
+  const sessionId = run.session_id
+  const [state, setState] = useState<{ response?: RunResponse; error?: string }>({})
+  const load = useCallback(
+    (fresh = false) => {
+      setState({})
+      loadRun(sessionId, { fresh })
+        .then((response) => setState({ response }))
+        .catch((error: unknown) =>
+          setState({ error: error instanceof Error ? error.message : 'Unknown error' }),
+        )
+    },
+    [sessionId],
+  )
   useEffect(() => load(), [load])
-  const tree = useMemo(() => (state.run ? buildAgentTree(state.run) : []), [state.run])
+  const tree = useMemo(
+    () => buildAgentTree(state.response ? state.response : { run, calls: NO_CALLS }),
+    [run, state.response],
+  )
   if (state.error) {
     return (
-      <InsightsLoadError title="This session could not load" message={state.error} onRetry={load} />
-    )
-  }
-  if (!state.run) {
-    return (
-      <div className="flex flex-col gap-2 px-1 py-2" aria-busy>
-        <Skeleton className="h-4 w-48" />
-        <Skeleton className="h-16 w-full" />
-      </div>
+      <InsightsLoadError
+        title="This session could not load"
+        message={state.error}
+        onRetry={() => load(true)}
+      />
     )
   }
   return (
     <ul className="flex flex-col gap-3" aria-label="Agents of this session">
       {tree.map((node) => (
-        <AgentBranch key={node.agent.label} node={node} />
+        <AgentBranch key={node.agent.label} node={node} loading={!state.response} />
       ))}
     </ul>
   )
@@ -358,7 +400,8 @@ function SessionRow({
   const info = harnessInfo(run.harness)
   const derived = isDerivedSession(run.session_id)
   const tokens = run.cost.prompt_tokens + run.cost.completion_tokens
-  const cost = formatRunCost(run.cost)
+  const cost = runCostView(run.cost)
+  const unpriced = unpricedText(cost)
   const events = runEventCounts(run)
   const panel = `session-${run.session_id.replace(/[^a-zA-Z0-9_-]/g, '_')}`
   return (
@@ -367,6 +410,12 @@ function SessionRow({
         <button
           type="button"
           onClick={onToggle}
+          onPointerEnter={() => {
+            if (!open) prefetchRun(run.session_id)
+          }}
+          onFocus={() => {
+            if (!open) prefetchRun(run.session_id)
+          }}
           aria-expanded={open}
           aria-controls={panel}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
@@ -416,12 +465,24 @@ function SessionRow({
           >
             <span>{formatTokenCount(tokens)} tok</span>
           </Tooltip>
-          {cost === 'no price' ? (
-            <Tooltip content="No call of this session has a recorded price.">
+          {cost.text === 'no price' ? (
+            <Tooltip content={cost.note ?? 'No call of this session has a recorded price.'}>
               <span className="text-subtle-foreground">—</span>
             </Tooltip>
           ) : (
-            <span>{cost}</span>
+            <span className="flex flex-col items-end leading-tight" data-cost={cost.text}>
+              <span>{cost.text}</span>
+              {unpriced && cost.note ? (
+                <Tooltip
+                  content={<span className="block max-w-72 whitespace-normal">{cost.note}</span>}
+                >
+                  <span className="inline-flex cursor-help items-center gap-0.5 font-sans text-[10.5px] text-subtle-foreground">
+                    <Info className="size-2.5" aria-hidden />
+                    {unpriced}
+                  </span>
+                </Tooltip>
+              ) : null}
+            </span>
           )}
         </span>
         <RunStatus run={run} />
@@ -438,7 +499,7 @@ function SessionRow({
       {open ? (
         <div id={panel} className="border-t border-border px-3 py-3">
           {events.length > 0 ? <AgentEventChips events={events} className="mb-3" /> : null}
-          <SessionTree sessionId={run.session_id} />
+          <SessionTree run={run} />
         </div>
       ) : null}
     </li>

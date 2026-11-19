@@ -31,6 +31,11 @@ export interface AgentEventInfo {
   noun: [singular: string, plural: string]
   tone: AgentEventTone
   description: string
+  /**
+   * Routine events, which most calls of an agent carry, read as quiet marks;
+   * the rest are worth a labelled badge wherever a call is listed.
+   */
+  quiet?: boolean
 }
 
 export const AGENT_EVENT_INFO: Record<AgentEvent, AgentEventInfo> = {
@@ -51,17 +56,19 @@ export const AGENT_EVENT_INFO: Record<AgentEvent, AgentEventInfo> = {
     noun: ['housekeeping call', 'housekeeping calls'],
     tone: 'neutral',
     description: 'A session title or another side request of the harness',
+    quiet: true,
   },
   tool_loop: {
     label: 'Tool loop',
     noun: ['tool turn', 'tool turns'],
-    tone: 'teal',
+    tone: 'neutral',
     description: 'The call carried tool results back to the model',
+    quiet: true,
   },
   image: {
     label: 'Image',
     noun: ['image turn', 'image turns'],
-    tone: 'info',
+    tone: 'teal',
     description: 'The newest turn gave the model a picture to read',
   },
   block: {
@@ -108,10 +115,31 @@ export const AGENT_EVENT_INFO: Record<AgentEvent, AgentEventInfo> = {
   },
 }
 
+/**
+ * The events the run Timeline marks on its events strip, compaction first:
+ * what a reader looks for in a long run.
+ */
+export const TIMELINE_EVENTS = [
+  'compaction',
+  'subagent_start',
+  'image',
+  'block',
+  'guard',
+  'failure',
+  'switch',
+] as const satisfies readonly AgentEvent[]
+
+export type TimelineEvent = (typeof TIMELINE_EVENTS)[number]
+
 const KNOWN = new Set<string>(AGENT_EVENTS)
+const ON_TIMELINE = new Set<string>(TIMELINE_EVENTS)
 
 export function isAgentEvent(value: string): value is AgentEvent {
   return KNOWN.has(value)
+}
+
+export function isTimelineEvent(value: string): value is TimelineEvent {
+  return ON_TIMELINE.has(value)
 }
 
 /** A call's events in the page's order, its guard flag left out when the guard also refused it. */
@@ -134,18 +162,44 @@ export function eventCountText(event: AgentEvent, count: number): string {
   return `${count.toLocaleString()} ${count === 1 ? one : many}`
 }
 
+type RecordEventFields = Pick<
+  InsightsRecord,
+  | 'agent'
+  | 'image_count'
+  | 'request_kind'
+  | 'jailbreak_detected'
+  | 'pii_detected'
+  | 'pii_blocked'
+  | 'hallucination_detected'
+  | 'selection_method'
+  | 'selected_model'
+  | 'lifecycle_state'
+  | 'response_status'
+>
+
 /**
  * The events a record shows by itself in the flat list: what its class and
- * fields say. A run marks the rest, such as a subagent's first call.
+ * fields say, read as the Router marks a run's calls. A run marks the rest,
+ * such as a subagent's first call or a model switch.
  */
-export function recordEvents(
-  record: Pick<InsightsRecord, 'agent' | 'image_count' | 'request_kind'>,
-): AgentEvent[] {
+export function recordEvents(record: Partial<RecordEventFields>): AgentEvent[] {
   const events: AgentEvent[] = []
   const requestClass = record.agent?.request_class
   if (requestClass === 'compaction') events.push('compaction')
   else if (requestClass === 'auxiliary' || record.request_kind === 'session_title')
     events.push('housekeeping')
   if ((record.image_count ?? 0) > 0) events.push('image')
+  const flagged = Boolean(record.jailbreak_detected || record.pii_detected)
+  // A guard decision that answers with its fast response refuses with a 200 and calls no model.
+  const refused =
+    Boolean(record.pii_blocked) ||
+    (flagged && (record.selection_method === 'fast_response' || !record.selected_model)) ||
+    ((flagged || Boolean(record.hallucination_detected)) &&
+      (record.response_status ?? 0) >= 400 &&
+      (record.response_status ?? 0) < 500)
+  if (refused) events.push('block')
+  else if (flagged || record.hallucination_detected) events.push('guard')
+  if (!refused && (record.lifecycle_state === 'failed' || (record.response_status ?? 0) >= 400))
+    events.push('failure')
   return events
 }

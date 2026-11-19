@@ -476,9 +476,11 @@ test('a long run reads at a glance: a one-line title, its task in a sheet, its c
   await expect(timeline.getByRole('listitem')).toHaveCount(2)
   await page.getByRole('button', { name: 'Later calls' }).click()
   await expect(page.getByText('Calls 101–200 of 300')).toBeVisible()
-  await expect(timeline.locator('[data-marker="failure"]')).toHaveCount(1)
+  await expect(
+    page.getByRole('list', { name: 'Run events' }).locator('[data-event="failure"]'),
+  ).toHaveCount(1)
   // the hour away folds to a narrow mark that says how long it lasted
-  await expect(timeline).toContainText('1h 0m idle')
+  await expect(page.locator('#run-timeline')).toContainText('1h 0m idle')
   await page.screenshot({ path: info.outputPath('run-long.png'), fullPage: true })
 
   await expect(page.getByText('1–25 of 300 calls')).toBeVisible()
