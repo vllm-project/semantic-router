@@ -345,6 +345,9 @@ func TestChatPublicStreamFilterReportsAToolCallStopAtTheOutputLimit(t *testing.T
 						t.Fatalf("frames =\n%s\nwant %d frames", output, len(want)-1)
 					}
 					for index := range want {
+						if includeUsage && index < 4 {
+							want[index] = strings.Replace(want[index], "}\n\n", `,"usage":null}`+"\n\n", 1)
+						}
 						if index != 3 {
 							if got[index] != want[index] {
 								t.Fatalf("frame %d = %q, want %q", index, got[index], want[index])
