@@ -11,9 +11,10 @@ import (
 // ChatUsageStreamFilter frames a same-format Chat stream before exposing it to
 // the client. It removes Router-requested accounting evidence when the client
 // did not opt into usage, and provider decorations that the neutral codec
-// reports as dropped. Undecorated frames retain their original bytes. A
-// provider error event ends the public stream: the filter drops it and every
-// later frame, and UpstreamFailed reports it.
+// reports as dropped. When the client opted into usage, a chunk without usage
+// gains "usage": null and keeps its other bytes; other undecorated frames
+// retain their original bytes. A provider error event ends the public stream:
+// the filter drops it and every later frame, and UpstreamFailed reports it.
 type ChatUsageStreamFilter struct {
 	framer          sseFramer
 	stripUsage      bool
@@ -207,12 +208,41 @@ func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenF
 			return nil, false, true, false, err
 		}
 		object["usage"] = usage
+	} else if !hasUsage && !stripUsage {
+		if !changed {
+			frame, err = encodeNullUsageFrame(parsed.Event, parsed.Data)
+			return frame, err == nil, true, false, err
+		}
+		object["usage"] = json.RawMessage("null")
 	}
 	if !changed {
 		return frame, true, true, false, nil
 	}
 	filtered, err := encodeSSE(parsed.Event, object)
 	return filtered, err == nil, true, false, err
+}
+
+// encodeNullUsageFrame gives a chunk without usage the "usage": null that
+// OpenAI sends on every chunk before the usage chunk of a stream whose client
+// asked for usage, leaving the provider's members as they were.
+func encodeNullUsageFrame(event string, data []byte) ([]byte, error) {
+	var chunk bytes.Buffer
+	if err := json.Compact(&chunk, data); err != nil {
+		return nil, err
+	}
+	body := chunk.Bytes()
+	separator := ","
+	if len(body) == len("{}") {
+		separator = ""
+	}
+	var frame bytes.Buffer
+	if event != "" {
+		frame.WriteString("event: " + event + "\n")
+	}
+	frame.WriteString("data: ")
+	frame.Write(body[:len(body)-1])
+	frame.WriteString(separator + `"usage":null}` + "\n\n")
+	return frame.Bytes(), nil
 }
 
 // Some providers send an extra content-free finish chunk after an earlier

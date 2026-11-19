@@ -127,12 +127,24 @@ func TestChatClientsReceiveNoServerMembersStreamed(t *testing.T) {
 }
 
 // A reply or stream without server members reaches a same-format Chat client
-// byte for byte.
+// byte for byte, apart from the "usage": null a stream's chunks carry for a
+// client that asks for usage.
 func TestChatRepliesWithoutServerMembersPassUnchanged(t *testing.T) {
-	stream := []byte("data: {\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"a < b\"},\"finish_reason\":null}]}\n\n" +
-		"data: {\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
-	if public := publicChatStream(t, stream); !bytes.Equal(public, stream) {
+	first := []byte("data: {\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"a < b\"},\"finish_reason\":null}]}\n\n")
+	finish := []byte("data: {\"id\":\"c\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+	done := []byte("data: [DONE]\n\n")
+	stream := bytes.Join([][]byte{first, finish, done}, nil)
+	if public := publicChatStream(t, stream); !bytes.Equal(public, bytes.Join([][]byte{withNullUsage(first), withNullUsage(finish), done}, nil)) {
 		t.Fatalf("public stream changed: %s", public)
+	}
+	filter := NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+	public, err := filter.Push(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	final, err := filter.Finalize()
+	if err != nil || !bytes.Equal(append(public, final...), stream) {
+		t.Fatalf("public stream without usage changed (%v): %s", err, append(public, final...))
 	}
 	reply := []byte(`{"id":"c","object":"chat.completion","created":1,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"a < b"},"finish_reason":"stop"}]}`)
 	translated, err := NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, reply, nil)
