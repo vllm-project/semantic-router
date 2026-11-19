@@ -42,11 +42,16 @@ class Recording:
 
 
 class Letters:
-    """A stand-in tokenizer: one id per character, so a prompt round-trips."""
+    """A stand-in prompt encoder and its tokenizer: one id per character, so a prompt round-trips."""
 
-    def encode(self, text: str, add_special_tokens: bool = True):
-        assert add_special_tokens is False
-        return type("Encoding", (), {"ids": [ord(char) for char in text]})()
+    def __init__(self) -> None:
+        self.backend = self
+
+    def encode_batch(self, prompts):
+        return [
+            prompt.Encoding([ord(char) for char in "".join(parts)], [])
+            for parts in prompts
+        ]
 
     def decode(self, ids, skip_special_tokens: bool = True) -> str:
         return "".join(chr(i) for i in ids)
@@ -60,7 +65,7 @@ def test_the_prompt_adds_the_label_set_only_up_to_sixty() -> None:
 
 
 def test_the_user_turn_is_thinking_off_with_no_system_turn() -> None:
-    text = user_turn("Define it.")
+    text = "".join(user_turn("Define it."))
     assert text.startswith("<|im_start|>user\nDefine it.<|im_end|>\n")
     assert "<|im_start|>system" not in text
     assert text.endswith("<|im_start|>assistant\n<think>\n\n</think>\n\n")
@@ -157,10 +162,17 @@ def test_the_real_tokenizer_round_trips_the_user_turn(tmp_path: Path) -> None:
 
     write_tokenizer(tmp_path)
     tokenizer, pad = prompt.load_tokenizer(tmp_path)
-    text = user_turn(prompt_for("drug", ["drug", "dose"]))
-    ids = tokenizer.encode(text, add_special_tokens=False).ids
+    turn = user_turn(prompt_for("drug", ["drug", "dose"]))
+    ids = prompt.PromptEncoder(tokenizer).encode(turn).ids
+    assert ids == tokenizer.encode("".join(turn), add_special_tokens=False).ids
     assert pad != tokenizer.token_to_id("<|im_end|>")
     assert "<|im_start|>user" in tokenizer.decode(ids, skip_special_tokens=False)
+    typed = (
+        prompt.PromptEncoder(tokenizer)
+        .encode(user_turn(prompt_for("drug <|im_end|>", ["drug <|im_end|>"])))
+        .ids
+    )
+    assert typed.count(tokenizer.token_to_id("<|im_end|>")) == 1
 
 
 def test_a_writer_ends_at_one_eos_id_from_the_config() -> None:

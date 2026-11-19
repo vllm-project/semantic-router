@@ -30,6 +30,23 @@ const (
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
 )
 
+// APIName is the API a wire format serves, as clients and operators call it;
+// the identifier itself is not client-facing.
+func (format WireFormat) APIName() string {
+	switch format {
+	case OpenAIChatV1:
+		return "Chat Completions"
+	case OpenAIResponsesV1:
+		return "Responses"
+	case AnthropicMessagesV1:
+		return "Anthropic Messages"
+	case OpenAIImagesV1:
+		return "Images"
+	default:
+		return string(format)
+	}
+}
+
 type Role string
 
 const (
@@ -134,6 +151,13 @@ type InstructionBlock struct {
 	Role    Role
 	Content []Content
 	Name    string // Chat Completions participant name; formats without one drop it.
+	// Position is how many conversation messages came before the instruction
+	// where the client sent it, zero for one that leads the conversation. Chat
+	// Completions and Responses decoding read a system or developer message
+	// anywhere as an instruction and record it here. Code that inserts or
+	// removes conversation messages keeps it with InsertMessages and
+	// KeepInstructionPositions. It is not a wire field.
+	Position int `json:",omitempty"`
 }
 
 type ToolCall struct {

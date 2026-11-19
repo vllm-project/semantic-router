@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -149,5 +150,130 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	stopped := errors.New("stop scan")
 	if err = postgres.ScanMetadata(ctx, QueryFilters{}, func(Record) error { return stopped }); !errors.Is(err, stopped) {
 		t.Fatalf("callback failure was hidden: %v", err)
+	}
+}
+
+// A run read returns one session oldest first without its bodies, prompt or
+// tool definitions, and keeps each tool step's kind, source, tool, call id
+// and status but not the text, arguments or output it carried.
+//
+// StorageIntegration: postgres
+func TestPostgresQueryRunIntegration(t *testing.T) {
+	postgres := openPostgresReviewStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	start := time.Unix(1700000000, 0).UTC()
+	large := strings.Repeat("a long agent history ", 4096)
+	for index, id := range []string{"turn-2", "turn-1", "elsewhere"} {
+		record := postgresMetadataFixture()
+		record.ID, record.RequestID = id, id
+		record.SelectedModel, record.Agent = "qwen", &AgentIdentity{Harness: HarnessCodex}
+		record.SessionID = "session-a"
+		if id == "elsewhere" {
+			record.SessionID = "session-b"
+		}
+		record.Timestamp = start.Add(time.Duration(2-index) * time.Second)
+		record.RequestBody, record.ResponseBody, record.Prompt, record.ToolDefinitions = large, large, large, large
+		record.ToolTrace = &ToolTrace{Flow: "client", ToolNames: []string{"read"}, Steps: []ToolTraceStep{
+			{Type: "assistant_tool_call", Source: "request", ToolName: "read", ToolCallID: "call-1", Arguments: large},
+			{Type: "client_tool_result", Source: "request", ToolName: "read", ToolCallID: "call-1", Status: "failed", Output: large, Text: large},
+		}}
+		if _, err := postgres.Add(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	records, err := postgres.QueryRun(ctx, QueryFilters{SessionID: "session-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, len(records))
+	for index, record := range records {
+		ids[index] = record.ID
+	}
+	if !reflect.DeepEqual(ids, []string{"turn-1", "turn-2"}) {
+		t.Fatalf("run records = %v, want the session's oldest first", ids)
+	}
+	record := records[0]
+	if record.RequestBody != "" || record.ResponseBody != "" || record.Prompt != "" || record.ToolDefinitions != "" {
+		t.Fatal("the run read returned captured bodies")
+	}
+	if record.SelectedModel == "" || record.Agent == nil || record.SessionID != "session-a" {
+		t.Fatalf("the run read lost the metadata: %+v", record)
+	}
+	want := []ToolTraceStep{
+		{Type: "assistant_tool_call", Source: "request", ToolName: "read", ToolCallID: "call-1"},
+		{Type: "client_tool_result", Source: "request", ToolName: "read", ToolCallID: "call-1", Status: "failed"},
+	}
+	if record.ToolTrace == nil || !reflect.DeepEqual(record.ToolTrace.Steps, want) ||
+		record.ToolTrace.Flow != "client" || !reflect.DeepEqual(record.ToolTrace.ToolNames, []string{"read"}) {
+		t.Fatalf("tool trace = %+v, want the steps without their payloads", record.ToolTrace)
+	}
+
+	// A plain API call belongs to no session: has_session leaves it out of the page and its count.
+	plain := postgresMetadataFixture()
+	plain.ID, plain.RequestID, plain.SessionID, plain.Timestamp = "plain", "plain", "", start.Add(time.Minute)
+	if _, err = postgres.Add(ctx, plain); err != nil {
+		t.Fatal(err)
+	}
+	page, err := postgres.QueryPage(ctx, QueryFilters{HasSession: true}, 10, 0, false)
+	if err != nil || page.Total != 3 || len(page.Records) != 3 {
+		t.Fatalf("sessions page total=%d records=%d err=%v, want the 3 records with a session", page.Total, len(page.Records), err)
+	}
+}
+
+// A harness filter keeps the records of its harnesses, a record no harness
+// sent as an API client, and a page counts every harness the other filters
+// keep, in the snapshot its total comes from.
+//
+// StorageIntegration: postgres
+func TestPostgresHarnessQueriesIntegration(t *testing.T) {
+	postgres := openPostgresReviewStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	start := time.Unix(1700000000, 0).UTC()
+	records := []Record{
+		{ID: "claude", Agent: &AgentIdentity{Harness: HarnessClaudeCode}},
+		{ID: "codex", Agent: &AgentIdentity{Harness: HarnessCodex, ID: "subagent"}},
+		{ID: "plain"},
+		{ID: "unnamed-agent", Agent: &AgentIdentity{ID: "agent-hash"}},
+		{ID: "codex-elsewhere", Agent: &AgentIdentity{Harness: HarnessCodex}, Recipe: "other"},
+	}
+	for index, record := range records {
+		record.RequestID, record.Timestamp = record.ID, start.Add(time.Duration(index)*time.Second)
+		if record.Recipe == "" {
+			record.Recipe = "evaluation"
+		}
+		if _, err := postgres.Add(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := postgres.QueryPage(ctx, QueryFilters{Recipe: "evaluation", Harness: HarnessAPIClient + "," + HarnessCodex}, 10, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, len(page.Records))
+	for index, record := range page.Records {
+		ids[index] = record.ID
+	}
+	if page.Total != 3 || !reflect.DeepEqual(ids, []string{"unnamed-agent", "plain", "codex"}) {
+		t.Fatalf("harness page total=%d records=%v", page.Total, ids)
+	}
+	want := map[string]int{HarnessClaudeCode: 1, HarnessCodex: 1, HarnessAPIClient: 2}
+	if !reflect.DeepEqual(page.HarnessCounts, want) {
+		t.Fatalf("harness counts = %v, want %v", page.HarnessCounts, want)
+	}
+	all, err := postgres.QueryPage(ctx, QueryFilters{}, 1, 0, false)
+	if err != nil || all.Total != 5 || all.HarnessCounts[HarnessCodex] != 2 || len(all.Records) != 1 {
+		t.Fatalf("unfiltered page=%+v err=%v", all, err)
+	}
+	scanned := 0
+	if err = postgres.ScanMetadata(ctx, QueryFilters{Harness: HarnessClaudeCode}, func(record Record) error {
+		if record.Agent == nil || record.Agent.Harness != HarnessClaudeCode {
+			return fmt.Errorf("harness scan returned %s", record.RequestID)
+		}
+		scanned++
+		return nil
+	}); err != nil || scanned != 1 {
+		t.Fatalf("harness scan count=%d err=%v", scanned, err)
 	}
 }

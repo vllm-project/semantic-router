@@ -284,7 +284,7 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         self.router = router
         self.reader = Reader(router, render31=package.render31)
         self.answerer = Answerer(router)
-        self.tokens = tokens(package.root, package.config["decision"]["marker_ids"])
+        self.tokens = tokens(package.root)
         self.scan_tokens = scan_tokens
         self.layout = layout(package.config, router.window, router.overlap)
         self.evidence_layout = layout(

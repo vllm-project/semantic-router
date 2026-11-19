@@ -811,7 +811,10 @@ option logits (cosine plus MLP terms), softmax or sigmoid, word-level span
 scores with code-point offsets, per-type temperatures, and the thresholds in
 `calibration.json` (constant, per question, the PII length rule and its
 sparse-document gate). It serves `/v1/decisions` with Set and Span, plus the
-packages' presets (`pii`, `halu`, `toxic`, relevance) as named questions.
+packages' presets (`pii`, `halu`, `toxic`, relevance) as named questions. The
+span decoder follows the engine except for two boundary rules the engine gets
+wrong: a span keeps an edge bracket whose partner lies inside it (the `(` of
+`(415) 555-0100`), and its end takes in the combining marks that follow it.
 
 A question reads a part whole up to a scan budget (`limits.max_scan_tokens`):
 four inputs on a CPU, 32 on a GPU, or the model option `max_scan_tokens`; a
@@ -886,6 +889,14 @@ thinking off. The family renders the chat format itself for the templates it
 knows by digest, and builds the tokenizer as Transformers 5.17 builds
 `Qwen2Tokenizer` (the Qwen2 pre-tokenizer pattern and every special token of
 `tokenizer_config.json`), which the released runtime tokenized with. The
+template's own tokens are the only added tokens of a prompt: the family places
+them by ID and reads every other part, the request's state, instructions and
+options among them, with no added token matched (`prompt.PromptEncoder`), so a
+typed `<|im_end|>`, `<think>` or `<|image_pad|>` is read as its characters and
+never becomes a control token or an image placeholder. A prompt whose text
+holds no added token's string tokenizes as the released runtime tokenized it,
+and media placeholders that do not match a request's media one for one refuse
+it (400) before any is expanded. The
 backbone holds BF16 parameters on every device and runs without autocast; its
 full-attention layers see the whole left-padded prompt (`attention_mode:
 noncausal_full_attention`) while the Gated DeltaNet layers stay causal. The
@@ -1046,7 +1057,10 @@ positions, each layer at its own rope base) with adapter networks over it.
 A string state is one user part as it is, even when it parses as JSON
 (`vela3_encoder._parts`), so span offsets index the text the caller sent; only
 a JSON-object state is read as typed parts. Vela 2.0 reads a string that holds
-a JSON object as that object.
+a JSON object as that object. Text is tokenized without any of the tokenizer's
+added tokens (`vela3_shared.tokens`, the picos' too): the layouts place BOS,
+EOS and the markers by ID, so a typed `<|endoftext|>` is read as its
+characters.
 
 Each adapter file holds LoRA factors for every projection of every layer, its
 own copies of the top layers it trained and the readout tensors it trained.
@@ -1072,7 +1086,11 @@ per SDPA call over every key with their rows of the dense mask. A tail under
 calls differently, so each query's reduction, and every answer, stays
 unchanged.
 The span and router layout, word units and span decoder are the Vela 2.0
-family's, which the package copies verbatim.
+family's, which the package copies verbatim. A span question whose `threshold`
+is above the package's decodes the words at the package's threshold and keeps
+the spans whose probability reaches its own, each whole (words decoded at the
+higher threshold would split an entity at its weaker words); a lower
+`threshold` decodes at itself. The picos read thresholds the same way.
 
 ### 8.8 Vela 3.0 d3 sizes (`vela3_d3`)
 
@@ -1105,9 +1123,10 @@ the usage. Span passes add nothing to `usage.input_tokens` on any size, on
 purpose: the packages' runtime does not count them either, and every
 parity request's input tokens agree with it (the vela3 family counts its
 span windows). Requests with images, videos or assets and Box / track
-questions take the base alone; those with media refuse span questions. On
-every path a blank state is refused and span questions are planned before
-the base sees the rest.
+questions take the base alone; those with media refuse span questions. A
+blank state is refused unless the request has images, videos or assets (the
+base then reads an image-only state, as the d3 models do), and span questions
+are planned before the base sees the rest.
 A span question reads its whole target in windows, so `overflow` takes only
 `window`. The target holds at most 32,768 tokens on every size (the vela3
 family's default scan budget on a CPU; it does not follow the base's question
@@ -1119,14 +1138,20 @@ through the base's length check (`max_length_exceeded`).
 trained question and label set, as on the vela3 family; the card lists the
 presets the package's span schemas hold. Span answers follow the contract (`spans`, `thresholds`, a Noul of
 the most probable word); the decoder is the package's (its unit class starts
-its compatibility block at U+F900, unlike the word splitter's). Open labels
+its compatibility block at U+F900, unlike the word splitter's) with the Vela
+2.0 decoder's two boundary corrections, and evidence spans lose the white
+space at their edges. A `threshold` above the package's decodes at the
+package's and keeps the spans whose probability reaches it, each whole, as on
+the vela3 family. Open labels
 without a description are defined before the span pass when
 `definitions.writer` is `base` (vela3-mini: the tied input embedding is the
 LM head) or `grafted_head` (vela3-flash: `labeldef_lm_head.safetensors`, cast
 to the embedding dtype). The native engine generates each definition with
 every adapter off and causal attention: a user turn, thinking off, the label
 set as context for at most 60 labels, greedy, at most 40 new tokens, ending
-at the checkpoint's `eos_token_id`. The family keeps the first line and
+at the checkpoint's `eos_token_id`; span windows and definition prompts go
+through the base's prompt encoder, so labels and states are read as text. The
+family keeps the first line and
 caches it per label set (per label above 60). Generated definitions live in a
 4,096-entry least-recently-used cache; the entries of `label_definitions.json`
 are never evicted. Rows are right-padded in batches of at most 64. A row's positions are its attention-mask

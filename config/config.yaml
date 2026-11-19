@@ -29,7 +29,8 @@ listeners:
     # of chat_completions and messages.
     apis:
       # Standalone mode: accept only these request models (exact `model`
-      # values); others get 403 model_not_allowed. Omitted, every LLM model.
+      # values); others get 403 model_not_allowed, or 404 model_not_found
+      # when the Router serves them on no listener. Omitted, every LLM model.
       chat_completions:
         models: [vllm-sr/exhaustive-default]
       responses:
@@ -71,6 +72,11 @@ providers:
   defaults:
     model: qwen3-8b
     reasoning_effort: medium
+    # A backend counts reasoning against the output limit. A request that
+    # states no reasoning preference (no thinking, reasoning_effort, reasoning
+    # or chat_template_kwargs thinking switch) and sets a smaller limit than
+    # this runs with the model's reasoning off. 0 or unset turns the rule off.
+    reasoning_min_output_tokens: 512
     # The CA bundle of every https backend whose own tls names no ca_file. It
     # replaces the system roots for those backends, in Envoy and in the
     # Router's own calls, so it must hold every CA they chain to.
@@ -2349,10 +2355,13 @@ global:
     # Protocol losses to translate with an x-vsr-warnings protocol entry instead
     # of rejecting them. tool_result.is_error omits the Anthropic failed tool
     # call flag that OpenAI Chat and Responses backends cannot carry, and
-    # messages[].role sends Anthropic system messages inside the conversation to
-    # those backends as user text, for chat templates that accept a system
-    # message only first. content.file sends each file in the conversation as
-    # a short note to a model whose capabilities leave out file_input.
+    # messages[].role sends a Chat backend the leading system and developer
+    # messages as one system message and those inside the conversation as user
+    # text, for chat templates that accept one system message, only first; an
+    # Anthropic system message inside the conversation reaches Responses
+    # backends as user text too. content.file sends each file in the
+    # conversation as a short note to a model whose capabilities leave out
+    # file_input.
     # tools.defer_loading sends tools that a coding agent marks for tool search
     # in full, for every backend format.
     # reasoning.signature drops the signature an Anthropic backend puts on its

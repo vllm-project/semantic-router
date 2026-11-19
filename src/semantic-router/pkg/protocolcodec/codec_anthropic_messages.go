@@ -80,6 +80,9 @@ type anthropicContentWire struct {
 	ToolsetName     json.RawMessage            `json:"toolset_name,omitempty"`
 	Transformations json.RawMessage            `json:"transformations,omitempty"`
 	FileID          string                     `json:"file_id,omitempty"`
+	// signed renders a thinking block's signature even when it is empty, as
+	// Messages replies carry it. It is not a wire field.
+	signed bool
 }
 
 func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
@@ -97,6 +100,9 @@ func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
 		object["text"], _ = json.Marshal(wire.Text)
 	case "thinking":
 		object["thinking"], _ = json.Marshal(wire.Thinking)
+		if wire.signed {
+			object["signature"], _ = json.Marshal(wire.Signature)
+		}
 	}
 	return json.Marshal(object)
 }
