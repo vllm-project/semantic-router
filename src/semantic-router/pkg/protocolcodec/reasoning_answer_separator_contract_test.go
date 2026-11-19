@@ -44,9 +44,8 @@ func TestAnswerSeparatorRule(t *testing.T) {
 	})
 }
 
-// A same-format Chat reply is patched where it stands, so its replay differs
-// from the provider bytes. Any other reply is encoded again, since its provider
-// bytes still hold the separator.
+// A same-format reply is patched where it stands, keeping any other member
+// the provider sent, including a citation whose offsets the trim must shift.
 func TestAnswerSeparatorEnvelope(t *testing.T) {
 	engine := NewBuiltinEngine()
 	chat := func(reasoning, content string) ([]byte, llmprotocol.Envelope) {
@@ -67,6 +66,21 @@ func TestAnswerSeparatorEnvelope(t *testing.T) {
 		`"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":2}}`)
 	result, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, messages, nil)
 	require.NoError(t, err)
-	require.True(t, result.Envelope.ResponseReencodeRequired)
-	require.False(t, result.Envelope.CanReplay(llmprotocol.AnthropicMessagesV1, result.Response.Generation, llmprotocol.DefaultPolicy(), true))
+	require.False(t, result.Envelope.ResponseReencodeRequired, "the signed thinking block is untouched and replays fine")
+	require.Contains(t, string(result.Envelope.Response), `"signature":"c2ln"`)
+	require.True(t, result.Envelope.CanReplay(llmprotocol.AnthropicMessagesV1, result.Response.Generation, llmprotocol.DefaultPolicy(), true))
+
+	responsesWithCitation := []byte(`{"id":"resp_1","object":"response","created_at":1,"status":"completed","model":"m","output":[` +
+		`{"id":"rs_1","type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"hmm"}]},` +
+		`{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"\n\nSee the site",` +
+		`"annotations":[{"type":"url_citation","url":"https://example.com","title":"site","start_index":10,"end_index":14}]}]}],` +
+		`"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`)
+	result, err = engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIResponsesV1, responsesWithCitation, nil)
+	require.NoError(t, err)
+	require.False(t, result.Envelope.ResponseReencodeRequired, "the citation is shifted and replays with the rest of the reply")
+	require.True(t, result.Envelope.CanReplay(llmprotocol.OpenAIResponsesV1, result.Response.Generation, llmprotocol.DefaultPolicy(), true))
+	require.Contains(t, string(result.Envelope.Response), `"start_index":8`)
+	require.Contains(t, string(result.Envelope.Response), `"end_index":12`)
+	answer, _ := wireAnswerAndReasoning(t, llmprotocol.OpenAIResponsesV1, result.Body)
+	require.Equal(t, "See the site", answer, string(result.Body))
 }

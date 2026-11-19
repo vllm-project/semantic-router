@@ -154,6 +154,66 @@ func TestChatReplayKeepsTheProviderBodyBesidesTheAnswer(t *testing.T) {
 	require.Equal(t, original, forwarded, "only the answer text and the server's own members may change")
 }
 
+// A Messages client of a Messages backend keeps members its own wire contract
+// does not carry through a full re-encode, such as the container a gateway
+// attaches or extra usage accounting, because the patch never goes through
+// that contract at all.
+func TestMessagesReplayKeepsTheProviderBodyBesidesTheAnswer(t *testing.T) {
+	body := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[` +
+		`{"type":"thinking","thinking":"` + separatorThought + `","signature":""},{"type":"text","text":"\n\nRed"}],` +
+		`"stop_reason":"end_turn","stop_sequence":null,"container":{"id":"container_123"},` +
+		`"usage":{"input_tokens":20,"output_tokens":12,"speed":"45.2","total_cost":0.0031}}`)
+	engine := NewBuiltinEngine()
+	result, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, body, nil)
+	require.NoError(t, err)
+	require.False(t, result.Envelope.ResponseReencodeRequired)
+	encoded, err := engine.EncodeResponse(llmprotocol.AnthropicMessagesV1, result.Response, result.Envelope)
+	require.NoError(t, err)
+	require.JSONEq(t, string(result.Body), string(encoded.Body))
+
+	var original, forwarded map[string]any
+	require.NoError(t, json.Unmarshal(body, &original))
+	require.NoError(t, json.Unmarshal(result.Body, &forwarded))
+	require.Equal(t, "container_123", forwarded["container"].(map[string]any)["id"], "the gateway's container survives the patch")
+	require.Equal(t, "45.2", forwarded["usage"].(map[string]any)["speed"])
+	require.InDelta(t, 0.0031, forwarded["usage"].(map[string]any)["total_cost"], 0.0001)
+
+	content := func(object map[string]any) []any { return object["content"].([]any) }
+	text := func(object map[string]any) map[string]any { return content(object)[1].(map[string]any) }
+	require.Equal(t, "Red", text(forwarded)["text"])
+	text(original)["text"], text(forwarded)["text"] = nil, nil
+	require.Equal(t, original, forwarded, "only the answer text may change")
+}
+
+// A Responses client of a Responses backend keeps request-scoped metadata its
+// own wire contract cannot carry through a full re-encode, for the same reason.
+func TestResponsesReplayKeepsTheProviderBodyBesidesTheAnswer(t *testing.T) {
+	body := []byte(`{"id":"resp_1","object":"response","created_at":1,"status":"completed","model":"m","output":[` +
+		`{"id":"rs_1","type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"` + separatorThought + `"}]},` +
+		`{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"\n\nRed","annotations":[]}]}],` +
+		`"metadata":{"trace_id":"trace-123"},"usage":{"input_tokens":20,"output_tokens":12,"total_tokens":32}}`)
+	engine := NewBuiltinEngine()
+	result, err := engine.TranslateResponse(llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIResponsesV1, body, nil)
+	require.NoError(t, err)
+	require.False(t, result.Envelope.ResponseReencodeRequired)
+	encoded, err := engine.EncodeResponse(llmprotocol.OpenAIResponsesV1, result.Response, result.Envelope)
+	require.NoError(t, err)
+	require.JSONEq(t, string(result.Body), string(encoded.Body))
+
+	var original, forwarded map[string]any
+	require.NoError(t, json.Unmarshal(body, &original))
+	require.NoError(t, json.Unmarshal(result.Body, &forwarded))
+	require.Equal(t, "trace-123", forwarded["metadata"].(map[string]any)["trace_id"], "request-scoped metadata survives the patch")
+
+	message := func(object map[string]any) map[string]any { return object["output"].([]any)[1].(map[string]any) }
+	text := func(object map[string]any) map[string]any {
+		return message(object)["content"].([]any)[0].(map[string]any)
+	}
+	require.Equal(t, "Red", text(forwarded)["text"])
+	text(original)["text"], text(forwarded)["text"] = nil, nil
+	require.Equal(t, original, forwarded, "only the answer text may change")
+}
+
 func TestTranslateResponseLeavesOtherRepliesAlone(t *testing.T) {
 	for name, test := range map[string]struct{ reasoning, content string }{
 		"deepseek style, clean answer after reasoning": {separatorThought, "Red"},
@@ -280,7 +340,9 @@ func TestMessagesBackendReplyDropsTheAnswerSeparator(t *testing.T) {
 			`"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":12}}`)
 	}
 	engine := NewBuiltinEngine()
-	// A signed thinking block cannot leave Messages without an accepted loss.
+	// A signed thinking block is left untouched by the in-place patch, so a
+	// Messages client of a Messages backend keeps the signature and still
+	// replays rather than paying a full re-encode.
 	for target, signature := range map[llmprotocol.WireFormat]string{
 		llmprotocol.AnthropicMessagesV1: "c2ln", llmprotocol.OpenAIChatV1: "", llmprotocol.OpenAIResponsesV1: "",
 	} {
@@ -291,7 +353,7 @@ func TestMessagesBackendReplyDropsTheAnswerSeparator(t *testing.T) {
 			require.Equal(t, "Red", answer, string(result.Body))
 			require.Equal(t, separatorThought, reasoning, string(result.Body))
 			if target == llmprotocol.AnthropicMessagesV1 {
-				require.True(t, result.Envelope.ResponseReencodeRequired, "the provider bytes still hold the separator")
+				require.False(t, result.Envelope.ResponseReencodeRequired, "the signed thinking block is untouched and replays fine")
 				require.Contains(t, string(result.Body), `"signature":"c2ln"`)
 			}
 		})
