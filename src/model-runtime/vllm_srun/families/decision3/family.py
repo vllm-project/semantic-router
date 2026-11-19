@@ -290,6 +290,14 @@ class Decision3Family(ModelFamily):
                 # few of a quantized package's answers; BF16 packages keep exact
                 # kernels.
                 approximate_kernels=quantized is not None,
+                # docs/records/cpu-zentorch-d3.md: zentorch's FP32 linear changed
+                # no decision of the FP32 CPU answers. Its SDPA changed none either
+                # but added at most 2% over the linear, so the sdpa slot stays exact
+                # until a record shows it pays. Quantized packages have no CPU record
+                # and keep exact kernels; vela3_d3 shares this policy.
+                approximate_cpu_kernels=(
+                    frozenset({"linear"}) if quantized is None else False
+                ),
             ),
             max_input_tokens=package.max_input_tokens,
             kernel_variants=CONV_VARIANT,
