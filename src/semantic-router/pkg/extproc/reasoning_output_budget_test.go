@@ -61,6 +61,13 @@ func TestClientStatesReasoningPreferencePerFormat(t *testing.T) {
 
 func reasoningBudgetRouter(t *testing.T, backend llmprotocol.WireFormat, family string, threshold int) *OpenAIRouter {
 	t.Helper()
+	return reasoningLaneRouter(t, backend, family, threshold, "")
+}
+
+// reasoningLaneRouter builds a router whose one decision turns reasoning on
+// for worker, with that decision's plugins given as YAML.
+func reasoningLaneRouter(t *testing.T, backend llmprotocol.WireFormat, family string, threshold int, plugins string) *OpenAIRouter {
+	t.Helper()
 	apiFormat, provider := config.APIFormatOpenAI, "vllm"
 	switch backend {
 	case llmprotocol.OpenAIResponsesV1:
@@ -87,11 +94,12 @@ recipes:
       - name: thinking
         rules: {operator: AND, conditions: []}
         modelRefs: [{model: worker, use_reasoning: true}]
+%s
 global:
   router:
     headers:
       debug: any
-`, threshold, apiFormat, family, provider)))
+`, threshold, apiFormat, family, provider, plugins)))
 	require.NoError(t, err)
 	router, err := buildOpenAIRouterFromConfig(cfg)
 	require.NoError(t, err)

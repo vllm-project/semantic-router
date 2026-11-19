@@ -548,6 +548,9 @@ type RequestContext struct {
 	// request that states no reasoning preference, before dispatch sets the
 	// reasoning controls; see outputBudgetTurnsReasoningOff.
 	unstatedReasoningOutputLimit *int64
+	// unstatedReasoningStopSequences snapshots whether such a request sets
+	// stop sequences; see stopSequencesTurnReasoningOff.
+	unstatedReasoningStopSequences bool
 
 	ContextCompressionTargetTokens *int
 	ContextCompressionRecoveryKeys []string
