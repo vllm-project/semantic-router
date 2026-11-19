@@ -5,12 +5,18 @@ import { Badge, cn } from '../ui'
 
 import { decisionTone, type Tone } from './insightsDecisionTone'
 
-const ICONS: Record<Tone, LucideIcon> = {
+const DECISION_ICONS: Record<Tone, LucideIcon> = {
   guard: ShieldAlert,
   privacy: Lock,
   deep: Brain,
   fast: Zap,
   route: Split,
+}
+
+/** The icon a decision's name reads as, alone. */
+export function DecisionIcon({ decision, className }: { decision: string; className?: string }) {
+  const Icon = DECISION_ICONS[decisionTone(decision)]
+  return <Icon className={className} aria-hidden />
 }
 
 // A decision as a violet pill with the icon its name reads as; `label` is the
@@ -27,7 +33,7 @@ export default function InsightsDecisionBadge({
   className?: string
 }) {
   const tone = decisionTone(decision)
-  const Icon = ICONS[tone]
+  const Icon = DECISION_ICONS[tone]
   if (quiet) {
     return (
       <span

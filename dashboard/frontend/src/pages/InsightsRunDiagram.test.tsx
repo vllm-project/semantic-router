@@ -72,18 +72,47 @@ const response: RunResponse = {
 const timeline = buildRunTimeline(response, 0, 2)
 
 describe('run diagram', () => {
-  it('draws a lane per agent with the spawn and the failure marked', () => {
+  it('draws a labelled lane per agent with the spawn, and the failure on the events strip', () => {
     const html = renderToStaticMarkup(
       <TooltipProvider>
         <RunDiagram run={response.run} timeline={timeline} onSelect={() => undefined} />
       </TooltipProvider>,
     )
-    expect(html).toContain('↳')
-    expect(html).toContain('subagent 1')
+    expect(html).toContain('Main agent')
+    expect(html).toContain('Subagent 1')
     expect(html).toContain('collab_spawn')
-    expect(html).toContain('title="Spawned by main"')
+    expect(html).toContain('title="Started by the main agent"')
     expect(html).toContain('left:50%')
-    expect(html).toContain('data-marker="failure"')
+    const strip = html.slice(
+      html.indexOf('aria-label="Run events"'),
+      html.indexOf('aria-label="Run timeline"'),
+    )
+    expect(strip).toContain('data-event="failure"')
+    expect(strip).toContain('aria-label="Failed"')
+    expect(html).toContain('>Events<')
+  })
+
+  it('rules a compaction through every lane and labels its marker in words where there is room', () => {
+    const compacted: RunResponse = {
+      ...response,
+      calls: [
+        response.calls[0],
+        { ...failed, agent: 'main', markers: ['compaction'], lifecycle_state: 'completed' },
+      ],
+    }
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <RunDiagram
+          run={response.run}
+          timeline={buildRunTimeline(compacted, 0, 2)}
+          numbers={new Map([['rec-2', 2]])}
+          onSelect={() => undefined}
+        />
+      </TooltipProvider>,
+    )
+    expect(html).toContain('data-compaction-rule')
+    expect(html).toContain('aria-label="Compaction, call 2"')
+    expect(html).toMatch(/data-event="compaction"[^>]*>.*Compaction<\/span>/)
   })
 
   it("lets a lane's agent be followed, and dims the agents not followed", () => {
@@ -129,9 +158,12 @@ describe('run diagram', () => {
   it('details a step with its route, a hidden reason, and its record', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <RunCallDetails call={failed} />
+        <TooltipProvider>
+          <RunCallDetails call={failed} />
+        </TooltipProvider>
       </MemoryRouter>,
     )
+    expect(html).toContain('data-event="failure"')
     expect(html).toContain('title="keyword:email"')
     expect(html).toContain('high')
     expect(html).toContain('failed 502')
@@ -146,7 +178,7 @@ describe('run diagram', () => {
       <MemoryRouter>
         <TooltipProvider>
           <ModelLabelsContext.Provider value={labels}>
-            <RunLegend run={response.run} />
+            <RunLegend run={{ ...response.run, events: { failure: 1 } }} timeline={timeline} />
             <RunDiagram run={response.run} timeline={timeline} onSelect={() => undefined} />
             <RunSegmentPanel
               segment={subagent.blocks[0]}
@@ -161,5 +193,8 @@ describe('run diagram', () => {
     expect(html).toContain('aria-label="Qwen3.6 35B A3B (qwen-msg), 1 call"')
     expect(html).toContain('aria-label="Step details"')
     expect(html).toContain('qwen36<small>qwen-chat</small>')
+    // the legend explains each marker in words, with the run's count
+    expect(html).toContain('data-legend="failure"')
+    expect(html).toMatch(/data-legend="failure"[^]*Failed<\/span>[^]*>1<\/span>/)
   })
 })

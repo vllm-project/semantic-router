@@ -54,6 +54,7 @@ import {
 } from '../ui'
 import { formatDateTime } from '../utils/dateTime'
 
+import { callEvents, type AgentEvent } from './insightsAgentEvents'
 import { compactIdentifier, displaySessionId } from './insightsAgentIdentity'
 import { formatTokenCount } from './insightsDisplayFormat'
 import {
@@ -67,21 +68,23 @@ import { HarnessLogo, HarnessName } from './InsightsHarness'
 import { DEFAULT_PAGE_SIZE, pageHolding } from './insightsListData'
 import { InsightsDataProviders, modelLabel, useModelLabels } from './insightsModelLabelSupport'
 import {
-  fetchInsightsJSON,
   InsightsRequestError,
   insightsUnavailableReason,
   type InsightsUnavailableReason,
 } from './insightsPageApi'
 import { getReviewsPath, getSessionRequestsPath } from './insightsReviewSupport'
+import { loadRun } from './insightsRunCache'
 import { RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
 import { RunAgentsPanel, RunCallsPanel, RunOutcomesPanel } from './InsightsRunPanels'
 import { RunEvents, RunStatus } from './InsightsRunsView'
 import {
   countText,
   filterRunCalls,
-  formatRunCost,
   formatRunDuration,
+  runCostView,
+  runCurrency,
   runHeadline,
+  unpricedText,
   type CallsView,
 } from './insightsRunSupport'
 import {
@@ -104,36 +107,36 @@ function useRun(sessionId: string, pending = false) {
     notFound: boolean
     loading: boolean
   }>({ response: null, error: null, notFound: false, loading: true })
-  const load = useCallback(async () => {
-    if (pending) {
-      setState((current) => (current.loading ? current : { ...current, loading: true }))
-      return
-    }
-    if (!sessionId) {
-      setState({ response: null, error: null, notFound: true, loading: false })
-      return
-    }
-    setState((current) => ({ ...current, loading: true }))
-    try {
-      const query = new URLSearchParams({ session_id: sessionId })
-      const response = await fetchInsightsJSON<RunResponse>(
-        `/api/router/api/v1/observability/replays/run?${query.toString()}`,
-        'agent run',
-      )
-      setState({ response, error: null, notFound: false, loading: false })
-    } catch (error) {
-      const reason = insightsUnavailableReason(error)
-      const notFound = error instanceof InsightsRequestError && error.status === 404
-      setState((current) => ({
-        // a failed refresh keeps the run on screen under its error
-        response: notFound ? null : current.response,
-        error: reason ? null : error instanceof Error ? error.message : 'Unknown error',
-        unavailable: notFound ? undefined : reason,
-        notFound,
-        loading: false,
-      }))
-    }
-  }, [pending, sessionId])
+  // The first read may be the one the Sessions view just made; Refresh reads anew.
+  const load = useCallback(
+    async (fresh = false) => {
+      if (pending) {
+        setState((current) => (current.loading ? current : { ...current, loading: true }))
+        return
+      }
+      if (!sessionId) {
+        setState({ response: null, error: null, notFound: true, loading: false })
+        return
+      }
+      setState((current) => ({ ...current, loading: true }))
+      try {
+        const response = await loadRun(sessionId, { fresh })
+        setState({ response, error: null, notFound: false, loading: false })
+      } catch (error) {
+        const reason = insightsUnavailableReason(error)
+        const notFound = error instanceof InsightsRequestError && error.status === 404
+        setState((current) => ({
+          // a failed refresh keeps the run on screen under its error
+          response: notFound ? null : current.response,
+          error: reason ? null : error instanceof Error ? error.message : 'Unknown error',
+          unavailable: notFound ? undefined : reason,
+          notFound,
+          loading: false,
+        }))
+      }
+    },
+    [pending, sessionId],
+  )
   useEffect(() => {
     void load()
   }, [load])
@@ -294,6 +297,18 @@ function AgentRun() {
     setCallId(next.record_id)
     document.getElementById('run-timeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+  // The legend's events find the next call with the event after the one open,
+  // or after the window in view, wrapping to the run's first.
+  const findEvent = (event: string) => {
+    const after = callId ? (numbers.get(callId) ?? 0) : from
+    const has = (entry: RunCall) => callEvents(entry).includes(event as AgentEvent)
+    const next = calls.slice(after).find(has) ?? calls.slice(0, after).find(has)
+    if (!next) return
+    const index = (numbers.get(next.record_id) ?? 1) - 1
+    setWindowPage(pageHolding(index, size))
+    setBlockKey(undefined)
+    setCallId(next.record_id)
+  }
   const toggleAgent = (label: string) =>
     setView((current) => ({
       ...current,
@@ -333,7 +348,11 @@ function AgentRun() {
       <PageContainer>
         <BackLink />
         <Card className="border-dashed shadow-none">
-          <InsightsUnavailable reason={unavailable} noun="agent runs" onRetry={() => void load()} />
+          <InsightsUnavailable
+            reason={unavailable}
+            noun="agent runs"
+            onRetry={() => void load(true)}
+          />
         </Card>
       </PageContainer>
     )
@@ -347,7 +366,7 @@ function AgentRun() {
           <InsightsLoadError
             title="The run could not load"
             message={error}
-            onRetry={() => void load()}
+            onRetry={() => void load(true)}
           />
         ) : null}
         {loading ? <RunSkeleton /> : null}
@@ -356,6 +375,7 @@ function AgentRun() {
   }
 
   const run = response.run
+  const cost = runCostView(run.cost, calls)
   const headline = runHeadline(run)
   const task = run.prompt?.trim() ?? ''
   const subagents = run.agents.filter((entry) => entry.label !== 'main').length
@@ -418,7 +438,7 @@ function AgentRun() {
               <ListTree />
               View requests
             </Button>
-            <RefreshButton onClick={() => void load()} loading={loading} />
+            <RefreshButton onClick={() => void load(true)} loading={loading} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" aria-label="More actions">
@@ -461,7 +481,7 @@ function AgentRun() {
         <InsightsLoadError
           title="The run could not refresh"
           message={error}
-          onRetry={() => void load()}
+          onRetry={() => void load(true)}
         />
       ) : null}
 
@@ -498,11 +518,14 @@ function AgentRun() {
         <SummaryTile
           label="Cost"
           icon={<CircleDollarSign className="text-chart-6" />}
-          value={formatRunCost(run.cost)}
+          value={cost.text === 'no price' ? '—' : cost.text}
+          info={cost.note}
+          infoLabel="What the cost leaves out"
           hint={
-            run.cost.by_currency?.some((entry) => entry.router_call_spend > 0)
+            unpricedText(cost) ??
+            (run.cost.by_currency?.some((entry) => entry.router_call_spend > 0)
               ? 'Router calls included'
-              : 'Configured-rate estimate'
+              : 'Configured-rate estimate')
           }
         />
         <SummaryTile
@@ -517,8 +540,8 @@ function AgentRun() {
         <CardHeader>
           <CardTitle>Timeline</CardTitle>
           <CardDescription className="col-start-1">
-            One lane per agent; a block is a stretch of calls on one model. Click a block for its
-            calls, an agent to follow its calls below.
+            Each lane is an agent and each block a stretch of its calls on one model; the strip
+            above marks what happened. Click a block or a marker for its calls.
           </CardDescription>
           {total > TIMELINE_SIZES[0] ? (
             <CardAction className="gap-2 max-sm:col-start-1 max-sm:row-span-1 max-sm:row-start-3 max-sm:justify-self-start">
@@ -572,26 +595,21 @@ function AgentRun() {
             run={run}
             timeline={timeline}
             selected={block?.key}
+            selectedCall={call?.record_id}
             agents={view.agents}
+            numbers={numbers}
             onSelect={selectBlock}
+            onSelectCall={selectCall}
             onAgent={toggleAgent}
           />
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
-            <RunLegend run={run} />
-            <span className="text-xs text-subtle-foreground tabular">
-              {formatRunDuration(timeline.activeMs)} of activity in view
-              {timeline.breaks.length === 1 ? ' · 1 idle stretch folded' : ''}
-              {timeline.breaks.length > 1
-                ? ` · ${timeline.breaks.length} idle stretches folded`
-                : ''}
-            </span>
-          </div>
+          <RunLegend run={run} timeline={timeline} onFind={findEvent} />
           {block ? (
             <div className="border-t border-border pt-4">
               <RunSegmentPanel
                 segment={block}
                 call={call}
                 numbers={numbers}
+                currency={runCurrency(run.cost)}
                 onSelectCall={selectCall}
               />
             </div>
