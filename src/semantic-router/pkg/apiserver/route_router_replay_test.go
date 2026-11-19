@@ -4,9 +4,11 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -17,6 +19,7 @@ import (
 )
 
 type replayRuntimeStub struct {
+	ctx           context.Context
 	method        string
 	requestTarget string
 	response      routerruntime.ReplayResponse
@@ -25,10 +28,12 @@ type replayRuntimeStub struct {
 }
 
 func (runtime *replayRuntimeStub) HandleReplayRequest(
+	ctx context.Context,
 	method string,
 	requestTarget string,
 ) (routerruntime.ReplayResponse, bool) {
 	runtime.calls++
+	runtime.ctx = ctx
 	runtime.method = method
 	runtime.requestTarget = requestTarget
 	return runtime.response, runtime.handled
@@ -109,6 +114,10 @@ func assertViewerReplayResponse(
 	assertReplayStatus(t, response, http.StatusOK, "viewer")
 	if runtime.method != http.MethodGet || runtime.requestTarget != wantTarget {
 		t.Fatalf("forwarded replay request = %s %s", runtime.method, runtime.requestTarget)
+	}
+	// The read runs under the request's context, so it ends when the client leaves.
+	if _, ok := managementPrincipalFromContext(runtime.ctx); !ok {
+		t.Fatal("replay runtime did not receive the authenticated request's context")
 	}
 	if response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("Cache-Control = %q, want no-store", response.Header().Get("Cache-Control"))
@@ -240,7 +249,7 @@ func TestRouterReplayEveryReadRouteRedactsRecordedTextForViewer(t *testing.T) {
 	recorder.SetCapturePolicy(true, true, 0)
 	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{
 		ID: "replay-1", SessionID: "session-1", Decision: "safe-decision", SelectedModel: "model-a",
-		Prompt: private, RequestBody: private, ResponseBody: private,
+		Prompt: private, RequestBody: private, ResponseBody: private, SessionName: private,
 		SessionPolicy: map[string]interface{}{"identity": map[string]interface{}{"agent": map[string]interface{}{"hash": private}}},
 		RouteDiagnostics: &routerreplay.RouteDiagnostics{
 			SelectedModel: "model-a", SelectionReasoning: private, SessionReason: private, DecisionReason: private,
@@ -263,6 +272,9 @@ func TestRouterReplayEveryReadRouteRedactsRecordedTextForViewer(t *testing.T) {
 		{"list with details", "/api/v1/observability/replays?showDetails=true"},
 		{"record", "/api/v1/observability/replays/replay-1"},
 		{"trajectory", "/api/v1/observability/replays/trajectory?session_id=session-1"},
+		{"runs", "/api/v1/observability/replays/runs"},
+		{"run", "/api/v1/observability/replays/run?session_id=session-1"},
+		{"models", "/api/v1/observability/replays/models"},
 		{"aggregate", "/api/v1/observability/replays/aggregate"},
 		{"dataset", "/api/v1/observability/replays/dataset?seed=s&split=train:1"},
 		{"judge tasks", "/api/v1/observability/replays/dataset/judge-tasks?seed=s&split=train:1&blinding_key=k"},
@@ -285,5 +297,60 @@ func TestRouterReplayEveryReadRouteRedactsRecordedTextForViewer(t *testing.T) {
 	assertReplayStatus(t, operator, http.StatusOK, "operator")
 	if !bytes.Contains(operator.Body.Bytes(), []byte(`"selection_reasoning":"`+private)) {
 		t.Fatalf("operator trajectory lost the routing reasoning: %s", operator.Body.String())
+	}
+}
+
+// A viewer filters the records list by harness through the management API
+// and reads the harness counts beside the filtered total.
+func TestRouterReplayListFiltersByHarnessThroughManagementAPI(t *testing.T) {
+	const viewerAccessFixture = "viewer-replay-harness-token"
+	t.Setenv("VSR_VIEWER_HARNESS_TOKEN", viewerAccessFixture)
+	cfg := &config.RouterConfig{ManagementAPI: config.ManagementAPIConfig{Auth: config.ManagementAPIAuthConfig{
+		Mode:   config.ManagementAuthModeBearer,
+		Tokens: []config.ManagementAPITokenRef{{Env: "VSR_VIEWER_HARNESS_TOKEN", Role: "viewer"}},
+		Roles:  config.DefaultManagementAPIRoles(),
+	}}}
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	for _, record := range []routerreplay.RoutingRecord{
+		{ID: "codex", Agent: &store.AgentIdentity{Harness: store.HarnessCodex, ID: "subagent"}},
+		{ID: "claude", Agent: &store.AgentIdentity{Harness: store.HarnessClaudeCode}},
+		{ID: "script-1"},
+		{ID: "script-2"},
+	} {
+		if _, err := recorder.AddRecord(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	router := &extproc.OpenAIRouter{ReplayRecorder: recorder}
+	extproc.NewRouterServiceForSnapshot(router, nil)
+	registry := routerruntime.NewRegistry(cfg)
+	registry.SetReplayRuntime(router)
+	mux := (&ClassificationAPIServer{config: cfg, runtimeRegistry: registry}).setupRoutes()
+
+	response := serveReplayManagementRequest(mux, "/api/v1/observability/replays?harness=codex", viewerAccessFixture)
+	assertReplayStatus(t, response, http.StatusOK, "viewer")
+	var page struct {
+		Total         int            `json:"total"`
+		HarnessCounts map[string]int `json:"harness_counts"`
+		Data          []struct {
+			ID    string               `json:"id"`
+			Agent *store.AgentIdentity `json:"agent"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || len(page.Data) != 1 || page.Data[0].ID != "codex" || page.Data[0].Agent.Harness != store.HarnessCodex || page.Data[0].Agent.ID != "" {
+		t.Fatalf("viewer harness page = %s", response.Body.String())
+	}
+	want := map[string]int{store.HarnessCodex: 1, store.HarnessClaudeCode: 1, store.HarnessAPIClient: 2}
+	if !reflect.DeepEqual(page.HarnessCounts, want) {
+		t.Fatalf("harness counts = %v, want %v", page.HarnessCounts, want)
+	}
+
+	invalid := serveReplayManagementRequest(mux, "/api/v1/observability/replays?harness=gemini_cli", viewerAccessFixture)
+	assertReplayStatus(t, invalid, http.StatusBadRequest, "viewer")
+	if !bytes.Contains(invalid.Body.Bytes(), []byte("harness must list one or more of")) {
+		t.Fatalf("invalid harness body = %s", invalid.Body.String())
 	}
 }

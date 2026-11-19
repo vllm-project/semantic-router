@@ -32,6 +32,55 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AgentRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "main",
+            "subagent"
+          ]
+        },
+        "harness": {
+          "type": "string",
+          "enum": [
+            "claude_code",
+            "codex",
+            "opencode",
+            "deepseek_harness",
+            "cursor",
+            "openclaw"
+          ]
+        },
+        "types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "request_classes": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "main",
+              "subagent",
+              "workflow",
+              "compaction",
+              "auxiliary"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AlgorithmBudget": {
       "properties": {
         "deadline": {
@@ -336,6 +385,47 @@
         },
         "description": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BudgetMatch": {
+      "properties": {
+        "user": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "BudgetsConfig": {
+      "properties": {
+        "currency": {
+          "type": "string"
+        },
+        "unpriced": {
+          "type": "string",
+          "enum": [
+            "refuse",
+            "allow"
+          ]
+        },
+        "output_reserve_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "run": {
+          "$ref": "#/$defs/RunBudget"
+        },
+        "users": {
+          "items": {
+            "$ref": "#/$defs/UserBudget"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -773,6 +863,10 @@
         "reasoning_effort": {
           "type": "string"
         },
+        "reasoning_min_output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
         "tls": {
           "$ref": "#/$defs/ProviderDefaultsTLS"
         }
@@ -842,7 +936,8 @@
             "type": "string",
             "enum": [
               "sampling_min_p",
-              "sampling_logit_bias"
+              "sampling_logit_bias",
+              "developer_role"
             ]
           },
           "type": "array"
@@ -1180,6 +1275,9 @@
         "ratelimit": {
           "$ref": "#/$defs/RateLimitConfig"
         },
+        "budgets": {
+          "$ref": "#/$defs/BudgetsConfig"
+        },
         "management_api": {
           "$ref": "#/$defs/ManagementAPIConfig"
         },
@@ -1300,6 +1398,12 @@
         "input_modality": {
           "items": {
             "$ref": "#/$defs/InputModalityRule"
+          },
+          "type": "array"
+        },
+        "agent": {
+          "items": {
+            "$ref": "#/$defs/AgentRule"
           },
           "type": "array"
         },
@@ -2783,6 +2887,9 @@
         },
         "message": {
           "type": "string"
+        },
+        "block": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3153,6 +3260,9 @@
       "properties": {
         "history": {
           "type": "boolean"
+        },
+        "tool_results": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3394,6 +3504,9 @@
         },
         "vsr": {
           "$ref": "#/$defs/VSRProfile"
+        },
+        "unserved_models": {
+          "$ref": "#/$defs/UnservedModels"
         }
       },
       "additionalProperties": false,
@@ -5787,6 +5900,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "agent",
             "authz",
             "complexity",
             "context",
@@ -6427,6 +6541,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "agent",
             "authz",
             "complexity",
             "context",
@@ -6479,6 +6594,23 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "RunBudget": {
+      "properties": {
+        "limit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "idle_timeout_seconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "limit"
+      ]
     },
     "SafetyRule": {
       "properties": {
@@ -7081,6 +7213,52 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "UnservedModels": {
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "reject",
+            "route"
+          ]
+        },
+        "route_to": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "UserBudget": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "match": {
+          "$ref": "#/$defs/BudgetMatch"
+        },
+        "limit": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "window": {
+          "type": "string",
+          "enum": [
+            "hour",
+            "day",
+            "week",
+            "month"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "limit",
+        "window"
+      ]
     },
     "UserFeedbackRule": {
       "properties": {
@@ -7820,6 +7998,14 @@
         "schema_ref": "#/$defs/InputModalityRule"
       },
       {
+        "type": "agent",
+        "display_name": "Agent",
+        "collection": "agent",
+        "observation_key": "agent",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/AgentRule"
+      },
+      {
         "type": "systemone",
         "display_name": "System One",
         "collection": "systemone",
@@ -8102,6 +8288,15 @@
         "path": [
           "services",
           "ratelimit"
+        ]
+      },
+      {
+        "key": "budgets",
+        "layer": "services",
+        "display_name": "Budgets",
+        "path": [
+          "services",
+          "budgets"
         ]
       },
       {

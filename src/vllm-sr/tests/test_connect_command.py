@@ -334,6 +334,13 @@ def test_the_displayed_diff_shows_owned_keys_and_hides_the_key(tmp_path):
     assert '"CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"' in new
 
 
+def test_claude_code_names_its_request_class_for_the_session_title(tmp_path):
+    # Router Replay names an agent run by the title Claude Code asks for on an
+    # auxiliary request, which it marks only with its gateway hint headers on.
+    settings = json.loads(_claude(tmp_path / "settings.json").new_text())
+    assert settings["env"]["CLAUDE_CODE_GATEWAY_HINT_HEADERS"] == "1"
+
+
 def test_codex_profile_holds_the_provider_and_undo_restores_the_old_one(tmp_path):
     tomllib = pytest.importorskip("tomllib")
     profile = tmp_path / "vllm-sr.config.toml"
@@ -766,6 +773,31 @@ def test_cli_dry_run_writes_nothing_and_hides_the_key(tmp_path, gateway, monkeyp
     assert "sk-secret" not in result.output
     assert '"ANTHROPIC_AUTH_TOKEN": "<$VLLM_SR_API_KEY>"' in result.output
     assert not (tmp_path / "settings.json").exists()
+
+
+def test_claude_code_sends_the_gateway_hint_headers(tmp_path, gateway, monkeypatch):
+    # Claude Code names a subagent's type and a request's class, which the
+    # agent signal routes on, only with this variable set (2.1.325)
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    args = ["connect", "claude-code", "--base-url", url]
+    preview = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert '"CLAUDE_CODE_GATEWAY_HINT_HEADERS": "1"' in preview.output
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    settings = tmp_path / "settings.json"
+    env = json.loads(settings.read_text())["env"]
+    assert env["CLAUDE_CODE_GATEWAY_HINT_HEADERS"] == "1"
+    env["CLAUDE_CODE_GATEWAY_HINT_HEADERS"] = "0"
+    settings.write_text(json.dumps({"env": env}))
+    status = CliRunner().invoke(main, ["connect", "status", "--json"])
+    assert "CLAUDE_CODE_GATEWAY_HINT_HEADERS" in status.output
+    assert CliRunner().invoke(main, ["connect", "claude-code", "--undo"]).exit_code == 0
+    assert json.loads(settings.read_text()) == {
+        "env": {"CLAUDE_CODE_GATEWAY_HINT_HEADERS": "0"}
+    }
 
 
 def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):

@@ -333,6 +333,9 @@ func setCoreEnums(root *jsonschema.Schema) {
 	})
 	setDefinitionPropertyEnum(root, "ProjectionScoreInput", "type", routerconfig.SupportedProjectionInputTypes())
 	setDefinitionPropertyEnum(root, "InputModalityRule", "modality", routerconfig.SupportedInputModalities())
+	setDefinitionPropertyEnum(root, "AgentRule", "role", routerconfig.SupportedAgentRoles())
+	setDefinitionPropertyEnum(root, "AgentRule", "harness", routerconfig.SupportedAgentHarnesses())
+	setDefinitionPropertyItemsEnum(root, "AgentRule", "request_classes", routerconfig.SupportedAgentRequestClasses())
 	setDefinitionPropertyEnum(root, "CanonicalRecipe", "strategy", []string{
 		string(routerconfig.RoutingStrategyPriority),
 		string(routerconfig.RoutingStrategyConfidence),

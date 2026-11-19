@@ -2,12 +2,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import InsightsCharts from '../components/InsightsCharts'
-import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
+import { ModelLabelsContext, modelText, type ModelLabels } from './insightsModelLabelSupport'
+import { buildInsightsRecordSections, renderInsightsSavingsCell } from './insightsPageSupport'
 import type {
   InsightsAggregateCostCoverage,
   InsightsAggregateResponse,
   InsightsRecord,
 } from './insightsPageTypes'
+
+const savingsColumn = (labels: ModelLabels = {}) => ({
+  render: (record: InsightsRecord) => renderInsightsSavingsCell(record, labels),
+})
 
 const priced: InsightsRecord = {
   id: 'priced',
@@ -31,27 +36,27 @@ const priced: InsightsRecord = {
   },
 }
 
-const usageAndCost = (record: InsightsRecord) =>
-  buildInsightsRecordSections(record, { isReadonly: false }).find(
+const usageAndCost = (record: InsightsRecord, modelLabels?: Record<string, string>) =>
+  buildInsightsRecordSections(record, { isReadonly: false, modelLabels }).find(
     (section) => section.title === 'Usage & Cost',
   )!
 
-const field = (record: InsightsRecord, label: string) =>
-  usageAndCost(record).fields.find((item) => item.label === label)?.value
+const field = (record: InsightsRecord, label: string, modelLabels?: Record<string, string>) =>
+  usageAndCost(record, modelLabels).fields.find((item) => item.label === label)?.value
 
 describe('Insights cost accounting labels', () => {
   it('marks list prices and caller logins as estimates and names the configured baseline', () => {
     expect(field(priced, 'Cost basis')).toBe(
       'Recorded tokens × the built-in catalog’s list price (an estimate: no pricing is configured) at capture time; not a GPU bill or provider invoice. It ran on the client’s own login: this is the API-price equivalent, not what the plan charges.',
     )
-    expect(field(priced, 'Baseline basis')).toContain('the configured baseline model (small)')
+    expect(field(priced, 'Baseline basis')).toContain('the configured baseline model, small.')
     expect(field(priced, 'Baseline basis')).toContain(
       'a negative saving means the baseline was cheaper',
     )
-    const savings = createInsightsTableColumns().find((column) => column.key === 'cost_savings')!
-    const html = renderToStaticMarkup(<>{savings.render!(priced)}</>)
+    const savings = savingsColumn()
+    const html = renderToStaticMarkup(<>{savings.render(priced)}</>)
     expect(html).toContain('-$0.0030')
-    expect(html).not.toContain('costValuePositive')
+    expect(html).not.toContain('text-success-foreground')
   })
 
   it('explains a missing price, a missing baseline and a Looper request', () => {
@@ -105,6 +110,44 @@ describe('Insights cost accounting labels', () => {
   })
 })
 
+describe('Insights cost text names models by their labels', () => {
+  const labels = { premium: 'Qwen3.6 35B A3B', small: 'qwen36', 'qwen-chat': 'qwen36' }
+
+  it('keeps the configured name beside the label', () => {
+    expect(modelText(labels, 'premium')).toBe('Qwen3.6 35B A3B (premium)')
+    expect(modelText(labels, 'vllm-sr/auto')).toBe('vllm-sr/auto')
+  })
+
+  it('in the missing price, the baseline, the Router calls and the savings cell', () => {
+    const unpriced: InsightsRecord = {
+      ...priced,
+      actual_cost: undefined,
+      currency: undefined,
+      cost_accounting: {
+        unpriced_reason: 'pricing_not_configured',
+        router_calls: [{ kind: 'decision_model', model: 'qwen-chat', calls: 2 }],
+      },
+    }
+    expect(field(unpriced, 'Cost basis', labels)).toContain(
+      'No price is configured for Qwen3.6 35B A3B (premium).',
+    )
+    expect(field(priced, 'Baseline basis', labels)).toContain(
+      'the configured baseline model, qwen36 (small).',
+    )
+    expect(field(unpriced, 'Router calls', labels)).toContain(
+      '2 Decision model calls on qwen36 (qwen-chat)',
+    )
+    const savings = savingsColumn(labels)
+    const html = renderToStaticMarkup(
+      <ModelLabelsContext.Provider value={labels}>
+        {savings.render(priced)}
+      </ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain('Baseline (configured rates): <span')
+    expect(html).toContain('title="Configured as small">qwen36</span>')
+  })
+})
+
 const coverage: InsightsAggregateCostCoverage = {
   priced_records: 2,
   partly_priced_records: 1,
@@ -150,14 +193,16 @@ describe('Insights cost coverage', () => {
     expect(html).toContain('Left out: 2 no price configured, 1 not completed.')
     expect(html).toContain('Router calls: 3 calls, 1 unpriced')
     expect(html).toContain(
-      'Savings compare 2 requests with the configured baseline model (1), the recipe pool’s most expensive model (1).',
+      'Differences compare 2 requests with the configured baseline model (1), the recipe pool’s most expensive model (1).',
     )
     expect(html).toContain('1 request priced at a catalog list price: an estimate')
     expect(html).toContain('API-price equivalent, not what the plan charges')
     expect(html).toContain('4 Looper hop records not counted')
-    expect(html).toContain('Estimated Router Calls')
+    expect(html).toContain('Router calls')
     expect(html).toContain('$3.50')
-    expect(html).toContain('summaryValueNegative')
+    expect(html).toContain('+$1.00')
+    expect(html).toContain('100.0% above the reference')
+    expect(html).not.toContain('text-destructive-foreground')
     expect(html).not.toContain('No cost is shown')
   })
 
@@ -185,7 +230,7 @@ describe('Insights cost coverage', () => {
     expect(html).not.toContain('Estimated Router Calls')
   })
 
-  it('says savings are net of the Router calls and keeps the gross figure', () => {
+  it('says the difference includes the Router calls and keeps the figure before them', () => {
     const summary = {
       total_saved: 3.25,
       gross_saved: 4,
@@ -205,20 +250,19 @@ describe('Insights cost coverage', () => {
       },
     }
     const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('Estimated Gross Savings')
-    expect(html).toContain('$4.00')
-    expect(html).toContain('Router Calls Netted')
+    expect(html).toContain('Before them: -$4.00')
+    expect(html).toContain('Router calls in the difference')
     expect(html).toContain('$0.75')
-    expect(html).toContain('$3.25')
+    expect(html).toContain('-$3.25')
     expect(html).toContain(
-      'Savings are net of the Router’s own calls for these requests: 2 Decision model calls, 1 classify call, 1 System One call.',
+      'The difference includes the Router’s own calls for these requests: 2 Decision model calls, 1 classify call, 1 System One call.',
     )
     expect(html).toContain(
       '1 request left out of savings for a Router call without a price (1 no token usage reported).',
     )
   })
 
-  it('leaves savings unknown where nothing was compared with a baseline', () => {
+  it('leaves the difference unknown where nothing was compared with a reference', () => {
     const summary = {
       total_saved: 0,
       baseline_spend: 0,
@@ -231,8 +275,9 @@ describe('Insights cost coverage', () => {
       coverage: { ...coverage, baseline_sources: undefined },
     }
     const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('Estimated Total Cost')
+    expect(html).toContain('Total cost')
     expect(html).toContain('$0.50')
+    expect(html).toContain('title="No request in range has both a priced model cost')
     expect(html).not.toContain('$0.0000')
   })
 })
@@ -264,20 +309,71 @@ describe('Router decision costs', () => {
       },
     }
     expect(field(record, 'Router calls')).toContain(
-      '1 Decision model call (primary), 120 input / 3 output tokens, 1 priced at $0.0020',
+      '1 Decision model call on primary, 120 input / 3 output tokens, 1 priced at $0.0020',
     )
     expect(field(record, 'Router calls')).toContain(
-      '1 System One call (remote), 10 input / 0 output tokens, 1 unpriced',
+      '1 System One call on remote, 10 input / 0 output tokens, 1 unpriced',
     )
     expect(field(priced, 'Router calls')).toBeUndefined()
     // The record's own savings are gross, as the table's column says.
     expect(field(record, 'Estimated savings before its Router calls')).toBe('-$0.0030')
     expect(field(record, 'Estimated savings')).toBeUndefined()
     expect(field(priced, 'Estimated savings')).toBeDefined()
-    const savings = createInsightsTableColumns().find((column) => column.key === 'cost_savings')!
-    expect(renderToStaticMarkup(<>{savings.render!(record)}</>)).toContain(
-      'Before its Router calls',
+    const savings = savingsColumn()
+    expect(renderToStaticMarkup(<>{savings.render(record)}</>)).toContain('Before its Router calls')
+    expect(renderToStaticMarkup(<>{savings.render(priced)}</>)).not.toContain('Router calls')
+  })
+})
+
+describe('spend budget on a record', () => {
+  it('shows what the budget had left and what the call reserved and was charged', () => {
+    const settled: InsightsRecord = {
+      ...priced,
+      cost_accounting: {
+        ...priced.cost_accounting,
+        budget: {
+          scope: 'run',
+          currency: 'USD',
+          limit: 0.03,
+          remaining: 0.024,
+          estimate: 0.011,
+          charged: 0.006,
+          settlement: 'usage',
+        },
+      },
+    }
+    expect(field(settled, 'Spend budget')).toBe(
+      'run: $0.024 of $0.03 left; reserved $0.011, charged $0.0060 from its usage',
     )
-    expect(renderToStaticMarkup(<>{savings.render!(priced)}</>)).not.toContain('Router calls')
+  })
+
+  it('says a refused call did not fit', () => {
+    const refused: InsightsRecord = {
+      ...priced,
+      lifecycle_state: 'failed',
+      terminal_reason: 'budget_exceeded',
+      cost_accounting: {
+        budget: {
+          scope: 'user/daily',
+          currency: 'USD',
+          limit: 0.05,
+          remaining: 0.008,
+          estimate: 0.011,
+        },
+      },
+    }
+    expect(field(refused, 'Spend budget')).toBe(
+      'user/daily: $0.0080 of $0.05 left; refused: the call was estimated at $0.011',
+    )
+    const exhausted: InsightsRecord = {
+      ...refused,
+      cost_accounting: {
+        budget: { scope: 'run', currency: 'USD', limit: 0.03, remaining: 0, estimate: 0 },
+      },
+    }
+    expect(field(exhausted, 'Spend budget')).toBe(
+      'run: $0.0000 of $0.03 left; refused: nothing was left',
+    )
+    expect(field({ ...priced }, 'Spend budget')).toBeUndefined()
   })
 })

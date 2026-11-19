@@ -69,8 +69,9 @@ receipts](../api/headers) and [CLI previews and probes](../api/cli).
 
 A harness can request models other than the one you configured. Claude Code,
 for example, asks for its own Haiku model ID when it starts an Explore
-subagent. The Router answers a model it does not publish with "the requested
-model is not available", and that subagent fails. Point every model setting
+subagent. The Router answers a model it does not publish with 404
+`model_not_found`, "The model ... does not exist or you do not have access to
+it.", and that subagent fails. Point every model setting
 the harness has at an entrypoint (for Claude Code, `ANTHROPIC_MODEL` and the
 `ANTHROPIC_DEFAULT_*_MODEL` variables), or list the IDs it sends in the
 entrypoint's `model_names`:
@@ -80,6 +81,31 @@ entrypoints:
   - model_names: [vllm-sr/auto, claude-haiku-5-5]
     recipe: default
 ```
+
+Some clients send every model of a provider family to one base URL, so the
+names cannot be listed in advance. Cursor's "Override OpenAI Base URL" sends its
+own models (`gpt-5.6-sol`, ...) to the Router next to the custom `vllm-sr/auto`.
+For such a client, let the listener's API route the models it does not serve to
+one of its own:
+
+```yaml
+listeners:
+  - name: public
+    port: 8899
+    apis:
+      chat_completions:
+        models: [vllm-sr/auto]
+        unserved_models: {policy: route, route_to: vllm-sr/auto}
+```
+
+A request naming any model the API does not accept, or the Router does not
+serve, is then routed exactly as `vllm-sr/auto` would be, instead of being
+answered with `403 model_not_allowed` or `404 model_not_found`. The answer's
+`model` and `x-vsr-selected-model` name the model that served it, the Replay
+record keeps the name the client gave in `requested_model`, and a caller allowed
+debug headers reads it in `x-vsr-trace`. No signal reads that name. A System One
+model named on an LLM API keeps its `400 model_api_mismatch`, and
+`GET /v1/models` still lists only the API's models.
 
 ## Claude Code and Codex CLI
 
@@ -382,7 +408,7 @@ listed but never offered for removal, since that launch did not make the
 worktree. Without git on `PATH`, as for a launch with no `--worktree`, each
 session is listed with its state unknown and no cleanup step, since both come
 from git. The record stays after the cleanup, so the list keeps the session id
-to look up in Insights.
+to look up in the Dashboard's **Requests** page.
 
 ### Fetch the key with a command
 
@@ -618,7 +644,8 @@ describes. An `anthropic` backend receives those as sent.
 Protection reads the session and subagent ids Claude Code sends,
 `x-claude-code-session-id` and `x-claude-code-agent-id`, with no identity
 headers configured, so each session and each subagent keeps its own model.
-Insights then names each subagent in a session's routing history.
+The Dashboard's **Requests** page then names each subagent in a session's
+routing history.
 
 For every harness, `connect` leaves protection out of what it asks for only
 when the entrypoint reaches exactly one model, which leaves no model to keep.
@@ -652,8 +679,9 @@ models the entrypoint reaches; without it Claude Code does not know
 exports replaces the login, and it does not probe the gateway, which answers
 only on that login.
 
-The Router then routes each call among Claude models on that login, and
-Insights shows the session's calls with the model each decision picked. A
+The Router then routes each call among Claude models on that login, and the
+Dashboard's **Requests** page shows the session's calls with the model each
+decision picked. A
 cost is the tokens at the API's list price, not what the plan charges. A model
 without `pricing` takes its list price from the built-in catalog, through its
 `catalog` card or through the `provider_model_id` its `anthropic` backend calls,
@@ -937,9 +965,10 @@ Each review's record holds the planned action, the verdict with its risk and
 rationale, the reviewed session, the review model, latency, tokens and cost.
 A failed or interrupted review is recorded as failed or cancelled, never as a
 deny. The command and the rationale are request and response text, so they are
-kept only with `prompt_capture: raw` and body capture on. Open **Insights** and
-switch to **Reviews** for the approval rate, reviews over time, cost by review
-model and a table of reviews; a session's routing history marks the turns
+kept only with `prompt_capture: raw` and body capture on. Open
+**Observe → Requests** and select the **Reviews** tab for the approval rate,
+reviews over time, cost by review model and a table of reviews; a session's
+routing history marks the turns
 whose actions were reviewed. See
 [Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
 for the fields and the API filters.
@@ -1155,7 +1184,7 @@ nothing, so it leaves vSR alone.
 
 The listener can also set which of vSR's apps run, for every plugin pointed at
 it, under `systemone.vsr`; the Dashboard shows each field as Default, On or Off
-under Config › Global Config › vSR agent plugins, where Default leaves the field
+under Settings › Router settings › vSR agent plugins, where Default leaves the field
 out. Each field set there wins over the plugin's own option, so turning
 `redact` off here turns it off in every session that uses this listener, from
 its next prompt a minute or more later. A choice a person makes in Claude Code
@@ -1222,7 +1251,7 @@ rules of a reachable recipe only.
               - {type: keyword, name: employee_id, enforce: required}
 ```
 
-In the Dashboard, Config › Global Config › vSR agent plugins › Rules of your
+In the Dashboard, Settings › Router settings › vSR agent plugins › Rules of your
 own picks the recipe and lists its rules that fit each app, each Off, Advisory
 or Required. Once an app binds a rule, the rules left Off fold behind a
 "Show N more rules" button. Try it under each app sends a sample command or output through
@@ -1307,14 +1336,22 @@ The command writes these. Claude Code reads them from its settings:
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "vllm-sr/auto",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "vllm-sr/auto",
-    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000",
+    "CLAUDE_CODE_GATEWAY_HINT_HEADERS": "1"
   }
 }
 ```
 
 `CLAUDE_CODE_MAX_OUTPUT_TOKENS` is 32000, or the smallest `max_output_tokens`
 of the models the entrypoint reaches when that is lower, since a model refuses
-a request for more.
+a request for more. `CLAUDE_CODE_GATEWAY_HINT_HEADERS` has Claude Code send
+each request's class and each subagent's type, which Claude Code leaves out for
+a custom base URL otherwise; the
+[agent signal](../tutorials/signal/heuristic/agent) routes on them, and the
+Dashboard's **Requests** page names a session's run with the title Claude Code
+shows for it ([Session names](../tutorials/plugin/router-replay#session-names)).
+Codex sends no thread name the gateway can tie to its run, so **Requests** shows
+a Codex run by its first prompt.
 
 Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
 `codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider
@@ -1508,6 +1545,50 @@ The command writes this provider into `models.json`; these settings follow the
   }
 }
 ```
+
+## OpenCode
+
+[OpenCode](https://opencode.ai) reads custom providers from `opencode.json` in
+the project or in `~/.config/opencode/`. Add the gateway as an
+OpenAI-compatible provider:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "vllm-sr": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "vLLM Semantic Router",
+      "options": {
+        "baseURL": "http://localhost:8899/v1",
+        "apiKey": "{env:VLLM_SR_API_KEY}"
+      },
+      "models": {
+        "auto": { "id": "vllm-sr/auto", "limit": { "context": 131072, "output": 32000 } }
+      }
+    }
+  },
+  "model": "vllm-sr/auto"
+}
+```
+
+- `id` is the model name OpenCode sends, so the gateway sees `vllm-sr/auto`
+  rather than the provider-prefixed `vllm-sr/vllm-sr/auto`. `limit.context` is
+  the window OpenCode compacts the session at: give it the entrypoint's context
+  window. `limit.output` is the output limit it asks for.
+- OpenCode sends its session in `x-session-id` on every call, so session
+  protection holds the model for the session. A subagent runs in a child
+  session and also sends the session that spawned it in `x-parent-session-id`:
+  protection holds each subagent on its own model under that session, and
+  Replay shows it in the same run.
+- The [`agent`](../tutorials/signal/heuristic/agent) signal matches OpenCode as
+  `harness: opencode`, its subagents as `role: subagent`, its session titles as
+  the `auxiliary` request class and its session summaries as `compaction`, so
+  a `housekeeping` route sends those to a small model. Where Replay keeps
+  response text, it names the run with the title OpenCode asked for.
+
+The Router settings are those of [Pi](#router-settings-for-pi). These settings
+were checked with OpenCode 1.18.10.
 
 ## VS Code
 
@@ -1741,14 +1822,14 @@ line for each request it refused. The messages are those of Claude Code
 | Codex says `` Missing environment variable: `VLLM_SR_API_KEY`. `` Pi says `No API key found for vllm-sr.` | `vllm-sr connect status` says `not probed: $VLLM_SR_API_KEY is not set`. | Export the listener's key as `VLLM_SR_API_KEY` before you start the harness, or connect again with `--key-command` ([Fetch the key with a command](#fetch-the-key-with-a-command)). |
 | The gateway does not answer at that address. `claude -p` retries for about three minutes, then `API Error: Connection refused`. Codex keeps printing `Reconnecting... waiting for network`. Pi: `Connection error.: connect ECONNREFUSED`. VS Code: `The gateway at <address> refused the connection`. | `vllm-sr connect status` says `no connection (Connection refused). Is the gateway running there?` after the URL it tried. | Start the Router, or run connect again with the `--config` the Router serves or with `--base-url`. In VS Code, set `vllm-sr.gatewayUrl`. |
 | A `--key-command` fails or prints nothing. `vllm-sr connect` stops with `--key-command exited with status 1`, `--key-command printed no key` or `--key-command did not finish in 5 s`, and writes nothing. When it stops working after connect: Claude Code says `apiKeyHelper failed: did not return a value`, then `Your apiKeyHelper script is failing`. Codex: ``provider auth command `/bin/sh` produced an empty token``. Pi: `API key auth failed for provider vllm-sr`. | `vllm-sr connect status` runs the command as the harness does and says `--key-command printed no key` or `--key-command exited with status 1`. Run the command in a shell to see its error. | Make the command print the key, for example by unlocking the password store, and start a new session. The settings keep the command, so connect does not need to run again. |
-| The harness asks for a model the gateway does not serve. Claude Code: `API Error: 400 the requested model is not available`. Codex: `the requested model is not available`, after a warning that it found no model metadata. Pi: `400: {"type":"invalid_request_error","code":"model_not_found"`. | `GET /v1/models` lists what the gateway serves. The Router logs `specified_model_not_found` with the `model` the harness sent. `codex exec` names it on its `model:` line. | Ask for an entrypoint such as `vllm-sr/auto`, or add the ID to an entrypoint's `model_names` ([Model names the harness picks itself](#model-names-the-harness-picks-itself)). When a project's settings name the model, see the next two rows. |
+| The harness asks for a model the gateway does not serve. The gateway answers `404` `model_not_found`: ``The model `<name>` does not exist or you do not have access to it.`` Codex first warns that it found no model metadata. | `GET /v1/models` lists what the gateway serves. The Router logs `specified_model_not_found` with the `model` the harness sent. `codex exec` names it on its `model:` line. | Ask for an entrypoint such as `vllm-sr/auto`, or add the ID to an entrypoint's `model_names` ([Model names the harness picks itself](#model-names-the-harness-picks-itself)). When a project's settings name the model, see the next two rows. |
 | Claude Code started in one directory asks for another model. | `vllm-sr connect status` run in that directory shows `overridden here` with the file and keys, such as `.claude/settings.json sets ANTHROPIC_MODEL`, and `vllm-sr connect claude-code` there warns that `Claude Code started in this directory takes those over` the user settings. | Remove those keys from the project's settings, connect there with `--scope project`, or start with `--launch` ([Try it without writing anything](#try-it-without-writing-anything)). |
-| Codex in a trusted project asks for another model: its `model:` line names it, and the gateway answers `the requested model is not available`. | Run `vllm-sr connect codex` in that directory. It warns that `.codex/config.toml sets model, which Codex asks for instead of vllm-sr/auto once it trusts this project`. | Remove `model` from the project's `.codex/config.toml`, or start with `--launch`. |
+| Codex in a trusted project asks for another model: its `model:` line names it, and the gateway answers that the model does not exist (`404` `model_not_found`). | Run `vllm-sr connect codex` in that directory. It warns that `.codex/config.toml sets model, which Codex asks for instead of vllm-sr/auto once it trusts this project`. | Remove `model` from the project's `.codex/config.toml`, or start with `--launch`. |
 | Pi answers `401` although `VLLM_SR_API_KEY` holds the right key. | `vllm-sr connect status` says `Pi holds a key of its own for vllm-sr in auth.json, which it sends in place of the one models.json names`. | Remove the `vllm-sr` entry from Pi's `auth.json`. |
 | The request is larger than the context window. Claude Code: `Prompt is too long`. Codex: `This model's maximum context length is`, in an error with code `context_length_exceeded`. VS Code: `The gateway answered 400: This model's maximum context length is`. `pi -p` prints nothing and exits with status 0, and `pi --mode json` shows the error in `errorMessage`. | When the Router refuses it on its own count, it logs `context_window_exceeded` with the window and the count. `vllm-sr connect status` shows the `context window` the harness was given. | Give the harness the smallest window of the models the entrypoint reaches: run connect again after those models change, or pass `--context-window`. In VS Code, set `vllm-sr.maxInputTokens` ([Set budgets](#set-budgets-before-running-a-task)). |
 | `vllm-sr connect codex --check` shows `not observed` on its `Approval review` line. | The Router logs a `routing_decision` line with `"original_model":"vllm-sr/review"` for a review that reached it. If `GET /api/v1/observability/replays?model=vllm-sr/review` on the management API then lists nothing, replay is off for the review recipe. Without that log line, the model ran the command without asking for approval. | Remove `enabled: false` from the `router_replay` plugin of the review recipe to record reviews. A model that runs the command without asking does not fail the check. |
 | Approve for me reviews go to the session model after you set a `review_model`. | `vllm-sr connect status` shows `the session model` as the review model. | Run connect again after you set or change `review_model` ([Approve for me reviews](#approve-for-me-reviews)). |
-| Insights shows no requests, although the harness gets answers. | `GET /api/v1/observability/replays` on the management API answers 404 with `router replay is disabled or unavailable`. | Replay is on by default. Remove `enabled: false` from the `router_replay` plugin in `global.plugins`, or set it to `true`, and restart the Router. |
-| Insights lost the requests from before the Router restarted. | The list answers `"count":0` right after a restart, and either `global.services.router_replay.store_backend` is `memory` or the Router logged at startup that its records `stay in memory`. | Remove `store_backend: memory` so the default `file` store keeps them, make the configuration's directory writable, or configure Postgres or Redis ([Keep records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts)). |
+| The Dashboard's **Requests** page shows no requests, although the harness gets answers. | `GET /api/v1/observability/replays` on the management API answers 404 with `router replay is disabled or unavailable`. | Replay is on by default. Remove `enabled: false` from the `router_replay` plugin in `global.plugins`, or set it to `true`, and restart the Router. |
+| The **Requests** page lost the requests from before the Router restarted. | The list answers `"count":0` right after a restart, and either `global.services.router_replay.store_backend` is `memory` or the Router logged at startup that its records `stay in memory`. | Remove `store_backend: memory` so the default `file` store keeps them, make the configuration's directory writable, or configure Postgres or Redis ([Keep records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts)). |
 | `vllm-sr connect` stops before writing anything, with `so every call would be refused`, for a gateway that presents each client's own login. | The configuration's `auth: {credential: caller}` backends name `openai` while Claude Code sends an `anthropic` login, or the reverse for Codex. For Pi the message names the provider it has no login for, such as `Pi holds no anthropic login`. | Point Claude Code at a gateway whose caller backends name `anthropic`, and Codex at one whose caller backends name `openai`. Sign Pi in with `pi auth login anthropic` or `pi auth login openai-codex`, and run connect again. |
 | `claude -p` prints `[claude-code:unrecognized_model] {"model":"vllm-sr/auto","query_source":"sdk"}` before the answer. | The answer follows. | Nothing to fix: Claude Code does not know the entrypoint's name. |

@@ -675,6 +675,9 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | `GET` | `/api/v1/observability/replays` | List Router Replay records |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate Router Replay routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
+| `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session over the filtered records, latest activity first |
+| `GET` | `/api/v1/observability/replays/run` | Read one agent run as a tree: its agents and their calls in time order, with each call's route, cost and outcome |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id |
 | `GET` | `/api/v1/observability/replays/dataset` | Export a shadow comparison dataset manifest built from the selected Router Replay records |
 | `GET` | `/api/v1/observability/replays/dataset/judge-tasks` | Build blinded pairwise judge tasks over the shadow comparison dataset |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
@@ -797,5 +800,5 @@ The test bypasses the Router result cache and records real model-runtime request
 latency and server-phase metrics. Requests are limited to 2 MiB, responses to
 4 MiB, and execution to 30 seconds. Discovery requires `config.read`; inference
 requires `classify.invoke`. The Dashboard's
-**Build → System One → Decision Playground** page
+**Models → Decision models → Playground** tab
 uses its own authenticated gateway with `config.read` and `evaluation.run`.

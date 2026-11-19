@@ -65,6 +65,7 @@ var builtinSignalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeConversation, DisplayName: "Conversation", Collection: "conversation", ObservationKey: "conversation", DecisionReferenceable: true},
 	{Type: SignalTypeMetadata, DisplayName: "Metadata", Collection: "metadata", ObservationKey: "metadata", DecisionReferenceable: true},
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
+	{Type: SignalTypeAgent, DisplayName: "Agent", Collection: "agent", ObservationKey: "agent", DecisionReferenceable: true},
 	{Type: SignalTypeSystemOne, DisplayName: "System One", Collection: "systemone", ObservationKey: "systemone", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 }
 

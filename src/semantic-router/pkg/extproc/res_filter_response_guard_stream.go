@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 // responseGuardHoldLimit bounds the upstream bytes of a streamed answer the
@@ -31,26 +32,36 @@ const (
 var errResponseGuardHoldLimit = errors.New("streamed answer exceeds the response guard's hold limit")
 
 // responseGuardHold is a streamed answer the Router holds until the selected
-// decision's response_guard has read all of it: the client frames the stream
-// would have sent so far and the upstream bytes it read.
+// decision's response_guard has read all of it, or until the structured
+// output pass knows whether the answer is the turn's: the client frames the
+// stream would have sent so far and the upstream bytes it read.
 type responseGuardHold struct {
 	frames []byte
 	read   int
 	// outcome is what became of the answer once the hold ended: the guard's
 	// outcome, responseGuardOverLimit or responseGuardIncomplete.
 	outcome string
+	// guarded reports that the guard asked for the hold; only then does the
+	// hold record guard outcomes.
+	guarded bool
+	// diagnostics counts the request's diagnostics when the answer began.
+	diagnostics int
 }
 
-// holdStreamForResponseGuard asks the gateway to buffer a streamed answer
-// whose response_guard can refuse or rewrite it, so that no byte reaches the
-// client before the guard has read the whole answer. A gateway that streams
-// the body anyway still sends the client nothing early: the Router holds every
-// part itself.
-func holdStreamForResponseGuard(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
-	if ctx == nil || !ctx.IsStreamingResponse || !requestResponseGuard(ctx).Enforces() {
+// holdStreamedAnswer asks the gateway to buffer a streamed answer whose
+// response_guard can refuse or rewrite it, or whose structured output pass
+// can replace it, so that no byte reaches the client before the Router has
+// read the whole answer. A gateway that streams the body anyway still sends
+// the client nothing early: the Router holds every part itself.
+func holdStreamedAnswer(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || !ctx.IsStreamingResponse {
 		return
 	}
-	ctx.ResponseGuardHold = &responseGuardHold{}
+	guarded := requestResponseGuard(ctx).Enforces()
+	if !guarded && ctx.structuredOutputPass == nil {
+		return
+	}
+	ctx.ResponseGuardHold = &responseGuardHold{guarded: guarded, diagnostics: len(ctx.ProtocolDiagnostics)}
 	response.ModeOverride = &http_ext.ProcessingMode{ResponseBodyMode: http_ext.ProcessingMode_BUFFERED}
 }
 
@@ -69,8 +80,12 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	if len(body) > responseGuardHoldLimit-hold.read {
 		r.completeSemanticStream(ctx, errResponseGuardHoldLimit)
 		ctx.ResponsePath = headers.ResponsePathBlocked
-		return r.endUnreadStream(ctx, responseGuardOverLimit, llmprotocol.NewError(llmprotocol.ErrorPermission,
-			"response_guard_hold_limit", "Response blocked: the answer is larger than the response guard can check", nil), "request_rejected")
+		message := "Response blocked: the answer is larger than the response guard can check"
+		if !hold.guarded {
+			message = "Response blocked: the answer is larger than the Router can hold"
+		}
+		return r.endUnreadStream(ctx, responseGuardOverLimit, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest,
+			"response_guard_hold_limit", message, nil), "request_rejected")
 	}
 	hold.read += len(body)
 	buffers := semanticStreamBuffers{}
@@ -84,9 +99,24 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 		return heldStreamPart(nil)
 	}
 	clean := buffers.streamErr == nil && !ctx.StreamingAborted
-	semanticResponse := r.completeSemanticStream(ctx, buffers.streamErr)
+	var passErr error
+	semanticResponse := r.completeSemanticStreamWith(ctx, buffers.streamErr, func(first *llmprotocol.Response) *llmprotocol.Response {
+		second, err := r.structuredOutputAnswer(ctx, first, hold.diagnostics)
+		if second == nil {
+			passErr = err
+			return first
+		}
+		return second
+	})
 	if semanticResponse == nil || ctx.StreamingAborted {
 		return r.endUnreadStream(ctx, responseGuardIncomplete, heldStreamFailure(ctx, buffers.streamErr), heldStreamFailureReason(ctx, clean))
+	}
+	if passErr == nil && ctx.structuredOutputPass != nil && ctx.structuredOutputPass.answered {
+		hold.frames, passErr = r.encodeClientStream(ctx, *semanticResponse)
+	}
+	if passErr != nil {
+		_, protocolError, reason := r.structuredOutputRefusal(ctx, passErr)
+		return r.refuseHeldStream(ctx, protocolError, reason)
 	}
 	return r.releaseHeldStream(ctx, semanticResponse)
 }
@@ -107,7 +137,9 @@ func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *
 	r.updateKVAddressRegistry(ctx)
 	plan := r.prepareResponsePolicy(ctx, semanticResponse, answer)
 	hold.outcome = ctx.ResponseGuard.outcome()
-	metrics.RecordResponseGuardBuffered(requestDecisionStateKey(ctx), hold.outcome)
+	if hold.guarded {
+		metrics.RecordResponseGuardBuffered(requestDecisionStateKey(ctx), hold.outcome)
+	}
 	if plan.blocked != nil {
 		plan.commit()
 		return r.refuseHeldStream(ctx, plan.refusal, "request_rejected")
@@ -170,6 +202,9 @@ func (r *OpenAIRouter) recordHeldStreamOverMessageLimit(ctx *RequestContext, err
 
 func (r *OpenAIRouter) recordUnreadStream(ctx *RequestContext, outcome string) {
 	ctx.ResponseGuardHold.outcome = outcome
+	if !ctx.ResponseGuardHold.guarded {
+		return
+	}
 	metrics.RecordResponseGuardBuffered(requestDecisionStateKey(ctx), outcome)
 	traceResponseGuard(ctx, outcome)
 	r.recordRouterReplayUnreadAnswer(ctx, outcome)
@@ -201,10 +236,12 @@ func (r *OpenAIRouter) refuseHeldStream(ctx *RequestContext, protocolError *llmp
 	return response
 }
 
-// responseGuardRefusal is the error a streaming client receives for an answer
-// rule blocked: the message a buffered answer's 403 carries.
+// responseGuardRefusal is the error a client receives for an answer a rule
+// blocked: a buffered answer's 400 and a stream's error event. It is the
+// invalid request a blocking fast_response gives, not a permission error,
+// which Claude Code reads as a failed login and retries.
 func responseGuardRefusal(rule *responseGuardRuleRun) *llmprotocol.ProtocolError {
-	return llmprotocol.NewError(llmprotocol.ErrorPermission, "response_blocked", responseGuardBlockMessage(rule), nil)
+	return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "response_blocked", responseGuardBlockMessage(rule), nil)
 }
 
 // streamedFallbackRefusal answers a streaming client whose fallback answer
@@ -245,9 +282,13 @@ func (r *OpenAIRouter) encodeClientStream(ctx *RequestContext, response llmproto
 	if format == "" {
 		format = llmprotocol.OpenAIChatV1
 	}
+	if format == llmprotocol.AnthropicMessagesV1 {
+		source, _ := responseWireFormats(ctx)
+		response = protocolcodec.AnthropicReplyIdentifiers(source, response)
+	}
 	body, diagnostics, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Source: format, Target: format,
-		Options: clientStreamOptions(ctx), PreviousResponseID: responseObjectPreviousID(ctx),
+		Options: clientStreamOptions(ctx), ResponseRender: responseObjectRender(ctx),
 	})
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 	return body, err

@@ -4,7 +4,7 @@
 # Requirements:
 #   - NVIDIA GPU with 24GB+ VRAM (A100 recommended)
 #   - CUDA 11.8+
-#   - Python 3.10+
+#   - Python 3.11+
 #
 # Usage:
 #   ./scripts/train_router_r1_gpu.sh [OPTIONS]

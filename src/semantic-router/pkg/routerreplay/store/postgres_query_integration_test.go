@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -81,7 +82,7 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 		t.Fatalf("detail page failed: %v", err)
 	}
 	count, matching := 0, 0
-	err = postgres.ScanMetadata(ctx, func(record Record) error {
+	err = postgres.ScanMetadata(ctx, QueryFilters{}, func(record Record) error {
 		count++
 		if record.Recipe == "evaluation" {
 			matching++
@@ -93,6 +94,26 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 	})
 	if err != nil || count != 12250 || matching != 12230 {
 		t.Fatalf("scan count=%d matching=%d err=%v", count, matching, err)
+	}
+	// A filtered scan reads only the selected rows; the filter options still
+	// come from every row.
+	filtered := 0
+	err = postgres.ScanMetadata(ctx, QueryFilters{Recipe: "other", SessionID: "unrelated-session"}, func(record Record) error {
+		if record.Recipe != "other" || record.SessionID != "unrelated-session" {
+			return errors.New("filtered scan returned an unselected record")
+		}
+		filtered++
+		return nil
+	})
+	if err != nil || filtered != 19 {
+		t.Fatalf("filtered scan count=%d err=%v", filtered, err)
+	}
+	recipes := map[string]bool{}
+	if err = postgres.ScanFilterOptions(ctx, func(record Record) error {
+		recipes[record.Recipe] = true
+		return nil
+	}); err != nil || len(recipes) != 2 || !recipes["evaluation"] || !recipes["other"] {
+		t.Fatalf("filter options recipes=%v err=%v", recipes, err)
 	}
 	scoped, err := postgres.QueryPage(ctx, QueryFilters{SessionID: "old-session", Recipe: "evaluation", RecipeSet: true}, 100, 0, true)
 	if err != nil || scoped.Total != 2 || len(scoped.Records) != 2 {
@@ -127,7 +148,64 @@ func TestPostgresQueryBeyondTenThousandIntegration(t *testing.T) {
 		t.Fatalf("legacy recipe session=%+v err=%v", legacy, err)
 	}
 	stopped := errors.New("stop scan")
-	if err = postgres.ScanMetadata(ctx, func(Record) error { return stopped }); !errors.Is(err, stopped) {
+	if err = postgres.ScanMetadata(ctx, QueryFilters{}, func(Record) error { return stopped }); !errors.Is(err, stopped) {
 		t.Fatalf("callback failure was hidden: %v", err)
+	}
+}
+
+// A harness filter keeps the records of its harnesses, a record no harness
+// sent as an API client, and a page counts every harness the other filters
+// keep, in the snapshot its total comes from.
+//
+// StorageIntegration: postgres
+func TestPostgresHarnessQueriesIntegration(t *testing.T) {
+	postgres := openPostgresReviewStore(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	start := time.Unix(1700000000, 0).UTC()
+	records := []Record{
+		{ID: "claude", Agent: &AgentIdentity{Harness: HarnessClaudeCode}},
+		{ID: "codex", Agent: &AgentIdentity{Harness: HarnessCodex, ID: "subagent"}},
+		{ID: "plain"},
+		{ID: "unnamed-agent", Agent: &AgentIdentity{ID: "agent-hash"}},
+		{ID: "codex-elsewhere", Agent: &AgentIdentity{Harness: HarnessCodex}, Recipe: "other"},
+	}
+	for index, record := range records {
+		record.RequestID, record.Timestamp = record.ID, start.Add(time.Duration(index)*time.Second)
+		if record.Recipe == "" {
+			record.Recipe = "evaluation"
+		}
+		if _, err := postgres.Add(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := postgres.QueryPage(ctx, QueryFilters{Recipe: "evaluation", Harness: HarnessAPIClient + "," + HarnessCodex}, 10, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, len(page.Records))
+	for index, record := range page.Records {
+		ids[index] = record.ID
+	}
+	if page.Total != 3 || !reflect.DeepEqual(ids, []string{"unnamed-agent", "plain", "codex"}) {
+		t.Fatalf("harness page total=%d records=%v", page.Total, ids)
+	}
+	want := map[string]int{HarnessClaudeCode: 1, HarnessCodex: 1, HarnessAPIClient: 2}
+	if !reflect.DeepEqual(page.HarnessCounts, want) {
+		t.Fatalf("harness counts = %v, want %v", page.HarnessCounts, want)
+	}
+	all, err := postgres.QueryPage(ctx, QueryFilters{}, 1, 0, false)
+	if err != nil || all.Total != 5 || all.HarnessCounts[HarnessCodex] != 2 || len(all.Records) != 1 {
+		t.Fatalf("unfiltered page=%+v err=%v", all, err)
+	}
+	scanned := 0
+	if err = postgres.ScanMetadata(ctx, QueryFilters{Harness: HarnessClaudeCode}, func(record Record) error {
+		if record.Agent == nil || record.Agent.Harness != HarnessClaudeCode {
+			return fmt.Errorf("harness scan returned %s", record.RequestID)
+		}
+		scanned++
+		return nil
+	}); err != nil || scanned != 1 {
+		t.Fatalf("harness scan count=%d err=%v", scanned, err)
 	}
 }

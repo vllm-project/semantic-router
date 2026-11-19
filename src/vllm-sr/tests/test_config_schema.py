@@ -326,3 +326,34 @@ def test_environment_reference_is_accepted_in_a_number_or_auto_field(
     )
 
     assert validate_user_config(config, log_summary=False) == []
+
+
+def test_budgets_validate_and_refuse_what_cannot_be_enforced() -> None:
+    budgets = {
+        "currency": "USD",
+        "unpriced": "refuse",
+        "output_reserve_tokens": 4096,
+        "run": {"limit": 2.5, "idle_timeout_seconds": 3600},
+        "users": [
+            {"name": "daily", "match": {"group": "eng"}, "limit": 10, "window": "day"}
+        ],
+    }
+    config = {"version": "v0.5", "global": {"services": {"budgets": budgets}}}
+    assert validate_config_structure(config) == []
+
+    for bad, field in [
+        ({"run": {"limit": 0}}, "global.services.budgets.run.limit"),
+        (
+            {"users": [{"name": "a", "limit": 1, "window": "fortnight"}]},
+            "global.services.budgets.users.0.window",
+        ),
+        (
+            {"users": [{"name": "a", "window": "day"}]},
+            "global.services.budgets.users.0",
+        ),
+        ({"unpriced": "ignore"}, "global.services.budgets.unpriced"),
+    ]:
+        errors = validate_config_structure(
+            {"version": "v0.5", "global": {"services": {"budgets": bad}}}
+        )
+        assert any(error.startswith(field) for error in errors), (bad, errors)

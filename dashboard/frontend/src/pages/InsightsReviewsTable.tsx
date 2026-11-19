@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ShieldCheck } from 'lucide-react'
 
-import { DataTable } from '../components/DataTable'
-import TableHeader from '../components/TableHeader'
+import { DataTable, DataToolbar, EmptyState, FilterPill } from '../ui'
 
-import emptyStyles from './InsightsEmptyState.module.css'
-import styles from './InsightsPage.module.css'
+import { modelText, useModelLabels } from './insightsModelLabelSupport'
+import { getInsightsRecordPath } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
 import {
   createReviewTableColumns,
@@ -20,23 +21,37 @@ interface InsightsReviewsTableProps {
   sessionInput: string
   modelOptions: string[]
   hasReviews: boolean
+  loading?: boolean
+  actions?: ReactNode
   onSessionInput: (value: string) => void
   onFilterChange: (key: 'result' | 'risk' | 'model', value: string) => void
 }
 
 export function InsightsReviewsEmptyState() {
   return (
-    <section className={emptyStyles.emptyState} aria-labelledby="insights-reviews-empty-title">
-      <h3 id="insights-reviews-empty-title" className={emptyStyles.title}>
-        No approval reviews yet
-      </h3>
-      <p className={emptyStyles.description}>
-        Reviews appear here when Codex sends its Approve for me reviews through the gateway and
-        Router Replay records the route that answers them.
-      </p>
-    </section>
+    <EmptyState
+      compact
+      icon={ShieldCheck}
+      tone="blue"
+      title="No approval reviews yet"
+      description="Reviews appear here when Codex sends its Approve for me reviews through the gateway and Router Replay records the route that answers them."
+      footer={
+        <a
+          className="underline-offset-4 hover:text-foreground hover:underline"
+          href="https://vllm-sr.ai/docs/installation/agent-harness#approve-for-me-reviews"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Set up Approve for me reviews
+        </a>
+      }
+    />
   )
 }
+
+// One choice at a time: the API reads a single value for each of these filters.
+const single = (selected: string[], current: string) =>
+  selected.filter((value) => value !== current).pop() ?? 'all'
 
 export default function InsightsReviewsTable({
   records,
@@ -45,73 +60,72 @@ export default function InsightsReviewsTable({
   sessionInput,
   modelOptions,
   hasReviews,
+  loading = false,
+  actions,
   onSessionInput,
   onFilterChange,
 }: InsightsReviewsTableProps) {
+  const navigate = useNavigate()
   const columns = useMemo(() => createReviewTableColumns(), [])
+  const labels = useModelLabels()
+  const picked = (value: string) => (value === 'all' ? [] : [value])
   return (
     <>
-      <TableHeader
-        title="Approval Reviews"
-        count={total}
-        searchPlaceholder="Filter by session ID..."
-        searchValue={sessionInput}
+      <DataToolbar
+        search={sessionInput}
         onSearchChange={onSessionInput}
-        variant="embedded"
+        placeholder="Filter by session ID…"
+        filters={
+          <>
+            <FilterPill
+              label="Result"
+              options={REVIEW_RESULT_OPTIONS}
+              selected={picked(filters.result)}
+              onChange={(next) => onFilterChange('result', single(next, filters.result))}
+            />
+            <FilterPill
+              label="Risk"
+              options={REVIEW_RISK_OPTIONS.map((risk) => ({ value: risk, label: risk }))}
+              selected={picked(filters.risk)}
+              onChange={(next) => onFilterChange('risk', single(next, filters.risk))}
+            />
+            {modelOptions.length > 0 ? (
+              <FilterPill
+                label="Review model"
+                options={modelOptions.map((model) => ({
+                  value: model,
+                  label: modelText(labels, model),
+                }))}
+                selected={picked(filters.model)}
+                onChange={(next) => onFilterChange('model', single(next, filters.model))}
+              />
+            ) : null}
+          </>
+        }
+        actions={actions}
       />
-      <div className={styles.filterRow}>
-        <select
-          className={styles.filterSelect}
-          aria-label="Result"
-          value={filters.result}
-          onChange={(event) => onFilterChange('result', event.target.value)}
-        >
-          <option value="all">All results</option>
-          {REVIEW_RESULT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className={styles.filterSelect}
-          aria-label="Risk"
-          value={filters.risk}
-          onChange={(event) => onFilterChange('risk', event.target.value)}
-        >
-          <option value="all">All risk levels</option>
-          {REVIEW_RISK_OPTIONS.map((risk) => (
-            <option key={risk} value={risk}>
-              {risk}
-            </option>
-          ))}
-        </select>
-        <select
-          className={styles.filterSelect}
-          aria-label="Review model"
-          value={filters.model}
-          onChange={(event) => onFilterChange('model', event.target.value)}
-          disabled={modelOptions.length === 0}
-        >
-          <option value="all">All review models</option>
-          {modelOptions.map((model) => (
-            <option key={model} value={model}>
-              {model}
-            </option>
-          ))}
-        </select>
-      </div>
-      {hasReviews ? (
+      <section aria-label="Approval reviews" data-total={total}>
         <DataTable
+          data={hasReviews ? records : []}
           columns={columns}
-          data={records}
-          keyExtractor={(row) => row.id}
-          emptyMessage="No reviews match your current filters"
-          className={styles.insightsTable}
+          getRowId={(row) => row.id}
+          loading={loading && records.length === 0}
+          onRowClick={(row) => navigate(getInsightsRecordPath(row.id))}
+          empty={
+            hasReviews ? (
+              <EmptyState
+                compact
+                icon={ShieldCheck}
+                tone="blue"
+                title="No reviews match"
+                description="Clear the session or the filters to see every review."
+              />
+            ) : (
+              <InsightsReviewsEmptyState />
+            )
+          }
         />
-      ) : (
-        <InsightsReviewsEmptyState />
-      )}
+      </section>
     </>
   )
 }

@@ -84,6 +84,7 @@ func applyResponsesStart(event *llmprotocol.Event, wire responsesEventWire) {
 	event.Type = llmprotocol.EventResponseStarted
 	if wire.Response != nil {
 		event.ResponseID, event.Model = wire.Response.ID, wire.Response.Model
+		event.CreatedAt = responsesCreatedTime(wire.Response.CreatedAt)
 	}
 }
 

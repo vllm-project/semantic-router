@@ -355,6 +355,21 @@
       ]
     },
     {
+      "id": "vllm-sr/vela3.1-fast",
+      "family": "vela3",
+      "question_types": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "span_heads": [
+        "router"
+      ]
+    },
+    {
       "id": "vllm-sr/vela3-lite",
       "family": "vela3_d3",
       "question_types": [
@@ -421,6 +436,36 @@
         "text",
         "image",
         "video"
+      ],
+      "span_heads": [
+        "router"
+      ]
+    },
+    {
+      "id": "vllm-sr/vela3.1-pico-380m",
+      "family": "vela3_pico",
+      "question_types": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "span_heads": [
+        "router"
+      ]
+    },
+    {
+      "id": "vllm-sr/vela3.1-pico-150m",
+      "family": "vela3_pico",
+      "question_types": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
       ],
       "span_heads": [
         "router"

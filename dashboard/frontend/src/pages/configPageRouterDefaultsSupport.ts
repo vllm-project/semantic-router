@@ -68,6 +68,8 @@ interface RouterSectionContext {
   config: ConfigData | null
   routerConfig: RouterConfigSectionData
   routerDefaults: CanonicalGlobalConfig | null
+  /** Build only these curated cards, and none of the generated ones. */
+  only?: readonly RouterSystemKey[]
 }
 
 export const ROUTER_LAYER_META: Record<RouterLayerKey, { title: string; description: string }> = {
@@ -262,6 +264,8 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
           value: `${(asArray(section?.providers) || []).flatMap((provider) => asArray(provider.rules) || []).length}`,
         },
       ]
+    case 'budgets':
+      return budgetsSummary(section)
     case 'management_api':
       return [
         { label: 'Bind address', value: stringOrFallback(section?.bind_address) },
@@ -355,6 +359,38 @@ function summaryForKey(key: RouterSystemKey, data: unknown): RouterSectionSummar
   return [{ label: 'Fields', value: `${keys}` }]
 }
 
+function budgetsSummary(section: Record<string, unknown> | undefined): RouterSectionSummaryItem[] {
+  const currency = stringOrFallback(section?.currency, 'USD')
+  const run = asObject(section?.run)
+  return [
+    { label: 'Run limit', value: run?.limit ? `${run.limit} ${currency}` : 'Not set' },
+    { label: 'User budgets', value: `${(asArray(section?.users) || []).length}` },
+    { label: 'Unpriced calls', value: stringOrFallback(section?.unpriced, 'refuse') },
+  ]
+}
+
+function budgetsFields(): FieldConfig[] {
+  return [
+    { name: 'currency', label: 'Currency', type: 'text', placeholder: 'USD' },
+    {
+      name: 'unpriced',
+      label: 'Unpriced Calls',
+      type: 'select',
+      options: ['refuse', 'allow'],
+      description: 'Refuse a call to a model with no price, or admit it at zero and count it.',
+    },
+    {
+      name: 'output_reserve_tokens',
+      label: 'Output Reserve Tokens',
+      type: 'number',
+      placeholder: '4096',
+      description: 'Output a call reserves when neither its request nor its model sets a limit.',
+    },
+    routerStructuredField('budgets', 'run'),
+    routerStructuredField('budgets', 'users'),
+  ]
+}
+
 function badgesForKey(key: RouterSystemKey, data: unknown): RouterSectionBadge[] {
   const badges: RouterSectionBadge[] = []
 
@@ -381,7 +417,8 @@ function statusForKey(data: unknown): RouterSectionBadge {
   return enabledBadge(typeof section?.enabled === 'boolean' ? section.enabled : undefined)
 }
 
-function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
+/** The hand-tuned labels, hints and options of a legacy card's top-level fields. */
+export function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
   switch (key) {
     case 'router_core':
       return [
@@ -453,6 +490,8 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
         { name: 'fail_open', label: 'Fail Open', type: 'boolean' },
         routerStructuredField(key, 'providers'),
       ]
+    case 'budgets':
+      return budgetsFields()
     case 'memory':
       return [
         { name: 'auto_store', label: 'Auto Store Facts', type: 'boolean' },
@@ -646,7 +685,9 @@ export function buildEffectiveRouterConfig(
 }
 
 export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectionCard[] {
-  const orderedKeys = Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]
+  const orderedKeys = (Object.keys(CURATED_ROUTER_SECTIONS) as RouterSystemKey[]).filter(
+    (key) => !ctx.only || ctx.only.includes(key),
+  )
   const decisionBindings = decisionBindingsState(
     ctx.routerConfig.system_models,
     ctx.config,
@@ -697,6 +738,8 @@ export function buildRouterSectionCards(ctx: RouterSectionContext): RouterSectio
   const curatedPaths = new Set(
     Object.values(CURATED_ROUTER_SECTIONS).map(({ path }) => path.join('.')),
   )
+  if (ctx.only) return curatedCards
+
   const generatedCards: RouterSectionCard[] = ROUTER_CONFIG_EXTENSION.global_sections
     // KB management is not a Dashboard surface; the canonical schema and raw editor retain it.
     .filter((surface) => surface.path.join('.') !== 'model_catalog.kbs')

@@ -676,6 +676,15 @@ func (l *ReMoMLooper) sortAndShuffle(cfg *config.ReMoMAlgorithmConfig, responses
 // put next to the user's own words.
 var systemReminderBlock = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`)
 
+// WithoutSystemReminders is text without its <system-reminder> blocks, or
+// text itself when they are all it holds.
+func WithoutSystemReminders(text string) string {
+	if words := strings.TrimSpace(systemReminderBlock.ReplaceAllString(text, "")); words != "" {
+		return words
+	}
+	return text
+}
+
 // extractOriginalContent returns the question every Looper stage asks about:
 // the user's own words in the last user turn that has some, from its string
 // content or its joined text parts, without <system-reminder> blocks. A turn

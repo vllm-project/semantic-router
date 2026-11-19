@@ -121,6 +121,75 @@ attaches the credential it issued the requesting user:
 See
 [Security Hardening](../../installation/security-hardening#delegate-the-users-credential-to-an-upstream).
 
+### Spend budgets
+
+`budgets` caps what model calls may spend, set once for every route: per agent
+run, and per user over a window. Without it nothing is capped.
+
+```yaml
+global:
+  services:
+    budgets:
+      currency: USD
+      unpriced: refuse
+      output_reserve_tokens: 4096
+      run:
+        limit: 5.00
+        idle_timeout_seconds: 86400
+      users:
+        - name: daily
+          match:
+            group: eng
+          limit: 50.00
+          window: day
+```
+
+- **A run** is one user's session: every request that carries the session id
+  Router Replay records (`x-vsr-session-id`, a `session_id_headers` header,
+  `learning.protection.identity.headers.session`, or the session a supported
+  harness sends), so a harness's subagents share it. The Looper hops, fallback
+  attempts and Router model calls, such as the decision model's, made for
+  those requests count too. A request without a session is a run of its own.
+  A run unused for `idle_timeout_seconds` (default a day) starts again from
+  zero.
+- **A user budget** applies to each user `match` selects, as a rate-limit rule
+  does: an empty or `*` `user` or `group` matches everyone. The user is the
+  `authz.identity.user_id_header` value, which a listener keeps only when it
+  trusts identity headers. Requests without one share one budget per rule.
+  `window` is `hour`, `day`, `week` (from Monday) or `month`, in UTC. Listener
+  `api_keys` name no user, so a budget per key needs the authenticator in front
+  to send the key's identity as the user.
+- **Before a call is sent**, the Router reserves its estimated cost against
+  every budget the request belongs to: the input it counts, at the model's
+  highest input rate, and the output the request allows (`max_tokens`), else the
+  model's `max_output_tokens`, else `output_reserve_tokens`, at its output rate.
+  The call goes out only when that fits every budget. Calls in flight together
+  each hold their reservation, so they cannot together spend past a budget.
+- **After the reply**, its priced usage (`x-vsr-cost`) replaces the
+  reservation. A reply without usage that can be priced is charged its
+  estimate, and a call no provider answered is charged nothing. A call that
+  costs more than its estimate can leave a budget below zero.
+- **At the limit** the call is refused with `429` and the code
+  `budget_exceeded`, with `Retry-After` until a user budget's window starts
+  again. A request whose budget is already spent is refused before its signals
+  run. A fallback candidate that does not fit is skipped for the next one.
+- **A model with no price** in `currency` is refused with `403`
+  `budget_unpriced` under `unpriced: refuse`, the default. `unpriced: allow`
+  sends the call, spends nothing for it, and counts it in Replay.
+
+A provider's reply and a refusal carry `x-vsr-budget-remaining` and
+`x-vsr-budget-scope` (`run` or `user/<name>`) for the tightest budget of the
+request: on a buffered reply after the call's cost, on a stream after its
+reservation. The
+Replay record keeps the same in `cost_accounting.budget`, and a refused request
+is a `failed` record with `terminal_reason: budget_exceeded`. See
+[Router API errors](../../api/router.md#routing-errors).
+
+The Router keeps the budgets in its own memory. A configuration reload keeps
+what was spent; a restart forgets it. Each Router counts alone, so behind
+several replicas a budget can be spent once per replica: send each user's and
+session's requests to one Router.
+
 ### Response API
 
 ```yaml
@@ -167,6 +236,12 @@ global:
 `probabilistic` is the recommended tracing sampling type. Existing
 configurations that use `traceidratio` or `trace_id_ratio` continue to work as
 compatibility aliases.
+
+An agent run is one trace. A request that carries `traceparent` stays in its
+harness's trace; one that carries none and names a session is parented under a
+`semantic_router.run` root and a `semantic_router.agent` span per subagent the
+Router creates for that run, so all of the run's calls share a trace. See
+[Agent runs](../plugin/router-replay#agent-runs).
 
 Common Prometheus metric families:
 
@@ -273,7 +348,7 @@ dashboard in Grafana:
   looper attempt evidence.
 - **Means, not quantiles.** Recipe stage duration and the model timing panels
   are observed means; projection counts show evaluations, with individual
-  scores in Insights.
+  scores in the Dashboard's **Requests** page.
 - **Sources.** Prometheus scrapes both the Router and Jaeger's internal admin
   metrics.
 

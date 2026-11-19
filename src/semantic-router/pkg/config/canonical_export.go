@@ -21,9 +21,10 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 		Evaluation: cloneCanonicalEvaluation(cfg.Evaluation),
 		Providers: CanonicalProviders{
 			Defaults: CanonicalProviderDefaults{
-				DefaultModel:           cfg.DefaultModel,
-				DefaultReasoningEffort: cfg.DefaultReasoningEffort,
-				TLS:                    cloneProviderDefaultsTLS(cfg.DefaultBackendTLS),
+				DefaultModel:             cfg.DefaultModel,
+				DefaultReasoningEffort:   cfg.DefaultReasoningEffort,
+				ReasoningMinOutputTokens: cfg.ReasoningMinOutputTokens,
+				TLS:                      cloneProviderDefaultsTLS(cfg.DefaultBackendTLS),
 			},
 			Models: canonicalProviderModelsFromRouterConfig(cfg),
 		},
@@ -77,6 +78,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
 		Metadata:      append([]MetadataRule(nil), signals.MetadataRules...),
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
+		Agent:         append([]AgentRule(nil), signals.AgentRules...),
 		SystemOne:     append([]SystemOneRule(nil), signals.SystemOneRules...),
 	}
 }
@@ -137,6 +139,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			MaskingIdentity: cfg.MaskingIdentity,
 			Authz:           cfg.Authz,
 			RateLimit:       cfg.RateLimit,
+			Budgets:         cfg.Budgets,
 			ManagementAPI:   cfg.ManagementAPI,
 			RouterReplay:    cfg.RouterReplay,
 			StartupStatus:   cfg.StartupStatus,

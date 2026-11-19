@@ -1,23 +1,22 @@
-import type { Column } from '../components/DataTable'
-import CollapsibleSection from '../components/CollapsibleSection'
+import { ChevronDown, Lock } from 'lucide-react'
+
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { X_VSR_SELECTED_DECISION } from '../generated/vsrHeaders'
+import type { StatusTone } from '../ui'
 import { formatDateTime, formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
-import { Link } from 'react-router-dom'
 
 import type {
   InsightsCostSummary,
   InsightsCurrencyCostSummary,
   InsightsRecord,
 } from './insightsPageTypes'
-import InsightsDecisionBadge from './InsightsDecisionBadge'
-import InsightsSignalsCell from './InsightsSignalsCell'
+import { CHEVRON, DETAIL, RAW } from './insightsEvidenceStyles'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
-import { renderToolNamesCell } from './insightsPageToolTrace'
+import { ModelName, type ModelLabels } from './insightsModelLabelSupport'
 import { buildSignalFields } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import { buildProviderCacheSection } from './insightsProviderCache'
@@ -27,10 +26,10 @@ import {
   describeBaselineBasis,
   describeMissingModelCost,
   describePricingSource,
+  describeBudget,
   describeRouterCalls,
   isLooperRecord,
 } from './insightsCostAccounting'
-import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
 export { collectSignals } from './insightsRecordSignals'
@@ -54,19 +53,19 @@ export function getInsightsLifecyclePresentation(record: InsightsRecord) {
   return { state, successful, errored, pending, label }
 }
 
-export function getInsightsLifecycleStatusClass(
+export function getInsightsLifecycleTone(
   lifecycle: ReturnType<typeof getInsightsLifecyclePresentation>,
-) {
+): StatusTone {
   if (lifecycle.successful) {
-    return styles.statusSuccess
+    return 'success'
   }
   if (lifecycle.errored) {
-    return styles.statusError
+    return 'danger'
   }
   if (lifecycle.pending) {
-    return styles.statusPending
+    return 'info'
   }
-  return styles.statusUnknown
+  return 'neutral'
 }
 
 export function getUniqueDecisions(records: InsightsRecord[]) {
@@ -126,7 +125,7 @@ export function buildInsightsSummary(records: InsightsRecord[]): InsightsCostSum
 }
 
 export function getInsightsRecordPath(recordId: string) {
-  return `/insights/${encodeURIComponent(recordId)}`
+  return `/observe/requests/${encodeURIComponent(recordId)}`
 }
 
 export function buildInsightsRecordTitle(record: InsightsRecord | null | undefined) {
@@ -141,196 +140,48 @@ export function buildInsightsRecordTitle(record: InsightsRecord | null | undefin
   return `Record: ${record.decision ? formatInsightsDecisionName(record.decision) : record.id}`
 }
 
-function formatCompactIdentifier(value: string) {
-  if (value.length <= 20) {
-    return value
+/** A record's estimated cost for a table cell, or why it has none. */
+export function renderInsightsCostCell(record: InsightsRecord, labels: ModelLabels = {}) {
+  return hasCompleteCostData(record)
+    ? renderCostValue(record.actual_cost, record.currency)
+    : renderUnavailableCost(record, labels)
+}
+
+/** A record's estimated savings for a table cell: the amount, why it is zero, or why it is unknown. */
+export function renderInsightsSavingsCell(record: InsightsRecord, labels: ModelLabels = {}) {
+  if (!hasCompleteCostData(record)) {
+    return renderUnavailableCost(record, labels)
   }
-
-  return `${value.slice(0, 8)}…${value.slice(-8)}`
-}
-
-// The agent session a request belongs to, so a session search shows which rows matched.
-const SESSION_COLUMN: Column<InsightsRecord> = {
-  key: 'session_id',
-  header: 'Session',
-  width: '170px',
-  render: (row) =>
-    row.session_id ? (
-      <span className={styles.requestId} title={row.session_id}>
-        {formatCompactIdentifier(row.session_id)}
-      </span>
-    ) : (
-      '-'
-    ),
-}
-
-export function createInsightsTableColumns(): Column<InsightsRecord>[] {
-  return [
-    {
-      key: 'request_id',
-      header: 'Request ID',
-      width: '190px',
-      render: (row) => (
-        <Link
-          className={styles.requestIdLink}
-          title={row.request_id || row.id}
-          to={getInsightsRecordPath(row.id)}
-        >
-          <span className={styles.requestId} title={row.request_id || row.id}>
-            {formatCompactIdentifier(row.request_id || row.id)}
-          </span>
-        </Link>
-      ),
-    },
-    SESSION_COLUMN,
-    {
-      key: 'timestamp',
-      header: 'Created',
-      width: '160px',
-      sortable: true,
-      render: (row) => <span className={styles.timestamp}>{formatDateTime(row.timestamp)}</span>,
-    },
-    {
-      key: 'recipe',
-      header: 'Recipe',
-      width: '140px',
-      sortable: true,
-      render: (row) => <span className={styles.decision}>{row.recipe || 'default'}</span>,
-    },
-    {
-      key: 'decision',
-      header: 'Decision',
-      width: '180px',
-      sortable: true,
-      render: (row) =>
-        row.decision ? (
-          <InsightsDecisionBadge
-            decision={row.decision}
-            label={formatInsightsDecisionName(row.decision)}
-          />
-        ) : (
-          <span className={styles.decision}>-</span>
-        ),
-    },
-    {
-      key: 'signals',
-      header: 'Signals',
-      width: '200px',
-      render: (row) => <InsightsSignalsCell record={row} />,
-    },
-    {
-      key: 'tools',
-      header: 'Tools',
-      width: '120px',
-      render: (row) => renderToolNamesCell(row),
-    },
-    {
-      key: 'reasoning_mode',
-      header: 'Reasoning',
-      width: '96px',
-      align: 'center',
-      render: (row) => (
-        <span
-          className={`${styles.reasoningBadge} ${
-            row.reasoning_mode === 'on' ? styles.reasoningOn : styles.reasoningOff
-          }`}
-        >
-          {row.reasoning_mode === 'on' ? 'On' : 'Off'}
-        </span>
-      ),
-    },
-    {
-      key: 'selected_model',
-      header: 'Model Change',
-      width: '320px',
-      render: (row) => (
-        <div className={styles.modelChange}>
-          <span className={styles.modelName}>{row.original_model || '-'}</span>
-          <span className={styles.modelArrow}>→</span>
-          <span className={styles.modelName}>{row.selected_model || '-'}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'actual_cost',
-      header: 'Estimated Cost',
-      width: '160px',
-      sortable: true,
-      render: (row) =>
-        hasCompleteCostData(row)
-          ? renderCostValue(row.actual_cost, row.currency)
-          : renderUnavailableCost(row),
-    },
-    {
-      key: 'cost_savings',
-      header: 'Estimated Savings',
-      width: '180px',
-      sortable: true,
-      render: (row) => {
-        if (!hasCompleteCostData(row)) {
-          return renderUnavailableCost(row)
+  const zeroSavingsReason = getZeroSavingsReason(record)
+  return (
+    <span className="flex flex-col items-end gap-0.5">
+      <strong
+        className={
+          zeroSavingsReason || (record.cost_savings ?? 0) < 0
+            ? 'font-mono text-xs font-medium tabular'
+            : 'font-mono text-xs font-medium text-success-foreground tabular'
         }
-        const zeroSavingsReason = getZeroSavingsReason(row)
-
-        return (
-          <div className={styles.costCell}>
-            <strong
-              className={
-                zeroSavingsReason || (row.cost_savings ?? 0) < 0
-                  ? styles.costValue
-                  : styles.costValuePositive
-              }
-            >
-              {zeroSavingsReason ? 'No savings' : formatCurrency(row.cost_savings, row.currency)}
-            </strong>
-            {zeroSavingsReason && <span className={styles.costSubtle}>{zeroSavingsReason}</span>}
-            <span className={styles.costSubtle}>
-              Baseline (configured rates): {row.baseline_model}
-            </span>
-            {row.cost_accounting?.router_calls?.length ? (
-              <span className={styles.costSubtle}>Before its Router calls</span>
-            ) : null}
-          </div>
-        )
-      },
-    },
-    {
-      key: 'response_status',
-      header: 'Status',
-      width: '150px',
-      align: 'center',
-      render: (row) => {
-        const lifecycle = getInsightsLifecyclePresentation(row)
-        return (
-          <span className={`${styles.statusBadge} ${getInsightsLifecycleStatusClass(lifecycle)}`}>
-            {lifecycle.label}
-          </span>
-        )
-      },
-    },
-    {
-      key: 'flags',
-      header: 'Flags',
-      width: '160px',
-      render: (row) => (
-        <div className={styles.indicators}>
-          {row.from_cache && (
-            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Cache hit</span>
-          )}
-          {row.streaming && (
-            <span className={`${styles.indicator} ${styles.indicatorActive}`}>Streaming</span>
-          )}
-          {!row.from_cache && !row.streaming && <span>No recorded flags</span>}
-        </div>
-      ),
-    },
-  ]
+      >
+        {zeroSavingsReason ? 'No savings' : formatCurrency(record.cost_savings, record.currency)}
+      </strong>
+      {zeroSavingsReason ? (
+        <span className="text-[11px] text-subtle-foreground">{zeroSavingsReason}</span>
+      ) : null}
+      <span className="text-[11px] text-subtle-foreground">
+        Baseline (configured rates): <ModelName name={record.baseline_model} compact />
+      </span>
+      {record.cost_accounting?.router_calls?.length ? (
+        <span className="text-[11px] text-subtle-foreground">Before its Router calls</span>
+      ) : null}
+    </span>
+  )
 }
 
 export function buildInsightsRecordSections(
   record: InsightsRecord,
-  options: { isReadonly: boolean },
+  options: { isReadonly: boolean; modelLabels?: ModelLabels; canViewBodies?: boolean },
 ): ViewSection[] {
+  const labels = options.modelLabels ?? {}
   const sections: ViewSection[] = []
   const reviewSection = buildReviewSection(record)
   if (reviewSection) {
@@ -375,8 +226,11 @@ export function buildInsightsRecordSections(
   sections.push({
     title: 'Model Selection',
     fields: [
-      { label: 'Original model', value: record.original_model || '-' },
-      { label: 'Selected model', value: record.selected_model || '-' },
+      { label: 'Original model', value: <ModelName name={record.original_model} /> },
+      {
+        label: 'Selected model',
+        value: record.selected_model ? <ModelName name={record.selected_model} /> : '-',
+      },
       { label: 'Selection method', value: record.selection_method || '-' },
       {
         label: 'Selection rationale',
@@ -424,21 +278,31 @@ export function buildInsightsRecordSections(
       { label: 'Prompt tokens', value: formatTokenValue(record.prompt_tokens) },
       { label: 'Completion tokens', value: formatTokenValue(record.completion_tokens) },
       { label: 'Total tokens', value: formatTokenValue(record.total_tokens) },
-      { label: 'Baseline model', value: record.baseline_model || 'Baseline not recorded' },
-      ...buildRouterCallFields(record),
-      { label: 'Cost basis', value: describeCostBasis(record) },
+      {
+        label: 'Baseline model',
+        value: record.baseline_model ? (
+          <ModelName name={record.baseline_model} />
+        ) : (
+          'Baseline not recorded'
+        ),
+      },
+      ...buildRouterCallFields(record, labels),
+      ...buildBudgetFields(record),
+      { label: 'Cost basis', value: describeCostBasis(record, labels) },
       {
         label: 'Baseline basis',
         value: record.cost_accounting?.baseline_source
-          ? `${describeBaselineBasis(record)} Same currency and recorded tokens; a negative saving means the baseline was cheaper.`
+          ? `${describeBaselineBasis(record, labels)} Same currency and recorded tokens; a negative saving means the baseline was cheaper.`
           : 'New records use the highest estimate in the recipe’s complete model pool across all decisions at configured rates, in the same currency using the same recorded tokens, unless the route sets a cost_baseline_model. Direct requests compare against the selected model. Older records retain their captured baseline.',
       },
       {
         label: 'Current pricing',
         value: (
           <>
-            <a href="/config/models">View current configured model rates</a>. Current rates may
-            differ from this record; historical records are not repriced.
+            <a className="text-primary hover:underline" href="/models/backends">
+              View current configured model rates
+            </a>
+            . Current rates may differ from this record; historical records are not repriced.
           </>
         ),
       },
@@ -478,7 +342,11 @@ export function buildInsightsRecordSections(
     fields: buildInsightsPluginFields(record),
   })
 
-  const requestResponseFields = buildRequestResponseFields(record, options.isReadonly)
+  const requestResponseFields = buildRequestResponseFields(
+    record,
+    options.isReadonly,
+    options.canViewBodies ?? true,
+  )
   if (requestResponseFields.length > 0) {
     sections.push({
       title: 'Request / Response',
@@ -489,11 +357,14 @@ export function buildInsightsRecordSections(
   return sections
 }
 
-export function getInsightsCostUnavailableReason(record: InsightsRecord): string | undefined {
-  return getUnavailableCost(record)?.reason
+export function getInsightsCostUnavailableReason(
+  record: InsightsRecord,
+  labels: ModelLabels = {},
+): string | undefined {
+  return getUnavailableCost(record, labels)?.reason
 }
 
-function describeCostBasis(record: InsightsRecord): string {
+function describeCostBasis(record: InsightsRecord, labels: ModelLabels): string {
   const rates = describePricingSource(record.cost_accounting)
   if (rates && Number.isFinite(record.actual_cost)) {
     const login = record.cost_accounting?.caller_login
@@ -502,17 +373,22 @@ function describeCostBasis(record: InsightsRecord): string {
     return `Recorded tokens × ${rates} at capture time; not a GPU bill or provider invoice.${login}`
   }
   return (
-    getInsightsCostUnavailableReason(record) ||
+    getInsightsCostUnavailableReason(record, labels) ||
     'Recorded tokens × configured model rates at capture time; not a GPU bill or provider invoice.'
   )
 }
 
-function buildRouterCallFields(record: InsightsRecord): ViewField[] {
-  const value = describeRouterCalls(record.cost_accounting)
+function buildRouterCallFields(record: InsightsRecord, labels: ModelLabels): ViewField[] {
+  const value = describeRouterCalls(record.cost_accounting, labels)
   return value ? [{ label: 'Router calls', value }] : []
 }
 
-function getUnavailableCost(record: InsightsRecord) {
+function buildBudgetFields(record: InsightsRecord): ViewField[] {
+  const value = describeBudget(record.cost_accounting)
+  return value ? [{ label: 'Spend budget', value }] : []
+}
+
+function getUnavailableCost(record: InsightsRecord, labels: ModelLabels = {}) {
   if (record.lifecycle_state !== 'completed') {
     return { label: 'Not completed', reason: 'Request not completed' }
   }
@@ -520,7 +396,7 @@ function getUnavailableCost(record: InsightsRecord) {
     return { label: 'Usage not recorded', reason: 'Token usage was not recorded for this request' }
   }
   if (!Number.isFinite(record.actual_cost) || !record.currency?.trim()) {
-    return getMissingModelCost(record)
+    return getMissingModelCost(record, labels)
   }
   if (
     !Number.isFinite(record.baseline_cost) ||
@@ -535,14 +411,14 @@ function getUnavailableCost(record: InsightsRecord) {
   return undefined
 }
 
-function getMissingModelCost(record: InsightsRecord) {
+function getMissingModelCost(record: InsightsRecord, labels: ModelLabels) {
   if (isLooperRecord(record)) {
     return {
       label: 'In router calls',
-      reason: `A Looper request: its cost is its calls, ${describeRouterCalls(record.cost_accounting)}`,
+      reason: `A Looper request: its cost is its calls, ${describeRouterCalls(record.cost_accounting, labels)}`,
     }
   }
-  const missing = describeMissingModelCost(record)
+  const missing = describeMissingModelCost(record, labels)
   if (missing) {
     return { label: 'No price', reason: missing }
   }
@@ -553,11 +429,11 @@ function getMissingModelCost(record: InsightsRecord) {
   }
 }
 
-function renderUnavailableCost(record: InsightsRecord) {
-  const unavailable = getUnavailableCost(record)
+function renderUnavailableCost(record: InsightsRecord, labels: ModelLabels) {
+  const unavailable = getUnavailableCost(record, labels)
   return (
-    <span className={styles.costValueMuted} title={unavailable?.reason}>
-      {unavailable?.label || 'N/A'}
+    <span className="text-xs text-subtle-foreground" title={unavailable?.reason}>
+      {unavailable?.label || '—'}
     </span>
   )
 }
@@ -566,7 +442,11 @@ export function hasCompleteCostData(record: InsightsRecord) {
   return getInsightsCostUnavailableReason(record) === undefined
 }
 
-function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean): ViewField[] {
+function buildRequestResponseFields(
+  record: InsightsRecord,
+  isReadonly: boolean,
+  canViewBodies: boolean,
+): ViewField[] {
   if (isReadonly) {
     if (!record.request_body && !record.response_body) {
       return []
@@ -575,11 +455,11 @@ function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean)
     return [
       {
         label: 'Request body',
-        value: renderReadonlyLock(),
+        value: renderLockedBody('Not available in read-only mode'),
       },
       {
         label: 'Response body',
-        value: renderReadonlyLock(),
+        value: renderLockedBody('Not available in read-only mode'),
       },
     ]
   }
@@ -589,7 +469,6 @@ function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean)
     fields.push({
       label: 'Request body',
       value: renderBodyField(
-        `request-${record.id}`,
         'request body',
         record.request_body,
         record.request_body_truncated || false,
@@ -601,10 +480,18 @@ function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean)
     fields.push({
       label: 'Response body',
       value: renderBodyField(
-        `response-${record.id}`,
         'response body',
         record.response_body,
         record.response_body_truncated || false,
+      ),
+      fullWidth: true,
+    })
+  }
+  if (fields.length === 0 && !canViewBodies) {
+    fields.push({
+      label: 'Request and response bodies',
+      value: renderLockedBody(
+        'Hidden for your role: captured bodies and tool payloads need the config.write permission.',
       ),
       fullWidth: true,
     })
@@ -613,23 +500,26 @@ function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean)
   return fields
 }
 
-function renderBodyField(id: string, title: string, body: string, truncated: boolean) {
+function renderBodyField(title: string, body: string, truncated: boolean) {
   return (
-    <CollapsibleSection
-      id={id}
-      title={title}
-      isTruncated={truncated}
-      defaultExpanded={false}
-      content={<pre className={styles.bodyPreview}>{formatJson(body) || body}</pre>}
-    />
+    <details className={DETAIL}>
+      <summary>
+        <span>
+          Show the {title}
+          {truncated ? ' · cut at the capture limit' : ''}
+        </span>
+        <ChevronDown className={CHEVRON} />
+      </summary>
+      <pre className={`${RAW} m-2 whitespace-pre-wrap break-all`}>{formatJson(body) || body}</pre>
+    </details>
   )
 }
 
-function renderReadonlyLock() {
+function renderLockedBody(message: string) {
   return (
-    <div className={styles.readonlyLock}>
-      <span>🔒</span>
-      <span>Not available in read-only mode</span>
+    <div className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
+      <Lock className="size-3.5 shrink-0" />
+      <span>{message}</span>
     </div>
   )
 }
@@ -653,14 +543,10 @@ function getZeroSavingsReason(record: InsightsRecord): string | null {
 
 function renderCostValue(value?: number, currency?: string) {
   if (!Number.isFinite(value) || !currency?.trim()) {
-    return <span className={styles.costValueMuted}>Price not recorded</span>
+    return <span className="text-xs text-subtle-foreground">Price not recorded</span>
   }
 
-  return (
-    <div className={styles.costCell}>
-      <strong className={styles.costValue}>{formatCurrency(value, currency)}</strong>
-    </div>
-  )
+  return <span className="font-mono text-xs tabular">{formatCurrency(value, currency)}</span>
 }
 
 function formatJson(jsonStr: string | undefined) {

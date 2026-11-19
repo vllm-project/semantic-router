@@ -1,9 +1,20 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { Link } from 'react-router-dom'
 
+import { Lock } from 'lucide-react'
+
+import { cn } from '../ui'
 import { formatSeconds } from '../utils/dateTime'
+import {
+  SESSION_ACTION_WORDS,
+  SESSION_REASON_TEXT,
+  sessionReasonText,
+} from './insightsAgentIdentity'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { buildConversationLabels } from './insightsConversationIdentity'
+import { Pager } from './InsightsDisplay'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES, pageHolding, pageOf } from './insightsListData'
+import { ModelName } from './insightsModelLabelSupport'
 import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import {
@@ -15,39 +26,23 @@ import {
   summarizeReviews,
 } from './insightsReviewSupport'
 import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
-import styles from './InsightsPage.module.css'
 
-// What the Router did with a request's model, as one word before the model; the
-// recorded code stays in the title.
-const ACTION_WORD: Record<string, string> = {
-  establish_baseline: 'picked',
-  stay: 'kept',
-  switch: 'switched',
-  hard_lock: 'held',
-}
-const REASON_TEXT: Record<string, string> = {
-  new_session: 'New session',
-  new_conversation: 'New conversation',
-  session_scope_protect: "Kept this session's model",
-  previous_model_not_in_candidates: 'The previous model is not a candidate here',
-  switch_allowed: 'A better model was allowed',
-  stay_has_best_adjusted_score: 'The current model still scores best',
-  rescue_underpowered_model: 'Moved up from a model that fell short',
-  idle_reset: 'The session was idle, so it started over',
-  tool_loop: 'Inside a tool call loop',
-  observe_only: 'Observed only',
-}
-const LOCK = 'M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z'
 // Each subagent's dot, in order of first appearance; the main conversation's is plain.
-const AGENT_HUES = ['#5cc8b8', '#a395e8', '#e0a84f', '#e8798f', '#7aa7e8']
+const AGENT_HUES = [
+  'var(--chart-4)',
+  'var(--chart-3)',
+  'var(--chart-2)',
+  'var(--chart-5)',
+  'var(--chart-1)',
+]
 
 function reasonText(route: InsightsTrajectoryRoute) {
   // redaction empties a reason it keeps; one never recorded is left out
-  if (route.session_reason === '') return 'Hidden from this viewer'
+  if (route.session_reason === '') return sessionReasonText('')
   const code = route.session_reason || ''
   if (code === 'session_scope_protect' && route.agent !== undefined)
     return "Kept this agent's model"
-  return REASON_TEXT[code] || code || route.selection_reasoning || 'Not recorded'
+  return SESSION_REASON_TEXT[code] || code || route.selection_reasoning || 'Not recorded'
 }
 
 type Outcome = 'ok' | 'running' | 'failed'
@@ -110,9 +105,16 @@ function ReviewSummary({
     <div>
       <dt>Reviews</dt>
       <dd title="Approval reviews the agent asked for in this session">
-        <Link to={getReviewsPath(session)}>{summary.total}</Link>
+        <Link className="font-medium text-primary hover:underline" to={getReviewsPath(session)}>
+          {summary.total}
+        </Link>
         {` · ${summary.allowed} allowed · ${summary.denied} denied`}
-        {summary.failed > 0 ? <span data-outcome="failed"> · {summary.failed} failed</span> : null}
+        {summary.failed > 0 ? (
+          <span data-outcome="failed" className="text-destructive-foreground">
+            {' '}
+            · {summary.failed} failed
+          </span>
+        ) : null}
         {truncated ? ' · older reviews not shown' : null}
       </dd>
     </div>
@@ -124,7 +126,7 @@ function ReviewMarks({ reviews }: { reviews?: InsightsRecord[] }) {
   return reviews?.map((review) => (
     <Link
       key={review.id}
-      className={styles.historyReviewMark}
+      className="ml-1.5 inline-flex align-middle"
       to={getInsightsRecordPath(review.id)}
       title={`Approval review of ${review.review?.action?.tool || 'an action'}`}
     >
@@ -162,17 +164,20 @@ function Summary({
     .map(([agent, name], index) => ({ agent, name, hue: agentHue(agent, index) }))
     .filter(({ agent }) => routes.some((route) => agentKey(route) === agent))
   return (
-    <dl className={styles.historySummary} aria-label="Session summary">
+    <dl
+      className="grid grid-cols-2 gap-x-6 gap-y-3 px-5 pb-4 sm:grid-cols-3 lg:grid-cols-4 [&_dd]:flex [&_dd]:flex-wrap [&_dd]:items-center [&_dd]:gap-1.5 [&_dd]:text-[13px] [&_dt]:mb-1 [&_dt]:text-xs [&_dt]:text-subtle-foreground"
+      aria-label="Session summary"
+    >
       <div>
         <dt>Agents</dt>
         <dd>
           {seen.map(({ agent, name, hue }) => (
             <span
               key={agent || 'main'}
-              className={styles.historyChip}
+              className={CHIP}
               title={agent && agent !== HIDDEN ? agent : undefined}
             >
-              <i style={{ background: hue }} />
+              <i className="size-2 rounded-full" style={{ background: hue }} />
               {name}
             </span>
           ))}
@@ -182,8 +187,8 @@ function Summary({
         <dt>Models</dt>
         <dd>
           {[...models].map(([model, count]) => (
-            <span key={model} className={styles.historyChip}>
-              {model}
+            <span key={model} className={CHIP}>
+              <ModelName name={model} compact />
               <b>×{count}</b>
             </span>
           ))}
@@ -191,17 +196,31 @@ function Summary({
       </div>
       <div>
         <dt>Switches</dt>
-        <dd data-strong={switches > 0 || undefined}>{switches}</dd>
+        <dd
+          data-strong={switches > 0 || undefined}
+          className={cn('font-mono tabular', switches > 0 && 'font-semibold')}
+        >
+          {switches}
+        </dd>
       </div>
       <div>
         <dt>Results</dt>
         <dd>
           {failed > 0 ? (
-            <span data-outcome="failed">{failed} failed</span>
+            <span data-outcome="failed" className="text-destructive-foreground">
+              {failed} failed
+            </span>
           ) : (
-            <span data-outcome="ok">all answered</span>
+            <span data-outcome="ok" className="text-success-foreground">
+              all answered
+            </span>
           )}
-          {running > 0 ? <span data-outcome="running"> · {running} running</span> : null}
+          {running > 0 ? (
+            <span data-outcome="running" className="text-info-foreground">
+              {' '}
+              · {running} running
+            </span>
+          ) : null}
         </dd>
       </div>
       <div>
@@ -221,42 +240,50 @@ function Summary({
   )
 }
 
+const CHIP =
+  'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface px-2 text-xs [&>b]:font-mono [&>b]:text-[11px] [&>b]:font-medium [&>b]:text-subtle-foreground'
+
 const agentHue = (agent: string, index: number) =>
   agent === HIDDEN
-    ? 'var(--color-text-muted)'
+    ? 'var(--subtle-foreground)'
     : agent
       ? AGENT_HUES[(index - 1 + AGENT_HUES.length) % AGENT_HUES.length]
-      : 'var(--color-text)'
+      : 'var(--foreground)'
 
 function ModelCell({ route }: { route: InsightsTrajectoryRoute }) {
   const action = route.session_action || ''
-  const word = ACTION_WORD[action] || action
+  const word = SESSION_ACTION_WORDS[action] || action
   const switched = Boolean(
     route.previous_model && route.selected_model && route.previous_model !== route.selected_model,
   )
   return (
-    <span className={styles.historyModel}>
+    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
       {word ? (
         <span
-          className={styles.historyVerb}
+          className={cn(
+            'inline-flex items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground',
+            action === 'switch' && 'bg-chart-3/12 text-chart-3',
+          )}
           data-action={action}
           title={`${action}${route.session_policy_applied ? ' · session protection applied' : ''}`}
         >
           {word}
-          {route.session_policy_applied ? (
-            <svg viewBox="0 0 24 24" aria-label="protected">
-              <path d={LOCK} />
-            </svg>
-          ) : null}
+          {route.session_policy_applied ? <Lock aria-label="protected" className="size-3" /> : null}
         </span>
       ) : null}
       {switched ? (
         <>
-          <span className={styles.historyPrevious}>{route.previous_model}</span>
-          <span aria-hidden="true">→</span>
+          <span className="text-muted-foreground line-through decoration-border-strong">
+            <ModelName name={route.previous_model} compact />
+          </span>
+          <span aria-hidden="true" className="text-subtle-foreground">
+            →
+          </span>
         </>
       ) : null}
-      <strong>{route.selected_model || 'No backend selected'}</strong>
+      <strong className="font-medium">
+        <ModelName name={route.selected_model} fallback="No backend selected" compact />
+      </strong>
     </span>
   )
 }
@@ -275,7 +302,10 @@ export function InsightsSessionPosition({
   if (index < 0 || routes.length < 2) return null
   const agent = agentNames(routes).get(agentKey(routes[index]))
   return (
-    <a className={styles.recordSessionLink} href="#session-history">
+    <a
+      className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+      href="#session-history"
+    >
       Request {index + 1} of {routes.length} in this session · {agent} · history ↓
     </a>
   )
@@ -302,12 +332,16 @@ function GroupRows({
   return (
     <>
       {labels.size > 0 && (!previous || route.conversation_id !== previous.conversation_id) ? (
-        <tr className={styles.historyGroup}>
-          <td colSpan={8}>
+        <tr className="bg-surface-subtle/70">
+          <td colSpan={8} className="text-xs font-medium text-muted-foreground">
             {route.conversation_id ? (
               <details>
-                <summary>{labels.get(route.conversation_id)}</summary>
-                <code>{route.conversation_id}</code>
+                <summary className="cursor-pointer select-none">
+                  {labels.get(route.conversation_id)}
+                </summary>
+                <code className="mt-1 block font-mono text-[11.5px] font-normal break-all">
+                  {route.conversation_id}
+                </code>
               </details>
             ) : (
               'Conversation not recorded'
@@ -316,9 +350,13 @@ function GroupRows({
         </tr>
       ) : null}
       {turn && turn !== turnOf(previous) ? (
-        <tr className={styles.historyGroup}>
-          <td colSpan={8}>
-            <Link to={getTurnPath(turn)} title={turn}>
+        <tr className="bg-surface-subtle/70">
+          <td colSpan={8} className="text-xs text-muted-foreground">
+            <Link
+              className="font-medium text-foreground hover:text-primary hover:underline"
+              to={getTurnPath(turn)}
+              title={turn}
+            >
               Codex turn {compactID(turn)}
             </Link>
             {` · ${calls} ${calls === 1 ? 'call' : 'calls'}`}
@@ -353,8 +391,10 @@ function HistoryRow({
       data-switch={route.session_action === 'switch' || undefined}
       aria-current={route.record_id === current ? 'true' : undefined}
     >
-      <td className={styles.historyNumber}>
-        <Link to={getInsightsRecordPath(route.record_id)}>{number}</Link>
+      <td className="font-mono text-xs tabular">
+        <Link className="text-primary hover:underline" to={getInsightsRecordPath(route.record_id)}>
+          {number}
+        </Link>
       </td>
       <td
         title={
@@ -365,12 +405,12 @@ function HistoryRow({
               : undefined
         }
       >
-        <span className={styles.historyAgent}>
-          <i style={{ background: hue }} />
+        <span className="inline-flex items-center gap-1.5 font-mono text-[12px]">
+          <i className="size-2 shrink-0 rounded-full" style={{ background: hue }} />
           {agentName}
         </span>
       </td>
-      <td className={styles.historyNumber}>
+      <td className="font-mono text-xs tabular">
         {route.turn_index + 1}
         <ReviewMarks reviews={reviews} />
       </td>
@@ -388,23 +428,36 @@ function HistoryRow({
       <td>
         <ModelCell route={route} />
       </td>
-      <td className={styles.historyReason} title={route.session_reason || undefined}>
+      <td
+        className="max-w-[240px] text-xs text-muted-foreground"
+        title={route.session_reason || undefined}
+      >
         {reasonText(route)}
       </td>
       <td
         title={`${route.lifecycle_state}${route.response_status ? ` · HTTP ${route.response_status}` : ''}`}
       >
-        <span className={styles.historyResult} data-outcome={outcome}>
+        <span
+          data-outcome={outcome}
+          className={cn(
+            'font-mono text-xs',
+            outcome === 'failed' && 'text-destructive-foreground',
+            outcome === 'running' && 'text-info-foreground',
+            outcome === 'ok' && 'text-muted-foreground',
+          )}
+        >
           {outcome === 'running' ? 'running' : route.response_status || route.lifecycle_state}
         </span>
       </td>
-      <td className={styles.historyNumber}>
+      <td className="text-right font-mono text-xs tabular">
         {outcome === 'running' ? '…' : formatSeconds(route.duration_ms)}
       </td>
     </tr>
   )
 }
 
+// A session's requests in time order under its summary, a page at a time,
+// opening on the page that holds the request on screen.
 export default function InsightsSessionRoutes({
   trajectory,
   current,
@@ -417,6 +470,8 @@ export default function InsightsSessionRoutes({
   reviewsTruncated?: boolean
 }) {
   const routes = trajectory?.routes ?? []
+  const [size, setSize] = useState(DEFAULT_PAGE_SIZE)
+  const [page, setPage] = useState<number>()
   if (routes.length === 0) return null
   const marks = assignReviewsToRoutes(routes, reviews)
   const ownReview = new Map(reviews.map((review) => [review.id, [review]]))
@@ -425,15 +480,25 @@ export default function InsightsSessionRoutes({
   const agentIndex = new Map([...agents.keys()].map((agent, index) => [agent, index]))
   const turnCalls = new Map<string, number>()
   for (const route of routes) turnCalls.set(turnOf(route), (turnCalls.get(turnOf(route)) ?? 0) + 1)
+  const shown = pageOf(
+    routes,
+    page ??
+      pageHolding(
+        routes.findIndex((route) => route.record_id === current),
+        size,
+      ),
+    size,
+  )
+  const offset = (shown.page - 1) * size
   return (
     <section
       id="session-history"
-      className={`${styles.recordSection} ${styles.recordSectionWide}`}
+      className="flex min-w-0 scroll-mt-6 flex-col rounded-xl border border-border bg-card shadow-xs"
       aria-label="Session routing history"
     >
-      <div className={styles.recordSectionHeader}>
-        <h2>Session routing history</h2>
-        <span>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-3 pt-4">
+        <h2 className="text-sm font-semibold tracking-[-0.01em]">Session routing history</h2>
+        <span className="text-xs text-subtle-foreground">
           {trajectory?.recipe || 'Default recipe'} · {routes.length} request
           {routes.length === 1 ? '' : 's'}
         </span>
@@ -445,31 +510,39 @@ export default function InsightsSessionRoutes({
         reviewsTruncated={reviewsTruncated}
         session={trajectory?.session_id}
       />
-      <div className={styles.historyWrap}>
-        <table className={styles.historyTable}>
-          <thead>
+      <div className="max-w-full overflow-x-auto border-t border-border">
+        <table className="w-full border-collapse text-[13px] [&_td]:px-3 [&_td]:py-2 [&_td]:align-middle [&_td:first-child]:pl-5 [&_th]:px-3 [&_th]:py-2 [&_th:first-child]:pl-5 [&_tbody_tr]:border-t [&_tbody_tr]:border-border [&_tbody_tr[data-current]]:bg-primary-soft/50">
+          <thead className="bg-surface-subtle/80">
             <tr>
               {['#', 'Agent', 'Turn', 'Decision', 'Model', 'Why', 'Result', 'Time'].map(
                 (heading) => (
-                  <th key={heading}>{heading}</th>
+                  <th
+                    key={heading}
+                    className={cn(
+                      'whitespace-nowrap text-left text-xs font-medium text-subtle-foreground',
+                      heading === 'Time' && 'text-right',
+                    )}
+                  >
+                    {heading}
+                  </th>
                 ),
               )}
             </tr>
           </thead>
           <tbody>
-            {routes.map((route, index) => {
+            {shown.rows.map((route, position) => {
               const agent = agentKey(route)
               return (
                 <Fragment key={route.record_id}>
                   <GroupRows
                     route={route}
-                    previous={routes[index - 1]}
+                    previous={position > 0 ? shown.rows[position - 1] : undefined}
                     labels={labels}
                     turnCalls={turnCalls}
                   />
                   <HistoryRow
                     route={route}
-                    number={index + 1}
+                    number={offset + position + 1}
                     current={current}
                     agentName={agents.get(agent)}
                     hue={agentHue(agent, agentIndex.get(agent) ?? 0)}
@@ -481,6 +554,20 @@ export default function InsightsSessionRoutes({
           </tbody>
         </table>
       </div>
+      {routes.length > PAGE_SIZES[0] ? (
+        <Pager
+          className="mt-0 border-t border-border px-5 py-2.5"
+          page={shown.page}
+          pageSize={size}
+          total={routes.length}
+          noun="request"
+          onPage={setPage}
+          onPageSize={(next) => {
+            setSize(next)
+            setPage(1)
+          }}
+        />
+      ) : null}
     </section>
   )
 }

@@ -162,6 +162,28 @@ export interface RateLimitConfig {
   providers?: RateLimitProviderConfig[]
 }
 
+export interface BudgetMatch {
+  user?: string
+  group?: string
+}
+
+/** A spend limit per user a rule matches, over a calendar window in UTC. */
+export interface UserBudget {
+  name: string
+  match?: BudgetMatch
+  limit: number
+  window: 'hour' | 'day' | 'week' | 'month'
+}
+
+/** global.services.budgets: spend budgets per agent run and per user. */
+export interface BudgetsConfig {
+  currency?: string
+  unpriced?: 'refuse' | 'allow'
+  output_reserve_tokens?: number
+  run?: { limit: number; idle_timeout_seconds?: number }
+  users?: UserBudget[]
+}
+
 export interface VectorStoreMemoryConfig {
   max_entries_per_store?: number
 }
@@ -220,6 +242,7 @@ export interface CanonicalServiceGlobalConfig {
   observability?: ObservabilityConfig
   authz?: AuthzConfig
   ratelimit?: RateLimitConfig
+  budgets?: BudgetsConfig
   management_api?: Record<string, unknown>
   router_replay?: RouterReplayConfig
   startup_status?: Record<string, unknown>

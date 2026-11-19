@@ -247,6 +247,10 @@ def claude_env(
         "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
         "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": MAX_OUTPUT_TOKENS,
+        # sends x-claude-code-request-class and x-claude-code-agent-type, which
+        # agent signal rules route on and Insights names a session's run by;
+        # off for a custom base URL by default
+        "CLAUDE_CODE_GATEWAY_HINT_HEADERS": "1",
     }
 
 

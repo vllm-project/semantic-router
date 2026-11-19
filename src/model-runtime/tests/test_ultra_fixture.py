@@ -205,8 +205,8 @@ def test_a_text_request_lists_its_questions_before_the_state(runtimes):
     ]
     assert set(plan.errors) == {"broken"}
     head = prompt.state_block(STATE, header=HEADER)
-    assert head.endswith(f"\n{HEADER}State:\n{STATE}\n\n")
-    state = model.tokenizer.encode(head, add_special_tokens=False)
+    assert "".join(head).endswith(f"\n{HEADER}State:\n{STATE}\n\n")
+    state = model.tokenizer.encode("".join(head), add_special_tokens=False)
     split = prompt.state_tokens(state.offsets, head)
     for item, (instructions, texts) in zip(
         plan.items,
@@ -223,7 +223,7 @@ def test_a_text_request_lists_its_questions_before_the_state(runtimes):
         ],
         strict=True,
     ):
-        whole = head + prompt.question_block(instructions, texts, model.codes)
+        whole = "".join(head + prompt.question_block(instructions, texts, model.codes))
         assert item.ids == model.tokenizer.encode(whole, add_special_tokens=False).ids
         assert item.state is not None and list(item.state.ids) == state.ids[:split]
         assert item.temperature == 1.0
@@ -305,13 +305,15 @@ def test_a_per_question_package_lists_the_questions_too(runtimes):
     assert type(model) is Decision3Model
     plan = model.plan(STATE, QUESTIONS)
     first = plan.items[0]
-    text = prompt.render(
-        prompt.user_prompt(
-            STATE,
-            QUESTIONS["domain"]["instructions"],
-            ["code: Programming", "math", 'other: {"note": "x"}'],
-            model.codes,
-            HEADER,
+    text = "".join(
+        prompt.render(
+            prompt.user_prompt(
+                STATE,
+                QUESTIONS["domain"]["instructions"],
+                ["code: Programming", "math", 'other: {"note": "x"}'],
+                model.codes,
+                HEADER,
+            )
         )
     )
     assert first.ids == model.tokenizer.encode(text, add_special_tokens=False).ids

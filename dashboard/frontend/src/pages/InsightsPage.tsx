@@ -1,452 +1,65 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
+import { ListTree } from 'lucide-react'
 
-import { DataTable } from '../components/DataTable'
-import TableHeader from '../components/TableHeader'
-import ProductIcon from '../components/ProductIcon'
-import ProductLoadingState from '../components/ProductLoadingState'
+import { IconTile, PageContainer, PageHeader, Tabs, TabsList, TabsTrigger } from '../ui'
 
-import configStyles from './ConfigPage.module.css'
-import ConfigPageManagerLayout from './ConfigPageManagerLayout'
-import styles from './InsightsPage.module.css'
-import InsightsEmptyState from './InsightsEmptyState'
+import InsightsRequestsView from './InsightsRequestsView'
 import InsightsReviewsView from './InsightsReviewsView'
-import { isInsightsReplayUnavailableError } from './insightsPageApi'
-import { buildReplayQueryString } from './insightsPageFilters'
-import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
-import {
-  createInsightsTableColumns,
-  formatInsightsDecisionName,
-  getInsightsRecordPath,
-} from './insightsPageSupport'
-import type {
-  InsightsAggregateResponse,
-  InsightsFilterType,
-  InsightsListResponse,
-  InsightsRecord,
-} from './insightsPageTypes'
-import { compactID } from './insightsReviewSupport'
+import InsightsRunsView from './InsightsRunsView'
+import { InsightsDataProviders } from './insightsModelLabelSupport'
+import { INSIGHTS_TABS, readInsightsTab } from './insightsRequestsData'
 
-const insightsPageSize = 25
-const insightsSearchDebounceMs = 300
-const InsightsCharts = lazy(() => import('../components/InsightsCharts'))
-
-// All requests, or the approval reviews among them, kept in the URL so a
-// reviewed session's link opens its reviews.
-function InsightsViewSwitch({ reviews }: { reviews: boolean }) {
-  const [, setSearchParams] = useSearchParams()
-  const views: { label: string; active: boolean; params: Record<string, string> }[] = [
-    { label: 'All requests', active: !reviews, params: {} },
-    { label: 'Reviews', active: reviews, params: { view: 'reviews' } },
-  ]
-  return (
-    <div className={styles.viewSwitch} role="group" aria-label="Insights view">
-      {views.map((view) => (
-        <button
-          key={view.label}
-          type="button"
-          aria-pressed={view.active}
-          className={styles.viewSwitchButton}
-          onClick={() => setSearchParams(view.params)}
-        >
-          {view.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// The Codex turn the list is filtered to, from a record's turn link, until cleared.
-export function InsightsTurnFilter() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const turn = searchParams.get('turn')
-  if (!turn) return null
-  const clear = () =>
-    setSearchParams((params) => {
-      params.delete('turn')
-      return params
-    })
-  return (
-    <span className={styles.filterChip} title={turn}>
-      Codex turn {compactID(turn)}
-      <button type="button" aria-label="Clear turn filter" onClick={clear}>
-        <ProductIcon name="close" width={13} height={13} />
-      </button>
-    </span>
-  )
-}
-
+// Requests: every routed request, the agent runs they make up, and the
+// approval reviews among them, the tab and its filters kept in the URL. Each
+// tab loads its own data when it opens.
 export default function InsightsPage() {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const reviewsView = searchParams.get('view') === 'reviews'
-  const turn = searchParams.get('turn') ?? ''
-  const [records, setRecords] = useState<InsightsRecord[]>([])
-  const [aggregate, setAggregate] = useState<InsightsAggregateResponse | null>(null)
-  const [totalRecords, setTotalRecords] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [replayUnavailable, setReplayUnavailable] = useState(false)
-  const [autoRefresh, setAutoRefresh] = useState(false)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
-  const [filter, setFilter] = useState<InsightsFilterType>('all')
-  const [recipeFilter, setRecipeFilter] = useState('all')
-  const [decisionFilter, setDecisionFilter] = useState('all')
-  const [modelFilter, setModelFilter] = useState('all')
-  const [currentPage, setCurrentPage] = useState(1)
-  const requestSequenceRef = useRef(0)
-  const requestAbortControllerRef = useRef<AbortController | null>(null)
-  const tableColumns = useMemo(() => createInsightsTableColumns(), [])
-
-  const activeFilters = useMemo(
-    () => ({
-      searchTerm: debouncedSearchTerm,
-      filter,
-      recipeFilter,
-      decisionFilter,
-      modelFilter,
-      turn,
-    }),
-    [debouncedSearchTerm, filter, recipeFilter, decisionFilter, modelFilter, turn],
+  return (
+    <InsightsDataProviders>
+      <InsightsWorkspace />
+    </InsightsDataProviders>
   )
+}
 
-  const totalPages = Math.max(1, Math.ceil(totalRecords / insightsPageSize))
-  const listQuery = useMemo(
-    () =>
-      buildReplayQueryString(activeFilters, {
-        limit: insightsPageSize,
-        offset: (currentPage - 1) * insightsPageSize,
-      }),
-    [activeFilters, currentPage],
-  )
-  const aggregateQuery = useMemo(() => buildReplayQueryString(activeFilters), [activeFilters])
+function InsightsWorkspace() {
+  const [params, setParams] = useSearchParams()
+  const tab = readInsightsTab(params)
+  const session = params.get('session') ?? ''
+  const range = params.get('range')
 
-  const fetchRecords = useCallback(async () => {
-    const requestSequence = requestSequenceRef.current + 1
-    requestSequenceRef.current = requestSequence
-    requestAbortControllerRef.current?.abort()
-    const abortController = new AbortController()
-    requestAbortControllerRef.current = abortController
-    setLoading(true)
-
-    try {
-      const [listResponse, aggregateResponse] = await Promise.all([
-        fetchAbortableInsightsJSON<InsightsListResponse>(
-          `/api/router/api/v1/observability/replays${listQuery}`,
-          'insight records',
-          abortController.signal,
-        ),
-        fetchAbortableInsightsJSON<InsightsAggregateResponse>(
-          `/api/router/api/v1/observability/replays/aggregate${aggregateQuery}`,
-          'insight aggregates',
-          abortController.signal,
-        ),
-      ])
-      if (requestSequenceRef.current !== requestSequence) {
-        return
-      }
-
-      setRecords(listResponse.data || [])
-      setTotalRecords(
-        typeof listResponse.total === 'number' ? listResponse.total : listResponse.count,
-      )
-      setAggregate(aggregateResponse)
-      setError(null)
-      setReplayUnavailable(false)
-    } catch (err) {
-      if (isAbortError(err)) {
-        return
-      }
-      if (requestSequenceRef.current !== requestSequence) {
-        return
-      }
-
-      const unavailable = isInsightsReplayUnavailableError(err)
-      setRecords([])
-      setTotalRecords(0)
-      setAggregate(null)
-      setError(unavailable ? null : err instanceof Error ? err.message : 'Unknown error')
-      setReplayUnavailable(unavailable)
-    } finally {
-      if (requestAbortControllerRef.current === abortController) {
-        requestAbortControllerRef.current = null
-      }
-      if (requestSequenceRef.current === requestSequence) {
-        setLoading(false)
-      }
-    }
-  }, [aggregateQuery, listQuery])
-
-  useEffect(() => {
-    const debounceTimer = window.setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm)
-      setCurrentPage(1)
-    }, insightsSearchDebounceMs)
-
-    return () => window.clearTimeout(debounceTimer)
-  }, [searchTerm])
-
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [turn])
-
-  useEffect(
-    () => () => {
-      requestSequenceRef.current += 1
-      requestAbortControllerRef.current?.abort()
-    },
-    [],
-  )
-
-  useEffect(() => {
-    if (reviewsView) {
-      return undefined
-    }
-    void fetchRecords()
-
-    if (!autoRefresh) {
-      return undefined
-    }
-
-    const interval = window.setInterval(() => {
-      void fetchRecords()
-    }, 5000)
-
-    return () => window.clearInterval(interval)
-  }, [autoRefresh, fetchRecords, reviewsView])
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages)
-    }
-  }, [currentPage, totalPages])
-
-  const availableRecipes = aggregate?.available_recipes ?? []
-  const availableDecisions = aggregate?.available_decisions ?? []
-  const availableModels = aggregate?.available_models ?? []
-  const hasReplayData =
-    totalRecords > 0 ||
-    (aggregate?.record_count ?? 0) > 0 ||
-    availableRecipes.length > 0 ||
-    availableDecisions.length > 0 ||
-    availableModels.length > 0
-
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchTerm(value)
-  }, [])
-
-  const handleDecisionFilterChange = useCallback((value: string) => {
-    setDecisionFilter(value)
-    setCurrentPage(1)
-  }, [])
-
-  const handleRecipeFilterChange = useCallback((value: string) => {
-    setRecipeFilter(value)
-    setCurrentPage(1)
-  }, [])
-
-  const handleModelFilterChange = useCallback((value: string) => {
-    setModelFilter(value)
-    setCurrentPage(1)
-  }, [])
-
-  const handleCacheFilterChange = useCallback((value: InsightsFilterType) => {
-    setFilter(value)
-    setCurrentPage(1)
-  }, [])
-
-  const handleViewRecord = useCallback(
-    (record: InsightsRecord) => {
-      navigate(getInsightsRecordPath(record.id))
-    },
-    [navigate],
-  )
-
-  const layout = {
-    eyebrow: 'Insights',
-    title: 'Insights',
-    description: 'See what the router picked, what signals fired, and how much it saved.',
-  }
-  if (reviewsView) {
-    return (
-      <ConfigPageManagerLayout {...layout}>
-        <InsightsViewSwitch reviews />
-        <InsightsReviewsView
-          key={searchParams.get('session') ?? ''}
-          initialSession={searchParams.get('session') ?? ''}
-        />
-      </ConfigPageManagerLayout>
-    )
-  }
-
-  if (loading && !hasReplayData && records.length === 0) {
-    return <ProductLoadingState label="Loading insights" />
+  const openTab = (next: string) => {
+    const nextParams = new URLSearchParams()
+    if (next !== 'requests') nextParams.set('tab', next)
+    // a session carries over, so a session's requests open its reviews
+    if (session && next !== 'runs') nextParams.set('session', session)
+    // the requests and their runs read one time range
+    if (range && next !== 'reviews' && tab !== 'reviews') nextParams.set('range', range)
+    setParams(nextParams)
   }
 
   return (
-    <ConfigPageManagerLayout {...layout}>
-      <InsightsViewSwitch reviews={false} />
-      {error ? (
-        <div className={styles.error}>
-          <span>{error}</span>
-        </div>
-      ) : null}
-
-      {aggregate ? (
-        <Suspense fallback={null}>
-          <InsightsCharts aggregate={aggregate} />
-        </Suspense>
-      ) : null}
-
-      <div className={configStyles.sectionPanel}>
-        <section className={configStyles.sectionTableBlock}>
-          <div className={styles.toolbar}>
-            <div>
-              <h2 className={styles.sectionTitle}>Insight Records</h2>
-              <p className={styles.sectionSubtitle}>
-                Replay-backed routing records with spend, savings, and token details per request.
-              </p>
-            </div>
-            <div className={styles.toolbarActions}>
-              <label className={styles.toggle}>
-                <input
-                  type="checkbox"
-                  checked={autoRefresh}
-                  onChange={(event) => setAutoRefresh(event.target.checked)}
-                />
-                <span>Auto-refresh</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => void fetchRecords()}
-                className={styles.refreshButton}
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
-
-          <TableHeader
-            title="Routing Insights"
-            count={totalRecords}
-            searchPlaceholder="Search by request, recipe or session ID..."
-            searchValue={searchTerm}
-            onSearchChange={handleSearchChange}
-            variant="embedded"
-          />
-
-          <div className={styles.filterRow}>
-            <InsightsTurnFilter />
-            <select
-              className={styles.filterSelect}
-              value={recipeFilter}
-              onChange={(event) => handleRecipeFilterChange(event.target.value)}
-              disabled={availableRecipes.length === 0}
-            >
-              <option value="all">All Recipes</option>
-              {availableRecipes.map((recipe) => (
-                <option key={recipe} value={recipe}>
-                  {recipe}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className={styles.filterSelect}
-              value={decisionFilter}
-              onChange={(event) => handleDecisionFilterChange(event.target.value)}
-              disabled={availableDecisions.length === 0}
-            >
-              <option value="all">All Decisions</option>
-              {availableDecisions.map((decision) => (
-                <option key={decision} value={decision}>
-                  {formatInsightsDecisionName(decision)}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className={styles.filterSelect}
-              value={modelFilter}
-              onChange={(event) => handleModelFilterChange(event.target.value)}
-              disabled={availableModels.length === 0}
-            >
-              <option value="all">All Models</option>
-              {availableModels.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className={styles.filterSelect}
-              value={filter}
-              onChange={(event) =>
-                handleCacheFilterChange(event.target.value as InsightsFilterType)
-              }
-            >
-              <option value="all">Cache Status</option>
-              <option value="cached">Cached Only</option>
-              <option value="streamed">Streamed Only</option>
-            </select>
-          </div>
-
-          {!hasReplayData && !loading ? (
-            <InsightsEmptyState replayUnavailable={replayUnavailable} hasError={Boolean(error)} />
-          ) : (
-            <DataTable
-              columns={tableColumns}
-              data={records}
-              keyExtractor={(row) => row.id}
-              onView={handleViewRecord}
-              emptyMessage="No insight records match your current filters"
-              className={styles.insightsTable}
-            />
-          )}
-        </section>
-      </div>
-
-      {totalRecords > insightsPageSize ? (
-        <div className={styles.pagination}>
-          <button
-            type="button"
-            className={styles.paginationButton}
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
-          >
-            First
-          </button>
-          <button
-            type="button"
-            className={styles.paginationButton}
-            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-            disabled={currentPage === 1}
-          >
-            Previous
-          </button>
-          <span className={styles.paginationInfo}>
-            Page {currentPage} of {totalPages} ({totalRecords} records)
-          </span>
-          <button
-            type="button"
-            className={styles.paginationButton}
-            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-            disabled={currentPage === totalPages}
-          >
-            Next
-          </button>
-          <button
-            type="button"
-            className={styles.paginationButton}
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages}
-          >
-            Last
-          </button>
-        </div>
-      ) : null}
-    </ConfigPageManagerLayout>
+    <PageContainer>
+      <PageHeader
+        icon={<IconTile icon={ListTree} tone="blue" size="lg" />}
+        title="Requests"
+        description="Every request the router handled: the client and agent that sent it, the decision it matched, the model that answered and what it cost."
+      >
+        <Tabs value={tab} onValueChange={openTab} variant="line" className="gap-0">
+          <TabsList aria-label="Requests views">
+            {INSIGHTS_TABS.map(({ value, label }) => (
+              <TabsTrigger key={value} value={value}>
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </PageHeader>
+      {tab === 'runs' ? (
+        <InsightsRunsView />
+      ) : tab === 'reviews' ? (
+        <InsightsReviewsView key={session} initialSession={session} />
+      ) : (
+        <InsightsRequestsView />
+      )}
+    </PageContainer>
   )
 }
