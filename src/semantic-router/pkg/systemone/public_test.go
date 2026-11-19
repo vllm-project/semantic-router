@@ -352,7 +352,7 @@ func TestPublicNativeMediaRejectionsTakeTheDocumentedCodes(t *testing.T) {
 		body := `{"error":{"code":"` + test.code + `","reason":"` + test.reason + `","limit":100,"message":"images[0]: /private/models/test"}}`
 		handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 			return test.status, []byte(body), nil
-		})
+		}, ClientAuth{})
 		response := httptest.NewRecorder()
 		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
 		var got struct {
