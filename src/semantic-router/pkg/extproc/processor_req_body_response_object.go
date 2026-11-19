@@ -71,8 +71,13 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	for index := at + len(history.Instructions); index < len(instructions); index++ {
 		instructions[index].Position += len(history.Messages)
 	}
+	continued := *request
+	continued.Messages = slices.Concat(history.Messages, request.Messages)
+	if err := llmprotocol.RefuseUnansweredToolCalls(continued); err != nil {
+		return false, err
+	}
 	request.Instructions = instructions
-	request.Messages = append(history.Messages, request.Messages...)
+	request.Messages = continued.Messages
 	return true, nil
 }
 
