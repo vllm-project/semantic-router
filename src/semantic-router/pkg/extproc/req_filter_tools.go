@@ -124,6 +124,6 @@ func commitToolSelection(request *llmprotocol.Request, ctx *RequestContext) erro
 	if request == nil || ctx == nil {
 		return fmt.Errorf("neutral inference request is unavailable")
 	}
-	ctx.SemanticRequest = request
+	attachSemanticRequest(ctx, request)
 	return nil
 }

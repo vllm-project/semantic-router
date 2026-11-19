@@ -47,15 +47,15 @@ recipes:
 }
 
 // A model whose backends reject min_p and logit_bias, as a vLLM backend that
-// runs speculative decoding does, declares them; the declaration reaches the
-// runtime model and survives export. Any other name fails at load and names
-// the ones a model may declare.
-func TestUnsupportedCapabilitiesDeclareOnlySamplingControls(t *testing.T) {
-	cfg, err := ParseYAMLBytes(unsupportedCapabilitiesDocument("[sampling_min_p, sampling_logit_bias]"))
+// runs speculative decoding does, or lack the developer role, as DeepSeek V4
+// does, declares them; the declaration reaches the runtime model and survives
+// export. Any other name fails at load and names the ones a model may declare.
+func TestUnsupportedCapabilitiesDeclareOnlyKnownCapabilities(t *testing.T) {
+	cfg, err := ParseYAMLBytes(unsupportedCapabilitiesDocument("[sampling_min_p, sampling_logit_bias, developer_role]"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"sampling_min_p", "sampling_logit_bias"}
+	want := []string{"sampling_min_p", "sampling_logit_bias", "developer_role"}
 	if got := cfg.ModelConfig["draft-model"].UnsupportedCapabilities; !reflect.DeepEqual(got, want) {
 		t.Fatalf("draft-model unsupported capabilities = %v, want %v", got, want)
 	}
@@ -69,10 +69,10 @@ func TestUnsupportedCapabilitiesDeclareOnlySamplingControls(t *testing.T) {
 		}
 	}
 
-	for _, names := range []string{"[image_input]", "[sampling_top_k]", "[min_p]", "[Sampling_Min_P]"} {
+	for _, names := range []string{"[image_input]", "[sampling_top_k]", "[min_p]", "[Sampling_Min_P]", "[developer]"} {
 		_, err := ParseYAMLBytes(unsupportedCapabilitiesDocument(names))
 		if err == nil || !strings.Contains(err.Error(), "providers.models[draft-model].unsupported_capabilities") ||
-			!strings.Contains(err.Error(), "use one of: sampling_min_p, sampling_logit_bias") {
+			!strings.Contains(err.Error(), "use one of: sampling_min_p, sampling_logit_bias, developer_role") {
 			t.Fatalf("unsupported_capabilities %s: error = %v", names, err)
 		}
 	}

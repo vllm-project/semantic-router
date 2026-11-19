@@ -64,6 +64,15 @@ class ModelPagesTests(unittest.TestCase):
                     "pii: spans" in text, "span" not in model.question_types
                 )
 
+    def test_a_model_can_name_its_release_instead_of_its_family(self):
+        models = {model.repo: model for model in pages.load_models()}
+        self.assertEqual(models["vllm-sr/vela3.1-fast"].family, "vela3")
+        self.assertEqual(models["vllm-sr/vela3.1-fast"].family_label, "Vela 3.1")
+        self.assertEqual(models["vllm-sr/vela3-fast"].family_label, "Vela 3.0")
+        self.assertIn(
+            "| Family | [Vela 3.1]", pages.render_page(models["vllm-sr/vela3.1-fast"])
+        )
+
     def test_a_catalog_model_without_editorial_text_fails(self):
         self.use_copies()
         editorial = yaml.safe_load(pages.EDITORIAL.read_text())

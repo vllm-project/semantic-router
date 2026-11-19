@@ -19,7 +19,7 @@ func TestRoutingErrorProbesRequireRouterOwnedErrorEnvelopes(t *testing.T) {
 					t.Errorf("request model = %q, want %q: %v", request.Model, probe.model, err)
 				}
 				w.Header().Set("x-vsr-response-path", "error")
-				w.WriteHeader(http.StatusBadRequest)
+				w.WriteHeader(probe.status)
 				_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{
 					"type": "invalid_request_error", "code": probe.code, "message": probe.message,
 				}})
@@ -37,6 +37,7 @@ func TestRoutingErrorProbesRequireRouterOwnedErrorEnvelopes(t *testing.T) {
 		{"default fallback", "upstream", "no_route", http.StatusOK},
 		{"backend error", "upstream", "no_route", http.StatusBadRequest},
 		{"wrong reason", "error", "model_not_found", http.StatusBadRequest},
+		{"wrong status", "error", "no_route", http.StatusNotFound},
 	} {
 		t.Run(testcase.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -47,7 +48,7 @@ func TestRoutingErrorProbesRequireRouterOwnedErrorEnvelopes(t *testing.T) {
 				}})
 			}))
 			defer server.Close()
-			probe := routingErrorProbe{model: "e2e-no-route", code: "no_route", message: "no route matched the request"}
+			probe := routingErrorProbe{model: "e2e-no-route", status: http.StatusBadRequest, code: "no_route", message: "no route matched the request"}
 			if err := checkRoutingErrorProbe(context.Background(), server.Client(), server.URL, probe); err == nil {
 				t.Fatal("an incorrect response satisfied the Router error contract")
 			}

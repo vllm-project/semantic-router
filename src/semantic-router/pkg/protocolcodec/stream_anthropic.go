@@ -18,6 +18,7 @@ type anthropicStreamEncoder struct {
 	blockIndexes   map[streamContentKey]int
 	blockStarted   map[streamContentKey]bool
 	blockStopped   map[streamContentKey]bool
+	blockSigned    map[streamContentKey]bool
 	itemBlockKeys  map[int][]streamContentKey
 	activeBlock    streamContentKey
 	hasActiveBlock bool
@@ -35,6 +36,7 @@ func (AnthropicMessagesCodec) NewEncoder(context llmprotocol.StreamContext, poli
 		blockIndexes:  make(map[streamContentKey]int),
 		blockStarted:  make(map[streamContentKey]bool),
 		blockStopped:  make(map[streamContentKey]bool),
+		blockSigned:   make(map[streamContentKey]bool),
 		itemBlockKeys: make(map[int][]streamContentKey),
 	}
 }
@@ -80,6 +82,12 @@ type anthropicDeltaWire struct {
 }
 
 func (wire anthropicDeltaWire) MarshalJSON() ([]byte, error) {
+	if wire.Type == "signature_delta" {
+		return json.Marshal(struct {
+			Type      string `json:"type"`
+			Signature string `json:"signature"`
+		}{Type: wire.Type, Signature: wire.Signature})
+	}
 	if wire.Type == "message_delta" {
 		return json.Marshal(struct {
 			Container    json.RawMessage `json:"container,omitempty"`
@@ -153,14 +161,14 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
-	if err := validateAnthropicStreamEvent(wire, data); err != nil {
+	if err = validateAnthropicStreamEvent(wire, data); err != nil {
 		return nil, nil, err
 	}
 	if wire.Type == "content_block_start" && anthropicEventIndex(wire) != len(decoder.items) {
 		return nil, nil, invalidProviderResponse("stream_output_index_order", "Anthropic content block indexes must be contiguous from zero")
 	}
 	if wire.Message != nil {
-		if err := decoder.observeProviderIdentity(wire.Message.ID, wire.Message.Model); err != nil {
+		if err = decoder.observeProviderIdentity(wire.Message.ID, wire.Message.Model); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -508,6 +516,11 @@ func (decoder *anthropicStreamDecoder) Finalize(reason error) ([]llmprotocol.Eve
 }
 
 func (encoder *anthropicStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.Content != nil {
+		if err := requireReasoningRepresentation(llmprotocol.AnthropicMessagesV1, []llmprotocol.Content{*event.Content}); err != nil {
+			return nil, nil, err
+		}
+	}
 	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredEventCapabilities(event)); err != nil {
 		return nil, nil, err
 	}
@@ -584,6 +597,9 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicReasoningDelta(
 	if err != nil {
 		return nil, nil, err
 	}
+	if event.Content != nil && event.Content.Signature != "" {
+		encoder.blockSigned[key] = true
+	}
 	frames, err = appendAnthropicReasoningSignature(frames, blockIndex, event.Content)
 	return frames, nil, err
 }
@@ -636,7 +652,7 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicLifecycleEvent(
 	var diagnostics llmprotocol.Diagnostics
 	switch event.Type {
 	case llmprotocol.EventResponseStarted:
-		wire = encodeAnthropicMessageStart(event)
+		wire = encodeAnthropicMessageStart(event, encoder.context)
 	case llmprotocol.EventUsageUpdated:
 		if event.Usage == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "usage event is invalid", nil)
@@ -666,15 +682,22 @@ func encodeAnthropicWireFrame(wire anthropicEventWire) ([][]byte, llmprotocol.Di
 	return [][]byte{frame}, nil, err
 }
 
-func encodeAnthropicMessageStart(event llmprotocol.Event) anthropicEventWire {
+// encodeAnthropicMessageStart reports the provider's input usage when the
+// provider reported it by now, and the Router's own estimate otherwise: a
+// Chat or Responses provider reports usage only at the end, and the final
+// message_delta carries it.
+func encodeAnthropicMessageStart(event llmprotocol.Event, context llmprotocol.StreamContext) anthropicEventWire {
 	usage := newAnthropicUsageWire()
 	if event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
 		usage = encodeAnthropicUsage(*event.Usage)
+	} else {
+		usage.InputTokens = context.EstimatedInputTokens
 	}
 	return anthropicEventWire{
 		Type: "message_start",
 		Message: &anthropicResponseWire{
-			ID: event.ResponseID, Type: "message", Role: "assistant", Model: event.Model,
+			ID:   anthropicReplyID(context.Source, anthropicMessageIDPrefix, event.ResponseID),
+			Type: "message", Role: "assistant", Model: event.Model,
 			Content: json.RawMessage(`[]`), Usage: usage,
 		},
 	}
@@ -733,14 +756,17 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(
 	kind llmprotocol.ContentKind,
 ) anthropicEventWire {
 	block := &anthropicContentWire{Type: "text", Text: ""}
-	if kind == llmprotocol.ContentToolCall {
-		block.Type, block.ID, block.Name, block.Input = "tool_use", event.ToolCall.ID, event.ToolCall.Name, json.RawMessage(`{}`)
-	} else if kind == llmprotocol.ContentReasoning {
+	switch kind {
+	case llmprotocol.ContentToolCall:
+		block.Type, block.Name, block.Input = "tool_use", event.ToolCall.Name, json.RawMessage(`{}`)
+		block.ID = anthropicReplyID(encoder.context.Source, anthropicToolUseIDPrefix, event.ToolCall.ID)
+	case llmprotocol.ContentReasoning:
 		signature := ""
 		if event.Content != nil {
 			signature = event.Content.Signature
 		}
-		block.Type, block.Text, block.Thinking, block.Signature = "thinking", "", "", signature
+		block.Type, block.Text, block.Thinking, block.Signature, block.signed = "thinking", "", "", signature, true
+		encoder.blockSigned[key] = signature != ""
 	}
 	return anthropicEventWire{Type: "content_block_start", Index: anthropicIndex(encoder.blockIndexes[key]), ContentBlock: block}
 }
@@ -778,6 +804,12 @@ func (encoder *anthropicStreamEncoder) completeAnthropicItem(
 		} else if event.Content != nil && event.Content.Kind != "" {
 			kind = event.Content.Kind
 		}
+		// Reasoning that streamed nothing, all of it omitted or dropped, has no
+		// block: an unsigned empty thinking block carries nothing, and the
+		// buffered reply leaves such an item out.
+		if kind == llmprotocol.ContentReasoning && event.Content.Signature == "" {
+			return frames, nil, nil
+		}
 		started, key, err := encoder.ensureAnthropicBlockStarted(event, kind)
 		if err != nil {
 			return nil, nil, err
@@ -799,6 +831,20 @@ func (encoder *anthropicStreamEncoder) stopAnthropicBlock(key streamContentKey) 
 	if !encoder.blockStarted[key] || encoder.blockStopped[key] {
 		return nil, nil
 	}
+	var frames [][]byte
+	// A thinking block ends with its signature, empty when the backend gave
+	// none.
+	if encoder.blocks[key] == llmprotocol.ContentReasoning && !encoder.blockSigned[key] {
+		delta := anthropicEventWire{
+			Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
+			Delta: &anthropicDeltaWire{Type: "signature_delta"},
+		}
+		frame, err := encodeSSE(delta.Type, delta)
+		if err != nil {
+			return nil, err
+		}
+		frames = append(frames, frame)
+	}
 	wire := anthropicEventWire{Type: "content_block_stop", Index: anthropicIndex(encoder.blockIndexes[key])}
 	frame, err := encodeSSE(wire.Type, wire)
 	if err != nil {
@@ -808,7 +854,7 @@ func (encoder *anthropicStreamEncoder) stopAnthropicBlock(key streamContentKey) 
 	if encoder.hasActiveBlock && encoder.activeBlock == key {
 		encoder.hasActiveBlock = false
 	}
-	return [][]byte{frame}, nil
+	return append(frames, frame), nil
 }
 
 func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(

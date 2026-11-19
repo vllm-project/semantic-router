@@ -102,6 +102,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Heuristic',
               items: [
+                'tutorials/signal/heuristic/agent',
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
@@ -444,6 +445,13 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/production-stack-integration',
             'proposals/nvidia-dynamo-integration',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Dashboard & Operator Experience',
+          items: [
+            'proposals/dashboard-ux-redesign',
           ],
         },
       ],

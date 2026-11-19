@@ -1516,6 +1516,7 @@ spec:
                                       Type specifies the signal or projection type a leaf references: a type
                                       the router accepts in decision rules.
                                     enum:
+                                    - agent
                                     - authz
                                     - complexity
                                     - context

@@ -143,6 +143,50 @@ func TestRedisExactCacheIntegration_MaxAge(t *testing.T) {
 }
 
 // StorageIntegration: redis
+func TestRedisExactCacheIntegration_ExpiredMetadataWithoutNativeTTL(t *testing.T) {
+	storagetest.Require(t, "redis")
+	host := os.Getenv("REDIS_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+	port := 6379
+	if configured := os.Getenv("REDIS_PORT"); configured != "" {
+		parsed, err := strconv.Atoi(configured)
+		require.NoError(t, err)
+		port = parsed
+	}
+	client := redis.NewClient(&redis.Options{
+		Addr: fmt.Sprintf("%s:%d", host, port),
+	})
+	t.Cleanup(func() { _ = client.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis unavailable: %v", err))
+	}
+	cache := &RedisCache{
+		client:  client,
+		config:  &config.RedisConfig{},
+		enabled: true,
+	}
+
+	fingerprint := fmt.Sprintf("exact-expired-no-ttl-%d", time.Now().UnixNano())
+	key := exactCacheStorageKey("tenant-expired", fingerprint)
+	expiredAt := time.Now().Add(-time.Minute).Unix()
+	require.NoError(t, client.HSet(ctx, key, map[string]interface{}{
+		"response_body": `{"answer":"stale"}`,
+		"timestamp":     expiredAt - 60,
+		"expires_at":    expiredAt,
+		"ttl_seconds":   1,
+	}).Err())
+	require.Less(t, client.TTL(ctx, key).Val(), time.Duration(0))
+
+	hit, err := cache.FindExact(ctx, "tenant-expired", fingerprint)
+	require.NoError(t, err)
+	assert.False(t, hit.Found, "expired logical metadata must be a miss without native TTL")
+}
+
+// StorageIntegration: redis
 func TestRedisExactCacheIntegration_LegacyStringOverwrite(t *testing.T) {
 	storagetest.Require(t, "redis")
 	host := os.Getenv("REDIS_HOST")

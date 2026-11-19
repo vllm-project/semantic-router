@@ -11,7 +11,8 @@ import (
 // A provider the Router configures receives only the credential its auth
 // sets. A client's own credential headers, whatever the client meant them
 // for, never travel beside it: not with a static key, not with a per-user
-// key, and not when the upstream takes no key at all.
+// key, and not when the upstream takes no key at all. Nor does the account
+// a caller login names.
 func TestProviderDispatchDropsTheClientsOwnCredentials(t *testing.T) {
 	t.Setenv("CLIENT_CREDENTIALS_TEST_KEY", "router-key")
 	cfg, err := config.ParseYAMLBytes([]byte(`
@@ -55,6 +56,8 @@ recipes:
 		"x-goog-api-key":            "client-goog-key",
 		"api-subscription-key":      "client-subscription-key",
 		"ocp-apim-subscription-key": "client-ocp-key",
+		// The ChatGPT account a Codex login acts for goes only with the login.
+		"chatgpt-account-id": "client-account",
 	}
 	for _, tc := range []struct {
 		name, model, endpoint string

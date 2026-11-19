@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from cli.consts import HEALTH_CHECK_TIMEOUT
@@ -13,6 +14,7 @@ from cli.instance_setup import (
     attach_controller,
     stop_managed_controller,
 )
+from cli.pending_activation import heartbeat_file
 from cli.runtime_lifecycle import validate_startup_timeout
 from cli.runtime_lifecycle_lock import acquire_runtime_lifecycle_lock
 from cli.runtime_stack import resolve_runtime_stack
@@ -48,7 +50,14 @@ class ContainerBackend:
             source_config_file = kwargs.get("source_config_file")
         if runtime_config_file is None:
             runtime_config_file = kwargs.get("runtime_config_file")
-        with self._lifecycle_lock():
+        with self._lifecycle_lock(
+            command="vllm-sr serve",
+            state="starting",
+            take_over_waiting=runtime_config_lock is None,
+            heartbeat_path=heartbeat_file(
+                Path(runtime_config_file or config_file).absolute()
+            ),
+        ):
             start_vllm_sr(
                 config_file,
                 env_vars=env_vars,
@@ -76,16 +85,24 @@ class ContainerBackend:
         )
 
     def teardown(self) -> None:
-        with self._lifecycle_lock():
+        with self._lifecycle_lock(
+            command="vllm-sr stop", state="stopping", take_over_waiting=True
+        ):
             stop_managed_controller()
             stop_vllm_sr()
 
     @staticmethod
-    def _lifecycle_lock():
+    def _lifecycle_lock(
+        *, command: str, state: str, take_over_waiting: bool, heartbeat_path=None
+    ):
         stack_layout = resolve_runtime_stack()
         return acquire_runtime_lifecycle_lock(
             runtime=get_container_runtime(),
             stack_name=stack_layout.stack_name,
+            command=command,
+            state=state,
+            heartbeat_path=heartbeat_path,
+            take_over_waiting=take_over_waiting,
         )
 
     def logs(self, service: str, follow: bool = False) -> None:

@@ -84,6 +84,7 @@ func applyResponsesStart(event *llmprotocol.Event, wire responsesEventWire) {
 	event.Type = llmprotocol.EventResponseStarted
 	if wire.Response != nil {
 		event.ResponseID, event.Model = wire.Response.ID, wire.Response.Model
+		event.CreatedAt = responsesCreatedTime(wire.Response.CreatedAt)
 	}
 }
 
@@ -293,6 +294,13 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItemKind(
 		}
 	case "reasoning":
 		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning}
+		encrypted, err := decodeResponsesEncryptedReasoning(item, decoder.policy, true)
+		if err != nil {
+			return err
+		}
+		if encrypted != nil {
+			event.Content = encrypted
+		}
 	case "image_generation_call":
 		event.Content = &llmprotocol.Content{
 			Kind:           llmprotocol.ContentGeneratedImage,

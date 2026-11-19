@@ -172,7 +172,7 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 		}
 		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), handler: handler, listener: ln})
 		logging.ComponentEvent("router", "standalone_listener_started", map[string]interface{}{
-			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.APIKeys) > 0,
+			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.ClientKeys()) > 0,
 			"apis": spec.ServedAPIs(), "tls": serverOpts.TLS != nil,
 		})
 	}
@@ -288,7 +288,7 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 	for _, listener := range cfg.Listeners {
 		if listener.Name == name {
-			return listener.APIKeys
+			return listener.ClientKeys()
 		}
 	}
 	return nil
@@ -307,6 +307,7 @@ func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name 
 		serving.ListsLLM = servesAnyLLM(listener)
 		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
 		serving.Gate = listenerGate(listener)
+		serving.UnservedRoute = listenerUnservedRoute(listener)
 		return
 	}
 }
@@ -345,6 +346,23 @@ func listenerGate(listener config.Listener) func(string) ([]string, string, bool
 			return refuse(path)
 		}
 		return entry.Models, "", true
+	}
+}
+
+// listenerUnservedRoute is the model a request on a path is routed as when
+// it names a model the path's API does not serve, from the API's
+// unserved_models; empty for a path whose API refuses such requests.
+func listenerUnservedRoute(listener config.Listener) func(string) string {
+	return func(path string) string {
+		api, isAPI := apiregistry.ForPath(path)
+		if !isAPI {
+			return ""
+		}
+		entry, served := listener.API(api.Name)
+		if !served {
+			return ""
+		}
+		return entry.UnservedRoute()
 	}
 }
 

@@ -44,29 +44,6 @@ export function getDecisionCategory(priority?: number): 'guardrail' | 'routing' 
   return 'routing'
 }
 
-/** Palette for signal type labels (flow diagram + breakdown). */
-export const SIGNAL_COLORS: Record<string, string> = {
-  keywords: '#4EC9B0',
-  domains: '#DCDCAA',
-  fact_check: '#CE9178',
-  user_feedbacks: '#C586C0',
-  language: '#B5CEA8',
-  context: '#D7BA7D',
-  complexity: '#569CD6',
-  modality: '#D4D4D4',
-  role_bindings: '#F48771',
-  jailbreak: '#F48771',
-  safety: '#F44747',
-  hallucination: '#D16969',
-  refusal: '#CCA700',
-  turn_relation: '#9CDCFE',
-  pii: '#FF6B6B',
-  conversation: '#6A9955',
-  metadata: '#808080',
-  input_modality: '#4FC1FF',
-  systemone: '#B180D7',
-}
-
 export function categorizeDecisions(config: RouterConfig | null): {
   guardrails: DecisionRule[]
   routing: DecisionRule[]

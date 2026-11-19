@@ -924,7 +924,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type specifies the signal or projection type a leaf references: a type<br />the router accepts in decision rules. |  | Enum: [authz complexity context conversation domain fact_check input_modality jailbreak keyword language metadata modality pii projection safety systemone turn_relation user_feedback] <br />Optional: \{\} <br /> |
+| `type` _string_ | Type specifies the signal or projection type a leaf references: a type<br />the router accepts in decision rules. |  | Enum: [agent authz complexity context conversation domain fact_check input_modality jailbreak keyword language metadata modality pii projection safety systemone turn_relation user_feedback] <br />Optional: \{\} <br /> |
 | `name` _string_ | Name is the name of the rule a leaf references |  | Optional: \{\} <br /> |
 | `label` _string_ | Label matches one label of the referenced rule (systemone and<br />application signal conditions) |  | Optional: \{\} <br /> |
 | `predicate` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Predicate bounds the referenced rule's score, as \{gt, gte, lt, lte\}.<br />The router checks it when it loads the configuration. |  | Type: object <br />Optional: \{\} <br /> |

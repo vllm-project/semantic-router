@@ -43,6 +43,7 @@ type Encoding struct {
 	ranks  map[string]int
 	splits []*splitter
 	nfc    bool
+	added  *addedTokens
 }
 
 // Name is the encoding's name: a built-in encoding's, or the source of a

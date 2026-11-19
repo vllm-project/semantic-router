@@ -136,6 +136,16 @@ lists every removed form, its load error and its rewrite.
 
 ## Behavior to expect
 
+- **Router Replay records every request by default**, a record of its routing
+  data and no text, unless a `router_replay` plugin in `global.plugins` sets
+  `enabled: false`. A configuration that names a replay store in
+  `global.services.router_replay` (`postgres`, `redis`, `milvus` or `qdrant`)
+  without a `router_replay` plugin used to leave that store alone; the Router
+  now connects to it at startup and does not start while it is unreachable.
+  Turn Replay off as above, or remove the store, to keep the old behavior. See
+  [Keep records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts)
+  for where the records go without a store.
+
 - **`jailbreak` and `pii` rules whose model gives no answer do not match.**
   The default `on_unknown` is `no_match`, as it was: a guard whose decision
   model is down lets traffic through. `on_unknown: match` is the explicit

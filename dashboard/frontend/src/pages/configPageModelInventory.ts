@@ -29,6 +29,67 @@ export interface ModelInventoryFilters {
   defaultModel: string
 }
 
+export type ModelBackendKind = 'endpoints' | 'deployment' | 'none'
+
+export interface ModelInventoryFacets {
+  search: string
+  providers: readonly string[]
+  /** Reasoning family names; `__unassigned__` matches models without one. */
+  families: readonly string[]
+  backends: readonly ModelBackendKind[]
+  roles: readonly Exclude<ModelRoleFilter, 'all'>[]
+  defaultModel: string
+  /** The shared deployment each model alias names, by model name. */
+  deployments?: ReadonlyMap<string, string>
+}
+
+export function modelBackendKind(
+  model: NormalizedModel,
+  deployments?: ReadonlyMap<string, string>,
+): ModelBackendKind {
+  if ((model.endpoints?.length ?? 0) > 0) return 'endpoints'
+  return deployments?.get(model.name) ? 'deployment' : 'none'
+}
+
+/** Multi-select inventory filters: values within a facet match any, facets combine with AND. */
+export function filterModelInventoryFacets(
+  models: NormalizedModel[],
+  facets: ModelInventoryFacets,
+): NormalizedModel[] {
+  const query = facets.search.trim().toLocaleLowerCase()
+  return models.filter((model) => {
+    if (
+      query &&
+      !searchableModelValues(model).some((value) => value.toLocaleLowerCase().includes(query)) &&
+      !(facets.deployments?.get(model.name) ?? '').toLocaleLowerCase().includes(query)
+    ) {
+      return false
+    }
+    if (
+      facets.providers.length > 0 &&
+      !(model.backend_refs ?? []).some((backend) =>
+        facets.providers.includes(backend.provider?.trim() ?? ''),
+      )
+    ) {
+      return false
+    }
+    if (
+      facets.families.length > 0 &&
+      !facets.families.includes(model.reasoning_family || '__unassigned__')
+    ) {
+      return false
+    }
+    if (
+      facets.backends.length > 0 &&
+      !facets.backends.includes(modelBackendKind(model, facets.deployments))
+    ) {
+      return false
+    }
+    const role = model.name === facets.defaultModel ? 'default' : 'standard'
+    return facets.roles.length === 0 || facets.roles.includes(role)
+  })
+}
+
 function searchableModelValues(model: NormalizedModel): string[] {
   return [
     model.name,
@@ -169,6 +230,9 @@ export function getModelDeleteBlocker(
 
   return null
 }
+
+/** Deleting several models at once asks for this phrase; one model needs none. */
+export const modelDeleteConfirmation = (count: number) => (count > 1 ? `DELETE ${count}` : '')
 
 export function validateNewModelName(rawName: unknown, existingModels: NormalizedModel[]): string {
   const modelName = typeof rawName === 'string' ? rawName.trim() : ''

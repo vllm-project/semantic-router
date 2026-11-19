@@ -8,11 +8,17 @@ import (
 )
 
 func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	request, projectionDiagnostics := llmprotocol.ProjectResponsesReasoning(request, llmprotocol.OpenAIChatV1, false)
+	for _, message := range request.Messages {
+		if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, message.Content); err != nil {
+			return nil, projectionDiagnostics, err
+		}
+	}
 	if envelope.CanReplay(llmprotocol.OpenAIChatV1, request.Generation, policy, false) {
-		return append([]byte(nil), envelope.Request...), nil, nil
+		return append([]byte(nil), envelope.Request...), projectionDiagnostics, nil
 	}
 	if request.ReasoningDisplay != "" {
-		return nil, nil, llmprotocol.NewError(
+		return nil, projectionDiagnostics, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_reasoning_display",
 			"Chat Completions cannot represent reasoning display controls",
@@ -20,7 +26,7 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		)
 	}
 	if request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens < 0 {
-		return nil, nil, llmprotocol.NewError(
+		return nil, projectionDiagnostics, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_chat_max_output_tokens",
 			"Chat Completions cannot represent a negative output token limit",
@@ -28,7 +34,7 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		)
 	}
 	if len(request.Sampling.Stop) > 4 {
-		return nil, nil, llmprotocol.NewError(
+		return nil, projectionDiagnostics, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_chat_stop_sequence_limit",
 			"Chat Completions cannot represent more than four stop sequences",
@@ -36,6 +42,7 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 		)
 	}
 	diagnostics, validationErr := chatRequestDiagnostics(request, policy)
+	diagnostics = appendDiagnostics(projectionDiagnostics, diagnostics, policy.Limits.Diagnostics)
 	if validationErr != nil {
 		return nil, diagnostics, validationErr
 	}
@@ -64,6 +71,7 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 	if err := appendToolResultErrorLoss(&diagnostics, request, policy, llmprotocol.OpenAIChatV1); err != nil {
 		return diagnostics, err
 	}
+	appendToolResultImagesMoved(&diagnostics, request, policy)
 	for _, message := range request.Messages {
 		if message.ReasoningEffort != "" {
 			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
@@ -92,6 +100,31 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 	return diagnostics, err
 }
 
+// appendToolResultImagesMoved reports that the images of tool results reach
+// the model in a user message after the tool messages, once per request.
+func appendToolResultImagesMoved(diagnostics *llmprotocol.Diagnostics, request llmprotocol.Request, policy llmprotocol.Policy) {
+	for _, message := range request.Messages {
+		for _, content := range message.Content {
+			if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
+				continue
+			}
+			for _, part := range content.ToolResult.Content {
+				if part.Kind != llmprotocol.ContentImage {
+					continue
+				}
+				if len(*diagnostics) < policy.Limits.Diagnostics {
+					*diagnostics = append(*diagnostics, llmprotocol.Diagnostic{
+						Source: request.Trusted.SourceFormat, Target: llmprotocol.OpenAIChatV1,
+						Field: "messages[].content.tool_result.image", Action: llmprotocol.DiagnosticApproximated,
+						Reason: "Chat Completions tool messages carry text only; the tool results' images were sent in a user message after them",
+					})
+				}
+				return
+			}
+		}
+	}
+}
+
 func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 	wire := chatRequestWire{
 		Model: request.Model, Stream: request.Stream, Metadata: request.Metadata,
@@ -117,6 +150,14 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 	return wire
 }
 
+// chatToolResultImagesNote opens the user message that carries the images of
+// the tool results before it.
+const chatToolResultImagesNote = "The tool results above returned these images."
+
+// chatToolResultImagesFollow is the text of a tool message whose result holds
+// only images.
+const chatToolResultImagesFollow = "The tool returned images, which follow in the next message."
+
 func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) error {
 	for _, instruction := range request.Instructions {
 		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content, Name: instruction.Name})
@@ -125,16 +166,33 @@ func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) erro
 		}
 		wire.Messages = append(wire.Messages, encoded)
 	}
+	// A Chat tool message carries text only, and the tool messages answering
+	// one assistant turn must follow it unbroken, so the images of a run of
+	// tool results go in one user message right after the run.
+	var toolImages []chatContentWire
+	flushToolImages := func() {
+		if len(toolImages) == 0 {
+			return
+		}
+		content, _ := json.Marshal(append([]chatContentWire{{Type: "text", Text: chatToolResultImagesNote}}, toolImages...))
+		wire.Messages = append(wire.Messages, chatMessageWire{Role: string(llmprotocol.RoleUser), Content: content})
+		toolImages = nil
+	}
 	for _, message := range responsesAssistantTurns(request) {
 		if len(message.Content) == 0 && message.ReasoningEffort != "" {
 			continue
 		}
-		encoded, err := encodeChatMessage(message)
+		if message.Role != llmprotocol.RoleTool {
+			flushToolImages()
+		}
+		encoded, images, err := encodeChatMessageWithToolImages(message)
 		if err != nil {
 			return err
 		}
 		wire.Messages = append(wire.Messages, encoded)
+		toolImages = append(toolImages, images...)
 	}
+	flushToolImages()
 	return nil
 }
 
@@ -166,9 +224,19 @@ func encodeChatRequestOptions(wire *chatRequestWire, request llmprotocol.Request
 }
 
 func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
+	wire, images, err := encodeChatMessageWithToolImages(message)
+	if err == nil && len(images) > 0 {
+		return chatMessageWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "tool_result_media", "chat tool results support text only", nil)
+	}
+	return wire, err
+}
+
+// encodeChatMessageWithToolImages encodes one message and returns, apart, the
+// images its tool result holds, which a Chat tool message cannot carry.
+func encodeChatMessageWithToolImages(message llmprotocol.Message) (chatMessageWire, []chatContentWire, error) {
 	role, err := wireRole(message.Role)
 	if err != nil {
-		return chatMessageWire{}, err
+		return chatMessageWire{}, nil, err
 	}
 	wire := chatMessageWire{ID: message.ID, Role: role}
 	if message.Name != "" {
@@ -177,11 +245,11 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 	state := chatMessageEncodingState{wire: &wire, parts: make([]chatContentWire, 0, len(message.Content))}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {
-			return chatMessageWire{}, err
+			return chatMessageWire{}, nil, err
 		}
 	}
 	if state.citationTextBlocks > 1 {
-		return chatMessageWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "citation_text_ambiguous", "Chat Completions citations require one text block", nil)
+		return chatMessageWire{}, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "citation_text_ambiguous", "Chat Completions citations require one text block", nil)
 	}
 	if len(state.parts) == 1 && state.parts[0].Type == "text" && state.parts[0].CacheControl == nil {
 		wire.Content, _ = json.Marshal(state.parts[0].Text)
@@ -191,12 +259,13 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 		// Chat tool messages require content even when the result has no parts.
 		wire.Content = json.RawMessage(`""`)
 	}
-	return wire, nil
+	return wire, state.toolImages, nil
 }
 
 type chatMessageEncodingState struct {
 	wire               *chatMessageWire
 	parts              []chatContentWire
+	toolImages         []chatContentWire
 	citationTextBlocks int
 }
 
@@ -259,21 +328,29 @@ func (state *chatMessageEncodingState) appendText(content llmprotocol.Content) {
 }
 
 func (state *chatMessageEncodingState) appendImage(content llmprotocol.Content) error {
+	part, err := chatImagePart(content)
+	if err != nil {
+		return err
+	}
+	state.parts = append(state.parts, part)
+	return nil
+}
+
+func chatImagePart(content llmprotocol.Content) (chatContentWire, error) {
 	if content.FileID != "" {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "image_file_id", "Chat Completions cannot encode image file IDs", nil)
+		return chatContentWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "image_file_id", "Chat Completions cannot encode image file IDs", nil)
 	}
 	imageURL := content.URL
 	if content.Data != "" {
 		if !strings.HasPrefix(content.MediaType, "image/") {
-			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "image_media_type", "inline Chat images require an image media type", nil)
+			return chatContentWire{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "image_media_type", "inline Chat images require an image media type", nil)
 		}
 		imageURL = "data:" + content.MediaType + ";base64," + content.Data
 	}
 	if imageURL == "" {
-		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "image_source", "Chat images require a URL or inline data", nil)
+		return chatContentWire{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "image_source", "Chat images require a URL or inline data", nil)
 	}
-	state.parts = append(state.parts, chatContentWire{Type: "image_url", ImageURL: &chatImageURLWire{URL: imageURL, Detail: content.Detail}, CacheControl: encodeAnthropicCacheControl(content.Cache)})
-	return nil
+	return chatContentWire{Type: "image_url", ImageURL: &chatImageURLWire{URL: imageURL, Detail: content.Detail}, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
 }
 
 func (state *chatMessageEncodingState) appendFile(content llmprotocol.Content) error {
@@ -308,14 +385,28 @@ func (state *chatMessageEncodingState) appendToolResult(result *llmprotocol.Tool
 	}
 	state.wire.ToolCallID = result.CallID
 	firstPart := len(state.parts)
+	images := len(state.toolImages)
 	for _, resultContent := range result.Content {
-		if resultContent.Kind != llmprotocol.ContentText {
-			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "tool_result_media", "chat tool results support text only", nil)
+		switch resultContent.Kind {
+		case llmprotocol.ContentText:
+			state.parts = append(state.parts, chatContentWire{
+				Type: "text", Text: resultContent.Text,
+				CacheControl: encodeAnthropicCacheControl(resultContent.Cache),
+			})
+		case llmprotocol.ContentImage:
+			part, err := chatImagePart(resultContent)
+			if err != nil {
+				return err
+			}
+			state.toolImages = append(state.toolImages, part)
+		default:
+			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "tool_result_media", "chat tool results support text and images only", nil)
 		}
-		state.parts = append(state.parts, chatContentWire{
-			Type: "text", Text: resultContent.Text,
-			CacheControl: encodeAnthropicCacheControl(resultContent.Cache),
-		})
+	}
+	if len(state.parts) == firstPart && len(state.toolImages) > images {
+		// The tool message names what follows, and holds the outer cache
+		// boundary the result's images cannot.
+		state.parts = append(state.parts, chatContentWire{Type: "text", Text: chatToolResultImagesFollow})
 	}
 	if outerCache != nil {
 		if len(state.parts) == firstPart {

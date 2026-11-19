@@ -218,10 +218,11 @@ func (c *Client) exchange(ctx context.Context, task api.BundleTask) (api.BundleR
 	return result, timing, nil
 }
 
-func (c *Client) send(ctx context.Context, task api.BundleTask) (api.BundleResult, exchangeTiming, error) {
+func (c *Client) send(ctx context.Context, task api.BundleTask) (result api.BundleResult, timing exchangeTiming, err error) {
 	if bundle := bundleFrom(ctx); bundle != nil {
 		return bundle.submit(ctx, c, task)
 	}
+	defer func() { reportRuntimeCall(ctx, task, result) }()
 	started := time.Now()
 	switch {
 	case task.Decisions != nil:
@@ -260,6 +261,13 @@ func (c *Client) send(ctx context.Context, task api.BundleTask) (api.BundleResul
 // Bundle sends tasks in one /v1/bundle call and returns their results in task order.
 func (c *Client) Bundle(ctx context.Context, tasks []api.BundleTask) ([]api.BundleResult, error) {
 	results, _, err := c.sendBundle(ctx, tasks)
+	for index, task := range tasks {
+		result := api.BundleResult{}
+		if index < len(results) {
+			result = results[index]
+		}
+		reportRuntimeCall(ctx, task, result)
+	}
 	return results, err
 }
 

@@ -35,6 +35,9 @@ const (
 	// CodeUncalibratedPreset warns of a preset asked with the neutral
 	// threshold, because the answering model has no calibrated one.
 	CodeUncalibratedPreset = "uncalibrated_preset"
+	// CodeRetryOnWithoutCount warns of a provider model that names retry
+	// conditions and no retry count, which turns its default retries off.
+	CodeRetryOnWithoutCount = "retry_on_without_count"
 )
 
 // LocatedError is a one-line load error that names its own place in the

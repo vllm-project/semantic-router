@@ -70,8 +70,15 @@ type EntrypointMapping struct {
 	Recipe     RecipeName
 	API        InferenceAPI
 	Source     EntrypointSource
+	// ClientAuth, when set, requires a client key for every name of the
+	// mapping; nil means public. Builtin mappings are always public.
+	ClientAuth *EntrypointClientAuth
 	// Default marks the entrypoint of the default recipe.
 	Default bool
+	// ReviewModel names another entrypoint model used for agent approval reviews.
+	ReviewModel string
+	// MemoryModel names another entrypoint model used for agent memory calls.
+	MemoryModel string
 }
 
 // RoutingDecisionRef identifies a decision inside its owning recipe. The

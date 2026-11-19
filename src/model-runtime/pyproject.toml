@@ -64,6 +64,7 @@ task_heads = "vllm_srun.families.task_heads.family:TaskHeadsFamily"
 vela2 = "vllm_srun.families.vela2.family:Vela2Family"
 vela3 = "vllm_srun.families.vela3.family:Vela3Family"
 vela3_d3 = "vllm_srun.families.vela3_d3.family:Vela3D3Family"
+vela3_pico = "vllm_srun.families.vela3_pico.family:Vela3PicoFamily"
 
 [project.entry-points."vllm_srun.engines"]
 native = "vllm_srun.engines.native.engine:NativeEngine"
@@ -87,6 +88,7 @@ vllm_srun = [
   "registry/kernel_choices.json",
   "testing/data/*.jinja",
   "testing/data/*.json",
+  "testing/data/*.txt",
 ]
 
 [tool.mypy]

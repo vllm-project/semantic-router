@@ -1,6 +1,6 @@
 import type { InsightsRecord } from './insightsPageTypes'
 import { projectionMetric } from './insightsRoutingMetrics'
-import styles from './InsightsRoutingEvidence.module.css'
+import { TABLE, TABLE_WRAP } from './insightsEvidenceStyles'
 
 // The recorded value, confidence and error match of each named signal.
 export default function InsightsSignalTable({
@@ -13,8 +13,8 @@ export default function InsightsSignalTable({
   const errors = record.signal_error_matches
   const hasErrors = Boolean(errors && Object.keys(errors).length)
   return (
-    <div className={styles.tableScroll}>
-      <table aria-label="Recorded signal values and confidence">
+    <div className={TABLE_WRAP}>
+      <table className={TABLE} aria-label="Recorded signal values and confidence">
         <thead>
           <tr>
             <th>Signal</th>

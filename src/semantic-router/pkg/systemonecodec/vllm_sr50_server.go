@@ -233,7 +233,7 @@ func (VLLMSR50Codec) decodeFiveRequest(value systemoneprotocol.Value, rules Read
 	case request.State.Kind() == systemoneprotocol.KindObject:
 		request.Roles = systemoneprotocol.Roles{Mode: rules.Roles}
 	}
-	return request, nil
+	return request, checkState(request, at)
 }
 
 func checkFiveQuestion(named systemoneprotocol.NamedQuestion, at string) error {
