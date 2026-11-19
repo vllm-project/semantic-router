@@ -27,13 +27,13 @@ func TestAnthropicOmittedStopSequenceReachesProtocolWarning(t *testing.T) {
 		t.Fatalf("provider answer changed: %+v", response)
 	}
 	builder := newResponseHeaderMutationBuilder()
-	builder.addProtocolDiagnostics(ctx, ctx.ProtocolDiagnostics)
+	builder.addWarnings(ctx)
 	for _, header := range builder.setHeaders {
-		if header.Header.Key != headers.VSRProtocolWarnings {
+		if header.Header.Key != headers.VSRWarnings {
 			continue
 		}
 		value := string(header.Header.RawValue)
-		if !strings.Contains(value, "interpreted as null") || !strings.HasSuffix(value, ";stop_sequence") || len(value) > lossinessHeaderSizeLimit {
+		if !strings.Contains(value, "interpreted as null") || !strings.HasSuffix(value, `;field="stop_sequence"`) || len(value) > warningsSizeLimit {
 			t.Fatalf("compatibility warning not observable or bounded: %q", value)
 		}
 		return

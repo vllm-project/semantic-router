@@ -426,28 +426,9 @@ func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string
 		return nil, ErrInvalidInput
 	}
 
-	// Phase 1: Collect response IDs by following the chain
-	responseIDs, err := s.collectChainIDs(ctx, responseID)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(responseIDs) == 0 {
-		return []*responseapi.StoredResponse{}, nil
-	}
-
-	// Phase 2: Fetch all responses using pipelining
-	chain, err := s.fetchResponsesPipelined(ctx, responseIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	// Phase 3: Reverse chain to get chronological order (oldest first)
-	for i, j := 0, len(chain)-1; i < j; i, j = i+1, j-1 {
-		chain[i], chain[j] = chain[j], chain[i]
-	}
-
-	return chain, nil
+	// A single walk both validates the links and reads the objects, so a node
+	// that expires between two passes cannot shorten the chain silently.
+	return s.collectChainResponses(ctx, responseID)
 }
 
 func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
@@ -664,84 +645,45 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 
 // Helper methods
 
-func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]string, error) {
-	var responseIDs []string
+// collectChainResponses follows the previous_response_id links backwards and
+// returns the responses in chronological order.
+func (s *RedisStore) collectChainResponses(ctx context.Context, startID string) ([]*responseapi.StoredResponse, error) {
+	var chain []*responseapi.StoredResponse
 	currentID := startID
 	visited := make(map[string]bool)
 
 	// Maximum chain length to prevent infinite loops
 	const maxChainLength = 1000
 
-	for currentID != "" && len(responseIDs) < maxChainLength {
-		// Prevent circular references
+	for currentID != "" && len(chain) < maxChainLength {
+		// Prevent circular references. A cycle is corrupt data: the conversation
+		// it describes cannot be reconstructed, so it fails instead of serving a
+		// prefix of it.
 		if visited[currentID] {
 			logging.Warnf("RedisStore: circular reference detected at %s", currentID)
-			break
+			return nil, fmt.Errorf("response chain loops back to %s", currentID)
 		}
 		visited[currentID] = true
-
-		responseIDs = append(responseIDs, currentID)
 
 		response, err := s.GetResponse(ctx, currentID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				// If this is the first response (start of chain), return error
-				if len(responseIDs) == 1 {
-					return nil, ErrNotFound
-				}
-				// Otherwise, just break - the chain ended early
+				// A gap anywhere in the chain leaves the history incomplete. The
+				// caller answers previous_response_not_found instead of continuing
+				// with the remainder as if it were the whole conversation.
 				logging.Warnf("RedisStore: response %s not found in chain", currentID)
-				break
+				return nil, ErrNotFound
 			}
 			return nil, fmt.Errorf("failed to fetch response %s: %w", currentID, err)
 		}
 
+		chain = append([]*responseapi.StoredResponse{response}, chain...)
 		currentID = response.PreviousResponseID
 	}
 
-	return responseIDs, nil
-}
-
-func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []string) ([]*responseapi.StoredResponse, error) {
-	if len(responseIDs) == 0 {
-		return []*responseapi.StoredResponse{}, nil
+	if currentID != "" {
+		// The walk stopped at the cap with history still ahead of it.
+		return nil, fmt.Errorf("response chain is longer than %d entries", maxChainLength)
 	}
-
-	pipe := s.client.Pipeline()
-
-	cmds := make([]*redis.StringCmd, len(responseIDs))
-	for i, id := range responseIDs {
-		key := s.buildKey(ResponseKeyPrefix + id)
-		cmds[i] = pipe.Get(ctx, key)
-	}
-
-	_, err := pipe.Exec(ctx)
-	if err != nil && !errors.Is(err, redis.Nil) {
-		// Some commands might fail, but we continue to process successful ones
-		logging.Debugf("RedisStore: pipeline execution completed with some errors: %v", err)
-	}
-
-	// Process results
-	var chain []*responseapi.StoredResponse
-	for i, cmd := range cmds {
-		data, err := cmd.Bytes()
-		if err != nil {
-			if errors.Is(err, redis.Nil) {
-				logging.Warnf("RedisStore: response %s not found (may have expired)", responseIDs[i])
-				continue
-			}
-			logging.Warnf("RedisStore: failed to get response %s: %v", responseIDs[i], err)
-			continue
-		}
-
-		var response responseapi.StoredResponse
-		if err := json.Unmarshal(data, &response); err != nil {
-			logging.Warnf("RedisStore: failed to parse response %s: %v", responseIDs[i], err)
-			continue
-		}
-
-		chain = append(chain, &response)
-	}
-
 	return chain, nil
 }

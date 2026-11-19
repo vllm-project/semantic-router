@@ -10,35 +10,9 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
-func TestCanonicalExportKeepsRouterReplayDisabled(t *testing.T) {
-	cfg := &RouterConfig{
-		RouterReplay: RouterReplayConfig{
-			Enabled:      false,
-			StoreBackend: "memory",
-			TTLSeconds:   600,
-		},
-	}
-
-	encoded, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
-	if err != nil {
-		t.Fatalf("marshal canonical config: %v", err)
-	}
-
-	var document map[interface{}]interface{}
-	if err := yaml.Unmarshal(encoded, &document); err != nil {
-		t.Fatalf("unmarshal canonical config: %v", err)
-	}
-	global := requireYAMLMap(t, document["global"], "global")
-	services := requireYAMLMap(t, global["services"], "global.services")
-	replay := requireYAMLMap(t, services["router_replay"], "global.services.router_replay")
-	if got, ok := replay["enabled"]; !ok || got != false {
-		t.Fatalf("router_replay.enabled = %#v, want explicit false; YAML:\n%s", got, encoded)
-	}
-}
-
 func TestCanonicalExportPreservesAuthoredModelDeclaration(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
@@ -55,8 +29,9 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-          api_key_env: PRIVATE_MODEL_API_KEY
-routing: {}
+          auth: {api_key_env: PRIVATE_MODEL_API_KEY}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("parse inline reasoning config: %v", err)
@@ -76,7 +51,7 @@ routing: {}
 
 func TestCanonicalOmittedDefaultsRetainCatalogReasoningDefault(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: qwen
@@ -84,7 +59,8 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: dashscope
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("parse catalog-backed config without defaults: %v", err)
@@ -122,7 +98,7 @@ func assertExportedAuthoredModel(t *testing.T, exported *CanonicalConfig) {
 	if reasoning.Family != "" || len(reasoning.Levels) != 3 {
 		t.Fatalf("exported inline reasoning changed shape: %#v", reasoning)
 	}
-	if ref := exported.Providers.Models[0].BackendRefs[0]; ref.APIKeyEnv != "" || ref.Auth == nil || ref.Auth.APIKeyEnv != "PRIVATE_MODEL_API_KEY" {
+	if ref := exported.Providers.Models[0].BackendRefs[0]; ref.Auth == nil || ref.Auth.APIKeyEnv != "PRIVATE_MODEL_API_KEY" {
 		t.Fatalf("exported backend ref = %#v, want auth.api_key_env", ref)
 	}
 }
@@ -192,7 +168,7 @@ func TestCatalogBackedModelMaterializesAPIFormat(t *testing.T) {
 		{
 			name:       "provider default for chat binding",
 			catalog:    "openai/gpt-5.4",
-			wantFormat: APIFormatOpenAI,
+			wantFormat: APIFormatChatCompletions,
 			wantWire:   "openai/chat-completions@1",
 		},
 		{
@@ -209,7 +185,7 @@ func TestCatalogBackedModelMaterializesAPIFormat(t *testing.T) {
 				BackendRefs: []CanonicalBackendRef{{Name: "primary", Provider: "openai"}},
 			}
 			input, err := canonicalCatalogInput(&CanonicalConfig{
-				Version:   "v0.3",
+				Version:   "v0.5",
 				Providers: CanonicalProviders{Models: []CanonicalProviderModel{model}},
 			})
 			if err != nil {
@@ -244,7 +220,7 @@ func TestCatalogProviderBindingExposesNativeReasoningModes(t *testing.T) {
 		BackendRefs: []CanonicalBackendRef{{Name: "primary", Provider: "minimax"}},
 	}
 	input, err := canonicalCatalogInput(&CanonicalConfig{
-		Version: "v0.3", Providers: CanonicalProviders{Models: []CanonicalProviderModel{model}},
+		Version: "v0.5", Providers: CanonicalProviders{Models: []CanonicalProviderModel{model}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -280,7 +256,7 @@ func TestCatalogProviderBindingExposesNativeReasoningModes(t *testing.T) {
 
 func TestParseYAMLBytesHonorsExplicitResponsesForCatalogModel(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: production
@@ -289,7 +265,8 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +282,7 @@ routing: {}
 
 func TestGPT6AstraCatalogMaterializesItsExactReasoningContract(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: astra
@@ -314,17 +291,18 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-routing:
-  decisions:
-    - name: astra_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: astra
-          use_reasoning: true
-          reasoning_effort: max
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+            reasoning_effort: max
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -356,7 +334,7 @@ routing:
 func TestGPT6AstraCatalogNarrowsChatReasoningEfforts(t *testing.T) {
 	configForEffort := func(effort string) []byte {
 		return []byte(fmt.Sprintf(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: astra
@@ -364,17 +342,18 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-routing:
-  decisions:
-    - name: astra_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: astra
-          use_reasoning: true
-          reasoning_effort: %s
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+            reasoning_effort: %s
 `, effort))
 	}
 
@@ -396,9 +375,48 @@ routing:
 	}
 }
 
+// A decision without its own effort sends providers.defaults.reasoning_effort
+// wherever the family lists it, so the Provider binding must allow it too.
+func TestGPT6AstraChatChecksTheDefaultEffortItWouldSend(t *testing.T) {
+	configForDefault := func(effort string) []byte {
+		return []byte(fmt.Sprintf(`
+version: v0.5
+providers:
+  defaults:
+    reasoning_effort: %s
+  models:
+    - name: astra
+      catalog: openai/gpt-6-astra
+      backend_refs:
+        - name: primary
+          provider: openai
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+`, effort))
+	}
+
+	if _, err := ParseYAMLBytes(configForDefault("xhigh")); err != nil {
+		t.Fatalf("default effort the Chat binding allows was refused: %v", err)
+	}
+	_, err := ParseYAMLBytes(configForDefault("max"))
+	want := `modelRefs[0] (astra) via providers.defaults.reasoning_effort: reasoning_effort "max" is not supported by provider "openai"`
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want one containing %q", err, want)
+	}
+}
+
 func TestGPT6AstraCatalogRejectsDisabledReasoning(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: astra
@@ -406,16 +424,17 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-routing:
-  decisions:
-    - name: astra_disabled
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: astra
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: astra_disabled
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: false
 `))
 	if err == nil || !strings.Contains(err.Error(), "always-on reasoning family") {
 		t.Fatalf("expected Astra disable rejection, got %v", err)
@@ -424,7 +443,7 @@ routing:
 
 func TestGrok47CatalogMaterializesItsReasoningContract(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: grok
@@ -432,17 +451,18 @@ providers:
       backend_refs:
         - name: primary
           provider: xai
-routing:
-  decisions:
-    - name: grok_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: grok
-          use_reasoning: true
-          reasoning_effort: xhigh
+recipes:
+  - name: default
+    decisions:
+      - name: grok_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: grok
+            use_reasoning: true
+            reasoning_effort: xhigh
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -459,7 +479,7 @@ routing:
 
 func TestRouterOwnedListenerRejectsBackendlessPhysicalModel(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -468,7 +488,8 @@ providers:
   models:
     - name: claude-custom
       api_format: anthropic
-routing: {}
+recipes:
+  - name: default
 `))
 	if err == nil || !strings.Contains(err.Error(), "must define backend_refs with an explicit Provider ID") {
 		t.Fatalf("expected explicit-backend error, got %v", err)
@@ -477,13 +498,14 @@ routing: {}
 
 func TestExternalGatewayMetadataDoesNotMaterializeCatalogProvider(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
     - name: claude-custom
       api_format: anthropic
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -498,7 +520,7 @@ routing: {}
 
 func TestRouterOwnedListenerAllowsBackendlessVirtualCatalogModel(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -507,7 +529,8 @@ providers:
   models:
     - name: virtual-entrypoint
       catalog: vllm-sr/mom-v1-blend
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -530,7 +553,7 @@ func TestCatalogInputRejectsUnsupportedExplicitAPIFormat(t *testing.T) {
 
 func TestCanonicalBackendExplicitEmptyAuthPrefixOverridesCatalogDefault(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: private
@@ -539,10 +562,10 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: https://private.example/v1
-          auth_header: x-api-key
-          auth_prefix: ""
+          auth: {header: x-api-key, prefix: ""}
           api_key: static-secret
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -560,19 +583,6 @@ routing: {}
 	}
 	if got := cfg.GetModelAccessKeyForProvider("private", "vllm"); got != "static-secret" {
 		t.Fatalf("runtime credential = %q, want static-secret", got)
-	}
-}
-
-func TestCatalogInputRejectsAliasNamedBuiltInOverride(t *testing.T) {
-	_, err := canonicalCatalogInput(&CanonicalConfig{
-		Providers: CanonicalProviders{Models: []CanonicalProviderModel{{
-			Name:    "production",
-			Catalog: "vllm-sr/mom-v1-lite",
-		}}},
-		Routing: CanonicalRouting{ModelCards: []RoutingModel{{Name: "production"}}},
-	})
-	if err == nil || !strings.Contains(err.Error(), "does not match a providers.models catalog identity") {
-		t.Fatalf("canonicalCatalogInput() error = %v", err)
 	}
 }
 
@@ -611,7 +621,7 @@ func TestCatalogInputKeepsImplicitCustomCardSeparateFromBuiltInIdentity(t *testi
 
 func TestCanonicalConfigRejectsMixedOwnershipForOneCardIdentity(t *testing.T) {
 	err := validateCanonicalContract(&CanonicalConfig{
-		Version: "v0.3",
+		Version: "v0.5",
 		Providers: CanonicalProviders{Models: []CanonicalProviderModel{
 			{
 				Name: "openai/gpt-5.4",
@@ -634,30 +644,29 @@ func TestCanonicalConfigRejectsMixedOwnershipForOneCardIdentity(t *testing.T) {
 
 func TestCanonicalExportPreservesOperatorModelCardReleaseMetadata(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: private-model
       backend_refs:
         - provider: vllm
           endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: private-model
       revision: private-model-v2
       released_at: 2026-08-31
       knowledge_cutoff: 2026-06
       lifecycle: experimental
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	exported := CanonicalConfigFromRouterConfig(cfg)
-	if len(exported.Routing.ModelCards) != 1 {
-		t.Fatalf("exported model cards = %#v, want one card", exported.Routing.ModelCards)
+	if len(canonicalModelCards(exported.Providers.Models)) != 1 {
+		t.Fatalf("exported model cards = %#v, want one card", exported.Providers.Models)
 	}
-	card := exported.Routing.ModelCards[0]
+	card := canonicalModelCards(exported.Providers.Models)[0]
 	for _, field := range []struct{ name, got, want string }{
 		{"revision", card.Revision, "private-model-v2"},
 		{"released_at", card.ReleasedAt, "2026-08-31"},
@@ -696,7 +705,7 @@ routing:
 
 func TestCanonicalExportDeduplicatesCatalogOverrideSharedByAliases(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: primary-gpt
@@ -704,25 +713,24 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
+      description: Restricted production profile
     - name: fallback-gpt
       catalog: openai/gpt-5.4
       backend_refs:
         - name: fallback
           provider: openai
-routing:
-  modelCards:
-    - name: openai/gpt-5.4
-      description: Restricted production profile
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	exported := CanonicalConfigFromRouterConfig(cfg)
-	if len(exported.Routing.ModelCards) != 1 {
-		t.Fatalf("exported model cards = %#v, want one shared catalog override", exported.Routing.ModelCards)
+	if len(canonicalModelCards(exported.Providers.Models)) != 1 {
+		t.Fatalf("exported model cards = %#v, want one shared catalog override", exported.Providers.Models)
 	}
-	if card := exported.Routing.ModelCards[0]; card.Name != "openai/gpt-5.4" || card.Description != "Restricted production profile" {
+	if card := canonicalModelCards(exported.Providers.Models)[0]; card.Name != "openai/gpt-5.4" || card.Description != "Restricted production profile" {
 		t.Fatalf("exported shared catalog override = %#v", card)
 	}
 
@@ -735,15 +743,12 @@ routing:
 	}
 }
 
-func TestCatalogInputAllowsDeclaredLoRAAliasCard(t *testing.T) {
+func TestCatalogInputAllowsDeclaredLoRAAdapters(t *testing.T) {
 	_, err := canonicalCatalogInput(&CanonicalConfig{
 		Providers: CanonicalProviders{Models: []CanonicalProviderModel{{
-			Name: "base-model",
+			Name:       "base-model",
+			ModelFacts: ModelFacts{LoRAs: []LoRAAdapter{{Name: "general-expert", Description: "General expert"}}},
 		}}},
-		Routing: CanonicalRouting{ModelCards: []RoutingModel{
-			{Name: "base-model", LoRAs: []LoRAAdapter{{Name: "general-expert"}}},
-			{Name: "general-expert"},
-		}},
 	})
 	if err != nil {
 		t.Fatalf("canonicalCatalogInput() error = %v", err)

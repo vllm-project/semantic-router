@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
@@ -99,13 +100,19 @@ func evaluateProtectionRelease(
 	return verdict
 }
 
-// protectionReleaseHeaderForRemoval names the release header so it never
-// reaches a backend, whether or not protection or release is enabled.
+// protectionReleaseHeaderForRemoval names a renamed release header so it
+// never reaches a backend, whether or not protection or release is enabled.
+// The default name is already one of the headers every provider-bound
+// request drops (headers.KeptFromProviders).
 func (r *OpenAIRouter) protectionReleaseHeaderForRemoval() []string {
 	if r == nil || r.Config == nil {
 		return nil
 	}
-	return []string{r.Config.RouterLearning.Protection.Release.EffectiveHeader()}
+	header := r.Config.RouterLearning.Protection.Release.EffectiveHeader()
+	if strings.EqualFold(header, headers.VSRProtectionRelease) {
+		return nil
+	}
+	return []string{header}
 }
 
 func recordProtectionReleaseWarning(ctx *RequestContext, verdict protectionReleaseVerdict) {

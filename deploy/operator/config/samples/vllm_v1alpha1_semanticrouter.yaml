@@ -127,11 +127,6 @@ spec:
 
   # Semantic Router configuration
   config:
-    embedding_models:
-      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
-      use_cpu: true
-
-    # Semantic cache for response caching
     response_cache:
       enabled: true
       backend_type: "memory"
@@ -139,24 +134,7 @@ spec:
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: "fifo"
-      embedding_model: "mmbert"
 
-    # Tools auto-selection
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: "0.2"
-      tools_db_path: "config/tools_db.json"
-      fallback_to_empty: true
-
-    # Prompt guard / jailbreak detection, answered by the decision model
-    # (vela3-fast by default).
-    prompt_guard:
-      enabled: true
-      threshold: "0.88"
-      use_cpu: true
-
-    # Domain and PII classifiers follow the decision model too.
 
     # Reasoning mode configuration per model family
     # Default reasoning effort level
@@ -166,8 +144,6 @@ spec:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           enabled: true
           detailed_goroutine_tracking: true
@@ -266,4 +242,4 @@ spec:
         paths:
           - path: /
             pathType: Prefix
-            servicePort: 8080
+            servicePort: 8801  # the Router's inference listener (8080 is the management API)

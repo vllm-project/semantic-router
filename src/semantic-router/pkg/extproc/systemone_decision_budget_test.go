@@ -40,64 +40,67 @@ func (f nativeRoutingDecider) Decide(ctx context.Context, deployment string, req
 }
 
 func TestSystemOneBudgetIncludesSignalsAndVariesByDecision(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - {name: kai, api_format: systemone, deployment: local-kai}
     - name: vega
       api_format: systemone
       provider_model_id: native-vega
-      backend_refs: [{provider: systemone-compatible, base_url: http://unused.invalid/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: 'http://unused.invalid/v1'}]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 global:
   model_catalog:
     deployments:
       local-kai: {provider: model_runtime, artifact: vllm-sr/Decision-2.0-Kai-0.6B, device: cpu}
-routing: {}
 recipes:
+  - name: default
   - name: native
-    routing:
-      fallback: {enabled: false}
-      signals:
-        decision:
-          - name: task_kind
-            deployment: local-kai
-            timeout_ms: 2000
-            question:
-              type: choice
-              instructions: Does the original task need escalation?
-              choices: [{key: simple, description: Routine task}, {key: hard, description: Complex task}]
-      decisions:
-        - name: simple
-          rules: {type: decision, name: task_kind, label: simple}
-          modelRefs: [{model: kai}]
-          algorithm:
-            type: cascade
-            budget: {deadline: 150ms, max_calls: 2}
+    fallback: {enabled: false}
+    signals:
+      systemone:
+        - name: task_kind
+          deployment: local-kai
+          timeout_ms: 2000
+          question:
+            type: choice
+            instructions: Does the original task need escalation?
+            choices: [{key: simple, description: Routine task}, {key: hard, description: Complex task}]
+    decisions:
+      - name: simple
+        rules: {type: systemone, name: task_kind, label: simple}
+        modelRefs: [{model: kai}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 150ms, max_calls: 2}
+          escalate:
             quality: &quality
               type: uncalibrated
-              acceptance:
-                rules: [{question_type: noul, field: top_probability, predicate: {gte: 0}}]
-            stages: [{name: answer, kind: native, model: kai}]
-        - name: hard
-          rules: {type: decision, name: task_kind, label: hard}
-          modelRefs: [{model: kai}, {model: vega}]
-          algorithm:
-            type: cascade
-            budget: {deadline: 200ms, max_calls: 3}
+              accept:
+                native: [{question_type: noul, field: top_probability, gte: 0}]
+            stages: [{name: answer, model: kai}]
+      - name: hard
+        rules: {type: systemone, name: task_kind, label: hard}
+        modelRefs: [{model: kai}, {model: vega}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 200ms, max_calls: 3}
+          escalate:
             quality: *quality
             stages:
               - name: fast
-                kind: native
                 model: kai
                 accept:
-                  rules: [{question_type: noul, field: top_probability, predicate: {gte: 0.9}}]
-              - {name: strong, kind: native, model: vega}
+                  native: [{question_type: noul, field: top_probability, gte: 0.9}]
+              - {name: strong, model: vega}
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +109,7 @@ recipes:
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +162,7 @@ recipes:
 					return modelservice.Response{}, context.Canceled
 				}
 				return modelservice.Response{Answers: map[string]modelservice.Answer{
-					"task_kind": {Type: "choice", Choice: tc.decision, Probabilities: map[string]float64{"simple": 0.5, "hard": 0.5}},
+					"systemone:task_kind": {Type: "choice", Choice: tc.decision, Probabilities: map[string]float64{"simple": 0.5, "hard": 0.5}},
 				}}, nil
 			}))
 			var calls []string

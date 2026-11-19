@@ -181,8 +181,6 @@ func resolveMemoryRewriteServiceConfig(routerCfg *config.RouterConfig) *memoryRe
 		if generation.Temperature != nil {
 			resolved.Temperature = *generation.Temperature
 		}
-	} else if external := deployment.LegacyExternal(); external != nil {
-		resolved.MaxTokens, resolved.Temperature = external.MaxTokens, external.Temperature
 	}
 	return resolved
 }

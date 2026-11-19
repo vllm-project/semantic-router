@@ -1,8 +1,6 @@
 package extproc
 
 import (
-	"strings"
-
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -10,19 +8,9 @@ import (
 )
 
 // usesExternalGatewayDispatch reports whether a concrete model is declared as
-// protocol metadata only. In this mode the external gateway owns the route,
-// backend, and credentials; Semantic Router owns only protocol conversion and
-// Responses object state.
+// protocol metadata only; see config.RouterConfig.UsesExternalGatewayDispatch.
 func (r *OpenAIRouter) usesExternalGatewayDispatch(model string) bool {
-	if r == nil || r.Config == nil || r.Config.ModelSelection.Enabled || len(r.Config.Listeners) != 0 {
-		return false
-	}
-	model = strings.TrimSpace(model)
-	if model == "" || len(r.Config.GetEndpointsForModel(model)) != 0 {
-		return false
-	}
-	_, configured := r.Config.ModelConfig[model]
-	return configured
+	return r != nil && r.Config.UsesExternalGatewayDispatch(model)
 }
 
 func (r *OpenAIRouter) handleExternalGatewayModelRouting(

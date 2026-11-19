@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  canAccessMLSetup,
   canAccessDashboardPath,
   canAccessReplayFlowDetails,
   canDeployConfig,
   canManageMCP,
+  canUseTools,
   canManageUsers,
   canRunEvaluation,
   canSubmitFeedback,
@@ -33,15 +33,15 @@ describe('config write access', () => {
     const emptyAdmin = { role: 'admin', permissions: [] }
 
     expect(canAccessReplayFlowDetails(explicitReader)).toBe(false)
-    expect(canAccessMLSetup(explicitReader)).toBe(false)
+    expect(canManageMCP(explicitReader)).toBe(false)
     expect(canAccessReplayFlowDetails(emptyAdmin)).toBe(false)
-    expect(canAccessMLSetup(emptyAdmin)).toBe(false)
+    expect(canManageMCP(emptyAdmin)).toBe(false)
   })
 
   it('uses legacy role fallback only when permissions are absent', () => {
     expect(canAccessReplayFlowDetails({ role: 'write' })).toBe(true)
     expect(canAccessReplayFlowDetails({ role: 'read' })).toBe(false)
-    expect(canAccessMLSetup({ role: 'admin' })).toBe(true)
+    expect(canManageMCP({ role: 'admin' })).toBe(true)
     expect(canAccessReplayFlowDetails({ role: 'read', permissions: ['replay.read'] })).toBe(false)
     expect(
       canAccessReplayFlowDetails({
@@ -49,7 +49,7 @@ describe('config write access', () => {
         permissions: ['config.write', 'replay.read'],
       }),
     ).toBe(true)
-    expect(canAccessMLSetup({ role: 'read', permissions: ['mlpipeline.manage'] })).toBe(true)
+    expect(canManageMCP({ role: 'read', permissions: ['mcp.manage'] })).toBe(true)
   })
 
   it('maps dashboard routes to their backend read permissions', () => {
@@ -105,5 +105,12 @@ describe('config write access', () => {
     expect(canManageUsers({ role: 'admin', permissions: [] })).toBe(false)
     expect(canViewUsers({ role: 'admin' })).toBe(true)
     expect(canManageUsers({ role: 'admin' })).toBe(true)
+  })
+
+  it('lets tools.use call tools and falls back to writers for role-only sessions', () => {
+    expect(canUseTools({ role: 'read', permissions: ['tools.use'] })).toBe(true)
+    expect(canUseTools({ role: 'admin', permissions: ['mcp.manage'] })).toBe(false)
+    expect(canUseTools({ role: 'write' })).toBe(true)
+    expect(canUseTools({ role: 'read' })).toBe(false)
   })
 })

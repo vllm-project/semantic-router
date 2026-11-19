@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/mark3labs/mcp-go/server"
 
@@ -22,7 +21,7 @@ func newMCPShutdownDashboard(t *testing.T) *Server {
 	t.Setenv("VLLM_SR_RECIPE_STORE_DIR", filepath.Join(tempDir, "recipe-store"))
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
 	configPath := filepath.Join(tempDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	upstream := httptest.NewServer(http.NotFoundHandler())
@@ -75,7 +74,7 @@ func connectHTTPMCPForShutdown(t *testing.T, dashboard *Server) (string, <-chan 
 	if err := dashboard.mcpManager.AddServer(serverConfig); err != nil {
 		t.Fatalf("add HTTP MCP server: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), preconditionBudget)
 	defer cancel()
 	if err := dashboard.mcpManager.Connect(ctx, serverConfig.ID); err != nil {
 		t.Fatalf("connect HTTP MCP server: %v", err)

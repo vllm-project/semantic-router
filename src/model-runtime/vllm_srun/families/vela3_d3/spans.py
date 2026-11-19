@@ -4,8 +4,11 @@ A span question is read here and planned as one ``SpanItem``: the package's
 policy routes it (``span_policy.py``), the renderer lays its target out in
 windows of d3's own prompt (``span_render.py``), and the reader runs and
 answers it (``span_read.py``). The questions follow the runtime's contract:
-``over`` names the target part, ``threshold`` overrides the package's,
-``preset`` asks a trained label set, and answers are ``spans`` with each
+``over`` names the target part (by default the answer part, else the user
+part, else the only one; a state of several parts with neither needs
+``over``), ``threshold`` overrides the package's (one above it keeps the
+package's spans that reach it, whole), ``preset`` asks a trained label set,
+and answers are ``spans`` with each
 span's mean word probability. The windows read the whole target, so
 ``overflow`` is ``window`` and a question that sets ``require_full_input``
 reads its input completely.
@@ -13,13 +16,20 @@ reads its input completely.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from ...errors import SCAN_BUDGET_EXCEEDED, QuestionError
-from ...systemone import listed_options, named_options, require_full_input
-from ..vela3_shared import expand_preset, invalid, text, threshold_of
+from ...systemone import (
+    REQUEST_ROLES,
+    STATE_KEY_ROLES,
+    listed_options,
+    named_options,
+    require_full_input,
+)
+from ..vela3_shared import SPAN_HEADS, expand_preset, invalid, text, threshold_of
 from .package import SPAN_TARGET_TOKENS
 from .span_policy import Policy
 from .span_read import SpanItem, SpanReader
@@ -51,6 +61,9 @@ def is_span(question: Any) -> bool:
 
 
 def parts_of(state: Any) -> list[tuple[str, str]]:
+    """A span state's parts by name: text is the user part, an object of text parts its keys in order, and,
+    with ``roles: null`` (no part has a role), an object the user's content as Decision 3 writes it.
+    """
     if isinstance(state, str):
         return [("user", state)]
     if (
@@ -58,8 +71,34 @@ def parts_of(state: Any) -> list[tuple[str, str]]:
         and state
         and all(isinstance(v, str) for v in state.values())
     ):
+        if REQUEST_ROLES.get() is None:
+            return [("user", json.dumps(state, ensure_ascii=False))]
         return list(state.items())
     raise invalid("span questions need a text state or an object of text parts")
+
+
+def default_target(names: list[str]) -> str:
+    """The part a span question reads without ``over``, as the contract says: the answer part, else the user
+    part (the first part ``roles`` gives that role, or without roles the first key whose implicit role it is),
+    else the only part. A state of several parts with neither names no part: the question is invalid rather
+    than answered from one of them, which would leave the others unread."""
+    roles = REQUEST_ROLES.get()
+
+    def role_of(name: str) -> Any:
+        if isinstance(roles, dict):
+            return roles.get(name)
+        return STATE_KEY_ROLES.get(name.lower(), "context")
+
+    for role in ("answer", "user"):
+        found = [name for name in names if role_of(name) == role]
+        if found:
+            return found[0]
+    if len(names) == 1:
+        return names[0]
+    raise invalid(
+        "a span question reads one part of the state, and this state has no answer or user part:"
+        f" name the part with over (one of {names})"
+    )
 
 
 def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
@@ -74,10 +113,11 @@ def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
     if listed is not None:
         criteria = listed_options(listed, "labels")
     elif isinstance(criteria, list):
-        names = [str(name) for name in criteria]
-        if len(set(names)) != len(names):
+        if not all(isinstance(name, str) for name in criteria):
+            raise invalid("criteria must list span labels as strings")
+        if len(set(criteria)) != len(criteria):
             raise invalid("span labels must be distinct")
-        criteria = dict.fromkeys(names)
+        criteria = dict.fromkeys(criteria)
     options = named_options(criteria, minimum=1)
     return [
         (name, "" if value is None else text(value)) for name, value in options.items()
@@ -127,11 +167,11 @@ class Spans:
                 f"span questions read their whole target in windows: overflow must be {WINDOWED!r}"
             )
         require_full_input(question)
-        if question.get("head") not in (None, "router"):
+        if question.get("head") not in (None, *SPAN_HEADS):
             raise invalid("this model has no broad span head")
         parts = parts_of(state)
         roles = [role for role, _ in parts]
-        target = question.get("over") or ("answer" if "answer" in roles else roles[-1])
+        target = question.get("over") or default_target(roles)
         if not isinstance(target, str) or target not in roles:
             raise invalid(f"over names no part of the state: {target!r}")
         labels = labels_of(question)
@@ -151,13 +191,10 @@ class Spans:
         refused = length_error(max(len(window.ids) for window in windows))
         if refused is not None:
             raise refused
-        threshold = (
-            override
-            if override is not None
-            else self.policy.threshold(
-                routed.route, routed.label_set, routed.labels, count
-            )
+        own = self.policy.threshold(
+            routed.route, routed.label_set, routed.labels, count
         )
+        threshold = own if override is None else override
         return SpanItem(
             question_id=question_id,
             task_type="span",
@@ -169,6 +206,7 @@ class Spans:
             names=tuple(names),
             label_set=routed.label_set,
             threshold=threshold,
+            decode_threshold=own if threshold > own else None,
             evidence=routed.evidence,
             text=dict(parts)[target],
             windows=tuple(windows),

@@ -238,8 +238,19 @@ func (s *ClassificationAPIServer) handleDeleteFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if err := fileStore.Delete(id); err != nil {
+	if _, err := fileStore.Get(id); err != nil {
 		s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", err.Error())
+		return
+	}
+	var err error
+	if pipeline := s.currentVectorStorePipeline(); pipeline != nil {
+		err = pipeline.DeleteFile(r.Context(), id)
+	} else {
+		err = fileStore.Delete(id)
+	}
+	if err != nil {
+		logging.Errorf("Deleting file %s failed: %v", id, err)
+		s.writeErrorResponse(w, http.StatusInternalServerError, "DELETE_FAILED", "failed to delete file")
 		return
 	}
 

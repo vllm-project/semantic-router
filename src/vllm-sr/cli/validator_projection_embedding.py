@@ -106,7 +106,7 @@ def _register_projection_names(
         if name and name in declared_names[kind]:
             errors.append(
                 ValidationError(
-                    field=f"recipes.{profile_name}.routing.projections.{kind}",
+                    field=f"recipes.{profile_name}.projections.{kind}",
                     message=(
                         f'duplicate projection name "{name}" in recipe "{profile_name}"'
                     ),
@@ -121,7 +121,7 @@ def _register_projection_names(
             if output_name and output_name in output_names:
                 errors.append(
                     ValidationError(
-                        field=(f"recipes.{profile_name}.routing.projections.mappings"),
+                        field=(f"recipes.{profile_name}.projections.mappings"),
                         message=(
                             f'duplicate projection output "{output_name}" in recipe '
                             f'"{profile_name}"'

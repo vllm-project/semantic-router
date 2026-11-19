@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 
 // testRouterConfigYAML is a minimal canonical config with a single backed model.
 const testRouterConfigYAML = `
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -28,14 +29,13 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           api_key: test-secret
-routing:
-  modelCards:
-    - name: known-model
-  decisions:
-    - name: default_route
-      priority: 1
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: known-model}]
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: known-model}]
 `
 
 func newModelResolutionTestRouter(t *testing.T) (*OpenAIRouter, *config.RouterConfig) {
@@ -78,7 +78,7 @@ func selectedModelHeader(resp *ext_proc.ProcessingResponse) (string, bool) {
 		return "", false
 	}
 	for _, h := range body.GetResponse().GetHeaderMutation().GetSetHeaders() {
-		if h.GetHeader().GetKey() == headers.SelectedModel {
+		if h.GetHeader().GetKey() == headers.VSRRouteModel {
 			return string(h.GetHeader().GetRawValue()), true
 		}
 	}
@@ -86,9 +86,9 @@ func selectedModelHeader(resp *ext_proc.ProcessingResponse) (string, bool) {
 }
 
 // B1: a client-specified model that is not in the router config must be
-// rejected with a clear 400, not silently forwarded (which produces a
+// rejected with a clear 404, not silently forwarded (which produces a
 // misleading upstream "401 No api key" because no credential is resolvable).
-func TestSpecifiedUnknownModelReturns400(t *testing.T) {
+func TestSpecifiedUnknownModelReturns404(t *testing.T) {
 	router, _ := newModelResolutionTestRouter(t)
 	ctx := newModelResolutionTestContext(t)
 	req := modelResolutionRequest("no-such-model")
@@ -97,7 +97,7 @@ func TestSpecifiedUnknownModelReturns400(t *testing.T) {
 	resp, err := router.handleSpecifiedModelRouting(req, "no-such-model", "", ctx)
 	require.NoError(t, err)
 	require.NotNil(t, resp.GetImmediateResponse(), "unknown model should produce an immediate error response, not a passthrough")
-	assert.Equal(t, 400, int(resp.GetImmediateResponse().GetStatus().GetCode()))
+	assert.Equal(t, 404, int(resp.GetImmediateResponse().GetStatus().GetCode()))
 }
 
 // B1: a known, configured model must still route normally.
@@ -111,22 +111,79 @@ func TestSpecifiedKnownModelRoutes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, resp.GetImmediateResponse(), "known model should not be rejected")
 	model, ok := selectedModelHeader(resp)
-	require.True(t, ok, "known model should set x-selected-model header")
+	require.True(t, ok, "known model should set the route key")
 	assert.Equal(t, "known-model", model)
+}
+
+// A LoRA name two models declare names no single backend, so a direct request
+// for it is refused instead of reaching whichever model sorts first, also when
+// a backendless model carries that name, with or without an external gateway.
+// A name one model declares still routes. A decision selects a shared name
+// through its model and lora_name (TestSameNamedLoRAUsesTheSelectedBaseProvider).
+func TestSpecifiedLoRANameDeclaredTwiceReturns404(t *testing.T) {
+	const models = `
+providers:
+  defaults:
+    model: zeta
+  models:
+    - name: alpha
+      loras: [{name: shared}, {name: only-alpha}]
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.1:8000", api_key: test-secret}]
+    - name: zeta
+      loras: [{name: shared}]
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.2:8000", api_key: test-secret}]
+recipes:
+  - name: default
+`
+	const metadataOnly = "    - name: shared\n      context_window_size: 32768\n"
+	withMetadata := strings.Replace(models, "recipes:", metadataOnly+"recipes:", 1)
+	for _, test := range []struct{ name, document string }{
+		{"LoRA name only", "version: v0.5\n" + models},
+		{"backendless model of that name", "version: v0.5\n" + withMetadata},
+		{
+			"backendless model behind an external gateway",
+			"version: v0.5\nlisteners: []\nglobal: {router: {model_selection: {enabled: false}}}\n" + withMetadata,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg, err := config.ParseYAMLBytes([]byte(test.document))
+			require.NoError(t, err)
+			router := &OpenAIRouter{Config: cfg, CredentialResolver: buildDefaultCredentialResolver(cfg, false)}
+			route := func(model string) *ext_proc.ProcessingResponse {
+				ctx := newModelResolutionTestContext(t)
+				req := modelResolutionRequest(model)
+				ctx.SemanticRequest = req
+				resp, routeErr := router.handleModelRouting(req, model, "", entropy.ReasoningDecision{}, "", ctx)
+				require.NoError(t, routeErr)
+				return resp
+			}
+
+			refused := route("shared").GetImmediateResponse()
+			require.NotNil(t, refused, "a LoRA name two models declare must not be forwarded")
+			assert.Equal(t, 404, int(refused.GetStatus().GetCode()))
+			assert.Contains(t, string(refused.GetBody()), "The model `shared` does not exist or you do not have access to it.")
+			assert.Nil(t, route("only-alpha").GetImmediateResponse(), "a LoRA name one model declares must still route")
+		})
+	}
 }
 
 // B2: an Entrypoint that yields no selection fails closed. A global default
 // Model cannot bypass the Entrypoint's Recipe and assignment contract.
 func TestEntrypointNoSelectionReturns400(t *testing.T) {
-	router, _ := newModelResolutionTestRouter(t)
+	router, cfg := newModelResolutionTestRouter(t)
 	ctx := newModelResolutionTestContext(t)
-	req := modelResolutionRequest("router/default")
+	recipe, ok := cfg.RecipeForRoutingModel(config.DefaultEntrypointModel)
+	require.True(t, ok)
+	ctx.Routing.SelectRecipe(recipe)
+	req := modelResolutionRequest(config.DefaultEntrypointModel)
 	ctx.SemanticRequest = req
 
-	resp, err := router.handleModelRouting(req, "router/default", "", entropy.ReasoningDecision{}, "", ctx)
+	resp, err := router.handleModelRouting(req, config.DefaultEntrypointModel, "", entropy.ReasoningDecision{}, "", ctx)
 	require.NoError(t, err)
 	require.NotNil(t, resp.GetImmediateResponse(), "no selection should produce an immediate error response")
 	assert.Equal(t, 400, int(resp.GetImmediateResponse().GetStatus().GetCode()))
+	require.NotNil(t, ctx.ImmediateProtocolError)
+	assert.Equal(t, routingFailureNoRoute.code, ctx.ImmediateProtocolError.Code)
 }
 
 // The Entrypoint branch that dispatches to the looper (algorithm.type
@@ -142,11 +199,12 @@ func TestLooperEntrypointRoutingSetsSelectedDecisionName(t *testing.T) {
 	router, cfg := newModelResolutionTestRouter(t)
 	cfg.Looper.Endpoint = "http://127.0.0.1:0/v1/chat/completions" // unreachable; only ctx state before dispatch is under test
 	ctx := newModelResolutionTestContext(t)
+	threshold := 0.5
 	decision := &config.Decision{
 		Name: "looper_test_decision",
 		Algorithm: &config.AlgorithmConfig{
-			Type:       "confidence",
-			Confidence: &config.ConfidenceAlgorithmConfig{ConfidenceMethod: "hybrid", Threshold: 0.5},
+			Type:     "escalate",
+			Escalate: &config.EscalateAlgorithmConfig{Accept: &config.EscalateAccept{Confidence: &config.EscalateConfidence{Method: "hybrid", GTE: &threshold}}},
 		},
 		ModelRefs: []config.ModelRef{
 			{Model: "known-model"},

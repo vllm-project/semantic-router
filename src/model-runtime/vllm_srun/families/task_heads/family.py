@@ -64,7 +64,7 @@ from ...plugins.base import (
 from ...registry import builtin
 from ...registry.artifacts import named_files, safetensors_elements
 from ...registry.resolve import fetch
-from ...text.windows import Envelope, InputTooLongError
+from ...text.windows import Envelope, InputTooLongError, window_width
 from . import package as pkg
 
 OVERFLOW = ("reject", "truncate", "window")
@@ -272,6 +272,8 @@ class TaskHeadsModel(LoadedModel[Item, Any]):
                 raise ValueError("window tokens exceed max_tokens")
             if overlap < 0:
                 raise ValueError("window overlap must not be negative")
+            if isinstance(head, SequenceHead | TokenHead):
+                window_width(head.envelope, size, overlap)
         entries: list[tuple[int, Any]] = []
         items: list[Item] = []
         input_tokens = 0

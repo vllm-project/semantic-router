@@ -108,10 +108,24 @@
       {
         "data": {
           "content_index": 0,
+          "item_id": "reasoning_interleaved",
+          "output_index": 1,
+          "part": {
+            "text": "",
+            "type": "reasoning_text"
+          },
+          "sequence_number": 6,
+          "type": "response.content_part.added"
+        },
+        "event": "response.content_part.added"
+      },
+      {
+        "data": {
+          "content_index": 0,
           "delta": "thought",
           "item_id": "reasoning_interleaved",
           "output_index": 1,
-          "sequence_number": 6,
+          "sequence_number": 7,
           "type": "response.reasoning_text.delta"
         },
         "event": "response.reasoning_text.delta"
@@ -121,11 +135,25 @@
           "content_index": 0,
           "item_id": "reasoning_interleaved",
           "output_index": 1,
-          "sequence_number": 7,
+          "sequence_number": 8,
           "text": "thought",
           "type": "response.reasoning_text.done"
         },
         "event": "response.reasoning_text.done"
+      },
+      {
+        "data": {
+          "content_index": 0,
+          "item_id": "reasoning_interleaved",
+          "output_index": 1,
+          "part": {
+            "text": "thought",
+            "type": "reasoning_text"
+          },
+          "sequence_number": 9,
+          "type": "response.content_part.done"
+        },
+        "event": "response.content_part.done"
       },
       {
         "data": {
@@ -142,7 +170,7 @@
             "type": "reasoning"
           },
           "output_index": 1,
-          "sequence_number": 8,
+          "sequence_number": 10,
           "type": "response.output_item.done"
         },
         "event": "response.output_item.done"
@@ -153,7 +181,7 @@
           "delta": "after",
           "item_id": "msg_interleaved",
           "output_index": 0,
-          "sequence_number": 9,
+          "sequence_number": 11,
           "type": "response.output_text.delta"
         },
         "event": "response.output_text.delta"
@@ -163,7 +191,7 @@
           "content_index": 0,
           "item_id": "msg_interleaved",
           "output_index": 0,
-          "sequence_number": 10,
+          "sequence_number": 12,
           "text": "before after",
           "type": "response.output_text.done"
         },
@@ -179,7 +207,7 @@
             "text": "before after",
             "type": "output_text"
           },
-          "sequence_number": 11,
+          "sequence_number": 13,
           "type": "response.content_part.done"
         },
         "event": "response.content_part.done"
@@ -200,7 +228,7 @@
             "type": "message"
           },
           "output_index": 0,
-          "sequence_number": 12,
+          "sequence_number": 14,
           "type": "response.output_item.done"
         },
         "event": "response.output_item.done"
@@ -252,7 +280,7 @@
             "usage": {
               "input_tokens": 2,
               "input_tokens_details": {
-                "cached_tokens": null
+                "cached_tokens": 0
               },
               "output_tokens": 3,
               "output_tokens_details": {
@@ -261,11 +289,17 @@
               "total_tokens": 5
             }
           },
-          "sequence_number": 13,
+          "sequence_number": 15,
           "type": "response.completed"
         },
         "event": "response.completed"
       }
     ]
-  }
+  },
+  "diagnostics": [
+    {
+      "field": "output.status",
+      "action": "dropped"
+    }
+  ]
 }

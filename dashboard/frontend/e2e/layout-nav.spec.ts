@@ -1,5 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { dashboardSettingsResponse, mockAuthenticatedSession, unavailableCapability } from './support/auth'
+import {
+  dashboardSettingsResponse,
+  mockAuthenticatedSession,
+  unavailableCapability,
+} from './support/auth'
 
 const setupState = {
   setupMode: false,
@@ -37,18 +41,10 @@ const minimalPermissionUser = {
 }
 
 const configResponse = {
-  version: 'v0.3',
+  version: 'v0.5',
   listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
   providers: {
-    defaults: {
-      default_model: 'test-model',
-      reasoning_families: {
-        qwen3: {
-          type: 'reasoning_effort',
-          parameter: 'reasoning_effort',
-        },
-      },
-    },
+    defaults: { model: 'test-model' },
     models: [
       {
         name: 'test-model',
@@ -63,71 +59,64 @@ const configResponse = {
       },
     ],
   },
-  routing: {
-    modelCards: [{ name: 'test-model' }],
-    signals: {
-      domains: [
-        { name: 'business', description: 'Business' },
-        { name: 'economics', description: 'Economics' },
-      ],
-      embeddings: [
+  recipes: [
+    {
+      name: 'default',
+      signals: {
+        domains: [
+          { name: 'business', description: 'Business' },
+          { name: 'economics', description: 'Economics' },
+        ],
+        keywords: [
+          {
+            name: 'business_analysis',
+            operator: 'OR',
+            keywords: ['revenue', 'margin'],
+            case_sensitive: false,
+          },
+        ],
+        context: [{ name: 'long_context', min_tokens: '4K' }],
+        complexity: [{ name: 'general_reasoning' }],
+      },
+      decisions: [
         {
-          name: 'business_analysis',
-          threshold: 0.72,
-          candidates: ['business'],
-          aggregation_method: 'max',
+          name: 'medium_business',
+          priority: 215,
+          rules: {
+            operator: 'AND',
+            conditions: [
+              {
+                operator: 'OR',
+                conditions: [
+                  { type: 'domain', name: 'business' },
+                  { type: 'domain', name: 'economics' },
+                ],
+              },
+              {
+                operator: 'OR',
+                conditions: [
+                  { type: 'keyword', name: 'business_analysis' },
+                  { type: 'complexity', name: 'general_reasoning:easy' },
+                  { type: 'complexity', name: 'general_reasoning:medium' },
+                  { type: 'context', name: 'long_context' },
+                ],
+              },
+            ],
+          },
+          modelRefs: [{ model: 'test-model', use_reasoning: true, reasoning_effort: 'medium' }],
         },
-      ],
-      preferences: [
         {
-          name: 'structured_delivery',
-          threshold: 0.55,
-          examples: ['Use a structured answer'],
+          name: 'business-route',
+          priority: 1,
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'domain', name: 'business' }],
+          },
+          modelRefs: [{ model: 'test-model' }],
         },
-      ],
-      complexity: [
-        { name: 'general_reasoning:easy', threshold: 0.25 },
-        { name: 'general_reasoning:medium', threshold: 0.5 },
       ],
     },
-    decisions: [
-      {
-        name: 'medium_business',
-        priority: 215,
-        rules: {
-          operator: 'AND',
-          conditions: [
-            {
-              operator: 'OR',
-              conditions: [
-                { type: 'domain', name: 'business' },
-                { type: 'domain', name: 'economics' },
-              ],
-            },
-            {
-              operator: 'OR',
-              conditions: [
-                { type: 'embedding', name: 'business_analysis' },
-                { type: 'complexity', name: 'general_reasoning:easy' },
-                { type: 'complexity', name: 'general_reasoning:medium' },
-                { type: 'preference', name: 'structured_delivery' },
-              ],
-            },
-          ],
-        },
-        modelRefs: [{ model: 'test-model', use_reasoning: true, reasoning_effort: 'medium' }],
-      },
-      {
-        name: 'business-route',
-        priority: 1,
-        rules: {
-          operator: 'AND',
-          conditions: [{ type: 'domain', name: 'business' }],
-        },
-        modelRefs: [{ model: 'test-model' }],
-      },
-    ],
-  },
+  ],
   global: {
     router: { strategy: 'priority' },
     services: {
@@ -146,6 +135,7 @@ services:
 const statusResponse = {
   overall: 'healthy',
   deployment_type: 'local',
+  version: 'v0.5.0-dev.e1ba40498f',
   services: [
     {
       name: 'router',
@@ -162,6 +152,16 @@ const statusResponse = {
   },
 }
 
+const replayRecord = {
+  turn_index: 0,
+  decision_tier: 0,
+  decision_priority: 1,
+  recipe: 'default',
+  lifecycle_state: 'completed',
+  response_status: 200,
+  duration_ms: 820,
+}
+
 const replayRecordsResponse = {
   object: 'router_replay.list',
   count: 2,
@@ -171,6 +171,7 @@ const replayRecordsResponse = {
   has_more: false,
   data: [
     {
+      ...replayRecord,
       id: 'replay-1',
       timestamp: '2026-03-17T10:00:00Z',
       request_id: 'req-1',
@@ -183,7 +184,6 @@ const replayRecordsResponse = {
         domain: ['business'],
         keyword: ['finance'],
       },
-      response_status: 200,
       from_cache: false,
       streaming: false,
       prompt_tokens: 1000,
@@ -196,6 +196,7 @@ const replayRecordsResponse = {
       baseline_model: 'premium-model',
     },
     {
+      ...replayRecord,
       id: 'replay-2',
       timestamp: '2026-03-17T10:05:00Z',
       request_id: 'req-2',
@@ -208,7 +209,6 @@ const replayRecordsResponse = {
         domain: ['business'],
         preference: ['low-latency'],
       },
-      response_status: 200,
       from_cache: true,
       streaming: true,
     },
@@ -218,6 +218,7 @@ const replayRecordsResponse = {
 const replayAggregateResponse = {
   object: 'router_replay.aggregate',
   record_count: 2,
+  lifecycle: { completed: 2, failed: 0, aborted: 0, in_progress: 0, unknown: 0 },
   summary: {
     total_saved: 0.006,
     baseline_spend: 0.008,
@@ -257,6 +258,7 @@ const replayAggregateResponse = {
       },
     ],
   },
+  available_recipes: ['default'],
   available_decisions: ['business-route'],
   available_models: ['test-model'],
 }
@@ -392,42 +394,26 @@ async function expectInsideViewport(page: Page, locator: Locator) {
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport!.width)
 }
 
-async function expectBalancedDesktopFrame(page: Page, locator: Locator) {
-  await expect(locator).toBeVisible()
-  const bounds = await locator.boundingBox()
-  const viewport = page.viewportSize()
-  const documentFrame = await page.evaluate(() => {
-    const rect = document.documentElement.getBoundingClientRect()
-    return { left: rect.left, right: rect.right, width: rect.width }
-  })
-  expect(bounds).not.toBeNull()
-  expect(viewport).not.toBeNull()
-
-  const leftGutter = bounds!.x - documentFrame.left
-  const rightGutter = documentFrame.right - (bounds!.x + bounds!.width)
-  expect(Math.abs(leftGutter - rightGutter)).toBeLessThanOrEqual(2)
-  expect(leftGutter).toBeGreaterThanOrEqual(24)
-  expect(leftGutter).toBeLessThanOrEqual(72)
-  expect(bounds!.width / documentFrame.width).toBeGreaterThanOrEqual(0.9)
+async function expectNoHorizontalScroll(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
-
-  return bounds!
 }
 
-test.describe('Layout top navigation', () => {
-  test('keeps the three System One pages in separate desktop columns', async ({ page }) => {
+const sidebar = (page: Page) => page.getByRole('navigation', { name: 'Primary' })
+const settingsNav = (page: Page) => page.getByRole('navigation', { name: 'Settings', exact: true })
+// The sidebar marks the item that owns the current page with an accent bar.
+const activeBar = (link: Locator) => link.locator('span.bg-primary')
+
+test.describe('Shell navigation', () => {
+  test('lists the three decision model views as tabs on one desktop row', async ({ page }) => {
     await mockCommon(page)
-    await page.goto('/dashboard')
     for (const width of [1024, 1440]) {
       await page.setViewportSize({ width, height: 900 })
-      await page.getByRole('button', { name: 'Build', exact: true }).click()
-      const menu = page.getByRole('navigation', { name: 'Build' })
-      await menu.getByRole('tab', { name: /System One/ }).click()
-      const sections = menu.locator('section')
-      await expect(sections).toHaveCount(3)
-      const boxes = await sections.evaluateAll((elements) =>
+      await page.goto('/models/decision')
+      const tabs = page.getByRole('tablist').first().getByRole('tab')
+      await expect(tabs).toHaveText([/Deploy/, /Playground/, /Monitoring/])
+      const boxes = await tabs.evaluateAll((elements) =>
         elements.map((element) => {
           const { x, y, right } = element.getBoundingClientRect()
           return { x, y, right }
@@ -436,45 +422,45 @@ test.describe('Layout top navigation', () => {
       expect(
         Math.max(...boxes.map((box) => box.y)) - Math.min(...boxes.map((box) => box.y)),
       ).toBeLessThan(2)
-      expect(boxes[0].right).toBeLessThan(boxes[1].x)
-      expect(boxes[1].right).toBeLessThan(boxes[2].x)
+      expect(boxes[0].right).toBeLessThanOrEqual(boxes[1].x)
+      expect(boxes[1].right).toBeLessThanOrEqual(boxes[2].x)
       expect(boxes[2].right).toBeLessThan(width)
-      await page.keyboard.press('Escape')
     }
   })
 
-  test('browsing menus does not fetch an unvisited Model Hub route', async ({ page }) => {
+  test('hovering navigation does not fetch an unvisited Model Hub route', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
     const hubRequests: string[] = []
     page.on('request', (request) => {
       if (/ModelHubPage|\/api\/models\/catalog|model_catalog\.json/.test(request.url()))
         hubRequests.push(request.url())
     })
-    await page.goto('/dashboard')
-    await page.getByRole('button', { name: 'System', exact: true }).click()
-    const menu = page.getByRole('navigation', { name: 'System' })
-    const modelHub = menu.getByRole('link', { name: 'Model Hub', exact: true })
+    await page.goto('/routing/signals')
+    const modelHub = sidebar(page).getByRole('link', { name: 'Model Hub', exact: true })
     await modelHub.hover()
     // A hover used to trigger an import while a user was only scanning menus.
     await page.waitForTimeout(350)
     expect(hubRequests).toEqual([])
-    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page).toHaveURL(/\/routing\/signals$/)
   })
 
-  test('hides Evaluation and explains direct access when the service is unavailable', async ({
+  test('hides Evaluations and explains direct access when the service is unavailable', async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page, {
-      capabilities: { evaluation: unavailableCapability('Evaluation is disabled for this deployment.') },
+      capabilities: {
+        evaluation: unavailableCapability('Evaluation is disabled for this deployment.'),
+      },
     })
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
 
-    await page.getByRole('button', { name: 'Build' }).click()
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
-    await expect(buildMenu.getByRole('link', { name: 'Evaluation' })).toHaveCount(0)
+    await expect(sidebar(page).getByRole('link', { name: 'Status' })).toBeVisible()
+    await expect(sidebar(page).getByRole('link', { name: 'Evaluations' })).toHaveCount(0)
 
     await page.goto('/evaluation')
+    await expect(page).toHaveURL(/\/observe\/evaluations$/)
     await expect(page.getByRole('heading', { name: 'Evaluation is not available' })).toBeVisible()
     await expect(page.getByText('Evaluation is disabled for this deployment.')).toBeVisible()
   })
@@ -483,365 +469,325 @@ test.describe('Layout top navigation', () => {
     await page.setViewportSize({ width: 375, height: 700 })
     await mockCommon(page)
 
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
 
     for (const width of [320, 375]) {
       await page.setViewportSize({ width, height: 700 })
-      await expectInsideViewport(page, page.getByRole('link', { name: 'Documentation' }))
-      await expectInsideViewport(page, page.getByRole('link', { name: 'GitHub' }))
-      await expectInsideViewport(page, page.getByRole('button', { name: /Open account menu/i }))
-      await expectInsideViewport(page, page.getByRole('button', { name: 'Toggle menu' }))
+      for (const name of ['Open navigation', 'Search', 'Notifications', 'Toggle theme', 'Help']) {
+        await expectInsideViewport(page, page.getByRole('button', { name, exact: true }))
+      }
+      await expectNoHorizontalScroll(page)
     }
   })
 
-  test('switches to the complete mobile navigation before tablet controls clip', async ({
+  test('switches to the complete navigation drawer before tablet controls clip', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 900, height: 700 })
     await mockCommon(page)
 
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
 
-    await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeHidden()
-    const menuButton = page.getByRole('button', { name: 'Toggle menu' })
+    await expect(sidebar(page)).toBeHidden()
+    const menuButton = page.getByRole('button', { name: 'Open navigation' })
     await expect(menuButton).toBeVisible()
-    await expect(menuButton).toHaveAttribute('aria-controls', 'mobile-navigation')
-    await expect(menuButton).toHaveAttribute('aria-expanded', 'false')
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true)
+    await expectNoHorizontalScroll(page)
 
     await menuButton.click()
-    await expect(menuButton).toHaveAttribute('aria-expanded', 'true')
-    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' })
-    await expect(mobileNavigation).toHaveAttribute('id', 'mobile-navigation')
-    const mobileDashboardLink = mobileNavigation.getByRole('link', { name: 'Dashboard' })
-    await expect(mobileDashboardLink).toHaveAttribute('aria-current', 'page')
-    await expect(mobileDashboardLink).toBeFocused()
-    await page.keyboard.press('ArrowDown')
-    await expect(mobileNavigation.getByRole('link', { name: 'Playground' })).toBeFocused()
-    await page.keyboard.press('Home')
-    await expect(mobileDashboardLink).toBeFocused()
-    await page.keyboard.press('End')
-    await expect(mobileNavigation.getByRole('button', { name: 'System' })).toBeFocused()
+    const drawer = page.getByRole('dialog', { name: 'Navigation' })
+    await expect(drawer).toBeVisible()
+    const navigation = drawer.getByRole('navigation', { name: 'Primary' })
+    for (const group of ['Routing', 'Models', 'Observe']) {
+      await expect(navigation.getByText(group, { exact: true })).toBeVisible()
+    }
+    for (const label of [
+      'Home',
+      'Playground',
+      'Recipes',
+      'Config editor',
+      'Backend models',
+      'Decision models',
+      'Requests',
+      'Traces',
+    ]) {
+      await expect(navigation.getByRole('link', { name: label, exact: true })).toBeVisible()
+    }
+    await expect(drawer.getByRole('link', { name: 'Settings' })).toBeVisible()
+    const activeLink = navigation.getByRole('link', { name: 'Signals' })
+    await expect(activeLink).toHaveAttribute('aria-current', 'page')
+    expect(
+      await activeLink.evaluate(() => document.activeElement?.closest('[role="dialog"]') !== null),
+    ).toBe(true)
+
     await page.keyboard.press('Escape')
-    await expect(mobileNavigation).toBeHidden()
+    await expect(drawer).toBeHidden()
     await expect(menuButton).toBeFocused()
 
     await menuButton.click()
-    await expect(mobileNavigation).toBeVisible()
-    expect(
-      await mobileDashboardLink.evaluate(
-        (element) => window.getComputedStyle(element).backgroundColor,
-      ),
-    ).not.toBe('rgba(0, 0, 0, 0)')
-    const buildToggle = mobileNavigation.getByRole('button', { name: 'Build' })
-    const operateToggle = mobileNavigation.getByRole('button', { name: 'System' })
-    await expect(buildToggle).toBeVisible()
-    await expect(operateToggle).toBeVisible()
-    await expect(buildToggle).toHaveAttribute('aria-expanded', 'false')
-
-    await buildToggle.click()
-    await expect(buildToggle).toHaveAttribute('aria-expanded', 'true')
-    await expect(mobileNavigation.getByText('Routing', { exact: true })).toBeVisible()
-    await expect(
-      mobileNavigation.getByRole('heading', { name: 'Knowledge Base', level: 3 }),
-    ).toHaveCount(0)
-    await expect(mobileNavigation.getByText('Integration', { exact: true })).toHaveCount(0)
-    await operateToggle.click()
-    await expect(mobileNavigation.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
-    await buildToggle.click()
-    await expect(mobileNavigation.getByRole('link', { name: 'Builder' })).toBeVisible()
-    await mobileNavigation.getByRole('link', { name: 'Signals' }).click()
-    await expect(page).toHaveURL(/\/config\/signals$/)
-    await expect(mobileNavigation).toBeHidden()
+    await expect(drawer).toBeVisible()
+    await navigation.getByRole('link', { name: 'Decisions' }).click()
+    await expect(page).toHaveURL(/\/routing\/decisions$/)
+    await expect(drawer).toBeHidden()
   })
 
-  test('omits empty workflow navigation after permission filtering', async ({ page }) => {
+  test('omits empty navigation groups after permission filtering', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page, { user: minimalPermissionUser })
 
-    await page.goto('/dashboard')
+    await page.goto('/playground')
 
-    await expect(page.getByRole('group', { name: 'Workflow navigation' })).toHaveCount(0)
-    await expect(
-      page.locator('header').getByRole('button', { name: /^(Build|System)$/ }),
-    ).toHaveCount(0)
+    const primary = sidebar(page)
+    await expect(primary.getByRole('link')).toHaveText(['Home', 'Get started', 'Playground'])
+    for (const group of ['Routing', 'Models', 'Observe']) {
+      await expect(primary.getByText(group, { exact: true })).toHaveCount(0)
+    }
+    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0)
 
     await page.setViewportSize({ width: 900, height: 700 })
-    const menuButton = page.getByRole('button', { name: 'Toggle menu' })
-    await menuButton.click()
-
-    const mobileNavigation = page.getByRole('navigation', { name: 'Mobile navigation' })
-    await expect(mobileNavigation.getByRole('button', { name: /^(Build|System)$/ })).toHaveCount(0)
-    await expect(mobileNavigation.getByRole('link')).toHaveCount(2)
-    await page.keyboard.press('End')
-    await expect(mobileNavigation.getByRole('link', { name: 'Playground' })).toBeFocused()
+    await page.getByRole('button', { name: 'Open navigation' }).click()
+    const drawer = page.getByRole('dialog', { name: 'Navigation' })
+    await expect(drawer.getByRole('navigation', { name: 'Primary' }).getByRole('link')).toHaveCount(
+      3,
+    )
+    await expect(drawer.getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0)
   })
 
-  test('organizes the control plane around Build and System mega navigation', async ({ page }) => {
+  test('organizes the control plane into routing, models, observe and settings', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
 
     await page.goto('/playground')
 
-    const primaryGroup = page.getByRole('group', { name: 'Primary navigation' })
-    const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
-
-    await expect(primaryGroup.getByRole('link', { name: 'Dashboard' })).toBeVisible()
-    await expect(primaryGroup.getByRole('link', { name: 'Playground' })).toBeVisible()
-    await expect(primaryGroup.getByRole('link')).toHaveCount(2)
-
-    const buildTrigger = workflowGroup.getByRole('button', { name: 'Build' })
-    const operateTrigger = workflowGroup.getByRole('button', { name: 'System' })
-    await expect(workflowGroup.getByRole('button')).toHaveCount(2)
-    await expect(workflowGroup.getByRole('button', { name: 'Analyze' })).toHaveCount(0)
-    await expect(buildTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-build')
-    await expect(operateTrigger).toHaveAttribute('aria-controls', 'layout-mega-menu-operate')
-    await expect(buildTrigger).not.toHaveAttribute('aria-haspopup')
-    await expect(workflowGroup.getByRole('button')).toHaveCount(2)
-
-    const header = page.locator('header').first()
-    await expect(header).toHaveCSS('background-color', 'rgb(0, 0, 0)')
-
-    const playgroundLink = primaryGroup.getByRole('link', { name: 'Playground' })
-    await expect(playgroundLink).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
-    const activeUnderline = await playgroundLink.evaluate((element) => {
-      const underline = window.getComputedStyle(element, '::after')
-      return { backgroundColor: underline.backgroundColor, height: underline.height }
-    })
-    expect(activeUnderline).toEqual({ backgroundColor: 'rgb(227, 27, 35)', height: '2px' })
-
-    await buildTrigger.hover()
-    await expect(buildTrigger).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
-    await buildTrigger.click()
-
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    await expect(buildMenu).toHaveAttribute('id', 'layout-mega-menu-build')
-    await expect(buildTrigger).toHaveAttribute('aria-expanded', 'true')
-    await expect(buildMenu.getByTestId('layout-mega-menu-rail')).toHaveCSS(
-      'background-color',
-      'rgb(8, 8, 8)',
-    )
-    await expect(buildMenu.getByTestId('layout-mega-menu-content')).toHaveCSS(
-      'background-color',
-      'rgb(244, 244, 241)',
-    )
-    const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
-    const systemOneTab = buildMenu.getByRole('tab', { name: /System One/ })
-    const outcomesTab = buildMenu.getByRole('tab', { name: /Outcomes/ })
-    await expect(buildMenu.getByRole('tab', { name: /Knowledge Base|Integration/ })).toHaveCount(0)
-    await expect(routingTab).toBeFocused()
-    await expect(routingTab).toHaveAttribute('aria-selected', 'true')
-    await expect(routingTab).toHaveAttribute(
-      'aria-controls',
-      'layout-mega-menu-build-routing-panel',
-    )
-    await expect(buildMenu.getByRole('link', { name: 'Builder' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'Brain' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'Signals' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'Decisions' })).toBeVisible()
-
-    await routingTab.focus()
-    await page.keyboard.press('ArrowDown')
-    await expect(systemOneTab).toBeFocused()
-    await expect(buildMenu).toHaveAttribute('data-section-count', '3')
-    for (const label of ['Decision Models', 'Decision Playground', 'Decision Monitoring']) {
-      await expect(buildMenu.getByRole('link', { name: label, exact: true })).toBeVisible()
+    const primary = sidebar(page)
+    await expect(primary.getByRole('link')).toHaveText([
+      'Home',
+      'Get started',
+      'Playground',
+      'Recipes',
+      'Decisions',
+      'Signals',
+      'Projections',
+      'Topology',
+      'Config editor',
+      'Backend models',
+      'Decision models',
+      'Model Hub',
+      'Requests',
+      'Evaluations',
+      'Status',
+      'Logs',
+      'Metrics',
+      'Traces',
+    ])
+    for (const group of ['Routing', 'Models', 'Observe']) {
+      await expect(primary.getByText(group, { exact: true })).toBeVisible()
     }
-    await page.keyboard.press('ArrowDown')
-    await expect(outcomesTab).toBeFocused()
-    await expect(outcomesTab).toHaveAttribute('aria-selected', 'true')
-    await page.keyboard.press('End')
-    await expect(outcomesTab).toBeFocused()
-    await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toHaveCount(0)
-    await page.keyboard.press('Home')
-    await expect(routingTab).toBeFocused()
-    await page.keyboard.press('ArrowRight')
-    await expect(buildMenu.getByRole('link', { name: 'Models', exact: true })).toBeFocused()
+    const playground = primary.getByRole('link', { name: 'Playground' })
+    await expect(playground).toHaveAttribute('aria-current', 'page')
+    await expect(activeBar(playground)).toHaveCount(1)
+    await expect(activeBar(primary.getByRole('link', { name: 'Home' }))).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('Playground')
 
-    const buildBounds = await buildMenu.boundingBox()
-    expect(buildBounds).not.toBeNull()
-    expect(buildBounds!.x).toBeGreaterThanOrEqual(0)
-    expect(buildBounds!.x + buildBounds!.width).toBeLessThanOrEqual(1440)
+    await playground.focus()
+    await page.keyboard.press('Tab')
+    await expect(primary.getByRole('link', { name: 'Recipes' })).toBeFocused()
 
-    await page.keyboard.press('Escape')
-    await expect(buildMenu).toBeHidden()
-    await expect(buildTrigger).toHaveAttribute('aria-expanded', 'false')
-    await expect(buildTrigger).toBeFocused()
+    const sidebarBounds = await primary.boundingBox()
+    expect(sidebarBounds).not.toBeNull()
+    expect(sidebarBounds!.x).toBeGreaterThanOrEqual(0)
+    expect(sidebarBounds!.x + sidebarBounds!.width).toBeLessThanOrEqual(1440)
 
-    await buildTrigger.click()
-    await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
-    await expect(buildMenu.getByRole('link', { name: 'Insights' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'Evaluation' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toBeVisible()
+    await primary.getByRole('link', { name: 'Decision models' }).click()
+    await expect(page).toHaveURL(/\/models\/decision$/)
+    await expect(page.getByRole('heading', { name: 'Decision models', exact: true })).toBeVisible()
+    for (const [tab, query] of [
+      ['Playground', 'playground'],
+      ['Monitoring', 'monitoring'],
+    ] as const) {
+      await page.getByRole('tab', { name: tab }).click()
+      await expect(page).toHaveURL(new RegExp(`/models/decision\\?tab=${query}$`))
+      await expect(page.getByRole('tab', { name: tab })).toHaveAttribute('aria-selected', 'true')
+    }
+    for (const [legacy, query] of [
+      ['/decision-model/playground', 'playground'],
+      ['/decision-model/monitoring', 'monitoring'],
+    ] as const) {
+      await page.goto(legacy)
+      await expect(page).toHaveURL(new RegExp(`/models/decision\\?tab=${query}$`))
+    }
 
-    await operateTrigger.click()
-    const operateMenu = page.getByRole('navigation', { name: 'System' })
-    await expect(operateMenu.getByRole('link', { name: 'Status' })).toBeVisible()
-    await expect(operateMenu.getByRole('link', { name: 'Logs' })).toBeVisible()
-    await operateMenu.getByRole('tab', { name: /Observability/ }).click()
-    await expect(operateMenu.getByRole('link', { name: 'Grafana' })).toBeVisible()
-    await expect(operateMenu.getByRole('link', { name: 'Tracing' })).toBeVisible()
-    await operateMenu.getByRole('tab', { name: /Platform & Access/ }).click()
-    await expect(operateMenu.getByRole('link', { name: 'Global Config' })).toBeVisible()
-    await expect(operateMenu.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
-    await expect(operateMenu.getByRole('link', { name: 'Users' })).toBeVisible()
-
-    await page.keyboard.press('Escape')
-    await expect(operateTrigger).toBeFocused()
-
-    await page.keyboard.press('ArrowUp')
-    await expect(operateMenu).toBeVisible()
-    await expect(operateMenu.getByRole('link', { name: 'Logs' })).toBeFocused()
-    await page.keyboard.press('Escape')
-    await expect(operateTrigger).toBeFocused()
-
-    await page.keyboard.press('ArrowDown')
-    await expect(operateMenu.getByRole('tab', { name: /Runtime/ })).toBeFocused()
-    await page.keyboard.press('Shift+Tab')
-    await expect(operateTrigger).toBeFocused()
-    await expect(operateTrigger).toHaveAttribute('aria-expanded', 'true')
-    await page.keyboard.press('Shift+Tab')
-    await expect(operateMenu).toBeHidden()
-    await expect(operateTrigger).toHaveAttribute('aria-expanded', 'false')
+    await page.getByRole('link', { name: 'Settings', exact: true }).click()
+    await expect(page).toHaveURL(/\/settings\/router$/)
+    await expect(settingsNav(page).getByRole('link')).toHaveText([
+      'Router settings',
+      'Integrations',
+      'Users & access',
+      'Schema reference',
+    ])
   })
 
-  test('navigates primary links while a workflow menu is open', async ({ page }) => {
+  test('navigates from the command menu and closes it', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
 
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
 
-    const primaryGroup = page.getByRole('group', { name: 'Primary navigation' })
-    const buildTrigger = page.getByRole('button', { name: 'Build' })
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-
-    await buildTrigger.click()
-    await expect(buildMenu).toBeVisible()
-    await primaryGroup.getByRole('link', { name: 'Playground' }).click()
+    await page.getByRole('button', { name: /Search or jump to/ }).click()
+    const commandMenu = page.getByRole('dialog')
+    await expect(commandMenu).toBeVisible()
+    await page.getByPlaceholder('Search pages, recipes, decisions, models…').fill('Playground')
+    await commandMenu.getByRole('option', { name: /^Playground/ }).click()
     await expect(page).toHaveURL(/\/playground$/)
-    await expect(buildMenu).toBeHidden()
+    await expect(commandMenu).toBeHidden()
 
-    await buildTrigger.click()
-    await expect(buildMenu).toBeVisible()
-    await primaryGroup.getByRole('link', { name: 'Dashboard' }).click()
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(buildMenu).toBeHidden()
+    await page.keyboard.press('ControlOrMeta+k')
+    await expect(commandMenu).toBeVisible()
+    await page.getByPlaceholder('Search pages, recipes, decisions, models…').fill('Router settings')
+    await commandMenu.getByRole('option', { name: /^Router settings/ }).click()
+    await expect(page).toHaveURL(/\/settings\/router$/)
+    await expect(commandMenu).toBeHidden()
+
+    await page.keyboard.press('ControlOrMeta+k')
+    await expect(commandMenu).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(commandMenu).toBeHidden()
+    await expect(page).toHaveURL(/\/settings\/router$/)
   })
 
-  test('navigates every configuration tab through its canonical URL', async ({ page }) => {
+  test('navigates every configuration page through its canonical URL', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
 
-    await page.goto('/dashboard')
-    const buildTrigger = page.getByRole('button', { name: 'Build' })
-    const systemTrigger = page.getByRole('button', { name: 'System' })
+    await page.goto('/playground')
 
-    await buildTrigger.click()
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    await buildMenu.getByRole('link', { name: 'Signals' }).click()
-    await expect(page).toHaveURL(/\/config\/signals$/)
+    await sidebar(page).getByRole('link', { name: 'Signals' }).click()
+    await expect(page).toHaveURL(/\/routing\/signals$/)
+    await sidebar(page).getByRole('link', { name: 'Decisions' }).click()
+    await expect(page).toHaveURL(/\/routing\/decisions$/)
 
-    await buildTrigger.click()
-    await buildMenu.getByRole('link', { name: 'Decisions' }).click()
-    await expect(page).toHaveURL(/\/config\/decisions$/)
+    await page.getByRole('link', { name: 'Settings', exact: true }).click()
+    await expect(page).toHaveURL(/\/settings\/router$/)
+    for (const [label, path] of [
+      ['Integrations', '/settings/integrations'],
+      ['Users & access', '/settings/access'],
+      ['Schema reference', '/settings/schema'],
+      ['Router settings', '/settings/router'],
+    ] as const) {
+      await settingsNav(page).getByRole('link', { name: label }).click()
+      await expect(page).toHaveURL(new RegExp(`${path}$`))
+    }
 
-    await systemTrigger.click()
-    const systemMenu = page.getByRole('navigation', { name: 'System' })
-    await systemMenu.getByRole('tab', { name: /Platform & Access/ }).click()
-    await systemMenu.getByRole('link', { name: 'Global Config' }).click()
-    await expect(page).toHaveURL(/\/config\/global-config$/)
+    for (const [legacy, path] of [
+      ['/config/signals', '/routing/signals'],
+      ['/config/decisions', '/routing/decisions'],
+      ['/config/global-config', '/settings/router'],
+      ['/config/mcp', '/settings/integrations'],
+    ] as const) {
+      await page.goto(legacy)
+      await expect(page).toHaveURL(new RegExp(`${path}$`))
+    }
   })
 
-  test('keeps the desktop mega menu inside the viewport at 1024px', async ({ page }) => {
+  test('keeps the desktop sidebar inside the viewport at 1024px', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 768 })
     await mockCommon(page)
 
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
 
-    const globalNav = page.getByRole('navigation', { name: 'Global navigation' })
-    await expect(globalNav).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Toggle menu' })).toBeHidden()
-
-    const buildTrigger = globalNav.getByRole('button', { name: 'Build' })
-    await buildTrigger.click()
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    await expect(buildMenu).toBeVisible()
-
-    const bounds = await buildMenu.boundingBox()
-    expect(bounds).not.toBeNull()
-    expect(bounds!.x).toBeGreaterThanOrEqual(0)
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(1024)
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true)
+    await expectInsideViewport(page, sidebar(page))
+    await expect(page.getByRole('button', { name: 'Open navigation' })).toBeHidden()
+    await expectNoHorizontalScroll(page)
   })
 
-  test('aligns every desktop mega menu to one balanced AMD-style shell', async ({ page }) => {
+  test('frames the page in one balanced shell that the sidebar can collapse', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.setViewportSize({ width: 2048, height: 1152 })
     await mockCommon(page)
 
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
 
-    const headerFrame = page.getByTestId('layout-header-content')
-    const headerBounds = await headerFrame.boundingBox()
-    const headerPadding = await headerFrame.evaluate((element) => {
-      const style = window.getComputedStyle(element)
-      return {
-        left: Number.parseFloat(style.paddingLeft),
-        right: Number.parseFloat(style.paddingRight),
-      }
+    const panel = page.locator('main#main').locator('..')
+    const header = page.locator('header').first()
+    const frame = async () => {
+      const box = await panel.boundingBox()
+      return box
+        ? {
+            left: Math.round(box.x),
+            top: Math.round(box.y),
+            right: Math.round(2048 - box.x - box.width),
+            bottom: Math.round(1152 - box.y - box.height),
+          }
+        : null
+    }
+    await expect.poll(frame).toEqual({ left: 248, top: 8, right: 8, bottom: 8 })
+    expect((await header.boundingBox())?.height).toBe(52)
+    await expectNoHorizontalScroll(page)
+
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect.poll(async () => (await frame())?.left).toBe(60)
+    await page.getByRole('button', { name: 'Expand sidebar' }).click()
+    await expect.poll(async () => (await frame())?.left).toBe(248)
+  })
+
+  test('keeps the wordmark in proportion beside a fixed release pill and an icon-only status', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page)
+    await page.goto('/routing/signals')
+
+    const wordmark = page.getByTestId('brand-lockup').getByRole('img', {
+      name: 'vLLM Semantic Router',
     })
-    expect(headerBounds).not.toBeNull()
-    expect(headerBounds!.height).toBe(80)
-    expect(Math.abs(headerPadding.left - headerPadding.right)).toBeLessThanOrEqual(1)
-
-    const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
-    const menuWidths: number[] = []
-
-    for (const label of ['Build', 'System'] as const) {
-      const trigger = workflowGroup.getByRole('button', { name: label })
-      await trigger.click()
-      const menu = page.getByRole('navigation', { name: label })
-      const menuBounds = await expectBalancedDesktopFrame(page, menu)
-      menuWidths.push(menuBounds.width)
-      expect(Math.abs(menuBounds.x - headerBounds!.x - headerPadding.left)).toBeLessThanOrEqual(1)
-      expect(Math.abs(menuBounds.y - headerBounds!.height)).toBeLessThanOrEqual(1)
-    }
-
-    expect(Math.max(...menuWidths) - Math.min(...menuWidths)).toBeLessThanOrEqual(2)
-
-    await workflowGroup.getByRole('button', { name: 'Build' }).click()
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    const initialBounds = await expectBalancedDesktopFrame(page, buildMenu)
-    const railBounds = await buildMenu.getByTestId('layout-mega-menu-rail').boundingBox()
-    const contentBounds = await buildMenu.getByTestId('layout-mega-menu-content').boundingBox()
-    expect(railBounds).not.toBeNull()
-    expect(contentBounds).not.toBeNull()
-    expect(railBounds!.width / initialBounds.width).toBeGreaterThanOrEqual(0.15)
-    expect(railBounds!.width / initialBounds.width).toBeLessThanOrEqual(0.2)
-    expect(contentBounds!.width / initialBounds.width).toBeGreaterThanOrEqual(0.78)
-
-    const firstTabBounds = await buildMenu.getByRole('tab').first().boundingBox()
-    expect(firstTabBounds).not.toBeNull()
-    expect(Math.abs(firstTabBounds!.y - initialBounds.y)).toBeLessThanOrEqual(2)
-
-    for (const category of [/System One/, /Outcomes/]) {
-      await buildMenu.getByRole('tab', { name: category }).click()
-      const nextBounds = await buildMenu.boundingBox()
-      expect(nextBounds).not.toBeNull()
-      expect(Math.abs(nextBounds!.x - initialBounds.x)).toBeLessThanOrEqual(1)
-      expect(Math.abs(nextBounds!.width - initialBounds.width)).toBeLessThanOrEqual(1)
-    }
-
-    await page.mouse.click(2040, 1144)
-    await expect(buildMenu).toBeHidden()
-    await expect(workflowGroup.getByRole('button', { name: 'Build' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
+    await expect(wordmark).toBeVisible()
+    await expect
+      .poll(() =>
+        wordmark.evaluate((image: HTMLImageElement) =>
+          image.naturalHeight ? image.naturalWidth / image.naturalHeight : 0,
+        ),
+      )
+      .toBeCloseTo(2166 / 696, 2)
+    const version = page.getByTestId('sidebar-version')
+    await expect(version).toHaveText('v0.5.0')
+    await expect(version).toHaveAccessibleName(/^Version v0\.5\.0-dev\.e1ba40498f, /)
+    const collapse = page.getByRole('button', { name: 'Collapse sidebar' })
+    const [logoBox, versionBox, collapseBox] = await Promise.all(
+      [wordmark, version, collapse].map(async (element) => {
+        const bounds = await element.boundingBox()
+        expect(bounds).not.toBeNull()
+        return bounds!
+      }),
     )
+    expect(logoBox.height).toBe(32)
+    expect(logoBox.width / logoBox.height).toBeCloseTo(2166 / 696, 1)
+    expect(Math.round(versionBox.width)).toBe(64)
+    expect(logoBox.x + logoBox.width).toBeLessThanOrEqual(versionBox.x)
+    expect(versionBox.x + versionBox.width).toBeLessThanOrEqual(collapseBox.x)
+    const middle = (bounds: { y: number; height: number }) => bounds.y + bounds.height / 2
+    expect(Math.abs(middle(logoBox) - middle(collapseBox))).toBeLessThanOrEqual(1)
+    expect(Math.abs(middle(versionBox) - middle(collapseBox))).toBeLessThanOrEqual(1)
+
+    await version.click()
+    await expect(page.getByRole('dialog')).toContainText('v0.5.0-dev.e1ba40498f')
+    await page.keyboard.press('Escape')
+
+    const status = page.getByRole('link', { name: 'Status: Router healthy' })
+    await expect(status).toBeVisible()
+    await expect(status).toHaveText('')
+    await expect(status).toHaveAttribute('href', '/observe/status')
+    await status.hover()
+    await expect(page.getByRole('tooltip')).toContainText('Router healthy')
+    await status.click()
+    await expect(page).toHaveURL(/\/observe\/status$/)
+
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click()
+    await expect(page.getByTestId('brand-lockup')).toHaveCount(0)
+    await expect(
+      page.locator('aside').getByRole('img', { name: 'vLLM Semantic Router' }),
+    ).toBeVisible()
   })
 
   test('switches to compact navigation at 961px with full access and a long account name', async ({
@@ -875,249 +821,200 @@ test.describe('Layout top navigation', () => {
       },
     })
 
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
 
-    await expect(page.getByRole('navigation', { name: 'Global navigation' })).toBeHidden()
-    await expect(page.getByRole('button', { name: 'Toggle menu' })).toBeVisible()
-    await expectInsideViewport(page, page.getByRole('link', { name: 'Documentation' }))
-    await expectInsideViewport(page, page.getByRole('link', { name: 'GitHub' }))
-    await expectInsideViewport(page, page.getByRole('button', { name: /Open account menu/i }))
-    await expectInsideViewport(page, page.getByRole('button', { name: 'Toggle menu' }))
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true)
+    await expect(sidebar(page)).toBeHidden()
+    for (const name of ['Open navigation', 'Notifications', 'Toggle theme', 'Help']) {
+      await expectInsideViewport(page, page.getByRole('button', { name, exact: true }))
+    }
+    await expectNoHorizontalScroll(page)
+
+    await page.getByRole('button', { name: 'Open navigation' }).click()
+    const drawer = page.getByRole('dialog', { name: 'Navigation' })
+    const account = drawer.getByRole('button', { name: /Alexandria Catherine Montgomery/ })
+    await expect(account).toBeVisible()
+    const [drawerBox, accountBox] = await Promise.all([drawer.boundingBox(), account.boundingBox()])
+    expect(drawerBox).not.toBeNull()
+    expect(accountBox).not.toBeNull()
+    expect(accountBox!.x).toBeGreaterThanOrEqual(drawerBox!.x)
+    expect(accountBox!.x + accountBox!.width).toBeLessThanOrEqual(drawerBox!.x + drawerBox!.width)
   })
 
-  test('keeps a manually selected category open from an active route', async ({ page }) => {
+  test('keeps Settings selected while moving between settings pages', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
 
     await page.goto('/builder')
+    await expect(page).toHaveURL(/\/routing\/editor$/)
+    await expect(sidebar(page).getByRole('link', { name: 'Config editor' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
 
-    const buildTrigger = page
-      .getByRole('group', { name: 'Workflow navigation' })
-      .getByRole('button', { name: 'Build' })
-    await buildTrigger.click()
+    const settingsLink = page.getByRole('link', { name: 'Settings', exact: true })
+    await settingsLink.click()
+    await expect(settingsNav(page).getByRole('link', { name: 'Router settings' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
 
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
-    const outcomesTab = buildMenu.getByRole('tab', { name: /Outcomes/ })
-    await expect(routingTab).toHaveAttribute('aria-selected', 'true')
-
-    await outcomesTab.click()
-    await expect(outcomesTab).toHaveAttribute('aria-selected', 'true')
-    await expect(buildMenu.getByRole('link', { name: 'Insights' })).toBeVisible()
-    await expect(routingTab).toHaveAttribute('aria-selected', 'false')
+    await settingsNav(page).getByRole('link', { name: 'Integrations' }).click()
+    await expect(page).toHaveURL(/\/settings\/integrations$/)
+    await expect(settingsNav(page).getByRole('link', { name: 'Integrations' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    await expect(
+      settingsNav(page).getByRole('link', { name: 'Router settings' }),
+    ).not.toHaveAttribute('aria-current', 'page')
+    await expect(activeBar(settingsLink)).toHaveCount(1)
+    await expect(activeBar(sidebar(page).getByRole('link', { name: 'Config editor' }))).toHaveCount(
+      0,
+    )
   })
 
-  test('keeps mega-menu links clickable when Safari reports a null blur target', async ({
+  test('keeps drawer links clickable when Safari reports a null blur target', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 700 })
+    await mockCommon(page)
+
+    await page.goto('/routing/signals')
+    await page.getByRole('button', { name: 'Open navigation' }).click()
+
+    const drawer = page.getByRole('dialog', { name: 'Navigation' })
+    await expect(drawer).toBeVisible()
+    await drawer.evaluate((element) => {
+      element.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }))
+    })
+
+    await expect(drawer).toBeVisible()
+    await drawer.getByRole('link', { name: 'Config editor' }).click()
+    await expect(page).toHaveURL(/\/routing\/editor$/)
+  })
+
+  test('keeps every navigation group reachable in a short desktop window', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 400 })
+    await mockCommon(page)
+
+    await page.goto('/routing/signals')
+
+    const traces = sidebar(page).getByRole('link', { name: 'Traces' })
+    await traces.scrollIntoViewIfNeeded()
+    await expect(traces).toBeInViewport()
+    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeInViewport()
+    await expect(page.getByRole('button', { name: /Admin User/ })).toBeInViewport()
+    await traces.click()
+    await expect(page).toHaveURL(/\/observe\/traces$/)
+  })
+
+  test('opens Requests from the sidebar with its summary and keeps runs under it', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
 
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
+    await sidebar(page).getByRole('link', { name: 'Requests' }).click()
 
-    await page
-      .getByRole('group', { name: 'Workflow navigation' })
-      .getByRole('button', { name: 'Build' })
-      .click()
+    await expect(page).toHaveURL(/\/observe\/requests$/)
+    await expect(page.getByRole('heading', { name: 'Requests', exact: true })).toBeVisible()
+    const summary = page.getByRole('region', { name: 'Requests summary' })
+    for (const label of ['Requests', 'Estimated spend', 'Cost vs reference', 'Tokens', 'Failed']) {
+      await expect(summary.getByText(label, { exact: true })).toBeVisible()
+    }
+    await expect(page.getByRole('columnheader', { name: 'Decision' })).toBeVisible()
+    await expect(page.getByRole('columnheader', { name: 'Cost' })).toBeVisible()
+    await expect(page.getByRole('row', { name: /req-1/ })).toBeVisible()
+    await expect(page.getByTitle('business-route')).toHaveCount(2)
 
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    await buildMenu.evaluate((menu) => {
-      menu.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }))
-    })
-
-    await expect(buildMenu).toBeVisible()
-    await buildMenu.getByRole('link', { name: 'Builder' }).click()
-    await expect(page).toHaveURL(/\/builder$/)
-  })
-
-  test('keeps every mega-menu category reachable in a short desktop window', async ({ page }) => {
-    await page.setViewportSize({ width: 1024, height: 400 })
-    await mockCommon(page)
-
-    await page.goto('/dashboard')
-    const buildTrigger = page
-      .getByRole('group', { name: 'Workflow navigation' })
-      .getByRole('button', { name: 'Build' })
-    await buildTrigger.click()
-
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
-    const outcomesTab = buildMenu.getByRole('tab', { name: /Outcomes/ })
-    await routingTab.focus()
-    await page.keyboard.press('End')
-
-    await expect(outcomesTab).toBeFocused()
-    await expect(outcomesTab).toBeInViewport()
-    expect(
-      await buildMenu.evaluate(
-        (element) => element.getBoundingClientRect().bottom <= window.innerHeight,
-      ),
-    ).toBe(true)
-  })
-
-  test('loads Insights charts and does not preserve the legacy replay route', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
-    await mockCommon(page)
-
-    await page.goto('/dashboard')
-    await page.getByRole('button', { name: 'Build' }).click()
-    await page
-      .getByRole('navigation', { name: 'Build' })
-      .getByRole('tab', { name: /Outcomes/ })
-      .click()
-    await page
-      .getByRole('navigation', { name: 'Build' })
-      .getByRole('link', { name: 'Insights' })
-      .click()
-
-    await expect(page).toHaveURL(/\/insights$/)
-    await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible()
-    await expect(
-      page.getByRole('article').getByText('Estimated Savings', { exact: true }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('article').getByText('Estimated Saved %', { exact: true }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('article').getByText('Estimated Baseline', { exact: true }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('article').getByText('Estimated Model Cost', { exact: true }),
-    ).toBeVisible()
-    await expect(
-      page.getByText('See what the router picked, what signals fired, and how much it saved.'),
-    ).toBeVisible()
-    await expect(
-      page.getByText(
-        'Replay-backed routing records with spend, savings, and token details per request.',
-      ),
-    ).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Model Selection', exact: true })).toBeVisible()
-    await expect(
-      page.getByRole('heading', { name: 'Decision Distribution', exact: true }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('heading', { name: 'Signal Distribution', exact: true }),
-    ).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Token Volume', exact: true })).toBeVisible()
-    await expect(
-      page.getByRole('heading', { name: 'Tokens by Decision', exact: true }),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('heading', { name: 'Tokens by Selected Model', exact: true }),
-    ).toBeVisible()
-    await expect(page.getByText('Input Tokens').first()).toBeVisible()
-    await expect(page.getByText('Output Tokens').first()).toBeVisible()
-    await expect(page.getByText('Total Tokens').first()).toBeVisible()
-    await expect(
-      page.getByText(
-        '1 filtered record excluded from estimates. Each row explains what was not recorded. Historical rows without captured prices are not repriced.',
-      ),
-    ).toBeVisible()
-    await expect(
-      page.getByText(
-        '1 filtered record excluded from token totals because usage data is incomplete.',
-      ),
-    ).toBeVisible()
-    await expect(
-      page.getByRole('article').filter({ hasText: 'Estimated Savings' }).getByRole('strong'),
-    ).toHaveText('$0.0060')
-    await expect(
-      page.getByRole('article').filter({ hasText: 'Saved %' }).getByRole('strong'),
-    ).toHaveText('75.0%')
-    await expect(page.getByRole('columnheader', { name: 'Estimated Cost' })).toBeVisible()
-    await expect(page.getByRole('columnheader', { name: 'Estimated Savings' })).toBeVisible()
+    await page.goto('/insights')
+    await expect(page).toHaveURL(/\/observe\/requests$/)
+    await page.goto('/insights/run?session=session-1')
+    await expect(page).toHaveURL(/\/observe\/runs\?session=session-1$/)
+    await expect(activeBar(sidebar(page).getByRole('link', { name: 'Requests' }))).toHaveCount(1)
 
     await page.goto('/replay')
-    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page.getByRole('heading', { name: "This page doesn't exist" })).toBeVisible()
   })
 
-  test('renders nested canonical decision groups in Brain topology', async ({ page }) => {
+  test('shows nested canonical decision groups in the topology inspector', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
 
     await page.goto('/topology')
+    await expect(page).toHaveURL(/\/routing\/topology$/)
 
-    const decisionNode = page
-      .locator('[class*="decisionNode"]')
-      .filter({ has: page.locator('[title="medium_business"]') })
-      .first()
-
-    await expect(decisionNode).toBeVisible()
-    await expect(decisionNode).toContainText('AND')
-    await expect(decisionNode).toContainText('OR')
-    await expect(decisionNode).toContainText('Domain: Business')
-    await expect(decisionNode).toContainText('Domain: Economics')
-    await expect(decisionNode).toContainText('Embedding: Business Analysis')
-    await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0)
+    await page.getByTestId('rf__node-decision-medium_business').click()
+    const inspector = page
+      .getByRole('button', { name: 'Close details' })
+      .locator('xpath=ancestor::aside[1]')
+    await expect(inspector).toContainText('medium_business')
+    await expect(inspector).toContainText('WHEN')
+    await expect(inspector).toContainText('(domain("business") OR domain("economics")) AND (')
+    await expect(inspector).toContainText('keyword("business_analysis")')
+    await expect(inspector).toContainText('complexity("general_reasoning:medium")')
+    await expect(inspector).toContainText('context("long_context")')
+    await expect(inspector).toContainText('P215')
+    await expect(inspector.getByText('Referenced signals not configured')).toHaveCount(0)
   })
 
-  test('retired knowledge routes fall back without fetching KB or embedded-map resources', async ({ page }) => {
+  test('retired knowledge routes show the not-found page without fetching KB or embedded-map resources', async ({
+    page,
+  }) => {
     await mockCommon(page)
     const featureRequests: string[] = []
     page.on('request', (request) => {
-      if (/\/api\/.*knowledge-bases|\/embedded\/wizmap|KnowledgeMapPage|TaxonomyPage/.test(request.url())) {
+      if (
+        /\/api\/.*knowledge-bases|\/embedded\/wizmap|KnowledgeMapPage|TaxonomyPage/.test(
+          request.url(),
+        )
+      ) {
         featureRequests.push(request.url())
       }
     })
-    for (const path of ['/knowledge-bases/bases', '/knowledge-bases/privacy_kb/map', '/taxonomy/labels']) {
+    for (const path of [
+      '/knowledge-bases/bases',
+      '/knowledge-bases/privacy_kb/map',
+      '/taxonomy/labels',
+    ]) {
       await page.goto(path)
-      await expect(page).toHaveURL(/\/dashboard$/)
-      await expect(page.getByRole('heading', { name: 'Router Intelligence' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: "This page doesn't exist" })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Go to Home' })).toBeVisible()
       await expect(page.locator('iframe')).toHaveCount(0)
     }
     expect(featureRequests).toEqual([])
   })
 
-  test('opens MCP from System with its existing permission and URL', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 })
-    await mockCommon(page, { user: readUser })
-    await page.goto('/dashboard')
-    await page.getByRole('group', { name: 'Workflow navigation' }).getByRole('button', { name: 'System' }).click()
-    const systemMenu = page.getByRole('navigation', { name: 'System' })
-    await systemMenu.getByRole('tab', { name: /Platform & Access/ }).click()
-    await systemMenu.getByRole('link', { name: 'MCP Servers' }).click()
-    await expect(page).toHaveURL(/\/config\/mcp$/)
-    await expect(page.getByRole('heading', { name: 'MCP Servers', exact: true })).toBeVisible()
-  })
-
-  test('hides ML Setup for read users and redirects direct access back to the dashboard', async ({
+  test('opens Integrations from Settings with its existing permission and URL', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page, { user: readUser })
-
-    await page.goto('/dashboard')
-
-    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
-
-    const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
-    await workflowGroup.getByRole('button', { name: 'System' }).click()
-
-    const operateMenu = page.getByRole('navigation', { name: 'System' })
-    await operateMenu.getByRole('tab', { name: /Platform & Access/ }).click()
-    await expect(operateMenu.getByRole('link', { name: 'Users' })).toHaveCount(0)
-    await expect(operateMenu.getByRole('link', { name: 'Global Config' })).toBeVisible()
-    await expect(operateMenu.getByRole('link', { name: 'MCP Servers' })).toBeVisible()
-
-    await workflowGroup.getByRole('button', { name: 'Build' }).click()
-    const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
-    await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toHaveCount(0)
-    await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toHaveCount(0)
-
-    await page.goto('/ml-setup')
-
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
+    await page.goto('/routing/signals')
+    await page.getByRole('link', { name: 'Settings', exact: true }).click()
+    await settingsNav(page).getByRole('link', { name: 'Integrations' }).click()
+    await expect(page).toHaveURL(/\/settings\/integrations$/)
+    await expect(
+      page.getByRole('heading', { name: 'Integrations', exact: true }).first(),
+    ).toBeVisible()
   })
 
-  test('opens an anchored account dropdown and allows logging out from the header', async ({
-    page,
-  }) => {
+  test('hides admin pages from read users', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await mockCommon(page, { user: readUser })
+
+    await page.goto('/settings/router')
+
+    await expect(settingsNav(page).getByRole('link', { name: 'Users & access' })).toHaveCount(0)
+    await expect(settingsNav(page).getByRole('link', { name: 'Router settings' })).toBeVisible()
+    await expect(settingsNav(page).getByRole('link', { name: 'Integrations' })).toBeVisible()
+
+    await page.keyboard.press('ControlOrMeta+k')
+    const commandMenu = page.getByRole('dialog')
+    await expect(commandMenu.getByRole('option', { name: /^Integrations/ })).toBeVisible()
+    await expect(commandMenu.getByRole('option', { name: /^Users & access/ })).toHaveCount(0)
+  })
+
+  test('opens the anchored sidebar account menu and signs out from it', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page, {
       user: {
@@ -1129,57 +1026,58 @@ test.describe('Layout top navigation', () => {
       },
     })
 
-    await page.goto('/dashboard')
+    await page.goto('/routing/signals')
 
-    const accountTrigger = page.getByRole('button', { name: /Open account menu/i })
+    const accountTrigger = page.getByRole('button', { name: /Ada Lovelace/ })
+    await expect(accountTrigger).toHaveAttribute('aria-haspopup', 'menu')
+    const triggerBox = await accountTrigger.boundingBox()
     await accountTrigger.click()
 
-    const accountDialog = page.getByTestId('layout-account-dialog')
-    const closeDialogButton = accountDialog.getByRole('button', { name: 'Close account dialog' })
-    const logoutButton = accountDialog.getByRole('button', { name: 'Logout' })
-    await expect(accountDialog).toBeVisible()
-    await expect(accountDialog).toHaveAttribute('aria-modal', 'true')
-    await expect(accountDialog.getByText('Ada Lovelace')).toBeVisible()
-    await expect(accountDialog.getByText('ada@example.com')).toBeVisible()
-    await expect(accountDialog.getByText('Admin')).toBeVisible()
-    await expect(accountDialog.getByText('config.read')).toBeVisible()
-    await expect(accountDialog.getByText('config.write')).toBeVisible()
-    await expect(accountDialog.getByText('users.manage')).toBeVisible()
-    await expect(closeDialogButton).toBeFocused()
+    const accountMenu = page.getByRole('menu')
+    await expect(accountMenu).toBeVisible()
+    await expect(accountMenu.getByText('Ada Lovelace')).toBeVisible()
+    await expect(accountMenu.getByText('ada@example.com')).toBeVisible()
+    await expect(accountMenu.getByText('admin', { exact: true })).toBeVisible()
+    await expect(accountMenu.getByRole('menuitem', { name: 'Sign out' })).toBeVisible()
 
-    const accountBounds = await accountDialog.boundingBox()
+    const menuBox = await accountMenu.boundingBox()
     const viewport = page.viewportSize()
-    expect(accountBounds).not.toBeNull()
-    expect(viewport).not.toBeNull()
-    expect(accountBounds!.x).toBeGreaterThan(viewport!.width / 2)
-    expect(accountBounds!.y).toBeLessThan(120)
-    expect(accountBounds!.width).toBeLessThanOrEqual(400)
+    expect(menuBox).not.toBeNull()
+    expect(triggerBox).not.toBeNull()
+    expect(menuBox!.x).toBeLessThan(viewport!.width / 2)
+    expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(triggerBox!.y + 1)
+    expect(menuBox!.width).toBeLessThanOrEqual(400)
 
-    await page.keyboard.press('Shift+Tab')
-    await expect(logoutButton).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(closeDialogButton).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(accountMenu.getByRole('menuitem').first()).toBeFocused()
     await page.keyboard.press('Escape')
-    await expect(accountDialog).toBeHidden()
+    await expect(accountMenu).toBeHidden()
     await expect(accountTrigger).toBeFocused()
 
     await accountTrigger.click()
-    await accountDialog.getByRole('button', { name: 'Logout' }).click()
+    await accountMenu.getByRole('menuitem', { name: 'Sign out' }).click()
 
     await expect(page).toHaveURL(/\/login$/)
-    await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Sign in to Semantic Router' })).toBeVisible()
   })
 
-  test('defaults /config to Global Config and loads raw global YAML', async ({ page }) => {
+  test('sends /config to router settings and loads the effective global YAML', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page)
 
     await page.goto('/config')
 
-    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible()
+    await expect(page).toHaveURL(/\/settings\/router$/)
+    await expect(
+      page.getByRole('heading', { name: 'Router settings', exact: true }).first(),
+    ).toBeVisible()
 
-    await page.getByRole('button', { name: 'Raw YAML' }).click()
-    await expect(page.getByRole('heading', { name: 'Raw Global YAML' })).toBeVisible()
-    await expect(page.locator('textarea')).toHaveValue(rawGlobalYaml)
+    await page.getByRole('radio', { name: 'YAML' }).click()
+    await page.getByRole('button', { name: 'Edit effective YAML' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Effective global YAML' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('textbox', { name: 'Effective global YAML' })).toHaveValue(
+      rawGlobalYaml,
+    )
   })
 })

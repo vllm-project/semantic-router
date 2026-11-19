@@ -13,19 +13,20 @@ import (
 // safeFailureFragment references a model the merged config does not define.
 // The YAML is syntactically valid, so it clears the parse stage and can only be
 // rejected by config validation.
-const safeFailureFragment = `routing:
-  decisions:
-    - name: e2e-safe-failure
-      description: Deploy probe that must be rejected by config validation
-      priority: 3
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: e2e-nonexistent-model
-          use_reasoning: false
+const safeFailureFragment = `recipes:
+  - name: default
+    decisions:
+      - name: e2e-safe-failure
+        description: Deploy probe that must be rejected by config validation
+        priority: 3
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: e2e-nonexistent-model
+            use_reasoning: false
 `
 
 // TestDeployHandler_SemanticRejectionLeavesConfigUnchanged pins the safe-failure

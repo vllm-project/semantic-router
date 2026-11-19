@@ -86,6 +86,10 @@ func cacheKey(cfg config.RoutingInputConfig) string {
 type Outcome struct {
 	SkippedMessages int
 	StrippedBlocks  int
+	// Fallback reports that routing_input left no user message with routing
+	// text, so routing read the last user message with text instead of
+	// refusing the request.
+	Fallback bool
 	// MessageIndex is the index of the user message the routing text came
 	// from: the last kept user message with routing text, or -1.
 	MessageIndex int
@@ -108,6 +112,9 @@ func (o Outcome) Changed() bool {
 type Walk struct {
 	selector *Selector
 	turns    []turn
+	// keep is the index of the user message the walk routes on although
+	// routing_input would leave nothing of it, or -1.
+	keep int
 }
 
 // turn is one user message with text, as sent and as routed.
@@ -119,22 +126,67 @@ type turn struct {
 	stripped []string
 }
 
-// Walk starts a request walk. The walk of a nil selector changes nothing.
-func (s *Selector) Walk() *Walk {
-	return &Walk{selector: s}
+// UserText is one user message as routing_input reads it: its index in the
+// request, its text, and whether text is all it carries.
+type UserText struct {
+	Index    int
+	Text     string
+	TextOnly bool
+}
+
+// Walk starts a request walk over the user messages of one request. The walk
+// of a nil selector changes nothing. When routing_input would leave none of
+// messages with routing text, every one skipped or stripped to nothing, the
+// walk routes on the last of them with text instead, so a request is never
+// refused for want of routing text.
+func (s *Selector) Walk(messages ...UserText) *Walk {
+	return &Walk{selector: s, keep: s.fallback(messages)}
+}
+
+// fallback is the index of the user message a walk routes on when
+// routing_input leaves no user message with routing text: the last one with
+// text; -1 when one keeps routing text, or none has text.
+func (s *Selector) fallback(messages []UserText) int {
+	if s == nil {
+		return -1
+	}
+	last := -1
+	for position := len(messages) - 1; position >= 0; position-- {
+		message := messages[position]
+		if message.Text == "" {
+			continue
+		}
+		if last < 0 {
+			last = message.Index
+		}
+		if message.TextOnly && s.SkipsMessage(message.Text) {
+			continue
+		}
+		if routed, _ := s.Strip(message.Text); routed != "" {
+			return -1
+		}
+	}
+	return last
 }
 
 // UserMessage records one user message and returns its routing text and
 // whether routing skips it. Only a message whose content is all text can be
-// skipped, so its media and tool results keep reaching their signals.
+// skipped, so its media and tool results keep reaching their signals. The
+// walk's fallback message is never skipped: it routes on what the blocks
+// leave of it, or on all of it when they leave nothing.
 func (w *Walk) UserMessage(index int, text string, textOnly bool) (string, bool) {
 	if w == nil || w.selector == nil || text == "" {
 		return text, false
 	}
 	current := turn{index: index, text: text}
-	if textOnly && w.selector.SkipsMessage(text) {
+	switch {
+	case index == w.keep:
+		if current.routed, current.stripped = w.selector.Strip(text); current.routed == "" {
+			current.routed, current.stripped = text, nil
+		}
+	case textOnly && w.selector.SkipsMessage(text):
 		current.skipped = true
-	} else {
+	default:
 		current.routed, current.stripped = w.selector.Strip(text)
 	}
 	w.turns = append(w.turns, current)
@@ -163,6 +215,7 @@ func (w *Walk) Outcome() Outcome {
 	if routing >= 0 {
 		outcome.MessageIndex = w.turns[routing].index
 		outcome.Stripped = w.turns[routing].stripped
+		outcome.Fallback = outcome.MessageIndex == w.keep
 	}
 	if !outcome.Changed() {
 		return outcome

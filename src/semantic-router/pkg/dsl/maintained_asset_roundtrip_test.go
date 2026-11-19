@@ -41,8 +41,8 @@ func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
 func TestMaintainedBalanceLanesReadNamedQuestions(t *testing.T) {
 	cfg := mustLoadMaintainedBalanceRouterConfig(t, maintainedBalanceAsset("config.yaml"))
 
-	questions := make(map[string]bool, len(cfg.DecisionRules))
-	for _, rule := range cfg.DecisionRules {
+	questions := make(map[string]bool, len(cfg.SystemOneRules))
+	for _, rule := range cfg.SystemOneRules {
 		questions[rule.Name] = true
 	}
 	for _, name := range []string{"task", "verification", "correction", "clarify"} {
@@ -60,7 +60,7 @@ func TestMaintainedBalanceLanesReadNamedQuestions(t *testing.T) {
 		case "omni", "casual_chat":
 			continue
 		}
-		if !ruleTreeReadsSignalType(&decision.Rules, config.SignalTypeDecision) {
+		if !ruleTreeReadsSignalType(&decision.Rules, config.SignalTypeSystemOne) {
 			t.Fatalf("expected %s to read a decision-model question", decision.Name)
 		}
 	}
@@ -139,10 +139,10 @@ func assertMaintainedBalanceDecisionTiers(t *testing.T, decisions []config.Decis
 func assertMaintainedBalanceDSLMarkers(t *testing.T, dslPath, dslText string) {
 	t.Helper()
 	for _, marker := range []string{
-		"SIGNAL decision task",
-		"SIGNAL decision verification",
-		"SIGNAL decision correction",
-		"SIGNAL decision clarify",
+		"SIGNAL systemone task",
+		"SIGNAL systemone verification",
+		"SIGNAL systemone correction",
+		"SIGNAL systemone clarify",
 		"ROUTE formal_math_proof",
 		"ROUTE reasoning_deep",
 		"ROUTE complex_specialist",
@@ -164,7 +164,7 @@ func assertMaintainedBalanceDSLDiagnostics(t *testing.T, prog *Program) {
 	}
 }
 
-func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) config.CanonicalRouting {
+func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) routingSurface {
 	t.Helper()
 
 	compiledCfg, compileErrs := CompileAST(prog)
@@ -179,14 +179,14 @@ func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) config.Canonic
 	if err != nil {
 		t.Fatalf("ParseRoutingYAMLBytes(compiledYAML) error: %v", err)
 	}
-	return config.CanonicalRoutingFromRouterConfig(compiledParsedCfg)
+	return routingSurfaceOf(compiledParsedCfg)
 }
 
-func mustLoadMaintainedBalanceRoutingYAML(t *testing.T, yamlPath string) config.CanonicalRouting {
+func mustLoadMaintainedBalanceRoutingYAML(t *testing.T, yamlPath string) routingSurface {
 	t.Helper()
 
 	parsedCfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
-	return config.CanonicalRoutingFromRouterConfig(parsedCfg)
+	return routingSurfaceOf(parsedCfg)
 }
 
 func mustLoadMaintainedBalanceRouterConfig(t *testing.T, yamlPath string) *config.RouterConfig {
@@ -228,4 +228,18 @@ func ruleTreeReadsSignalType(node *config.RuleCombination, signalType string) bo
 		}
 	}
 	return false
+}
+
+// routingSurface is the DSL-owned surface of a config: its recipes, and the
+// model cards its providers.models[] entries state.
+type routingSurface struct {
+	Recipes []config.CanonicalRecipe
+	Cards   []config.RoutingModel
+}
+
+func routingSurfaceOf(cfg *config.RouterConfig) routingSurface {
+	return routingSurface{
+		Recipes: config.CanonicalConfigFromRouterConfig(cfg).Recipes,
+		Cards:   config.ModelCardsFromRouterConfig(cfg),
+	}
 }

@@ -10,7 +10,7 @@ import (
 const probabilitySumTolerance = 0.02
 
 // checkAnswers marks every answer that does not fit the question it answers as
-// invalid_model_output, so neither the decision signal nor the selector acts on
+// invalid_model_output, so neither the systemone signal nor the selector acts on
 // it. The built-in runtime cannot produce such an answer, but an engine
 // attached through a deployment's endpoint can. A preset question takes its
 // type from the model; checkedAnswer enforces its confidence and probability

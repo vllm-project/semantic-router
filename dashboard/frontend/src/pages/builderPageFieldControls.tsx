@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import type { FieldSchema } from '@/lib/dslMutations'
 import ProductCheckbox from '@/components/ProductCheckbox'
 
-import styles from './BuilderPage.module.css'
+import styles from './builderPageFieldControls.module.css'
 import { JsonFieldEditor } from './builderPageJsonFieldEditor'
 import { StructuredFieldEditor } from './builderPageStructuredFieldControls'
 
@@ -224,7 +224,6 @@ export const FieldEditor: React.FC<{
     case 'json':
       return <JsonFieldEditor schema={schema} value={value} onChange={onChange} />
     case 'string[]':
-    case 'string[][]':
     case 'object':
     case 'object[]':
     case 'key-value':

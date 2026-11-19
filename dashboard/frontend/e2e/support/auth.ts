@@ -77,7 +77,7 @@ export const dashboardSettingsResponse = (
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> => ({ ...defaultSettings, ...overrides })
 
-const capabilityIDs = ['setup', 'config', 'evaluation', 'mlPipeline', 'mcp']
+const capabilityIDs = ['setup', 'config', 'evaluation', 'mcp']
 
 /** Every capability available unless overridden, e.g. `{ evaluation: unavailableCapability(...) }`. */
 export const dashboardCapabilitiesResponse = (

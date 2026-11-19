@@ -34,7 +34,7 @@ func assertRatingsStreamingBoundary(t *testing.T, includeUsage bool) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{Looper: config.LooperConfig{Endpoint: server.URL}}}
 	decision := &config.Decision{
 		Name: "ratings-stream", ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
-		Algorithm: &config.AlgorithmConfig{Type: "ratings", Ratings: &config.RatingsAlgorithmConfig{OnError: "fail"}},
+		Algorithm: &config.AlgorithmConfig{Type: "ratings", OnError: "fail", Ratings: &config.RatingsAlgorithmConfig{}},
 	}
 	request := testNeutralRequest("public-model", "hello")
 	request.Stream = true
@@ -50,6 +50,7 @@ func assertRatingsStreamingBoundary(t *testing.T, includeUsage bool) {
 	require.Contains(t, string(immediate.GetBody()), "data: [DONE]\n\n")
 	if includeUsage {
 		require.Contains(t, string(immediate.GetBody()), `"total_tokens":6`)
+		requireNullUsageUntilTheUsageChunk(t, immediate.GetBody())
 	} else {
 		require.NotContains(t, string(immediate.GetBody()), `"usage"`)
 	}

@@ -77,7 +77,7 @@ func TestResetModelBaselineLeavesModelsMeasuredButUngated(t *testing.T) {
 	committed := &Baseline{Benchmarks: map[string]BenchmarkMetric{"BenchmarkEvaluate": {AllocsPerOp: 10}}}
 	reset := &Baseline{GitCommit: "base-source", ModelBaselineReset: "base predates the model runtime", Benchmarks: map[string]BenchmarkMetric{}}
 	if err := OverlayModelBaseline(&Baseline{Benchmarks: map[string]BenchmarkMetric{}}, current, reset); err == nil {
-		t.Fatal("a reset was accepted without the legacy-versus-runtime records")
+		t.Fatal("a reset was accepted without the records that compare both sides")
 	}
 	reset.LegacyComparisonRecords = []string{"src/model-runtime/docs/records/decision1-parity.md"}
 	if err := OverlayModelBaseline(committed, current, reset); err != nil {

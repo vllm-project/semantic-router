@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { Trash2 } from 'lucide-react'
+import { Button } from '../../ui'
 import ConfirmDialog from '../ConfirmDialog'
-import ProductIcon from '../ProductIcon'
 import { SrBenchRequestError } from './api'
 import { experimentApi, type Experiment } from './experimentApi'
-import controls from './BenchControls.module.css'
-import styles from './ExperimentWorkspace.module.css'
 
 export default function ExperimentDelete({
   experiment,
@@ -67,16 +66,19 @@ export default function ExperimentDelete({
   }
   return (
     <>
-      <button
+      <Button
         ref={trigger}
-        className={controls.compactButton}
+        variant="destructive-ghost"
+        size="sm"
         disabled={disabled || experiment.active_run_count !== 0}
         onClick={() => setOpen(true)}
       >
-        <ProductIcon name="trash" /> Delete experiment
-      </button>
+        <Trash2 aria-hidden="true" /> Delete experiment
+      </Button>
       {hasActiveRuns && (
-        <span className={styles.deleteNotice}>Wait for active runs to finish before deleting.</span>
+        <span className="basis-full text-right text-xs text-muted-foreground">
+          Wait for active runs to finish before deleting.
+        </span>
       )}
       <ConfirmDialog
         isOpen={open}

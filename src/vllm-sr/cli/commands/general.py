@@ -25,6 +25,10 @@ from cli.router_management_client import RouterManagementClient
 from cli.utils import get_logger
 
 log = get_logger(__name__)
+GATEWAY_OPTION_HELP = (
+    f"The gateway mode the configuration is served in (default: ${GATEWAY_ENV} "
+    "or standalone)."
+)
 
 
 @click.group(invoke_without_command=True)
@@ -159,29 +163,32 @@ def config_schema(
     help="Path for migrated canonical config (default: <config>.migrated.yaml)",
 )
 @click.option(
+    "--gateway",
+    type=click.Choice(VALID_GATEWAYS),
+    default=None,
+    help=GATEWAY_OPTION_HELP,
+)
+@click.option(
     "--force",
     is_flag=True,
     help="Overwrite the output file if it already exists.",
 )
-@click.option(
-    "--offline",
-    is_flag=True,
-    help="Check the output with only the CLI's structural checks, without the Router's validation.",
-)
 @exit_with_logged_error(log)
 def config_migrate(
-    config_path: str, output: str | None, force: bool, offline: bool
+    config_path: str, output: str | None, gateway: str | None, force: bool
 ) -> None:
-    """Migrate a legacy or mixed config file to canonical v0.3 YAML.
+    """Migrate a config file to canonical v0.5 YAML.
 
-    The output is written only when the Router's own validation accepts it: a
-    local Router binary ($VLLM_SR_ROUTER_BINARY) or the Router in its local
-    image. With --offline, or when no Router can run, only the CLI's
-    structural checks run.
+    The Router rewrites the file: a local Router binary
+    ($VLLM_SR_ROUTER_BINARY) or, present here and never pulled, the Router
+    image `vllm-sr serve` runs by default ($VLLM_SR_ROUTER_IMAGE,
+    $VLLM_SR_IMAGE or this CLI's own); a running stack's Router is not asked.
+    The output is written only when the CLI's structural checks and the
+    Router's own validation accept it, in the gateway mode --gateway names.
     """
 
     migrate_config_command(
-        config_path=config_path, output_path=output, force=force, offline=offline
+        config_path=config_path, output_path=output, force=force, gateway=gateway
     )
 
 
@@ -190,7 +197,7 @@ def config_migrate(
     "--config",
     "config_path",
     required=True,
-    help="Path to a canonical v0.3 config file. The file is not modified.",
+    help="Path to a canonical v0.5 config file. The file is not modified.",
 )
 @click.option(
     "--intent",
@@ -245,13 +252,16 @@ def config_propose(
 @click.option(
     "--image",
     default=None,
-    help="Router image whose own validation to run (default: the stack's, if present).",
+    help=(
+        "Router image whose own validation to run (default: the one `vllm-sr "
+        "serve` runs without --image, if present)."
+    ),
 )
 @click.option(
     "--gateway",
     type=click.Choice(VALID_GATEWAYS),
     default=None,
-    help="The gateway mode the configuration is served in (default: standalone).",
+    help=GATEWAY_OPTION_HELP,
 )
 @click.option(
     "--offline",
@@ -276,10 +286,12 @@ def config_validate(
 
     The Router's own validation decides, as it does when `vllm-sr serve` or
     `vllm-sr config apply` loads the file: a local Router binary
-    (--router-binary or $VLLM_SR_ROUTER_BINARY), the Router in its local image
-    (never pulled), or the running Router --endpoint names. The CLI checks the
-    file's structure and the rules it owns as well. With --offline, or when no
-    Router can run, only the CLI's structural checks run.
+    (--router-binary or $VLLM_SR_ROUTER_BINARY), a Router image present here
+    and never pulled (--image, else the one `vllm-sr serve` runs by default:
+    $VLLM_SR_ROUTER_IMAGE, $VLLM_SR_IMAGE or this CLI's own), or the running
+    Router --endpoint names. A running stack's Router is asked only when named.
+    The CLI checks the file's structure and the rules it owns as well. With
+    --offline, or when no Router can run, only the CLI's structural checks run.
 
     Examples:
         vllm-sr config validate

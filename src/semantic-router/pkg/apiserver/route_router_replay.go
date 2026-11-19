@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/redaction"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -27,7 +28,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[routerreplay.ListResponse](http.StatusOK, "Successful replay response"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -36,12 +36,11 @@ func apiRouterReplayRoutes() []apiRoute {
 				Path:        apiObservabilityReplaysPath + "/aggregate",
 				Method:      "GET",
 				Description: "Aggregate Router Replay routing and cost metadata",
-				Parameters:  routerReplayFilterParameters(),
+				Parameters:  routerReplayAggregateParameters(),
 			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[routerreplay.AggregateResponse](http.StatusOK, "Successful replay response"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -58,9 +57,48 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[routerreplay.TrajectoryResponse](http.StatusOK, "Successful replay response"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
+		),
+		managedRoute(
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/runs",
+				Method:      "GET",
+				Description: "List agent runs, one summary per session over the filtered records, latest activity first",
+				Parameters:  routerReplayRunListParameters(),
+			},
+			policy,
+			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			jsonResponse[routerreplay.RunListResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
+		),
+		managedRoute(
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/run",
+				Method:      "GET",
+				Description: "Read one agent run as a tree: its agents and their calls in time order, with each call's route, cost and outcome",
+				Parameters: []OpenAPIParameter{
+					requiredQueryParameter("session_id", "Session whose agent run should be returned, across recipes.", "string"),
+				},
+			},
+			policy,
+			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			jsonResponse[routerreplay.RunResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
+		),
+		managedRoute(
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/models",
+				Method:      "GET",
+				Description: "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
+			},
+			policy,
+			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			jsonResponse[routerreplay.ModelListResponse](http.StatusOK, "Successful replay response"),
+			errorResponses(http.StatusNotFound, http.StatusInternalServerError),
 		),
 		managedRoute(
 			EndpointMetadata{
@@ -72,7 +110,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[shadowdataset.Manifest](http.StatusOK, "Shadow comparison dataset manifest"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -90,7 +127,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			routePolicy{Permission: PermReplayDetail, Sensitivity: SensitivityReplay},
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[shadowdataset.JudgeTaskSet](http.StatusOK, "Blinded judge tasks"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -99,7 +135,6 @@ func apiRouterReplayRoutes() []apiRoute {
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
-			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
 			jsonResponse[routerreplay.RoutingRecord](http.StatusOK, "Successful replay response"),
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
@@ -113,8 +148,21 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 		queryParameter("decision", "Filter by decision name.", "string"),
 		queryParameter("model", "Filter by selected model.", "string"),
 		queryParameter("session_id", "Filter by logical session identifier.", "string"),
+		queryParameter("turn_id", "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.", "string"),
+		queryParameter("harness", "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.", "string"),
+		queryParameter("since", "Keep the records at or after this RFC 3339 timestamp, such as 2026-11-15T15:00:00Z; send an offset's + as %2B.", "string"),
 		queryParameter("cache_status", "Filter by response-cache outcome.", "string", "all", "cached", "streamed"),
+		queryParameter("request_kind", "Filter by request kind; codex_approval_review selects Codex approval reviews.", "string", "all", "codex_approval_review"),
+		queryParameter("review_status", "Filter approval reviews by status.", "string", "all", "pending", "completed", "tool_call", "invalid", "failed", "cancelled"),
+		queryParameter("review_outcome", "Filter completed approval reviews by verdict.", "string", "all", "allow", "deny"),
+		queryParameter("review_risk", "Filter completed approval reviews by reported risk.", "string", "all", "low", "medium", "high", "critical"),
 	}
+}
+
+func routerReplayAggregateParameters() []OpenAPIParameter {
+	return append(routerReplayFilterParameters(),
+		queryParameter("interval", "With since, also return traffic: the records in contiguous intervals of this length from since to now, such as 5m or 1h; at least 1m and at most 1000 intervals.", "string"),
+	)
 }
 
 func routerReplayDatasetParameters() []OpenAPIParameter {
@@ -136,6 +184,13 @@ func routerReplayListParameters() []OpenAPIParameter {
 	)
 }
 
+func routerReplayRunListParameters() []OpenAPIParameter {
+	return append(routerReplayFilterParameters(),
+		queryParameter("limit", "Maximum runs; defaults to 20 and is capped at 100.", "integer"),
+		queryParameter("offset", "Zero-based result offset.", "integer"),
+	)
+}
+
 func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *http.Request) {
 	runtime, release := s.currentReplayRuntime()
 	defer release()
@@ -148,7 +203,7 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 	if r.URL.RawQuery != "" {
 		requestTarget += "?" + r.URL.RawQuery
 	}
-	response, handled := runtime.HandleReplayRequest(r.Method, requestTarget)
+	response, handled := runtime.HandleReplayRequest(r.Context(), r.Method, requestTarget)
 	if !handled {
 		s.writeErrorResponse(w, http.StatusNotFound, "REPLAY_UNAVAILABLE", "router replay is disabled or unavailable")
 		return
@@ -184,7 +239,7 @@ func (s *ClassificationAPIServer) handleRouterReplay(w http.ResponseWriter, r *h
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set(headers.XContentTypeOptions, "nosniff")
 	w.WriteHeader(statusCode)
 	_, _ = w.Write(body)
 }

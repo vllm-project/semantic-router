@@ -43,9 +43,13 @@ type Config struct {
 	ServiceConfig framework.ServiceConfig
 
 	PrerequisiteManifests []string
-	ResourceManifests     []string
-	WaitDeployments       []helpers.DeploymentRef
-	VerifyDeployments     []helpers.DeploymentRef
+	// PrerequisiteWaits are prerequisite deployments the Router needs
+	// running before it starts, such as the provider-mocker embedding
+	// fixture its startup prepares.
+	PrerequisiteWaits []helpers.DeploymentRef
+	ResourceManifests []string
+	WaitDeployments   []helpers.DeploymentRef
+	VerifyDeployments []helpers.DeploymentRef
 }
 
 // Stack composes the common gateway-based E2E deployment lifecycle.
@@ -140,23 +144,38 @@ func (s *Stack) ApplyPrerequisites(ctx context.Context, opts *framework.SetupOpt
 		return nil
 	}
 	s.log(opts.Verbose, "Applying prerequisite manifests")
-	return s.applyManifests(ctx, opts.KubeConfig, s.config.PrerequisiteManifests)
+	if err := s.applyManifests(ctx, opts.KubeConfig, s.config.PrerequisiteManifests); err != nil {
+		return err
+	}
+	return s.waitDeployments(ctx, opts, s.config.PrerequisiteWaits)
 }
 
 // DeployCore installs semantic-router, Envoy Gateway, and Envoy AI Gateway.
+// The Router and the two gateways do not depend on each other until the
+// profile's resources are applied, so the Router installs beside them.
 func (s *Stack) DeployCore(ctx context.Context, opts *framework.SetupOptions) error {
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
+	router := make(chan error, 1)
+	go func() {
+		s.log(opts.Verbose, "Installing semantic-router")
+		if err := deployer.Install(ctx, s.semanticRouterInstallOptions(opts)); err != nil {
+			router <- fmt.Errorf("install semantic-router: %w", err)
+			return
+		}
+		if err := deployer.WaitForDeployment(ctx, helm.SemanticRouterRelease.Namespace, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
+			router <- fmt.Errorf("wait for semantic-router: %w", err)
+			return
+		}
+		router <- nil
+	}()
+	gateways := s.deployGateways(ctx, deployer, opts)
+	return errors.Join(<-router, gateways)
+}
+
+func (s *Stack) deployGateways(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
 	envoyGatewayRelease := helm.EnvoyGatewayRelease.Clone()
 	aiGatewayCRDRelease := helm.AIGatewayCRDRelease.Clone()
 	aiGatewayRelease := helm.AIGatewayRelease.Clone()
-
-	s.log(opts.Verbose, "Installing semantic-router")
-	if err := deployer.Install(ctx, s.semanticRouterInstallOptions(opts)); err != nil {
-		return fmt.Errorf("install semantic-router: %w", err)
-	}
-	if err := deployer.WaitForDeployment(ctx, helm.SemanticRouterRelease.Namespace, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
-		return fmt.Errorf("wait for semantic-router: %w", err)
-	}
 
 	s.log(opts.Verbose, "Installing Envoy Gateway")
 	if err := deployer.Install(ctx, envoyGatewayRelease); err != nil {
@@ -176,7 +195,6 @@ func (s *Stack) DeployCore(ctx context.Context, opts *framework.SetupOptions) er
 	if err := deployer.WaitForDeployment(ctx, helm.AIGatewayRelease.Namespace, deploymentAIGateway, timeoutDeploymentWait); err != nil {
 		return fmt.Errorf("wait for Envoy AI Gateway: %w", err)
 	}
-
 	return nil
 }
 
@@ -189,12 +207,16 @@ func (s *Stack) ApplyResources(ctx context.Context, opts *framework.SetupOptions
 		}
 	}
 
-	if len(s.config.WaitDeployments) == 0 {
+	return s.waitDeployments(ctx, opts, s.config.WaitDeployments)
+}
+
+func (s *Stack) waitDeployments(ctx context.Context, opts *framework.SetupOptions, deployments []helpers.DeploymentRef) error {
+	if len(deployments) == 0 {
 		return nil
 	}
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
-	for _, deployment := range s.config.WaitDeployments {
+	for _, deployment := range deployments {
 		s.log(opts.Verbose, "Waiting for deployment %s/%s", deployment.Namespace, deployment.Name)
 		if err := deployer.WaitForDeployment(ctx, deployment.Namespace, deployment.Name, timeoutDeploymentWait); err != nil {
 			return fmt.Errorf("wait for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)

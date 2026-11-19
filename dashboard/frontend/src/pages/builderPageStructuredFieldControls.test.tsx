@@ -42,7 +42,7 @@ describe('Builder structured field controls', () => {
     expect(markup).not.toContain('<textarea')
   })
 
-  it('renders fixed nested objects and string matrices with typed inputs', () => {
+  it('renders fixed nested objects with typed inputs', () => {
     const weights = requireField(getAlgorithmFieldSchema('multi_factor'), 'weights')
     const weightsMarkup = renderToStaticMarkup(
       createElement(FieldEditor, {
@@ -55,21 +55,13 @@ describe('Builder structured field controls', () => {
     expect(weightsMarkup).toContain('value="0.4"')
     expect(weightsMarkup).not.toContain('<textarea')
 
-    const structureFeature = requireField(getSignalFieldSchema('structure'), 'feature')
-    const featureMarkup = renderToStaticMarkup(
-      createElement(FieldEditor, {
-        schema: structureFeature,
-        value: {
-          type: 'sequence',
-          source: { type: 'sequence', sequences: [['first', 'then']] },
-        },
-        onChange: vi.fn(),
-      }),
+    const keywordCount = requireField(getSignalFieldSchema('keyword'), 'count')
+    const countMarkup = renderToStaticMarkup(
+      createElement(FieldEditor, { schema: keywordCount, value: { gte: 4 }, onChange: vi.fn() }),
     )
-    expect(featureMarkup).toContain('Sequence 1')
-    expect(featureMarkup).toContain('first')
-    expect(featureMarkup).toContain('then')
-    expect(featureMarkup).not.toContain('<textarea')
+    expect(countMarkup).toContain('Greater Than or Equal')
+    expect(countMarkup).toContain('value="4"')
+    expect(countMarkup).not.toContain('<textarea')
   })
 
   it('renders multi-factor objectives and quality gates as structured controls', () => {
@@ -147,16 +139,16 @@ describe('Builder structured field controls', () => {
     expect(markup).toContain('min="1"')
   })
 
-  it('renders recursive composer rules without falling back to JSON', () => {
-    const composer = requireField(getSignalFieldSchema('complexity'), 'composer')
+  it('renders recursive rules without falling back to JSON', () => {
+    const rules: FieldSchema = { key: 'rules', label: 'Rules', type: 'rule' }
     const markup = renderToStaticMarkup(
       createElement(FieldEditor, {
-        schema: composer,
+        schema: rules,
         value: {
           operator: 'OR',
           conditions: [
             { type: 'domain', name: 'math' },
-            { type: 'preference', name: 'deep_reasoning' },
+            { type: 'keyword', name: 'deep_reasoning' },
           ],
         },
         onChange: vi.fn(),
@@ -168,6 +160,57 @@ describe('Builder structured field controls', () => {
     expect(markup).toContain('value="domain"')
     expect(markup).toContain('value="deep_reasoning"')
     expect(markup).not.toContain('<textarea')
+  })
+
+  it('lets a System One condition name an option and its own error policy', () => {
+    const rules: FieldSchema = { key: 'rules', label: 'Rules', type: 'rule' }
+    const markup = renderToStaticMarkup(
+      createElement(FieldEditor, {
+        schema: rules,
+        value: { type: 'systemone', name: 'request_kind', label: 'code' },
+        onChange: vi.fn(),
+      }),
+    )
+
+    expect(markup).toContain('Option or Label')
+    expect(markup).toContain('value="code"')
+    expect(markup).toContain('Use root policy')
+  })
+
+  it('lets an application signal condition name a label but not an error policy', () => {
+    const rules: FieldSchema = { key: 'rules', label: 'Rules', type: 'rule' }
+    const markup = renderToStaticMarkup(
+      createElement(FieldEditor, {
+        schema: rules,
+        value: { type: 'turn_relation', name: 'follow_up' },
+        onChange: vi.fn(),
+      }),
+    )
+
+    expect(markup).toContain('placeholder="hard"')
+    expect(markup).not.toContain('Use root policy')
+  })
+
+  it('offers every System One rule field in the signal editor', () => {
+    const keys = getSignalFieldSchema('systemone').map((field) => field.key)
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        'question',
+        'labels',
+        'ignore_labels',
+        'predicate',
+        'deployment',
+        'stage',
+        'input',
+        'coverage',
+        'on_unscanned',
+        'timeout_ms',
+      ]),
+    )
+    const input = requireField(getSignalFieldSchema('systemone'), 'input')
+    expect((input.fields || []).map((field) => field.key)).toEqual(
+      expect.arrayContaining(['history', 'previous_turns', 'tool_results', 'image', 'video']),
+    )
   })
 
   it('keeps raw JSON textarea handling out of the schema renderer', () => {

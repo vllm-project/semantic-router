@@ -18,8 +18,7 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 14,
       license: 'apache-2.0',
-      model_card_url:
-        'https://huggingface.co/vllm-sr/mmbert32k-intent-classifier-merged',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert32k-intent-classifier-merged',
       tags: ['text-classification', 'intent-classification'],
     },
     metadata: {
@@ -43,8 +42,7 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 2,
       license: 'apache-2.0',
-      model_card_url:
-        'https://huggingface.co/vllm-sr/mmbert32k-factcheck-classifier-merged',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert32k-factcheck-classifier-merged',
       tags: ['text-classification', 'fact-check'],
     },
     metadata: {
@@ -69,8 +67,7 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 4,
       license: 'apache-2.0',
-      model_card_url:
-        'https://huggingface.co/vllm-sr/mmbert32k-feedback-detector-merged',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert32k-feedback-detector-merged',
       tags: ['text-classification', 'feedback-detection'],
     },
     metadata: {
@@ -95,8 +92,7 @@ const routerModels = [
       max_context_length: 32768,
       num_classes: 2,
       license: 'apache-2.0',
-      model_card_url:
-        'https://huggingface.co/vllm-sr/mmbert32k-jailbreak-detector-merged',
+      model_card_url: 'https://huggingface.co/vllm-sr/mmbert32k-jailbreak-detector-merged',
       tags: ['text-classification', 'security'],
     },
     metadata: {
@@ -205,16 +201,33 @@ const decisionModelCatalog = {
   },
 }
 
+const readyJudge = {
+  name: 'routing-judge',
+  managed: true,
+  served_name: 'routing-judge',
+  repo: 'vllm-sr/Vela-2.0-4B',
+  ready: true,
+  state: 'ready',
+  device: 'rocm:0',
+  desired_replicas: 1,
+  ready_replicas: 1,
+}
+
 async function mockRouterInventoryShell(
   page: Page,
   status: unknown = statusPayload,
-  config: unknown = { signals: {}, decisions: [], providers: { models: [] }, plugins: {} },
+  config: unknown = { version: 'v0.5', providers: { models: [] }, recipes: [{ name: 'default' }] },
+  inventory: unknown = { deployments: [] },
 ) {
   await mockAuthenticatedAppShell(page, {
     settings: {
       platform: 'amd',
     },
   })
+
+  await page.route('**/api/router/api/v1/inventory/model-runtime', (route) =>
+    route.fulfill({ json: inventory }),
+  )
 
   await page.route('**/api/router/config/all', async (route) => {
     await route.fulfill({
@@ -234,7 +247,7 @@ async function mockRouterInventoryShell(
 }
 
 test.describe('Router model inventory surfaces', () => {
-  test('shows the configured decision model, routing questions and observed shared runtime', async ({
+  test('shows the configured decision model, routing questions and the Router-reported runtime', async ({
     page,
   }) => {
     const questions = [
@@ -245,21 +258,20 @@ test.describe('Router model inventory surfaces', () => {
       { name: 'correction', question: { type: 'noul' } },
     ]
     const config = {
+      version: 'v0.5',
       global: { model_catalog: decisionModelCatalog },
       providers: { models: [] },
       entrypoints: [{ recipe: 'balanced', model_names: ['vllm-sr/balanced'] }],
       recipes: [
         {
           name: 'balanced',
-          routing: {
-            signals: {
-              decision: questions,
-              pii: [{ name: 'personal_data' }],
-              jailbreak: [{ name: 'prompt_attack' }],
-              safety: [{ name: 'unsafe_request' }],
-            },
-            projections: { scores: [{ name: 'effort_score' }], mappings: [{ name: 'effort' }] },
+          signals: {
+            systemone: questions,
+            pii: [{ name: 'personal_data' }],
+            jailbreak: [{ name: 'prompt_attack' }],
+            safety: [{ name: 'unsafe_request' }],
           },
+          projections: { scores: [{ name: 'effort_score' }], mappings: [{ name: 'effort' }] },
         },
       ],
     }
@@ -285,8 +297,9 @@ test.describe('Router model inventory surfaces', () => {
     const intelligence = page.getByRole('region', { name: 'Router Intelligence' })
     const overview = intelligence.getByTestId('decision-model-overview')
     await expect(overview).toContainText('Vela-2.0-4B')
-    await expect(overview).toContainText('Shared runtime ready')
-    await expect(overview).toContainText('1 runtime · 3 reported bindings')
+    // The model runtime does not list the deployment, so the Router's bindings speak for it.
+    await expect(overview).toContainText('Ready')
+    await expect(overview).toContainText('The Router reports it ready')
     await expect(
       intelligence.getByText('5 questions · 3 other signals · 2 projections'),
     ).toBeVisible()
@@ -297,15 +310,33 @@ test.describe('Router model inventory surfaces', () => {
     await expect(intelligence.getByText('effort_score', { exact: true })).toBeVisible()
     await expect(intelligence.getByText('effort', { exact: true })).toBeVisible()
     await expect(intelligence.getByText('personal_data', { exact: true })).toBeVisible()
-    await expect(
-      intelligence.getByTestId('router-model-grid-preview').locator('button'),
-    ).toHaveCount(1)
-    await intelligence.getByTestId('router-model-preview-pii_classifier').click()
-    await expect(page.getByRole('dialog', { name: 'Runtime model details' })).toBeVisible()
-    await page.keyboard.press('Escape')
+    await expect(intelligence.getByTestId('router-model-grid-preview')).toHaveCount(0)
+    await expect(intelligence.getByText('Runtime inventory')).toHaveCount(0)
 
     await intelligence.getByRole('button', { name: 'Manage decision model' }).click()
-    await expect(page).toHaveURL('/decision-model')
+    await expect(page).toHaveURL(/\/models\/decision(\?|$)/)
+  })
+
+  test('shows one decision model deployment state on Home and Status', async ({ page }) => {
+    await mockRouterInventoryShell(
+      page,
+      statusPayload,
+      { global: { model_catalog: decisionModelCatalog } },
+      { deployments: [readyJudge] },
+    )
+    await page.goto('/dashboard')
+    const overview = page.getByTestId('decision-model-overview')
+    await expect(overview).toContainText('Vela-2.0-4B')
+    await expect(overview).toContainText('Ready')
+    await expect(overview).toContainText('rocm:0 · 1 of 1 replicas ready')
+
+    await page.goto('/observe/status')
+    const summary = page.getByTestId('status-decision-model')
+    await expect(summary).toContainText('Vela-2.0-4B · routing-judge')
+    await expect(summary).toContainText('Ready')
+    await expect(summary).toContainText('rocm:0 · 1 of 1 replicas ready')
+    await summary.getByRole('button', { name: 'Decision models' }).click()
+    await expect(page).toHaveURL(/\/models\/decision(\?|$)/)
   })
 
   test('does not claim a configured decision model is ready without runtime evidence', async ({
@@ -317,11 +348,19 @@ test.describe('Router model inventory surfaces', () => {
     await page.goto('/dashboard')
     const overview = page.getByTestId('decision-model-overview')
     await expect(overview).toContainText('Vela-2.0-4B')
-    await expect(overview).toContainText('Runtime not reported')
-    await expect(overview).not.toContainText('Shared runtime ready')
+    await expect(overview).toContainText('Not reported')
+    await expect(overview).toContainText(
+      'The model runtime has not reported the routing-judge deployment yet',
+    )
+    await expect(overview).not.toContainText('Ready')
+
+    await page.goto('/observe/status')
+    await expect(page.getByTestId('status-decision-model')).toContainText('Not reported')
   })
 
-  test('keeps service availability useful when router model metadata is absent', async ({ page }) => {
+  test('keeps service availability useful when router model metadata is absent', async ({
+    page,
+  }) => {
     await mockRouterInventoryShell(page, {
       ...statusPayload,
       models: {
@@ -335,141 +374,37 @@ test.describe('Router model inventory surfaces', () => {
       },
     })
 
-    await page.goto('/status')
+    await page.goto('/observe/status')
 
     await expect(page.getByTestId('status-overview')).toContainText('Healthy')
     await expect(page.getByTestId('status-services-section')).toContainText('Router')
     await expect(page.getByTestId('status-services-section')).toContainText('Dashboard')
   })
 
-  test('opens the selected runtime details and restores focus on close', async ({
+  test('keeps the legacy classifier and embedding inventory off Home and Status', async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1920, height: 1200 })
-
+    await page.setViewportSize({ width: 1600, height: 1000 })
     await mockRouterInventoryShell(page)
 
     await page.goto('/dashboard')
+    await expect(page.getByTestId('decision-model-overview')).toBeVisible()
+    await expect(page.locator('[data-testid^="router-model-preview-"]')).toHaveCount(0)
+    await expect(page.getByText('Runtime inventory')).toHaveCount(0)
+    await expect(page.getByText(routerModels[4].registry.repo_id)).toHaveCount(0)
 
-    const previewGrid = page.getByTestId('router-model-grid-preview')
-    await expect(previewGrid.locator('[data-testid^="router-model-preview-"]')).toHaveCount(6)
-
-    const embeddingPreview = page.getByTestId('router-model-preview-mmbert_embedding_model')
-    await expect(embeddingPreview.getByRole('heading')).toHaveText('mmbert-embed-32k-2d-matryoshka')
-    await expect(embeddingPreview.getByText('vllm-sr', { exact: true })).toBeVisible()
-    await expect(embeddingPreview).toContainText('Embedding')
-    await expect(embeddingPreview).toContainText('Input budget: 32,768 tokens')
-    await expect(embeddingPreview).not.toContainText('MmBertEmbeddingModel(')
-
-    await embeddingPreview.click()
-    const details = page.getByRole('dialog', { name: 'Runtime model details' })
-    await expect(details).toBeVisible()
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(details.getByRole('heading', { level: 3 })).toHaveText(routerModels[4].registry.repo_id)
-    await expect(details.getByText('default / mmbert_embedding_model', { exact: true })).toBeVisible()
-    await expect(details).toContainText('Provider')
-    await expect(details.getByText('Model Runtime', { exact: true })).toBeVisible()
-    await expect(details.getByAltText('AMD GPU')).toBeVisible()
-    await expect(details).toContainText('ROCm 0')
-    await expect(details).toContainText('32,768 tokens')
-    const technicalDetails = details.locator('summary', { hasText: 'Technical details' })
-    await technicalDetails.click()
-    await expect(details.getByText(routerModels[4].model_path, { exact: true })).toBeVisible()
-    await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
-      'href',
-      routerModels[4].registry.model_card_url,
-    )
-    await expect(details.getByRole('searchbox')).toHaveCount(0)
-    await expect(details.locator('[data-testid^="router-model-detail-"]')).toHaveCount(1)
-    await page.keyboard.press('Escape')
-    await expect(details).toHaveCount(0)
-    await expect(embeddingPreview).toBeFocused()
-    await page.keyboard.press('Enter')
-    await expect(details).toBeVisible()
-    const closeButtons = details.getByRole('button', { name: 'Close', exact: true })
-    await expect(closeButtons.first()).toBeFocused()
-    await page.keyboard.press('Shift+Tab')
-    await expect(closeButtons.last()).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(closeButtons.first()).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(technicalDetails).toBeFocused()
-    await page.keyboard.press('Tab')
-    await expect(details.getByRole('link', { name: /model card/i })).toBeFocused()
+    await page.goto('/observe/status')
+    await expect(page.getByTestId('status-router')).toBeVisible()
+    await expect(page.getByTestId('status-decision-model')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Router models' })).toHaveCount(0)
+    await expect(page.getByText('No router models reported')).toHaveCount(0)
+    await expect(page.getByText(/classifiers? and embedding models/i)).toHaveCount(0)
+    await expect(page.getByText(routerModels[0].registry.repo_id)).toHaveCount(0)
   })
 
-  test('keeps model-card HTML out of runtime descriptions', async ({ page }) => {
-    const embedding = routerModels[4]
-    const description = [
-      '<div align="center">',
-      '<img src="https://vllm-sr.ai/img/vllm-sr-logo.social.png" alt="vLLM Semantic Router" width="560" />',
-      '<p> <a href="https://vllm-sr.ai/"><strong>Docs</strong></a> |',
-      '<a href="https://vllm-sr.ai/blog/"><strong>Blog</strong></a> |',
-      '<a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN"><strong>Slack</strong></a> |',
-      '<a href="https://github.com/vllm-project/semantic-router"><strong>GitHub</strong></a> </p> </div>',
-    ].join(' ')
-    await mockRouterInventoryShell(page, {
-      ...statusPayload,
-      models: {
-        ...statusPayload.models,
-        models: [{ ...embedding, registry: { ...embedding.registry, description } }],
-        summary: { ...statusPayload.models.summary, loaded_models: 1, total_models: 1 },
-      },
-    })
-    await page.goto('/dashboard')
-    await page.getByTestId('router-model-preview-mmbert_embedding_model').click()
-
-    const details = page.getByRole('dialog', { name: 'Runtime model details' })
-    await expect(details).toBeVisible()
-    await expect(details.getByText('Embedding', { exact: true }).first()).toBeVisible()
-    await expect(details).not.toContainText('<div')
-    await expect(details).not.toContainText('Docs')
-    await expect(details).not.toContainText('Blog')
-    await expect(details.getByRole('link')).toHaveCount(1)
-    await expect(details.getByRole('link', { name: /model card/i })).toHaveAttribute(
-      'href', embedding.registry.model_card_url,
-    )
-  })
-
-  test('keeps same-name runtimes scoped to the clicked recipe', async ({ page }) => {
-    const embedding = routerModels[4]
-    await mockRouterInventoryShell(page, {
-      ...statusPayload,
-      models: {
-        ...statusPayload.models,
-        models: [
-          {
-            ...embedding,
-            recipe: 'balance',
-            model_path: 'models/balance-embedding',
-            registry: { ...embedding.registry, local_path: 'models/balance-embedding' },
-          },
-          {
-            ...embedding,
-            recipe: 'vault',
-            model_path: 'models/vault-embedding',
-            registry: { ...embedding.registry, local_path: 'models/vault-embedding' },
-          },
-        ],
-        summary: { ...statusPayload.models.summary, loaded_models: 2, total_models: 2 },
-      },
-    })
-    await page.goto('/dashboard')
-    const previews = page.getByTestId('router-model-preview-mmbert_embedding_model')
-    await expect(previews).toHaveCount(2)
-    // Both consumers use the same upstream repository. The second fixture is
-    // the vault runtime; selecting it must preserve its recipe and artifact.
-    await previews.nth(1).click()
-
-    const details = page.getByRole('dialog', { name: 'Runtime model details' })
-    await expect(details.getByText('vault / mmbert_embedding_model', { exact: true })).toBeVisible()
-    await details.locator('summary', { hasText: 'Technical details' }).click()
-    await expect(details.getByText('models/vault-embedding', { exact: true })).toBeVisible()
-    await expect(details).not.toContainText('models/balance-embedding')
-    await expect(page).toHaveURL(/\/dashboard$/)
-  })
-
-  test('makes degraded service health explicit without hiding healthy services', async ({ page }) => {
+  test('makes degraded service health explicit without hiding healthy services', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1600, height: 900 })
 
     await mockRouterInventoryShell(page, {
@@ -480,7 +415,7 @@ test.describe('Router model inventory surfaces', () => {
         { name: 'Telemetry', status: 'unavailable', healthy: false },
       ],
     })
-    await page.goto('/status')
+    await page.goto('/observe/status')
 
     const overview = page.getByTestId('status-overview')
     await expect(overview).toContainText('Degraded')
@@ -491,9 +426,7 @@ test.describe('Router model inventory surfaces', () => {
     await expect(services).toContainText('Unavailable')
   })
 
-  test('renders a keyboard-accessible 90-hour service history', async ({
-    page,
-  }) => {
+  test('renders a keyboard-accessible 90-hour service history', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 900 })
 
     await mockRouterInventoryShell(page, {
@@ -504,7 +437,7 @@ test.describe('Router model inventory surfaces', () => {
         services: [hourlyHistory('Router'), hourlyHistory('Dashboard')],
       },
     })
-    await page.goto('/status')
+    await page.goto('/observe/status')
 
     const overview = page.getByTestId('status-overview')
     const servicesSection = page.getByTestId('status-services-section')
@@ -531,14 +464,14 @@ test.describe('Router model inventory surfaces', () => {
       services: [],
       models: { models: [] },
     })
-    await page.goto('/status')
+    await page.goto('/observe/status')
 
-    await expect(page.getByRole('heading', { name: 'System status' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Status', exact: true, level: 1 })).toBeVisible()
     const overview = page.getByTestId('status-overview')
     await expect(overview).toBeVisible()
     await expect(overview).toContainText('No running services detected')
     await expect(overview).toContainText('Availability will appear when the Router starts.')
-    await expect(page.getByLabel('Refresh system status')).toBeVisible()
+    await expect(page.getByText('Live · checks every 10 s', { exact: true })).toBeVisible()
 
     const pageMetrics = await page.getByTestId('status-page').evaluate((node) => ({
       clientWidth: node.clientWidth,
@@ -556,4 +489,37 @@ test.describe('Router model inventory surfaces', () => {
     expect(servicesMetrics.scrollWidth).toBeLessThanOrEqual(servicesMetrics.clientWidth + 1)
   })
 
+  test('lines the Router and Deployment cards up and keeps in-cluster addresses off the page', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 })
+    await mockRouterInventoryShell(page, {
+      ...statusPayload,
+      version: 'v0.5.0-dev.e1ba40498f',
+      endpoints: ['http://router:8080'],
+      router_runtime: { phase: 'ready', ready: true, message: 'Router configuration is active.' },
+      history: {
+        windowHours: 90,
+        through: '2026-08-27T17:00:00.000Z',
+        services: [hourlyHistory('Router'), hourlyHistory('Dashboard')],
+      },
+    })
+    await page.goto('/observe/status')
+
+    const router = page.getByTestId('status-router')
+    const deployment = page.getByTestId('status-deployment')
+    await expect(deployment).toContainText('v0.5.0-dev.e1ba40498f')
+    const [routerBox, deploymentBox] = await Promise.all([
+      router.boundingBox(),
+      deployment.boundingBox(),
+    ])
+    expect(routerBox).not.toBeNull()
+    expect(deploymentBox).not.toBeNull()
+    expect(Math.abs(routerBox!.y - deploymentBox!.y)).toBeLessThanOrEqual(1)
+    expect(Math.abs(routerBox!.height - deploymentBox!.height)).toBeLessThanOrEqual(1)
+
+    await expect(page.getByText('Public endpoints')).toHaveCount(0)
+    await expect(page.getByText('http://router:8080')).toHaveCount(0)
+    await expect(page.getByTestId('status-decision-model')).toBeVisible()
+  })
 })

@@ -1,24 +1,25 @@
-routing:
-  decisions:
-    - name: priority_safe_escalation_route
-      description: Combine AND, OR, and NOT for a realistic multi-signal routing case.
-      priority: 160
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-              - type: complexity
-                name: needs_reasoning:hard
-          - operator: NOT
-            conditions:
-              - type: jailbreak
-                name: prompt_injection
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: true
-
+recipes:
+  - name: default
+    decisions:
+      - name: priority_safe_escalation_route
+        description: Combine AND, OR, and NOT for a realistic multi-signal routing case.
+        priority: 160
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+            - operator: OR
+              conditions:
+                - type: keyword
+                  name: urgent_keywords
+                - type: complexity
+                  name: needs_reasoning
+                  label: hard
+            - operator: NOT
+              conditions:
+                - type: jailbreak
+                  name: prompt_injection
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: true

@@ -63,7 +63,7 @@ func TestRoutingDecisionsAtNamesRecipePaths(t *testing.T) {
 		{Name: "coding", Profile: config.RoutingProfile{Decisions: []config.Decision{{Name: "b"}}}},
 	}
 	at := cfg.RoutingDecisionsAt()
-	if len(at) != 2 || at[0].Path != "routing.decisions[a]" || at[1].Path != "recipes[coding].routing.decisions[b]" ||
+	if len(at) != 2 || at[0].Path != "recipes[default].decisions[a]" || at[1].Path != "recipes[coding].decisions[b]" ||
 		at[1].Decision.Name != "b" {
 		t.Fatalf("RoutingDecisionsAt() = %+v", at)
 	}

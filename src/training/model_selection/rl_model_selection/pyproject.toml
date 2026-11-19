@@ -2,7 +2,7 @@
 name = "rl-model-selection"
 version = "0.0.0"
 description = "Environment for the RL model selection trainers under src/training/model_selection/rl_model_selection"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     "numpy>=1.24.0,<3",

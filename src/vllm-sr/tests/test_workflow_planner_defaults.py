@@ -14,25 +14,28 @@ def test_dynamic_planner_default_preserves_distinct_worker_minimum(planner):
         workflows["planner"] = planner
     cfg = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {
-                "decisions": [
-                    {
-                        "name": "flow",
-                        "priority": 1,
-                        "modelRefs": [{"model": "worker-a"}, {"model": "worker-b"}],
-                        "algorithm": {
-                            "type": "workflows",
-                            "minimum_candidates": 2,
-                            "workflows": workflows,
-                        },
-                    }
-                ]
-            },
+            "version": "v0.5",
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "flow",
+                            "priority": 1,
+                            "modelRefs": [{"model": "worker-a"}, {"model": "worker-b"}],
+                            "algorithm": {
+                                "type": "workflows",
+                                "minimum_candidates": 2,
+                                "workflows": workflows,
+                            },
+                        }
+                    ],
+                }
+            ],
         }
     )
     assert validate_algorithm_configurations(cfg) == []
-    decision = cfg.routing.decisions[0]
+    decision = cfg.default_recipe.decisions[0]
     actual = decision.algorithm.workflows.planner
     assert (actual.model if actual else None) == (planner or {}).get("model")
     decision.modelRefs[1].model = "worker-a"

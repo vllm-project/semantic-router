@@ -76,7 +76,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		failed := llmprotocol.Event{
 			Type: llmprotocol.EventResponseFailed, ResponseID: response.ID,
 			Model: response.Model, StopReason: llmprotocol.StopError, Error: response.Error,
-			Failure: llmprotocol.FailureResponse,
+			Failure: llmprotocol.FailureResponse, CreatedAt: response.CreatedAt,
 		}
 		if response.Usage.State != "" {
 			usage := response.Usage
@@ -88,6 +88,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		Type:       llmprotocol.EventResponseStarted,
 		ResponseID: response.ID,
 		Model:      response.Model,
+		CreatedAt:  response.CreatedAt,
 	}
 	if response.Usage.State != "" {
 		usage := response.Usage
@@ -259,10 +260,10 @@ func neutralReasoningDeltaEvents(
 
 func neutralToolCallEvents(started, completed llmprotocol.Event, content llmprotocol.Content) ([]llmprotocol.Event, error) {
 	if content.ToolCall == nil {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_call_missing", "neutral tool call is missing", nil)
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_call_missing", "tool call is missing", nil)
 	}
 	call := *content.ToolCall
-	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name}
+	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name, Namespace: call.Namespace}
 	completed.ToolCall = &call
 	delta := started
 	delta.Type = llmprotocol.EventToolCallDelta

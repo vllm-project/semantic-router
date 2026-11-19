@@ -47,7 +47,7 @@ func decisionRouteResponses(success string) map[int]apicontract.Response {
 		http.StatusNotFound:              apicontract.JSONResponse[map[string]any]("The frontend endpoint or selected route is not available"),
 		http.StatusRequestEntityTooLarge: apicontract.JSONResponse[map[string]any]("The request exceeds 2 MiB"),
 		http.StatusBadGateway:            apicontract.JSONResponse[map[string]any]("The frontend is unreachable or returned an invalid response"),
-		http.StatusServiceUnavailable:    apicontract.JSONResponse[map[string]any]("The route is unavailable, the request was canceled, or the cascade could not resolve the request"),
+		http.StatusServiceUnavailable:    apicontract.JSONResponse[map[string]any]("The route is unavailable, the request was canceled, or no escalate stage could resolve the request"),
 		http.StatusGatewayTimeout:        apicontract.JSONResponse[map[string]any]("The frontend or selected algorithm deadline elapsed"),
 	}
 	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {

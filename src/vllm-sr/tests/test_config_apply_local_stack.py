@@ -22,7 +22,7 @@ MOVED_PORT = 8890
 WARMUP_SECONDS = 120
 
 SOURCE = f"""\
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -34,9 +34,8 @@ providers:
     - name: m
       backend_refs:
         - endpoint: host.docker.internal:8000
-routing:
-  modelCards:
-    - name: m
+recipes:
+  - name: default
 """
 
 
@@ -48,7 +47,6 @@ def stack(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> LocalStack:
     stack = LocalStack(
         layout=resolve_runtime_stack(),
         state_dir=state_dir,
-        platform=None,
         algorithm=None,
     )
     _publish_management_endpoint(monkeypatch, stack, 8080, 8080)
@@ -486,14 +484,17 @@ def test_local_stack_reads_the_router_container(monkeypatch, tmp_path):
     monkeypatch.setattr(
         local_stack_config,
         "_container_env",
-        lambda _name: {"VLLM_SR_PLATFORM": "rocm", "VLLM_SR_ALGORITHM_OVERRIDE": "knn"},
+        lambda _name: {
+            "VLLM_SR_PLATFORM": "rocm",
+            "VLLM_SR_ALGORITHM_OVERRIDE": "random",
+        },
     )
 
     found = local_stack_config.local_stack()
 
     assert found is not None
     assert found.state_dir == state_dir
-    assert (found.platform, found.algorithm) == ("rocm", "knn")
+    assert found.algorithm == "random"
     assert found.owns(tmp_path / "config.yaml")
     assert not found.owns(tmp_path / "elsewhere" / "config.yaml")
 

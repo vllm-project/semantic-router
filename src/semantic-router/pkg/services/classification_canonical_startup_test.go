@@ -11,7 +11,7 @@ import (
 func TestStandaloneCanonicalStartupRejectsInvalidBindings(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.MoMRegistry = map[string]string{"models/lora_model": "unrelated/discoverable-model"}
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "missing", Adapter: "mmbert", Contract: "embedding.v1"}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "missing"}}
 	service, err := NewClassificationServiceFromConfig(cfg)
 	if err == nil || service != nil {
 		if service != nil {

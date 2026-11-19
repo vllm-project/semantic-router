@@ -1001,4 +1001,4 @@ lora_training_infrastructure:
 
 ## 下一步
 
-- 参见：[模型性能评估](/docs/training/model-performance-eval)
+- 参见：[模型性能评估](/docs/v0.4/training/model-performance-eval)

@@ -21,11 +21,14 @@ import (
 // VectorStoreRuntime owns the vector-store services shared by the API server
 // and request-time RAG retrieval.
 type VectorStoreRuntime struct {
-	FileStore      *vectorstore.FileStore
-	Backend        vectorstore.VectorStoreBackend
-	Manager        *vectorstore.Manager
-	Pipeline       *vectorstore.IngestionPipeline
-	Embedder       vectorstore.Embedder
+	FileStore *vectorstore.FileStore
+	Backend   vectorstore.VectorStoreBackend
+	Manager   *vectorstore.Manager
+	Pipeline  *vectorstore.IngestionPipeline
+	Embedder  vectorstore.Embedder
+	// deployment embeds documents and queries at dimension.
+	deployment     string
+	dimension      int
 	registryCloser io.Closer
 	embeddings     *embedding.Set
 	lease          *modelservice.Lease
@@ -42,18 +45,14 @@ const defaultDrainTimeout = 25 * time.Second
 
 // vectorStoreEmbeddingConfig is the part of cfg the vector store embeds with:
 // the shared embedding consumer and what it resolves through, the
-// deployments embeddings.default and embeddings.multimodal name included.
-// Recipe classifier and safety bindings require their signal declarations and
-// do not belong to this service's preparation scope.
+// deployment embeddings.default names included. Recipe classifier and
+// safety bindings require their signal declarations and do not belong to
+// this service's preparation scope.
 func vectorStoreEmbeddingConfig(cfg *config.RouterConfig) *config.RouterConfig {
 	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
-	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
-	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
 	embeddingConfig.ModelDeployments = cfg.ModelDeployments
 	embeddingConfig.GlobalModelBindings = cfg.GlobalModelBindings
 	embeddingConfig.EmbeddingDeployment = cfg.EmbeddingDeployment
-	embeddingConfig.MultimodalEmbeddingDeployment = cfg.MultimodalEmbeddingDeployment
-	embeddingConfig.ExternalModels = cfg.ExternalModels
 	embeddingConfig.ModelAdmission = cfg.ModelAdmission
 	return embeddingConfig
 }
@@ -91,7 +90,8 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, runtimes *modelservice.Mana
 	if err != nil {
 		return nil, fmt.Errorf("prepare vector store embedding: %w", err)
 	}
-	embedder, err := prepareVectorStoreEmbedding(prepared, cfg.VectorStore)
+	deployment, width := cfg.VectorStoreEmbedding()
+	embedder, dimension, err := prepareVectorStoreEmbedding(prepared, deployment, width)
 	if err != nil {
 		_ = prepared.Close()
 		return nil, err
@@ -101,7 +101,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, runtimes *modelservice.Mana
 			_ = prepared.Close()
 		}
 	}()
-	identity, err := resolveVectorStoreEmbeddingIdentity(embedder, cfg.VectorStore)
+	identity, err := resolveVectorStoreEmbeddingIdentity(embedder, deployment, dimension)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, runtimes *modelservice.Mana
 		return nil, fmt.Errorf("failed to create vector store file store: %w", err)
 	}
 
-	backend, err := vectorstore.NewBackend(cfg.VectorStore.BackendType, buildVectorStoreBackendConfigs(cfg))
+	backend, err := vectorstore.NewBackend(cfg.VectorStore.BackendType, buildVectorStoreBackendConfigs(cfg, dimension))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create vector store backend: %w", err)
 	}
@@ -132,7 +132,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, runtimes *modelservice.Mana
 			_ = backend.Close()
 		}
 	}()
-	manager := vectorstore.NewManager(backend, storeReg, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType, vectorstore.WithEmbeddingIdentity(identity.Fingerprint))
+	manager := vectorstore.NewManager(backend, storeReg, dimension, cfg.VectorStore.BackendType, vectorstore.WithEmbeddingIdentity(identity.Fingerprint))
 
 	ctx := context.Background()
 	if err = manager.LoadFromRegistry(ctx); err != nil {
@@ -155,6 +155,8 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, runtimes *modelservice.Mana
 		Manager:        manager,
 		Pipeline:       pipeline,
 		Embedder:       embedder,
+		deployment:     deployment,
+		dimension:      dimension,
 		registryCloser: regCloser,
 		embeddings:     prepared,
 		lease:          lease,
@@ -165,22 +167,21 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, runtimes *modelservice.Mana
 // Resolve output width before opening a backend or creating collection metadata.
 // Request a full provider first so an unchecked option view cannot masquerade
 // as support for a dimension that the model does not actually produce.
-func prepareVectorStoreEmbedding(prepared *embedding.Set, cfg *config.VectorStoreConfig) (embedding.Provider, error) {
-	provider, err := prepared.Get(cfg.EmbeddingModel, 0, 0)
+func prepareVectorStoreEmbedding(prepared *embedding.Set, deployment string, width int) (embedding.Provider, int, error) {
+	provider, err := prepared.Get(deployment, 0, 0)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	dimension, err := embedding.ResolveDimension(provider, cfg.EmbeddingDimension)
+	dimension, err := embedding.ResolveDimension(provider, width)
 	if err != nil {
-		return nil, fmt.Errorf("vector store output dimension: %w", err)
+		return nil, 0, fmt.Errorf("vector store output dimension: %w", err)
 	}
-	cfg.EmbeddingDimension = dimension
-	return embedding.WithOptions(provider, embedding.Options{Dimension: dimension}), nil
+	return embedding.WithOptions(provider, embedding.Options{Dimension: dimension}), dimension, nil
 }
 
-func resolveVectorStoreEmbeddingIdentity(embedder embedding.Provider, cfg *config.VectorStoreConfig) (embedding.ContentIdentity, error) {
+func resolveVectorStoreEmbeddingIdentity(embedder embedding.Provider, deployment string, dimension int) (embedding.ContentIdentity, error) {
 	identity, err := embedding.ResolveProviderIdentity(embedder, embedding.ConsumerSettings{
-		ModelType: cfg.EmbeddingModel, Dimension: cfg.EmbeddingDimension,
+		ModelType: deployment, Dimension: dimension,
 		InputPolicy: "vectorstore-chunk-content-and-query-v1",
 	})
 	if err != nil && !errors.Is(err, embedding.ErrIdentityUnsupported) {
@@ -286,14 +287,14 @@ func (r *VectorStoreRuntime) LogInitialized(component string, cfg *config.Router
 		return
 	}
 	logging.ComponentEvent(component, "vector_store_initialized", map[string]interface{}{
-		"backend": cfg.VectorStore.BackendType,
-		"model":   cfg.VectorStore.EmbeddingModel,
-		"dim":     cfg.VectorStore.EmbeddingDimension,
-		"workers": cfg.VectorStore.IngestionWorkers,
+		"backend":   cfg.VectorStore.BackendType,
+		"embedding": r.deployment,
+		"dim":       r.dimension,
+		"workers":   cfg.VectorStore.IngestionWorkers,
 	})
 }
 
-func buildVectorStoreBackendConfigs(cfg *config.RouterConfig) vectorstore.BackendConfigs {
+func buildVectorStoreBackendConfigs(cfg *config.RouterConfig, dimension int) vectorstore.BackendConfigs {
 	switch cfg.VectorStore.BackendType {
 	case "memory":
 		maxEntries := 100000
@@ -316,7 +317,7 @@ func buildVectorStoreBackendConfigs(cfg *config.RouterConfig) vectorstore.Backen
 				Endpoint:              lsCfg.Endpoint,
 				AuthToken:             lsCfg.AuthToken,
 				EmbeddingModel:        lsCfg.EmbeddingModel,
-				EmbeddingDimension:    cfg.VectorStore.EmbeddingDimension,
+				EmbeddingDimension:    dimension,
 				RequestTimeoutSeconds: lsCfg.RequestTimeoutSeconds,
 				SearchType:            lsCfg.SearchType,
 			},

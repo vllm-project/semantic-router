@@ -36,9 +36,9 @@ describe('decision model deployment management', () => {
 
   it('keeps the Router warnings a save reports', async () => {
     const warning = {
-      code: 'deprecated_model_field',
-      field: 'global.model_catalog.system.pii_classifier',
-      message: 'model paths are deprecated; read as bindings.pii: vela-pii',
+      code: 'uncalibrated_preset',
+      field: 'recipes[default].signals.jailbreak[attack]',
+      message: 'resolves to deployment "d3-remote", whose model has no calibrated threshold',
     }
     const result = await readDecisionModelApplyResult(
       new Response(JSON.stringify({ status: 'success', warnings: [warning, { code: 'empty' }] }), {

@@ -33,13 +33,7 @@ func buildReplayRouteDiagnostics(
 		SelectionReasoning:             ctx.VSRSelectionReasoning,
 		SelectionTrace:                 ctx.VSRSelectionTrace.Clone(),
 		FusionQuorum:                   ctx.VSRFusionQuorum,
-		TopicContinuity:                routerreplay.NewTopicContinuityRecords(ctx.TopicContinuityEvaluations),
 		Looper:                         ctx.VSRLooperDiagnostics,
-		PromptHelperModel:              ctx.VSRPromptHelperModel,
-		PromptHelperPromptTokens:       ctx.VSRPromptHelperPromptTokens,
-		PromptHelperCompletionTokens:   ctx.VSRPromptHelperCompletionTokens,
-		PromptHelperTotalTokens:        ctx.VSRPromptHelperTotalTokens,
-		PromptHelperLatencyMs:          ctx.VSRPromptHelperLatencyMs,
 		OriginalModel:                  originalModel,
 		ProposalModel:                  finalModel,
 		SelectedModel:                  finalModel,
@@ -72,6 +66,7 @@ func buildReplayRouteDiagnostics(
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 		DecisionRanking:                replayDecisionRanking(ctx.VSRDecisionDiagnostics.Ranking),
+		Retention:                      ctx.RetentionOutcome.Clone(),
 	}
 	if ctx.preparedDispatchReceipt != nil {
 		receipt := *ctx.preparedDispatchReceipt

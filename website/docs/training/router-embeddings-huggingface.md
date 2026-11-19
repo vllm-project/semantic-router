@@ -5,10 +5,14 @@ sidebar_label: Router Embeddings & Hugging Face
 
 # Train and Publish Router Embedding Models
 
-vLLM Semantic Router uses dense embedding models for two core inference capabilities:
+vLLM Semantic Router uses dense embedding models for recall only: they find
+the candidates a feature then uses or judges, and no routing decision reads
+them. Routing questions go to the decision model; see
+[System One](../system-one/overview). Recall is where a domain-adapted
+embedding model pays off:
 
-1. **Semantic Routing**: Mapping user prompts to topic anchors and intent categories using vector similarity signals.
-2. **Semantic Caching**: Determining whether an incoming query is a safe paraphrase of a previously cached response or a distinct query requiring fresh generation.
+1. **Semantic Caching**: recalling the cached requests that may be safe paraphrases of an incoming query. The `same_request` judge then confirms each hit, so a recalled request with a different meaning still gets a fresh generation.
+2. **Retrieval**: recalling the documents, memories and vector-store entries a request needs, before a `relevance` judge keeps the useful ones.
 
 While general-purpose embedding models (such as `sentence-transformers/all-MiniLM-L12-v2` or `vllm-sr/Vela-1.0-Encoder-307M`) perform well on standard language benchmarks, specialized technical and enterprise domains (e.g. medical, legal, financial, programming) often require domain-specific fine-tuning.
 
@@ -34,7 +38,7 @@ Evaluation (Separation Margin / MRR@5 / Recall)
 Packaging & Hub Upload (huggingface-cli with HF_TOKEN)
         │
         ▼
-Semantic Router Deployment (Semantic Cache or Routing Signals)
+Semantic Router Deployment (Recall for the Cache, Memory or Retrieval)
 ```
 
 ---
@@ -219,10 +223,10 @@ huggingface-cli upload <your-hf-namespace>/mmbert-embed-financial . --repo-type 
 
 Loading a LoRA adapter directly in the router is a separate runtime capability; a cache LoRA can currently be tested offline through Python and PEFT, but cannot be activated by Router configuration.
 
-To deploy a domain-adapted full embedding model built on a supported ModernBERT (`mmbert`) or Qwen3 backbone inside Semantic Router's local `model_runtime`, bind it through the canonical v0.3 `global.model_catalog` contract:
+To deploy a domain-adapted full embedding model built on a supported ModernBERT (`mmbert`) or Qwen3 backbone inside Semantic Router's local `model_runtime`, declare it as a deployment and name it in `global.model_catalog.embeddings.default`, the deployment every recall feature embeds with:
 
 ```yaml
-version: v0.3
+version: v0.5
 
 listeners:
   - name: default
@@ -234,21 +238,23 @@ global:
     deployments:
       domain-embedding:
         provider: model_runtime
-        artifact: <your-hf-namespace>/mmbert-embed-financial
+        artifact: your-org/mmbert-embed-financial
         device: cpu
         input:
           max_tokens: 8192
           overflow: truncate
-    bindings:
-      embedding:
-        deployment: domain-embedding
-        contract: embedding.v1
+    embeddings:
+      default: {deployment: domain-embedding}
 ```
 
-If you fine-tuned a classic BERT/MiniLM checkpoint (such as a 384-dimensional `all-MiniLM-L12-v2` derivative) or prefer serving embeddings via an external OpenAI-compatible HTTP server, configure `global.model_catalog.embeddings.semantic` for text-only routing consumers and disable the default semantic cache (which rejects an HTTP-only embedding contract because it requires a local layer-capable `model_runtime` view):
+Replace `your-org` with the namespace you published to, and set the
+deployment's `revision` to the commit you evaluated so the Router serves
+exactly that model.
+
+If you fine-tuned a classic BERT/MiniLM checkpoint (such as a 384-dimensional `all-MiniLM-L12-v2` derivative) or prefer serving embeddings via an external OpenAI-compatible HTTP server, declare that server as an `openai_embeddings` deployment, with the width and input of its vectors in `capabilities`:
 
 ```yaml
-version: v0.3
+version: v0.5
 
 listeners:
   - name: default
@@ -256,22 +262,18 @@ listeners:
     port: 8080
 
 global:
-  stores:
-    response_cache:
-      enabled: false
   model_catalog:
+    deployments:
+      financial-minilm:
+        provider: openai_embeddings
+        endpoint: http://model-service:8000/v1
+        model: your-org/financial-minilm-l12
+        capabilities: {dimensions: 384, modalities: [text]}
     embeddings:
-      semantic:
-        embedding_config:
-          backend: openai_compatible
-          model_type: remote
-          preload_embeddings: false
-          target_dimension: 384
-        endpoint:
-          base_url: http://model-service:8000/v1
-          model: <your-hf-namespace>/financial-minilm-l12
-          dimensions: 384
+      default: {deployment: financial-minilm}
 ```
+
+A store indexed with another model keeps its own `embedding: {deployment, dimension}` block, so only stores without one move to the new model. Vectors of different models are never compared: re-index a store after you change the model it embeds with (see [Embeddings](../model-runtime/guides/embeddings)).
 
 ### 2. Direct Python & PEFT Inference
 

@@ -139,10 +139,19 @@ func TestOpenAIChatResponseTranslatesLiteLLMReply(t *testing.T) {
 	}
 }
 
-func TestOpenAIChatRequestRejectsLiteLLMProviderSpecificFields(t *testing.T) {
+func TestOpenAIChatRequestDropsLiteLLMProviderSpecificFields(t *testing.T) {
 	raw := []byte(`{"model":"client-model","messages":[{"role":"user","content":"ok","provider_specific_fields":{"reasoning":"x"}}]}`)
-	_, _, _, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, raw)
-	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_messages_provider_specific_fields")
+	request, envelope, diagnostics, err := NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1, raw)
+	if err != nil {
+		t.Fatalf("DecodeRequestForMutation() error = %v", err)
+	}
+	if len(request.Messages) != 1 || request.Messages[0].Content[0].Text != "ok" {
+		t.Fatalf("messages = %+v", request.Messages)
+	}
+	assertDiagnosticFields(t, diagnostics, "messages[].provider_specific_fields")
+	if envelope.Request != nil {
+		t.Fatal("the source bytes still carry provider_specific_fields and must not be replayed")
+	}
 }
 
 func TestOpenAIChatResponseStillRejectsUnknownProviderFields(t *testing.T) {
@@ -439,18 +448,21 @@ func TestChatStreamCerebrasTimeInfoStaysStrict(t *testing.T) {
 	})
 }
 
-// A same-format Chat response replays the original bytes, so the omission the
-// diagnostic reports describes the neutral representation only: the client
-// still receives time_info verbatim. Both facts are pinned here so neither
-// side can drift silently.
+// A same-format Chat response replays the original members, so the omission
+// the diagnostic reports describes the neutral representation only: the
+// client still receives time_info unchanged, though not the server's
+// system_fingerprint. Both facts are pinned here so neither side can drift
+// silently.
 func TestOpenAIChatResponseSameFormatReplayForwardsTimeInfo(t *testing.T) {
 	engine := NewBuiltinEngine()
 	translated, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(cerebrasChatResponseFixture), nil)
 	if err != nil {
 		t.Fatalf("TranslateResponse() error = %v", err)
 	}
-	if string(translated.Body) != cerebrasChatResponseFixture {
-		t.Fatal("same-format response was not replayed byte-for-byte; time_info must reach the client unchanged")
+	want := strings.Replace(cerebrasChatResponseFixture, `,
+  "system_fingerprint":"fp_1"`, "", 1)
+	if !jsonEquivalent([]byte(want), translated.Body) {
+		t.Fatalf("same-format response = %s; time_info must reach the client unchanged", translated.Body)
 	}
 	assertDiagnosticFields(t, translated.Diagnostics, "time_info")
 }

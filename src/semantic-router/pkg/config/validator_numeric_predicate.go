@@ -14,7 +14,7 @@ func validateNumericPredicateContract(
 	if !numericPredicateIsFinite(predicate) {
 		return fmt.Errorf("predicate values must be finite")
 	}
-	if structurePredicateComparatorCount(predicate) == 0 {
+	if predicate.GT == nil && predicate.GTE == nil && predicate.LT == nil && predicate.LTE == nil {
 		return fmt.Errorf("predicate must set at least one comparator")
 	}
 	if predicate.GT != nil && predicate.GTE != nil {

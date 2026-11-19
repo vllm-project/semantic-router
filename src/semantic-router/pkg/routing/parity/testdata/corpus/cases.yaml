@@ -247,7 +247,46 @@ cases:
       body: '{"model":"vllm-sr/auto","stream":true,"messages":[{"role":"user","content":"Hello there."}]}'
     upstream: chat-sse
 
+  # The Images API entry routes on its prompt: an image decision's model
+  # generates, and the client receives the images dialect.
+  - name: images-api-image-route
+    request:
+      method: POST
+      path: /v1/images/generations
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","prompt":"Draw a lighthouse at dusk.","size":"512x512"}'
+    upstream: images-ok
+
+  # An Images API prompt that reaches a text decision is refused before any
+  # model is called.
+  - name: images-api-text-route
+    request:
+      method: POST
+      path: /v1/images/generations
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","prompt":"Write a python script to parse CSV."}'
+    upstream: images-ok
+
+  # An Images API prompt that matches no decision falls to the default model,
+  # which answers in text, so it is refused too.
+  - name: images-api-no-decision
+    request:
+      method: POST
+      path: /v1/images/generations
+      headers:
+        - [content-type, application/json]
+      body: '{"model":"vllm-sr/auto","prompt":"Hello there."}'
+    upstream: images-ok
+
 upstreams:
+  images-ok:
+    status: 200
+    headers:
+      - [content-type, application/json]
+    body: '{"created":1700000000,"data":[{"b64_json":"aGVsbG8="}]}'
+
   chat-ok:
     status: 200
     headers:

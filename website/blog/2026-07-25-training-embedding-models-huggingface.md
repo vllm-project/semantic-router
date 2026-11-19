@@ -35,7 +35,7 @@ Training does **not** live inside the Go router. It lives under
 (Python). Maintained models and datasets live under the official
 [`vllm-sr`](https://huggingface.co/vllm-sr) organization.
 
-For full technical details, see the maintained [Router Embeddings & Hugging Face Guide](/docs/next/training/router-embeddings-huggingface).
+For full technical details, see the maintained [Router Embeddings & Hugging Face Guide](/docs/training/router-embeddings-huggingface).
 
 ## End-to-end picture
 
@@ -256,7 +256,7 @@ those models on Hugging Face as shared community assets.
 
 | Track | Start here |
 |---|---|
-| Maintained Guide | [Router Embeddings & Hugging Face Guide](/docs/next/training/router-embeddings-huggingface) |
+| Maintained Guide | [Router Embeddings & Hugging Face Guide](/docs/training/router-embeddings-huggingface) |
 | Cache LoRA | [`cache_embeddings/README.md`](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_embeddings/cache_embeddings/README.md) |
 | Domain full fine-tune | [`domain_adapted_embeddings/USAGE.md`](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_embeddings/domain_adapted_embeddings/USAGE.md) |
 | Hub org | [vllm-sr](https://huggingface.co/vllm-sr) |

@@ -1,0 +1,1 @@
+global.model_catalog.deployments.domain: invalid_value: provider candle is removed: the built-in model runtime serves every local model; run `vllm-sr config migrate` (provider: model_runtime, on its device, with its artifact's Hub repository)

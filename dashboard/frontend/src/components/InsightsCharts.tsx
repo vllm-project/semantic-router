@@ -1,450 +1,322 @@
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import type { ReactNode } from 'react'
+import { Info } from 'lucide-react'
 
 import type {
+  InsightsAggregateCurrencySummary,
   InsightsAggregateResponse,
   InsightsAggregateSummary,
-  InsightsAggregateCurrencySummary,
-  InsightsAggregateTokenEntry,
 } from '../pages/insightsPageTypes'
-import styles from './InsightsCharts.module.css'
-import InsightsProviderCacheSummary from './InsightsProviderCacheSummary'
-import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
+import { describeMissingAggregateCost } from '../pages/insightsCostAccounting'
+import { HarnessLogo } from '../pages/InsightsHarness'
+import { API_CLIENT_LABEL, harnessInfo, sortHarnessIds } from '../pages/insightsHarness'
+import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
+import { cn, Tooltip } from '../ui'
+import InsightsRankedBars from './InsightsRankedBars'
+import {
+  formatInsightsCompactCount,
+  formatInsightsCost,
+  formatInsightsCount,
+  formatInsightsShare,
+  insightsCurrencyLabel,
+} from '../utils/insightsCost'
 
 interface InsightsChartsProps {
   aggregate: InsightsAggregateResponse
+  /** Requests by harness under the page's other filters, from the records list. */
+  harnessCounts?: Record<string, number> | null
 }
 
-const CHART_COLORS = [
-  '#e31b23',
-  '#f4f4f5',
-  '#c9cbd0',
-  '#a1a1aa',
-  '#858990',
-  '#6f7379',
-  '#55585e',
-  '#393b40',
-]
+type CostSummary = InsightsAggregateSummary | InsightsAggregateCurrencySummary
 
-interface PieLabelProps {
-  cx: number
-  cy: number
-  midAngle: number
-  outerRadius: number
-  percent: number
-  name: string
+const API_CLIENT = 'api_client'
+
+const NO_COMPARISON =
+  'No request in range has both a priced model cost and a priced reference model, so there is nothing to compare.'
+
+const total = (value: number | undefined, currency?: string) =>
+  formatInsightsCost(value, currency, { total: true })
+
+const plural = (count: number, word: string) =>
+  `${formatInsightsCount(count)} ${word}${count === 1 ? '' : 's'}`
+
+interface Metric {
+  label: string
+  value?: string
+  /** Why the value is missing, shown on the dash. */
+  why?: string
+  hint?: string
+  /** Colors the hint: below the reference reads as good, above as a caution. */
+  tone?: 'good' | 'caution'
+  title?: string
 }
 
-const renderCustomLabel = ({ cx, cy, midAngle, outerRadius, percent, name }: PieLabelProps) => {
-  const radian = Math.PI / 180
-  const radius = outerRadius + 25
-  const x = cx + radius * Math.cos(-midAngle * radian)
-  const y = cy + radius * Math.sin(-midAngle * radian)
+function leadGroup(summary: InsightsAggregateSummary): CostSummary {
+  const groups: CostSummary[] = summary.by_currency?.length ? summary.by_currency : [summary]
+  const spend = (group: CostSummary) => group.total_spend ?? group.actual_spend
+  return groups.reduce((best, group) => (spend(group) > spend(best) ? group : best))
+}
 
+function metrics(aggregate: InsightsAggregateResponse): Metric[] {
+  const summary = aggregate.summary
+  const group = leadGroup(summary)
+  const compared = group.cost_record_count > 0
+  const missing = summary.coverage ? describeMissingAggregateCost(summary.coverage) : undefined
+  const why = compared ? undefined : (missing ?? NO_COMPARISON)
+  const tokens = aggregate.token_volume
+  const cache = aggregate.provider_cache
+  // Positive when the routed requests cost more than the reference would have.
+  const difference = compared ? -group.total_saved : undefined
+  return [
+    {
+      label: 'Requests',
+      value: formatInsightsCount(aggregate.record_count),
+      hint: `${formatInsightsCount(aggregate.lifecycle.completed)} completed`,
+    },
+    {
+      label: 'Input tokens',
+      value: formatInsightsCompactCount(tokens.input_tokens),
+      title: `${formatInsightsCount(tokens.input_tokens)} tokens`,
+      hint:
+        tokens.total_tokens > 0
+          ? `${formatInsightsShare(tokens.input_tokens, tokens.total_tokens)} of all`
+          : undefined,
+    },
+    {
+      label: 'Output tokens',
+      value: formatInsightsCompactCount(tokens.output_tokens),
+      title: `${formatInsightsCount(tokens.output_tokens)} tokens`,
+      hint:
+        tokens.excluded_record_count > 0
+          ? `${plural(tokens.excluded_record_count, 'request')} without usage`
+          : undefined,
+    },
+    {
+      label: 'Prompt cache',
+      value:
+        cache && cache.priced_records > 0 ? total(cache.net_savings, cache.currency) : undefined,
+      why: 'No priced request reported cached prompt tokens.',
+      hint:
+        cache && cache.no_cache_spend > 0
+          ? `${formatInsightsShare(cache.net_savings, cache.no_cache_spend)} off cache-less cost`
+          : undefined,
+    },
+    {
+      label: 'Model cost',
+      value: compared ? total(group.actual_spend, group.currency) : undefined,
+      why,
+      hint: compared ? insightsCurrencyLabel(group.currency) || 'Price units' : undefined,
+    },
+    {
+      label: 'Vs reference',
+      value:
+        difference === undefined
+          ? undefined
+          : `${difference > 0 ? '+' : ''}${total(difference, group.currency)}`,
+      why,
+      hint:
+        compared && group.baseline_spend > 0
+          ? `${formatInsightsShare(Math.abs(group.total_saved), group.baseline_spend)} ${group.total_saved >= 0 ? 'below' : 'above'} reference`
+          : undefined,
+      tone: difference === undefined ? undefined : difference > 0 ? 'caution' : 'good',
+    },
+  ]
+}
+
+function MetricTile({ metric }: { metric: Metric }) {
   return (
-    <text
-      x={x}
-      y={y}
-      fill="#e4e4e7"
-      textAnchor={x > cx ? 'start' : 'end'}
-      dominantBaseline="central"
-      style={{ fontSize: '11px', fontWeight: 500 }}
-    >
-      {`${name}: ${(percent * 100).toFixed(0)}%`}
-    </text>
-  )
-}
-
-const generateBarColors = (count: number): string[] => {
-  return Array.from({ length: count }, (_, index) => CHART_COLORS[index % CHART_COLORS.length])
-}
-
-const formatTokenCount = (value: number) =>
-  new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value)
-
-const formatCompactTokenCount = (value: number) =>
-  new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value)
-
-const formatPercent = (value?: number) => {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return 'N/A'
-  }
-
-  return `${(value * 100).toFixed(1)}%`
-}
-
-const formatAxisLabel = (value: string) => (value.length > 20 ? `${value.slice(0, 17)}...` : value)
-
-interface TokenBreakdownChartProps {
-  title: string
-  data: InsightsAggregateTokenEntry[]
-}
-
-function TokenBreakdownChart({ title, data }: TokenBreakdownChartProps) {
-  return (
-    <div className={styles.chartSection}>
-      <h3 className={styles.chartTitle}>
-        <svg
-          className={styles.chartIcon}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M4 19h16" />
-          <path d="M7 16V8" />
-          <path d="M12 16V5" />
-          <path d="M17 16v-6" />
-        </svg>
-        {title}
-      </h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <BarChart data={data} margin={{ top: 20, right: 20, left: 0, bottom: 70 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-          <XAxis
-            dataKey="name"
-            angle={-30}
-            textAnchor="end"
-            height={90}
-            interval={0}
-            tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-            tickFormatter={formatAxisLabel}
-          />
-          <YAxis
-            tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-            tickFormatter={formatCompactTokenCount}
-          />
-          <Tooltip
-            cursor={false}
-            formatter={(value: number | string) => [formatTokenCount(Number(value)), 'Tokens']}
-            labelFormatter={(label) => String(label)}
-            contentStyle={{
-              background: 'var(--color-bg-secondary)',
-              border: '1px solid var(--color-border)',
-              borderRadius: '4px',
-              color: 'var(--color-text)',
-            }}
-            itemStyle={{ color: 'var(--color-text)' }}
-          />
-          <Legend verticalAlign="top" height={30} />
-          <Bar dataKey="input_tokens" name="Input Tokens" fill="#8f949c" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="output_tokens" name="Output Tokens" fill="#a6abb3" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="total_tokens" name="Total Tokens" fill="#e31b23" radius={[6, 6, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="flex min-w-0 flex-col gap-1 px-4 py-3.5" title={metric.title}>
+      <span className="text-[11.5px] font-medium uppercase tracking-[0.04em] text-subtle-foreground">
+        {metric.label}
+      </span>
+      {metric.value ? (
+        <span className="truncate text-[22px] font-semibold leading-tight tracking-[-0.02em] tabular">
+          {metric.value}
+        </span>
+      ) : (
+        <Tooltip content={metric.why}>
+          <span
+            className="w-fit cursor-help text-[22px] font-semibold leading-tight text-subtle-foreground"
+            aria-label={`Not available: ${metric.why}`}
+          >
+            —
+          </span>
+        </Tooltip>
+      )}
+      <span
+        className={cn(
+          'truncate text-xs text-muted-foreground',
+          metric.tone === 'good' && 'text-success-foreground',
+          metric.tone === 'caution' && 'text-warning-foreground',
+        )}
+      >
+        {metric.hint ?? '\u00a0'}
+      </span>
     </div>
   )
 }
 
-const summaryCards = (summary: InsightsAggregateSummary | InsightsAggregateCurrencySummary) => [
-  {
-    label: 'Estimated Savings',
-    value: formatCurrency(summary.total_saved, summary.currency),
-    accentClassName: styles.summaryValuePositive,
-    cardClassName: '',
-  },
-  {
-    label: 'Estimated Saved %',
-    value:
-      summary.cost_record_count > 0 && summary.baseline_spend > 0
-        ? formatPercent(summary.total_saved / summary.baseline_spend)
-        : 'N/A',
-    accentClassName: styles.summaryValueHighlight,
-    cardClassName: styles.summaryCardHighlight,
-  },
-  {
-    label: 'Estimated Baseline',
-    value: formatCurrency(summary.baseline_spend, summary.currency),
-    accentClassName: '',
-    cardClassName: '',
-  },
-  {
-    label: 'Estimated Model Cost',
-    value: formatCurrency(summary.actual_spend, summary.currency),
-    accentClassName: styles.summaryValueNeutral,
-    cardClassName: '',
-  },
-]
-
-export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
+/** The method and what was left out, held in one footnote's tooltip. */
+function methodNote(aggregate: InsightsAggregateResponse): string {
   const summary = aggregate.summary
-  const costGroups = summary.by_currency?.length ? summary.by_currency : [summary]
-  const modelData = aggregate.model_selection
-  const decisionData = aggregate.decision_distribution
-  const signalData = aggregate.signal_distribution
-  const tokenVolume = aggregate.token_volume
-  const tokenBreakdown = aggregate.token_breakdown
-  const tokenValues = [
-    { name: 'Input Tokens', value: tokenVolume.input_tokens, fill: '#8f949c' },
-    { name: 'Output Tokens', value: tokenVolume.output_tokens, fill: '#a6abb3' },
-    { name: 'Total Tokens', value: tokenVolume.total_tokens, fill: '#e31b23' },
+  const coverage = summary.coverage
+  const parts = [
+    'Each request is priced twice from its recorded tokens: at the selected model’s list price and at the reference model’s.',
+    'The reference is the route’s cost_baseline_model, else the dearest model of its recipe’s pool.',
+    'Router calls are costed apart; nothing here is a GPU bill, an invoice or a quality comparison.',
   ]
-  const barColors = generateBarColors(modelData.length)
+  if (coverage) {
+    parts.push(
+      `Priced: ${formatInsightsCount(coverage.priced_records)} of ${formatInsightsCount(aggregate.record_count)} requests` +
+        (coverage.partly_priced_records
+          ? `, ${formatInsightsCount(coverage.partly_priced_records)} partly`
+          : '') +
+        '.',
+    )
+  }
+  if (summary.excluded_record_count > 0) {
+    parts.push(`${plural(summary.excluded_record_count, 'request')} left out of the comparison.`)
+  }
+  return parts.join(' ')
+}
 
+interface HarnessRow {
+  id: string
+  label: string
+  value: number
+}
+
+function harnessRows(counts: Record<string, number>): HarnessRow[] {
+  const ids = sortHarnessIds(
+    Object.keys(counts).filter((id) => id !== API_CLIENT && counts[id] > 0),
+  )
+  const rows = ids.map((id) => ({ id, label: harnessInfo(id)?.label ?? id, value: counts[id] }))
+  if (counts[API_CLIENT] > 0)
+    rows.push({ id: API_CLIENT, label: API_CLIENT_LABEL, value: counts[API_CLIENT] })
+  return rows
+}
+
+/** Requests by agent harness: each bar opens with its harness's logo. */
+export function InsightsHarnessBars({ counts }: { counts: Record<string, number> }) {
+  const rows = harnessRows(counts)
+  const sum = rows.reduce((acc, row) => acc + row.value, 0)
+  const peak = Math.max(0, ...rows.map((row) => row.value))
+  return (
+    <Panel title="Agents" meta={plural(sum, 'request')}>
+      {rows.length === 0 ? (
+        <p className="py-2 text-[13px] text-muted-foreground">No requests in range.</p>
+      ) : (
+        <ul className="flex flex-col gap-2" aria-label="Requests by agent harness">
+          {rows.map((row) => (
+            <li
+              key={row.id}
+              className="grid grid-cols-[minmax(0,1fr)_auto_3.25rem] items-center gap-3"
+              data-harness={row.id}
+            >
+              <div className="relative h-8 min-w-0 overflow-hidden rounded-lg bg-surface-subtle">
+                <span
+                  aria-hidden
+                  className="absolute inset-y-0 left-0 rounded-lg bg-chart-1/20"
+                  style={{ width: `${peak > 0 ? Math.max((row.value / peak) * 100, 2) : 0}%` }}
+                />
+                <span className="relative flex h-full min-w-0 items-center gap-2 px-2">
+                  <HarnessLogo
+                    harness={row.id === API_CLIENT ? undefined : row.id}
+                    size={18}
+                    framed
+                  />
+                  <span className="truncate text-[13px] font-medium">{row.label}</span>
+                </span>
+              </div>
+              <span
+                className="text-right font-mono text-[13px] tabular"
+                title={`${formatInsightsCount(row.value)} requests`}
+              >
+                {formatInsightsCompactCount(row.value)}
+              </span>
+              <span className="text-right font-mono text-xs text-muted-foreground tabular">
+                {formatInsightsShare(row.value, sum)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  )
+}
+
+function Panel({
+  title,
+  meta,
+  children,
+}: {
+  title: string
+  meta?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section
+      className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card px-4 py-3.5 shadow-xs"
+      aria-label={title}
+    >
+      <header className="flex items-baseline justify-between gap-2">
+        <h4 className="text-[13px] font-semibold">{title}</h4>
+        {meta ? <span className="text-xs text-subtle-foreground">{meta}</span> : null}
+      </header>
+      {children}
+    </section>
+  )
+}
+
+// The Breakdown: the headline figures in one grid, the estimate's method behind
+// one footnote, and the requests by agent harness, model and decision.
+export default function InsightsCharts({ aggregate, harnessCounts }: InsightsChartsProps) {
+  const labels = useModelLabels()
   if (aggregate.record_count === 0) {
     return null
   }
-
+  const named = <T extends { name: string }>(entries: T[]) =>
+    entries.map((entry) => ({ ...entry, name: modelText(labels, entry.name) }))
   return (
-    <section className={styles.container}>
-      <div className={styles.estimateContext}>
-        <p className={styles.summaryHint}>
-          Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.
-        </p>
-        <details className={styles.estimateDetails}>
-          <summary>How estimates work</summary>
-          <p>
-            New records use the highest estimate in the recipe’s complete model pool across all
-            decisions, in the same currency, as baseline using the same recorded tokens. Direct
-            requests use the selected model as baseline. Older records retain their captured
-            baseline.
-          </p>
-          <p>
-            Infrastructure charges and invoice adjustments are excluded. Currencies are shown
-            separately; no exchange-rate conversion is applied. Requests that are not completed or
-            lack token usage, model pricing, or baseline data are excluded. Missing data is shown as
-            an explicit reason in each record. Historical requests without captured prices remain
-            “Price not recorded”; current model rates do not backfill them.
-          </p>
-        </details>
+    <section className="flex flex-col gap-3" aria-label="Insights summary">
+      <div
+        role="group"
+        aria-label="Breakdown figures"
+        className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border shadow-xs sm:grid-cols-3 xl:grid-cols-6 [&>*]:bg-card"
+      >
+        {metrics(aggregate).map((metric) => (
+          <MetricTile key={metric.label} metric={metric} />
+        ))}
       </div>
-      {costGroups.map((group) => (
-        <div key={group.currency || 'unavailable'}>
-          {costGroups.length > 1 ? (
-            <h3 className={styles.chartTitle}>{group.currency} estimates</h3>
-          ) : null}
-          <div className={styles.summaryGrid}>
-            {summaryCards(group).map((card) => (
-              <article
-                key={card.label}
-                className={`${styles.summaryCard} ${card.cardClassName}`.trim()}
-              >
-                <span className={styles.summaryLabel}>{card.label}</span>
-                <strong className={`${styles.summaryValue} ${card.accentClassName}`.trim()}>
-                  {card.value}
-                </strong>
-              </article>
-            ))}
-          </div>
-        </div>
-      ))}
-      {summary.excluded_record_count > 0 ? (
-        <p className={styles.summaryHint}>
-          {summary.excluded_record_count} filtered record
-          {summary.excluded_record_count === 1 ? '' : 's'} excluded from estimates. Each row
-          explains what was not recorded. Historical rows without captured prices are not repriced.
-        </p>
-      ) : null}
-
-      <InsightsProviderCacheSummary summary={aggregate.provider_cache} />
-
-      <div className={styles.chartsRow}>
-        <div className={styles.chartSection}>
-          <h3 className={styles.chartTitle}>
-            <svg
-              className={styles.chartIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <rect x="3" y="3" width="7" height="18" />
-              <rect x="14" y="8" width="7" height="13" />
-            </svg>
-            Model Selection
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={modelData} margin={{ top: 20, right: 0, left: 0, bottom: 60 }}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.1)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="name"
-                angle={-45}
-                textAnchor="end"
-                height={80}
-                tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-              />
-              <YAxis tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
-              <Tooltip
-                cursor={false}
-                contentStyle={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '4px',
-                  color: 'var(--color-text)',
-                }}
-                itemStyle={{ color: 'var(--color-text)' }}
-              />
-              <Bar dataKey="value" name="Count">
-                {modelData.map((_entry, index) => (
-                  <Cell key={`model-${index}`} fill={barColors[index]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className={styles.chartSection}>
-          <h3 className={styles.chartTitle}>
-            <svg
-              className={styles.chartIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 2 L12 12 L20 12" />
-            </svg>
-            Decision Distribution
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={decisionData}
-                cx="50%"
-                cy="50%"
-                labelLine={{ stroke: 'var(--color-text-secondary)', strokeWidth: 1 }}
-                label={renderCustomLabel}
-                outerRadius={70}
-                dataKey="value"
-              >
-                {decisionData.map((_entry, index) => (
-                  <Cell
-                    key={`decision-${index}`}
-                    fill={CHART_COLORS[index % CHART_COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '4px',
-                  color: 'var(--color-text)',
-                }}
-                itemStyle={{ color: 'var(--color-text)' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className={styles.chartSection}>
-          <h3 className={styles.chartTitle}>
-            <svg
-              className={styles.chartIcon}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 2 L12 12 L20 12" />
-            </svg>
-            Signal Distribution
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={signalData}
-                cx="50%"
-                cy="50%"
-                labelLine={{ stroke: 'var(--color-text-secondary)', strokeWidth: 1 }}
-                label={renderCustomLabel}
-                outerRadius={70}
-                dataKey="value"
-              >
-                {signalData.map((_entry, index) => (
-                  <Cell key={`signal-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: 'var(--color-bg-secondary)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '4px',
-                  color: 'var(--color-text)',
-                }}
-                itemStyle={{ color: 'var(--color-text)' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className={styles.chartSection}>
-        <h3 className={styles.chartTitle}>
-          <svg
-            className={styles.chartIcon}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+      <p className="flex items-center gap-1.5 px-1 text-xs text-subtle-foreground">
+        Cost-only estimate against a reference model’s list price.
+        <Tooltip content={methodNote(aggregate)}>
+          <button
+            type="button"
+            aria-label="How the estimate is made"
+            className="grid size-4 place-items-center rounded-full text-subtle-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
           >
-            <path d="M4 19h16" />
-            <path d="M7 16V8" />
-            <path d="M12 16V5" />
-            <path d="M17 16v-6" />
-          </svg>
-          Token Volume
-        </h3>
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={tokenValues} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }} />
-            <YAxis
-              tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-              tickFormatter={formatCompactTokenCount}
-            />
-            <Tooltip
-              cursor={false}
-              formatter={(value: number | string) => [formatTokenCount(Number(value)), 'Tokens']}
-              contentStyle={{
-                background: 'var(--color-bg-secondary)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '4px',
-                color: 'var(--color-text)',
-              }}
-              itemStyle={{ color: 'var(--color-text)' }}
-            />
-            <Bar dataKey="value" name="Tokens" radius={[8, 8, 0, 0]}>
-              {tokenValues.map((entry) => (
-                <Cell key={entry.name} fill={entry.fill} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        {tokenVolume.excluded_record_count > 0 ? (
-          <p className={styles.summaryHint}>
-            {tokenVolume.excluded_record_count} filtered record
-            {tokenVolume.excluded_record_count === 1 ? '' : 's'} excluded from token totals because
-            usage data is incomplete.
-          </p>
-        ) : null}
-      </div>
-
-      <div className={styles.tokenBreakdownRow}>
-        <TokenBreakdownChart title="Tokens by Decision" data={tokenBreakdown.by_decision} />
-        <TokenBreakdownChart
-          title="Tokens by Selected Model"
-          data={tokenBreakdown.by_selected_model}
+            <Info className="size-3.5" />
+          </button>
+        </Tooltip>
+      </p>
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-3',
+          harnessCounts ? 'lg:grid-cols-3' : 'lg:grid-cols-2',
+        )}
+      >
+        {harnessCounts ? <InsightsHarnessBars counts={harnessCounts} /> : null}
+        <InsightsRankedBars
+          title="Models"
+          entries={named(aggregate.model_selection)}
+          total={aggregate.record_count}
+          color="var(--chart-6)"
+        />
+        <InsightsRankedBars
+          title="Decisions"
+          entries={aggregate.decision_distribution}
+          total={aggregate.record_count}
+          color="var(--chart-3)"
         />
       </div>
     </section>

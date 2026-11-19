@@ -1,0 +1,39 @@
+# The model runtime's numerics profiles became engine arguments: batching is
+# the default, and shared_context and max_speed share the forwards of
+# concurrent rows; an unknown profile names the arguments to set. An Omni
+# bundle the router image shipped is its published repository.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      fast:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: cpu
+        profile: max_speed
+      exact:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: cpu
+        profile: exact
+      custom:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: cpu
+        profile: low_latency
+      omni:
+        provider: model_runtime
+        artifact: /opt/router-model-artifacts/vela-1.0-omni-nano
+        device: cpu

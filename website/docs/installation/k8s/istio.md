@@ -141,7 +141,7 @@ routing rules. Download and review
 [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/semantic-router-values/values.yaml)
 before adapting it to a real provider pool. Keep
 `global.router.clear_route_cache: true`: after ExtProc writes
-`x-selected-model`, Envoy must discard its earlier route and evaluate the
+`x-vsr-route-model`, Envoy must discard its earlier route and evaluate the
 header-based `HTTPRoute` again.
 
 ## Step 6: Install additional Istio configuration
@@ -156,7 +156,7 @@ kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/
 
 The example filter sets `failure_mode_allow: true`, which lets Envoy continue
 its HTTP filter chain when ExtProc is unavailable. It does not guarantee that
-the request reaches a backend: the supplied routes require `x-selected-model`,
+the request reaches a backend: the supplied routes require `x-vsr-route-model`,
 so route selection can still fail when the Router did not add that header. A
 true bypass needs a deliberate catch-all route, which also changes the security
 boundary. Prefer fail-close behavior when semantic routing is an authorization

@@ -16,7 +16,7 @@ import {
   pluginFieldsFromRouterSchema,
   signalFieldsFromRouterSchema,
 } from '../lib/routerConfigSchema'
-import { PROJECTION_INPUT_TYPES } from './configPageProjectionFormSupport'
+import { PROJECTION_INPUT_TYPES } from '../lib/projectionSchemas'
 import { SIGNAL_CATALOG } from './configPageSignalCatalog'
 
 function expectSameFieldInventory(rendered: FieldSchema[], generated: FieldSchema[]) {
@@ -65,18 +65,20 @@ describe('generated Dashboard routing contract', () => {
     }
   })
 
-  it('separates native acceptance from Chat quality scoring', () => {
-    const native = getAlgorithmFieldSchema('cascade')
-    expect(native.map((field) => field.key).sort()).toEqual(['budget', 'quality', 'stages'])
-    const budget = native.find((field) => field.key === 'budget')
-    expect(budget?.required).toBe(true)
+  it('offers budget and on_error to executors only', () => {
+    const escalate = getAlgorithmFieldSchema('escalate')
+    expect(escalate.map((field) => field.key)).toEqual(
+      expect.arrayContaining(['budget', 'on_error', 'order', 'accept', 'quality', 'stages']),
+    )
+    const budget = escalate.find((field) => field.key === 'budget')
     expect(budget?.fields?.map((field) => field.key)).toEqual(['deadline', 'max_calls'])
     expect(
-      native.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
-    ).toContain('acceptance')
+      escalate.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
+    ).toContain('accept')
     const chat = getAlgorithmFieldSchema('multi_factor')
     expect(chat.map((field) => field.key)).not.toContain('stages')
     expect(chat.map((field) => field.key)).not.toContain('budget')
+    expect(chat.map((field) => field.key)).not.toContain('on_error')
     expect(
       chat.find((field) => field.key === 'quality')?.fields?.map((field) => field.key),
     ).toEqual(['index', 'on_missing', 'min_coverage', 'min_score'])

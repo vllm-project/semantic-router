@@ -62,7 +62,7 @@ func TestReloadChecksGatewayCapabilitiesBeforePreparation(t *testing.T) {
 		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
 		reasons := configsnapshot.ReasonsOf(err)
 		if len(reasons) != 1 || reasons[0].Code != configsnapshot.CodeUnsupported ||
-			reasons[0].Path != "routing.decisions[slow].reliability" || !strings.Contains(err.Error(), "--gateway standalone") {
+			reasons[0].Path != "recipes[default].decisions[slow].reliability" || !strings.Contains(err.Error(), "--gateway standalone") {
 			t.Fatalf("%s reload error = %v (%+v)", source, err, reasons)
 		}
 		if server.service.GetRouter() != previous {
@@ -135,7 +135,7 @@ func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
 		t.Fatalf("router swap did not install candidate config")
 	}
 
-	wantOrder := []string{"parse", "ensure", "build", "warmup", "replace"}
+	wantOrder := []string{"parse", "ensure", "build", "replace"}
 	if !reflect.DeepEqual(order, wantOrder) {
 		t.Fatalf("reload order = %v, want %v", order, wantOrder)
 	}
@@ -171,10 +171,6 @@ func TestReloadRouterFromFileDoesNotSwapWhenModelEnsureFails(t *testing.T) {
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		t.Fatalf("buildReloadRouter() should not be called on ensure failure")
 		return nil, nil
-	}
-	warmupReloadRouter = func(router *OpenAIRouter) error {
-		t.Fatalf("warmupReloadRouter() should not be called on ensure failure")
-		return nil
 	}
 	replaceReloadConfig = func(cfg *config.RouterConfig) {
 		t.Fatalf("replaceReloadConfig() should not be called on ensure failure")
@@ -266,14 +262,6 @@ func stubReloadBuild(t *testing.T, candidateCfg *config.RouterConfig, order *[]s
 
 func stubReloadWarmup(t *testing.T, candidateCfg *config.RouterConfig, order *[]string) {
 	t.Helper()
-
-	warmupReloadRouter = func(router *OpenAIRouter) error {
-		appendReloadStep(order, "warmup")
-		if router == nil || router.Config != candidateCfg {
-			t.Fatalf("warmupReloadRouter() router config mismatch")
-		}
-		return nil
-	}
 }
 
 func stubReloadReplace(t *testing.T, candidateCfg *config.RouterConfig, order *[]string) {
@@ -297,14 +285,12 @@ func stubReloadSeams(t *testing.T) func() {
 	originalParse := parseReloadConfig
 	originalEnsure := ensureReloadConfigModels
 	originalBuild := buildReloadRouter
-	originalWarmup := warmupReloadRouter
 	originalReplace := replaceReloadConfig
 
 	return func() {
 		parseReloadConfig = originalParse
 		ensureReloadConfigModels = originalEnsure
 		buildReloadRouter = originalBuild
-		warmupReloadRouter = originalWarmup
 		replaceReloadConfig = originalReplace
 	}
 }

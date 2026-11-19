@@ -131,17 +131,17 @@ def complete_agent_task_summary(
             "x-vsr-selected-model": 0,
             "x-vsr-selected-decision": 0,
             "x-vsr-replay-id": 0,
-            "x-vsr-session-phase": 0,
-            "x-vsr-selected-confidence": 0,
-            "x-vsr-context-token-count": 0,
+            "session_phase": 0,
+            "confidence": 0,
+            "context_tokens": 0,
         },
         "invalid_router_header_counts": {
             "x-vsr-selected-model": 0,
             "x-vsr-selected-decision": 0,
             "x-vsr-replay-id": 0,
-            "x-vsr-session-phase": 0,
-            "x-vsr-selected-confidence": 0,
-            "x-vsr-context-token-count": 0,
+            "session_phase": 0,
+            "confidence": 0,
+            "context_tokens": 0,
         },
         "tool_loop_switch_violations": 0,
         "context_portability_violations": 0,
@@ -243,9 +243,9 @@ def test_full_branch_image_summary_blocks_mounted_binary_and_stale_tasks(tmp_pat
                 "x-vsr-selected-model": 0,
                 "x-vsr-selected-decision": 0,
                 "x-vsr-replay-id": 0,
-                "x-vsr-session-phase": 96,
-                "x-vsr-selected-confidence": 96,
-                "x-vsr-context-token-count": 96,
+                "session_phase": 96,
+                "confidence": 96,
+                "context_tokens": 96,
             },
             "task_names": REQUIRED_LONG_HORIZON_TASKS[:6],
             "scored_task_names": REQUIRED_LONG_HORIZON_TASKS[:6],
@@ -268,8 +268,8 @@ def test_full_branch_image_summary_blocks_mounted_binary_and_stale_tasks(tmp_pat
     assert "agent task requests 96.0 < 489" in summary["validation_failures"]
     assert (
         "agent task missing router headers: "
-        "{'x-vsr-session-phase': 96, 'x-vsr-selected-confidence': 96, "
-        "'x-vsr-context-token-count': 96}" in summary["validation_failures"]
+        "{'session_phase': 96, 'confidence': 96, "
+        "'context_tokens': 96}" in summary["validation_failures"]
     )
 
 

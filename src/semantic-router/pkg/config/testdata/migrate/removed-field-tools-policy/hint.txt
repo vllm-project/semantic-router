@@ -1,0 +1,1 @@
+recipes[default].decisions[private].plugins[0]: removed_field: tools plugin fields mode, strip_tool_history are not read at the top of its configuration; run `vllm-sr config migrate` (mode, allow_tools, block_tools, strip_tool_history and trusted_facts go under policy; select replaces semantic_selection, strategy and dynamic_retrieval)

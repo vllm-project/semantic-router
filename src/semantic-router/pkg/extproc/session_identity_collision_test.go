@@ -65,7 +65,7 @@ func TestRouterSessionIdentitySeparatesDecisionWriters(t *testing.T) {
 					SelectedModel: proposal, Score: 1, Confidence: 1, Method: selection.MethodStatic,
 					AllScores: map[string]float64{proposal: 1},
 				}})
-				selCtx := router.buildSelectionContext(candidates, "choice", "", nil, "", nil, ctx)
+				selCtx := router.buildSelectionContext(candidates, "choice", "", "", nil, ctx)
 				selected, _, err := router.selectModelFromCandidates(selCtx, nil, ctx)
 				if err != nil || selected == nil {
 					t.Fatalf("selection failed for recipe=%q SID=%q CID=%q: selected=%+v err=%v", recipe, sid, cid, selected, err)

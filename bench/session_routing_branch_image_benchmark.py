@@ -80,9 +80,9 @@ DEFAULT_REQUIRED_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",
     "x-vsr-replay-id",
-    "x-vsr-session-phase",
-    "x-vsr-selected-confidence",
-    "x-vsr-context-token-count",
+    "session_phase",
+    "confidence",
+    "context_tokens",
 )
 FULL_BRANCH_IMAGE_KIND = "full-branch-image-benchmark"
 EVIDENCE_REF_KEYS = ("evidence_ref", "ref")

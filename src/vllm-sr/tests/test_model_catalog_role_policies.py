@@ -39,7 +39,7 @@ def test_virtual_assignment_roles_match_decisions_that_invoke_backends() -> None
         )
         backend_decisions = [
             decision
-            for decision in recipe["routing"]["decisions"]
+            for decision in recipe["decisions"]
             if not any(
                 plugin["type"] == "fast_response"
                 for plugin in decision.get("plugins", [])

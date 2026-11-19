@@ -15,8 +15,8 @@ The paths below were measured on Ascend 910B1 and 950DT hosts
 (torch_npu 2.10.0.post4, CANN 8.5 / 9.1).
 
 Large-model inference on Ascend belongs to vLLM behind an HTTP endpoint; the
-`npu` accelerator covers the Router's own 307M signal encoders and
-decision models inside the model runtime.
+`npu` accelerator covers the models the Router runs inside the model runtime,
+from the 307M encoders to the decision models.
 
 ## Prerequisites
 
@@ -52,7 +52,7 @@ serving unverified answers.
 `device: auto` still selects the CPU on an Ascend host: accelerators that are
 not yet validated are only used when named explicitly. In a full
 configuration, place a deployment on the NPU with `device: npu:0` — the same
-[placement rules](../model-runtime/deploy.md#place-and-scale-replicas) as for
+[placement rules](../model-runtime/deploy/placement-and-scaling.md#place-and-scale-replicas) as for
 GPUs, with the runtime installed next to torch_npu.
 
 ### Precision: bf16 as an opt-in
@@ -123,7 +123,7 @@ container sees. The torch_npu version must match the PyTorch the image ships.
 `vllm-sr serve` orchestration provisions its own runtime container without
 these mounts, so a fully orchestrated local stack keeps its models on the CPU.
 Run the runtime in the prepared container and point the Router's deployments
-at it ([External runtime](runtime/external.md)), or keep the whole stack on
+at it ([External runtime](../model-runtime/deploy/remote-services.md)), or keep the whole stack on
 the host.
 
 ## Troubleshooting
