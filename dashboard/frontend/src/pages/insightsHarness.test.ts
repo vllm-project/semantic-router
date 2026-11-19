@@ -17,11 +17,13 @@ import {
 } from './insightsAgentFixtures'
 
 describe('harness registry', () => {
-  it('names the four harnesses the Router identifies, each with its lobehub logo', () => {
+  it('names the harnesses the Router identifies, each with its lobehub logo', () => {
     expect(PRIMARY_HARNESSES.map((id) => harnessInfo(id)?.label)).toEqual([
       'Claude Code',
       'Codex',
       'OpenCode',
+      'Cursor',
+      'OpenClaw',
       'DeepSeek Harness',
     ])
     // Vite inlines a small SVG as a data URI; the icon's own title names it.
@@ -31,6 +33,7 @@ describe('harness registry', () => {
     expect(title('codex')).toBe('Codex')
     expect(title('opencode')).toBe('opencode')
     expect(title('deepseek_harness')).toBe('DeepSeek')
+    expect(title('openclaw')).toBe('OpenClaw')
   })
 
   it('marks the logos drawn in currentColor so dark mode inverts them', () => {

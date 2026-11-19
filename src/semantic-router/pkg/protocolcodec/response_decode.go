@@ -38,10 +38,32 @@ func (engine *Engine) DecodeResponse(
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
+	diagnostics = appendDiagnostics(diagnostics, engine.stopAtRequestOutputLimit(format, &response, &envelope), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return response, envelope, diagnostics, err
 	}
 	return response, envelope, diagnostics, nil
+}
+
+// stopAtRequestOutputLimit decodes a buffered reply that stopped for its tool
+// calls once its output reached the request's output limit as stopped at that
+// limit, so its last call is read as one the limit may have cut.
+func (engine *Engine) stopAtRequestOutputLimit(
+	source llmprotocol.WireFormat,
+	response *llmprotocol.Response,
+	envelope *llmprotocol.Envelope,
+) llmprotocol.Diagnostics {
+	if len(response.Alternatives) > 0 ||
+		!llmprotocol.ToolCallStopAtOutputLimit(response.StopReason, response.Usage, engine.policy.RequestOutputLimit) {
+		return nil
+	}
+	response.StopReason = llmprotocol.StopMaxTokens
+	// The backend's bytes name the tool-call stop.
+	envelope.ResponseReencodeRequired = true
+	return llmprotocol.Diagnostics{{
+		Source: source, Field: "response.stop_reason", Action: llmprotocol.DiagnosticApproximated,
+		Reason: "a tool-call stop whose output reached the request's output token limit is reported as that limit",
+	}}
 }
 
 // DecodeResponseStream decodes a complete wire stream into one neutral
@@ -213,6 +235,9 @@ func (accumulator *responseAccumulator) applyEventMetadata(event llmprotocol.Eve
 	}
 	if event.Model != "" {
 		accumulator.result.Model = event.Model
+	}
+	if !event.CreatedAt.IsZero() {
+		accumulator.result.CreatedAt = event.CreatedAt
 	}
 	if event.Usage != nil {
 		accumulator.result.Usage = *event.Usage

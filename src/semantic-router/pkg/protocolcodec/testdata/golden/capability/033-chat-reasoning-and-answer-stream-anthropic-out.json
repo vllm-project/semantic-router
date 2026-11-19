@@ -7,7 +7,7 @@
           "message": {
             "container": null,
             "content": [],
-            "id": "chatcmpl_1",
+            "id": "msg_2234400da79a73f647f83e89",
             "model": "public-model",
             "role": "assistant",
             "stop_details": null,
@@ -41,6 +41,7 @@
       {
         "data": {
           "content_block": {
+            "signature": "",
             "thinking": "",
             "type": "thinking"
           },
@@ -54,6 +55,17 @@
           "delta": {
             "thinking": "inspect the evidence",
             "type": "thinking_delta"
+          },
+          "index": 0,
+          "type": "content_block_delta"
+        },
+        "event": "content_block_delta"
+      },
+      {
+        "data": {
+          "delta": {
+            "signature": "",
+            "type": "signature_delta"
           },
           "index": 0,
           "type": "content_block_delta"

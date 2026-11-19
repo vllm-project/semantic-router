@@ -18,6 +18,8 @@ const (
 	openCodeUserAgentPrefix       = "opencode/"
 	openCodeTitleInstruction      = "You are a title generator."
 	openCodeCompactionInstruction = "You are an anchored context summarization assistant"
+	// OpenCode 1.19 opens its compaction with this instead.
+	openCodeCompactionAgentInstruction = "You are a context summarization agent."
 )
 
 func isOpenCode(ctx *RequestContext) bool {
@@ -47,7 +49,8 @@ func openCodeRequestClass(request *llmprotocol.Request, subagent bool) string {
 		switch instructions := leadingInstructionText(request); {
 		case strings.HasPrefix(instructions, openCodeTitleInstruction):
 			return config.AgentRequestClassAuxiliary
-		case strings.HasPrefix(instructions, openCodeCompactionInstruction):
+		case strings.HasPrefix(instructions, openCodeCompactionInstruction),
+			strings.HasPrefix(instructions, openCodeCompactionAgentInstruction):
 			return config.AgentRequestClassCompaction
 		}
 	}

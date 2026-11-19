@@ -31,6 +31,30 @@ vllm-sr serve vllm-sr/d3-edge -e --platform rocm
 
 <!-- END GENERATED MODEL TABLE -->
 
+## Language evaluation
+
+The project's D3 parity tests check that the runtime reproduces each package;
+they are not language-quality benchmarks. The language-evaluation evidence
+reported here compares English and Thai for the 27B `vllm-sr/d3` package at
+revision `20f37b9a` (2026-10-22), using paired items. It was reported by a
+community contributor:
+
+| Evaluation | Items | English (%) | Thai (%) | Reported comparison |
+| --- | ---: | ---: | ---: | --- |
+| OpenDecisions 1.0.1, capability from raw probabilities | 1,680 | 87.0 | 83.6 | Thai −3.4 points; paired bootstrap 95% CI [−5.6, −1.7] |
+| Decision Index kit sample, contributor's accuracy scorer | 1,200 | 84.8 | 79.3 | Thai −5.5 points; 98 English-only vs. 33 Thai-only correct, exact McNemar p = 1e-8 |
+
+These are unofficial results, not scores produced or independently verified
+by the project
+([issue #6446](https://github.com/vllm-project/semantic-router/issues/6446)).
+The Thai items were machine-translated from English and have not had
+native-speaker review. The Decision Index sample was rebuilt and scored by the
+contributor; it is not an official Decision Index score. This evidence covers
+only the 27B `d3` package; it does not establish language coverage for other D3
+sizes or for languages not listed here. Treat it as a data point, not a
+guarantee of quality in Thai or any other language, and validate on
+representative inputs for your language and use case.
+
 - **d3-edge to d3** are the plain sizes. Their answers match the packages' own
   runtime bit for bit
   ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-parity.md)).

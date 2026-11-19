@@ -1,5 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ReactNode } from 'react'
 import { describe, expect, it } from 'vitest'
+
+import { TooltipProvider } from '../ui'
 import InsightsCharts from './InsightsCharts'
 import type { InsightsAggregateResponse } from '../pages/insightsPageTypes'
 
@@ -18,9 +21,9 @@ const aggregate: InsightsAggregateResponse = {
   decision_distribution: [],
   signal_distribution: [],
   token_volume: {
-    input_tokens: 100,
-    output_tokens: 100,
-    total_tokens: 200,
+    input_tokens: 1500,
+    output_tokens: 500,
+    total_tokens: 2000,
     excluded_record_count: 0,
   },
   token_breakdown: { by_decision: [], by_selected_model: [] },
@@ -29,124 +32,107 @@ const aggregate: InsightsAggregateResponse = {
   available_models: [],
 }
 
-describe('Insights cost charts', () => {
-  it('distinguishes tiny savings from an exact zero model cost', () => {
-    const summary = {
-      ...aggregate.summary,
-      currency: 'USD',
-      cost_record_count: 1,
-      excluded_record_count: 0,
-      total_saved: 0.000001,
-      baseline_spend: 0.000001,
-      actual_spend: 0,
-    }
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('&lt;$0.0001')
-    expect(html).toContain('>$0.00<')
-  })
+const render = (node: ReactNode) => renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>)
 
-  it('keeps missing pricing unknown and states the estimate and lifecycle scope', () => {
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={aggregate} />)
-    expect(html).toContain('Estimated Model Cost')
-    expect(html).toContain(
-      'Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.',
-    )
-    expect(html).toContain('<summary>How estimates work</summary>')
-    expect(html).not.toMatch(/<details[^>]*\sopen(?:[\s=>]|$)/)
-    expect(html.indexOf('<details')).toBeLessThan(html.indexOf('New records use'))
-    expect(html.indexOf('</details>')).toBeGreaterThan(html.indexOf('Older records retain'))
-    expect(html).toContain('N/A')
-    expect(html).toContain('not completed or lack token usage, model pricing, or baseline data')
-    expect(html).toContain('The total still counts the priced calls of a request that failed.')
-    expect(html).toContain('recipe’s complete model pool across all decisions')
-    expect(html).toContain('Historical requests without captured prices remain')
-    expect(html).toContain('Price not recorded')
-    expect(html).toContain('current model rates do not backfill them')
-    expect(html).not.toContain('Actual Spend')
-    expect(html).not.toContain('$0')
-  })
+// The card a title heads, from its section to the next.
+const card = (html: string, title: string) => {
+  const start = html.indexOf(`aria-label="${title}"`)
+  const end = html.indexOf('</section>', start)
+  return html.slice(start, end)
+}
 
-  it('renders each currency instead of a mixed-currency total', () => {
-    const summary = {
-      ...aggregate.summary,
-      cost_record_count: 2,
-      excluded_record_count: 0,
-      by_currency: [
-        {
-          currency: 'EUR',
-          actual_spend: 1,
-          baseline_spend: 2,
-          total_saved: 1,
-          cost_record_count: 1,
-        },
-        {
-          currency: 'USD',
-          actual_spend: 10,
-          baseline_spend: 20,
-          total_saved: 10,
-          cost_record_count: 1,
-        },
-      ],
-    }
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('EUR estimates')
-    expect(html).toContain('USD estimates')
-    expect(html).toContain('no exchange-rate conversion is applied')
-    expect(html).toContain('$10.00')
-    expect(html).not.toContain('$11.00')
-  })
-
-  it('shows prices that name no currency as plain amounts in price units', () => {
-    const summary = {
-      total_saved: 579.0035,
-      baseline_spend: 1740.2211,
-      actual_spend: 1161.2176,
-      currency: 'XXX',
-      cost_record_count: 610147,
-      excluded_record_count: 57906,
-    }
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('>579.00<')
-    expect(html).toContain('>1,740.22<')
-    expect(html).toContain('>1,161.22<')
-    expect(html).toContain('Price units')
-    expect(html).not.toMatch(/XXX(\s|&nbsp;|\u00a0)?[0-9]/)
-    expect(html).toContain('57,906 filtered records excluded')
-  })
-
-  it('ranks each distribution with its share of the filtered records', () => {
-    const html = renderToStaticMarkup(
+describe('Insights breakdown', () => {
+  it('shows only the Agents, Models and Decisions cards: no second grid of figures, no footnote', () => {
+    const html = render(
       <InsightsCharts
         aggregate={{
           ...aggregate,
-          record_count: 4000,
-          model_selection: [
-            { name: 'model-b', value: 1000 },
-            { name: 'model-a', value: 3000 },
-          ],
-          decision_distribution: [{ name: 'agents::code', value: 4000 }],
+          summary: { ...aggregate.summary, currency: 'USD', cost_record_count: 2, actual_spend: 1 },
         }}
+        harnessCounts={{ codex: 2 }}
       />,
     )
-    expect(html.indexOf('model-a')).toBeLessThan(html.indexOf('model-b'))
-    expect(html).toContain('3,000')
-    expect(html).toContain('75.0%')
-    expect(html).toContain('100.0%')
-    expect(html).toContain('4,000 records')
+    for (const title of ['Agents', 'Models', 'Decisions']) {
+      expect(html).toContain(`aria-label="${title}"`)
+    }
+    for (const gone of [
+      'Breakdown figures',
+      'Input tokens',
+      'Output tokens',
+      'Prompt cache',
+      'Model cost',
+      'Price units',
+      'Cost-only estimate',
+      '<details',
+    ]) {
+      expect(html).not.toContain(gone)
+    }
+    expect(html).not.toContain('N/A')
   })
 
-  it('continues rendering a single-currency flat summary', () => {
-    const summary = {
-      total_saved: 1,
-      baseline_spend: 2,
-      actual_spend: 1,
-      currency: 'USD',
-      cost_record_count: 2,
-      excluded_record_count: 0,
+  it('heads every card with an icon and lays every row out alike: mark, name, count, share, one bar', () => {
+    const html = render(
+      <InsightsCharts
+        aggregate={{
+          ...aggregate,
+          record_count: 4,
+          model_selection: [{ name: 'deepseek/deepseek-v4.1-flash', value: 3 }],
+          decision_distribution: [{ name: 'agentic', value: 1 }],
+        }}
+        harnessCounts={{ claude_code: 3, api_client: 1 }}
+      />,
+    )
+    for (const title of ['Agents', 'Models', 'Decisions']) {
+      const section = card(html, title)
+      expect(section).toMatch(/<h4[^>]*><svg/)
+      expect(section).toContain('h-[3px]')
+      expect(section).toMatch(/grid-cols-\[18px_minmax\(0,1fr\)_auto_3\.25rem\]/)
     }
-    const html = renderToStaticMarkup(<InsightsCharts aggregate={{ ...aggregate, summary }} />)
-    expect(html).toContain('$1.00')
-    expect(html).toContain('50.0%')
-    expect(html).not.toContain('>N/A<')
+    // the agents' logos stand bare, as the models' and decisions' marks do
+    expect(card(html, 'Agents')).not.toContain('rounded-lg border border-border bg-surface')
+    expect(card(html, 'Models')).toContain('75.0%')
+    expect(card(html, 'Decisions')).toContain('25.0%')
+    expect(card(html, 'Decisions')).toContain('Agentic')
+  })
+
+  it('ranks the harnesses by their requests with the plain API client last', () => {
+    const html = render(
+      <InsightsCharts
+        aggregate={aggregate}
+        harnessCounts={{ api_client: 50, openclaw: 5, claude_code: 30, codex: 40, cursor: 15 }}
+      />,
+    )
+    expect(html).toContain('aria-label="Requests by agent harness"')
+    const order = ['codex', 'claude_code', 'cursor', 'openclaw', 'api_client'].map((id) =>
+      html.indexOf(`data-harness="${id}"`),
+    )
+    expect(order.every((at) => at > 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+    expect(html).toContain('Claude Code')
+    expect(html).toContain('API client')
+    expect(html).toContain('<img')
+    expect(html).toContain('5 agents')
+  })
+
+  it('folds rows past the first seven behind a "Show more" button', () => {
+    const decisions = Array.from({ length: 9 }, (_, index) => ({
+      name: `decision_${index}`,
+      value: 10 - index,
+    }))
+    const html = render(
+      <InsightsCharts
+        aggregate={{ ...aggregate, record_count: 54, decision_distribution: decisions }}
+      />,
+    )
+    const section = card(html, 'Decisions')
+    expect(section.match(/data-decision=/g)).toHaveLength(7)
+    expect(section).toContain('Show 2 more')
+    expect(section).toContain('aria-expanded="false"')
+  })
+
+  it('waits for the harness counts with a skeleton that keeps the three columns', () => {
+    const html = render(<InsightsCharts aggregate={aggregate} harnessCounts={null} />)
+    expect(card(html, 'Agents')).toContain('aria-busy="true"')
+    expect(html).toContain('lg:grid-cols-3')
   })
 })

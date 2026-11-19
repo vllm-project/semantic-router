@@ -9,7 +9,6 @@ import {
   RefreshCw,
   ServerOff,
   Split,
-  Waypoints,
 } from 'lucide-react'
 
 import {
@@ -21,14 +20,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  CopyButton,
   EmptyState,
   IconTile,
   MiniBar,
   ProviderLogo,
   Skeleton,
   StatusDot,
-  Tooltip,
   cn,
   type Tone,
 } from '../ui'
@@ -44,6 +41,9 @@ import {
 } from './dashboardPageStats'
 import type { RouterConfig } from './dashboardPageTypes'
 import { HOME_RANGE_LABEL, topShares, type HomeAggregate, type HomeRange } from './homeSupport'
+import type { HomeTraffic } from './homeTraffic'
+import { HarnessLogo } from './InsightsHarness'
+import { API_CLIENT_LABEL, harnessInfo, sortHarnessIds } from './insightsHarness'
 import { modelProviderId } from './insightsConfigFacts'
 import { modelLabel, useModelLabels } from './insightsModelLabelSupport'
 import { formatInsightsDecisionName } from './insightsPageSupport'
@@ -393,124 +393,72 @@ export function HomeModelsInUse({
   )
 }
 
-// ---------------------------------------------------------------- public models
+// ---------------------------------------------------------------- agents in use
 
-/** What apps call: each recipe with its public model names, counts and topology. */
-export function HomePublicModels({ config }: { config: RouterConfig | null }) {
-  const navigate = useNavigate()
-  const scopes = config ? listRoutingScopes(config as RouterConfig & RoutingScopedConfigLike) : []
-  const publicModels = listPublicModels(config)
-  const rows = scopes.map((scope) => ({
-    scope,
-    models: publicModels.filter((model) => model.recipe === scope.id),
+/** Where requests came from: each agent harness by its own logo, then plain API clients. */
+export function HomeAgentsInUse({ traffic, range }: { traffic: HomeTraffic; range: HomeRange }) {
+  const counts = traffic.harnessCounts ?? {}
+  const entries = Object.entries(counts).filter(([, value]) => value > 0)
+  const total = entries.reduce((sum, [, value]) => sum + value, 0)
+  const ids = sortHarnessIds(entries.map(([id]) => id).filter((id) => id !== 'api_client'))
+  const rows = [...ids, ...(counts.api_client ? ['api_client'] : [])].map((id) => ({
+    id,
+    value: counts[id] ?? 0,
+    share: total > 0 ? ((counts[id] ?? 0) / total) * 100 : 0,
   }))
-  const shown = rows.slice(0, 5)
+  const peak = Math.max(0, ...rows.map((row) => row.share))
   return (
-    <Card className="lg:col-span-2 xl:col-span-1" data-testid="home-public-models">
+    <Card className="lg:col-span-2 xl:col-span-1" data-testid="home-agents">
       <CardHeader>
-        <CardTitle>Public models</CardTitle>
+        <CardTitle>Agents in use</CardTitle>
         <CardDescription>
-          {config
-            ? `What your apps call · ${scopes.length} recipe${scopes.length === 1 ? '' : 's'}`
-            : 'What your apps call'}
+          {rows.length
+            ? `Requests by harness · ${HOME_RANGE_LABEL[range]}`
+            : 'Coding agents and API clients that call the router'}
         </CardDescription>
-        <CardLinkAction to="/routing/recipes" label="Recipes" />
+        <CardLinkAction to="/observe/requests?tab=runs" label="Agent runs" />
       </CardHeader>
-      <CardContent className="flex flex-col gap-2 pt-3">
-        {shown.length === 0 ? (
-          <p className="py-6 text-center text-[13px] text-muted-foreground">
-            The configuration did not load.
-          </p>
-        ) : (
-          shown.map(({ scope, models }) => {
-            const lead = models[0]
-            const signals = Object.values(scope.routing.signals ?? {}).reduce<number>(
-              (sum, value) => sum + (Array.isArray(value) ? value.length : 0),
-              0,
-            )
-            const decisions = Array.isArray(scope.routing.decisions)
-              ? scope.routing.decisions.length
-              : 0
-            return (
-              <div
-                key={scope.id}
-                className="group rounded-lg border border-border bg-surface-subtle/60 px-3 py-2.5 transition-colors hover:border-border-strong"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <Layers className="size-3.5 shrink-0 text-chart-1" />
-                  {lead ? (
-                    <span
-                      className="truncate font-mono text-[12.5px] font-medium"
-                      title={models.map((model) => model.name).join(', ')}
-                    >
-                      {lead.name}
+      <CardContent className="flex flex-col gap-0.5 pt-2">
+        {rows.length ? (
+          <ul className="flex flex-col gap-0.5" aria-label="Requests by agent harness">
+            {rows.map((row) => {
+              const info = harnessInfo(row.id === 'api_client' ? undefined : row.id)
+              return (
+                <li
+                  key={row.id}
+                  className="flex items-center gap-3 rounded-lg py-1.5"
+                  data-harness={row.id}
+                >
+                  <HarnessLogo
+                    harness={row.id === 'api_client' ? undefined : row.id}
+                    size={18}
+                    framed
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[13px] font-medium">
+                      {info?.label ?? API_CLIENT_LABEL}
                     </span>
-                  ) : (
-                    <span className="truncate text-[13px] font-medium">{scope.label}</span>
-                  )}
-                  {models.length > 1 ? (
-                    <Tooltip
-                      content={models
-                        .slice(1)
-                        .map((model) => model.name)
-                        .join(', ')}
-                    >
-                      <span className="shrink-0 text-[11px] text-subtle-foreground">
-                        +{models.length - 1}
-                      </span>
-                    </Tooltip>
-                  ) : null}
-                  {lead?.isDefault ? (
-                    <Badge size="sm" tone="brand" className="shrink-0">
-                      default
-                    </Badge>
-                  ) : null}
-                  {lead?.api === 'systemone' ? (
-                    <Badge size="sm" tone="violet" className="shrink-0">
-                      System One
-                    </Badge>
-                  ) : null}
-                  <span className="ml-auto flex shrink-0 items-center">
-                    {lead ? (
-                      <CopyButton
-                        value={lead.name}
-                        label="Copy model name"
-                        className="size-6 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                      />
-                    ) : null}
-                    <Tooltip content="View topology">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="size-6"
-                        aria-label={`View ${scope.label} topology`}
-                        onClick={() =>
-                          navigate(`/routing/topology?scope=${encodeURIComponent(scope.id)}`)
-                        }
-                      >
-                        <Waypoints />
-                      </Button>
-                    </Tooltip>
+                    <span className="truncate text-xs text-subtle-foreground tabular">
+                      {row.value.toLocaleString()} request{row.value === 1 ? '' : 's'}
+                    </span>
                   </span>
-                </div>
-                <div className="mt-1 flex min-w-0 items-center gap-3 text-xs text-muted-foreground">
-                  <span className="truncate font-mono text-[11.5px]">{scope.id}</span>
-                  <span className="shrink-0 tabular">
-                    {decisions} decision{decisions === 1 ? '' : 's'}
+                  <span className="flex w-24 flex-col items-end gap-1">
+                    <span className="font-mono text-xs tabular">{row.share.toFixed(1)}%</span>
+                    <MiniBar value={row.share} max={peak} tone="blue" className="h-1" />
                   </span>
-                  <span className="shrink-0 tabular">
-                    {signals} signal{signals === 1 ? '' : 's'}
-                  </span>
-                </div>
-              </div>
-            )
-          })
+                </li>
+              )
+            })}
+          </ul>
+        ) : (
+          <p className="py-6 text-center text-[13px] text-muted-foreground">
+            {traffic.rowsLoading
+              ? 'Counting requests…'
+              : traffic.harnessCounts || traffic.rows.length === 0
+                ? `No requests in the ${HOME_RANGE_LABEL[range]}.`
+                : 'This router does not count requests by agent harness yet.'}
+          </p>
         )}
-        {rows.length > shown.length ? (
-          <Link to="/routing/recipes" className="text-xs font-medium text-primary hover:underline">
-            +{rows.length - shown.length} more recipes
-          </Link>
-        ) : null}
       </CardContent>
     </Card>
   )

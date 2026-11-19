@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
+import { codexSubagentCall } from './insightsAgentFixtures'
 import {
   defaultRequestRange,
+  harnessCountsQuery,
+  harnessFilterValues,
   hasAnyFilter,
+  hasClientFilters,
+  matchesClientFilters,
   readRequestFilters,
   requestRangeSince,
   serverQuery,
+  withSessionsOnly,
   writeRequestFilters,
 } from './insightsRequestsData'
 
@@ -43,6 +49,7 @@ describe('request list filters', () => {
     expect(hasAnyFilter(read('range=7d'))).toBe(false)
     expect(hasAnyFilter(read('housekeeping=hide'))).toBe(true)
     expect(hasAnyFilter(read('session=s-1'))).toBe(true)
+    expect(hasAnyFilter(read('harness=codex'))).toBe(true)
   })
 
   it('bounds a range to the minute, so a live list keeps one query a minute', () => {
@@ -51,5 +58,74 @@ describe('request list filters', () => {
     expect(requestRangeSince('all', minute)).toBeUndefined()
     const query = new URLSearchParams(serverQuery(read('model=m'), requestRangeSince('1h', minute)))
     expect(Object.fromEntries(query)).toEqual({ model: 'm', since: '2026-11-18T09:42:00.000Z' })
+  })
+})
+
+describe('the harness filter', () => {
+  it('reads the harnesses the replay API filters by, and API clients as api_client', () => {
+    // "api" names API clients in links from before the server filtered harnesses
+    expect(read('harness=codex,claudecode,api,cursor,gemini,codex').harness).toEqual([
+      'codex',
+      'claude_code',
+      'api_client',
+      'cursor',
+    ])
+    expect(read('harness=api_client').harness).toEqual(['api_client'])
+  })
+
+  it('asks the replay API for the harnesses and leaves the records it returns alone', () => {
+    const filters = read('harness=codex,api_client&model=m')
+    expect(Object.fromEntries(new URLSearchParams(serverQuery(filters, undefined)))).toEqual({
+      model: 'm',
+      harness: 'api_client,codex',
+    })
+    expect(hasClientFilters(filters)).toBe(false)
+    expect(hasClientFilters(read('class=main'))).toBe(true)
+    expect(matchesClientFilters(codexSubagentCall, read('harness=claude_code'))).toBe(true)
+  })
+
+  it('counts the harnesses under every other server filter', () => {
+    const since = '2026-11-18T09:42:00.000Z'
+    const query = new URLSearchParams(harnessCountsQuery(read('harness=codex&model=m'), since))
+    expect(Object.fromEntries(query)).toEqual({
+      model: 'm',
+      since,
+      limit: '1',
+      offset: '0',
+      showDetails: 'false',
+    })
+  })
+
+  it('keeps the Sessions view’s reads to the requests that belong to a session', () => {
+    const since = '2026-11-18T09:42:00.000Z'
+    expect(withSessionsOnly(serverQuery(read('model=m'), since), true)).toBe(
+      `?model=m&since=${encodeURIComponent(since)}&has_session=true`,
+    )
+    expect(withSessionsOnly('', true)).toBe('?has_session=true')
+    expect(withSessionsOnly('?model=m', false)).toBe('?model=m')
+    const counts = new URLSearchParams(harnessCountsQuery(read('harness=codex'), since, true))
+    expect(counts.get('has_session')).toBe('true')
+    expect(counts.get('harness')).toBeNull()
+  })
+
+  it('offers every harness before the counts load, then the counted and the selected ones', () => {
+    expect(harnessFilterValues(null, []).map((option) => option.value)).toEqual([
+      'claude_code',
+      'codex',
+      'opencode',
+      'cursor',
+      'openclaw',
+      'deepseek_harness',
+      'api_client',
+    ])
+    expect(harnessFilterValues(null, [])[0].count).toBeUndefined()
+    const counted = harnessFilterValues({ api_client: 51234, codex: 977, claude_code: 0 }, [
+      'opencode',
+    ])
+    expect(counted).toEqual([
+      { value: 'codex', count: 977 },
+      { value: 'opencode', count: 0 },
+      { value: 'api_client', count: 51234 },
+    ])
   })
 })

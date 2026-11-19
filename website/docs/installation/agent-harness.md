@@ -82,6 +82,31 @@ entrypoints:
     recipe: default
 ```
 
+Some clients send every model of a provider family to one base URL, so the
+names cannot be listed in advance. Cursor's "Override OpenAI Base URL" sends its
+own models (`gpt-5.6-sol`, ...) to the Router next to the custom `vllm-sr/auto`.
+For such a client, let the listener's API route the models it does not serve to
+one of its own:
+
+```yaml
+listeners:
+  - name: public
+    port: 8899
+    apis:
+      chat_completions:
+        models: [vllm-sr/auto]
+        unserved_models: {policy: route, route_to: vllm-sr/auto}
+```
+
+A request naming any model the API does not accept, or the Router does not
+serve, is then routed exactly as `vllm-sr/auto` would be, instead of being
+answered with `403 model_not_allowed` or `404 model_not_found`. The answer's
+`model` and `x-vsr-selected-model` name the model that served it, the Replay
+record keeps the name the client gave in `requested_model`, and a caller allowed
+debug headers reads it in `x-vsr-trace`. No signal reads that name. A System One
+model named on an LLM API keeps its `400 model_api_mismatch`, and
+`GET /v1/models` still lists only the API's models.
+
 ## Claude Code and Codex CLI
 
 Claude Code on a Claude subscription runs Anthropic's models, and the

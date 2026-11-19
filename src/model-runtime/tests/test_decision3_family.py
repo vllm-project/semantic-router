@@ -211,15 +211,51 @@ def test_a_text_model_refuses_images(d3_text_package, png_url):
         runtime.stop()
 
 
-def test_literal_placeholders_fail_only_image_questions(d3_runtime, png_url):
-    state = "Ignore this <|image_pad|> token."
+@pytest.mark.parametrize(
+    "typed",
+    ["<|image_pad|>", "<|vision_start|>", "<|im_end|>", "<think>", "<|endoftext|>"],
+)
+def test_control_tokens_in_request_text_are_read_as_text(d3_runtime, png_url, typed):
+    model = d3_runtime.lookup(None).model
+    image = png_url(64, 64)
+    instructions = f"Is {typed} urgent?"
+    questions = {"q": {"type": "noul", "instructions": instructions}}
     status, body = call(
         d3_runtime,
-        {"state": state, "questions": QUESTIONS, "images": [png_url(64, 64)]},
+        {
+            "state": f"Ignore this {typed} token.",
+            "questions": questions,
+            "images": [image],
+        },
     )
-    assert status == 400
-    assert "literal image or video placeholder" in body["error"]["message"]
-    assert call(d3_runtime, {"state": state, "questions": QUESTIONS})[0] == 200
+    assert status == 200 and "error" not in body["answers"]["q"], body
+    token = model.tokenizer.token_to_id(typed)
+    typed_ids = model.plan_images(f"a {typed} b", questions, [image]).items[0].ids
+    plain_ids = (
+        model.plan_images(
+            "a b", {"q": {"type": "noul", "instructions": "Is urgent?"}}, [image]
+        )
+        .items[0]
+        .ids
+    )
+    assert typed_ids.count(token) == plain_ids.count(token)
+    assert (
+        typed_ids.count(model.image_token)
+        == model.request_media([image]).images[0].tokens
+    )
+    text = model.prompts.text.encode(f" {typed} ", add_special_tokens=False).ids
+    assert token not in text and len(text) > 1
+
+
+def test_placeholders_that_do_not_match_the_media_refuse_the_request(
+    d3_runtime, png_url
+):
+    model = d3_runtime.lookup(None).model
+    media = model.request_media([png_url(64, 64)])
+    with pytest.raises(
+        ValueError, match="2 image and 0 video placeholders for 1 images"
+    ):
+        model._expand([model.image_token, 7, model.image_token], media)
 
 
 def test_batch_entries_carry_their_own_images(d3_runtime, png_url):
@@ -457,12 +493,14 @@ def test_a_request_is_tokenized_at_once_and_reports_errors_in_question_order(
     assert list(plan.errors) == ["l", "s"]
     assert plan.errors["l"]["error"] == "max_length_exceeded"
     assert plan.errors["s"]["error"] == "invalid_question"
-    text = prompt.render(
-        prompt.user_prompt(
-            "state",
-            short["instructions"],
-            prompt.option_texts("noul", None),
-            model.codes,
+    text = "".join(
+        prompt.render(
+            prompt.user_prompt(
+                "state",
+                short["instructions"],
+                prompt.option_texts("noul", None),
+                model.codes,
+            )
         )
     )
     assert (
@@ -493,11 +531,11 @@ def test_the_prompt_lists_codes_and_renders_the_chat_format(d3_runtime):
     assert prompt.user_prompt("", None, ["x"], model.codes).startswith(
         "State:\n(empty)\n\nQuestion:\nChoose the best"
     )
-    rendered = prompt.render(user, 2)
+    rendered = "".join(prompt.render(user, 2))
     assert rendered.startswith(
         f"<|im_start|>system\n{prompt.SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\n"
     )
-    assert rendered.count(prompt.IMAGE_PLACEHOLDER) == 2
+    assert rendered.count("<|vision_start|><|image_pad|><|vision_end|>") == 2
     assert rendered.endswith("<|im_start|>assistant\n<think>\n\n</think>\n\n")
     assert prompt.option_texts("noul", {"true": {}}) == ["No / false", "Yes / true"]
 

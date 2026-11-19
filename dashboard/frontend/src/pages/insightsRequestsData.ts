@@ -6,7 +6,7 @@ import {
   type AgentRuleIndex,
   type RequestClass,
 } from './insightsAgentIdentity'
-import { recordHarnessId } from './insightsHarness'
+import { normalizeHarnessId, PRIMARY_HARNESSES } from './insightsHarness'
 import {
   DEFAULT_PAGE_SIZE,
   useLivePolling,
@@ -40,10 +40,10 @@ export function readInsightsTab(params: URLSearchParams): InsightsTab {
 }
 
 export const REQUESTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
-/** Records the client-side filters and their counts read: the newest under the server filters. */
+/** Records the class filters and their counts read: the newest under the server filters. */
 export const REQUEST_WINDOW_SIZE = 300
 const LIVE_INTERVAL_MS = 5_000
-/** The aggregate scans every record the filters select, so a live list reads it once a minute. */
+/** The aggregate and the harness counts read every record the filters select, so a live list reads them once a minute. */
 const AGGREGATE_INTERVAL_MS = 60_000
 const WINDOW_INTERVAL_MS = 60_000
 const REPLAYS = '/api/router/api/v1/observability/replays'
@@ -104,6 +104,17 @@ const list = (value: string | null) =>
     .map((item) => item.trim())
     .filter(Boolean)
 
+/** The harness filter's value for the requests no harness sent, as the replay API reads it. */
+export const API_CLIENT_FILTER = 'api_client'
+
+/** The harness filter's values in display order: each harness the Router identifies, then API clients. */
+export const REQUEST_HARNESSES: readonly string[] = [...PRIMARY_HARNESSES, API_CLIENT_FILTER]
+
+/** A harness filter value from a URL; links from before the filter ran on the server name API clients "api". */
+function requestHarness(value: string): string {
+  return value === 'api' ? API_CLIENT_FILTER : normalizeHarnessId(value)
+}
+
 export function readRequestFilters(params: URLSearchParams): RequestFilters {
   const cache = params.get('cache')
   const range = params.get('range')
@@ -118,7 +129,9 @@ export function readRequestFilters(params: URLSearchParams): RequestFilters {
     session,
     turn,
     range: isRequestRange(range) ? range : defaultRequestRange({ session, turn }),
-    harness: list(params.get('harness')),
+    harness: [...new Set(list(params.get('harness')).map(requestHarness))].filter((value) =>
+      REQUEST_HARNESSES.includes(value),
+    ),
     classes: list(params.get('class')).filter((value): value is RequestClass =>
       (REQUEST_CLASSES as readonly string[]).includes(value),
     ),
@@ -174,8 +187,9 @@ export function writeRequestFilters(
   return next
 }
 
+/** Whether a filter the browser applies is on: the request class filters the replay API does not answer. */
 export function hasClientFilters(filters: RequestFilters): boolean {
-  return filters.harness.length > 0 || filters.classes.length > 0 || filters.hideHousekeeping
+  return filters.classes.length > 0 || filters.hideHousekeeping
 }
 
 /** Whether any filter but the time range narrows the list. */
@@ -188,15 +202,23 @@ export function hasAnyFilter(filters: RequestFilters): boolean {
       filters.cache !== 'all' ||
       filters.session ||
       filters.turn ||
+      filters.harness.length > 0 ||
       hasClientFilters(filters),
   )
 }
 
-/** The value a "harness" filter matches: the harness id, or "api" for none. */
-export const API_CLIENT_FILTER = 'api'
-
-export function recordClientFilterValue(record: InsightsRecord): string {
-  return recordHarnessId(record) || API_CLIENT_FILTER
+/**
+ * The harness filter's options: every value before the counts load, then the
+ * ones with requests under the other filters and the ones selected, each with
+ * its count.
+ */
+export function harnessFilterValues(
+  counts: Record<string, number> | null,
+  selected: string[],
+): { value: string; count?: number }[] {
+  return REQUEST_HARNESSES.filter(
+    (value) => !counts || (counts[value] ?? 0) > 0 || selected.includes(value),
+  ).map((value) => ({ value, count: counts ? (counts[value] ?? 0) : undefined }))
 }
 
 export function matchesClientFilters(
@@ -204,9 +226,6 @@ export function matchesClientFilters(
   filters: RequestFilters,
   rules?: AgentRuleIndex,
 ): boolean {
-  if (filters.harness.length > 0 && !filters.harness.includes(recordClientFilterValue(record))) {
-    return false
-  }
   const requestClass = requestClassOf(record, rules)
   if (filters.classes.length > 0 && !filters.classes.includes(requestClass)) return false
   return !(filters.hideHousekeeping && requestClass === 'housekeeping')
@@ -244,15 +263,45 @@ export function serverQuery(filters: RequestFilters, since: string | undefined):
     modelFilter: filters.model || 'all',
     turn: filters.turn,
     session: filters.session,
+    harness: filters.harness,
     since,
   })
+}
+
+/**
+ * A query kept to the records that belong to a session, as the Sessions view
+ * lists them; a Router that predates the filter ignores it.
+ */
+export function withSessionsOnly(query: string, sessionsOnly: boolean): string {
+  if (!sessionsOnly) return query
+  const params = new URLSearchParams(query)
+  params.set('has_session', 'true')
+  return `?${params.toString()}`
+}
+
+/**
+ * The page the harness counts come from: one record under every server filter
+ * but harness, so choosing a harness leaves the counts as they are.
+ */
+export function harnessCountsQuery(
+  filters: RequestFilters,
+  since: string | undefined,
+  sessionsOnly = false,
+): string {
+  return withPage(
+    withSessionsOnly(serverQuery({ ...filters, harness: [] }, since), sessionsOnly),
+    1,
+    0,
+  )
 }
 
 export interface RequestsData {
   rows: InsightsRecord[]
   total: number
   aggregate: InsightsAggregateResponse | null
-  /** The newest records under the server filters, which the client filters and counts read. */
+  /** Requests by harness under every server filter but harness, once withFacets asks for them. */
+  harnessCounts: Record<string, number> | null
+  /** The newest records under the server filters, which the class filters and counts read. */
   window: InsightsRecord[]
   windowTotal: number
   /** The window holds the newest records of the current filters. */
@@ -276,11 +325,12 @@ const recordId = (record: InsightsRecord) => record.id
 /**
  * The request list, each part loaded on its own so the rows never wait: one
  * server page, polled while live; the aggregate of every record the server
- * filters select, read again once a minute; and, when withWindow or a client
- * filter asks for it, a window of the newest records for the harness and
- * request-class filters and counts the replay API does not answer. Only a
- * client filter keeps the window live; for counts alone it loads once per
- * set of filters.
+ * filters select, read again once a minute; and the filters' counts, when
+ * withFacets or a class filter asks for them: the requests by harness under
+ * every other server filter, read again once a minute, and a window of the
+ * newest records for the request-class filters and counts the replay API does
+ * not answer. Only a class filter keeps the window live; for counts alone it
+ * loads once per set of filters.
  */
 export function useRequestsData({
   filters,
@@ -290,7 +340,9 @@ export function useRequestsData({
   held,
   rules,
   interval,
-  withWindow = true,
+  withFacets = true,
+  paused = false,
+  sessionsOnly = false,
 }: {
   filters: RequestFilters
   page: number
@@ -300,26 +352,40 @@ export function useRequestsData({
   rules?: AgentRuleIndex
   /** With a range, asks the aggregate for its traffic in intervals of this length, such as 1h. */
   interval?: string
-  withWindow?: boolean
+  withFacets?: boolean
+  /** Reads nothing yet, as while a session filter is matched with its full id. */
+  paused?: boolean
+  /** Reads only the records that belong to a session, so the totals match the Sessions view. */
+  sessionsOnly?: boolean
 }): RequestsData {
   const [minute, setMinute] = useState(() => Math.floor(Date.now() / MINUTE))
-  const baseQuery = serverQuery(filters, requestRangeSince(filters.range, minute))
-  const scope = `${serverQuery(filters, undefined)}|${filters.range}`
+  const since = requestRangeSince(filters.range, minute)
+  const baseQuery = withSessionsOnly(serverQuery(filters, since), sessionsOnly)
+  const scope = `${withSessionsOnly(serverQuery(filters, undefined), sessionsOnly)}|${filters.range}`
   const clientMode = hasClientFilters(filters)
 
   const listRead = useReplayRead<InsightsListResponse>(
-    clientMode ? null : `${REPLAYS}${withPage(baseQuery, pageSize, (page - 1) * pageSize)}`,
+    clientMode || paused
+      ? null
+      : `${REPLAYS}${withPage(baseQuery, pageSize, (page - 1) * pageSize)}`,
     'insight records',
     `${scope}|${page}|${pageSize}`,
   )
   const aggregateRead = useReplayRead<InsightsAggregateResponse>(
-    `${REPLAYS}/aggregate${withInterval(baseQuery, filters.range === 'all' ? undefined : interval)}`,
+    paused
+      ? null
+      : `${REPLAYS}/aggregate${withInterval(baseQuery, filters.range === 'all' ? undefined : interval)}`,
     'insight aggregates',
     `${scope}|${interval ?? ''}`,
   )
+  const harnessRead = useReplayRead<InsightsListResponse>(
+    withFacets && !paused ? `${REPLAYS}${harnessCountsQuery(filters, since, sessionsOnly)}` : null,
+    'harness counts',
+    `${withSessionsOnly(serverQuery({ ...filters, harness: [] }, undefined), sessionsOnly)}|${filters.range}`,
+  )
 
   const [windowQuery, releaseWindow] = useWindowQuery(
-    clientMode ? 'live' : withWindow ? 'counts' : 'off',
+    paused ? 'off' : clientMode ? 'live' : withFacets ? 'counts' : 'off',
     scope,
     baseQuery,
   )
@@ -351,11 +417,13 @@ export function useRequestsData({
     const now = Date.now()
     if (!clientMode) listRead.reload()
     if (now - aggregateRead.requestedAt >= AGGREGATE_INTERVAL_MS) aggregateRead.reload()
+    if (withFacets && now - harnessRead.requestedAt >= AGGREGATE_INTERVAL_MS) harnessRead.reload()
     if (clientMode && now - windowRead.requestedAt >= WINDOW_INTERVAL_MS) windowRead.reload()
   })
 
   const { reload: reloadList } = listRead
   const { reload: reloadAggregate } = aggregateRead
+  const { reload: reloadHarness } = harnessRead
   const { reload: reloadWindow } = windowRead
   const refresh = useCallback(() => {
     const current = Math.floor(Date.now() / MINUTE)
@@ -366,8 +434,17 @@ export function useRequestsData({
     }
     reloadList()
     reloadAggregate()
+    reloadHarness()
     if (!releaseWindow()) reloadWindow()
-  }, [filters.range, minute, releaseWindow, reloadAggregate, reloadList, reloadWindow])
+  }, [
+    filters.range,
+    minute,
+    releaseWindow,
+    reloadAggregate,
+    reloadHarness,
+    reloadList,
+    reloadWindow,
+  ])
 
   const filtered = useMemo(
     () =>
@@ -392,15 +469,18 @@ export function useRequestsData({
           : listResponse.count
         : 0,
     aggregate: aggregateRead.stale ? null : aggregateRead.data,
+    harnessCounts: harnessRead.stale ? null : (harnessRead.data?.harness_counts ?? null),
     window: windowRead.rows,
     windowTotal: windowRead.total,
     windowLoaded: windowRead.loaded,
     windowLoading: windowRead.loading,
-    loading: clientMode
-      ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
-      : listRead.loading && (listResponse === null || listRead.stale),
+    loading:
+      paused ||
+      (clientMode
+        ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
+        : listRead.loading && (listResponse === null || listRead.stale)),
     stale: clientMode ? false : listRead.stale && listResponse !== null,
-    aggregateLoading: aggregateRead.loading,
+    aggregateLoading: paused || aggregateRead.loading,
     error: listError ?? aggregateError,
     listError,
     aggregateError,
