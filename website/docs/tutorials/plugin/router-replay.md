@@ -1022,7 +1022,11 @@ recipes: the same summary in `run` and every call in time order in `calls`.
 Without `replay.detail` a run keeps its tree, labels, markers and counts, and
 loses what its records would: the session name, the prompt, the agent hashes,
 the reasons and the text of reported outcomes. The runs list reads the filtered
-records whole, so bound it with `since` on a large PostgreSQL store.
+records whole, so bound it with `since` on a large PostgreSQL store. On
+PostgreSQL the run read leaves each record's request and response bodies,
+prompt, tool definitions and tool payloads in the database, which for a long
+agent session are most of what its records hold, and reads one prompt, the
+task's.
 
 In **Requests**, the **Agent runs** tab lists one row per run: its session name or
 task, the harness, the agents, the models, the outcome, the cost and duration,

@@ -46,6 +46,13 @@ type RecordPage struct {
 	HarnessCounts map[string]int
 }
 
+// RunReader optionally reads one agent run's records, oldest first, without
+// their captured bodies or prompt and with each tool trace's steps but not
+// their payloads: what the run view needs of a session of thousands of calls.
+type RunReader interface {
+	QueryRun(ctx context.Context, filters QueryFilters) ([]Record, error)
+}
+
 // QueryReader optionally provides database-side pagination and a streaming
 // metadata scan. Implementations must not cap the scan or read captured bodies.
 // Reader remains the compatibility contract for bounded in-memory stores.

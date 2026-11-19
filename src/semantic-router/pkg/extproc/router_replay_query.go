@@ -160,27 +160,41 @@ func routerReplayPagePayload(page store.RecordPage, query routerReplayListQuery)
 // offset pages that could duplicate or miss turns during concurrent writes.
 func (r *OpenAIRouter) queryRouterReplaySession(ctx context.Context, sessionID string, recipe *string) ([]routerreplay.RoutingRecord, error) {
 	var records []routerreplay.RoutingRecord
+	for _, reader := range r.routerReplayReaders() {
+		page, err := r.querySessionRecords(ctx, reader, sessionID, recipe)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, page...)
+	}
+	return sortRouterReplayRecords(records), nil
+}
+
+// queryRouterReplaySessionIn reads one reader's full records of a session.
+func (r *OpenAIRouter) queryRouterReplaySessionIn(ctx context.Context, reader *routerreplay.Recorder, sessionID string) ([]routerreplay.RoutingRecord, error) {
+	return r.querySessionRecords(ctx, reader, sessionID, nil)
+}
+
+func (r *OpenAIRouter) querySessionRecords(ctx context.Context, reader *routerreplay.Recorder, sessionID string, recipe *string) ([]routerreplay.RoutingRecord, error) {
 	filters := store.QueryFilters{SessionID: sessionID}
 	if recipe != nil {
 		filters.Recipe = *recipe
 		filters.RecipeSet = true
 	}
-	for _, reader := range r.routerReplayReaders() {
-		page, supported, err := reader.QueryPage(ctx, filters, math.MaxInt, 0, true)
-		if err != nil {
-			return nil, err
-		}
-		if !supported {
-			all, listErr := reader.ListRecords()
-			if listErr != nil {
-				return nil, listErr
-			}
-			page.Records = filterTrajectoryRecordsBySession(all, sessionID)
-			if recipe != nil {
-				page.Records = filterTrajectoryRecordsByRecipe(page.Records, *recipe)
-			}
-		}
-		records = append(records, page.Records...)
+	page, supported, err := reader.QueryPage(ctx, filters, math.MaxInt, 0, true)
+	if err != nil {
+		return nil, err
 	}
-	return sortRouterReplayRecords(records), nil
+	if supported {
+		return page.Records, nil
+	}
+	all, err := reader.ListRecords()
+	if err != nil {
+		return nil, err
+	}
+	records := filterTrajectoryRecordsBySession(all, sessionID)
+	if recipe != nil {
+		records = filterTrajectoryRecordsByRecipe(records, *recipe)
+	}
+	return records, nil
 }
