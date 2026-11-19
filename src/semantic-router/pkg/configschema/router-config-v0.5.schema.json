@@ -1231,6 +1231,12 @@
           },
           "type": "array"
         },
+        "allow_request_extension_fields": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "routing_input": {
           "$ref": "#/$defs/RoutingInputConfig"
         },
