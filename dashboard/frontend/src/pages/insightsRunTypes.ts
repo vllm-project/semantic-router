@@ -19,6 +19,8 @@ export interface RunAgent {
   id?: string
   parent?: string
   kind?: string
+  /** The subagent type its calls name, else Codex's kind. */
+  type?: string
   calls: number
   first_call_at: string
   last_call_at: string
@@ -113,6 +115,9 @@ export interface RunCall {
   session_action?: string
   reason?: string
   request_kind?: string
+  request_class?: string
+  agent_type?: string
+  image_count?: number
   lifecycle_state: string
   response_status?: number
   terminal_reason?: string

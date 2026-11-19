@@ -337,6 +337,14 @@ type Record struct {
 	// SessionNameFromPrompt marks a SessionName the main agent's first prompt
 	// gave, which a name the harness gave outranks.
 	SessionNameFromPrompt bool `json:"session_name_from_prompt,omitempty"`
+	// ImageCount is the images in the request's newest turn, after its last
+	// assistant message, and HistoryImageCount the images before it.
+	ImageCount        int `json:"image_count,omitempty"`
+	HistoryImageCount int `json:"history_image_count,omitempty"`
+
+	// RequestedModel is the model the client named when its listener's
+	// unserved_models routed the request as OriginalModel.
+	RequestedModel string `json:"requested_model,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`

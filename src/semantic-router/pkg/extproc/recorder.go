@@ -314,6 +314,7 @@ func buildReplayRoutingRecord(
 		CacheEntryAgeSeconds: ctx.VSRCacheEntryAgeSeconds,
 		CacheTTLSeconds:      ctx.VSRCacheTTLSeconds,
 		ContextTokenCount:    ctx.VSRContextTokenCount,
+		RequestedModel:       ctx.RequestedModel,
 		HallucinationEnabled: hallucinationEnabled,
 	}
 	if state := ctx.ResponseObjectState; state != nil {
@@ -324,6 +325,7 @@ func buildReplayRoutingRecord(
 	sessionKind, sessionName := replaySessionNaming(ctx)
 	record.RequestKind, record.SessionName = firstNonEmptyString(record.RequestKind, sessionKind, replaySideRequestKind(ctx)), sessionName
 	record.ThreadID, record.TurnID, record.ParentTurnID = ctx.AgentTurn.ThreadID, ctx.AgentTurn.TurnID, ctx.AgentTurn.ParentTurnID
+	record.ImageCount, record.HistoryImageCount = requestImageCounts(ctx.SemanticRequest)
 	// The sanitiser drops tool-result payloads unless the route captures tool
 	// results; a masking route persists no request text at all, because Replay
 	// snapshots the request before masking runs (D3, #3566).

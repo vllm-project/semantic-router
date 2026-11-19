@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Bot, Copy, Info, ListTree, PanelRightOpen } from 'lucide-react'
 
 import {
-  Badge,
   Button,
   Card,
   DataTable,
@@ -22,6 +21,8 @@ import {
 } from '../ui'
 import { formatInsightsCount } from '../utils/insightsCost'
 
+import { runEventCounts } from './insightsAgentEvents'
+import { AgentEventChips } from './InsightsAgentEvents'
 import { compactSessionId, displaySessionId } from './insightsAgentIdentity'
 import { formatLatency, useNow } from './insightsDisplayFormat'
 import {
@@ -52,8 +53,6 @@ import {
   formatRunCost,
   getRunPath,
   oneLine,
-  RUN_MARKER_GLYPHS,
-  RUN_MARKER_LABELS,
   RUN_OUTCOME_LABELS,
   RUN_STATUS_TONES,
   runHeadline,
@@ -69,32 +68,11 @@ export function RunStatus({ run }: { run: Pick<RunSummary, 'outcome'> }) {
   )
 }
 
-/** A run's events worth a look, each a glyph and its count. */
+/** A run's events worth a look, in the shared event vocabulary, each with its count. */
 export function RunEvents({ events }: { events?: Record<string, number> }) {
-  const entries = Object.entries(events ?? {})
-  if (entries.length === 0) return null
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      {entries.map(([marker, count]) => (
-        <Badge
-          key={marker}
-          tone={
-            marker === 'failure' || marker === 'block'
-              ? 'danger'
-              : marker === 'guard' || marker === 'tool_failure'
-                ? 'warning'
-                : 'outline'
-          }
-          size="sm"
-          title={`${RUN_MARKER_LABELS[marker] ?? marker}: ${count}`}
-          data-marker={marker}
-        >
-          <span aria-hidden>{RUN_MARKER_GLYPHS[marker] ?? '•'}</span>
-          {count}
-        </Badge>
-      ))}
-    </span>
-  )
+  const counts = runEventCounts({ events })
+  if (counts.length === 0) return null
+  return <AgentEventChips events={counts} compact />
 }
 
 function copy(value: string, label: string) {

@@ -57,30 +57,52 @@ func applyReplayRunParent(record *store.Record, parent *replayRunParent) {
 
 // harnessRunSession is the session the harness names for a request's agent
 // run: the one protection reads, else the one a supported harness sends,
-// pinned or Codex's session-id. A run keeps it whichever identity headers
-// protection is configured with and whether protection can key the call.
+// pinned or Codex's session-id, else for Cursor and OpenClaw, which send
+// no session header, the session OpenClaw names in prompt_cache_key or the
+// conversation id the Router derives. A run keeps it whichever
+// identity headers protection is configured with and whether protection can
+// key the call.
 func harnessRunSession(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) string {
 	if sessionID, _ := protectionSessionID(ctx, cfg); sessionID != "" {
 		return sessionID
 	}
-	sessionID, _ := protectionSessionID(ctx, config.RouterLearningProtectionConfig{})
-	return sessionID
+	if sessionID, _ := protectionSessionID(ctx, config.RouterLearningProtectionConfig{}); sessionID != "" {
+		return sessionID
+	}
+	switch harness := requestHarness(ctx); harness {
+	case store.HarnessOpenClaw:
+		if session := openClawSession(ctx); session != "" {
+			return session
+		}
+		return derivedConversationID(ctx, harness)
+	case store.HarnessCursor:
+		return derivedConversationID(ctx, harness)
+	}
+	return ""
 }
 
 // harnessRunAgent is the agent of its run a request comes from, as the
 // harness names it: protection's agent, else the one a supported harness
-// sends. Codex names the thread that spawned a thread; a thread its root
+// sends, with the subagent type and request class the agent signal reads. Codex names the thread that spawned a thread; a thread its root
 // spawned, and every Claude Code or OpenCode subagent, hangs off the main
 // agent.
 func harnessRunAgent(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) *store.AgentIdentity {
 	agentID, _ := protectionAgentID(ctx, cfg)
 	if agentID == "" {
-		agentID, _ = protectionAgentID(ctx, config.RouterLearningProtectionConfig{})
+		// The facts follow the identity the record keeps, so a subagent's
+		// call reads as one whichever headers protection is set to read.
+		cfg = config.RouterLearningProtectionConfig{}
+		agentID, _ = protectionAgentID(ctx, cfg)
 	}
+	facts := agentFacts(ctx, cfg)
 	identity := store.AgentIdentity{
-		Harness:  requestHarness(ctx),
-		ID:       shortLearningIdentityHash(agentID),
-		ParentID: shortLearningIdentityHash(codexParentThread(ctx)),
+		Harness:      requestHarness(ctx),
+		ID:           shortLearningIdentityHash(agentID),
+		ParentID:     shortLearningIdentityHash(codexParentThread(ctx)),
+		RequestClass: facts.RequestClass,
+	}
+	if identity.Harness != store.HarnessCodex {
+		identity.Type = facts.Type
 	}
 	if identity.ID != "" {
 		// Codex names a child's kind, such as collab_spawn or review, and
@@ -132,6 +154,10 @@ func requestHarness(ctx *RequestContext) string {
 		return store.HarnessOpenCode
 	case isDeepSeekHarness(ctx):
 		return store.HarnessDeepSeekHarness
+	case isCursor(ctx):
+		return store.HarnessCursor
+	case isOpenClaw(ctx):
+		return store.HarnessOpenClaw
 	default:
 		return ""
 	}
