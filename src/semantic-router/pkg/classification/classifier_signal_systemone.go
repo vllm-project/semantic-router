@@ -85,18 +85,10 @@ type ConversationTurn struct {
 // a tool result held content that is not text, which toolResults leaves out,
 // and imagesIncomplete whether an image is one no decision model decodes,
 // which images leaves out.
-// The decision-model runtime bounds each question's tokens (vela3-fast
-// rejects bodies above ~12KiB on a shared card), so the two parts that grow
-// with the conversation keep only their tail: recent tool output and recent
-// turns carry what a late-session question reads.
-const (
-	toolResultsCapBytes   = 8 * 1024
-	previousTurnsCapBytes = 4 * 1024
-)
-
-// tailCap keeps the last limit bytes of s behind a truncation marker.
+// tailCap keeps the last limit bytes of s behind a truncation marker. A
+// limit of 0, the config default, keeps s whole.
 func tailCap(s string, limit int) string {
-	if len(s) <= limit {
+	if limit <= 0 || len(s) <= limit {
 		return s
 	}
 	const marker = "[state truncated] "
@@ -135,16 +127,17 @@ func (r systemOneReading) previousAnswer() string {
 func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request {
 	input := rule.Input
 	if !input.ReadsRequest() {
-		return modelservice.Request{State: strings.Join(r.besidesRequest(input), "\n\n")}
+		return modelservice.Request{State: tailCap(strings.Join(r.besidesRequest(input), "\n\n"), input.MaxStateBytes)}
 	}
 	if request, ok := r.spanScan(rule); ok {
 		return request
 	}
 	parts := map[string]string{}
 	add := func(name, text string) {
-		if strings.TrimSpace(text) != "" {
-			parts[name] = text
+		if strings.TrimSpace(text) == "" {
+			return
 		}
+		parts[name] = tailCap(text, input.MaxStateBytes)
 	}
 	if input.History {
 		add("history", strings.Join(r.history, "\n\n"))
@@ -155,13 +148,13 @@ func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request 
 		for index, turn := range turns {
 			lines[index] = turn.Role + ": " + turn.Text
 		}
-		add("previous_turns", tailCap(strings.Join(lines, "\n"), previousTurnsCapBytes))
+		add("previous_turns", strings.Join(lines, "\n"))
 	}
 	if input.PreviousAnswer {
 		add("previous_answer", r.previousAnswer())
 	}
 	if input.ToolResults {
-		add("tool_results", tailCap(strings.Join(r.toolResults, "\n\n"), toolResultsCapBytes))
+		add("tool_results", strings.Join(r.toolResults, "\n\n"))
 	}
 	if input.Context {
 		add("context", r.context)
@@ -169,7 +162,7 @@ func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request 
 	if input.Answer {
 		add("answer", r.answer)
 	}
-	request := modelservice.Request{State: r.request}
+	request := modelservice.Request{State: tailCap(r.request, input.MaxStateBytes)}
 	if len(parts) > 0 {
 		add("request", r.request)
 		request = modelservice.Request{Parts: parts}
