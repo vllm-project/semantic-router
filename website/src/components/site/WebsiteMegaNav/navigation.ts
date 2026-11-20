@@ -32,7 +32,7 @@ export const WEBSITE_PRIMARY_NAV_ITEMS: WebsitePrimaryNavItem[] = [
     key: 'community',
     label: 'Community',
     translateId: 'nav.primary.community',
-    to: '/community/team',
+    to: '/community/contributor-guide',
     activePrefixes: ['/community'],
   },
 ]
