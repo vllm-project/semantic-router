@@ -36,6 +36,8 @@ describe('capability plugin field schemas', () => {
     expect(resolveCapabilityPluginFieldSchema('shadow_dispatch')).toBeNull()
     expect(shadow?.fields?.map((field) => field.key)).toEqual([
       'model',
+      'arms',
+      'budget',
       'sample_rate',
       'max_concurrency',
       'max_queue_depth',
@@ -46,6 +48,20 @@ describe('capability plugin field schemas', () => {
       'max_capture_bytes',
       'tls_skip_verify',
       'forward_headers',
+    ])
+    const fields = shadow?.fields
+    expect(fields?.find((field) => field.key === 'arms')?.type).toBe('string[]')
+    expect(fields?.find((field) => field.key === 'budget')?.type).toBe('object')
+    expect(
+      fields?.find((field) => field.key === 'budget')?.fields?.map((field) => field.key),
+    ).toEqual([
+      'max_calls_per_request',
+      'max_tokens_per_request',
+      'max_cost_per_request',
+      'price_per_million_tokens',
+      'reserve_tokens_per_arm',
+      'max_concurrency_per_request',
+      'max_response_bytes_per_request',
     ])
   })
 

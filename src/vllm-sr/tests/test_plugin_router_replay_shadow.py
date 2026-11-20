@@ -12,6 +12,7 @@ from cli.models import (
     PluginType,
     RouterReplayPluginConfig,
     RouterReplayShadowConfig,
+    ShadowDispatchBudgetConfig,
 )
 from pydantic import ValidationError as PydanticValidationError
 
@@ -29,11 +30,17 @@ class TestRouterReplayShadowConfig:
         assert cfg.capture_response_body is False
         assert cfg.max_capture_bytes == 4096
 
-    def test_model_is_required(self):
-        with pytest.raises(PydanticValidationError, match="model"):
+    def test_model_or_arms_required(self):
+        with pytest.raises(PydanticValidationError, match="shadow model or arms"):
             RouterReplayShadowConfig()
-        with pytest.raises(PydanticValidationError, match="shadow model is required"):
+        with pytest.raises(PydanticValidationError, match="shadow model or arms"):
             RouterReplayShadowConfig(model=" ")
+        with pytest.raises(PydanticValidationError, match="empty model names"):
+            RouterReplayShadowConfig(model="candidate", arms=["arm-a", " "])
+        # Arms-only is a valid multi-arm shadow (issue #3376).
+        cfg = RouterReplayShadowConfig(arms=["arm-a", "arm-b"])
+        assert cfg.model is None
+        assert cfg.arms == ["arm-a", "arm-b"]
 
     def test_bounds_and_headers(self):
         with pytest.raises(PydanticValidationError):
@@ -49,9 +56,69 @@ class TestRouterReplayShadowConfig:
 
     def test_router_replay_carries_the_shadow(self):
         cfg = RouterReplayPluginConfig(
-            enabled=True, shadow={"model": "candidate", "sample_rate": 0.05}
+            enabled=True,
+            shadow={
+                "model": "candidate",
+                "arms": ["arm-a"],
+                "budget": {"max_calls_per_request": 2},
+                "sample_rate": 0.05,
+            },
         )
         assert cfg.shadow is not None and cfg.shadow.sample_rate == 0.05
+        assert cfg.shadow.arms == ["arm-a"]
+        assert cfg.shadow.budget is not None
+        assert cfg.shadow.budget.max_calls_per_request == 2
+
+    def test_budget_field_parses(self):
+        cfg = RouterReplayShadowConfig(
+            model="candidate",
+            arms=["arm-a"],
+            budget=ShadowDispatchBudgetConfig(
+                max_calls_per_request=2,
+                max_tokens_per_request=512,
+                reserve_tokens_per_arm=256,
+                max_concurrency_per_request=2,
+            ),
+        )
+        assert cfg.budget is not None
+        assert cfg.budget.max_calls_per_request == 2
+        assert cfg.budget.max_tokens_per_request == 512
+        assert cfg.budget.reserve_tokens_per_arm == 256
+        assert cfg.budget.max_concurrency_per_request == 2
+
+    def test_budget_caps_reject_silent_combinations(self):
+        # Mirrors the Router: caps that cannot bind before dispatch are refused
+        # here instead of failing silently at run time.
+        with pytest.raises(
+            PydanticValidationError, match="requires reserve_tokens_per_arm"
+        ):
+            RouterReplayShadowConfig(
+                model="m",
+                budget=ShadowDispatchBudgetConfig(max_tokens_per_request=100),
+            )
+        with pytest.raises(
+            PydanticValidationError,
+            match="requires reserve_tokens_per_arm and price_per_million_tokens",
+        ):
+            RouterReplayShadowConfig(
+                model="m",
+                budget=ShadowDispatchBudgetConfig(max_cost_per_request=1.0),
+            )
+        with pytest.raises(
+            PydanticValidationError, match="requires reserve_tokens_per_arm"
+        ):
+            RouterReplayShadowConfig(
+                model="m",
+                budget=ShadowDispatchBudgetConfig(
+                    max_cost_per_request=1.0, price_per_million_tokens=2.0
+                ),
+            )
+
+    def test_budget_rejects_negative_and_unknown_fields(self):
+        with pytest.raises(PydanticValidationError):
+            ShadowDispatchBudgetConfig(max_tokens_per_request=-1)
+        with pytest.raises(PydanticValidationError, match="max_calls"):
+            ShadowDispatchBudgetConfig(max_calls=1)
 
     def test_shadow_dispatch_is_no_plugin_type(self):
         assert "shadow_dispatch" not in {member.value for member in PluginType}

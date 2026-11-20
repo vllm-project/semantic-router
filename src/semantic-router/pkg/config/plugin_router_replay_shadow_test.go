@@ -40,7 +40,8 @@ func TestRouterReplayShadowPayloadValidation(t *testing.T) {
 	}{
 		{name: "valid", payload: shadow(map[string]interface{}{"model": "candidate", "sample_rate": half, "max_retries": 3})},
 		{name: "no shadow", payload: map[string]interface{}{"enabled": true}},
-		{name: "missing model", payload: shadow(map[string]interface{}{"sample_rate": half}), wantErr: "shadow: model is required"},
+		{name: "missing model", payload: shadow(map[string]interface{}{"sample_rate": half}), wantErr: "model or arms is required"},
+		{name: "arms only", payload: shadow(map[string]interface{}{"arms": []string{"candidate"}})},
 		{name: "sample rate out of range", payload: shadow(map[string]interface{}{"model": "m", "sample_rate": tooHigh}), wantErr: "sample_rate"},
 		{name: "negative bound", payload: shadow(map[string]interface{}{"model": "m", "max_concurrency": -1}), wantErr: "max_concurrency cannot be negative"},
 		{name: "too many retries", payload: shadow(map[string]interface{}{"model": "m", "max_retries": 4}), wantErr: "max_retries cannot exceed"},
@@ -109,6 +110,33 @@ func TestRouterReplayShadowModelMustHaveBackend(t *testing.T) {
 	err = validateDecisionReplayShadow(cfg, decision)
 	if err == nil || !strings.Contains(err.Error(), "executor algorithm") {
 		t.Fatalf("error = %v, want executor rejection", err)
+	}
+}
+
+func TestRouterReplayShadowBudgetCapsRejectSilentCombinations(t *testing.T) {
+	cases := []struct {
+		name    string
+		cfg     ShadowDispatchBudgetConfig
+		wantErr string
+	}{
+		{name: "token cap without admission reserve", cfg: ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100}, wantErr: "requires reserve_tokens_per_arm"},
+		{name: "cost cap without price", cfg: ShadowDispatchBudgetConfig{MaxCostPerRequest: 1.0}, wantErr: "requires reserve_tokens_per_arm and price_per_million_tokens"},
+		{name: "cost cap without admission reserve", cfg: ShadowDispatchBudgetConfig{MaxCostPerRequest: 1.0, PricePerMillionTokens: 2.0}, wantErr: "requires reserve_tokens_per_arm and price_per_million_tokens"},
+		{name: "bounded pair accepted", cfg: ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100, ReserveTokensPerArm: 50, MaxCostPerRequest: 1.0, PricePerMillionTokens: 2.0}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := (&RouterReplayShadowConfig{Model: "m", Budget: tc.cfg}).Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error = %v, want containing %q", err, tc.wantErr)
+			}
+		})
 	}
 }
 
