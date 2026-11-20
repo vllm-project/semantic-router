@@ -180,6 +180,15 @@ func (l *Ledger) Check(limits []Limit) *Refusal {
 	return l.admit(limits, 0)
 }
 
+// Recheck refuses a call of estimate as the ledger stands now, without
+// reserving it, so a refusal made while other calls were in flight can be
+// read again once they settle.
+func (l *Ledger) Recheck(limits []Limit, estimate float64) *Refusal {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.admit(limits, estimate)
+}
+
 // admit refuses with the budget that has least room once the calls in
 // flight settle, so a refusal any wait cannot clear is never reported as one
 // a short wait may.

@@ -63,9 +63,10 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 	finalizeLooperQuorumOutcome(reqCtx, evidence.fusionQuorum, decision, false)
 
 	logging.ComponentErrorEvent("extproc", "looper_execution_failed", failureFields)
-	// A run a spend budget stopped answers as the refused call would alone.
+	// A run a spend budget stopped answers as the refused call would alone,
+	// read again now that its other calls have settled.
 	if refusal := reqCtx.spend.hopRefusal(); refusal != nil {
-		return r.respondLooperBudgetRefused(reqCtx, refusal, evidenceArgs...)
+		return r.respondLooperBudgetRefused(reqCtx, reqCtx.spend.recheck(refusal), evidenceArgs...)
 	}
 	status, message, reason := 500, "Looper execution failed: "+err.Error(), "looper_execution_failed"
 	// A model's rate limit or failure that ended the run reaches the client

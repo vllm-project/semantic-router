@@ -27,8 +27,8 @@ import (
 // spendRouteConfig is a priced Router with a Looper escalation (small-model,
 // then big-model), a Looper panel that calls three models at once, a
 // fallback chain whose models both fail, a model whose
-// answer cannot be read, a Looper panel of three Messages models, and a
-// plain route. Every Chat answer reports 2000 input tokens, 1500 of them
+// answer cannot be read, a Looper panel of three Messages models, a Fusion
+// panel of two slow models that needs both, and a plain route. Every Chat answer reports 2000 input tokens, 1500 of them
 // cache reads and 300 cache writes, and 100 output tokens: far more than a
 // short request's estimate. Every Messages answer reports 10000 one-hour
 // cache writes and nothing else.
@@ -93,6 +93,18 @@ providers:
       max_output_tokens: 1000
       pricing: {currency: USD, prompt_per_1m: 3.0, cache_write_per_1m: 3.75, cache_write_1h_per_1m: 6.0, completion_per_1m: 15.0}
       backend_refs: [{name: fake, endpoint: BACKEND, protocol: http, provider: vllm}]
+    - name: slow-a
+      provider_model_id: slow-a
+      api_format: openai
+      max_output_tokens: 1000
+      pricing: {currency: USD, prompt_per_1m: 1.0, completion_per_1m: 10.0}
+      backend_refs: [{name: fake, endpoint: BACKEND, protocol: http, provider: vllm}]
+    - name: slow-b
+      provider_model_id: slow-b
+      api_format: openai
+      max_output_tokens: 1000
+      pricing: {currency: USD, prompt_per_1m: 1.0, completion_per_1m: 10.0}
+      backend_refs: [{name: fake, endpoint: BACKEND, protocol: http, provider: vllm}]
     - name: broken-model
       provider_model_id: broken-model
       api_format: openai
@@ -113,6 +125,7 @@ recipes:
         - {name: fail_kw, operator: OR, keywords: ["FAILONLY"], case_sensitive: true}
         - {name: broken_kw, operator: OR, keywords: ["BROKEN"], case_sensitive: true}
         - {name: tiered_kw, operator: OR, keywords: ["TIERED"], case_sensitive: true}
+        - {name: fused_kw, operator: OR, keywords: ["FUSED"], case_sensitive: true}
     decisions:
       - name: looper
         priority: 200
@@ -142,6 +155,19 @@ recipes:
           type: ratings
           on_error: skip
           ratings: {max_concurrent: 3}
+      - name: fused
+        priority: 200
+        rules: {operator: AND, conditions: [{type: keyword, name: fused_kw}]}
+        modelRefs: [{model: slow-a}, {model: slow-b}]
+        algorithm:
+          type: fusion
+          on_error: skip
+          fusion:
+            model: main-model
+            analysis_models: [slow-a, slow-b]
+            analysis_mode: separate
+            max_concurrent: 2
+            min_successful_responses: 2
       - name: failover
         priority: 200
         rules: {operator: AND, conditions: [{type: keyword, name: failover_kw}]}
@@ -171,7 +197,8 @@ BUDGETS
 
 // spendBackend answers as the vx mock does: fail-a and fail-b with 503,
 // broken-model with a body no codec reads, small-model with low
-// log probabilities to a LOOPER question, so escalation moves on.
+// log probabilities to a LOOPER question, so escalation moves on, and
+// slow-a and slow-b after a pause, so both reserve before either settles.
 func spendBackend(t *testing.T) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +232,8 @@ func spendBackend(t *testing.T) *httptest.Server {
 		case "broken-model":
 			_, _ = io.WriteString(w, `not an answer`)
 			return
+		case "slow-a", "slow-b":
+			time.Sleep(300 * time.Millisecond)
 		}
 		logprob := -0.01
 		if req.Model == "small-model" && strings.Contains(string(req.Messages), "LOOPER") {
@@ -561,4 +590,17 @@ func TestAnOutOfBudgetRefusalSaysWhatCallsInFlightHold(t *testing.T) {
 	require.True(t, strings.HasPrefix(responses.Header.Get(headers.XCodexPromoMessage), "O"+want[1:]), responses.Header.Get(headers.XCodexPromoMessage))
 	require.Contains(t, string(responses.Body), `"type":"usage_limit_reached"`)
 	require.Equal(t, budgetExceededCode, messages.Header.Get(headers.AnthropicOverageDisabledReason))
+}
+
+// A Fusion hop refused only because its sibling held the room answers the
+// run as out of budget once that sibling settles the room away: the reply
+// tells the client not to retry rather than to retry in 5 seconds.
+func TestALooperHopRefusalIsRecheckedOnceItsSiblingsSettle(t *testing.T) {
+	h := newSpendRoute(t, "    budgets: {currency: USD, run: {limit: 0.0015}}")
+	response := h.chat("FUSED question", "fused")
+	require.Equal(t, http.StatusTooManyRequests, response.Status, string(response.Body))
+	require.Equal(t, "false", response.Header.Get(headers.XShouldRetry), string(response.Body))
+	require.Empty(t, response.Header.Get("retry-after"), "a run budget has no window to wait for")
+	require.Contains(t, string(response.Body), "out of budget: the run spend budget of 0.001500")
+	require.NotContains(t, string(response.Body), "retry once they finish")
 }

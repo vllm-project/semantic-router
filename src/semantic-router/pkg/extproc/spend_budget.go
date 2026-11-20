@@ -383,6 +383,20 @@ func (s *requestSpend) hopRefusal() *budgetRefusal {
 	return s.hops.refusal
 }
 
+// recheck reads a Looper hop's refusal again once the run's other calls are
+// done: a call that only calls in flight kept out and that what they settled
+// leaves no room for is out of budget, and one that fits now keeps asking
+// for a retry.
+func (s *requestSpend) recheck(refusal *budgetRefusal) *budgetRefusal {
+	if !refusal.inFlight {
+		return refusal
+	}
+	if again := spendbudget.Process().Recheck(s.limits, refusal.estimate); again != nil {
+		return s.refused(again)
+	}
+	return refusal
+}
+
 func (s *requestSpend) settle(actual float64, settlement string) {
 	s.hold.Settle(actual)
 	s.hold = nil
