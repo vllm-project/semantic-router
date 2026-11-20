@@ -284,6 +284,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     if (validateTimer) clearTimeout(validateTimer)
     sourceRevision++
     importRequestId++
+    deployPreviewRequestId++
     set({ ...initialDSLState, compilerReady: get().compilerReady })
   },
 

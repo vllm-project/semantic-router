@@ -90,10 +90,35 @@ describe('Builder deploy preview staleness', () => {
     expect(previewBodies()[1]).toMatchObject({ yaml: 'recipes: [b]\n' })
   })
 
-  it('leaves the dismissed dialog untouched when its preview responds late', async () => {
+  it.each(['succeeds', 'fails'])(
+    'keeps the second preview when the first request %s late',
+    async (outcome) => {
+      const { pending } = stubDeferredPreviews()
+      openPreview('recipes: [a]\n', 'ROUTE a {}')
+      openPreview('recipes: [b]\n', 'ROUTE b {}')
+
+      pending[1].resolve(okPreview('current b', 'preview b'))
+      await vi.waitFor(() => expect(useDSLStore.getState().deployPreviewMerged).toBe('preview b'))
+
+      pending[0].resolve(
+        outcome === 'succeeds' ? okPreview('current a', 'preview a') : failedPreview(),
+      )
+      await flush()
+
+      expect(useDSLStore.getState()).toMatchObject({
+        showDeployConfirm: true,
+        deployPreviewLoading: false,
+        deployPreviewCurrent: 'current b',
+        deployPreviewMerged: 'preview b',
+        deployPreviewError: null,
+      })
+    },
+  )
+
+  it.each(['dismissDeploy', 'reset'] as const)('drops late previews after %s', async (action) => {
     const { pending } = stubDeferredPreviews()
     openPreview('recipes: []\n', 'ROUTE a {}')
-    useDSLStore.getState().dismissDeploy()
+    useDSLStore.getState()[action]()
 
     pending[0].resolve(okPreview('current a', 'preview a'))
     await flush()
