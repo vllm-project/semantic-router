@@ -20,12 +20,13 @@ import (
 // A box question to vllm-sr/auto goes only to the pool member whose backend
 // lists box questions and images; when no member does, the request is
 // refused before any call, with a detail naming what is missing and every
-// member.
+// member. A set question goes the same way, and its sets reach the client.
 func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		visionCard string
 		request    string
+		answer     string
 		status     int
 		posts      []string
 		body       []string
@@ -42,11 +43,26 @@ func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 			body:       []string{"unsupported_capability", `no candidate model of decision \"answer\"`, "needs box, image", "text lacks box, image (listing)", "vision lacks box (listing)"},
 		},
 		{
-			name:       "a question type auto does not route",
+			name:       "a set question",
 			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","set"]}`,
 			request:    `{"model":"vllm-sr/auto","state":"Mail me at a@example.com","questions":{"tags":{"type":"set","instructions":"Which apply?","criteria":{"pii":"Personal data"}}}}`,
+			answer:     `"answers":{"tags.pii":{"type":"noul","noul":0.9}},"sets":{"tags":{"selected":["pii"],"probabilities":{"pii":0.9}}},"thresholds":{"tags":0.5}`,
+			status:     http.StatusOK, posts: []string{"vision-native"},
+			body: []string{`"selected_model":"vision"`, `"sets":{"tags":{"selected":["pii"],"probabilities":{"pii":0.9}}}`, `"tags.pii":{"type":"noul","noul":0.9}`},
+		},
+		{
+			name:       "no member that answers sets",
+			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","box"],"modalities":["text","image"]}`,
+			request:    `{"model":"vllm-sr/auto","state":"Mail me at a@example.com","questions":{"tags":{"type":"set","instructions":"Which apply?","criteria":{"pii":"Personal data"}}}}`,
 			status:     http.StatusBadRequest,
-			body:       []string{"invalid_request", `auto does not support question type \"set\"`},
+			body:       []string{"unsupported_capability", "needs set", "text lacks set (listing)", "vision lacks set (listing)"},
+		},
+		{
+			name:       "a question type auto does not route",
+			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","track"]}`,
+			request:    `{"model":"vllm-sr/auto","state":"Where does the car go?","questions":{"path":{"type":"track","instructions":"Follow the car."}}}`,
+			status:     http.StatusBadRequest,
+			body:       []string{"invalid_request", `auto does not support question type \"track\"`},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -69,7 +85,11 @@ func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 					mu.Lock()
 					posts = append(posts, request.Model)
 					mu.Unlock()
-					fmt.Fprintf(w, `{"model":%q,"answers":{"where":{"type":"box","box":{"top":0.1,"bottom":0.4,"left":0.2,"right":0.5},"confidence":0.8}},"usage":{"input_tokens":30,"output_tokens":0}}`, request.Model)
+					answer := tc.answer
+					if answer == "" {
+						answer = `"answers":{"where":{"type":"box","box":{"top":0.1,"bottom":0.4,"left":0.2,"right":0.5},"confidence":0.8}}`
+					}
+					fmt.Fprintf(w, `{"model":%q,%s,"usage":{"input_tokens":30,"output_tokens":0}}`, request.Model, answer)
 				default:
 					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 					w.WriteHeader(http.StatusNotFound)
