@@ -117,20 +117,34 @@ class StateOnceModel(Decision3Model):
             for question_id, kind, instructions, keys, texts, descriptions in read
         ]
         temperature = self.request_temperature(len(rendered))
-        encodings = self.prompts.encode_batch(
-            [head, *(entry[-1] for entry in rendered)]
-        )
-        split = prompt.state_tokens(encodings[0].offsets, head)
-        state_ids = list(encodings[0].ids[:split])
-        # The blank line after the state (with any token that merged into it) opens each question block.
-        opening = list(encodings[0].ids[split:])
+        # A state block holds one placeholder token for each image and video,
+        # where a question's length counts their visual tokens.
+        room = self.question_cap()[0] + images + videos
         if media:
-            state_ids = self._expand(state_ids, media)
+            room -= sum(image.tokens for image in media.images)
+            room -= sum(len(ids) for ids in media.video_ids)
+        # A state block or a question block of more than ``room`` tokens puts
+        # its questions over the cap by itself, so neither is read further.
+        state_read, *blocks = self.prompts.read_batch(
+            [head, *(entry[-1] for entry in rendered)], room
+        )
+        state_ids: list[int] = []
+        opening: list[int] = []
+        if state_read is not None:
+            split = prompt.state_tokens(state_read.offsets, head)
+            state_ids = list(state_read.ids[:split])
+            # The blank line after the state (with any token that merged into it) opens each question block.
+            opening = list(state_read.ids[split:])
+            if media:
+                state_ids = self._expand(state_ids, media)
         shared = RequestState(tuple(state_ids), media)
         accepted: list[tuple[str, str, list[str], list[Any], list[int]]] = []
         for (question_id, kind, keys, descriptions, _), encoding in zip(
-            rendered, encodings[1:], strict=True
+            rendered, blocks, strict=True
         ):
+            if state_read is None or encoding is None:
+                errors[question_id] = question_error(kind, self.over_cap())
+                continue
             block = opening + list(encoding.ids)
             refused = self.length_error(len(state_ids) + len(block))
             if refused is not None:
@@ -172,21 +186,25 @@ class StateOnceModel(Decision3Model):
         )
 
     def _within_request_cap(
-        self, plan: RequestPlan[Item], tokens: int | None = None
+        self, plan: RequestPlan[Item], tokens: int | None = None, unread: bool = False
     ) -> RequestPlan[Item]:
         """``plan``, unless its request is over ``limits.max_request_tokens``: ``tokens`` (the request's state once and
         every question's own tokens; the plan's count by default) then refuse the whole request, reason
-        ``request_tokens``, with or without long context."""
+        ``request_tokens``, with or without long context. ``unread`` is a request whose state was not tokenized
+        to its end (``_read_state_block``): it is over the cap by itself, and the message names no count.
+        """
         cap = self.info.limits.get("max_request_tokens")
         tokens = plan.input_tokens if tokens is None else tokens
-        if cap is not None and tokens > cap:
-            raise RequestError(
-                "request_tokens",
-                f"the request has {tokens} tokens, its state once and every question's own, over {cap} tokens; "
-                "nothing was truncated",
-                cap,
-            )
-        return plan
+        if cap is None or not (unread or tokens > cap):
+            return plan
+        size = (
+            f"more than {cap} tokens, its state once and every question's own"
+            if unread
+            else f"{tokens} tokens, its state once and every question's own, over {cap} tokens"
+        )
+        raise RequestError(
+            "request_tokens", f"the request has {size}; nothing was truncated", cap
+        )
 
     # ------------------------------------------------------------------ composed images and Box
 
@@ -249,7 +267,7 @@ class StateOnceModel(Decision3Model):
         built: list[
             tuple[
                 str,
-                RequestState,
+                RequestState | None,
                 str,
                 list[str],
                 list[Any],
@@ -260,7 +278,7 @@ class StateOnceModel(Decision3Model):
             ]
         ] = []
         windowed: list[Item] = []
-        windows: dict[int, list[tuple[RequestState, tuple[float, ...]]]] = {}
+        windows: dict[int, list[tuple[RequestState | None, tuple[float, ...]]]] = {}
         for question_id, question in questions.items():
             kind = question.get("type") if isinstance(question, dict) else None
             try:
@@ -282,7 +300,11 @@ class StateOnceModel(Decision3Model):
                         question_id,
                         state,
                         *self._composed_question(
-                            question, refs, assets, list(state.opening), videos
+                            question,
+                            refs,
+                            assets,
+                            [] if state is None else list(state.opening),
+                            videos,
                         ),
                     )
                 )
@@ -292,11 +314,15 @@ class StateOnceModel(Decision3Model):
         accepted = []
         for entry in built:
             question_id, state, kind, block = entry[0], entry[1], entry[2], entry[5]
+            if state is None:
+                # A state not read to its end is over the cap by itself.
+                errors[question_id] = question_error(kind, self.over_cap())
+                continue
             refused = self.length_error(len(state.ids) + len(block))
             if refused is not None:
                 errors[question_id] = question_error(kind, refused)
                 continue
-            accepted.append(entry)
+            accepted.append((question_id, state, *entry[2:]))
         # Each state's tokens are shared by the questions that branch from it.
         shares = {
             id(state): iter(
@@ -333,15 +359,18 @@ class StateOnceModel(Decision3Model):
             )
         # The request cap counts each state once and each question's own block once; a video Box or track
         # question's frame windows and moments are bounded by the video limits instead.
-        own = sum(item.cost or 0 for item in items) + (
-            0 if accepted else len(shared.ids)
-        )
+        own = sum(item.cost or 0 for item in items)
+        if not accepted and shared is not None:
+            own += len(shared.ids)
         own += sum(
             {item.question_id: item.cost or 0 for item in reversed(windowed)}.values()
         )
         items += windowed
         window_tokens = sum(
-            len(state.ids) for states in windows.values() for state, _ in states
+            len(state.ids)
+            for states in windows.values()
+            for state, _ in states
+            if state is not None
         )
         return self._within_request_cap(
             RequestPlan(
@@ -353,20 +382,44 @@ class StateOnceModel(Decision3Model):
                 input_tokens=sum(item.cost or 0 for item in items) + window_tokens,
             ),
             own,
+            unread=shared is None and not accepted,
         )
+
+    def _read_state_block(
+        self, hoisted: Any, images: int, videos: int
+    ) -> tuple[list[int], list[int]] | None:
+        """The tokens of a composed request's state block over ``images`` and ``videos`` placeholders, and the
+        tokens after the state that open its question blocks.
+
+        None for a block of more tokens than the larger of the request cap and
+        the question cap, its placeholders and two more. At most two tokens
+        follow the state and a placeholder may expand to nothing, so its state
+        is over both caps whatever its media expand to. Such a block is read
+        only that far (``PromptEncoder.read_batch``), not to its end.
+        """
+        head = prompt.state_block(hoisted, images, videos)
+        cap = max(
+            self.info.limits.get("max_request_tokens") or 0, self.question_cap()[0]
+        )
+        encoding = self.prompts.read_batch([head], cap + images + videos + 2)[0]
+        if encoding is None:
+            return None
+        split = prompt.state_tokens(encoding.offsets, head)
+        return list(encoding.ids[:split]), list(encoding.ids[split:])
 
     def _composed_state(
         self, hoisted: Any, images: int, videos: int, media: RequestMedia | None
-    ) -> RequestState:
+    ) -> RequestState | None:
         """A composed request's state over ``images`` and ``videos`` placeholders (expanded with ``media``), and the
-        tokens that open its question blocks."""
-        head = prompt.state_block(hoisted, images, videos)
-        encoding = self.prompts.encode(head)
-        split = prompt.state_tokens(encoding.offsets, head)
-        ids = list(encoding.ids[:split])
+        tokens that open its question blocks; None for a state not read to its end (``_read_state_block``).
+        """
+        block = self._read_state_block(hoisted, images, videos)
+        if block is None:
+            return None
+        ids, opening = block
         if media:
             ids = self._expand(ids, media)
-        return RequestState(tuple(ids), media, tuple(encoding.ids[split:]))
+        return RequestState(tuple(ids), media, tuple(opening))
 
     def plan_resolved(self, request: Any) -> RequestPlan[Item]:
         """The API layer's resolved request (``assets.Segments``) through ``plan_composed``: each
@@ -448,7 +501,7 @@ class StateOnceModel(Decision3Model):
         videos: list[Any] | None,
         refs: list[str],
         assets: dict[str, Any],
-        windows: dict[int, list[tuple[RequestState, tuple[float, ...]]]],
+        windows: dict[int, list[tuple[RequestState | None, tuple[float, ...]]]],
     ) -> list[Item]:
         """A video Box: ``box`` + ``at`` reads the frame group nearest ``at``; ``track`` reads every frame group of
         the clip, at ``rate`` updates per second (1: 16-s windows at 2 fps; 2: 8-s windows at 4 fps). Each window is
@@ -517,6 +570,8 @@ class StateOnceModel(Decision3Model):
                     INVALID_QUESTION,
                     "a video Box reads the video; images go in the state",
                 )
+            if state is None:
+                raise self.over_cap()
             block = list(state.opening) + self.prompts.encode(text).ids
             refused = self.length_error(len(state.ids) + len(block))
             if refused is not None:
@@ -539,18 +594,19 @@ class StateOnceModel(Decision3Model):
 
     def _window_states(
         self, hoisted: Any, front: list[Any], video: Any, rate: int
-    ) -> list[tuple[RequestState, tuple[float, ...]]]:
-        """One state per track window: the request's images and the window's frames, with its frame-group times."""
+    ) -> list[tuple[RequestState | None, tuple[float, ...]]]:
+        """One state per track window: the request's images and the window's frames, with its frame-group times.
+
+        The windows of a state not read to its end (``_read_state_block``) have their times and no state.
+        """
         settings = self.video_settings
         if settings is None:
             raise QuestionError(
                 INVALID_QUESTION, f"model {self.info.id} reads no videos"
             )
         images = self.request_media(front, None).images if front else ()
-        head = prompt.state_block(hoisted, len(front), 1)
-        encoding = self.prompts.encode(head)
-        split = prompt.state_tokens(encoding.offsets, head)
-        out = []
+        block = self._read_state_block(hoisted, len(front), 1)
+        out: list[tuple[RequestState | None, tuple[float, ...]]] = []
         limit = self.info.limits.get("box_video_max_seconds")
         try:
             decoded = (
@@ -560,6 +616,9 @@ class StateOnceModel(Decision3Model):
             )
             for window in decoded:
                 clip = vid.preprocess(window, settings)
+                if block is None:
+                    out.append((None, clip.timestamps))
+                    continue
                 expansion = tuple(
                     self.tokenizer.encode(
                         clip.placeholder(
@@ -569,8 +628,8 @@ class StateOnceModel(Decision3Model):
                     ).ids
                 )
                 media = RequestMedia(tuple(images), (clip,), (expansion,))
-                ids = self._expand(list(encoding.ids[:split]), media)
-                state = RequestState(tuple(ids), media, tuple(encoding.ids[split:]))
+                ids = self._expand(list(block[0]), media)
+                state = RequestState(tuple(ids), media, tuple(block[1]))
                 out.append((state, clip.timestamps))
         except vid.ClipTooLongError as exc:
             raise QuestionError(
