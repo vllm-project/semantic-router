@@ -367,15 +367,17 @@ func (run *responseGuardRun) responseGuardNote(code string) string {
 // applyResponseGuardNotes writes the notes of the annotating rules with
 // details at the head of the answer, and reports whether it changed.
 func (r *OpenAIRouter) applyResponseGuardNotes(run *responseGuardRun, response *llmprotocol.Response) bool {
+	return prependSemanticAssistantText(response, run.notePrefix())
+}
+
+// notePrefix is the text the notes add at the head of each choice, or "".
+func (run *responseGuardRun) notePrefix() string {
 	codes := run.notedCodes()
-	if len(codes) == 0 {
-		return false
-	}
 	notes := make([]string, len(codes))
 	for i, code := range codes {
 		notes[i] = run.responseGuardNote(code)
 	}
-	return prependSemanticAssistantText(response, strings.Join(notes, "\n\n"))
+	return strings.Join(notes, "\n\n")
 }
 
 // traceResponseGuard records on the request span what became of the answer
