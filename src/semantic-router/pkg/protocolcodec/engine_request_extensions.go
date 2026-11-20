@@ -111,11 +111,32 @@ func captureRequestExtensions(format llmprotocol.WireFormat, body []byte, policy
 	return captured, stripped, nil
 }
 
+// restoreSourceEnvelope re-arms byte replay over the original request bytes
+// once members were captured. The original bytes are the only ones that carry
+// the members, so replay is offered only when the codec still keeps a replay
+// candidate and the original body fits the bounded same-format envelope. A
+// candidate the codec nilled — source bytes that no longer describe the
+// request — stays nil: replaying the original bytes would undo exactly those
+// drops. Without replay the request re-encodes from the neutral IR, where
+// EncodeRequest merges the members back; letting this assignment recreate a
+// nilled candidate would also replay a stripped body the codec kept when the
+// original body alone exceeds the bound, and the byte-identical merge skip
+// would silently drop every captured member.
+func restoreSourceEnvelope(policy llmprotocol.Policy, body []byte, envelope *llmprotocol.Envelope) {
+	if policy.SourcePreservation != llmprotocol.SourceBoundedSameFormat ||
+		len(body) > policy.Limits.SourceEnvelopeBytes || len(envelope.Request) == 0 {
+		envelope.Request = nil
+		return
+	}
+	envelope.Request = body
+}
+
 // mergeRequestExtensions appends the captured extension members to an encoded
-// same-format body. A replayed body already carries them byte-identically and
-// is returned untouched. Dispatch that crosses wire formats drops the members
-// with a diagnostic instead of injecting them into a contract that does not
-// declare them.
+// same-format body. A replayed body already carries them byte-identically —
+// restoreSourceEnvelope arms replay only over the original bytes, which hold
+// the members — and is returned untouched. Dispatch that crosses wire formats
+// drops the members with a diagnostic instead of injecting them into a
+// contract that does not declare them.
 func mergeRequestExtensions(
 	format llmprotocol.WireFormat,
 	request llmprotocol.Request,

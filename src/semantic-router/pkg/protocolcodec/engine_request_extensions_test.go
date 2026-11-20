@@ -144,3 +144,60 @@ func TestDuplicateExtensionMemberRejected(t *testing.T) {
 		t.Fatal("a duplicate whitelisted member must fail closed")
 	}
 }
+
+func TestOversizedSourceReencodesAndMergesExtensions(t *testing.T) {
+	policy := extensionTestPolicy()
+	body := extensionTestBody()
+	// The stripped body fits the bound while the original does not: the codec
+	// keeps its own replay candidate over the stripped bytes, and replaying
+	// them would pass the byte-identical merge skip without the member.
+	policy.Limits.SourceEnvelopeBytes = len(body) - 1
+	engine := extensionTestEngine(policy)
+	request, envelope, _, err := engine.DecodeRequestForMutation(llmprotocol.OpenAIChatV1, body)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(envelope.Request) != 0 {
+		t.Fatalf("replay must be unavailable when the original body exceeds the bound: %d bytes", len(envelope.Request))
+	}
+	result, err := engine.EncodeRequest(llmprotocol.OpenAIChatV1, request, envelope)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if !bytes.Contains(result.Body, []byte(`"vllm_xargs":{"agentic_context":"abc"}`)) {
+		t.Fatalf("re-encoded body lost the extension: %s", result.Body)
+	}
+	if strings.Count(string(result.Body), "vllm_xargs") != 1 {
+		t.Fatalf("re-encoded body duplicates the extension: %s", result.Body)
+	}
+}
+
+func TestDisabledReplayKeepsSanitationAndMergesExtensions(t *testing.T) {
+	policy := extensionTestPolicy()
+	// A null tool schema makes the Chat codec replace the schema and nil the
+	// replay candidate: the source bytes no longer describe the request, so
+	// no extension capture may revive them.
+	body := []byte(`{"model":"auto","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"f","description":"d","parameters":null}}],"vllm_xargs":{"agentic_context":"abc"}}`)
+	policy.Limits.SourceEnvelopeBytes = len(body)
+	engine := extensionTestEngine(policy)
+	request, envelope, _, err := engine.DecodeRequestForMutation(llmprotocol.OpenAIChatV1, body)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(envelope.Request) != 0 {
+		t.Fatal("a codec-disabled replay candidate must stay disabled")
+	}
+	result, err := engine.EncodeRequest(llmprotocol.OpenAIChatV1, request, envelope)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if bytes.Equal(result.Body, body) {
+		t.Fatalf("the withheld source bytes must not be replayed: %s", result.Body)
+	}
+	if bytes.Contains(result.Body, []byte(`"parameters":null`)) {
+		t.Fatalf("the codec's schema replacement must hold: %s", result.Body)
+	}
+	if !bytes.Contains(result.Body, []byte(`"vllm_xargs":{"agentic_context":"abc"}`)) {
+		t.Fatalf("re-encoded body lost the extension: %s", result.Body)
+	}
+}

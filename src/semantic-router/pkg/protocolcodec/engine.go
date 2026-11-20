@@ -98,9 +98,7 @@ func (engine *Engine) decodeRequest(
 	if len(captured) > 0 {
 		request.ExtensionFields = captured
 		request.ExtensionFieldsFormat = format
-		if policy.SourcePreservation == llmprotocol.SourceBoundedSameFormat && len(body) <= policy.Limits.SourceEnvelopeBytes {
-			envelope.Request = body
-		}
+		restoreSourceEnvelope(policy, body, &envelope)
 	}
 	applyRequestSemanticDefaults(&request)
 	llmprotocol.MarkDeferredToolLinks(&request)
@@ -205,9 +203,7 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	if len(captured) > 0 {
 		request.ExtensionFields = captured
 		request.ExtensionFieldsFormat = source
-		if engine.policy.SourcePreservation == llmprotocol.SourceBoundedSameFormat && len(body) <= engine.policy.Limits.SourceEnvelopeBytes {
-			envelope.Request = body
-		}
+		restoreSourceEnvelope(engine.policy, body, &envelope)
 	}
 	applyRequestSemanticDefaults(&request)
 	llmprotocol.MarkDeferredToolLinks(&request)
