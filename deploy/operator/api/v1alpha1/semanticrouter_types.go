@@ -45,7 +45,9 @@ type SemanticRouterSpec struct {
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
-	// ServiceAccount configuration
+	// ServiceAccount configuration. When omitted it defaults to an empty object,
+	// so create still takes its default.
+	// +kubebuilder:default={}
 	// +optional
 	ServiceAccount ServiceAccountSpec `json:"serviceAccount,omitempty"`
 
@@ -57,7 +59,10 @@ type SemanticRouterSpec struct {
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
-	// Persistence configuration
+	// Persistence configuration. When omitted it defaults to an empty object,
+	// so enabled, storageClassName, accessMode and size still take their
+	// defaults.
+	// +kubebuilder:default={}
 	// +optional
 	Persistence PersistenceSpec `json:"persistence,omitempty"`
 
