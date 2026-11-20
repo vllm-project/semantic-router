@@ -124,12 +124,12 @@ func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (done 
 		return false, nil
 	}
 	if len(attempt.Reasons) == 0 {
-		return true, errors.New("Router rejected configuration activation")
+		return true, errors.New("router rejected configuration activation")
 	}
 	messages := make([]string, 0, len(attempt.Reasons))
 	for _, reason := range attempt.Reasons {
 		if reason.Code != restartRequiredCode {
-			return true, fmt.Errorf("Router rejected configuration activation (%q)", reason.Code)
+			return true, fmt.Errorf("router rejected configuration activation (%q)", reason.Code)
 		}
 		messages = append(messages, reason.Message)
 	}

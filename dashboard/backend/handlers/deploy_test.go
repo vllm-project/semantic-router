@@ -1266,8 +1266,8 @@ func TestRollbackHandlerChecksRouterActivation(t *testing.T) {
 					http.NotFound(w, r)
 					return
 				}
-				written, err := os.ReadFile(path)
-				if err != nil {
+				written, readErr := os.ReadFile(path)
+				if readErr != nil {
 					http.Error(w, "reading the test config failed", http.StatusInternalServerError)
 					return
 				}
@@ -1302,7 +1302,7 @@ func TestRollbackHandlerChecksRouterActivation(t *testing.T) {
 			if tc.restored {
 				expected = previous
 				var failure map[string]string
-				if err := json.Unmarshal(response.Body.Bytes(), &failure); err != nil || failure["error"] != "config_activation_failed" || !strings.Contains(failure["message"], tc.reason) {
+				if decodeErr := json.Unmarshal(response.Body.Bytes(), &failure); decodeErr != nil || failure["error"] != "config_activation_failed" || !strings.Contains(failure["message"], tc.reason) {
 					t.Errorf("rollback failure lacks structured reason: %s", response.Body)
 				}
 			}

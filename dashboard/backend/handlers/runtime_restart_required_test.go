@@ -34,7 +34,7 @@ func TestJudgeRouterAttempt(t *testing.T) {
 		{name: "restored document is already active", response: routerConfigHash{GeneratedRuntimeHash: testDocument, ActiveRuntimeHash: testDocument}, done: true},
 		{name: "refused for a restart", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: restartAttempt(restartRequiredCode, "the port changes from 8899 to 9000")}, done: true, restart: true, detailContains: "8899 to 9000"},
 		{name: "refused for another reason", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: restartAttempt("model_unavailable", "model preparation failed")}, done: true, detailContains: "model_unavailable"},
-		{name: "refused without reasons", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: &routerConfigAttempt{DocumentHash: testDocument, Status: "failed"}}, done: true, detailContains: "Router rejected configuration activation"},
+		{name: "refused without reasons", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: &routerConfigAttempt{DocumentHash: testDocument, Status: "failed"}}, done: true, detailContains: "router rejected configuration activation"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			done, err := judgeRouterAttempt(test.response, "sha256:"+testDocument)
