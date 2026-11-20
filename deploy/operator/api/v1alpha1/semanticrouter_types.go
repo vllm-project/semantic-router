@@ -450,7 +450,7 @@ type StreamedBodyConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=10485760
 	// +optional
-	MaxBytes int64 `json:"max_bytes,omitempty"`
+	MaxBytes *int64 `json:"max_bytes,omitempty"`
 
 	// TimeoutSec caps how long body accumulation may take. A slower body is
 	// rejected and the ExtProc stream ends; the downstream response follows the

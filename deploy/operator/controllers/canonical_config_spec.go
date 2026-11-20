@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/utils/ptr"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -42,7 +43,7 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 		// The Router refuses an enabled streamed body without a ceiling, so a CR
 		// that enables one without naming a size gets the declared default. The
 		// CRD carries the same default for what the API server admits.
-		maxBytes := spec.StreamedBody.MaxBytes
+		maxBytes := ptr.Deref(spec.StreamedBody.MaxBytes, defaultStreamedBodyMaxBytes)
 		if maxBytes <= 0 {
 			maxBytes = defaultStreamedBodyMaxBytes
 		}
