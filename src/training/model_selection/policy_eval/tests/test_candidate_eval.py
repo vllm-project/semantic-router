@@ -81,12 +81,25 @@ class ChoiceTest(unittest.TestCase):
         self.assertEqual(pick.tolist(), [0, 1])
         self.assertEqual(infeasible, 0)
 
-    def test_rounding_up_can_exclude_an_assignment_at_the_budget(self):
-        # With 50 units per task, 0.1 rounds up to 17 units and 0.5 to 84, which
-        # exceeds the 100 units of two tasks, so the exact fit is not taken.
+    def test_rounding_up_can_exclude_an_upgrade_at_the_budget(self):
+        # With 50 units per task a unit is 0.006. The 0.4 the strong candidate
+        # adds rounds up to 67 units, and the 0.4 left after the cheap
+        # assignment holds 66, so the exact fit is not taken.
         p = np.array([[0.9, 0.95], [0.2, 0.9]])
         c = np.array([[0.1, 0.5], [0.1, 0.5]])
-        self.assertEqual(choose_global(p, c, 0.3, resolution=50)[0].tolist(), [0, 0])
+        pick, infeasible = choose_global(p, c, 0.3, resolution=50)
+        self.assertEqual((pick.tolist(), infeasible), ([0, 0], 0))
+
+    def test_rounding_never_makes_the_cheapest_assignment_infeasible(self):
+        # The cheapest estimates sum to exactly the budget of two tasks. Rounding
+        # each cost up on its own (0.999 to 50 units of 0.02, 1.001 to 51) would
+        # need 101 of 100 units and report the batch as infeasible.
+        p = np.array([[0.5, 0.9], [0.5, 0.9]])
+        c = np.array([[0.999, 1.5], [1.001, 1.5]])
+        pick, infeasible = choose_global(p, c, 1.0, resolution=50)
+        self.assertEqual((pick.tolist(), infeasible), ([0, 0], 0))
+        # A cent less and the cheapest estimates no longer fit.
+        self.assertEqual(choose_global(p, c, 0.99, resolution=50)[1], 1)
 
     def test_global_takes_the_cheapest_estimate_when_no_assignment_fits(self):
         p = np.array([[0.5, 0.9]] * 3)
@@ -99,30 +112,34 @@ class ChoiceTest(unittest.TestCase):
 class KnapsackTest(unittest.TestCase):
     def test_matches_exhaustive_search_on_rounded_costs(self):
         rng = np.random.default_rng(0)
-        for _ in range(200):
+        for _ in range(300):
             rows, k = int(rng.integers(1, 5)), int(rng.integers(1, 4))
             p = rng.random((rows, k))
             c = rng.choice([0.0, 0.05, 0.1, 0.2, 0.35, 0.5], size=(rows, k))
             budget = float(rng.choice([0.05, 0.1, 0.2, 0.3]))
             resolution = int(rng.choice([1, 4, 20]))
-            units = np.ceil(np.round(c * resolution / budget, 9))
+            # What each candidate adds to its row's cheapest estimate, in units
+            # of budget / resolution, against the budget the cheapest leave.
+            base = c.min(axis=1)
+            unit = budget / resolution
+            units = np.ceil(np.round((c - base[:, None]) / unit, 9))
+            capacity = np.floor(np.round((budget * rows - base.sum()) / unit, 9))
+            rowsel = np.arange(rows)
             feasible = [
-                (
-                    sum(p[i, j] for i, j in enumerate(a)),
-                    sum(units[i, j] for i, j in enumerate(a)),
-                )
+                (p[rowsel, list(a)].sum(), units[rowsel, list(a)].sum())
                 for a in itertools.product(range(k), repeat=rows)
-                if sum(units[i, j] for i, j in enumerate(a)) <= rows * resolution
+                if units[rowsel, list(a)].sum() <= capacity
             ]
             pick = knapsack(p, c, budget, resolution)
             if not feasible:
                 self.assertIsNone(pick)
+                self.assertGreater(base.sum(), budget * rows)
                 continue
             best = max(v for v, _ in feasible)
             fewest = min(u for v, u in feasible if np.isclose(v, best))
-            got = p[np.arange(rows), pick].sum()
-            self.assertAlmostEqual(got, best)
-            self.assertEqual(units[np.arange(rows), pick].sum(), fewest)
+            self.assertAlmostEqual(p[rowsel, pick].sum(), best)
+            self.assertEqual(units[rowsel, pick].sum(), fewest)
+            self.assertLessEqual(c[rowsel, pick].sum(), budget * rows + 1e-9)
 
     def test_rounding_up_never_exceeds_the_budget_on_estimates(self):
         rng = np.random.default_rng(1)

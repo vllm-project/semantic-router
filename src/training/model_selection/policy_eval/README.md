@@ -151,10 +151,13 @@ The report gives:
   estimated cost, so the report also gives the mean recorded cost and, for
   local, the share of tasks whose recorded cost exceeds the budget.
 
-The global dynamic program rounds estimated costs up to `budget /
---dp-resolution` per task, so the chosen assignment never exceeds the budget on
-the estimates; the rounding can leave up to `1 / --dp-resolution` of it
-unused. Rows are solved in consecutive batches of `--dp-batch` rows in file
+The global dynamic program keeps each task's cheapest estimate exact and rounds
+what another candidate adds to it up to units of `budget / --dp-resolution`, so
+the chosen assignment never exceeds the budget on the estimates. The rounding
+can leave up to `1 / --dp-resolution` of the budget per task unused, but it
+never makes a batch infeasible: the report counts a batch as infeasible only
+when its cheapest estimates alone exceed the budget, and such a batch takes the
+cheapest estimate on every task. Rows are solved in consecutive batches of `--dp-batch` rows in file
 order. Batching on the request path is out of scope for the Router; this is
 offline evaluation only.
 

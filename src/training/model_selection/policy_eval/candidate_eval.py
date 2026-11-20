@@ -20,8 +20,9 @@ Policies, over the candidates' estimates p (success) and c (cost):
   local     per task, the highest p among candidates with c <= b, ties to the
             lower c; the lowest c when none fits (b is a ceiling per task)
   global    the assignment with the highest total p whose total c is at most b
-            per task over a batch of tasks: a dynamic program over estimated
-            costs rounded up to b / resolution
+            per task over a batch of tasks: a dynamic program over the cost
+            each candidate adds to its task's cheapest estimate, rounded up to
+            b / resolution
   oracle    per task, any candidate, knowing every outcome (an upper bound on
             every policy over these candidates at every budget)
 
@@ -69,9 +70,10 @@ except ImportError:  # run as a script from this directory
         task_bootstrap,
     )
 
-# Batch size and cost resolution of the global dynamic program. Estimated costs
-# are rounded up to units of budget / DP_RESOLUTION, so the rounding can leave
-# up to 1 / DP_RESOLUTION of the budget unused.
+# Batch size and cost resolution of the global dynamic program. The cost a
+# candidate adds to its task's cheapest estimate is rounded up to units of
+# budget / DP_RESOLUTION, so the rounding can leave up to 1 / DP_RESOLUTION of
+# the budget per task unused, but never makes the cheapest assignment infeasible.
 DP_BATCH = 1000
 DP_RESOLUTION = 50
 CALIBRATION_BINS = 10
@@ -251,28 +253,37 @@ def cross_validated_gain(table, value, folds=5, quantiles=QUANTILES):
 def knapsack(p, c, budget, resolution=DP_RESOLUTION):
     """One candidate per row maximizing total p with total c at most budget per row, or None.
 
-    Costs are rounded up to units of budget / resolution, so the chosen
-    assignment never exceeds the budget on the estimates. Among assignments
-    with the same total p, the one with the lowest rounded total cost wins.
-    Returns None when even the cheapest assignment exceeds the budget.
+    Every row starts on its cheapest estimate, which is kept exact. What a
+    candidate adds to that is rounded up to units of budget / resolution, and
+    the units must fit in the budget left after the cheapest assignment. So the
+    chosen assignment never exceeds the budget on the estimates, rounding can
+    only leave some of it unused, and None means that the cheapest estimates
+    alone exceed the budget. Among assignments with the same total p, the one
+    with the fewest rounded units wins.
     """
     rows, k = p.shape
-    capacity = rows * resolution
+    base = c.min(axis=1)
+    extra = c - base[:, None]
+    slack = budget * rows - base.sum()
     if budget > 0:
-        units = np.ceil(np.round(c * resolution / budget, 9))
+        unit = budget / resolution
+        capacity = int(np.floor(np.round(slack / unit, 9)))
+        units = np.ceil(np.round(extra / unit, 9))
     else:
-        units = np.where(c > 0, capacity + 1, 0)
+        capacity = 0 if np.round(slack, 12) >= 0 else -1
+        units = np.where(extra > 0, 1, 0)
+    if capacity < 0:
+        return None
     units = np.minimum(units, capacity + 1).astype(np.int64)
-    # total[u]: the highest total p of the rows so far with rounded total cost
-    # exactly u, for u up to the highest total reachable so far.
+    # total[u]: the highest total p of the rows so far using exactly u units
+    # above their cheapest estimates, for u up to the most reachable so far.
+    # Each row's cheapest candidate takes 0 units, so every row has a choice.
     total = np.zeros(1)
     choice = np.zeros(
         (rows, capacity + 1), dtype=np.int8 if k <= np.iinfo(np.int8).max else np.int16
     )
     for i in range(rows):
         fits = np.flatnonzero(units[i] <= capacity)
-        if not len(fits):
-            return None
         reach = min(capacity, len(total) - 1 + int(units[i, fits].max()))
         best = np.full(reach + 1, -np.inf)
         for j in fits:
@@ -283,8 +294,6 @@ def knapsack(p, c, budget, resolution=DP_RESOLUTION):
             best[w : w + span][better] = moved[better]
             choice[i, w : w + span][better] = j
         total = best
-    if not np.isfinite(total).any():
-        return None
     b = int(np.argmax(total))
     pick = np.empty(rows, dtype=int)
     for i in reversed(range(rows)):
