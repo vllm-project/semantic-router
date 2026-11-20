@@ -245,29 +245,45 @@ func requirementsOf(questions []Question, body json.RawMessage) Requirements {
 	return needs
 }
 
-// Observe preserves absent, failed and incomplete answers as invalid rather
-// than dropping them from a bundle's quality denominator.
-func (r *NativeRequest) Observe(body json.RawMessage) []Observation {
-	type responseState struct {
-		Answers map[string]json.RawMessage `json:"answers"`
-	}
+// stateAnswers is one state's part of a response: its answers by question
+// name and, beside them, the family-specific sets and spans. A set question
+// answers in sets and has no entry of its own in answers, where each label
+// repeats as a "<name>.<label>" Noul; a span question answers a Noul and lists
+// its spans in spans. Entries stay raw, so an absent entry, a null and an
+// empty result remain different.
+type stateAnswers struct {
+	Answers map[string]json.RawMessage `json:"answers"`
+	Sets    map[string]json.RawMessage `json:"sets"`
+	Spans   map[string]json.RawMessage `json:"spans"`
+}
+
+// answersByState decodes a response once and returns each state's part of it:
+// a standard request's under the empty name, a batch entry's under its own.
+func answersByState(body json.RawMessage) func(state string) stateAnswers {
 	var response struct {
-		responseState
-		States map[string]responseState `json:"states"`
+		stateAnswers
+		States map[string]stateAnswers `json:"states"`
 	}
 	if json.Unmarshal(body, &response) != nil {
 		// json.Unmarshal may populate a valid prefix before reporting a bad
 		// field later in the envelope. Never accept that partial decoding.
-		response.Answers = nil
-		response.States = nil
+		return func(string) stateAnswers { return stateAnswers{} }
 	}
+	return func(state string) stateAnswers {
+		if state == "" {
+			return response.stateAnswers
+		}
+		return response.States[state]
+	}
+}
+
+// Observe preserves absent, failed and incomplete answers as invalid rather
+// than dropping them from a bundle's quality denominator.
+func (r *NativeRequest) Observe(body json.RawMessage) []Observation {
+	answers := answersByState(body)
 	observations := make([]Observation, 0, len(r.Questions))
 	for _, q := range r.Questions {
-		answers := response.Answers
-		if q.State != "" {
-			answers = response.States[q.State].Answers
-		}
-		observations = append(observations, observeAnswer(q, answers[q.Name]))
+		observations = append(observations, observeAnswer(q, answers(q.State).Answers[q.Name]))
 	}
 	return observations
 }
