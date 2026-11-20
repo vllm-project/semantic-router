@@ -87,6 +87,58 @@ that calls one of them is priced at the standard rate, since a cost leaves out
 long-context rates such as Haiku 5.5's five-times rate over 100,000 prompt
 tokens. `catalog:` cannot name these IDs.
 
+## Gemini 4
+
+The `gemini` Provider maps these canonical cards to Google's exact API IDs
+through [Chat Completions](https://aistudio.google.com/docs/openai#thinking):
+
+| Catalog ID | API model ID | Reasoning efforts | Default | Published AA evidence |
+| --- | --- | --- | --- | --- |
+| `google/gemini-4-argon` | `gemini-4-argon` | `low`, `medium`, `high` | `medium` | `high` |
+| `google/gemini-4-carbon` | `gemini-4-carbon` | `low`, `medium`, `high` | `medium` | `high` |
+| `google/gemini-4-hydrogen` | `gemini-4-hydrogen` | `low`, `medium`, `high`, `xhigh` | `high` | `xhigh` |
+| `google/gemini-4-neon` | `gemini-4-neon` | `low`, `medium`, `high`, `xhigh` | `high` | `xhigh` |
+
+```yaml
+version: v0.5
+providers:
+  models:
+    - name: neon
+      catalog: google/gemini-4-neon
+      backend_refs:
+        - name: primary
+          provider: gemini
+          auth: {api_key_env: GEMINI_API_KEY}
+recipes:
+  - name: default
+    decisions:
+      - name: neon_deep
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: neon
+            use_reasoning: true
+            reasoning_effort: xhigh
+```
+
+The Router sends the selected effort as top-level `reasoning_effort`.
+[Thinking cannot be disabled](https://aistudio.google.com/docs/thinking#thinking-levels)
+on Gemini 4. The catalog exposes native levels; the compatibility API's
+`minimal` alias for `low` is not a separate selectable level.
+The cards record a unified 1,048,576-token context and the default synchronous
+65,536-token output limit; long decode is a separate API feature.
+
+Each card has five imported [Artificial Analysis](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
+results at the effort shown above: GDP.pdf All-pass, Terminal-Bench 4.0 pass@1,
+AA-Briefcase v1.1 Elo (with 95% bounds), AA-Omniscience v1.1 Accuracy and Net Score,
+and HLE-Diamond pass@1 over all 1,000 questions, including 272 image questions,
+without tools. Records preserve the raw metrics, harness, and observation date.
+These versioned benchmarks do not replace the Intelligence 1.0 components.
+Other efforts retain their evidence gaps; the published scores are not local
+Router reproductions.
+
 ## MiniMax M3.1 Flash
 
 `minimax/minimax-m3.1-flash` identifies the
