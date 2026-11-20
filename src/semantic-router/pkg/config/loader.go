@@ -282,6 +282,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		rejectDeprecatedUserConfigFields,
 		checkRawClientAuth,
+		checkRawGuardVerdictEnvNames,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
 		rejectRemovedRouterLearningFields,

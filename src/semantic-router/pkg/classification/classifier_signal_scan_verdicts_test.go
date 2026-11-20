@@ -121,6 +121,14 @@ func TestAWindowKeyHoldsTheTextBeforeIt(t *testing.T) {
 	otherModel := scanOf(prose + "\n\nfirst ending")
 	otherModel.deployment = "secondary"
 	otherModel.verdicts = classifier.newScanVerdictKeys(otherModel)
+	if otherModel.verdicts != nil {
+		t.Fatal("an undeclared deployment must not retain window verdicts")
+	}
+	classifier.Config.ModelDeployments["secondary"] = classifier.Config.ModelDeployments["primary"]
+	otherModel.verdicts = classifier.newScanVerdictKeys(otherModel)
+	if otherModel.verdicts == nil {
+		t.Fatal("a declared attached deployment keeps no answers")
+	}
 	if *otherModel.verdictKey(window) == key {
 		t.Fatal("another deployment gave the same key")
 	}

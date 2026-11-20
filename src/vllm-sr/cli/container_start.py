@@ -7,6 +7,7 @@ from cli.commands.runtime_management_credentials import (
 )
 from cli.commands.runtime_support import (
     RECIPE_ENV_ALLOWLIST_ENV,
+    guard_verdict_secret_env_names,
     sensitive_env_names,
 )
 from cli.config_generator import (
@@ -149,6 +150,9 @@ def container_start_vllm_sr(
     # Secrets, passed by name: the Router gets this stack's storage
     # credentials, and both get the stack's management credential.
     router_secret_values = _resolve_storage_secret_env(config_dir, stack_layout)
+    for name in guard_verdict_secret_env_names(runtime_paths["effective_config_path"]):
+        if name in common_env:
+            router_secret_values[name] = common_env.pop(name)
     router_credential, dashboard_secret_values = _resolve_management_credential_env(
         config_dir,
         stack_layout,
