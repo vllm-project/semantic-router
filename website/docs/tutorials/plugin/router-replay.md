@@ -543,6 +543,7 @@ plugins:
           timeout: 30s
         budget:
           max_response_bytes: 2097152
+          # max_estimated_cost: 0.01
         capture:
           enabled: false
           max_bytes: 8192
@@ -558,17 +559,19 @@ Here `N` is the number of configured models. All integer bounds must be positive
 | `execution.max_queue_size` | `8` | Pending request groups for the same recipe and decision, shared across requests. Counts groups, not candidates. |
 | `execution.timeout` | `30s` | Shared group deadline, including queue wait and all candidate calls. Positive duration, at most `5m`. |
 | `budget.max_response_bytes` | `N × 1048576` | Aggregate response byte budget, divided before dispatch among effective candidates. Minimum `2 × N`: each candidate reserves one byte to detect an oversized response. |
+| `budget.max_estimated_cost` | — | Optional. Maximum estimated spend for the sampled Shadow group, in `global.services.budgets.currency` (USD by default). |
 | `capture.enabled` | `false` | Store bounded excerpts of candidate text in replay outcomes under `prompt_capture: raw`. Otherwise only sizes, token usage, and a SHA-256 are kept. |
 | `forward_headers` | `[]` | Decision header mutations to copy, matched case-insensitively. Credential headers are excluded. |
 | `capture.max_bytes` | `N × 4096` | Aggregate excerpt byte limit, divided among effective candidates. |
+
+When `budget.max_estimated_cost` is set, the Router prices each encoded request using its estimated input tokens and explicit output limit. It skips the group if the sum exceeds the limit or any candidate has no compatible price, has no explicit output limit, or requests multiple completions. Replay records the reason. Each attempted candidate records its estimate and a cost based on reported usage when available, or the estimate otherwise. The ceiling applies at admission and actual charges can differ. Primary requests retain their own run and user budget rules.
 
 The old flat shadow fields are rejected; use the nested structure above.
 
 The primary model is excluded from the group. Each remaining candidate makes
 at most one call, without retries. Candidates wait for concurrency slots under
 the same deadline. Byte allowances are assigned before dispatch and are not
-refunded on failure. Token usage and estimated cost remain observations, not
-admission limits; missing usage is unknown.
+refunded on failure. Replay records token usage when the backend reports it.
 
 Requests sampled out or left with no candidates produce metrics only. A
 decision whose algorithm is an executor (`escalate`, `fusion`, `remom`,

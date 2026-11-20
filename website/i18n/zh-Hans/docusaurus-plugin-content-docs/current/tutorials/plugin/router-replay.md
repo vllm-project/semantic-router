@@ -275,6 +275,7 @@ plugins:
           timeout: 30s
         budget:
           max_response_bytes: 2097152
+          # max_estimated_cost: 0.01
         capture:
           enabled: false
           max_bytes: 8192
@@ -290,13 +291,16 @@ plugins:
 | `execution.max_queue_size` | `8` | 同一配方和决策等待执行的请求组数，由所有请求共享。按组计数，不按候选模型计数。 |
 | `execution.timeout` | `30s` | 整组共享的截止时间，包括排队等待和所有候选调用。必须为正时长，最多 `5m`。 |
 | `budget.max_response_bytes` | `N × 1048576` | 整组的响应字节预算，在派发前分配给有效候选。最小值为 `2 × N`：每个候选预留一个字节，用于检测超大响应。 |
+| `budget.max_estimated_cost` | — | 可选。单次抽样的 Shadow 候选组最高预估费用，币种使用 `global.services.budgets.currency`（默认 USD）。 |
 | `capture.enabled` | `false` | 仅在 `prompt_capture: raw` 下保存候选文本的有上限摘录。关闭时只保留大小、token 用量和 SHA-256。 |
 | `forward_headers` | `[]` | 允许复制的决策请求头，不区分大小写。凭据头不会转发。 |
 | `capture.max_bytes` | `N × 4096` | 整组的摘录字节上限，分配给有效候选。 |
 
+设置 `budget.max_estimated_cost` 后，Router 根据各候选编码后的输入 token 估算值和显式输出上限计算费用。预估总额超限，或有候选缺少同币种价格、缺少显式输出上限或一次生成多个答案时，Router 跳过整组并在 Replay 记录原因。尝试派发的候选会记录预估费用，并在后端返回用量时按用量记录费用，否则沿用预估值。上限用于派发前的判断，实际费用可能有差异。主请求仍按自己的会话和用户预算规则执行。
+
 旧的扁平影子字段会被拒绝，请使用上面的嵌套结构。
 
-主模型会从组中排除。其余候选最多各调用一次，不重试；等待并发空位的时间也计入同一截止时间。字节额度在派发前分配，失败时不返还。token 用量和估算成本仍是观测值，不是准入限制；缺失用量保持未知。
+主模型会从组中排除。其余候选最多各调用一次，不重试；等待并发空位的时间也计入同一截止时间。字节额度在派发前分配，失败时不返还。派发后记录后端返回的 token 用量，缺失用量保持未知。
 
 未被抽中或排除后没有候选的请求只产生指标。算法为执行器（`escalate`、`fusion`、`remom`、`ratings` 或 `workflows`）的决策会在加载配置时拒绝影子请求，因为影子请求只在单模型的提供方派发上运行。
 

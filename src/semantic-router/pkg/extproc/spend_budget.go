@@ -175,9 +175,7 @@ func (r *OpenAIRouter) dispatchSpendEstimate(model string, request *llmprotocol.
 			output = min(output, limit)
 		}
 	}
-	inputRate := max(pricing.PromptPer1M, effectiveCacheWriteRate(pricing), effectiveCacheWrite1hRate(pricing))
-	input := llmprotocol.EstimateInput(request).Tokens
-	return (float64(input)*inputRate + float64(output)*max(pricing.CompletionPer1M, 0)) / 1e6, true
+	return estimateDispatchCost(llmprotocol.EstimateInput(request).Tokens, int64(output), pricing), true
 }
 
 // settleRequestSpend replaces the reservation with the priced usage, or with
