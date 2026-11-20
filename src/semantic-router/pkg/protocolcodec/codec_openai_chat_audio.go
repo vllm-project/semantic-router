@@ -7,7 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func decodeChatAudioOutputOptions(raw json.RawMessage, audio *chatAudioRequestWire) (*llmprotocol.AudioOutputOptions, error) {
+func decodeChatAudioOutputOptions(raw json.RawMessage, audio *chatAudioRequestWire, stream bool) (*llmprotocol.AudioOutputOptions, error) {
 	var modalities []string
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &modalities); err != nil {
@@ -40,6 +40,11 @@ func decodeChatAudioOutputOptions(raw json.RawMessage, audio *chatAudioRequestWi
 	// back with a modality it did not ask for. Refuse it instead of rewriting it.
 	if !hasText {
 		return nil, invalidChatModalities(nil)
+	}
+	// Neutral stream events have no audio slot, so a streamed answer would fail
+	// at its first delta.audio chunk after the provider had started generating.
+	if stream {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_stream_audio", "streamed Chat audio output is unsupported", nil)
 	}
 	options := &llmprotocol.AudioOutputOptions{Format: audioFormat(audio)}
 	voice, err := decodeChatAudioVoice(audio)

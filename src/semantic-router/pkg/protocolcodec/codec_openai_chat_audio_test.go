@@ -62,6 +62,7 @@ func TestChatAudioOutputRequest(t *testing.T) {
 		{name: "text only with audio options", body: `{"model":"m","messages":[{"role":"user","content":"hi"}],"modalities":["text"],"audio":{"voice":"alloy"}}`, code: "audio_requires_modality"},
 		{name: "unknown modality", body: `{"model":"m","messages":[{"role":"user","content":"hi"}],"modalities":["text","video"]}`, code: "invalid_modalities"},
 		{name: "modalities is not an array", body: `{"model":"m","messages":[{"role":"user","content":"hi"}],"modalities":"text"}`, code: "invalid_modalities"},
+		{name: "streamed audio", body: `{"model":"m","stream":true,"messages":[{"role":"user","content":"hi"}],"modalities":["text","audio"],"audio":{"voice":"alloy","format":"pcm16"}}`, code: "unsupported_stream_audio"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
