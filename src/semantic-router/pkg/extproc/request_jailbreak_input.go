@@ -32,21 +32,40 @@ func extractJailbreakInput(request *llmprotocol.Request) *classification.Jailbre
 // the user's message or a tool result, does not end the turn. An assistant
 // message carrying a tool call is not a completed assistant turn either: it
 // continues the user's tool cycle, so the user message that initiated the
-// cycle stays in the current turn instead of falling into history.
+// cycle stays in the current turn instead of falling into history. A codec may
+// also emit one tool-call step as several assistant items, such as the
+// Responses reasoning and narration items that precede the function calls.
+// Once the scan reaches a tool call, the earlier assistant items of that same
+// step continue the cycle too, while an assistant step without a tool call
+// remains the delimiter between turns.
 func currentTurnStart(messages []llmprotocol.Message) int {
 	start := len(messages)
+	inToolStep := false
 	for index := len(messages) - 1; index >= 0; index-- {
-		role := messages[index].Role
-		if isInstructionRole(role) {
+		message := messages[index]
+		if isInstructionRole(message.Role) {
 			continue
 		}
-		if role == llmprotocol.RoleAssistant && isToolCallContinuation(messages[index]) {
-			continue
+		if message.Role == llmprotocol.RoleAssistant {
+			if isToolCallContinuation(message) {
+				inToolStep = true
+				continue
+			}
+			// The assistant items of a tool-call step all precede its calls on
+			// the wire, so they continue the cycle only while scanning that
+			// step. A completed answer breaks the scan instead.
+			if inToolStep {
+				continue
+			}
+			break
 		}
-		if role != llmprotocol.RoleUser && role != llmprotocol.RoleTool {
+		if message.Role != llmprotocol.RoleUser && message.Role != llmprotocol.RoleTool {
 			break
 		}
 		start = index
+		// A user or tool message separates assistant steps, so a tool call
+		// above it belongs to an earlier cycle and cannot continue this one.
+		inToolStep = false
 	}
 	return start
 }
