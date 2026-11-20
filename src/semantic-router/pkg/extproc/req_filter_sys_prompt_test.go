@@ -121,9 +121,14 @@ func TestAddSystemPromptPreservesRawProviderFieldsAndIntegerPrecision(t *testing
 }
 
 // replace takes the place of every instruction the caller sent: each system
-// and developer message and the Responses instructions, whichever backend
-// the request is sent to.
+// and developer message, leading or later in the conversation, and the
+// Responses instructions, whichever client protocol and backend.
 func TestSystemPromptReplaceDropsEveryCallerInstruction(t *testing.T) {
+	const messagesInConversation = `{"model":"m","max_tokens":16,"system":"CLIENT_TOP","messages":[` +
+		`{"role":"user","content":"hi"},{"role":"assistant","content":"yo"},` +
+		`{"role":"system","content":"CLIENT_LATE"},{"role":"user","content":"again"}]}`
+	const laterTurns = `{"role":"system","content":"CLIENT_TOP"},{"role":"user","content":"hi"},{"role":"assistant","content":"yo"},` +
+		`{"role":"developer","content":"CLIENT_LATE"},{"role":"user","content":"again"}`
 	for _, tc := range []struct {
 		name           string
 		client, target llmprotocol.WireFormat
@@ -145,27 +150,63 @@ func TestSystemPromptReplaceDropsEveryCallerInstruction(t *testing.T) {
 			"anthropic backend", llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1,
 			`{"model":"m","max_tokens":16,"messages":[{"role":"system","content":"CLIENT_SYS"},{"role":"developer","content":"CLIENT_INSTR"},{"role":"user","content":"hi"}]}`,
 		},
+		{"messages client to chat", llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, messagesInConversation},
+		{"messages client to responses", llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIResponsesV1, messagesInConversation},
+		{"messages client to messages", llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, messagesInConversation},
+		{"later chat message", llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, `{"model":"m","messages":[` + laterTurns + `]}`},
+		{"later responses item", llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1, `{"model":"m","max_output_tokens":16,"input":[` + laterTurns + `]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			router, model := routingTestRouterForFormat(tc.target)
-			request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(tc.client, []byte(tc.body))
-			require.NoError(t, err)
-			ctx := routingTestContext(tc.client, &request)
-			decision := config.Decision{Name: "support", Plugins: []config.DecisionPlugin{{
-				Type:          config.DecisionPluginSystemPrompt,
-				Configuration: config.MustStructuredPayload(config.SystemPromptPluginConfig{SystemPrompt: "ROUTER_PROMPT", Mode: config.SystemPromptModeReplace}),
-			}}}
-			ctx.VSRSelectedDecision = &decision
-
-			_, err = router.prepareProviderDispatch(&request, model, decision.Name, false, ctx)
-			require.NoError(t, err)
-			body, err := router.encodeDispatchRequest(ctx)
-			require.NoError(t, err)
+			body := dispatchWithReplacedSystemPrompt(t, tc.client, tc.target, tc.body)
 
 			assert.Equal(t, 1, strings.Count(string(body), "ROUTER_PROMPT"), "%s", body)
 			assert.NotContains(t, string(body), "CLIENT_")
 		})
 	}
+}
+
+// A system message that also sets per-message effort loses its text under
+// replace but keeps the effort control in its place, so a Messages backend
+// still receives it.
+func TestSystemPromptReplaceKeepsPerMessageEffort(t *testing.T) {
+	body := dispatchWithReplacedSystemPrompt(t, llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1,
+		`{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"yo"},`+
+			`{"role":"system","content":"CLIENT_LATE","output_config":{"effort":"low"}},{"role":"user","content":"again"}]}`)
+
+	var dispatched struct {
+		System   json.RawMessage `json:"system"`
+		Messages []struct {
+			Role         string          `json:"role"`
+			Content      json.RawMessage `json:"content"`
+			OutputConfig json.RawMessage `json:"output_config"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.Unmarshal(body, &dispatched))
+	assert.Contains(t, string(dispatched.System), "ROUTER_PROMPT")
+	assert.NotContains(t, string(body), "CLIENT_")
+	require.Len(t, dispatched.Messages, 4, "%s", body)
+	assert.Equal(t, "system", dispatched.Messages[2].Role)
+	assert.JSONEq(t, `[]`, string(dispatched.Messages[2].Content))
+	assert.JSONEq(t, `{"effort":"low"}`, string(dispatched.Messages[2].OutputConfig))
+}
+
+func dispatchWithReplacedSystemPrompt(t *testing.T, client, target llmprotocol.WireFormat, body string) []byte {
+	t.Helper()
+	router, model := routingTestRouterForFormat(target)
+	request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(client, []byte(body))
+	require.NoError(t, err)
+	ctx := routingTestContext(client, &request)
+	decision := config.Decision{Name: "support", Plugins: []config.DecisionPlugin{{
+		Type:          config.DecisionPluginSystemPrompt,
+		Configuration: config.MustStructuredPayload(config.SystemPromptPluginConfig{SystemPrompt: "ROUTER_PROMPT", Mode: config.SystemPromptModeReplace}),
+	}}}
+	ctx.VSRSelectedDecision = &decision
+
+	_, err = router.prepareProviderDispatch(&request, model, decision.Name, false, ctx)
+	require.NoError(t, err)
+	dispatched, err := router.encodeDispatchRequest(ctx)
+	require.NoError(t, err)
+	return dispatched
 }
 
 // replace drops what the caller sent, not the context the context plugin

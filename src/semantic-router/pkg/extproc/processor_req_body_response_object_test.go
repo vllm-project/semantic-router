@@ -474,9 +474,10 @@ func TestMaterializeResponseObjectContextRejectsBrokenRetainedToolLifecycleAtomi
 	}
 }
 
-// previous_response_id replays the stored developer and system input items as
-// instructions in turn order: after the current request's top-level
-// instructions and before the developer items of its own input. The earlier
+// previous_response_id replays the developer and system items at the start of
+// the stored input as instructions, after the current request's top-level
+// instructions. The current input follows the stored turns, so its developer
+// items stay in their place there, at its start or later. The earlier
 // request's top-level instructions are not carried over.
 func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 	for _, backend := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1} {
@@ -491,19 +492,28 @@ func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 				t.Fatalf("turn 1 reply was replaced: %s", reply.GetImmediateResponse().GetBody())
 			}
 
-			turnOrder := []string{"Always answer in French.", "Now answer in digits.", "What is 2+2?", "hello", "And 3+3?"}
-			for _, instructions := range []string{`"instructions":"Be brief.",`, ""} {
-				second := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-2", TraceContext: t.Context()}
-				body := dispatchTestTurn(t, router, model, second, `{"model":"`+model+`",`+instructions+`"previous_response_id":"`+
-					first.ResponseObjectState.GeneratedResponseID+`","input":[{"type":"message","role":"developer","content":"Now answer in digits."},`+
-					`{"type":"message","role":"user","content":"And 3+3?"}]}`)
-				want := turnOrder
-				if instructions != "" {
-					want = append([]string{"Be brief."}, turnOrder...)
-				}
-				assertTextOrder(t, body, want...)
-				if bytes.Contains(body, []byte("Old instructions.")) {
-					t.Fatalf("top-level instructions of the earlier request were carried over: %s", body)
+			const developer = `{"type":"message","role":"developer","content":"Now answer in digits."}`
+			const user = `{"type":"message","role":"user","content":"And 3+3?"}`
+			for _, input := range []struct {
+				items string
+				order []string
+			}{
+				{`{"type":"reasoning","id":"rs_empty","encrypted_content":""},` + developer + "," + user, []string{"Always answer in French.", "What is 2+2?", "hello", "Now answer in digits.", "And 3+3?"}},
+				{developer + "," + user, []string{"Always answer in French.", "What is 2+2?", "hello", "Now answer in digits.", "And 3+3?"}},
+				{user + "," + developer, []string{"Always answer in French.", "What is 2+2?", "hello", "And 3+3?", "Now answer in digits."}},
+			} {
+				for _, instructions := range []string{`"instructions":"Be brief.",`, `"instructions":"",`, `"instructions":null,`, ""} {
+					second := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-2", TraceContext: t.Context()}
+					body := dispatchTestTurn(t, router, model, second, `{"model":"`+model+`",`+instructions+`"previous_response_id":"`+
+						first.ResponseObjectState.GeneratedResponseID+`","input":[`+input.items+`]}`)
+					want := input.order
+					if instructions == `"instructions":"Be brief.",` {
+						want = append([]string{"Be brief."}, input.order...)
+					}
+					assertTextOrder(t, body, want...)
+					if bytes.Contains(body, []byte("Old instructions.")) {
+						t.Fatalf("top-level instructions of the earlier request were carried over: %s", body)
+					}
 				}
 			}
 		})
