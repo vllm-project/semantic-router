@@ -39,10 +39,14 @@ func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
 	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
 	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
+	projected, serverToolDiagnostics, err := r.projectServerToolsForBackend(projected, model, target)
+	if err != nil {
+		return projected, nil, err
+	}
 	projected, otherDiagnostics, err := r.projectAnthropicRequestForBackendWithDiagnostics(projected, model, target)
 	projected = r.projectControlTokens(projected, model)
 	return projected, slices.Concat(systemDiagnostics, signatureDiagnostics, reasoningDiagnostics, verbosityDiagnostics, toolChoiceDiagnostics,
-		fileDiagnostics, storeDiagnostics, capabilityDiagnostics, otherDiagnostics), err
+		fileDiagnostics, storeDiagnostics, capabilityDiagnostics, serverToolDiagnostics, otherDiagnostics), err
 }
 
 // projectControlTokens escapes the model's control tokens in the request's

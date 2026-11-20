@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest'
 
 import InsightsCharts from '../components/InsightsCharts'
 import { TooltipProvider } from '../ui'
-import { describeFreeRecords } from './insightsCostAccounting'
+import { buildCostBaselineModel, InsightsConfigContext } from './insightsConfigFacts'
+import {
+  describeEstimateMethod,
+  describeFreeRecords,
+  describeRecordSaving,
+  formatSaving,
+  savingsReference,
+  savingVersus,
+} from './insightsCostAccounting'
 import { RequestsSummary } from './InsightsRequestsView'
 import { ModelLabelsContext, modelText, type ModelLabels } from './insightsModelLabelSupport'
 import { buildInsightsRecordSections, renderInsightsSavingsCell } from './insightsPageSupport'
@@ -207,12 +215,16 @@ describe('Insights cost coverage', () => {
       </TooltipProvider>,
     )
 
-  it('shows the spend and its difference from the reference as figures, the method behind a mark', () => {
+  it('shows the spend and the saving as figures, the Router calls on their own line, the method behind a mark', () => {
     const html = render()
     expect(html).toContain('$3.50')
-    expect(html).toContain('+$1.00')
-    expect(html).toContain('Cost only · 100.0% above the reference')
+    // two rules compared these requests, so the label names neither
+    expect(html).toContain('Saved vs reference')
+    expect(html).toContain('−$1.00')
+    expect(html).toContain('Cost only · 100.0% more than the reference')
+    expect(html).toContain('Router’s own calls: $0.50')
     expect(html).toContain('aria-label="How the estimate is made"')
+    expect(html).not.toContain('Cost vs reference')
     expect(html).not.toContain('Priced: 2 of 5 requests')
     expect(html).not.toContain('text-destructive-foreground')
   })
@@ -270,7 +282,7 @@ describe('Insights cost coverage', () => {
     expect(html).not.toContain('N/A')
   })
 
-  it('shows the difference net of the Router calls', () => {
+  it('shows the saving before the Router calls, which read on their own line', () => {
     const summary = {
       total_saved: 3.25,
       gross_saved: 4,
@@ -285,8 +297,57 @@ describe('Insights cost coverage', () => {
       coverage: { ...coverage, baseline_sources: { configured_model: 2 } },
     }
     const html = render(summary)
-    expect(html).toContain('-$3.25')
-    expect(html).toContain('Cost only · 54.2% below the reference')
+    expect(html).toContain('Saved vs configured model')
+    expect(html).toContain('$4.00')
+    expect(html).not.toContain('$3.25')
+    expect(html).toContain('Cost only · 66.7% less than the configured model')
+    expect(html).toContain('Router’s own calls: $0.88')
+
+    // the configuration names the model, by its label
+    const named = renderToStaticMarkup(
+      <InsightsConfigContext.Provider value={{ modelProviders: {}, costBaselineModel: 'small' }}>
+        <ModelLabelsContext.Provider value={{ small: 'qwen36' }}>
+          <TooltipProvider>
+            <RequestsSummary
+              aggregate={{ ...aggregate, summary }}
+              loading={false}
+              error={null}
+              onRetry={() => undefined}
+              breakdown={false}
+              onBreakdown={() => undefined}
+              clientFiltered={false}
+              harnessCounts={null}
+            />
+          </TooltipProvider>
+        </ModelLabelsContext.Provider>
+      </InsightsConfigContext.Provider>,
+    )
+    expect(named).toContain('Saved vs qwen36')
+    expect(named).toContain('Cost only · 66.7% less than qwen36')
+  })
+
+  it('reads a saving against the priciest model of each pool, positive where it saved', () => {
+    const summary = {
+      total_saved: 92.34,
+      gross_saved: 92.34,
+      baseline_spend: 261.98,
+      actual_spend: 169.64,
+      router_call_spend: 0,
+      total_spend: 169.84,
+      currency: 'USD',
+      cost_record_count: 39856,
+      excluded_record_count: 2683,
+      coverage: {
+        ...coverage,
+        baseline_sources: { recipe_most_expensive: 39851, selected_model: 5 },
+      },
+    }
+    const html = render(summary)
+    expect(html).toContain('Saved vs priciest model')
+    expect(html).toContain('$92.34')
+    expect(html).not.toContain('−$92.34')
+    expect(html).toContain('Cost only · 35.2% less than the priciest model')
+    expect(html).toContain('Router’s own calls: $0.00')
   })
 
   it('leaves the difference unknown where nothing was compared with a reference', () => {
@@ -306,6 +367,139 @@ describe('Insights cost coverage', () => {
       'aria-label="Not available: No request in range has both a priced model cost',
     )
     expect(html).not.toContain('$0.0000')
+  })
+})
+
+describe('what a saving compares with', () => {
+  const POOL_HINT =
+    'Cost only: each request priced at the most expensive model in its pool for the same tokens, at this deployment’s own price table (catalog list prices when the pricing source says so); not a quality comparison.'
+
+  it('names the priciest model of each pool, which direct requests do not change', () => {
+    const reference = savingsReference({
+      baseline_sources: { recipe_most_expensive: 40, selected_model: 2 },
+    })
+    expect(reference).toEqual({
+      label: 'Saved vs priciest model',
+      short: 'Priciest model',
+      noun: 'the priciest model',
+      hint: POOL_HINT,
+      mixed: undefined,
+    })
+    // with nothing compared yet, the configuration decides
+    expect(savingsReference(undefined).label).toBe('Saved vs priciest model')
+    expect(savingsReference({ baseline_sources: {} }, 'small', { small: 'qwen36' }).label).toBe(
+      'Saved vs qwen36',
+    )
+  })
+
+  it('names the configured model, by its label', () => {
+    const reference = savingsReference({ baseline_sources: { configured_model: 3 } }, 'small', {
+      small: 'qwen36',
+    })
+    expect(reference.label).toBe('Saved vs qwen36')
+    expect(reference.hint).toBe(
+      'Cost only: each request priced at qwen36 for the same tokens, at this deployment’s own price table (catalog list prices when the pricing source says so); not a quality comparison.',
+    )
+    expect(savingsReference({ baseline_sources: { configured_model: 3 } }).label).toBe(
+      'Saved vs configured model',
+    )
+  })
+
+  it('says so when the requests of a range compared with different rules', () => {
+    const reference = savingsReference(
+      { baseline_sources: { recipe_most_expensive: 1200, configured_model: 26308, unrecorded: 4 } },
+      'deepseek/deepseek-v4.1-flash',
+    )
+    expect(reference.label).toBe('Saved vs reference')
+    expect(reference.mixed).toBe(
+      'References differ in this range: 1,200 requests vs the priciest model in its pool, 26,308 requests vs deepseek/deepseek-v4.1-flash, 4 requests vs an unrecorded rule (older records).',
+    )
+    expect(
+      describeEstimateMethod(
+        {
+          coverage: {
+            ...coverage,
+            baseline_sources: { recipe_most_expensive: 1, configured_model: 1 },
+          },
+          excluded_record_count: 0,
+        },
+        5,
+      ),
+    ).toContain('References differ in this range')
+  })
+
+  it('reads the method with the reference first and the Router calls apart', () => {
+    const method = describeEstimateMethod(
+      {
+        coverage: { ...coverage, baseline_sources: { recipe_most_expensive: 2 } },
+        excluded_record_count: 7,
+      },
+      9,
+    )
+    expect(method.startsWith(POOL_HINT)).toBe(true)
+    expect(method).toContain('the Router’s own calls are shown on their own line and not taken off')
+    expect(method).toContain('Priced: 2 of 9 requests, 1 partly.')
+    expect(method).toContain('7 requests left out of the comparison.')
+  })
+
+  it('prints a saving plain and a loss with a minus sign', () => {
+    expect(formatSaving(92.34, 'USD')).toBe('$92.34')
+    expect(formatSaving(-7.97, 'USD')).toBe('−$7.97')
+    expect(formatSaving(0, 'USD')).toBe('$0.00')
+    expect(formatSaving(-1, undefined)).toBe('—')
+  })
+
+  it('reads the configured baseline model from global.plugins or a decision', () => {
+    const replay = (model?: string) => ({
+      type: 'router_replay',
+      configuration: model ? { cost_baseline_model: model } : {},
+    })
+    expect(buildCostBaselineModel({ global: { plugins: [replay()] } })).toBeUndefined()
+    expect(buildCostBaselineModel({ global: { plugins: [replay('small')] } })).toBe('small')
+    expect(
+      buildCostBaselineModel({
+        global: { plugins: [replay()] },
+        recipes: [
+          {
+            decisions: [{ plugins: [replay(' small ')] }, { plugins: [{ type: 'fast_response' }] }],
+          },
+        ],
+      }),
+    ).toBe('small')
+    // two models leave it unnamed
+    expect(
+      buildCostBaselineModel({
+        global: { plugins: [replay('small')] },
+        recipes: [{ decisions: [{ plugins: [replay('premium')] }] }],
+      }),
+    ).toBeUndefined()
+  })
+
+  it('names what a record compared with', () => {
+    const pool: InsightsRecord = {
+      ...priced,
+      cost_savings: 0.00144495,
+      baseline_model: 'zai/glm-5.3-flash',
+      cost_accounting: { baseline_source: 'recipe_most_expensive' },
+    }
+    expect(describeRecordSaving(pool)).toBe(
+      'Saved $0.0014 vs zai/glm-5.3-flash, the priciest model in its pool for these tokens (cost only)',
+    )
+    expect(savingVersus(pool, { 'zai/glm-5.3-flash': 'GLM-5.3-Flash' })).toBe(
+      'vs. GLM-5.3-Flash, the priciest in its pool',
+    )
+    expect(describeRecordSaving(priced)).toBe('Cost $0.0030 more than small (cost only)')
+    expect(savingVersus(priced)).toBe('vs. small')
+    const direct: InsightsRecord = {
+      ...priced,
+      cost_savings: 0,
+      baseline_model: 'premium',
+      cost_accounting: { baseline_source: 'selected_model' },
+    }
+    expect(describeRecordSaving(direct)).toBe(
+      'A direct request, compared with its own model, premium (cost only)',
+    )
+    expect(savingVersus({ ...priced, baseline_model: undefined })).toBe('No baseline recorded')
   })
 })
 

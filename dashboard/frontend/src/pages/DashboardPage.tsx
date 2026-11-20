@@ -34,6 +34,7 @@ import {
 import { useHomeTraffic } from './homeTraffic'
 import {
   buildAgentRuleIndex,
+  buildCostBaselineModel,
   buildModelProviders,
   EMPTY_CONFIG_FACTS,
   InsightsConfigContext,
@@ -153,6 +154,7 @@ const DashboardPage = () => {
         ? {
             agentRules: buildAgentRuleIndex(rawConfig),
             modelProviders: buildModelProviders(rawConfig),
+            costBaselineModel: buildCostBaselineModel(rawConfig),
           }
         : EMPTY_CONFIG_FACTS,
     [rawConfig],
