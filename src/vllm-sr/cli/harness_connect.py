@@ -37,6 +37,11 @@ NO_KEY = "vllm-sr-no-key"
 KEY_HELPER = "apiKeyHelper"
 # Claude Code settings the command may own outside "env"
 TOP_LEVEL_KEYS = ("statusLine", KEY_HELPER)
+# Claude Code's permission rules, which a key with / reaches inside, and the
+# tools connect denies there when the Router has no backend that serves them:
+# WebSearch sends Anthropic's server tool web_search_20250305.
+CLAUDE_DENY = "permissions/deny"
+CLAUDE_DENIED_TOOLS = ("WebSearch",)
 # What runs a key command: Claude Code runs apiKeyHelper in the system shell, and
 # a Codex auth command is a program with its arguments (0.166).
 KEY_SHELL = "/bin/sh"
@@ -47,8 +52,9 @@ STATUS_LINE_SCRIPT = "vllm-sr-status-line.py"
 class Change:
     """One file and what the command sets in it.
 
-    kind is json-env (keys of the "env" object of a JSON settings file, and
-    TOP_LEVEL_KEYS at its top level), json (keys of a JSON file whose other
+    kind is json-env (keys of the "env" object of a JSON settings file,
+    TOP_LEVEL_KEYS at its top level, and a key with / in it, such as
+    permissions/deny, nested from the top), json (keys of a JSON file whose other
     keys are not the command's; a key with / in it names a nested one, such as
     providers/vllm-sr), toml (entries of a TOML file, as harness_toml reads
     them) or file (the whole file, held as the one value under "file").
@@ -85,7 +91,11 @@ class Change:
             settings = _settings(text)
             env = settings.get("env") or {}
             return {
-                key: (settings if key in TOP_LEVEL_KEYS else env).get(key)
+                key: (
+                    _at(settings, key.split("/"))
+                    if "/" in key
+                    else (settings if key in TOP_LEVEL_KEYS else env).get(key)
+                )
                 for key in self.values
             }
         if self.kind == "json":
@@ -142,6 +152,8 @@ class Change:
         if held.get(KEY_HELPER) and held[KEY_HELPER] != self.values[KEY_HELPER]:
             held[KEY_HELPER] = "<hidden>"  # a helper of yours may name its secret
         shown = {k: held.pop(k) for k in TOP_LEVEL_KEYS if k in held}
+        for key in [key for key in held if "/" in key]:
+            _put(shown, key.split("/"), held.pop(key))
         if held:
             shown["env"] = held
         return json.dumps(shown, indent=2) + "\n" if shown else ""
@@ -285,12 +297,44 @@ def _settings(text: str) -> dict:
     return settings
 
 
+def claude_deny_rules(text: str) -> list[str]:
+    """The deny rules of the Claude Code settings text."""
+    try:
+        held = _at(_settings(text), CLAUDE_DENY.split("/"))
+    except ValueError:
+        held = None  # connect refuses such a file where it shows its change
+    return [r for r in held if isinstance(r, str)] if isinstance(held, list) else []
+
+
+def claude_denied(text: str, deny: bool = True) -> list[str] | None:
+    """The deny rules of the Claude Code settings text with CLAUDE_DENIED_TOOLS
+    after them, or, without deny, taken out of them: None when none are left."""
+    rules = claude_deny_rules(text)
+    if deny:
+        return rules + [tool for tool in CLAUDE_DENIED_TOOLS if tool not in rules]
+    return [rule for rule in rules if rule not in CLAUDE_DENIED_TOOLS] or None
+
+
+def claude_denial_owned(path: Path) -> bool:
+    """Whether connect added the CLAUDE_DENIED_TOOLS rules to the Claude Code
+    settings at path, as its record beside them says: it wrote them, and the
+    settings held none of them before connect first set their deny rules."""
+    record = _record(path.parent / MANIFEST) or {}
+    item = next((i for i in record.get("files", []) if i["path"] == str(path)), {})
+    entry = item.get("keys", {}).get(CLAUDE_DENY) or {}
+    before, written = entry.get("before") or [], entry.get("written") or []
+    return all(tool in written and tool not in before for tool in CLAUDE_DENIED_TOOLS)
+
+
 def set_json_env(text: str, values: dict[str, Any]) -> str:
-    """Set (or, for None, remove) env keys and TOP_LEVEL_KEYS; every other key
-    stays as it was."""
+    """Set (or, for None, remove) env keys, TOP_LEVEL_KEYS and keys with / in
+    them, which name a nested setting; every other key stays as it was."""
     settings = _settings(text)
     env = dict(settings.get("env") or {})
     for key, value in values.items():
+        if "/" in key:
+            _put(settings, key.split("/"), value)
+            continue
         target = settings if key in TOP_LEVEL_KEYS else env
         if value is None:
             target.pop(key, None)
@@ -978,6 +1022,17 @@ def _restored(item: dict, probe: Change, text: str, report: list[str]) -> str | 
     restore = {}
     for key, entry in item["keys"].items():
         now, written = current[key], entry["written"]
+        if key == CLAUDE_DENY:
+            # connect owns the deny rules it added, not the list they are in
+            before = entry["before"] or []
+            ours = [
+                tool
+                for tool in CLAUDE_DENIED_TOOLS
+                if tool in (written or []) and tool not in before
+            ]
+            if any(rule in ours for rule in now or []):
+                restore[key] = [rule for rule in now if rule not in ours] or None
+            continue
         if not still_written(key, now, written):
             what = path if key == "file" else f"{key} in {path}"
             report.append(f"kept {what}: it was changed after vllm-sr connect")
