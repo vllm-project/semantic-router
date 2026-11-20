@@ -342,13 +342,6 @@ Replies reach these clients in the shape an `anthropic` backend gives them:
   the answer ends, so a stream's `message_start` reports the Router's estimate
   of the input tokens. The final `message_delta` reports the backend's count.
 
-Claude Code's WebSearch tool sends Anthropic's server tool
-`web_search_20250305`, which only Anthropic's API runs. The Router refuses that
-request with `unsupported_tool` naming the tool type, and the agent sees a
-failed tool call. When the Router serves other models, deny the tool in Claude
-Code's settings with `"permissions": {"deny": ["WebSearch"]}` and give the
-agent a search MCP server instead.
-
 ### Files a model can't read
 
 A model whose declared capabilities leave out `file_input` can't receive a
