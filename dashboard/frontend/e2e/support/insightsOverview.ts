@@ -361,9 +361,12 @@ const mixedAggregate = {
     by_currency: [
       {
         currency: 'USD',
-        total_saved: 18.42,
+        total_saved: 17.81,
+        gross_saved: 18.42,
+        netted_router_call_spend: 0.61,
         baseline_spend: 31.9,
         actual_spend: 13.48,
+        router_call_spend: 0.61,
         total_spend: 14.09,
         cost_record_count: 1322,
       },

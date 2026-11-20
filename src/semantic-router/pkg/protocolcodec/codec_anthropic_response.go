@@ -102,6 +102,9 @@ func anthropicContentUnknownFields(raw json.RawMessage, policy llmprotocol.Polic
 	}
 	dropped := make(map[string]struct{})
 	for _, block := range blocks {
+		if _, carried := decodeAnthropicServerToolBlock(block); carried {
+			continue // A server tool block reaches its client as written.
+		}
 		_, fields := stripUnknownUpstreamFields(block, reflect.TypeOf(anthropicContentWire{}))
 		addUnknownFieldPaths(dropped, "content[]", fields)
 	}
