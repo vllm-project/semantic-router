@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -68,6 +69,13 @@ func (r *OpenAIRouter) selectTools(request *llmprotocol.Request, plugin *config.
 		input.History = strings.Join(snapshot.PriorUserMessages, "\n\n")
 	}
 	if strings.TrimSpace(input.Request) == "" {
+		if results := continuationToolResults(request.Messages, toolContinuationLimit); results != "" {
+			// A tool-continuation turn carries the results instead of user text:
+			// the selection reads this turn's results rather than skipping it.
+			input.Request = results
+		}
+	}
+	if strings.TrimSpace(input.Request) == "" {
 		return nil
 	}
 	catalog, candidates := r.toolsCandidates(request, plugin)
@@ -105,6 +113,52 @@ func (r *OpenAIRouter) selectTools(request *llmprotocol.Request, plugin *config.
 		keepRequestTools(request, kept, spec.PreserveCount)
 	}
 	return nil
+}
+
+// toolContinuationLimit bounds how much tool output one selection question
+// reads. A long agent session can carry hundreds of earlier results; the judge
+// only needs the ones this turn produced.
+const toolContinuationLimit = 8 << 10
+
+// continuationToolResults are the tool results the current turn carries: the
+// trailing run of tool messages, in order, capped at limit bytes. A request
+// that does not end in tool results carries none, so an earlier turn's output
+// never stands in for the question, and the cap keeps the question bounded
+// however long the session has run. The text is untrusted: the judge only
+// chooses among the policy's candidates, so a result can steer which of them
+// the model sees and never reach past the policy.
+func continuationToolResults(messages []llmprotocol.Message, limit int) string {
+	start := len(messages)
+	for start > 0 && messages[start-1].Role == llmprotocol.RoleTool {
+		start--
+	}
+	var results []string
+	total := 0
+	for _, message := range messages[start:] {
+		if total >= limit {
+			break
+		}
+		for _, content := range message.Content {
+			if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
+				continue
+			}
+			text := semanticText(content.ToolResult.Content)
+			if text == "" {
+				continue
+			}
+			if room := limit - total; len(text) > room {
+				// Trim to a rune boundary: a split rune would be mojibake in the question.
+				cut := room
+				for cut > 0 && !utf8.RuneStart(text[cut]) {
+					cut--
+				}
+				text = strings.TrimSpace(text[:cut])
+			}
+			results = append(results, text)
+			total += len(text)
+		}
+	}
+	return strings.Join(results, "\n\n")
 }
 
 // toolsCandidates are the tools a selection chooses among: in filter mode
