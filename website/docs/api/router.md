@@ -594,7 +594,9 @@ List and aggregate requests accept filters such as `recipe`, `decision`,
 approval reviews, `request_kind=codex_approval_review`, `review_status`,
 `review_outcome`, and `review_risk`. `turn_id` matches a record's `turn_id` or
 `parent_turn_id`: the calls one Codex turn sent, and the approval reviews and
-subagent calls it started. `since` keeps the records at or after an RFC 3339
+subagent calls it started. `has_session=true` keeps the records that belong to
+a session, the ones the runs list folds into agent runs, so totals can cover
+exactly what a sessions view lists. `since` keeps the records at or after an RFC 3339
 timestamp, such as `2026-11-15T15:00:00Z` (send an offset's `+` as `%2B`), so
 the list and the aggregate cover one window; [`vllm-sr usage`](../tutorials/plugin/router-replay#usage-in-the-terminal)
 reads both that way. Pagination uses `limit`

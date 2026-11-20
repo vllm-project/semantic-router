@@ -183,9 +183,11 @@ class Vela3Family(ModelFamily):
             backbone=backbone,
             # docs/records/cpu-zentorch-linear-vela3.md: zentorch's FP32 linear
             # changed no decision and no span set, so it runs on CPUs where
-            # opted in; GPUs keep exact kernels.
+            # opted in; other CPU slots and GPUs keep exact kernels.
             dtype=DtypePolicy(
-                autocast=None, bf16_resident=False, approximate_cpu_kernels=True
+                autocast=None,
+                bf16_resident=False,
+                approximate_cpu_kernels=frozenset({"linear"}),
             ),
             max_input_tokens=details.max_input_tokens,
             encoder=True,

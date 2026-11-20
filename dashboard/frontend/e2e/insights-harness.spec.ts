@@ -325,7 +325,9 @@ test("a session is a pivot: its requests, then its run's agent tree", async ({ p
     .filter({ hasText: 'Codex' })
     .getByRole('button', { name: '01a1ea71…9e9851' })
     .click()
-  await expect(page).toHaveURL(/session=key_3fa9c2%3A01a1ea71/)
+  // the URL names the session by the id Codex sent, never the key it was scoped to
+  await expect(page).toHaveURL(/session=01a1ea71-6532-7fc1-9137-1fd7cf9e9851/)
+  await expect(page).not.toHaveURL(/key_/)
   const chip = page.getByRole('button', { name: 'Clear session filter' }).locator('..')
   await expect(chip).toContainText('Add a histogram for selection latency')
   await expect(chip.getByRole('button', { name: 'Open run' })).toBeVisible()
@@ -474,9 +476,11 @@ test('a long run reads at a glance: a one-line title, its task in a sheet, its c
   await expect(timeline.getByRole('listitem')).toHaveCount(2)
   await page.getByRole('button', { name: 'Later calls' }).click()
   await expect(page.getByText('Calls 101–200 of 300')).toBeVisible()
-  await expect(timeline.locator('[data-marker="failure"]')).toHaveCount(1)
+  await expect(
+    page.getByRole('list', { name: 'Run events' }).locator('[data-event="failure"]'),
+  ).toHaveCount(1)
   // the hour away folds to a narrow mark that says how long it lasted
-  await expect(timeline).toContainText('1h 0m idle')
+  await expect(page.locator('#run-timeline')).toContainText('1h 0m idle')
   await page.screenshot({ path: info.outputPath('run-long.png'), fullPage: true })
 
   await expect(page.getByText('1–25 of 300 calls')).toBeVisible()

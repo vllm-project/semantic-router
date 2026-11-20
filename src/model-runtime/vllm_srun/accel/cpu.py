@@ -178,12 +178,15 @@ class CPUAccelerator(Accelerator):
                     variant=onednn.PACKED,
                 )
             )
-        # zentorch's linear: approximate, so it runs only for a family that
-        # consents on CPUs, and only opted in on a measured CPU (zentorch.py).
-        if zentorch.enabled():
+        # zentorch's kernels: approximate, so each runs only for a family that
+        # consents to its slot on CPUs, and only opted in on a measured CPU (zentorch.py).
+        zentorch_slots = zentorch.enabled()
+        if "linear" in zentorch_slots:
             kernels.register(
                 Kernel("linear", zentorch.lay_out, "zentorch", exact=False)
             )
+        if "sdpa" in zentorch_slots:
+            kernels.register(Kernel("sdpa", zentorch.sdpa, "zentorch", exact=False))
         return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:

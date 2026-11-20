@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, ListTree, Lock, RefreshCw, ServerOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Info, ListTree, Lock, RefreshCw, ServerOff } from 'lucide-react'
 
 import {
   Alert,
@@ -259,19 +259,38 @@ export function SummaryTile({
   icon,
   value,
   hint,
+  detail,
   tone,
+  info,
+  infoLabel,
 }: {
   label: string
   icon?: ReactNode
   value: ReactNode
   hint?: ReactNode
+  /** A second line under the hint, for a figure that belongs beside this one but not in it. */
+  detail?: ReactNode
   tone?: 'negative'
+  /** More about the figure, behind an info mark beside its label. */
+  info?: string
+  infoLabel?: string
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5 px-4 py-3">
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
         {icon}
         {label}
+        {info ? (
+          <Tooltip content={<span className="block max-w-80 whitespace-normal">{info}</span>}>
+            <button
+              type="button"
+              aria-label={infoLabel ?? `About ${label.toLowerCase()}`}
+              className="grid size-4 place-items-center rounded-full text-subtle-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40 [&_svg]:size-3"
+            >
+              <Info aria-hidden />
+            </button>
+          </Tooltip>
+        ) : null}
       </span>
       <span
         className={cn(
@@ -282,6 +301,9 @@ export function SummaryTile({
         {value}
       </span>
       {hint ? <span className="truncate text-[11.5px] text-subtle-foreground">{hint}</span> : null}
+      {detail ? (
+        <span className="truncate text-[11.5px] text-subtle-foreground">{detail}</span>
+      ) : null}
     </div>
   )
 }
