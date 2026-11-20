@@ -218,6 +218,9 @@ func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) conf
 	if v, ok := getStringField(fields, "message"); ok {
 		cfg.Message = v
 	}
+	if v, ok := getBoolField(fields, "block"); ok {
+		cfg.Block = v
+	}
 	return cfg
 }
 

@@ -73,6 +73,36 @@ def test_spans_are_trimmed_of_whitespace_brackets_and_quotes() -> None:
     assert decode([[0.9]], only_edge, ["X"], "[", 0.5) == []
 
 
+def test_a_span_keeps_an_edge_bracket_whose_partner_is_inside_it() -> None:
+    text = "call (415) 555-0100 or (tom@example.com) and [x"
+    offsets = np.asarray(
+        [(0, 4), (5, 6), (6, 9), (9, 10), (11, 19), (20, 22), (23, 24), (24, 39)]
+        + [(39, 40), (41, 44), (45, 46), (46, 47)]
+    )
+    probs = [[0.0], [0.9], [0.9], [0.9], [0.9], [0.0], [0.9], [0.9], [0.9]]
+    probs += [[0.0], [0.9], [0.9]]
+    assert spans_of_offsets(text, probs, offsets) == [
+        "(415) 555-0100",
+        "tom@example.com",
+        "x",
+    ]
+
+
+def test_a_span_ends_after_the_combining_marks_that_follow_it() -> None:
+    text = "Yesterday I met Jose\u0301 at the station."
+    offsets = np.asarray([(0, 9), (10, 11), (12, 15), (16, 20), (20, 21), (22, 24)])
+    probs = [[0.0], [0.0], [0.0], [0.9], [0.1], [0.0]]
+    assert decode(probs, offsets, ["PERSON"], text, 0.5) == [
+        {"start": 16, "end": 21, "label": "PERSON"}
+    ]
+
+
+def spans_of_offsets(text, probs, offsets):
+    return [
+        text[s["start"] : s["end"]] for s in decode(probs, offsets, ["X"], text, 0.5)
+    ]
+
+
 def test_every_cjk_character_is_its_own_unit() -> None:
     text = "王小明"
     assert list(units(text)[:3]) == [0, 1, 2]
@@ -168,6 +198,69 @@ def test_evidence_fills_a_paragraph_when_half_its_sentences_pass() -> None:
 def test_evidence_word_decoding_drops_short_spans() -> None:
     assert evidence("plain", scores({0, 1})) == ["Adults take"]
     assert evidence("plain", scores({0, 1}), min_chars=20) == []
+
+
+def test_evidence_sentences_lose_the_white_space_at_their_edges() -> None:
+    # The second sentence starts on the space after "grams."; min_chars counts it as the released runtime does.
+    assert evidence("sent", scores({5, 6, 7})) == ["Never more!"]
+    assert evidence("sent", scores({5, 6, 7}), min_chars=12) == ["Never more!"]
+    assert evidence("sent", scores({5, 6, 7}), min_chars=13) == []
+
+
+def card_answer(threshold, decode_threshold=None, scores=(0.99, 0.95, 0.99, 0.99)):
+    from vllm_srun.families.vela3_d3.span_read import SpanItem, answer
+
+    text = "Card 4111 1111 1111 1111 expires soon."
+    offsets = np.asarray([(0, 4), (5, 9), (10, 14), (15, 19), (20, 24), (25, 32)])
+    probs = np.asarray([0.01, *scores, 0.01])[:, None]
+    item = SpanItem(
+        question_id="q",
+        task_type="span",
+        ids=[],
+        keys=[],
+        descriptions=[],
+        names=("CARD",),
+        text=text,
+        threshold=threshold,
+        decode_threshold=decode_threshold,
+    )
+    found = answer(item, offsets, np.log(probs / (1 - probs)))
+    return [s["text"] for s in found["spans"]], found["threshold"]
+
+
+def test_a_raised_threshold_keeps_the_packages_spans_that_reach_it_whole() -> None:
+    # Words decoded at 0.97 split the number at its weaker word, as the released runtime does.
+    assert card_answer(0.97) == (["4111", "1111 1111"], 0.97)
+    # Decoded at the package's 0.5, the whole number's probability (0.98) reaches 0.97, and not 0.985.
+    assert card_answer(0.97, 0.5) == (["4111 1111 1111 1111"], 0.97)
+    assert card_answer(0.985, 0.5) == ([], 0.985)
+    # A lower threshold still decodes at itself.
+    assert card_answer(0.3, scores=(0.99, 0.4, 0.99, 0.99))[0] == [
+        "4111 1111 1111 1111"
+    ]
+
+
+def test_an_answer_leaves_out_the_commas_at_an_address_spans_edges() -> None:
+    from vllm_srun.families.vela3_d3.span_read import SpanItem, answer
+
+    text = "Ship to 123 Main St, Springfield, IL 62704, today"
+    offsets = np.asarray(
+        [(0, 4), (5, 7), (8, 11), (12, 16), (17, 19), (19, 20), (21, 32), (32, 33)]
+        + [(34, 36), (37, 42), (42, 43), (44, 49)]
+    )
+    labelled = {2, 3, 4, 5, 7, 8, 9, 10}
+    probs = np.asarray([0.9 if i in labelled else 0.1 for i in range(12)])[:, None]
+    item = SpanItem(
+        question_id="q",
+        task_type="span",
+        ids=[],
+        keys=[],
+        descriptions=[],
+        names=("ADDRESS",),
+        text=text,
+    )
+    spans = answer(item, offsets, np.log(probs / (1 - probs)))["spans"]
+    assert [s["text"] for s in spans] == ["123 Main St", "IL 62704"]
 
 
 def test_an_answer_leaves_out_the_comma_the_decoder_keeps_before_a_value() -> None:

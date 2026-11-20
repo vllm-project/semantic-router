@@ -143,4 +143,4 @@ algorithm:
 
 Router 使用候选精确推理力度的 `available` 结果，然后应用路由级覆盖率和分数门槛。平衡、质量优先和成本优先目标见 [Multi Factor](../tutorials/algorithm/selection/multi-factor)。
 
-在控制面板中打开 **Build → Models → Evaluation Records** 以添加或编辑记录。基准和指数定义仍保持为显式 YAML，因为更改其语义会创建版本化评分契约，而不是普通 Model Card 元数据。
+在控制面板中打开 **Models → Backend models**，从页面的 **⋯** 菜单选择 **Manage evaluation records** 以添加或编辑记录。基准和指数定义仍保持为显式 YAML，因为更改其语义会创建版本化评分契约，而不是普通 Model Card 元数据。

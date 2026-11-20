@@ -494,6 +494,7 @@ func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 		record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 		record.Currency = cloneStringPtr(usage.Currency)
 		record.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		record.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 	})
 }
 
@@ -501,6 +502,13 @@ func (m *MilvusStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 func (m *MilvusStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	return m.updateRecord(ctx, id, func(record *Record) {
 		record.ToolTrace = cloneToolTrace(&trace)
+	})
+}
+
+// UpdateReview replaces the approval review of a record.
+func (m *MilvusStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	return m.updateRecord(ctx, id, func(record *Record) {
+		record.Review = CloneReview(&review)
 	})
 }
 

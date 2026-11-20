@@ -97,3 +97,30 @@ func TestCLIDecompilePreservesCanonicalValidationError(t *testing.T) {
 		t.Fatal("invalid document emitted DSL")
 	}
 }
+
+func TestCLIDecompileRejectsClientAuthInRoutingFragment(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		auth string
+	}{
+		{"policy", "{type: bearer_api_key, api_key_envs: [FAST_KEY]}"},
+		{"null", "null"},
+		{"empty", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			input, output := filepath.Join(dir, "fragment.yaml"), filepath.Join(dir, "output.dsl")
+			fragment := "recipes:\n  - name: default\nentrypoints:\n  - model_names: [company/fast]\n    recipe: default\n    client_auth: " + tc.auth + "\n"
+			if err := os.WriteFile(input, []byte(fragment), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err := CLIDecompile(input, output)
+			if err == nil || !strings.Contains(err.Error(), "entrypoints[0].client_auth: entrypoint client authentication is not available yet") {
+				t.Errorf("CLIDecompile() = %v, want the client_auth rejection", err)
+			}
+			if _, err := os.Stat(output); !os.IsNotExist(err) {
+				t.Fatalf("rejected client_auth fragment emitted DSL: %v", err)
+			}
+		})
+	}
+}

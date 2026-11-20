@@ -23,15 +23,41 @@ const (
 
 // runtimeGuard is a remote guard that refuses a blank state, as the model
 // runtime does, finds an injection in any state that holds one, and keeps
-// the states it read.
+// the states it read. A state is a text or, for a rule that reads more than
+// the user's turn, its named parts, which it reads in name order.
 type runtimeGuard struct {
 	mu     sync.Mutex
 	states []string
 }
 
+type runtimeGuardState string
+
+func (s *runtimeGuardState) UnmarshalJSON(raw []byte) error {
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		*s = runtimeGuardState(text)
+		return nil
+	}
+	var parts map[string]string
+	if err := json.Unmarshal(raw, &parts); err != nil {
+		return err
+	}
+	names := make([]string, 0, len(parts))
+	for name := range parts {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	texts := make([]string, 0, len(names))
+	for _, name := range names {
+		texts = append(texts, parts[name])
+	}
+	*s = runtimeGuardState(strings.Join(texts, "\n\n"))
+	return nil
+}
+
 func (g *runtimeGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	type entry struct {
-		State     string                     `json:"state"`
+		State     runtimeGuardState          `json:"state"`
 		Questions map[string]json.RawMessage `json:"questions"`
 	}
 	var body struct {
@@ -47,7 +73,7 @@ func (g *runtimeGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		entries = map[string]entry{"": body.entry}
 	}
 	for _, state := range entries {
-		if strings.TrimSpace(state.State) == "" {
+		if strings.TrimSpace(string(state.State)) == "" {
 			http.Error(w, `{"error":{"message":"state must not be empty or whitespace","type":"invalid_request_error"}}`, http.StatusBadRequest)
 			return
 		}
@@ -55,12 +81,12 @@ func (g *runtimeGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	usage := map[string]int{"input_tokens": 1, "output_tokens": 0}
 	w.Header().Set("Content-Type", "application/json")
 	if body.States == nil {
-		_ = json.NewEncoder(w).Encode(map[string]any{"model": "d3", "answers": g.answers(body.State, body.Questions), "usage": usage})
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "d3", "answers": g.answers(string(body.State), body.Questions), "usage": usage})
 		return
 	}
 	states := map[string]any{}
 	for name, state := range entries {
-		states[name] = map[string]any{"answers": g.answers(state.State, state.Questions), "usage": usage}
+		states[name] = map[string]any{"answers": g.answers(string(state.State), state.Questions), "usage": usage}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"model": "d3", "states": states, "usage": usage})
 }
@@ -148,7 +174,37 @@ func TestGuardReadsAClaudeCodeTurnThatEndsWithASystemMessage(t *testing.T) {
 	}
 }
 
+// Without tool_results a jailbreak rule reads the user's text alone: an
+// injection in a tool result reaches neither the guard nor its decision.
+func TestAGuardWithoutToolResultsLeavesToolResultsOut(t *testing.T) {
+	withoutToolResults := strings.Replace(toolOutputGuardConfig, "          input: {tool_results: true}\n", "", 1)
+	if withoutToolResults == toolOutputGuardConfig {
+		t.Fatal("the fixture's jailbreak rule no longer asks for tool results")
+	}
+	messages := []map[string]any{
+		{"role": "user", "content": "Find the barge records of the river town."},
+		{"role": "assistant", "content": []map[string]any{
+			{"type": "tool_use", "id": "toolu_1", "name": "Read", "input": map[string]any{"file_path": "src/barges.py"}},
+		}},
+		{"role": "user", "content": []map[string]any{{"type": "tool_result", "tool_use_id": "toolu_1", "content": toolInjection}}},
+	}
+	for _, stream := range []bool{false, true} {
+		guard := &runtimeGuard{}
+		if route := routeClaudeCodeRequestWith(t, guard, withoutToolResults, messages, stream); route != "fast" {
+			t.Fatalf("stream=%v: routed to %q, want fast", stream, route)
+		}
+		if guard.read(toolInjection) {
+			t.Fatalf("stream=%v: the guard read a tool result it was not asked to read", stream)
+		}
+	}
+}
+
 func routeClaudeCodeRequest(t *testing.T, guard *runtimeGuard, messages []map[string]any, stream bool) string {
+	t.Helper()
+	return routeClaudeCodeRequestWith(t, guard, toolOutputGuardConfig, messages, stream)
+}
+
+func routeClaudeCodeRequestWith(t *testing.T, guard *runtimeGuard, guardConfig string, messages []map[string]any, stream bool) string {
 	t.Helper()
 	server := httptest.NewServer(guard)
 	defer server.Close()
@@ -157,7 +213,7 @@ func routeClaudeCodeRequest(t *testing.T, guard *runtimeGuard, messages []map[st
 	t.Setenv("LONG_MESSAGE_TEST_KEY", "fake-key")
 	cfg, err := config.ParseYAMLBytes([]byte(strings.NewReplacer(
 		"BACKEND", strings.TrimPrefix(backend.URL, "http://"), "GATEWAY", server.URL,
-	).Replace(toolOutputGuardConfig)))
+	).Replace(guardConfig)))
 	if err != nil {
 		t.Fatal(err)
 	}

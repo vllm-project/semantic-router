@@ -14,6 +14,11 @@ const SECTION_PRESENTATION: Record<
     secondaryTitle?: string
   }
 > = {
+  'Approval Review': {
+    size: 'wide',
+    description: 'What the agent planned and what the reviewer decided',
+    metricColumns: 4,
+  },
   Lifecycle: { size: 'compact' },
   'Decision Information': { size: 'compact' },
   'Model Selection': { size: 'compact' },
@@ -25,7 +30,12 @@ const SECTION_PRESENTATION: Record<
     structured: true,
     description: 'Priority filters and measured candidate evidence',
   },
-  'Session Routing': { size: 'wide' },
+  'Session Routing': {
+    size: 'wide',
+    collapsible: true,
+    defaultExpanded: false,
+    description: 'Session identity, protection and the model the session held',
+  },
   'Protection Candidate Scores': { size: 'wide', collapsible: true, defaultExpanded: true },
   'Observed Candidate Scores': { size: 'wide', collapsible: true, defaultExpanded: true },
   'Adaptation Candidate Scores': { size: 'wide', collapsible: true, defaultExpanded: true },
@@ -34,7 +44,7 @@ const SECTION_PRESENTATION: Record<
     size: 'wide',
     description: 'Recorded token usage and configured-rate estimates',
     metricColumns: 4,
-    noteFields: ['Cost basis'],
+    noteFields: ['Cost basis', 'Router calls'],
     secondaryFields: ['Baseline basis', 'Current pricing'],
     secondaryTitle: 'How these estimates are calculated',
   },

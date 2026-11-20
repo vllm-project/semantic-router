@@ -16,6 +16,12 @@ type CanonicalProviders struct {
 type CanonicalProviderDefaults struct {
 	DefaultModel           string `yaml:"model,omitempty"`
 	DefaultReasoningEffort string `yaml:"reasoning_effort,omitempty"`
+	// ReasoningMinOutputTokens is the smallest output limit a request keeps its
+	// decision's reasoning at. A backend counts reasoning against the limit, so
+	// a request that states no reasoning preference and sets a smaller one
+	// runs with the model's reasoning off; the client's own preference always
+	// wins. Unset or 0 keeps every request's reasoning as its decision chose.
+	ReasoningMinOutputTokens int `yaml:"reasoning_min_output_tokens,omitempty" jsonschema:"minimum=0"`
 	// TLS is the trust of every https backend whose own tls names no CA.
 	TLS *ProviderDefaultsTLS `yaml:"tls,omitempty"`
 }
@@ -43,10 +49,12 @@ type CanonicalProviderModel struct {
 	Schema           string            `yaml:"schema,omitempty"`
 	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
 	// UnsupportedCapabilities lists the request capabilities the model's
-	// backends reject: sampling_min_p or sampling_logit_bias, both of which a
-	// vLLM backend that runs speculative decoding rejects. The Router sends
-	// this model requests without those fields and reports each in
-	// x-vsr-warnings; other models still receive them.
+	// backends lack: sampling_min_p or sampling_logit_bias, both of which a
+	// vLLM backend that runs speculative decoding rejects, and developer_role,
+	// which DeepSeek V4 drops without tools when it thinks. The Router sends
+	// this model requests without those sampling fields and with developer
+	// messages as system messages, and reports each change in x-vsr-warnings;
+	// other models still receive them.
 	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
 	// Tokenizer counts the model's prompts for the context window check: a
 	// Hugging Face repo id ([org/]name[@revision]), whose tokenizer.json the
@@ -89,8 +97,11 @@ type CanonicalReasoning struct {
 // and endpoint health for one provider model. Every data plane honors it the
 // same way; an empty field keeps the default.
 type ProviderReliability struct {
-	LBPolicy            string `yaml:"lb_policy,omitempty"`
-	RetryCount          int    `yaml:"retry_count,omitempty"`
+	LBPolicy string `yaml:"lb_policy,omitempty"`
+	// RetryCount is the retries after the first attempt. Unset, it is
+	// DefaultProviderRetryCount when RetryOn is unset too, else 0; see
+	// Retries.
+	RetryCount          *int   `yaml:"retry_count,omitempty"`
 	RetryOn             string `yaml:"retry_on,omitempty"`
 	Consecutive5xx      int    `yaml:"consecutive_5xx,omitempty"`
 	BaseEjectionTime    string `yaml:"base_ejection_time,omitempty"`

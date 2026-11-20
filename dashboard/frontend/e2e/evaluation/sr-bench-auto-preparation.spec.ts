@@ -149,16 +149,19 @@ async function setup(page: Page, options: { prepared?: boolean; readonly?: boole
 
 type State = Awaited<ReturnType<typeof setup>>
 
-async function selectScope(page: Page) {
-  await page.goto('/evaluation?view=new')
+async function selectScope(page: Page, onScope?: () => Promise<void>) {
+  await page.goto('/observe/evaluations?view=new')
   const choices = page.getByRole('group', { name: 'Included benchmarks' }).getByRole('checkbox')
-  await expect(choices).toHaveCount(benchmarks.length)
+  // The sheet renders once catalog, datasets and targets are read.
+  await expect(choices).toHaveCount(benchmarks.length, { timeout: 15_000 })
   for (const choice of await choices.all()) {
     await expect(choice).toBeEnabled()
     await choice.check()
   }
-  await page.getByRole('combobox', { name: 'Add configured target' }).click()
-  await page.locator(`[role="option"][data-value="${target.id}"]`).click()
+  await onScope?.()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.locator(`[data-target-id="${target.id}"]`).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
 }
 
 function phase(state: State, name: string) {
@@ -184,13 +187,14 @@ for (const width of [1280, 390]) {
   }, testInfo) => {
     const state = await setup(page)
     await page.setViewportSize({ width, height: 1000 })
-    await selectScope(page)
-    await expect(
-      page.getByText(
-        'Missing datasets and required dependencies are prepared automatically when you review.',
-      ),
-    ).toBeVisible()
-    await expect(start(page)).toBeDisabled()
+    await selectScope(page, () =>
+      expect(
+        page.getByText(
+          'Missing datasets and required dependencies are prepared automatically when you review.',
+        ),
+      ).toBeVisible(),
+    )
+    await expect(start(page)).toHaveCount(0)
     await review(page).click()
     const progress = page.getByRole('region', { name: 'Preparing evaluation' })
     await expect(
@@ -208,9 +212,7 @@ for (const width of [1280, 390]) {
     await expect(
       progress.getByText('Installing required dependencies', { exact: true }),
     ).toBeVisible()
-    await expect(
-      page.getByRole('group', { name: 'Included benchmarks' }).getByRole('checkbox').first(),
-    ).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeDisabled()
     phase(state, 'downloading')
     await expect(progress.getByText('Downloading source data', { exact: true })).toBeVisible()
     const icon = await progress.locator('svg').boundingBox()
@@ -254,7 +256,7 @@ test('allows read-only users to select missing benchmarks without writes', async
   const state = await setup(page, { readonly: true })
   await selectScope(page)
   await expect(review(page)).toBeDisabled()
-  await expect(start(page)).toBeDisabled()
+  await expect(start(page)).toHaveCount(0)
   expect(state.writes).toEqual([])
 })
 
@@ -264,8 +266,8 @@ test('returns to the same service-owned job after leaving the composer', async (
   await review(page).click()
   await expect(page.getByText('Checking required dependencies', { exact: true })).toBeVisible()
   const id = state.preparations[0].id
-  await page.goto('/evaluation?view=datasets')
-  await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
+  await page.goto('/observe/evaluations?view=datasets')
+  await expect(page.getByRole('region', { name: 'Dataset library', exact: true })).toBeVisible()
   phase(state, 'downloading')
   expect(state.preparations[0].status).toBe('running')
   expect(state.plans).toEqual([])
@@ -295,7 +297,7 @@ test('keeps failures before planning and retries only after explicit review', as
     'Dataset access was denied. Check source credentials.',
   )
   await expect(review(page)).toBeEnabled()
-  await expect(start(page)).toBeDisabled()
+  await expect(start(page)).toHaveCount(0)
   expect(preparationWrites(state)).toHaveLength(1)
   expect(state.plans).toEqual([])
   noRuns(state)
@@ -353,7 +355,7 @@ test('surfaces the new failed job after a lost response instead of accepting an 
     'Selected benchmarks have conflicting frozen sources.',
   )
   await expect(review(page)).toBeEnabled()
-  await expect(start(page)).toBeDisabled()
+  await expect(start(page)).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toHaveCount(0)
   expect(state.preparations).toHaveLength(2)
   expect(state.preparations[0].status).toBe('failed')

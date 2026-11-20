@@ -7,7 +7,7 @@ import (
 
 func validateProjectionContracts(cfg *RouterConfig) (err error) {
 	defer func() { err = cfg.inRecipe(err) }()
-	if err := validateProjectionPartitions(cfg); err != nil {
+	if err = validateProjectionPartitions(cfg); err != nil {
 		return err
 	}
 	scoreNames, err := validateProjectionScores(cfg)
@@ -394,6 +394,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeConversation:  collectConversationRuleNames(cfg.ConversationRules),
 		SignalTypeMetadata:      collectMetadataRuleNames(cfg.MetadataRules),
 		SignalTypeInputModality: collectInputModalityRuleNames(cfg.InputModalityRules),
+		SignalTypeAgent:         collectAgentRuleNames(cfg.AgentRules),
 		SignalTypeSystemOne:     collectSystemOneRuleNames(cfg.SystemOneRules),
 	}
 	for _, spec := range cfg.applicationRuleSpecs() {

@@ -119,8 +119,8 @@ ROUTE reasoning_deep {
 
 ## 控制面板 {#dashboard}
 
-- `Config -> Projections` 以规范配置形式编辑映射
-- `Config -> Decisions` 可以用条件类型 `projection` 引用映射输出
+- **Routing → Projections** 以规范配置形式编辑映射
+- **Routing → Decisions** 可以用条件类型 `projection` 引用映射输出
 
 ## 何时使用
 

@@ -1,4 +1,4 @@
-// topology/constants.ts - Constants and Color Schemes
+// topology/constants.ts - Catalog constants the topology parsers read
 
 import { SignalType, PluginType, AlgorithmType } from './types'
 import {
@@ -17,7 +17,7 @@ export const SIGNAL_TYPES: SignalType[] = [...ROUTER_SIGNAL_TYPES, 'projection']
 export const PLUGIN_TYPES: PluginType[] = [...ROUTER_PLUGIN_TYPES]
 export const ALGORITHM_TYPES: AlgorithmType[] = [...ROUTER_ALGORITHM_TYPES]
 
-// ============== Signal Icons ==============
+// ============== Short Signal Codes ==============
 const SIGNAL_ICON_OVERRIDES: Partial<Record<SignalType, string>> = {
   keyword: 'KW',
   domain: 'DOM',
@@ -38,11 +38,6 @@ const SIGNAL_ICON_OVERRIDES: Partial<Record<SignalType, string>> = {
 export const SIGNAL_ICONS = Object.fromEntries(
   SIGNAL_TYPES.map((type) => [type, SIGNAL_ICON_OVERRIDES[type] || compactSurfaceIcon(type)]),
 ) as Record<SignalType, string>
-
-// ============== Signal Colors (Gray Nodes, Alloy Paths) ==============
-export const SIGNAL_COLORS = Object.fromEntries(
-  SIGNAL_TYPES.map((type) => [type, { background: '#4a5568', border: '#2d3748' }]),
-) as Record<SignalType, { background: string; border: string }>
 
 // ============== Signal Latency ==============
 const SIGNAL_LATENCY_OVERRIDES: Partial<Record<SignalType, string>> = {
@@ -66,7 +61,7 @@ export const SIGNAL_LATENCY = Object.fromEntries(
   SIGNAL_TYPES.map((type) => [type, SIGNAL_LATENCY_OVERRIDES[type] || '~100ms']),
 ) as Record<SignalType, string>
 
-// ============== Plugin Icons ==============
+// ============== Short Plugin Codes ==============
 const PLUGIN_ICON_OVERRIDES: Partial<Record<PluginType, string>> = {
   response_cache: 'RC',
   context: 'CTX',
@@ -85,30 +80,7 @@ export const PLUGIN_ICONS = Object.fromEntries(
   PLUGIN_TYPES.map((type) => [type, PLUGIN_ICON_OVERRIDES[type] || compactSurfaceIcon(type)]),
 ) as Record<PluginType, string>
 
-// ============== Plugin Colors (Graphite Theme) ==============
-const PLUGIN_COLOR_OVERRIDES: Partial<Record<PluginType, { background: string; border: string }>> =
-  {
-    response_cache: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
-    context: { background: '#2f855a', border: '#276749' },
-    system_prompt: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
-    header_mutation: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-    router_replay: { background: '#737780', border: '#696d74' }, // Green (consistent with other plugins)
-    fast_response: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-    request_params: { background: '#805ad5', border: '#6b46c1' },
-    response_guard: { background: '#c05621', border: '#9c4221' },
-    tools: { background: '#5a6c7d', border: '#3d4a59' },
-    prompt_cache: { background: '#6b7280', border: '#4b5563' },
-    masking: { background: '#4f6a7a', border: '#374d59' },
-  }
-
-export const PLUGIN_COLORS = Object.fromEntries(
-  PLUGIN_TYPES.map((type) => [
-    type,
-    PLUGIN_COLOR_OVERRIDES[type] || { background: '#607D8B', border: '#455A64' },
-  ]),
-) as Record<PluginType, { background: string; border: string }>
-
-// ============== Algorithm Icons ==============
+// ============== Short Algorithm Codes ==============
 const ALGORITHM_ICON_OVERRIDES: Partial<Record<AlgorithmType, string>> = {
   escalate: 'ES',
   ratings: 'RT',
@@ -120,168 +92,5 @@ const ALGORITHM_ICON_OVERRIDES: Partial<Record<AlgorithmType, string>> = {
 }
 
 export const ALGORITHM_ICONS = Object.fromEntries(
-  ALGORITHM_TYPES.map((type) => [
-    type,
-    ALGORITHM_ICON_OVERRIDES[type] || compactSurfaceIcon(type),
-  ]),
+  ALGORITHM_TYPES.map((type) => [type, ALGORITHM_ICON_OVERRIDES[type] || compactSurfaceIcon(type)]),
 ) as Record<AlgorithmType, string>
-
-// ============== Algorithm Colors (Graphite Theme) ==============
-const ALGORITHM_COLOR_OVERRIDES: Partial<
-  Record<AlgorithmType, { background: string; border: string }>
-> = {
-  escalate: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy
-  ratings: { background: '#c9cbd0', border: '#8f949c' }, // Light Alloy
-  static: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-  remom: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy (same as plugins)
-  fusion: { background: '#60784f', border: '#455a36' }, // Muted Alloy
-  workflows: { background: '#4f6f78', border: '#38545c' }, // Flow Teal
-  multi_factor: { background: '#4e6f63', border: '#38534a' },
-}
-
-export const ALGORITHM_COLORS = Object.fromEntries(
-  ALGORITHM_TYPES.map((type) => [
-    type,
-    ALGORITHM_COLOR_OVERRIDES[type] || { background: '#607D8B', border: '#455A64' },
-  ]),
-) as Record<AlgorithmType, { background: string; border: string }>
-
-// ============== Reasoning Effort Display (Graphite Theme) ==============
-export const REASONING_EFFORT_DISPLAY: Record<
-  string,
-  { icon: string; label: string; color: string }
-> = {
-  low: { icon: 'L', label: 'Low', color: '#c9cbd0' }, // Light Alloy
-  medium: { icon: 'M', label: 'Medium', color: '#8f949c' }, // Graphite Alloy
-  high: { icon: 'H', label: 'High', color: '#696d74' }, // Dark Alloy
-}
-
-export const MODEL_NODE_WIDTH = 220
-
-// ============== Global Plugin Display (Graphite Theme) ==============
-export const GLOBAL_PLUGIN_DISPLAY: Record<string, { icon: string; label: string; color: string }> =
-  {
-    response_cache: { icon: 'RC', label: 'Response Cache', color: '#8f949c' }, // Graphite Alloy
-  }
-
-// ============== Node Colors (Gray Nodes, Alloy Paths) ==============
-export const NODE_COLORS = {
-  client: { background: '#8f949c', border: '#696d74' }, // Graphite Alloy (Client stays alloy)
-  decision: {
-    normal: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-    reasoning: { background: '#4a5568', border: '#2d3748' }, // Dark Gray
-    unreachable: { background: '#3d4a59', border: '#2d3748' }, // Very Dark Gray
-  },
-  model: {
-    standard: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray (Models gray)
-    reasoning: { background: '#5a6c7d', border: '#3d4a59' }, // Blue Gray (Models gray)
-  },
-  classification: { background: '#606c7a', border: '#3d4a59' }, // Slate Gray
-  disabled: { background: '#3d4a59', border: '#2d3748' }, // Very Dark Gray
-}
-
-// ============== Edge Colors (Alloy Paths) ==============
-export const EDGE_COLORS = {
-  normal: '#8f949c', // Graphite Alloy (All paths use alloy)
-  reasoning: '#8f949c', // Graphite Alloy (All paths use alloy)
-  active: '#8f949c', // Graphite Alloy
-  disabled: '#3d4a59', // Very Dark Gray
-  highlighted: '#c9cbd0', // Light Alloy (Highlighted paths brighter)
-}
-
-// ============== Layout Configuration ==============
-export const LAYOUT_CONFIG = {
-  columns: {
-    client: { x: 50 },
-    globalPlugins: { x: 200 },
-    signals: { x: 350 },
-    decisions: { x: 530 },
-    algorithms: { x: 780 },
-    plugins: { x: 930 },
-    models: { x: 1100 },
-  },
-  nodeWidth: 180,
-  nodeHeight: 100,
-  verticalSpacing: 15, // Minimum space between nodes in same column (reduced from 25)
-  groupSpacing: 20, // Extra space between signal groups (reduced from 35)
-  // Base heights for different node types (actual height = base + content)
-  decisionBaseHeight: 120, // Decision nodes base
-  decisionConditionHeight: 22, // Per condition line
-  signalGroupBaseHeight: 80, // Signal group base
-  signalItemHeight: 20, // Per signal item
-  pluginChainBaseHeight: 60, // Plugin chain base
-  pluginItemHeight: 20, // Per plugin item
-}
-
-// ============== Three-Layer LR Layout (Brain Page) ==============
-// Keep these values configurable so dense topologies can be compacted
-// without changing layout code.
-export const TOPOLOGY_LAYER_LAYOUT = {
-  x: {
-    client: 0,
-    signals: 340,
-    projections: 640,
-    decisions: 1040,
-    algorithms: 1520,
-    pluginChains: 1840,
-    models: 2340,
-  },
-  framePadding: {
-    client: 36,
-    signals: 54,
-    projections: 60,
-    decisions: 84,
-    algorithms: 68,
-    pluginChains: 72,
-    models: 88,
-  },
-  horizontalGap: {
-    clientToSignals: 156,
-    signalsToProjections: 198,
-    projectionsToDecisions: 244,
-    decisionsToAlgorithms: 286,
-    algorithmsToPluginChains: 196,
-    pluginChainsToModels: 248,
-  },
-  verticalSpacing: {
-    client: { base: 0, min: 0, compactThreshold: 1, compactStep: 0 },
-    signals: { base: 34, min: 14, compactThreshold: 8, compactStep: 2.5 },
-    projections: { base: 38, min: 16, compactThreshold: 6, compactStep: 2.5 },
-    decisions: { base: 42, min: 16, compactThreshold: 9, compactStep: 3 },
-    algorithms: { base: 48, min: 20, compactThreshold: 4, compactStep: 4 },
-    pluginChains: { base: 52, min: 20, compactThreshold: 5, compactStep: 4 },
-    models: { base: 76, min: 36, compactThreshold: 9, compactStep: 2.5 },
-  },
-  lanes: {
-    signals: {
-      enableAt: 7,
-      maxPerLane: 6,
-      maxLanes: 2,
-      laneGap: 212,
-    },
-    projections: {
-      enableAt: 5,
-      maxPerLane: 4,
-      maxLanes: 2,
-      laneGap: 228,
-    },
-    decisions: {
-      enableAt: 7,
-      maxPerLane: 6,
-      maxLanes: 6,
-      laneGap: 250,
-    },
-    algorithms: {
-      laneGap: 220,
-    },
-    pluginChains: {
-      laneGap: 220,
-    },
-    models: {
-      enableAt: 10,
-      maxPerLane: 8,
-      maxLanes: 2,
-      laneGap: 250,
-    },
-  },
-} as const
