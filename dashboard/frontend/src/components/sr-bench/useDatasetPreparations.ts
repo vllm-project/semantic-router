@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   datasetPreparationApi,
+  preparationBenchmarkIDs,
   preparationIsActive,
   type DatasetPreparationJob,
   type PreparationBenchmark,
   type PreparationRequest,
 } from './datasetPreparationApi'
 
-export function useDatasetPreparations(onCompleted: () => void) {
+/** Jobs are always polled; the downloadable catalog is read only while `catalogOpen`. */
+export function useDatasetPreparations(onCompleted: () => void, catalogOpen = true) {
   const [benchmarks, setBenchmarks] = useState<PreparationBenchmark[]>([])
   const [preparations, setPreparations] = useState<DatasetPreparationJob[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,11 +29,11 @@ export function useDatasetPreparations(onCompleted: () => void) {
       let failed = false
       try {
         const [options, history] = await Promise.all([
-          datasetPreparationApi.options(controller.signal),
+          catalogOpen ? datasetPreparationApi.options(controller.signal) : null,
           datasetPreparationApi.list(controller.signal),
         ])
         if (controller.signal.aborted) return
-        setBenchmarks(options.benchmarks)
+        if (options) setBenchmarks(options.benchmarks)
         setPreparations(history.preparations)
         setReadError('')
         busy = history.preparations.some(preparationIsActive)
@@ -61,7 +63,7 @@ export function useDatasetPreparations(onCompleted: () => void) {
       controller.abort()
       if (timer) clearTimeout(timer)
     }
-  }, [onCompleted, revision])
+  }, [onCompleted, revision, catalogOpen])
 
   async function prepare(body: PreparationRequest) {
     if (submittingRef.current) return
@@ -89,4 +91,23 @@ export function useDatasetPreparations(onCompleted: () => void) {
   }
 
   return { benchmarks, preparations, loading, submitting, readError, submitError, prepare, refresh }
+}
+
+/** Resubmits a failed job's own benchmarks, profile and seed; only ever on an explicit click. */
+export function retryPreparation(
+  state: Pick<ReturnType<typeof useDatasetPreparations>, 'prepare'>,
+  job: DatasetPreparationJob,
+) {
+  const ids = preparationBenchmarkIDs(job)
+  if (!ids.length) return
+  void state.prepare(
+    job.benchmarks
+      ? { benchmarks: ids, profile: job.profile, seed: job.seed ?? undefined }
+      : {
+          benchmark: ids[0],
+          profile: job.profile,
+          seed: job.seed ?? undefined,
+          limit: job.limit ?? undefined,
+        },
+  )
 }

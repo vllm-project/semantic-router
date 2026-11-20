@@ -8,11 +8,12 @@
           "container": null,
           "content": [
             {
+              "signature": "",
               "thinking": "The user is asking for the current weather in Paris and wants me to use the tool. I need to call the get_weather function with city set to \"Paris\". Let me do that.",
               "type": "thinking"
             },
             {
-              "id": "call_1",
+              "id": "toolu_74196fe72e4cdc135c1033e0",
               "input": {
                 "city": "Paris"
               },
@@ -20,7 +21,7 @@
               "type": "tool_use"
             }
           ],
-          "id": "gen-openrouter-1",
+          "id": "msg_e731f5e8f8dd75fd75423da3",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -95,11 +96,12 @@
           "container": null,
           "content": [
             {
+              "signature": "",
               "thinking": "Plan the lookup. Use the tool.",
               "type": "thinking"
             },
             {
-              "id": "call_9",
+              "id": "toolu_5e447f59d541311dada70f8d",
               "input": {
                 "city": "Paris"
               },
@@ -107,7 +109,7 @@
               "type": "tool_use"
             }
           ],
-          "id": "gen-openrouter-1",
+          "id": "msg_e731f5e8f8dd75fd75423da3",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,

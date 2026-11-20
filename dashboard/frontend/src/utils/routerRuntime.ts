@@ -244,16 +244,6 @@ export function getRouterModelResources(models: RouterModelInfo[]): RouterModelR
   })
 }
 
-export function getRouterModelConsumers(
-  models: RouterModelInfo[],
-  selected: RouterModelInfo,
-): RouterModelInfo[] {
-  const identity = selected.metadata?.resource_id?.trim()
-  if (!identity) return [selected]
-  const consumers = models.filter((model) => model.metadata?.resource_id?.trim() === identity)
-  return consumers.length ? consumers : [selected]
-}
-
 // Summary values count bindings, while cards show pooled runtime resources.
 // Use the same concrete resources for the count and card list whenever present.
 export function getLoadedModelCount(modelsInfo?: RouterModelsInfo | null): number {
@@ -268,50 +258,6 @@ export function getTotalKnownModelCount(modelsInfo?: RouterModelsInfo | null): n
   if (!modelsInfo) return 0
   if (modelsInfo.models == null) return modelsInfo.summary?.total_models ?? 0
   return getRouterModelResources(modelsInfo.models).length
-}
-
-export function sortRouterModels(models: RouterModelInfo[]): RouterModelInfo[] {
-  return [...models].sort((left, right) => {
-    const leftState = ROUTER_MODEL_STATE_ORDER[getRouterModelState(left)] ?? 99
-    const rightState = ROUTER_MODEL_STATE_ORDER[getRouterModelState(right)] ?? 99
-    if (leftState !== rightState) {
-      return leftState - rightState
-    }
-
-    return left.name.localeCompare(right.name)
-  })
-}
-
-export function getPreviewRouterModels(
-  modelsInfo?: RouterModelsInfo | null,
-  limit?: number,
-): RouterModelInfo[] {
-  if (!modelsInfo?.models?.length) {
-    return []
-  }
-
-  const sorted = sortRouterModels(
-    getRouterModelResources(modelsInfo.models).map(({ model }) => model),
-  )
-  // The dashboard shows the entire known inventory, including a failed or
-  // loading resource beside ready resources. An explicit limit is opt-in.
-  return limit === undefined ? sorted : sorted.slice(0, limit)
-}
-
-export function getRouterModelAnchor(model: Pick<RouterModelInfo, 'name' | 'recipe'>): string {
-  if (model.recipe && model.recipe !== 'default') {
-    // Recipe names can contain Unicode and punctuation. Encode the complete
-    // identity so distinct scopes never collapse into the same slug or DOM key.
-    const identity = new TextEncoder().encode(JSON.stringify([model.recipe, model.name]))
-    return `model-${Array.from(identity, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
-  }
-  const slug = model.name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  return `model-${slug || 'unknown'}`
 }
 
 export function getModelStatusSummary(status?: StatusWithRouterRuntime | null): ModelStatusSummary {

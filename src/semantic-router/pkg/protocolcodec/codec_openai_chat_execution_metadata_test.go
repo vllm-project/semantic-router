@@ -152,6 +152,22 @@ func TestOpenAIChatRequestAcceptsEchoedToolCallIndex(t *testing.T) {
 	}
 }
 
+// A same-format Chat client receives the reply without the server's own
+// members, and every other member as the server sent it.
+const vLLMChatResponseExtensionsPublic = `{
+  "id":"chatcmpl-1","object":"chat.completion","created":7,
+  "model":"provider-model","service_tier":"default",
+  "choices":[{
+    "index":0,"finish_reason":"stop","stop_reason":106,"logprobs":null,
+    "message":{"role":"assistant","content":"OK","refusal":null,"annotations":null,
+      "audio":null,"function_call":null,"tool_calls":[],"reasoning":null}
+  }],
+  "usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3,
+    "prompt_tokens_details":{"cached_tokens":1,"audio_tokens":0},
+    "completion_tokens_details":{"accepted_prediction_tokens":0,"audio_tokens":0,
+      "reasoning_tokens":0,"rejected_prediction_tokens":0}}
+}`
+
 func TestOpenAIChatResponseExtensionEnvelopeRoundTripAndUnknownRejection(t *testing.T) {
 	engine := NewBuiltinEngine()
 	raw := []byte(vLLMChatResponseExtensionsFixture)
@@ -159,8 +175,8 @@ func TestOpenAIChatResponseExtensionEnvelopeRoundTripAndUnknownRejection(t *test
 	if translateErr != nil {
 		t.Fatalf("TranslateResponse() error = %v", translateErr)
 	}
-	if !bytes.Equal(translated.Body, raw) {
-		t.Fatal("same-format response envelope was not replayed byte-for-byte")
+	if !jsonEquivalent([]byte(vLLMChatResponseExtensionsPublic), translated.Body) {
+		t.Fatalf("same-format response = %s, want the reply without the server's members", translated.Body)
 	}
 
 	future := bytes.Replace(raw, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{},"future_field":true`), 1)
@@ -198,7 +214,7 @@ func TestOpenAIChatResponseRejectsUnsupportedNonNullOutputExtensions(t *testing.
 
 // vLLM's serving metadata is opaque: any value decodes, even under the
 // conformance contract, is reported as dropped from the neutral response and
-// is replayed unchanged to a Chat client.
+// never reaches a Chat client.
 func TestOpenAIChatResponseAcceptsNonNullVLLMServingMetadata(t *testing.T) {
 	tests := map[string]struct{ from, to, field string }{
 		"prompt_logprobs": {`"prompt_logprobs":null`, `"prompt_logprobs":[null,{"11":{"logprob":-0.5}}]`, "prompt_logprobs"},
@@ -216,8 +232,9 @@ func TestOpenAIChatResponseAcceptsNonNullVLLMServingMetadata(t *testing.T) {
 			if err != nil {
 				t.Fatalf("TranslateResponse() error = %v", err)
 			}
-			if !bytes.Equal(translated.Body, raw) {
-				t.Fatal("same-format response was not replayed byte-for-byte")
+			member := strings.TrimPrefix(test.field, "choices.")
+			if bytes.Contains(translated.Body, []byte(`"`+member+`"`)) {
+				t.Fatalf("same-format response kept %s: %s", member, translated.Body)
 			}
 			if !hasServingMetadataDiagnostic(translated.Diagnostics, test.field) {
 				t.Fatalf("no serving metadata diagnostic for %s in %+v", test.field, translated.Diagnostics)

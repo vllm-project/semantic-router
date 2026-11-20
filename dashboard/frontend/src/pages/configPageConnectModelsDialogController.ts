@@ -1,14 +1,5 @@
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useState,
-  type Dispatch,
-  type RefObject,
-  type SetStateAction,
-} from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 
-import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import type { BuiltInModelCatalog, CatalogModelBinding } from '../types/modelCatalog'
 import {
   emptyConnectModelAdvancedValues,
@@ -32,13 +23,15 @@ interface DiscoveryResponse {
 type Stage = 'provider' | 'models'
 
 interface DialogState {
-  titleId: string
   stage: Stage
   setStage: Dispatch<SetStateAction<Stage>>
   search: string
   setSearch: Dispatch<SetStateAction<string>>
   showAllProviders: boolean
   setShowAllProviders: Dispatch<SetStateAction<boolean>>
+  /** Lists every provider instead of only those serving the proposed catalog model. */
+  showEveryProvider: boolean
+  setShowEveryProvider: Dispatch<SetStateAction<boolean>>
   provider: ModelProviderPreset | null
   setProvider: Dispatch<SetStateAction<ModelProviderPreset | null>>
   baseUrl: string
@@ -64,14 +57,13 @@ interface DialogState {
   error: string | null
   setError: Dispatch<SetStateAction<string | null>>
   busy: boolean
-  dialogRef: RefObject<HTMLDivElement>
 }
 
-function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogState {
-  const titleId = useId()
+function useConnectDialogState(isOpen: boolean): DialogState {
   const [stage, setStage] = useState<Stage>('provider')
   const [search, setSearch] = useState('')
   const [showAllProviders, setShowAllProviders] = useState(false)
+  const [showEveryProvider, setShowEveryProvider] = useState(false)
   const [provider, setProvider] = useState<ModelProviderPreset | null>(null)
   const [baseUrl, setBaseUrl] = useState('')
   const [apiKey, setAPIKey] = useState('')
@@ -85,13 +77,13 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const busy = discovering || saving
-  const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen, onClose, dismissible: !busy })
 
   useEffect(() => {
     if (!isOpen) return
     setStage('provider')
     setSearch('')
     setShowAllProviders(false)
+    setShowEveryProvider(false)
     setProvider(null)
     setBaseUrl('')
     setAPIKey('')
@@ -105,13 +97,14 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
   }, [isOpen])
 
   return {
-    titleId,
     stage,
     setStage,
     search,
     setSearch,
     showAllProviders,
     setShowAllProviders,
+    showEveryProvider,
+    setShowEveryProvider,
     provider,
     setProvider,
     baseUrl,
@@ -137,22 +130,52 @@ function useConnectDialogState(isOpen: boolean, onClose: () => void): DialogStat
     error,
     setError,
     busy,
-    dialogRef,
   }
+}
+
+/** Providers whose catalog bindings serve the given catalog model. */
+export function providersServingCatalogModel(
+  catalog: BuiltInModelCatalog,
+  catalogModel?: string,
+): string[] {
+  if (!catalogModel) return []
+  return catalog.providers
+    .filter((provider) =>
+      [...modelsForProvider(catalog, provider.id).values()].includes(catalogModel),
+    )
+    .map((provider) => provider.id)
 }
 
 function useConnectDialogDerived(
   state: DialogState,
   existingModelNames: string[],
   catalog: BuiltInModelCatalog,
+  catalogModel?: string,
 ) {
   const providerCatalog = useMemo(
     () => modelProviderPresetsFromCatalog(catalog.providers),
     [catalog.providers],
   )
+  const servingProviders = useMemo(
+    () => providersServingCatalogModel(catalog, catalogModel),
+    [catalog, catalogModel],
+  )
+  const proposedModel = useMemo(
+    () => (catalogModel ? catalog.models.find((model) => model.id === catalogModel) : undefined),
+    [catalog.models, catalogModel],
+  )
   const visibleProviders = useMemo(() => {
+    if (servingProviders.length > 0 && !state.showEveryProvider && !state.search.trim()) {
+      return providerCatalog.filter((provider) => servingProviders.includes(provider.id))
+    }
     return filterModelProviderPresets(providerCatalog, state.search, state.showAllProviders)
-  }, [providerCatalog, state.search, state.showAllProviders])
+  }, [
+    providerCatalog,
+    servingProviders,
+    state.search,
+    state.showAllProviders,
+    state.showEveryProvider,
+  ])
   const hiddenProviderCount = useMemo(
     () => hiddenModelProviderPresetCount(providerCatalog),
     [providerCatalog],
@@ -192,6 +215,9 @@ function useConnectDialogDerived(
     [catalog.models],
   )
   return {
+    providerCatalog,
+    servingProviders,
+    proposedModel,
     visibleProviders,
     hiddenProviderCount,
     visibleModels,
@@ -259,13 +285,34 @@ export function useConnectModelsDialogController(
   catalog: BuiltInModelCatalog,
   onClose: () => void,
   onImport: (input: ConnectedModelInput) => Promise<void>,
+  catalogModel?: string,
 ) {
-  const state = useConnectDialogState(isOpen, onClose)
-  const derived = useConnectDialogDerived(state, existingModelNames, catalog)
+  const state = useConnectDialogState(isOpen)
+  const derived = useConnectDialogDerived(state, existingModelNames, catalog, catalogModel)
+  const choose = (provider: ModelProviderPreset) =>
+    chooseProvider(state, provider, catalog, catalogModel)
+  // A model proposed from the Model Hub that one provider serves skips the provider step once.
+  // State, not a ref: a re-run of the opening effects must choose again after they reset.
+  const [autoChosen, setAutoChosen] = useState(false)
+  useEffect(() => {
+    if (!isOpen) {
+      setAutoChosen(false)
+      return
+    }
+    if (autoChosen || derived.servingProviders.length !== 1) return
+    const provider = derived.providerCatalog.find(
+      (candidate) => candidate.id === derived.servingProviders[0],
+    )
+    if (!provider) return
+    setAutoChosen(true)
+    chooseProvider(state, provider, catalog, catalogModel)
+    // The state setters are stable; run once per opening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, derived.servingProviders, derived.providerCatalog])
   return {
     ...state,
     ...derived,
-    chooseProvider: (provider: ModelProviderPreset) => chooseProvider(state, provider, catalog),
+    chooseProvider: choose,
     discover: () => discoverModels(state),
     addManualModel: () => addManualModel(state),
     setProviderModelId: (model: string, value: string) => {
@@ -293,12 +340,21 @@ function chooseProvider(
   state: DialogState,
   provider: ModelProviderPreset,
   catalog: BuiltInModelCatalog,
+  catalogModel?: string,
 ): void {
   state.setProvider(provider)
   state.setBaseUrl(provider.baseUrl)
   state.setAPIKey('')
   state.setModels(modelInventoryForProvider(catalog, provider.id))
-  state.setSelected(new Set())
+  state.setSelected(
+    new Set(
+      catalogModel
+        ? [...modelsForProvider(catalog, provider.id)]
+            .filter(([, catalogID]) => catalogID === catalogModel)
+            .map(([bindingID]) => bindingID)
+        : [],
+    ),
+  )
   state.setProviderModelIds(new Map())
   state.setModelSearch('')
   state.setError(null)

@@ -34,6 +34,19 @@ func responseObjectPreviousID(ctx *RequestContext) string {
 	return strings.TrimSpace(ctx.ResponseObjectState.PreviousResponseID)
 }
 
+// responseObjectRender is the request context a Responses client's response
+// objects repeat: the turn's lineage and the settings the client sent, never
+// the request as routing changed it.
+func responseObjectRender(ctx *RequestContext) llmprotocol.ResponseRenderContext {
+	if ctx == nil || ctx.SourceFormat != llmprotocol.OpenAIResponsesV1 {
+		return llmprotocol.ResponseRenderContext{}
+	}
+	return llmprotocol.ResponseRenderContext{
+		PreviousResponseID: responseObjectPreviousID(ctx),
+		RequestEcho:        ctx.ProtocolEnvelope.ResponseRender.RequestEcho,
+	}
+}
+
 // persistImmediateResponseObject retains successful inference short-circuits
 // after their final client representation has been selected.
 func (r *OpenAIRouter) persistImmediateResponseObject(response *ext_proc.ProcessingResponse, ctx *RequestContext) {
@@ -106,7 +119,8 @@ func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
 	stored := &responseapi.StoredResponse{
 		ID: response.ID, Object: "response",
 		CreatedAt: response.CreatedAt, Model: response.Model, Status: response.Status,
-		Input: cloneResponseInputItems(state.Input), Output: response.Output,
+		IncompleteDetails: response.IncompleteDetails,
+		Input:             cloneResponseInputItems(state.Input), Output: response.Output,
 		OutputText: response.OutputText, PreviousResponseID: response.PreviousResponseID,
 		ConversationID: response.ConversationID, Usage: response.Usage,
 		Instructions: response.Instructions, Metadata: response.Metadata, Error: response.Error,

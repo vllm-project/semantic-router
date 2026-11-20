@@ -66,7 +66,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			&ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}})
 	}
 	response = buildResponseHeadersContinueResponse(headerMutation, outcome.bodyStreamed)
-	holdStreamForResponseGuard(ctx, response)
+	holdStreamedAnswer(ctx, response)
 	if outcome.isSuccessful && isVideoContentRequest(ctx) {
 		response.ModeOverride = &http_ext.ProcessingMode{ResponseBodyMode: http_ext.ProcessingMode_STREAMED}
 	}

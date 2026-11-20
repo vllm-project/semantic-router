@@ -101,13 +101,13 @@ test('progressively loads shareable config schema views', async ({ page }) => {
     }
   })
 
-  await page.goto('/config/reference')
+  await page.goto('/settings/schema')
   await expect(page.getByTestId('config-schema-reference-page')).toBeVisible()
   await expect(page.getByText('Deployed Router', { exact: true })).toBeVisible()
   expect(detailRequests).toHaveLength(0)
 
   await page.getByRole('button', { name: /Global configuration/ }).click()
-  await expect(page).toHaveURL(/\/config\/reference\?section=global$/)
+  await expect(page).toHaveURL(/\/settings\/schema\?section=global$/)
   await expect(page.getByRole('heading', { name: 'global' })).toBeVisible()
   await expect(page.getByText('Runtime routing behavior.', { exact: true })).toBeVisible()
 

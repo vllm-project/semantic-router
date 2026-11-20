@@ -6,8 +6,8 @@ description: Compare real MoM and single-model capability, cost, latency and tok
 # sr-bench 1.0
 
 sr-bench compares a Mixture of Models (MoM) entrypoint with single models on the
-same frozen tasks. The CLI and **Dashboard → Evaluation** share one durable
-service, run IDs, results and reports. Use a small development slice to tune
+same frozen tasks. The CLI and the Dashboard's **Observe → Evaluations** page
+share one durable service, run IDs, results and reports. Use a small development slice to tune
 routing, then evaluate a disjoint holdout before making a quality or savings
 claim.
 

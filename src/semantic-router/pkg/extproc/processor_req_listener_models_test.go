@@ -31,7 +31,9 @@ func TestRestrictedListenerListsOnlyItsModels(t *testing.T) {
 }
 
 func TestListenerModelsRestrictClientRequestsOnly(t *testing.T) {
-	router := &OpenAIRouter{}
+	router := &OpenAIRouter{Config: &config.RouterConfig{Entrypoints: []config.EntrypointMapping{
+		{ModelNames: []string{"a"}, Recipe: config.DefaultRecipeName},
+	}}}
 	restricted := routing.WithListenerModels(context.Background(), []string{"vllm-sr/auto"})
 	client := router.newRoutingSession(restricted, nil)
 	if !client.ctx.ListenerModels.Allows("vllm-sr/auto") || client.ctx.ListenerModels.Allows("a") {
@@ -43,6 +45,12 @@ func TestListenerModelsRestrictClientRequestsOnly(t *testing.T) {
 	rejected := router.listenerModelRejection("a", client.ctx)
 	if rejected.GetImmediateResponse().GetStatus().GetCode() != 403 ||
 		client.ctx.ImmediateProtocolError == nil || client.ctx.ImmediateProtocolError.Code != "model_not_allowed" {
+		t.Fatalf("rejection = %v, protocol error %+v", rejected, client.ctx.ImmediateProtocolError)
+	}
+	// A model the Router serves nowhere is unknown, not withheld.
+	rejected = router.listenerModelRejection("b", client.ctx)
+	if rejected.GetImmediateResponse().GetStatus().GetCode() != 404 ||
+		client.ctx.ImmediateProtocolError == nil || client.ctx.ImmediateProtocolError.Code != "model_not_found" {
 		t.Fatalf("rejection = %v, protocol error %+v", rejected, client.ctx.ImmediateProtocolError)
 	}
 	hop := router.newRoutingSession(routing.WithHop(restricted, routing.Hop{Decision: "compare", Iteration: 1}), nil)

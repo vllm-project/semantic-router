@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -198,20 +197,8 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 		return nil, fmt.Errorf("encode context recovery followup: %w", err)
 	}
 	// The dispatch may already have reported what this encode drops again,
-	// such as a replayed Responses blob, so a loss is added only past the
-	// copies the context already holds, and two blobs still count as two.
-	type loss struct{ action, field, reason string }
-	held := map[loss]int{}
-	for _, seen := range requestCtx.ProtocolDiagnostics {
-		held[loss{string(seen.Action), seen.Field, seen.Reason}]++
-	}
-	for _, diagnostic := range encodedRequest.Diagnostics {
-		if key := (loss{string(diagnostic.Action), diagnostic.Field, diagnostic.Reason}); held[key] > 0 {
-			held[key]--
-			continue
-		}
-		requestCtx.ProtocolDiagnostics = append(requestCtx.ProtocolDiagnostics, diagnostic)
-	}
+	// such as a replayed Responses blob.
+	appendUnheldDiagnostics(requestCtx, encodedRequest.Diagnostics)
 	openAIRequest, err := parseOpenAIRequest(encodedRequest.Body)
 	if err != nil {
 		return nil, fmt.Errorf("prepare context recovery followup: %w", err)
@@ -238,7 +225,7 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if err != nil {
 		return nil, fmt.Errorf("decode context recovery followup: %w", err)
 	}
-	decoded.Response.Usage, err = mergeContextRecoveryUsage(initial.Usage, decoded.Response.Usage)
+	decoded.Response.Usage, err = llmprotocol.AddUsage(initial.Usage, decoded.Response.Usage)
 	if err != nil {
 		return nil, err
 	}
@@ -375,54 +362,6 @@ func contextRecoveryKey(arguments interface{}) (string, error) {
 	default:
 		return "", fmt.Errorf("invalid context recovery arguments")
 	}
-}
-
-func mergeContextRecoveryUsage(
-	initial llmprotocol.Usage,
-	followup llmprotocol.Usage,
-) (llmprotocol.Usage, error) {
-	if initial.State != llmprotocol.UsageAvailable || followup.State != llmprotocol.UsageAvailable {
-		return llmprotocol.Usage{State: llmprotocol.UsageUnavailable}, nil
-	}
-	result := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
-	pairs := []struct {
-		left, right llmprotocol.TokenCount
-		target      *llmprotocol.TokenCount
-	}{
-		{initial.InputUncached, followup.InputUncached, &result.InputUncached},
-		{initial.InputCacheRead, followup.InputCacheRead, &result.InputCacheRead},
-		{initial.InputCacheWrite, followup.InputCacheWrite, &result.InputCacheWrite},
-		{initial.InputCacheWrite5m, followup.InputCacheWrite5m, &result.InputCacheWrite5m},
-		{initial.InputCacheWrite1h, followup.InputCacheWrite1h, &result.InputCacheWrite1h},
-		{initial.OutputReasoning, followup.OutputReasoning, &result.OutputReasoning},
-		{initial.OutputOther, followup.OutputOther, &result.OutputOther},
-		{initial.InputTotal, followup.InputTotal, &result.InputTotal},
-		{initial.OutputTotal, followup.OutputTotal, &result.OutputTotal},
-		{initial.Total, followup.Total, &result.Total},
-	}
-	for _, pair := range pairs {
-		merged, err := mergeContextRecoveryTokenCount(pair.left, pair.right)
-		if err != nil {
-			return llmprotocol.Usage{}, err
-		}
-		*pair.target = merged
-	}
-	return result, nil
-}
-
-func mergeContextRecoveryTokenCount(left, right llmprotocol.TokenCount) (llmprotocol.TokenCount, error) {
-	if left.Value == nil || right.Value == nil {
-		return llmprotocol.TokenCount{Provenance: llmprotocol.UsageUnknown}, nil
-	}
-	if *left.Value > math.MaxInt64-*right.Value {
-		return llmprotocol.TokenCount{}, fmt.Errorf("context recovery usage overflow")
-	}
-	value := *left.Value + *right.Value
-	provenance := llmprotocol.UsageDerived
-	if left.Provenance == llmprotocol.UsageAuthoritative && right.Provenance == llmprotocol.UsageAuthoritative {
-		provenance = llmprotocol.UsageAuthoritative
-	}
-	return llmprotocol.TokenCount{Value: &value, Provenance: provenance}, nil
 }
 
 //nolint:cyclop // Redaction walks every neutral output and nested tool result fail-closed.
