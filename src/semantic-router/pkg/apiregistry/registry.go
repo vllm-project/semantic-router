@@ -294,6 +294,20 @@ func (a API) Serves(path string) bool {
 	return ok && pattern.MatchString(normalizePath(path))
 }
 
+// Unprefixed is the path of the API's request under a listener's prefix for
+// the API, as the API answers it without the prefix; false when the path
+// is not the API's under that prefix.
+func (a API) Unprefixed(prefix, path string) (string, bool) {
+	if prefix == "" {
+		return "", false
+	}
+	rest, ok := strings.CutPrefix(normalizePath(path), prefix)
+	if !ok || !a.Serves(rest) {
+		return "", false
+	}
+	return rest, true
+}
+
 func normalizePath(path string) string {
 	if index := strings.IndexByte(path, '?'); index >= 0 {
 		path = path[:index]

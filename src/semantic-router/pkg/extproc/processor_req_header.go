@@ -24,6 +24,11 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The skip-processing opt-out would bypass a listener's model allow-list,
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
+	// A path under a listener's API prefix is read as the API's own path.
+	if canonical := r.Config.APIRequestTarget(path); canonical != path {
+		ctx.Headers[":path"] = canonical
+		path = canonical
+	}
 	r.captureDelegatedCredential(ctx)
 	r.captureCallerCredential(ctx)
 	if r.Config != nil {

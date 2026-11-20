@@ -3498,6 +3498,9 @@
             "vllm-sr/4.0"
           ]
         },
+        "prefix": {
+          "type": "string"
+        },
         "models": {
           "items": {
             "type": "string"
