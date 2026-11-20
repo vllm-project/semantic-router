@@ -68,13 +68,15 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	buffers := semanticStreamBuffers{}
 	responseBody, endOfStream = r.bridgeBufferedBody(&buffers, responseBody, endOfStream, ctx)
 	buffers.push(responseBody, ctx)
+	// TTFT waits for the first event that carries content: a keepalive or
+	// comment frame a gateway sends while it queues is not the model's answer.
+	// It is recorded before the stream settles, because the turn's session
+	// evidence is written there and takes the latency it has by then.
+	recordStreamingTTFT(ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
 	}
-	// TTFT waits for the first event that carries content: a keepalive or
-	// comment frame a gateway sends while it queues is not the model's answer.
-	recordStreamingTTFT(ctx)
 	return buffers.processingResponse(ctx)
 }
 

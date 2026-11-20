@@ -91,6 +91,9 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	buffers := semanticStreamBuffers{}
 	body, endOfStream = r.bridgeBufferedBody(&buffers, body, endOfStream, ctx)
 	buffers.push(body, ctx)
+	// A held stream is still the model's answer arriving: it records TTFT here
+	// too, before the release decides what the client sees.
+	recordStreamingTTFT(ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 	}
