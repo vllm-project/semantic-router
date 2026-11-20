@@ -48,7 +48,7 @@ from pydantic import (
 
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import UnknownPolicy
-from .config_schema import routing_surface_catalog, surface_types
+from .config_schema import definition_enum, routing_surface_catalog, surface_types
 from .context_bands import (
     normalize_token_count,
     references_environment,
@@ -180,6 +180,33 @@ class VSRProfile(BaseModel):
     )
 
 
+class UnservedModels(BaseModel):
+    """What an LLM API does with a request whose model it does not accept or the Router does not serve:
+    refuse it (reject, the default) or route it as if it named route_to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    policy: Optional[Literal["reject", "route"]] = Field(
+        default=None,
+        description="reject (the default) answers 403 model_not_allowed or 404 "
+        "model_not_found; route sends the request to route_to and keeps the "
+        "name the client gave in the Replay record and the trace.",
+    )
+    route_to: Optional[str] = Field(
+        default=None,
+        description="With policy route: one of the API's models, an "
+        "entrypoint of the API, that such a request is routed as.",
+    )
+
+    @model_validator(mode="after")
+    def route_names_its_target(self):
+        if self.policy == "route" and not self.route_to:
+            raise ValueError("unserved_models.route_to is required with policy route")
+        if self.policy != "route" and self.route_to:
+            raise ValueError("unserved_models.route_to goes with policy route only")
+        return self
+
+
 class ListenerAPI(BaseModel):
     """One API a listener serves: its schema (only for a versioned API, systemone), the models it accepts
     (omitted: every model of its kind) and the API's own settings."""
@@ -196,7 +223,8 @@ class ListenerAPI(BaseModel):
     models: Optional[List[str]] = Field(
         default=None,
         description="The only request models this API accepts, by exact "
-        "'model' value; others are rejected with HTTP 403 model_not_allowed. "
+        "'model' value; others are rejected with HTTP 403 model_not_allowed, "
+        "or 404 model_not_found when the Router serves them on no listener. "
         "Omitted, every model of the API's kind.",
     )
     max_deadline_ms: Optional[int] = Field(
@@ -212,6 +240,26 @@ class ListenerAPI(BaseModel):
         "listener turn on. The listing (GET /v1/systemone/models) hands it to "
         "them, and each field set here wins over the plugin's own option.",
     )
+    unserved_models: Optional[UnservedModels] = Field(
+        default=None,
+        description="chat_completions, responses, messages: route a request "
+        "whose model this API does not accept, or the Router does not serve, "
+        "to one of its models instead of refusing it.",
+    )
+
+    @model_validator(mode="after")
+    def route_to_is_accepted(self):
+        unserved = self.unserved_models
+        if (
+            unserved is not None
+            and unserved.route_to
+            and self.models is not None
+            and unserved.route_to not in self.models
+        ):
+            raise ValueError(
+                f"unserved_models.route_to {unserved.route_to!r} is not one of the API's models"
+            )
+        return self
 
     @field_validator("models")
     @classmethod
@@ -329,7 +377,7 @@ class Listener(BaseModel):
                     raise ValueError(
                         f"apis.{key}.schema: a listener serves api {name} in {' or '.join(schemas)}, not {entry.schema_!r}"
                     )
-            for setting in ("max_deadline_ms", "vsr"):
+            for setting in ("max_deadline_ms", "vsr", "unserved_models"):
                 if getattr(
                     entry, setting
                 ) is not None and setting not in API_SETTINGS.get(name, ()):
@@ -593,6 +641,9 @@ class InputModalityRule(BaseModel):
         return self
 
 
+AGENT_HARNESSES = definition_enum("AgentRule", "harness")
+
+
 class AgentRule(BaseModel):
     """Matches the agent a request belongs to, from its harness's headers."""
 
@@ -601,7 +652,7 @@ class AgentRule(BaseModel):
     name: str
     description: Optional[str] = None
     role: Optional[Literal["main", "subagent"]] = None
-    harness: Optional[Literal["claude_code", "codex"]] = None
+    harness: Optional[str] = None
     types: Optional[List[str]] = None
     request_classes: Optional[
         List[Literal["main", "subagent", "workflow", "compaction", "auxiliary"]]
@@ -615,10 +666,15 @@ class AgentRule(BaseModel):
             raise ValueError(
                 "set at least one of role, harness, types or request_classes"
             )
-        if self.request_classes and self.harness == "codex":
+        if self.harness is not None and self.harness not in AGENT_HARNESSES:
             raise ValueError(
-                "only Claude Code sends a request class, so request_classes"
-                " cannot go with harness codex"
+                f"harness must be one of {', '.join(AGENT_HARNESSES)},"
+                f" got {self.harness!r}"
+            )
+        if self.request_classes and self.harness in ("deepseek_harness", "cursor"):
+            raise ValueError(
+                f"{self.harness} calls carry no request class, so"
+                f" request_classes cannot go with harness {self.harness}"
             )
         if self.role == "main" and self.types:
             raise ValueError(
@@ -2917,6 +2973,9 @@ class ProviderDefaults(BaseModel):
 
     model: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    # A request that states no reasoning preference and sets a smaller output
+    # limit runs with reasoning off; 0 or unset turns the rule off.
+    reasoning_min_output_tokens: Optional[int] = Field(default=None, ge=0)
     tls: Optional[ProviderDefaultsTLS] = None
 
 

@@ -229,7 +229,7 @@ Router Memory 计数器只使用有界标签。参见 [Router Memory Prometheus 
 
 - **主要分组：** 公开推理结果、Recipe 流程、后端使用量、插件与响应缓存，以及遥测健康。
 - **成本和 MoM 面板**区分模型上报的用量与已支持的 Looper attempt 证据。
-- **均值，而不是分位数。** Recipe 阶段耗时和模型耗时面板展示观测均值；投影计数展示评估次数，单次分数可在 Insights 查看。
+- **均值，而不是分位数。** Recipe 阶段耗时和模型耗时面板展示观测均值；投影计数展示评估次数，单次分数可在 Dashboard 的 **Requests** 页面查看。
 - **数据来源。** Prometheus 抓取 Router 和 Jaeger 的内部管理指标。
 
 :::note

@@ -261,7 +261,7 @@
       "sensitivity": "none",
       "owner": "session",
       "version": "v0.3",
-      "doc": "Client session id `session_id_headers` accepts by default; providers receive it."
+      "doc": "Client session id `session_id_headers` accepts by default, which OpenCode sends on every call; providers receive it."
     },
     {
       "name": "x-claude-code-session-id",
@@ -370,6 +370,18 @@
       "owner": "router_replay",
       "version": "v0.5",
       "doc": "Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it."
+    },
+    {
+      "name": "x-parent-session-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Session that spawned an OpenCode subagent's session, which OpenCode sends on every call of the child beside the child's own `x-session-id`; with `identity.headers` unset and no `x-vsr-session-id`, protection and Router Replay key the call by that session and the child as its agent, and the `agent` signal reads it as a subagent's; providers receive it."
     },
     {
       "name": "x-conversation-id",
@@ -1067,6 +1079,11 @@
       "doc": "Provider wire protocol, such as `openai`."
     },
     {
+      "key": "requested_model",
+      "owner": "listener",
+      "doc": "The model the client named when the listener's `unserved_models` routed the request to one of its own models."
+    },
+    {
       "key": "effective_input_tokens",
       "owner": "automatic_output",
       "doc": "Rendered input tokens of the final automatic-output dispatch, chat template included."
@@ -1099,7 +1116,7 @@
     {
       "key": "reasoning",
       "owner": "classification",
-      "doc": "Reasoning mode chosen for the request: `on` or `off`."
+      "doc": "Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off, and `reason=stop_sequences` when the request's stop sequences did."
     },
     {
       "key": "modality",

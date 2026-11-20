@@ -21,7 +21,7 @@ test.beforeEach(async ({ page, context, baseURL }) => {
   await page.goto(documentPath)
 })
 
-test('Grafana iframe echoes the current CSRF cookie and preserves a query Request', async ({
+test('a proxied Grafana page echoes the current CSRF cookie and preserves a query Request', async ({
   page,
 }) => {
   const calls: { method: string; body: string | null; headers: Record<string, string> }[] = []

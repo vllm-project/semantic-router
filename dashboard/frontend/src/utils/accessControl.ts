@@ -16,6 +16,7 @@ const LOGS_READ_PERMISSION = 'logs.read'
 const MCP_READ_PERMISSION = 'mcp.read'
 const MCP_MANAGE_PERMISSION = 'mcp.manage'
 const REPLAY_READ_PERMISSION = 'replay.read'
+const TOOLS_USE_PERMISSION = 'tools.use'
 const TOPOLOGY_READ_PERMISSION = 'topology.read'
 const USERS_VIEW_PERMISSION = 'users.view'
 const USERS_MANAGE_PERMISSION = 'users.manage'
@@ -68,41 +69,55 @@ export function canManageMCP(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, MCP_MANAGE_PERMISSION)
 }
 
+export function canUseTools(user?: PermissionUser | null): boolean {
+  return canAccessWithPermission(user, TOOLS_USE_PERMISSION)
+}
+
 export function canAccessDashboardPath(
   user: PermissionUser | null | undefined,
   pathname: string,
 ): boolean {
   const normalizedPath = pathname.trim().toLowerCase()
+  const startsWith = (...prefixes: string[]) =>
+    prefixes.some((prefix) => normalizedPath.startsWith(prefix))
 
-  if (normalizedPath.startsWith('/users')) return canViewUsers(user)
-  if (normalizedPath.startsWith('/topology')) {
-    return canAccessWithPermission(user, TOPOLOGY_READ_PERMISSION, READ_CAPABLE_ROLES)
-  }
-  if (normalizedPath.startsWith('/status')) {
+  if (startsWith('/settings/access', '/users')) return canViewUsers(user)
+  if (startsWith('/routing/topology', '/topology', '/observe/status', '/status')) {
     return canAccessWithPermission(user, TOPOLOGY_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
   if (
-    normalizedPath.startsWith('/logs') ||
-    normalizedPath.startsWith('/monitoring') ||
-    normalizedPath.startsWith('/tracing')
+    startsWith(
+      '/observe/logs',
+      '/observe/metrics',
+      '/observe/traces',
+      '/logs',
+      '/monitoring',
+      '/tracing',
+    )
   ) {
     return canAccessWithPermission(user, LOGS_READ_PERMISSION)
   }
-  if (normalizedPath.startsWith('/insights')) {
+  if (startsWith('/observe/requests', '/observe/runs', '/insights')) {
     return canAccessWithPermission(user, REPLAY_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
-  if (normalizedPath.startsWith('/evaluation')) {
+  if (startsWith('/observe/evaluations', '/evaluation')) {
     return canAccessWithPermission(user, EVALUATION_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
-  if (normalizedPath.startsWith('/config/mcp')) {
+  if (startsWith('/settings/integrations', '/config/mcp')) {
     return canAccessWithPermission(user, MCP_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
   if (
     normalizedPath === '/api/router/docs' ||
-    normalizedPath.startsWith('/builder') ||
-    normalizedPath.startsWith('/models') ||
-    normalizedPath.startsWith('/decision-model') ||
-    normalizedPath.startsWith('/config')
+    startsWith(
+      '/routing/',
+      '/models/',
+      '/settings/router',
+      '/settings/schema',
+      '/builder',
+      '/models',
+      '/decision-model',
+      '/config',
+    )
   ) {
     return canAccessWithPermission(user, CONFIG_READ_PERMISSION, READ_CAPABLE_ROLES)
   }

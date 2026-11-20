@@ -13,8 +13,10 @@ ensuring community health.
 ## Code Ownership
 
 Ownership is distributed across the repository through per-directory `OWNER` files.
-Each file lists the reviewers responsible for that area. A full index of all
-`OWNER` file locations is maintained in [`.github/CODEOWNERS`](./.github/CODEOWNERS).
+Each file lists the reviewers responsible for that area. GitHub review requests
+go to the repository-wide Maintainers in [`.github/CODEOWNERS`](./.github/CODEOWNERS)
+and to a Lead of the pull request's owning Working Group, as described in
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## How Decisions Are Made
 

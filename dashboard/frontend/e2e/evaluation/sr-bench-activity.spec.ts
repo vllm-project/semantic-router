@@ -118,7 +118,7 @@ async function fixture(page: Page) {
     }
     return route.fulfill({ status: 404, json: { error: 'Unexpected fixture read' } })
   })
-  await page.goto('/evaluation?view=runs&run=first')
+  await page.goto('/observe/evaluations?view=runs&run=first&section=activity')
   await expect(
     page.getByRole('heading', { name: 'first long response', exact: true }),
   ).toBeVisible()
@@ -145,11 +145,8 @@ test('long responses update elapsed and wire activity with unchanged result time
   await expect(activity(page)).toContainText('5m 0s ago')
   expect(state.runs[0].updated_at).toBe(start)
   expect(state.reportReads).toBe(initialReports)
-  await expect(page.getByText('Total recorded cost').locator('..').locator('strong')).toHaveText(
-    '—',
-  )
   await expect(
-    page.getByText('Model tokens', { exact: true }).locator('..').locator('strong'),
+    page.getByRole('group', { name: 'Total recorded cost' }).locator('strong'),
   ).toHaveText('—')
   await expect(activity(page)).toContainText(
     'tokens and cost remain unknown until usage is recorded',
@@ -168,11 +165,11 @@ test('long responses update elapsed and wire activity with unchanged result time
   state.runs[0].updated_at = '2026-01-01T00:15:00Z'
   await page.clock.runFor(2600)
   await expect(activity(page)).toHaveCount(0)
-  await expect(elapsed(page)).toContainText('60 s')
+  await expect(elapsed(page)).toContainText('1m 0s')
   const reads = state.activityReads.first
   await page.clock.fastForward(60_000)
   expect(state.activityReads.first).toBe(reads)
-  await expect(elapsed(page)).toContainText('60 s')
+  await expect(elapsed(page)).toContainText('1m 0s')
   expect(state.writes).toEqual([])
 })
 
@@ -251,11 +248,13 @@ test('unmount aborts activity polling and a delayed prior-run response cannot le
   }
   await page.clock.runFor(2600)
   await expect.poll(() => entered).toBe(true)
-  await page.getByRole('button', { name: 'Back to runs', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   const firstReads = state.activityReads.first
   await page.clock.fastForward(60_000)
   expect(state.activityReads.first).toBe(firstReads)
   await page.getByRole('button', { name: 'second long response', exact: true }).click()
+  await page.getByRole('tab', { name: 'Activity', exact: true }).click()
   await expect(activity(page)).toContainText('provider/model/second')
   release()
   await page.clock.runFor(2600)

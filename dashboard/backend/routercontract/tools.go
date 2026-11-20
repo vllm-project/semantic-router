@@ -7,18 +7,14 @@ type ToolSelection struct {
 	ToolsDBPath string
 }
 
-// ReadToolSelection reads the stable dashboard-facing tool contract from a
-// canonical router config file: the catalog of the first decision whose tools
+// ToolSelectionFromConfig reads the stable dashboard-facing tool contract from
+// a canonical router config: the catalog of the first decision whose tools
 // plugin adds tools from one, empty when none does.
-func ReadToolSelection(configPath string) (ToolSelection, error) {
-	cfg, err := routerconfig.Parse(configPath)
-	if err != nil {
-		return ToolSelection{}, err
-	}
+func ToolSelectionFromConfig(cfg *routerconfig.RouterConfig) ToolSelection {
 	for _, decision := range cfg.AllRoutingDecisions() {
 		if spec := decision.GetToolsConfig().ActiveSelect(); spec != nil && spec.Mode == routerconfig.ToolsSelectModeAdd {
-			return ToolSelection{ToolsDBPath: spec.ToolsDBPath}, nil
+			return ToolSelection{ToolsDBPath: spec.ToolsDBPath}
 		}
 	}
-	return ToolSelection{}, nil
+	return ToolSelection{}
 }

@@ -403,6 +403,7 @@ const sidebars: SidebarsConfig = {
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
             'proposals/success-constrained-selection',
+            'proposals/concur-strategy-routing',
             'proposals/prompt-classification-routing',
           ],
         },
@@ -445,6 +446,13 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/production-stack-integration',
             'proposals/nvidia-dynamo-integration',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Dashboard & Operator Experience',
+          items: [
+            'proposals/dashboard-ux-redesign',
           ],
         },
       ],

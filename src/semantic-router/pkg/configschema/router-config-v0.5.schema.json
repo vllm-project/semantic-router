@@ -51,7 +51,11 @@
           "type": "string",
           "enum": [
             "claude_code",
-            "codex"
+            "codex",
+            "opencode",
+            "deepseek_harness",
+            "cursor",
+            "openclaw"
           ]
         },
         "types": {
@@ -859,6 +863,10 @@
         "reasoning_effort": {
           "type": "string"
         },
+        "reasoning_min_output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
         "tls": {
           "$ref": "#/$defs/ProviderDefaultsTLS"
         }
@@ -928,7 +936,8 @@
             "type": "string",
             "enum": [
               "sampling_min_p",
-              "sampling_logit_bias"
+              "sampling_logit_bias",
+              "developer_role"
             ]
           },
           "type": "array"
@@ -3251,6 +3260,9 @@
       "properties": {
         "history": {
           "type": "boolean"
+        },
+        "tool_results": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3492,6 +3504,9 @@
         },
         "vsr": {
           "$ref": "#/$defs/VSRProfile"
+        },
+        "unserved_models": {
+          "$ref": "#/$defs/UnservedModels"
         }
       },
       "additionalProperties": false,
@@ -7230,6 +7245,22 @@
       "properties": {
         "previous_turns": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "UnservedModels": {
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "reject",
+            "route"
+          ]
+        },
+        "route_to": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

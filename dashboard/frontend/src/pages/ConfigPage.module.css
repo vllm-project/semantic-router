@@ -67,8 +67,8 @@
 }
 
 .managerTable {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(6, 10, 9, 0.84);
+  border-color: var(--border);
+  background: var(--card);
 }
 
 .error {

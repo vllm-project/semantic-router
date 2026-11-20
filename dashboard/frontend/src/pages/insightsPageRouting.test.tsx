@@ -6,7 +6,7 @@ import InsightsRecordSection from './InsightsRecordSection'
 import { ModelLabelsContext } from './insightsModelLabelSupport'
 import InsightsSessionRoutes from './InsightsSessionRoutes'
 import { fetchInsightsTrajectory } from './insightsPageApi'
-import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
+import { buildInsightsRecordSections } from './insightsPageSupport'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 
 const record: InsightsRecord = {
@@ -59,7 +59,12 @@ function renderRecord(value: InsightsRecord) {
   return renderToStaticMarkup(
     <>
       {buildInsightsRecordSections(value, { isReadonly: true }).map((section, index) => (
-        <InsightsRecordSection key={section.title} section={section} sectionIndex={index} />
+        <InsightsRecordSection
+          key={section.title}
+          section={section}
+          sectionIndex={index}
+          initiallyExpanded
+        />
       ))}
     </>,
   )
@@ -76,7 +81,12 @@ describe('recorded routing explanation', () => {
           { ...record, learning: { ...record.learning, protection } },
           { isReadonly: true },
         ).map((section, index) => (
-          <InsightsRecordSection key={section.title} section={section} sectionIndex={index} />
+          <InsightsRecordSection
+            key={section.title}
+            section={section}
+            sectionIndex={index}
+            initiallyExpanded
+          />
         ))}
       </ModelLabelsContext.Provider>,
     )
@@ -182,24 +192,11 @@ describe('recorded routing explanation', () => {
     expect(html).toContain('0.017s')
     expect(html).toContain('0.023s')
     expect(html).toContain('observe_only')
-    expect(html).toContain('/insights/one')
-    expect(html).toContain('/insights/two')
+    expect(html).toContain('/observe/requests/one')
+    expect(html).toContain('/observe/requests/two')
     // a subagent's call names its agent, the main conversation's says main
     expect(html).toContain('9f2c1a')
     expect(html).toContain('>main<')
-  })
-
-  it('lists each request with its session, next to the request id', () => {
-    const columns = createInsightsTableColumns()
-    expect(columns.map((column) => column.key).slice(0, 2)).toEqual(['request_id', 'session_id'])
-    const session = columns[1]
-    const cell = renderToStaticMarkup(
-      <>{session.render!({ ...record, session_id: '21f9e946-5ddf-4b90-a897-7db814a78317' })}</>,
-    )
-    expect(cell).toContain('title="21f9e946-5ddf-4b90-a897-7db814a78317"')
-    expect(renderToStaticMarkup(<>{session.render!({ ...record, session_id: undefined })}</>)).toBe(
-      '-',
-    )
   })
 
   it('says in words why a session kept or switched its model, with the code in the title', () => {
@@ -252,7 +249,7 @@ describe('recorded routing explanation', () => {
     )
     expect(html).toContain('>kept<')
     expect(html).toContain('aria-label="protected"')
-    expect(html).toContain('Kept this session&#x27;s model')
+    expect(html).toContain('Session protection held the model')
     expect(html).toContain('Kept this agent&#x27;s model')
     expect(html).toContain('>switched<')
     expect(html).toContain('The previous model is not a candidate here')

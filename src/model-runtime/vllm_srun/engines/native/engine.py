@@ -13,7 +13,7 @@ from typing import Any, TypeVar, cast
 import torch
 from torch import nn
 
-from ...accel import onednn
+from ...accel import onednn, zentorch
 from ...accel.kernels import CONTIGUOUS
 from ...plugins.base import (
     Accelerator,
@@ -195,8 +195,18 @@ class NativeEngineModel(EngineModel):
             }
         )
         self.kernels = accelerator.kernels(device_info)
-        self.kernels.allow_approximate = (
-            not options.exact_kernels_only and spec.dtype.approximate_kernels
+        # Consent is per device class: a record on one says nothing about the other.
+        consents = (
+            spec.dtype.approximate_cpu_kernels
+            if self.device.type == "cpu"
+            else spec.dtype.approximate_kernels
+        )
+        self.kernels.allow_approximate = not options.exact_kernels_only and bool(
+            consents
+        )
+        # A family may consent to some slots only (DtypePolicy.approximate_cpu_kernels).
+        self.kernels.approximate_slots = (
+            consents if isinstance(consents, frozenset) else None
         )
         self.kernels.use_variants(spec.kernel_variants)
         fused_int4 = self.kernels.allow_approximate and torch.version.hip is None
@@ -210,9 +220,12 @@ class NativeEngineModel(EngineModel):
                 nvfp4.append(layer)
         self.fast: dict[str, Any] = {"lora_folded": folded} if folded else {}
         self.linear = self.kernels.select("linear")
-        if self.linear.variant is not None:
+        if self._lays_out_linears:
+            laid: dict[tuple[int, int | None], nn.Module] = (
+                {}
+            )  # one layout per shared weight
             for module in (backbone, *self.branches.values(), *self.towers.values()):
-                lay_out_linears(module, self.linear.fn)
+                lay_out_linears(module, self.linear.fn, laid)
         self._cpu_threads = options.threads or torch.get_num_threads()
         # Contiguous GeGLU, norms and unpadded uniform attention grids
         # (``packed(uniform=True)``) compute each row the same in any batch;
@@ -1240,6 +1253,23 @@ class NativeEngineModel(EngineModel):
         adaptive_threads.CpuTeam.apply(self._cpu_threads)
         return onednn.invariant(self._packed())
 
+    @property
+    def _lays_out_linears(self) -> bool:
+        """A variant, or an approximate linear the model consents to, lays the weights
+        out once at load; the reference keeps ``nn.Linear``."""
+        return self.linear.variant is not None or not self.linear.exact
+
+    def _laid_out(self) -> list[onednn.PackedLinear | zentorch.ZentorchLinear]:
+        """Every laid-out linear once (branches share the backbone's layers): its weight is a
+        buffer, counted through ``weight_elements``."""
+        unique = {
+            id(layer): layer
+            for module in self._modules()
+            for layer in module.modules()
+            if isinstance(layer, (onednn.PackedLinear, zentorch.ZentorchLinear))
+        }
+        return list(unique.values())
+
     def _packed(self) -> list[onednn.PackedLinear]:
         return [
             layer
@@ -1260,7 +1290,7 @@ class NativeEngineModel(EngineModel):
         return GATED_DELTA_ELEMENTS // width
 
     def parameter_count(self) -> int:
-        packed = sum(layer.weight_elements for layer in self._packed())
+        packed = sum(layer.weight_elements for layer in self._laid_out())
         packed += sum(layer.weight_elements for layer in self._quantized())
         return packed + sum(parameter.numel() for parameter in self._parameters())
 
@@ -1268,7 +1298,7 @@ class NativeEngineModel(EngineModel):
         copy_bytes = sum(linear_bytes(view) for view in self.reduced.values())
         packed = sum(
             layer.packed.numel() * layer.packed.element_size()
-            for layer in self._packed()
+            for layer in self._laid_out()
         )
         packed += sum(layer.stored_bytes() for layer in self._quantized())
         head = self.lm_head
@@ -1290,7 +1320,7 @@ class NativeEngineModel(EngineModel):
     def place(self, module: ModuleT) -> ModuleT:
         """A head on this device, its linear layers laid out like the backbone's."""
         module = module.to(self.device)
-        if self.linear.variant is not None:
+        if self._lays_out_linears:
             lay_out_linears(module, self.linear.fn)
         return module
 
