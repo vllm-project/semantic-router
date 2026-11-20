@@ -39,6 +39,18 @@ def schema_document() -> dict[str, Any]:
     return json.loads(schema_text())
 
 
+def definition_enum(definition: str, field: str) -> tuple[str, ...]:
+    """Return the values the bundled schema allows for one field of a definition."""
+
+    try:
+        values = schema_document()["$defs"][definition]["properties"][field]["enum"]
+    except (KeyError, TypeError) as error:
+        raise RuntimeError(
+            f"bundled Router config schema has no enum for {definition}.{field}"
+        ) from error
+    return tuple(value for value in values if isinstance(value, str))
+
+
 def routing_surface_catalog() -> dict[str, Any]:
     """Return generated signal, algorithm, plugin, and projection metadata."""
 

@@ -12,6 +12,7 @@ domains:
       - .github/copilot-instructions.md
       - .github/PULL_REQUEST_TEMPLATE.md
       - .github/ISSUE_TEMPLATE/**
+      - .github/actionlint.yaml
       - .github/actions/**
       - .github/workflows/**
       - .mergify.yml
@@ -277,6 +278,14 @@ domains:
       - src/agent-harness/codex/**
     checks:
       - python3 -m unittest discover -s src/agent-harness/codex/hooks
+    verifications: [agent-plugins]
+
+  vscode-extension:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - src/agent-harness/vscode/**
+    checks: [make agent-vscode-test]
     verifications: [agent-plugins]
 
   vela-omni-artifacts:
@@ -768,6 +777,14 @@ domains:
     checks: [make test-agent-crew]
     verifications: [bench-tools]
 
+  agent-kv-tier-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_kv_tier/**
+      - tools/make/tooling.mk
+    checks: [make test-agent-kv-tier-bench]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]
@@ -968,6 +985,7 @@ profiles:
       - e2e/profiles/standalone/**
       - e2e/testcases/standalone_gateway.go
       - e2e/testcases/standalone_streaming.go
+      - e2e/testcases/standalone_h2c_bounds.go
       - e2e/testcases/standalone_helm_upgrade.go
       - e2e/testcases/routing_error_codes.go
       - deploy/helm/semantic-router/Chart.yaml

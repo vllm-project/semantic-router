@@ -5,7 +5,9 @@ Codex runs this once per hook event, with the event as JSON on stdin, and reads 
 object from stdout. `pre` handles PreToolUse: guard asks the decision model whether a shell
 command should wait for a person, and blocks it with the reason when it should. `post`
 handles PostToolUse: redact replaces the personal data in a command's output with tags, and
-shield tells Codex to read an output that tries to give it orders as data.
+shield tells Codex to read an output that tries to give it orders as data. `stop` handles
+Stop: one line says which models the gateway served the turn with, read from the Router's own
+records of the turn.
 
 The questions are the Claude Code plugin's own, copied into framing.py. Whatever goes wrong
 with the decision model, the call goes on as Codex would run it, and one line says what
@@ -21,7 +23,9 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -40,6 +44,9 @@ DEFAULTS = {
     # The variable that holds the listener's key, as `vllm-sr connect codex` names it for a
     # listener with api_keys; the key itself never sits in vsr.json.
     "runtimeTokenEnv": "",
+    # The Router management API whose Router Replay records each Codex turn; empty leaves the
+    # turn line out.
+    "managementUrl": "http://127.0.0.1:8080",
 }
 # The apps a Router listener's vsr profile (listeners[].apis.systemone.vsr, set in its config
 # or the Dashboard) can turn on or off here, and how long its answer is kept in the Codex home.
@@ -53,11 +60,17 @@ MARK = "▚▞ vSR"
 # rules call holds (the listener's limit, in UTF-8 bytes).
 NO_RULES = {"revision": "", "guard": [], "redact": []}
 MAX_RULES_BYTES = 256 << 10
+# How long the turn line waits for the management API in all, and the most pages of a turn's
+# records it reads.
+TURN_SECONDS = 1.5
+TURN_PAGES = 5
+REVIEW = "codex_approval_review"
 
 
-def settings() -> dict:
+def settings(listener: bool = True) -> dict:
     """The defaults, then `vsr.json` in the Codex home, then VSR_* variables. The listener's
-    profile sets the apps `vsr.json` leaves out, as the Claude Code plugin lets it."""
+    profile sets the apps `vsr.json` leaves out, as the Claude Code plugin lets it; `listener`
+    False leaves the listener unasked."""
     found = dict(DEFAULTS)
     home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
     saved = {}
@@ -71,13 +84,17 @@ def settings() -> dict:
     for name, env in (
         ("runtimeUrl", "VSR_RUNTIME_URL"),
         ("runtimeModel", "VSR_RUNTIME_MODEL"),
+        ("managementUrl", "VSR_MANAGEMENT_URL"),
     ):
         if os.environ.get(env):
             found[name] = os.environ[env]
     found["runtimeToken"] = os.environ.get("VSR_RUNTIME_TOKEN") or os.environ.get(
         str(found["runtimeTokenEnv"] or ""), ""
     )
+    found["managementToken"] = os.environ.get("VSR_MANAGEMENT_TOKEN", "")
     found["home"] = str(home)
+    if not listener:
+        return found
     profile, found["rules"] = listener_profile(found, home)
     for app, on in profile.items():
         found[app] = saved.get(app, on)
@@ -155,7 +172,7 @@ def listener_profile(opts: dict, home: Path, timeout: float = 1.5) -> tuple[dict
     )
     profile = {}
     try:
-        with urllib.request.urlopen(
+        with NO_REDIRECTS.open(
             urllib.request.Request(url, headers=headers), timeout=timeout
         ) as response:
             listing = json.loads(response.read())
@@ -212,7 +229,7 @@ def ask_rules(
         json.dumps({"app": app, "parts": parts}).encode(),
         headers,
     )
-    with urllib.request.urlopen(
+    with NO_REDIRECTS.open(
         request,
         timeout=float(opts["timeoutSeconds"]) if timeout is None else timeout,
     ) as response:
@@ -331,9 +348,7 @@ def ask(app: str, given: object, opts: dict) -> dict:
     request = urllib.request.Request(
         opts["runtimeUrl"], json.dumps(body).encode(), headers
     )
-    with urllib.request.urlopen(
-        request, timeout=float(opts["timeoutSeconds"])
-    ) as response:
+    with NO_REDIRECTS.open(request, timeout=float(opts["timeoutSeconds"])) as response:
         reply = json.loads(response.read())
     return {
         **READERS[app](reply, {"redactPii": opts["redactPii"]}),
@@ -630,13 +645,121 @@ def output(event: dict, opts: dict) -> dict:
     return reply
 
 
+class RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib sends a request's headers on to wherever a redirect points, so a redirect would
+    hand the runtime or management token to another host. Neither API redirects."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(
+            req.full_url, code, "redirect refused", headers, fp
+        )
+
+
+NO_REDIRECTS = urllib.request.build_opener(RefuseRedirect)
+
+
+def turn_records(turn_id: str, opts: dict) -> tuple[list, int]:
+    """The Router Replay records of one Codex turn, the calls it sent and the approval reviews
+    and subagents it started, and how many there are. Raises when they cannot be read.
+    """
+    deadline = time.monotonic() + TURN_SECONDS
+    headers = (
+        {"Authorization": f"Bearer {opts['managementToken']}"}
+        if opts["managementToken"]
+        else {}
+    )
+    records: list = []
+    for _ in range(TURN_PAGES):
+        query = urllib.parse.urlencode(
+            {"turn_id": turn_id, "limit": 100, "offset": len(records)}
+        )
+        url = (
+            f"{opts['managementUrl'].rstrip('/')}/api/v1/observability/replays?{query}"
+        )
+        with NO_REDIRECTS.open(
+            urllib.request.Request(url, headers=headers),
+            timeout=max(0.01, deadline - time.monotonic()),
+        ) as response:
+            page = json.loads(response.read())
+        records += page["data"]
+        if not page.get("has_more") or time.monotonic() >= deadline:
+            break
+    return records, max(int(page.get("total") or 0), len(records))
+
+
+def ranked(counts: Counter) -> list[str]:
+    return [name for name, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+
+
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}" + ("" if n == 1 else "s")
+
+
+def turn_line(event: dict, opts: dict) -> dict:
+    """One line at the end of a turn: the models the gateway served it with and how many calls
+    each, the decisions that chose them, and the turn's approval reviews with their verdicts.
+    It comes from the Router's own records, found by the turn id Codex sends with every call, so
+    nothing is guessed. Nothing found, or no answer in time, leaves the turn as it is.
+    """
+    turn_id = event.get("turn_id")
+    if not opts["managementUrl"] or not isinstance(turn_id, str) or not turn_id:
+        return {}
+    try:
+        records, total = turn_records(turn_id, opts)
+        calls = [r for r in records if r.get("request_kind") != REVIEW]
+        reviews = [r for r in records if r.get("request_kind") == REVIEW]
+        models = Counter(r.get("selected_model") or "unknown" for r in calls)
+        decisions = Counter(r["decision"] for r in calls if r.get("decision"))
+        reviewers = Counter(r.get("selected_model") or "unknown" for r in reviews)
+        # A completed review's verdict, else its status; a review that asked for a tool check
+        # gets its verdict in a later call.
+        verdicts = Counter(
+            {"allow": "allowed", "deny": "denied"}.get(
+                (review.get("assessment") or {}).get("outcome"), review.get("status")
+            )
+            for review in (r.get("review") or {} for r in reviews)
+            if review.get("status") != "tool_call"
+        )
+    except Exception:  # never in Codex's way: the turn ends without its line
+        return {}
+    parts = []
+    if calls:
+        parts.append(
+            plural(len(calls), "call")
+            + ": "
+            + ", ".join(f"{m} ({models[m]})" for m in ranked(models))
+        )
+    if decisions:
+        parts.append(
+            ("decision: " if len(decisions) == 1 else "decisions: ")
+            + ", ".join(ranked(decisions))
+        )
+    if verdicts:
+        parts.append(
+            plural(sum(verdicts.values()), "review")
+            + ": "
+            + ", ".join(f"{verdicts[v]} {v}" for v in ranked(verdicts))
+            + " by "
+            + ", ".join(ranked(reviewers))
+        )
+    if not parts:
+        return {}
+    if total > len(records):
+        parts.append(f"read {len(records):,} of {total:,} calls")
+    return {"systemMessage": " · ".join([f"{MARK} turn", *parts])}
+
+
 def main(argv: list[str]) -> int:
     event = json.loads(sys.stdin.read() or "{}")
+    mode = argv[1] if len(argv) > 1 else ""
+    if mode == "stop":
+        print(json.dumps(turn_line(event, settings(listener=False))))
+        return 0
     opts = settings()
     if event.get("tool_name") != "Bash":
         print("{}")
         return 0
-    handle = {"pre": guard, "post": output}.get(argv[1] if len(argv) > 1 else "")
+    handle = {"pre": guard, "post": output}.get(mode)
     print(json.dumps(handle(event, opts) if handle else {}))
     return 0
 

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   lazyRoutePage,
   loadDashboardPage,
-  loadDecisionModelPage,
+  loadDecisionModelsWorkspace,
   preloadDashboardRoute,
   resetDashboardRouteLoader,
 } from './routeLoaders'
@@ -25,8 +25,8 @@ describe('route preloading', () => {
     const fetcher = vi.fn()
     vi.stubGlobal('fetch', fetcher)
     try {
-      resetDashboardRouteLoader(loadDecisionModelPage)
-      await preloadDashboardRoute('/decision-model')
+      resetDashboardRouteLoader(loadDecisionModelsWorkspace)
+      await preloadDashboardRoute('/models/decision')
       expect(fetcher).not.toHaveBeenCalled()
     } finally {
       vi.unstubAllGlobals()
@@ -45,8 +45,8 @@ describe('route preloading', () => {
 
   it('deduplicates repeated route preload requests', () => {
     resetDashboardRouteLoader(loadDashboardPage)
-    const first = preloadDashboardRoute('/dashboard')
-    const second = preloadDashboardRoute('/dashboard')
+    const first = preloadDashboardRoute('/')
+    const second = preloadDashboardRoute('/')
 
     expect(first).toBeDefined()
     expect(second).toBe(first)
@@ -54,10 +54,10 @@ describe('route preloading', () => {
 
   it('allows a failed route boundary to retry through a fresh preload entry', () => {
     resetDashboardRouteLoader(loadDashboardPage)
-    const first = preloadDashboardRoute('/dashboard')
+    const first = preloadDashboardRoute('/')
 
     resetDashboardRouteLoader(loadDashboardPage)
-    const retried = preloadDashboardRoute('/dashboard')
+    const retried = preloadDashboardRoute('/')
 
     expect(retried).toBeDefined()
     expect(retried).not.toBe(first)

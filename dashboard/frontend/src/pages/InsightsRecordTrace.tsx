@@ -1,10 +1,22 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { CheckCircle2, ChevronDown, OctagonAlert, Wrench } from 'lucide-react'
 
 import MarkdownRenderer from '../components/MarkdownRenderer'
-import ProductIcon from '../components/ProductIcon'
+import {
+  Badge,
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  cn,
+} from '../ui'
 
 import { buildConversationLabels } from './insightsConversationIdentity'
-import styles from './InsightsPage.module.css'
+import { Pager } from './InsightsDisplay'
+import { CHEVRON, DETAIL, RAW } from './insightsEvidenceStyles'
+import { pageHolding, pageOf } from './insightsListData'
 import type {
   InsightsRecord,
   InsightsTrajectory,
@@ -25,6 +37,12 @@ interface TraceTurn {
   messages: InsightsTrajectoryMessage[]
 }
 
+const NOTE = 'text-[11px] text-subtle-foreground'
+
+// The turns a page of the conversation shows; a long session pages through
+// them from the page that holds the record's own turn.
+const TURNS_PAGE = 20
+
 export default function InsightsRecordTrace({
   record,
   trajectory,
@@ -36,6 +54,21 @@ export default function InsightsRecordTrace({
     [record, trajectory],
   )
   const turns = useMemo(() => groupTraceTurns(messages), [messages])
+  const [page, setPage] = useState<number>()
+  const shown = pageOf(
+    turns,
+    page ??
+      pageHolding(
+        turns.findIndex(
+          (turn) =>
+            turn.index === record.turn_index &&
+            turn.conversationId === (record.conversation_id ?? ''),
+        ),
+        TURNS_PAGE,
+      ),
+    TURNS_PAGE,
+  )
+  const offset = (shown.page - 1) * TURNS_PAGE
   const conversationLabels = useMemo(
     () => buildConversationLabels([...(trajectory?.routes ?? []), ...messages]),
     [trajectory, messages],
@@ -46,66 +79,65 @@ export default function InsightsRecordTrace({
   )
 
   return (
-    <details className={styles.recordTrace}>
-      <summary className={styles.recordTraceHeader}>
-        <div>
-          <span className={styles.recordTraceEyebrow}>Conversation</span>
-          <h2 id="record-trace-title">Record trace</h2>
-        </div>
-        <div className={styles.recordTraceHeaderMeta}>
-          <span className={styles.recordTraceSummary}>
+    <Card role="region" aria-labelledby="record-trace-title">
+      <CardHeader>
+        <CardTitle id="record-trace-title">Conversation</CardTitle>
+        <CardDescription>Record trace of the session, as Replay kept it</CardDescription>
+        <CardAction>
+          <Badge tone="outline">
             {turns.length} {turns.length === 1 ? 'turn' : 'turns'}
             {toolCount > 0 ? ` · ${toolCount} ${toolCount === 1 ? 'tool call' : 'tool calls'}` : ''}
-          </span>
-          <ProductIcon
-            name="chevron-down"
-            width={15}
-            height={15}
-            className={styles.recordTraceHeaderChevron}
-          />
-        </div>
-      </summary>
+          </Badge>
+        </CardAction>
+      </CardHeader>
 
-      <div className={styles.recordTraceContent}>
+      <CardContent className="flex flex-col gap-2 pt-3">
         {loading ? (
-          <div className={styles.recordTraceEmpty}>Loading the complete session…</div>
+          <p className="text-[13px] text-muted-foreground">Loading the complete session…</p>
         ) : null}
         {!loading && error ? (
-          <div className={styles.recordTraceEmpty}>
+          <p className="text-[13px] text-muted-foreground">
             The session trace could not be loaded. {error}
-          </div>
+          </p>
         ) : null}
         {!loading && !error && turns.length === 0 ? (
-          <div className={styles.recordTraceEmpty}>No conversation steps were captured.</div>
+          <p className="text-[13px] text-muted-foreground">No conversation steps were captured.</p>
         ) : null}
 
-        {!loading && !error && turns.length > 0 ? (
-          <div className={styles.recordTraceTurns}>
-            {turns.map((turn, turnPosition) => {
+        {!loading && !error && turns.length > 0
+          ? shown.rows.map((turn, position) => {
+              const turnPosition = offset + position
               const turnToolCount = turn.messages.reduce(
                 (count, message) => count + (message.tool_calls?.length ?? 0),
                 0,
               )
               return (
-                <details key={`${turn.index}-${turnPosition}`} className={styles.recordTraceTurn}>
-                  <summary className={styles.recordTraceTurnSummary}>
-                    <span className={styles.recordTraceTurnIndex}>{turnPosition + 1}</span>
-                    <span className={styles.recordTraceTurnLabel}>
-                      <strong title={turn.conversationId || undefined}>
+                <details key={`${turn.index}-${turnPosition}`} className={DETAIL}>
+                  <summary>
+                    <span className="grid size-5 shrink-0 place-items-center rounded-full bg-secondary font-mono text-[10.5px] text-muted-foreground">
+                      {turnPosition + 1}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <strong
+                        className="truncate font-medium text-foreground"
+                        title={turn.conversationId || undefined}
+                      >
                         {turn.conversationId
                           ? `${conversationLabels.get(turn.conversationId)} · Turn ${turn.index + 1}`
                           : `Turn ${turnPosition + 1}`}
                       </strong>
-                      <span>{buildTurnPreview(turn)}</span>
+                      <span className="truncate font-normal text-subtle-foreground">
+                        {buildTurnPreview(turn)}
+                      </span>
                     </span>
-                    <span className={styles.recordTraceTurnMeta}>
+                    <span className="shrink-0 font-normal text-subtle-foreground">
                       {turnToolCount > 0
                         ? `${turnToolCount} ${turnToolCount === 1 ? 'tool' : 'tools'}`
                         : `${turn.messages.length} steps`}
                     </span>
-                    <ProductIcon name="chevron-down" width={14} height={14} />
+                    <ChevronDown className={CHEVRON} />
                   </summary>
-                  <div className={styles.recordTraceMessages}>
+                  <div className="flex flex-col gap-2.5 border-t border-border px-3 py-3">
                     {turn.messages.map((message, messageIndex) => (
                       <TraceMessage
                         key={`${message.role}-${message.tool_call_id ?? ''}-${messageIndex}`}
@@ -115,11 +147,20 @@ export default function InsightsRecordTrace({
                   </div>
                 </details>
               )
-            })}
-          </div>
+            })
+          : null}
+        {!loading && !error && turns.length > TURNS_PAGE ? (
+          <Pager
+            className="mt-1"
+            page={shown.page}
+            pageSize={TURNS_PAGE}
+            total={turns.length}
+            noun="turn"
+            onPage={setPage}
+          />
         ) : null}
-      </div>
-    </details>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -134,17 +175,24 @@ function TraceMessage({ message }: { message: InsightsTrajectoryMessage }) {
 
   const isUser = message.role === 'user'
   return (
-    <div className={`${styles.recordTraceMessage} ${isUser ? styles.recordTraceUser : ''}`}>
-      <span className={styles.recordTraceRole}>{isUser ? 'You' : 'Response'}</span>
+    <div className={cn('flex flex-col gap-1', isUser ? 'items-end pl-6' : 'items-start pr-4')}>
+      <span className={NOTE}>{isUser ? 'You' : 'Response'}</span>
       {message.content ? (
-        <div className={styles.recordTraceMarkdown}>
+        <div
+          className={cn(
+            'max-w-full rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed [&_p]:my-1 [&_pre]:max-w-full [&_pre]:overflow-x-auto',
+            isUser
+              ? 'rounded-br-md bg-primary-soft text-foreground'
+              : 'rounded-tl-md border border-border bg-surface-subtle',
+          )}
+        >
           <MarkdownRenderer content={message.content} />
           {message.content_truncated ? (
-            <span>Text truncated at the configured tool trace byte limit</span>
+            <span className={NOTE}>Text truncated at the configured tool trace byte limit</span>
           ) : null}
         </div>
       ) : (
-        <span className={styles.recordTraceRedacted}>
+        <span className="rounded-lg border border-dashed border-border-strong px-3 py-1.5 text-xs text-muted-foreground">
           {message.content_redacted ? 'Content hidden for this role' : 'No content captured'}
         </span>
       )}
@@ -160,22 +208,28 @@ function ToolCalls({
   redacted?: boolean
 }) {
   return (
-    <details className={styles.recordTraceTool}>
+    <details className={DETAIL}>
       <summary>
-        <ProductIcon name="tool" width={15} height={15} />
-        <span>
+        <Wrench className="size-3.5 shrink-0 text-chart-5" />
+        <span className="min-w-0 flex-1 truncate font-mono">
           {calls.length === 1 ? calls[0].function.name : `${calls.length} tools requested`}
         </span>
-        <ProductIcon name="chevron-down" width={14} height={14} />
+        <ChevronDown className={CHEVRON} />
       </summary>
-      <div className={styles.recordTraceToolBody}>
+      <div className="flex flex-col gap-2 border-t border-border px-3 py-2.5">
         {calls.map((call) => (
-          <div key={call.id || call.function.name} className={styles.recordTraceToolCall}>
-            <strong>{call.function.name || 'Tool'}</strong>
+          <div key={call.id || call.function.name} className="flex flex-col gap-1">
+            <strong className="font-mono text-xs font-medium">
+              {call.function.name || 'Tool'}
+            </strong>
             {call.function.arguments ? (
-              <pre>{formatTracePayload(call.function.arguments)}</pre>
+              <pre className={cn(RAW, 'whitespace-pre-wrap break-all')}>
+                {formatTracePayload(call.function.arguments)}
+              </pre>
             ) : (
-              <span>{redacted ? 'Arguments hidden for this role' : 'No arguments captured'}</span>
+              <span className={NOTE}>
+                {redacted ? 'Arguments hidden for this role' : 'No arguments captured'}
+              </span>
             )}
           </div>
         ))}
@@ -185,27 +239,30 @@ function ToolCalls({
 }
 
 function ToolResult({ message }: { message: InsightsTrajectoryMessage }) {
+  const failed = message.status === 'failed'
   return (
-    <details className={styles.recordTraceTool}>
+    <details className={DETAIL}>
       <summary>
-        <ProductIcon
-          name={message.status === 'failed' ? 'alert' : 'check'}
-          width={15}
-          height={15}
-        />
-        <span>{message.tool_name || 'Tool'} result</span>
-        <ProductIcon name="chevron-down" width={14} height={14} />
+        {failed ? (
+          <OctagonAlert className="size-3.5 shrink-0 text-destructive" />
+        ) : (
+          <CheckCircle2 className="size-3.5 shrink-0 text-success" />
+        )}
+        <span className="min-w-0 flex-1 truncate">{message.tool_name || 'Tool'} result</span>
+        <ChevronDown className={CHEVRON} />
       </summary>
-      <div className={styles.recordTraceToolBody}>
+      <div className="flex flex-col gap-1 border-t border-border px-3 py-2.5">
         {message.content ? (
           <>
-            <pre>{formatTracePayload(message.content)}</pre>
+            <pre className={cn(RAW, 'whitespace-pre-wrap break-all')}>
+              {formatTracePayload(message.content)}
+            </pre>
             {message.content_truncated ? (
-              <span>Result truncated at the configured tool trace byte limit</span>
+              <span className={NOTE}>Result truncated at the configured tool trace byte limit</span>
             ) : null}
           </>
         ) : (
-          <span>
+          <span className={NOTE}>
             {message.content_redacted
               ? `Result hidden · ${message.status || 'recorded'}`
               : 'No result captured'}

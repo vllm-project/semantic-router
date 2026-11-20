@@ -246,7 +246,11 @@ func writeConfigAtomically(configPath string, yamlData []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tmpFile.Write(yamlData); err != nil {
+	err = routerconfig.KeepReplacedFileMode(tmpFile, configPath)
+	if err == nil {
+		_, err = tmpFile.Write(yamlData)
+	}
+	if err != nil {
 		tmpFile.Close()
 		os.Remove(tmpConfigFile)
 		return err

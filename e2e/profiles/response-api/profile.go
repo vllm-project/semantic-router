@@ -111,6 +111,7 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-image-file-id",
 		"response-api-image-generation",
 		"response-api-image-generation-stream",
+		"response-api-image-generation-history",
 		"input-modality-cross-protocol",
 		"model-catalog-astra",
 		"protocol-codec-chat-backend-buffered-matrix",

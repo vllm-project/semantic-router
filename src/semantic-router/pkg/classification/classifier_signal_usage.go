@@ -64,6 +64,7 @@ func (c *Classifier) getAllSignalTypes() map[string]bool {
 	collectSignalKeys(allSignals, config.SignalTypeConversation, c.Config.ConversationRules, func(r config.ConversationRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeMetadata, c.Config.MetadataRules, func(r config.MetadataRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeInputModality, c.Config.InputModalityRules, func(r config.InputModalityRule) string { return r.Name })
+	collectSignalKeys(allSignals, config.SignalTypeAgent, c.Config.AgentRules, func(r config.AgentRule) string { return r.Name })
 	collectSignalKeys(allSignals, config.SignalTypeSystemOne, c.Config.SystemOneRules, func(r config.SystemOneRule) string { return r.Name })
 	for _, mapping := range c.Config.Projections.Mappings {
 		for _, output := range mapping.Outputs {

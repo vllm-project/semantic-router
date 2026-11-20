@@ -1,5 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { mockAuthenticatedAppShell } from './support/auth';
+import { expect, test, type Locator, type Page } from '@playwright/test'
+import { mockAuthenticatedAppShell } from './support/auth'
 
 const configResponse = {
   version: 'v0.5',
@@ -27,7 +27,9 @@ const configResponse = {
       name: 'default',
       signals: {
         domains: [{ name: 'business', description: 'Business' }],
-        keywords: [{ name: 'pricing', operator: 'OR', keywords: ['pricing'], case_sensitive: false }],
+        keywords: [
+          { name: 'pricing', operator: 'OR', keywords: ['pricing'], case_sensitive: false },
+        ],
       },
       decisions: [
         {
@@ -69,7 +71,7 @@ const configResponse = {
       },
     },
   },
-};
+}
 
 const rawGlobalYaml = `router:
   strategy: priority
@@ -83,30 +85,34 @@ model_catalog:
     jailbreak: guard-judge
   embeddings:
     default: {deployment: qwen3-embedding}
-`;
+`
 
 async function mockConfigSurface(page: Page) {
   await mockAuthenticatedAppShell(page, {
     settings: { platform: '', readonlyMode: false },
-  });
+  })
 
-  await page.route('**/api/router/config/all', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(configResponse) });
-  });
+  await page.route('**/api/router/config/all', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(configResponse),
+    })
+  })
 
-  await page.route('**/api/router/config/global', async route => {
+  await page.route('**/api/router/config/global', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(configResponse.global),
-    });
-  });
+    })
+  })
 
-  await page.route('**/api/router/config/global/raw', async route => {
-    await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml });
-  });
+  await page.route('**/api/router/config/global/raw', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/yaml', body: rawGlobalYaml })
+  })
 
-  await page.route('**/api/status', async route => {
+  await page.route('**/api/status', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -116,283 +122,204 @@ async function mockConfigSurface(page: Page) {
         services: [{ name: 'router', status: 'healthy', healthy: true }],
         models: { models: [], summary: { loaded_models: 0, total_models: 0 } },
       }),
-    });
-  });
+    })
+  })
 }
 
 async function expectInside(container: Locator, child: Locator) {
-  await child.scrollIntoViewIfNeeded();
+  await child.scrollIntoViewIfNeeded()
 
-  const [containerBox, childBox] = await Promise.all([
-    container.boundingBox(),
-    child.boundingBox(),
-  ]);
+  const [containerBox, childBox] = await Promise.all([container.boundingBox(), child.boundingBox()])
 
-  expect(containerBox).not.toBeNull();
-  expect(childBox).not.toBeNull();
+  expect(containerBox).not.toBeNull()
+  expect(childBox).not.toBeNull()
 
-  const containerBounds = containerBox!;
-  const childBounds = childBox!;
+  const containerBounds = containerBox!
+  const childBounds = childBox!
 
-  expect(childBounds.x).toBeGreaterThanOrEqual(containerBounds.x - 1);
-  expect(childBounds.y).toBeGreaterThanOrEqual(containerBounds.y - 1);
-  expect(childBounds.x + childBounds.width).toBeLessThanOrEqual(containerBounds.x + containerBounds.width + 1);
-  expect(childBounds.y + childBounds.height).toBeLessThanOrEqual(containerBounds.y + containerBounds.height + 1);
+  expect(childBounds.x).toBeGreaterThanOrEqual(containerBounds.x - 1)
+  expect(childBounds.y).toBeGreaterThanOrEqual(containerBounds.y - 1)
+  expect(childBounds.x + childBounds.width).toBeLessThanOrEqual(
+    containerBounds.x + containerBounds.width + 1,
+  )
+  expect(childBounds.y + childBounds.height).toBeLessThanOrEqual(
+    containerBounds.y + containerBounds.height + 1,
+  )
 }
 
 test.describe('Config surface layout regressions', () => {
-  test('opens decision model settings directly and saves the decision model and a binding', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await mockConfigSurface(page);
+  test('opens a new signal of any type in its drawer with schema-driven controls', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await mockConfigSurface(page)
 
-    let decisionModel = 'main-judge';
-    let patch: Record<string, unknown> | undefined;
-    const deployments = {
-      'main-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-4B' },
-      'alternate-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-0.8B' },
-    };
-    await page.route('**/api/router/config/global', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          model_catalog: { system: { decision_model: { deployment: decisionModel } }, deployments },
-        }),
-      });
-    });
-    await page.route('**/api/router/config/global/update', async route => {
-      patch = route.request().postDataJSON().model_catalog;
-      decisionModel = 'alternate-judge';
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"success","warnings":[]}' });
-    });
+    await page.goto('/routing/signals')
+    await page.getByRole('button', { name: 'New signal' }).click()
+    await page.getByRole('menuitem', { name: /Keywords/ }).click()
 
-    await page.goto('/config/global-config#global-section-system_models');
-    const card = page.locator('#global-section-system_models');
-    await expect(card.getByRole('heading', { name: 'Decision Model & Bindings' })).toBeInViewport();
-    await expect(card.getByText('main-judge', { exact: true })).toBeVisible();
-    await card.getByRole('button', { name: 'Edit', exact: true }).click();
-
-    const modal = page.getByRole('dialog', { name: 'Edit Decision Model & Bindings' });
-    await expect(modal.getByLabel(/^Decision Model/)).toHaveValue('main-judge');
-    await modal.getByLabel(/^Decision Model/).selectOption('alternate-judge');
-    await modal.getByLabel('Domain', { exact: true }).selectOption('alternate-judge');
-    await modal.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(modal).toBeHidden();
-    expect(patch).toEqual({
-      system: { decision_model: { deployment: 'alternate-judge' } },
-      bindings: { domain: 'alternate-judge' },
-    });
-    await expect(card.getByText('alternate-judge', { exact: true })).toBeVisible();
-  });
-
-  test('keeps signal controls readable and aligned in the shared editor', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1100 });
-    await mockConfigSurface(page);
-
-    await page.goto('/config/signals');
-    await page.getByRole('button', { name: 'Add Signal' }).click();
-
-    const modal = page.getByRole('dialog', { name: 'Add Signal' });
-    const signalType = modal.getByLabel('Signal type');
-    const signalOption = signalType.locator('option').first();
-    await expect(signalType).toHaveCSS('color-scheme', 'dark');
-    await expect(signalOption).toHaveCSS('color', 'rgb(245, 245, 247)');
-    await expect(signalOption).toHaveCSS('background-color', 'rgb(17, 18, 22)');
-
-    const checkbox = modal.getByLabel('Case Sensitive');
-    const [checkboxBox, checkboxControlBox] = await Promise.all([
-      checkbox.boundingBox(),
-      checkbox.locator('..').boundingBox(),
-    ]);
-    expect(checkboxBox).not.toBeNull();
-    expect(checkboxControlBox).not.toBeNull();
-    expect(checkboxBox!.width).toBeCloseTo(checkboxBox!.height, 0);
-    expect(checkboxBox!.width).toBeLessThanOrEqual(15);
-    expect(checkboxControlBox!.height).toBeGreaterThanOrEqual(39.5);
-
-    await checkbox.check();
-    await expect(checkbox).toBeChecked();
-    const checkmarkSize = await checkbox.evaluate((element) => {
-      const checkmark = window.getComputedStyle(element, '::before');
-      return {
-        width: Number.parseFloat(checkmark.width),
-        height: Number.parseFloat(checkmark.height),
-      };
-    });
-    expect(checkmarkSize.width).toBeLessThanOrEqual(4);
-    expect(checkmarkSize.height).toBeLessThanOrEqual(6);
-  });
+    const sheet = page.getByRole('dialog', { name: 'New keywords signal' })
+    await expect(sheet).toBeVisible()
+    await expect(sheet.getByRole('combobox', { name: 'Signal type' })).toBeVisible()
+    await expectInside(sheet, sheet.getByRole('textbox', { name: 'Keywords' }))
+    await sheet.getByRole('button', { name: /more settings at their defaults/ }).click()
+    const caseSensitive = sheet.getByRole('switch', { name: 'Case Sensitive' })
+    await expectInside(sheet, caseSensitive)
+    await caseSensitive.click()
+    await expect(caseSensitive).toBeChecked()
+  })
 
   test('uses the same hierarchy for projection editors', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1100 });
-    await mockConfigSurface(page);
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await mockConfigSurface(page)
 
-    await page.goto('/config/projections');
-    await page.getByRole('button', { name: 'Add Partition' }).click();
+    await page.goto('/routing/projections')
+    await page.getByRole('button', { name: 'New projection' }).first().click()
+    await page.getByRole('menuitem', { name: /Partition/ }).click()
 
-    const modal = page.getByRole('dialog', { name: 'Add Projection Partition' });
-    await expect(modal.getByRole('heading', { name: 'Identity' })).toBeVisible();
-    await expect(modal.getByRole('heading', { name: 'Definition' })).toBeVisible();
-    await expectInside(modal, modal.getByLabel('Semantics'));
-    await expectInside(modal, modal.getByRole('button', { name: 'Add member' }));
-  });
+    const sheet = page.getByRole('dialog', { name: 'New partition' })
+    await expect(sheet.getByRole('heading', { name: 'Definition' })).toBeVisible()
+    await expectInside(sheet, sheet.getByRole('combobox', { name: 'Semantics' }))
+    await expectInside(sheet, sheet.getByRole('textbox', { name: 'Members' }))
+  })
 
-  test('uses the shared hierarchy for signal and decision view and edit flows', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1100 });
-    await mockConfigSurface(page);
+  test('uses the shared hierarchy for signal and decision drawers', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await mockConfigSurface(page)
 
-    await page.goto('/config/signals');
-    await page.getByRole('button', { name: 'View keyword-pricing' }).click();
-    const signalView = page.getByRole('dialog', { name: 'Signal: pricing' });
-    await expect(signalView.getByRole('heading', { name: 'Identity' })).toBeVisible();
-    await expect(signalView.getByRole('heading', { name: 'Definition' })).toBeVisible();
-    await signalView.getByRole('button', { name: 'Close' }).first().click();
+    await page.goto('/routing/signals')
+    await page.getByRole('row', { name: /pricing/ }).click()
+    const signalSheet = page.getByRole('dialog', { name: 'pricing' })
+    await expect(signalSheet.getByRole('heading', { name: 'Identity' })).toBeVisible()
+    await expect(signalSheet.getByRole('heading', { name: 'Definition' })).toBeVisible()
+    await expect(page).toHaveURL(/id=keyword%3Apricing/)
+    await signalSheet.getByRole('button', { name: 'Close' }).last().click()
+    await expect(signalSheet).toBeHidden()
 
-    await page.getByRole('button', { name: 'Edit keyword-pricing' }).click();
-    const signalEdit = page.getByRole('dialog', { name: 'Edit Signal: pricing' });
-    await expect(signalEdit.getByRole('heading', { name: 'Identity' })).toBeVisible();
-    await expect(signalEdit.getByRole('heading', { name: 'Definition' })).toBeVisible();
-    await signalEdit.getByRole('button', { name: 'Close editor' }).click();
-
-    await page.goto('/config/decisions');
-    await page.getByRole('button', { name: 'View business-route' }).click();
-    const decisionView = page.getByRole('dialog', { name: 'Decision: business-route' });
-    for (const section of ['Identity', 'Routing policy', 'Selection & runtime', 'Output behavior']) {
-      await expect(decisionView.getByRole('heading', { name: section })).toBeVisible();
+    await page.goto('/routing/decisions')
+    await page.getByRole('row', { name: /business-route/ }).click()
+    const decisionSheet = page.getByRole('dialog', { name: 'business-route' })
+    for (const tab of [
+      'Overview',
+      'Rules',
+      'Models',
+      'Algorithm',
+      'Plugins',
+      'Advanced',
+      'Try it',
+      'YAML',
+    ]) {
+      await expect(decisionSheet.getByRole('tab', { name: new RegExp(`^${tab}`) })).toBeVisible()
     }
-  });
+  })
 
-  test('keeps decision model references editor controls inside the modal layout', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1100 });
-    await mockConfigSurface(page);
+  test('keeps decision model reference controls inside the drawer layout', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await mockConfigSurface(page)
 
-    await page.goto('/config/decisions');
-    const addDecisionButton = page.getByRole('button', { name: 'Add Decision' });
-    await addDecisionButton.click();
-
-    const modal = page.getByRole('dialog', { name: 'Add Decision' });
-    const form = modal.locator('form').first();
-    await expect(modal).toBeVisible();
-    await expect(form).toBeVisible();
-    const modelSelect = modal.getByRole('combobox', { name: 'Model', exact: true });
-    await modelSelect.selectOption('test-model');
-
+    await page.goto('/routing/decisions?id=business-route&view=models')
+    const sheet = page.getByRole('dialog', { name: 'business-route' })
     const controls = [
-      modelSelect,
-      page.getByLabel('Reasoning effort').first(),
-      page.getByLabel('Use reasoning').first(),
-      page.getByLabel('LoRA adapter').first(),
-      page.getByLabel('Weight').first(),
-      page.getByLabel('Reasoning description').first(),
-      page.getByRole('button', { name: 'Remove model reference' }),
-    ];
-
+      sheet.getByRole('combobox', { name: 'Model', exact: true }),
+      sheet.getByRole('radiogroup', { name: 'Use reasoning' }),
+      sheet.getByRole('combobox', { name: 'Reasoning effort' }),
+      sheet.getByRole('textbox', { name: 'LoRA adapter' }),
+      sheet.getByRole('textbox', { name: 'Weight' }),
+      sheet.getByRole('textbox', { name: 'Reasoning Description' }),
+      sheet.getByRole('button', { name: 'Remove test-model' }),
+    ]
     for (const control of controls) {
-      await expect(control).toBeVisible();
-      await expectInside(modal, control);
+      await expect(control).toBeVisible()
+      await expectInside(sheet, control)
     }
 
-    const [modalBox, viewport] = await Promise.all([
-      modal.boundingBox(),
-      page.viewportSize(),
-    ]);
-    expect(modalBox).not.toBeNull();
-    expect(viewport).not.toBeNull();
-    const rightGutter = viewport!.width - modalBox!.x - modalBox!.width;
-    const bottomGutter = viewport!.height - modalBox!.y - modalBox!.height;
-    expect(modalBox!.width).toBeLessThanOrEqual(1120);
-    expect(modalBox!.x).toBeCloseTo(rightGutter, 0);
-    expect(modalBox!.y).toBeCloseTo(bottomGutter, 0);
+    await sheet.getByRole('textbox', { name: 'Weight' }).fill('2')
+    await page.keyboard.press('Escape')
+    const discardDialog = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' })
+    await expect(discardDialog).toBeVisible()
+    await discardDialog.getByRole('button', { name: 'Discard changes' }).click()
+    await expect(sheet).toBeHidden()
+  })
 
-    const closeButton = modal.getByRole('button', { name: 'Close editor' });
-    await expect(closeButton).toBeFocused();
-    await modal.getByRole('button', { name: 'Add', exact: true }).focus();
-    await page.keyboard.press('Tab');
-    await expect(closeButton).toBeFocused();
-    await page.keyboard.press('Escape');
-    const discardDialog = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
-    await expect(discardDialog).toBeVisible();
-    await discardDialog.getByRole('button', { name: 'Discard changes' }).click();
-    await expect(modal).toBeHidden();
-    await expect(addDecisionButton).toBeFocused();
-  });
+  test('fits the decision drawer inside the mobile viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await mockConfigSurface(page)
 
-  test('fits the shared editor inside the mobile viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await mockConfigSurface(page);
+    await page.goto('/routing/decisions')
+    await page.getByRole('button', { name: 'New decision' }).click()
 
-    await page.goto('/config/decisions');
-    await page.getByRole('button', { name: 'Add Decision' }).click();
+    const sheet = page.getByRole('dialog', { name: 'New decision' })
+    await expect(sheet).toBeVisible()
+    const box = await sheet.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390)
+    expect(box!.y).toBeGreaterThanOrEqual(0)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(844)
+  })
 
-    const modal = page.getByRole('dialog', { name: 'Add Decision' });
-    await expect(modal).toHaveCSS('animation-name', 'none');
-    const modalBox = await modal.boundingBox();
-    expect(modalBox).not.toBeNull();
-    const rightGutter = 390 - modalBox!.x - modalBox!.width;
-    expect(modalBox!.x).toBeGreaterThanOrEqual(0);
-    expect(rightGutter).toBeGreaterThanOrEqual(0);
-    expect(modalBox!.x).toBeLessThanOrEqual(8);
-    expect(rightGutter).toBeLessThanOrEqual(8);
-    expect(modalBox!.y).toBeGreaterThanOrEqual(0);
-    expect(modalBox!.y + modalBox!.height).toBeLessThanOrEqual(844);
-  });
+  test('keeps model catalog card paths and controls cleanly inside their router settings cards', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1600, height: 1200 })
+    await mockConfigSurface(page)
 
-  test('stacks model catalog section path and actions cleanly inside global cards', async ({ page }) => {
-    await page.setViewportSize({ width: 1600, height: 1200 });
-    await mockConfigSurface(page);
+    await page.goto('/settings/router#global-section-system_models')
+    await expect(
+      page.getByRole('heading', { name: 'Router settings', exact: true }).first(),
+    ).toBeVisible({ timeout: 15_000 })
 
-    await page.goto('/config/global-config');
-    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
+    const decisionCard = page.locator('#global-section-system_models')
+    const embeddingsCard = page.locator('#global-section-embedding_models')
+    await expect(decisionCard.getByRole('combobox', { name: /^Jailbreak/ })).toHaveText(
+      'guard-judge',
+    )
+    await expect(embeddingsCard.getByRole('textbox', { name: 'Default deployment' })).toHaveValue(
+      'qwen3-embedding',
+    )
 
-    const systemBindingsCard = page.locator('article').filter({
-      has: page.getByRole('heading', { name: 'Decision Model & Bindings' }),
-    }).first();
-    const embeddingsCard = page.locator('article').filter({
-      has: page.getByRole('heading', { name: 'Embedding Models' }),
-    }).first();
-
-    await expect(systemBindingsCard).toBeVisible();
-    await expect(embeddingsCard).toBeVisible();
-    await expect(systemBindingsCard.getByText('guard-judge', { exact: true })).toBeVisible();
-    await expect(embeddingsCard.getByText('qwen3-embedding')).toBeVisible();
-
-    const systemPath = systemBindingsCard.getByText('global.model_catalog.system');
-    const systemButton = systemBindingsCard.getByRole('button', { name: 'Edit' });
-    const embeddingPath = embeddingsCard.getByText('global.model_catalog.embeddings');
-    const embeddingButton = embeddingsCard.getByRole('button', { name: 'Edit' });
-
-    for (const [card, path, button] of [
-      [systemBindingsCard, systemPath, systemButton],
-      [embeddingsCard, embeddingPath, embeddingButton],
+    for (const [card, path, control] of [
+      [
+        decisionCard,
+        decisionCard.getByText('global.model_catalog.system', { exact: true }),
+        decisionCard.getByRole('button', { name: 'Manage decision models' }),
+      ],
+      [
+        embeddingsCard,
+        embeddingsCard.getByText('global.model_catalog.embeddings', { exact: true }),
+        embeddingsCard.getByRole('radiogroup', { name: 'Embedding provider' }),
+      ],
     ] as const) {
-      await expect(path).toBeVisible();
-      await expect(button).toBeVisible();
-      await expectInside(card, path);
-      await expectInside(card, button);
+      await expect(path).toBeVisible()
+      await expect(control).toBeVisible()
+      await expectInside(card, path)
+      await expectInside(card, control)
 
-      const [pathBox, buttonBox] = await Promise.all([path.boundingBox(), button.boundingBox()]);
-      expect(pathBox).not.toBeNull();
-      expect(buttonBox).not.toBeNull();
+      const [pathBox, controlBox] = await Promise.all([path.boundingBox(), control.boundingBox()])
+      expect(pathBox).not.toBeNull()
+      expect(controlBox).not.toBeNull()
       const horizontallySeparated =
-        buttonBox!.x + buttonBox!.width <= pathBox!.x ||
-        pathBox!.x + pathBox!.width <= buttonBox!.x;
+        controlBox!.x + controlBox!.width <= pathBox!.x ||
+        pathBox!.x + pathBox!.width <= controlBox!.x
       const verticallySeparated =
-        buttonBox!.y + buttonBox!.height <= pathBox!.y ||
-        pathBox!.y + pathBox!.height <= buttonBox!.y;
-      expect(horizontallySeparated || verticallySeparated).toBe(true);
+        controlBox!.y + controlBox!.height <= pathBox!.y ||
+        pathBox!.y + pathBox!.height <= controlBox!.y
+      expect(horizontallySeparated || verticallySeparated).toBe(true)
     }
 
-    await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0);
-  });
+    await expect(page.getByRole('heading', { name: 'Classifier Catalog' })).toHaveCount(0)
+  })
 
-  test('falls back from the retired classifier route to Global Config', async ({ page }) => {
-    await page.setViewportSize({ width: 1600, height: 1200 });
-    await mockConfigSurface(page);
+  test('falls back from the retired classifier route to router settings', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1200 })
+    await mockConfigSurface(page)
 
-    await page.goto('/config/classifiers');
+    await page.goto('/config/classifiers')
 
-    await expect(page).toHaveURL(/\/config\/global-config$/);
-    await expect(page.getByRole('heading', { name: 'Global Config', exact: true })).toBeVisible();
-  });
-});
+    await expect(page).toHaveURL(/\/settings\/router$/)
+    await expect(
+      page.getByRole('heading', { name: 'Router settings', exact: true }).first(),
+    ).toBeVisible({ timeout: 15_000 })
+  })
+})

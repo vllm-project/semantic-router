@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/websearch"
 )
 
 // ========================
@@ -201,7 +202,7 @@ func fetchWebDirect(targetURL string, timeout time.Duration, maxLength int) (*Op
 	}
 
 	// Set request headers to mimic browser
-	req.Header.Set("User-Agent", getRandomUserAgent())
+	req.Header.Set("User-Agent", websearch.RandomUserAgent())
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 	req.Header.Set("DNT", "1")

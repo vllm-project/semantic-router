@@ -161,6 +161,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"conversation":   signals.MatchedConversationRules,
 		"metadata":       signals.MatchedMetadataRules,
 		"input_modality": signals.MatchedInputModalityRules,
+		"agent":          signals.MatchedAgentRules,
 		"decision":       signals.MatchedSystemOneRules,
 		"projection":     signals.MatchedProjectionRules,
 		"context_tokens": signals.TokenCount,
@@ -485,12 +486,14 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	if orch := r.fallbackOrchestratorForContext(ctx); orch != nil && orch.Policy().Enabled {
 		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, decisionName, selectedModel)
 	}
-	return selectedModel, applyReasoningModeFromSelectedModel(
-		selectedModelRef,
-		decisionName,
-		evaluationConfidence,
-		ctx,
-	), nil
+	reasoning = applyReasoningModeFromSelectedModel(selectedModelRef, decisionName, evaluationConfidence, ctx)
+	if reasoning.UseReasoning {
+		if reason := r.unstatedReasoningOffReason(ctx, selectedModelRef.Model); reason != "" {
+			reasoning.UseReasoning = false
+			ctx.VSRReasoningMode, ctx.VSRReasoningReason = "off", reason
+		}
+	}
+	return selectedModel, reasoning, nil
 }
 
 func applyReasoningModeFromSelectedModel(

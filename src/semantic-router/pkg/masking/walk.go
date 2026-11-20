@@ -42,6 +42,18 @@ type Result struct {
 // being scanned at the time of the error is never mutated, and the caller is
 // expected to discard the whole request rather than dispatch it (D4).
 func Apply(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, error) {
+	if a.err != nil {
+		return Result{}, a.err
+	}
+	if a.identity != nil {
+		if err := a.prepare(request); err != nil {
+			return Result{}, err
+		}
+	}
+	return applyRequest(request, a, scan)
+}
+
+func applyRequest(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, error) {
 	var result Result
 	// Instructions before Messages, so placeholder indices are stable
 	// regardless of where a value first appears in the request.
@@ -68,6 +80,9 @@ func Apply(request *llmprotocol.Request, a *Allocator, scan ScanFunc) (Result, e
 			request.Safeguards = json.RawMessage(masked)
 		}
 	}
+	if a.err != nil {
+		return Result{}, a.err
+	}
 	result.EntityTypes = dedupSortedEntityTypes(result.EntityTypes)
 	return result, nil
 }
@@ -92,6 +107,12 @@ func applyToContent(blocks []llmprotocol.Content, a *Allocator, scan ScanFunc, o
 func applyToBlock(
 	block *llmprotocol.Content, a *Allocator, scan ScanFunc, out *Result, depth int,
 ) error {
+	// A server tool's call and result, and the citations it attached to text,
+	// travel as written: their string leaves are masked like a structured tool
+	// result's, or the request is refused.
+	if err := maskRawBlock(block, a, scan, out); err != nil {
+		return err
+	}
 	switch block.Kind {
 	case llmprotocol.ContentText:
 		return maskTextBlock(block, a, scan, out)
@@ -101,6 +122,8 @@ func applyToBlock(
 		if block.ToolResult != nil {
 			return maskToolResult(block.ToolResult, a, scan, out, depth)
 		}
+	case llmprotocol.ContentServerTool:
+		// Masked above, as the JSON leaves of the block as written.
 	case llmprotocol.ContentReasoning:
 		// Anthropic thinking blocks carry a provider Signature over their
 		// text. Rewriting the text invalidates it and the provider
@@ -110,6 +133,21 @@ func applyToBlock(
 		// blocks are explicit non-goals: the issue scopes masking to text
 		// and structured tool payloads, not binary payloads, URLs, or
 		// opaque identifiers.
+	}
+	return nil
+}
+
+func maskRawBlock(block *llmprotocol.Content, a *Allocator, scan ScanFunc, out *Result) error {
+	if len(block.Raw) == 0 {
+		return nil
+	}
+	masked, changed, err := maskJSONDocument(string(block.Raw), a, scan, out)
+	if err != nil {
+		return fmt.Errorf("masking: server tool block: %w", err)
+	}
+	if changed {
+		out.Changed = true
+		block.Raw = json.RawMessage(masked)
 	}
 	return nil
 }

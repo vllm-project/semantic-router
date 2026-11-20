@@ -44,6 +44,10 @@ type Serving struct {
 	// a request path (nil accepts every model), or false and the detail of
 	// the 404 a path it does not serve answers.
 	Gate func(path string) (models []string, detail string, served bool)
+	// UnservedRoute, when set, is the model a request on a path is routed as
+	// when it names a model the path's API does not accept or the Router
+	// does not serve; empty, such a request is refused.
+	UnservedRoute func(path string) string
 	// ListsLLM and ListsSystemOne say which models GET /v1/models lists: the
 	// LLM APIs' as OpenAI data, the systemone API's as models.
 	ListsLLM, ListsSystemOne bool
@@ -210,7 +214,11 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		h.serveListing(w, r, serving, x)
 		return
 	}
-	h.serveRouted(w, r, serving, x, models)
+	route := ""
+	if serving.UnservedRoute != nil && !listing {
+		route = serving.UnservedRoute(r.URL.Path)
+	}
+	h.serveRouted(w, r, serving, x, models, route)
 }
 
 // isSystemOnePath reports whether a path is one of the System One API's.
@@ -228,7 +236,7 @@ func isSystemOnePath(path string) bool {
 // catalog Codex asks for, stays as the routing core wrote it.
 func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange) {
 	llm := newBufferedResponse()
-	h.serveRouted(llm, r, serving, x, serving.Models)
+	h.serveRouted(llm, r, serving, x, serving.Models, "")
 	systemOne := newBufferedResponse()
 	serving.SystemOne.ServeHTTP(systemOne, r.Clone(r.Context()))
 	var listed, native map[string]json.RawMessage
@@ -250,21 +258,14 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving S
 }
 
 // serveRouted serves a request through the routing core, accepting the
-// request models in models (nil accepts every model).
-func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, models []string) {
-	ctx := routing.WithListenerModels(r.Context(), models)
+// request models in models (nil accepts every model) and routing any other
+// as route when one is set.
+func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, models []string, route string) {
+	ctx := routing.WithUnservedModelRoute(routing.WithListenerModels(r.Context(), models), route)
 	x.record.RequestID = r.Header.Get(headers.RequestID)
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
-	if errors.Is(err, errBodyTooLarge) {
-		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
-		return
-	}
-	if errors.Is(err, os.ErrDeadlineExceeded) {
-		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request body did not arrive in time.")
-		return
-	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request_body", "The request body could not be read.")
+		writeBodyReadError(w, err)
 		return
 	}
 	var strip map[string]bool
@@ -289,7 +290,8 @@ func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Se
 
 var errResponseStarted = errors.New("the response failed after it started")
 
-// serve answers a plan and returns why the exchange ended early, or nil.
+// serve answers a plan and returns why the exchange ended early, the local
+// reply it answered with, or nil.
 func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serving, plan *routing.Plan, x *exchange) error {
 	if plan.Immediate != nil {
 		return transportError(ctx, writeResponse(w, plan.Immediate))
@@ -302,7 +304,13 @@ func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serv
 		return transportError(ctx, err)
 	}
 	defer closeBody()
-	return transportError(ctx, writeResponse(w, resp))
+	if err := writeResponse(w, resp); err != nil {
+		return transportError(ctx, err)
+	}
+	if x.local != nil {
+		return x.local
+	}
+	return nil
 }
 
 // forward sends the planned call upstream and runs the response phases. The
@@ -310,7 +318,8 @@ func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serv
 //
 // A local reply skips the response phases: Envoy's ext_proc ends processing
 // on Envoy's own local replies, so behind Envoy the client gets the reply as
-// it is, and the session ends as the ext_proc stream then does.
+// it is. The session then ends with the reply, as x.local, so it knows what
+// the client got.
 func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Plan, x *exchange) (*routing.Response, func(), error) {
 	sent := time.Now()
 	result, err := serving.Upstream.Execute(ctx, plan.Call, h.opts.Listener)
@@ -319,7 +328,9 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 			return nil, nil, ctx.Err()
 		}
 		x.record.UpstreamServiceTime = time.Since(sent)
-		return verbatim(localReply(err)), func() {}, nil
+		reply := localReply(err)
+		x.local = &routing.LocalReply{Status: reply.StatusCode, Failure: string(upstream.KindOf(err))}
+		return verbatim(reply), func() {}, nil
 	}
 	x.record.UpstreamServiceTime = time.Since(sent)
 	if result.Immediate != nil {
@@ -332,6 +343,7 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 	}
 	closeBody := func() { _ = resp.Body.Close() }
 	if resp.Local != nil {
+		x.local = &routing.LocalReply{Status: resp.StatusCode, Failure: string(resp.Local.Kind)}
 		return verbatim(resp), closeBody, nil
 	}
 	out, err := serving.Engine.Respond(ctx, plan, &routing.UpstreamResponse{
@@ -450,6 +462,20 @@ func transportError(ctx context.Context, err error) error {
 }
 
 var errBodyTooLarge = errors.New("request body too large")
+
+// writeBodyReadError is shared by normal ingress and the h2c adapter, which
+// must consume the initial Upgrade body before it can enter the Handler.
+func writeBodyReadError(w http.ResponseWriter, err error) {
+	var sizeErr *http.MaxBytesError
+	switch {
+	case errors.Is(err, errBodyTooLarge), errors.As(err, &sizeErr):
+		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
+	case errors.Is(err, os.ErrDeadlineExceeded):
+		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request body did not arrive in time.")
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "The request body could not be read.")
+	}
+}
 
 func readBody(r *http.Request, limit int64) ([]byte, error) {
 	if r.Body == nil || r.Body == http.NoBody {

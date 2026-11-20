@@ -1,12 +1,15 @@
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
-import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
+import {
+  PROJECTION_CALIBRATION_METHODS,
+  PROJECTION_INPUT_TYPES,
+  PROJECTION_PARTITION_SEMANTICS,
+  projectionValueSources,
+} from '../lib/projectionSchemas'
 import type {
   ProjectionMappingCalibration,
   ProjectionMappingOutput,
   ProjectionScoreInput,
 } from './configPageSupport'
-
-export const PROJECTION_INPUT_TYPES = ROUTER_CONFIG_EXTENSION.projection_input_types
 
 const supportedProjectionInputTypes = new Set<string>(PROJECTION_INPUT_TYPES)
 
@@ -20,6 +23,12 @@ function optionalString(value: unknown): string | undefined {
 
 function optionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function listPhrase(values: readonly string[]): string {
+  return values.length <= 1
+    ? values.join('')
+    : `${values.slice(0, -1).join(', ')}${values.length > 2 ? ',' : ''} or ${values[values.length - 1]}`
 }
 
 export function normalizeProjectionMembers(value: unknown): string[] {
@@ -38,8 +47,8 @@ export function assertProjectionPartitionSettings(
   semantics: string,
   temperature: number | undefined,
 ): void {
-  if (!['exclusive', 'softmax_exclusive'].includes(semantics)) {
-    throw new Error('Partition semantics must be exclusive or softmax_exclusive.')
+  if (!(PROJECTION_PARTITION_SEMANTICS as readonly string[]).includes(semantics)) {
+    throw new Error(`Partition semantics must be ${listPhrase(PROJECTION_PARTITION_SEMANTICS)}.`)
   }
   if (
     semantics === 'softmax_exclusive' &&
@@ -69,19 +78,13 @@ export function projectionInputErrors(input: ProjectionScoreInput): string[] {
     errors.push('Input type is not supported.')
   if (!input.name?.trim()) errors.push('Signal or projection name is required.')
   if (!Number.isFinite(input.weight)) errors.push('Weight must be a number.')
-  if (
-    input.type === 'projection' &&
-    input.value_source &&
-    !['score', 'confidence'].includes(input.value_source)
-  ) {
-    errors.push('Projection inputs support score or confidence values.')
-  }
-  if (
-    input.type !== 'projection' &&
-    input.value_source &&
-    !['binary', 'confidence', 'raw'].includes(input.value_source)
-  ) {
-    errors.push('Signal inputs support binary, confidence, or raw values.')
+  const sources = projectionValueSources(input.type)
+  if (input.value_source && !sources.includes(input.value_source)) {
+    errors.push(
+      input.type === 'projection'
+        ? `Projection inputs support ${listPhrase(sources)} values.`
+        : `Signal inputs support ${listPhrase(sources)} values.`,
+    )
   }
   return errors
 }
@@ -108,8 +111,11 @@ export function assertProjectionCalibration(
   calibration: ProjectionMappingCalibration | undefined,
 ): void {
   if (!calibration) return
-  if (calibration.method && calibration.method !== 'sigmoid_distance') {
-    throw new Error('Calibration method must be sigmoid_distance.')
+  if (
+    calibration.method &&
+    !(PROJECTION_CALIBRATION_METHODS as readonly string[]).includes(calibration.method)
+  ) {
+    throw new Error(`Calibration method must be ${listPhrase(PROJECTION_CALIBRATION_METHODS)}.`)
   }
   if (calibration.slope !== undefined && !Number.isFinite(calibration.slope)) {
     throw new Error('Calibration slope must be a number.')
