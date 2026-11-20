@@ -269,13 +269,20 @@ func chatChoicesEndForToolCalls(choices []json.RawMessage) bool {
 }
 
 func chatUsageCompletionTokens(raw json.RawMessage) *int64 {
-	var usage struct {
-		CompletionTokens *int64 `json:"completion_tokens"`
-	}
+	var usage map[string]json.RawMessage
 	if json.Unmarshal(raw, &usage) != nil {
 		return nil
 	}
-	return usage.CompletionTokens
+	// Match Chat provider decoding: a present canonical counter takes precedence.
+	counter, present := usage["completion_tokens"]
+	if !present {
+		counter = usage["output_tokens"]
+	}
+	var tokens *int64
+	if counter == nil || json.Unmarshal(counter, &tokens) != nil {
+		return nil
+	}
+	return tokens
 }
 
 func filterChatUsageFrame(
