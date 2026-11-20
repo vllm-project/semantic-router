@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -64,15 +65,16 @@ func observeSessionTitle(ctx *RequestContext, response *llmprotocol.Response) {
 	if ctx == nil || !ctx.SessionTitleRequest || ctx.AgentTurn.ThreadSource == codexThreadSourceTitle || response == nil {
 		return
 	}
+	prose := response.AssistantProse()
 	if isOpenCode(ctx) {
-		title, _, _ := strings.Cut(strings.TrimSpace(extractSemanticAssistantResponseText(response)), "\n")
+		title, _, _ := strings.Cut(memory.StripThinkTags(prose), "\n")
 		ctx.sessionName = boundedSessionName(title)
 		return
 	}
 	var answer struct {
 		Title string `json:"title"`
 	}
-	if json.Unmarshal([]byte(semanticAssistantContent(response)), &answer) == nil {
+	if json.Unmarshal([]byte(prose), &answer) == nil {
 		ctx.sessionName = boundedSessionName(answer.Title)
 	}
 }

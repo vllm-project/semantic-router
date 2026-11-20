@@ -17,6 +17,17 @@ func TextContent(contents []Content) string {
 // parts form one prose run until a visible tool call. transformProse, when
 // supplied, receives each complete run and never receives tool arguments.
 func (response *Response) AssistantText(transformProse func(string) string) string {
+	return response.renderAssistantText(transformProse, true)
+}
+
+// AssistantProse joins the primary assistant's text and refusal blocks in
+// order. Consumers of a textual answer, such as a session title, use this
+// projection even when the response also contains tool calls.
+func (response *Response) AssistantProse() string {
+	return response.renderAssistantText(nil, false)
+}
+
+func (response *Response) renderAssistantText(transformProse func(string) string, includeToolCalls bool) string {
 	if response == nil {
 		return ""
 	}
@@ -44,6 +55,9 @@ func (response *Response) AssistantText(transformProse func(string) string) stri
 			case ContentText, ContentRefusal:
 				prose.WriteString(content.Text)
 			case ContentToolCall:
+				if !includeToolCalls {
+					continue
+				}
 				if call := content.ToolCall.answerText(); call != "" {
 					flushProse()
 					sections = append(sections, call)
