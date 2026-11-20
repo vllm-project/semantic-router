@@ -15,7 +15,7 @@ class GeminiCatalogTests(unittest.TestCase):
 
     def test_published_evidence_uses_exact_efforts_and_benchmark_versions(self) -> None:
         expected_profiles = {
-            "artificial-analysis/gdp-pdf@1.0.0": "independent-standard",
+            "artificial-analysis/gdp-pdf@1.0.0": "published-standard",
             "harbor/terminal-bench@4.0.0": "independent-agent",
             "artificial-analysis/briefcase@1.1.0": "independent-agent",
             "artificial-analysis/omniscience@1.1.0": "independent-standard",
@@ -49,6 +49,33 @@ class GeminiCatalogTests(unittest.TestCase):
                     )
                     self.assertIn("observed_at", record)
                     self.assertNotIn("measured_at", record)
+
+    def test_omniscience_preserves_the_published_hallucination_rate(self) -> None:
+        benchmark = next(
+            item
+            for item in self.snapshot["benchmarks"]
+            if item["id"] == "artificial-analysis/omniscience@1.1.0"
+        )
+        metric = next(
+            item for item in benchmark["metrics"] if item["id"] == "hallucination_rate"
+        )
+        self.assertEqual(metric["unit"], "proportion")
+        self.assertEqual(metric["range"], [0, 1])
+        self.assertEqual(metric["direction"], "lower_is_better")
+        for model, value in (
+            ("argon", 0.0425531914893617),
+            ("carbon", 0.11421725239616613),
+            ("hydrogen", 0.0847913862718708),
+            ("neon", 0.14418212478920742),
+        ):
+            with self.subTest(model=model):
+                record = next(
+                    item
+                    for item in self.snapshot["evaluations"]
+                    if item["model"] == f"google/gemini-4-{model}"
+                    and item["benchmark"] == benchmark["id"]
+                )
+                self.assertEqual(record["metrics"]["hallucination_rate"], value)
 
     def test_new_evidence_does_not_fill_default_index_or_other_efforts(self) -> None:
         for model in ("argon", "carbon", "hydrogen", "neon"):

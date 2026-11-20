@@ -5012,17 +5012,6 @@ reasoning_families:
   modes:
   - enabled
   default_mode: enabled
-- id: gemini-4-three-level-medium
-  type: reasoning_effort
-  parameter: reasoning_effort
-  levels:
-  - low
-  - medium
-  - high
-  default: medium
-  modes:
-  - enabled
-  default_mode: enabled
 - id: gemini-4-four-level-high
   type: reasoning_effort
   parameter: reasoning_effort
@@ -6503,7 +6492,7 @@ models:
     type: proprietary_api
     source: https://aistudio.google.com/docs/models/gemini-4-argon
   family: gemini-4
-  reasoning_family: gemini-4-three-level-medium
+  reasoning_family: gemini-flash-three-level-medium
   lifecycle: active
   limits:
     context_window_size: 1048576
@@ -6535,6 +6524,7 @@ models:
   - proprietary
   - multimodal
   - agentic
+  released_at: '2026-10-13'
 - id: google/gemini-4-carbon
   display_name: Gemini 4 Carbon
   description: Google's Gemini 4 reasoning model for complex software engineering, math, science, and autonomous agents.
@@ -6548,7 +6538,7 @@ models:
     type: proprietary_api
     source: https://aistudio.google.com/docs/models/gemini-4-carbon
   family: gemini-4
-  reasoning_family: gemini-4-three-level-medium
+  reasoning_family: gemini-flash-three-level-medium
   lifecycle: active
   limits:
     context_window_size: 1048576
@@ -6580,6 +6570,7 @@ models:
   - proprietary
   - multimodal
   - agentic
+  released_at: '2026-11-10'
 - id: google/gemini-4-hydrogen
   display_name: Gemini 4 Hydrogen
   description: Google's Gemini 4 model for efficient everyday coding and agentic workflows.
@@ -6625,6 +6616,7 @@ models:
   - proprietary
   - multimodal
   - agentic
+  released_at: '2026-11-12'
 - id: google/gemini-4-neon
   display_name: Gemini 4 Neon
   description: Google's Gemini 4 model for multimodal reasoning, coding, and agentic workflows.
@@ -6670,6 +6662,7 @@ models:
   - proprietary
   - multimodal
   - agentic
+  released_at: '2026-11-18'
 - id: google/gemini-3.8-flash
   display_name: Gemini 3.8 Flash
   description: Google's current Flash model for long-horizon coding, autonomous agents, and multimodal work.
@@ -11314,11 +11307,6 @@ benchmarks:
   - id: published-standard
     display_name: Published standard
     description: Source-published all-pass result for the named model variant and reasoning effort.
-  - id: independent-standard
-    display_name: Independent standard run
-    description: Artificial Analysis implementation over 100 tasks with five attempts each, using extracted text and available
-      page images without tools. All-pass is the proportion of attempts passing every rubric criterion; document preparation
-      and judge are retained on the evaluation record.
   metrics:
   - id: all_pass
     unit: proportion
@@ -11499,6 +11487,12 @@ benchmarks:
       type: linear_clamp
       min: -100
       max: 100
+  - id: hallucination_rate
+    unit: proportion
+    direction: lower_is_better
+    range:
+    - 0
+    - 1
 - id: cais/hle-diamond@1.0.0
   display_name: HLE-Diamond
   domain: frontier_reasoning
@@ -20111,7 +20105,7 @@ evaluations:
 - id: independent/gemini-4-argon-high-gdp-pdf@1.0.0
   model: google/gemini-4-argon
   benchmark: artificial-analysis/gdp-pdf@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: published-standard
   reasoning_effort: high
   subject:
     source_model: Gemini 4 Argon (High)
@@ -20222,6 +20216,7 @@ evaluations:
   metrics:
     accuracy: 0.483
     net_score: 46.1
+    hallucination_rate: 0.0425531914893617
   status: available
   observed_at: '2026-11-20'
   evidence:
@@ -20264,7 +20259,7 @@ evaluations:
 - id: independent/gemini-4-carbon-high-gdp-pdf@1.0.0
   model: google/gemini-4-carbon
   benchmark: artificial-analysis/gdp-pdf@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: published-standard
   reasoning_effort: high
   subject:
     source_model: Gemini 4 Carbon (High)
@@ -20375,6 +20370,7 @@ evaluations:
   metrics:
     accuracy: 0.5826666666666667
     net_score: 53.5
+    hallucination_rate: 0.11421725239616613
   status: available
   observed_at: '2026-11-20'
   evidence:
@@ -20417,7 +20413,7 @@ evaluations:
 - id: independent/gemini-4-hydrogen-xhigh-gdp-pdf@1.0.0
   model: google/gemini-4-hydrogen
   benchmark: artificial-analysis/gdp-pdf@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: published-standard
   reasoning_effort: xhigh
   subject:
     source_model: Gemini 4 Hydrogen (Xhigh)
@@ -20528,6 +20524,7 @@ evaluations:
   metrics:
     accuracy: 0.5046666666666667
     net_score: 46.266666666666666
+    hallucination_rate: 0.0847913862718708
   status: available
   observed_at: '2026-11-20'
   evidence:
@@ -20570,7 +20567,7 @@ evaluations:
 - id: independent/gemini-4-neon-xhigh-gdp-pdf@1.0.0
   model: google/gemini-4-neon
   benchmark: artificial-analysis/gdp-pdf@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: published-standard
   reasoning_effort: xhigh
   subject:
     source_model: Gemini 4 Neon (Xhigh)
@@ -20681,6 +20678,7 @@ evaluations:
   metrics:
     accuracy: 0.6046666666666667
     net_score: 54.766666666666666
+    hallucination_rate: 0.14418212478920742
   status: available
   observed_at: '2026-11-20'
   evidence:

@@ -1,7 +1,7 @@
 - id: independent/gemini-4-argon-high-gdp-pdf@1.0.0
   model: google/gemini-4-argon
   benchmark: artificial-analysis/gdp-pdf@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: published-standard
   reasoning_effort: high
   subject:
     source_model: Gemini 4 Argon (High)
@@ -113,6 +113,7 @@
   metrics:
     accuracy: 0.483
     net_score: 46.1
+    hallucination_rate: 0.0425531914893617
   status: available
   observed_at: 2026-11-20
   evidence:
@@ -155,7 +156,7 @@
 - id: independent/gemini-4-carbon-high-gdp-pdf@1.0.0
   model: google/gemini-4-carbon
   benchmark: artificial-analysis/gdp-pdf@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: published-standard
   reasoning_effort: high
   subject:
     source_model: Gemini 4 Carbon (High)
@@ -267,6 +268,7 @@
   metrics:
     accuracy: 0.5826666666666667
     net_score: 53.5
+    hallucination_rate: 0.11421725239616613
   status: available
   observed_at: 2026-11-20
   evidence:
@@ -309,7 +311,7 @@
 - id: independent/gemini-4-hydrogen-xhigh-gdp-pdf@1.0.0
   model: google/gemini-4-hydrogen
   benchmark: artificial-analysis/gdp-pdf@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: published-standard
   reasoning_effort: xhigh
   subject:
     source_model: Gemini 4 Hydrogen (Xhigh)
@@ -421,6 +423,7 @@
   metrics:
     accuracy: 0.5046666666666667
     net_score: 46.266666666666666
+    hallucination_rate: 0.0847913862718708
   status: available
   observed_at: 2026-11-20
   evidence:
@@ -463,7 +466,7 @@
 - id: independent/gemini-4-neon-xhigh-gdp-pdf@1.0.0
   model: google/gemini-4-neon
   benchmark: artificial-analysis/gdp-pdf@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: published-standard
   reasoning_effort: xhigh
   subject:
     source_model: Gemini 4 Neon (Xhigh)
@@ -575,6 +578,7 @@
   metrics:
     accuracy: 0.6046666666666667
     net_score: 54.766666666666666
+    hallucination_rate: 0.14418212478920742
   status: available
   observed_at: 2026-11-20
   evidence:

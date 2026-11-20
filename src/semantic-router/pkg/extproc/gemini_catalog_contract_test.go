@@ -2,7 +2,6 @@ package extproc
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +21,12 @@ import (
 // Exercise every supported effort and both defaults through the catalog-backed
 // alias, routing, provider mapping, and final Chat Completions HTTP request.
 func TestGemini4ProviderDispatch(t *testing.T) {
+	type observation struct {
+		method        string
+		path          string
+		authorization string
+		body          []byte
+	}
 	for _, model := range []string{"argon", "carbon", "hydrogen", "neon"} {
 		efforts := []string{"", "low", "medium", "high"}
 		defaultEffort := "medium"
@@ -30,29 +35,26 @@ func TestGemini4ProviderDispatch(t *testing.T) {
 			defaultEffort = "high"
 		}
 		for _, effort := range efforts {
-			t.Run(model+"/"+effort, func(t *testing.T) {
+			name := effort
+			if name == "" {
+				name = "default"
+			}
+			t.Run(model+"/"+name, func(t *testing.T) {
 				selected := effort
 				if selected == "" {
 					selected = defaultEffort
 				}
+				received := make(chan observation, 1)
 				fixture := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					body, err := io.ReadAll(r.Body)
-					if !assert.NoError(t, err) {
+					if err != nil {
 						http.Error(w, err.Error(), http.StatusBadRequest)
 						return
 					}
-					assert.Equal(t, http.MethodPost, r.Method)
-					assert.Equal(t, "/v1beta/openai/chat/completions", r.URL.Path)
-					assert.Equal(t, "Bearer gemini-fixture-key", r.Header.Get("Authorization"))
-					var wire map[string]interface{}
-					if err := json.Unmarshal(body, &wire); !assert.NoError(t, err) {
-						http.Error(w, err.Error(), http.StatusBadRequest)
-						return
+					received <- observation{
+						method: r.Method, path: r.URL.Path,
+						authorization: r.Header.Get("Authorization"), body: body,
 					}
-					assert.Equal(t, "gemini-4-"+model, wire["model"])
-					assert.Equal(t, map[string]interface{}{"reasoning_effort": selected}, providerReasoningControls(wire))
-					assert.NotContains(t, wire, "thinking_level")
-					assert.NotContains(t, wire, "thinking_budget")
 					w.WriteHeader(http.StatusOK)
 				}))
 				t.Cleanup(fixture.Close)
@@ -95,6 +97,19 @@ func TestGemini4ProviderDispatch(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, result.Body.Close())
 				require.Equal(t, http.StatusOK, result.StatusCode)
+				select {
+				case observed := <-received:
+					assert.Equal(t, http.MethodPost, observed.method)
+					assert.Equal(t, "/v1beta/openai/chat/completions", observed.path)
+					assert.Equal(t, "Bearer gemini-fixture-key", observed.authorization)
+					wire := unmarshalReasoningRequest(t, observed.body)
+					assert.Equal(t, "gemini-4-"+model, wire["model"])
+					assert.Equal(t, map[string]interface{}{"reasoning_effort": selected}, providerReasoningControls(wire))
+					assert.NotContains(t, wire, "thinking_level")
+					assert.NotContains(t, wire, "thinking_budget")
+				default:
+					t.Fatal("Gemini backend did not receive the request")
+				}
 			})
 		}
 	}
@@ -115,6 +130,13 @@ func TestGemini4RejectsUnsupportedReasoning(t *testing.T) {
 				_, err := config.ParseYAMLBytes(gemini4Config(model, "http://127.0.0.1:8000",
 					"use_reasoning: true\n            reasoning_effort: "+effort))
 				require.ErrorContains(t, err, fmt.Sprintf("reasoning_effort %q is not supported", effort))
+			})
+		}
+		for _, mode := range []string{config.ReasoningModeAdaptive, config.ReasoningModeDisabled} {
+			t.Run(model+"/mode/"+mode, func(t *testing.T) {
+				_, err := config.ParseYAMLBytes(gemini4Config(model, "http://127.0.0.1:8000",
+					"use_reasoning: true\n            reasoning_mode: "+mode))
+				require.ErrorContains(t, err, fmt.Sprintf("reasoning_mode %q is not supported", mode))
 			})
 		}
 	}

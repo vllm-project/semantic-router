@@ -457,9 +457,6 @@
     - id: published-standard
       display_name: Published standard
       description: Source-published all-pass result for the named model variant and reasoning effort.
-    - id: independent-standard
-      display_name: Independent standard run
-      description: Artificial Analysis implementation over 100 tasks with five attempts each, using extracted text and available page images without tools. All-pass is the proportion of attempts passing every rubric criterion; document preparation and judge are retained on the evaluation record.
   metrics:
     - id: all_pass
       unit: proportion
@@ -585,6 +582,10 @@
       direction: higher_is_better
       range: [-100, 100]
       normalization: {type: linear_clamp, min: -100, max: 100}
+    - id: hallucination_rate
+      unit: proportion
+      direction: lower_is_better
+      range: [0, 1]
 # 1.0.0 versions this catalog definition, not an upstream dataset semver.
 - id: cais/hle-diamond@1.0.0
   display_name: HLE-Diamond

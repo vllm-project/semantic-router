@@ -847,11 +847,6 @@ const builtInCatalogJSON = `{
           "description": "Source-published all-pass result for the named model variant and reasoning effort.",
           "display_name": "Published standard",
           "id": "published-standard"
-        },
-        {
-          "description": "Artificial Analysis implementation over 100 tasks with five attempts each, using extracted text and available page images without tools. All-pass is the proportion of attempts passing every rubric criterion; document preparation and judge are retained on the evaluation record.",
-          "display_name": "Independent standard run",
-          "id": "independent-standard"
         }
       ],
       "source": "https://artificialanalysis.ai/evaluations/gdp-pdf"
@@ -1098,6 +1093,15 @@ const builtInCatalogJSON = `{
             100
           ],
           "unit": "score"
+        },
+        {
+          "direction": "lower_is_better",
+          "id": "hallucination_rate",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
         }
       ],
       "profiles": [
@@ -12214,7 +12218,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "published-standard",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -12336,6 +12340,7 @@ const builtInCatalogJSON = `{
       "id": "independent/gemini-4-argon-high-omniscience@1.1.0",
       "metrics": {
         "accuracy": 0.483,
+        "hallucination_rate": 0.0425531914893617,
         "net_score": 46.1
       },
       "model": "google/gemini-4-argon",
@@ -12394,7 +12399,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "published-standard",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -12516,6 +12521,7 @@ const builtInCatalogJSON = `{
       "id": "independent/gemini-4-carbon-high-omniscience@1.1.0",
       "metrics": {
         "accuracy": 0.5826666666666667,
+        "hallucination_rate": 0.11421725239616613,
         "net_score": 53.5
       },
       "model": "google/gemini-4-carbon",
@@ -12574,7 +12580,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "published-standard",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -12696,6 +12702,7 @@ const builtInCatalogJSON = `{
       "id": "independent/gemini-4-hydrogen-xhigh-omniscience@1.1.0",
       "metrics": {
         "accuracy": 0.5046666666666667,
+        "hallucination_rate": 0.0847913862718708,
         "net_score": 46.266666666666666
       },
       "model": "google/gemini-4-hydrogen",
@@ -12754,7 +12761,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
-      "benchmark_profile": "independent-standard",
+      "benchmark_profile": "published-standard",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -12876,6 +12883,7 @@ const builtInCatalogJSON = `{
       "id": "independent/gemini-4-neon-xhigh-omniscience@1.1.0",
       "metrics": {
         "accuracy": 0.6046666666666667,
+        "hallucination_rate": 0.14418212478920742,
         "net_score": 54.766666666666666
       },
       "model": "google/gemini-4-neon",
@@ -105710,7 +105718,8 @@ const builtInCatalogJSON = `{
         "monogram": "G"
       },
       "publisher": "Google",
-      "reasoning_family": "gemini-4-three-level-medium",
+      "reasoning_family": "gemini-flash-three-level-medium",
+      "released_at": "2026-10-13",
       "tags": [
         "proprietary",
         "multimodal",
@@ -105766,7 +105775,8 @@ const builtInCatalogJSON = `{
         "monogram": "G"
       },
       "publisher": "Google",
-      "reasoning_family": "gemini-4-three-level-medium",
+      "reasoning_family": "gemini-flash-three-level-medium",
+      "released_at": "2026-11-10",
       "tags": [
         "proprietary",
         "multimodal",
@@ -105823,6 +105833,7 @@ const builtInCatalogJSON = `{
       },
       "publisher": "Google",
       "reasoning_family": "gemini-4-four-level-high",
+      "released_at": "2026-11-12",
       "tags": [
         "proprietary",
         "multimodal",
@@ -105879,6 +105890,7 @@ const builtInCatalogJSON = `{
       },
       "publisher": "Google",
       "reasoning_family": "gemini-4-four-level-high",
+      "released_at": "2026-11-18",
       "tags": [
         "proprietary",
         "multimodal",
@@ -117771,21 +117783,6 @@ const builtInCatalogJSON = `{
       "default": "medium",
       "default_mode": "enabled",
       "id": "gemini-flash-three-level-medium",
-      "levels": [
-        "low",
-        "medium",
-        "high"
-      ],
-      "modes": [
-        "enabled"
-      ],
-      "parameter": "reasoning_effort",
-      "type": "reasoning_effort"
-    },
-    {
-      "default": "medium",
-      "default_mode": "enabled",
-      "id": "gemini-4-three-level-medium",
       "levels": [
         "low",
         "medium",

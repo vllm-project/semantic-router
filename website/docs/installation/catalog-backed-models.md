@@ -127,13 +127,16 @@ The Router sends the selected effort as top-level `reasoning_effort`.
 [Thinking cannot be disabled](https://aistudio.google.com/docs/thinking#thinking-levels)
 on Gemini 4. The catalog exposes native levels; the compatibility API's
 `minimal` alias for `low` is not a separate selectable level.
-The cards record a unified 1,048,576-token context and the default synchronous
-65,536-token output limit; long decode is a separate API feature.
+The cards record a unified 1,048,576-token context and a 65,536-token output
+limit. A single foreground non-streaming call on Argon or Carbon is capped at
+32,768 tokens; streaming calls and Hydrogen/Neon support 65,536. See Google's
+[context and output limits](https://aistudio.google.com/docs/thinking#token-limits).
+Long decode is a separate API feature.
 
 Each card has five imported [Artificial Analysis](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
 results at the effort shown above: GDP.pdf All-pass, Terminal-Bench 4.0 pass@1,
-AA-Briefcase v1.1 Elo (with 95% bounds), AA-Omniscience v1.1 Accuracy and Net Score,
-and HLE-Diamond pass@1 over all 1,000 questions, including 272 image questions,
+AA-Briefcase v1.1 Elo (with 95% bounds), AA-Omniscience v1.1 (Accuracy, Net Score,
+and Hallucination Rate), and HLE-Diamond pass@1 over all 1,000 questions, including 272 image questions,
 without tools. Records preserve the raw metrics, harness, and observation date.
 These versioned benchmarks do not replace the Intelligence 1.0 components.
 Other efforts retain their evidence gaps; the published scores are not local

@@ -73,12 +73,14 @@ recipes:
 Router 将选定档位作为顶层 `reasoning_effort` 发送。
 Gemini 4 [不支持关闭 thinking](https://aistudio.google.com/docs/thinking#thinking-levels)。
 目录仅暴露原生档位；兼容 API 中映射到 `low` 的 `minimal` 别名不是独立可选档位。
-模型卡记录统一的 1,048,576 token 上下文和默认同步调用的 65,536 token 输出上限；
+模型卡记录统一的 1,048,576 token 上下文和 65,536 token 输出上限。
+Argon/Carbon 的单次前台非流式调用上限为 32,768 tokens；流式调用及 Hydrogen/Neon
+支持 65,536 tokens。详见 Google 的[上下文与输出限制](https://aistudio.google.com/docs/thinking#token-limits)。
 long decode 是单独的 API 功能。
 
 每张卡在上表指定档位收录五项 [Artificial Analysis](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
 公开评测：GDP.pdf All-pass、Terminal-Bench 4.0 pass@1、AA-Briefcase v1.1 Elo
-（含 95% 区间）、AA-Omniscience v1.1 Accuracy 与 Net Score，以及完整 1,000 题
+（含 95% 区间）、AA-Omniscience v1.1 Accuracy、Net Score 与 Hallucination Rate，以及完整 1,000 题
 （含 272 道图像题）、无工具的 HLE-Diamond pass@1。记录保留原始指标、harness 和查阅日期。
 这些独立版本不替换 Intelligence 1.0 的组成项，其他档位继续保留证据缺失状态；
 公开成绩属于导入的第三方评测，不是 Router 本地复测。
