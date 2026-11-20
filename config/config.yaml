@@ -847,6 +847,9 @@ recipes:
             history: true
             previous_turns: 4
             tool_results: true
+            # Each named part keeps its last 6 KiB: a part past this budget
+            # would not fit the deployment's model input.
+            max_state_bytes: 6144
           coverage: full
           on_unscanned: unknown
         # A question about what an agent's tools brought back leaves the user

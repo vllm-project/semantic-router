@@ -3,6 +3,7 @@ package classification
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -54,5 +55,21 @@ func TestStateDefaultKeepsPartsWhole(t *testing.T) {
 	}
 	if got := req.Parts["request"]; len(got) != 20000 {
 		t.Fatalf("default cap altered request: %d", len(got))
+	}
+}
+
+func TestStateCapLandsOnRuneStart(t *testing.T) {
+	// The cut would land mid-rune: CJK text is 3 bytes per rune, so a 4-byte
+	// tail starts 1 byte into the last rune. The cut backs onto the rune
+	// start instead of reading U+FFFD at the seam.
+	text := strings.Repeat("你", 10) // 30 bytes of 3-byte runes
+	rule := config.SystemOneRule{Input: config.SystemOneInput{ToolResults: true, MaxStateBytes: 4}}
+	req := (systemOneReading{toolResults: []string{text}}).state(rule)
+	got := req.Parts["tool_results"]
+	if !utf8.ValidString(strings.TrimPrefix(got, "[state truncated] ")) {
+		t.Fatalf("capped part split a rune: %q", got)
+	}
+	if !strings.HasSuffix(got, strings.Repeat("你", 1)) {
+		t.Fatalf("capped part lost the last whole rune: %q", got)
 	}
 }

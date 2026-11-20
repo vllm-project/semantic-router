@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -86,12 +87,16 @@ type ConversationTurn struct {
 // and imagesIncomplete whether an image is one no decision model decodes,
 // which images leaves out.
 // tailCap keeps the last limit bytes of s behind a truncation marker. A
-// limit of 0, the config default, keeps s whole.
+// limit of 0, the config default, keeps s whole. The cut backs onto a rune
+// start: a mid-rune cut would read U+FFFD at the seam.
 func tailCap(s string, limit int) string {
 	if limit <= 0 || len(s) <= limit {
 		return s
 	}
 	const marker = "[state truncated] "
+	for len(s)-limit < len(s) && !utf8.RuneStart(s[len(s)-limit]) {
+		limit--
+	}
 	return marker + s[len(s)-limit:]
 }
 
