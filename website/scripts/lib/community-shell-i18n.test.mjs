@@ -56,6 +56,33 @@ const declared = new Map([
   ...declaredTranslations(teamPageSource),
 ])
 
+/* The render assertions need the website dependencies. The docs gate runs
+ * before `npm ci` on a clean checkout, so report that case as an explicit skip
+ * with the reason instead of a failure, and let the build job cover it. */
+function missingRenderDependencies() {
+  const require = createRequire(join(websiteRoot, 'package.json'))
+  const required = ['react', 'react-dom/server', '@babel/core', '@babel/preset-typescript']
+  const missing = []
+
+  for (const name of required) {
+    try {
+      require.resolve(name)
+    }
+    catch {
+      missing.push(name)
+    }
+  }
+
+  return missing
+}
+
+const renderSkipReason = (() => {
+  const missing = missingRenderDependencies()
+  return missing.length === 0
+    ? false
+    : `website dependencies are not installed (${missing.join(', ')}); run npm ci in website/`
+})()
+
 /* Render the real component against the real zh-Hans catalog, with the
  * Docusaurus runtime and the browse shell stubbed to their contracts. The
  * shell stub renders exactly the strings it is handed, so the assertion is
@@ -189,7 +216,7 @@ test('every declared ID has a zh-Hans entry translated away from the English def
   }
 })
 
-test('the rendered rail shows the Chinese group headings and link labels', async () => {
+test('the rendered rail shows the Chinese group headings and link labels', { skip: renderSkipReason }, async () => {
   const rail = await renderCommunityRail()
 
   assert.deepEqual(
@@ -213,7 +240,7 @@ test('the rendered rail shows the Chinese group headings and link labels', async
   assert.equal(rail.sidebarLabel, '社区栏目', 'the rail must render its zh-Hans accessible label')
 })
 
-test('the rendered rail keeps every destination unchanged', async () => {
+test('the rendered rail keeps every destination unchanged', { skip: renderSkipReason }, async () => {
   const rail = await renderCommunityRail()
 
   assert.deepEqual(
