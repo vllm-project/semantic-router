@@ -63,6 +63,13 @@ func TestMemorySnapshotBudgetRejectsBeforeSnapshot(t *testing.T) {
 		{"bytes", func(ctx *budgetHistory) {
 			ctx.messages[0].Content[0].Text = strings.Repeat("x", maxMemorySnapshotBytes+1)
 		}},
+		{"history_tool_namespace", func(ctx *budgetHistory) {
+			ctx.messages[0].Role = llmprotocol.RoleAssistant
+			ctx.messages[0].Content = []llmprotocol.Content{{
+				Kind:     llmprotocol.ContentToolCall,
+				ToolCall: &llmprotocol.ToolCall{Namespace: strings.Repeat("x", maxMemorySnapshotBytes+1)},
+			}}
+		}},
 		{"blocks", func(ctx *budgetHistory) {
 			ctx.messages[0].Content = make([]llmprotocol.Content, maxMemorySnapshotNodes+1)
 		}},

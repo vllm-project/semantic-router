@@ -73,7 +73,7 @@ func TestExtractMemoryInfo_DetachesNestedHistory(t *testing.T) {
 	assert.Equal(t, "original-user", userID)
 }
 
-func TestMemoryHistoryForExtractorHonorsAcceptedLosses(t *testing.T) {
+func TestEncodeMemoryHistoryHonorsAcceptedLosses(t *testing.T) {
 	failed := true
 	history := []llmprotocol.Message{
 		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "List /nope"}}},
@@ -91,13 +91,15 @@ func TestMemoryHistoryForExtractorHonorsAcceptedLosses(t *testing.T) {
 		}}},
 	}
 
-	_, err := memoryHistoryForExtractor(nil, nil, history)
+	_, err := encodeMemoryHistory(nil, nil, history)
 	require.ErrorContains(t, err, "translation would lose tool_result.is_error")
 
-	messages, err := memoryHistoryForExtractor(nil, llmprotocol.OptInLossyFields(), history)
+	body, err := encodeMemoryHistory(nil, llmprotocol.OptInLossyFields(), history)
 	require.NoError(t, err)
-	require.Len(t, messages, 3)
-	encoded, err := json.Marshal(messages[2])
+	request, err := parseOpenAIRequest(body)
+	require.NoError(t, err)
+	require.Len(t, request.Messages, 3)
+	encoded, err := json.Marshal(request.Messages[2])
 	require.NoError(t, err)
 	assert.Contains(t, string(encoded), "Exit code 2")
 }

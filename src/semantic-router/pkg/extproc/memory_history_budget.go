@@ -162,7 +162,7 @@ func (b *memoryHistoryBudget) contents(contents []llmprotocol.Content, depth int
 		if c.Cache != nil && !b.strings(c.Cache.Type, c.Cache.TTL) {
 			return false
 		}
-		if c.ToolCall != nil && !b.strings(c.ToolCall.ID, c.ToolCall.Name, c.ToolCall.Arguments) {
+		if c.ToolCall != nil && !b.strings(c.ToolCall.ID, c.ToolCall.Name, c.ToolCall.Namespace, c.ToolCall.Arguments) {
 			return false
 		}
 		if c.ToolResult != nil && (!b.strings(c.ToolResult.CallID) || !b.contents(c.ToolResult.Content, depth+1)) {

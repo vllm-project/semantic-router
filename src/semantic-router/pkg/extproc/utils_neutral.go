@@ -17,73 +17,7 @@ import (
 // name and arguments. Reasoning stays separate: guardrails and memory must
 // not mistake hidden chain-of-thought for the delivered answer.
 func semanticAssistantContent(response *llmprotocol.Response) string {
-	return renderSemanticAssistantContent(response, nil)
-}
-
-// renderSemanticAssistantContent joins the answer with an optional transform
-// applied to prose (text and refusal) parts only. Tool names and arguments
-// are payload, not prose: they pass through verbatim so reasoning-tag cleanup
-// cannot truncate a literal <think> an argument legitimately carries.
-func renderSemanticAssistantContent(response *llmprotocol.Response, transform func(string) string) string {
-	if response == nil {
-		return ""
-	}
-	var text strings.Builder
-	afterTool := false
-	write := func(part string, isTool bool) {
-		if !isTool && transform != nil {
-			part = transform(part)
-		}
-		if part == "" {
-			return
-		}
-		if afterTool || (isTool && text.Len() > 0) {
-			text.WriteByte('\n')
-		}
-		text.WriteString(part)
-		afterTool = isTool
-	}
-	for _, item := range response.Output {
-		if item.Role != llmprotocol.RoleAssistant {
-			continue
-		}
-		for _, content := range item.Content {
-			switch content.Kind {
-			case llmprotocol.ContentText, llmprotocol.ContentRefusal:
-				write(content.Text, false)
-			case llmprotocol.ContentToolCall:
-				write(semanticToolCallAnswer(content.ToolCall), true)
-			}
-		}
-	}
-	return text.String()
-}
-
-// semanticToolCallAnswer is the model-facing form of one assistant tool call:
-// the tool's name, with its namespace when the client knows it that way, then
-// the arguments the client receives.
-func semanticToolCallAnswer(call *llmprotocol.ToolCall) string {
-	if call == nil {
-		return ""
-	}
-	name := strings.TrimSpace(call.Name)
-	if ns := strings.TrimSpace(call.Namespace); ns != "" {
-		if name == "" {
-			name = ns
-		} else {
-			name = ns + "." + name
-		}
-	}
-	if name == "" && call.Arguments == "" {
-		return ""
-	}
-	if call.Arguments == "" {
-		return "tool " + name
-	}
-	if name == "" {
-		return "tool\n" + call.Arguments
-	}
-	return "tool " + name + "\n" + call.Arguments
+	return response.AssistantText(nil)
 }
 
 // prependSemanticAssistantText mutates every assistant alternative in place so

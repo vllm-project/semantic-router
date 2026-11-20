@@ -276,7 +276,7 @@ func TestCountTurns(t *testing.T) {
 		sdkUserMessage("q2"),
 		sdkAssistantMessage("a2"),
 	}
-	assert.Equal(t, 2, countTurns(history))
+	assert.Equal(t, 2, countTurns(sdkHistoryMessages(history)))
 	assert.Equal(t, 0, countTurns(nil))
 }
 
@@ -288,7 +288,7 @@ func TestBuildSessionChunk(t *testing.T) {
 		sdkAssistantMessage("Rob Pike and others at Google."),
 	}
 
-	chunk := buildSessionChunk(history, "Is it fast?", "Yes, Go is very fast.", 3)
+	chunk := buildSessionChunk(sdkHistoryMessages(history), "Is it fast?", "Yes, Go is very fast.", 3)
 
 	assert.Contains(t, chunk, "Q: Who created it?")
 	assert.Contains(t, chunk, "A: Rob Pike and others at Google.")
@@ -303,7 +303,7 @@ func TestBuildSessionChunk_WindowLargerThanHistory(t *testing.T) {
 		sdkAssistantMessage("Hello!"),
 	}
 
-	chunk := buildSessionChunk(history, "Bye", "Goodbye!", 10)
+	chunk := buildSessionChunk(sdkHistoryMessages(history), "Bye", "Goodbye!", 10)
 
 	assert.Contains(t, chunk, "Q: Hi")
 	assert.Contains(t, chunk, "Q: Bye")
@@ -317,10 +317,14 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	// Build 2 turns of history; +1 current = 3 turns total = stride triggers
 	history := []openai.ChatCompletionMessageParamUnion{
 		sdkUserMessage("What is your name?"),
-		sdkAssistantMessage("I am an AI assistant."),
+		sdkAssistantMessage("<think>private</think>I am an AI assistant."),
 		sdkUserMessage("What languages do you know?"),
 		sdkAssistantMessage("I can help with Go, Python, and more."),
 	}
+	const args = `{"path":"<think>.txt","contents":"keep me"}`
+	history[1].OfAssistant.ToolCalls = []openai.ChatCompletionMessageToolCallParam{{
+		Function: openai.ChatCompletionMessageToolCallFunctionParam{Name: "write", Arguments: args},
+	}}
 
 	// 3rd turn triggers session chunk (stride=3)
 	storedCount, err := extractor.ProcessResponseWithHistoryCount(
@@ -340,6 +344,10 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	var sources []string
 	for _, m := range results.Memories {
 		sources = append(sources, m.Source)
+		if m.Source == "session_window" {
+			assert.Contains(t, m.Content, "A: I am an AI assistant.\ntool write\n"+args)
+			assert.NotContains(t, m.Content, "<think>private</think>")
+		}
 	}
 	assert.Contains(t, sources, "conversation")
 	assert.Contains(t, sources, "session_window")
