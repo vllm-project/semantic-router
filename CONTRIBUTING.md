@@ -10,7 +10,8 @@ Install:
 - Docker or Podman;
 - Make;
 - Git; and
-- Python 3.10 or newer for the CLI, tests, or training tools you plan to use.
+- Python 3.10 or newer for the CLI and tests, and Python 3.11 or newer for the
+  training projects under `src/training/`.
 
 Clone the repository:
 
@@ -260,6 +261,21 @@ Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
 it, all required checks pass, and all review conversations are resolved.
 
+GitHub requests the repository-wide reviewers in `.github/CODEOWNERS` when a
+non-draft PR is ready for review. After the linked issue is accepted and its
+single `wg/*` owner is synchronized to the PR, Community Label Sync requests
+one Lead of that Working Group, rotating among the group's Leads by PR number.
+It skips the PR author and the repository-wide reviewers, and requests no one
+while a Lead of the group is already requested or has reviewed. With each
+request it keeps one PR comment that names the requested Lead and up to two
+other Leads of the group; mention them in a reply to speed up the review. Only
+Leads who are Maintainers or Committers with write access are requested,
+because only their approvals count toward the two the merge queue needs. The
+rosters are maintained in `tools/ci/community_reviewers.py`; update them when
+a Lead joins or leaves a group or their repository access changes.
+Cross-Workgroup changes may need additional specialist reviewers. Working
+Group membership alone does not grant repository review or merge authority.
+
 ### Troubleshoot the merge queue
 
 Check the **Mergify Merge Queue** check or Mergify's **Merge Queue Status**
@@ -316,6 +332,14 @@ Summary check shows the effective conditions, including inherited requirements.
   recovery. Do not rerun a cancelled sibling or repeatedly requeue the same
   head to try to erase a required failure.
 
+  The diagnostic separates successful qualification from check visibility,
+  suite conclusions, and the commit rollup. A required green publisher Gate
+  in an unsuccessful suite reports `suite_mismatch`; an unsuccessful rollup
+  reports `rollup_blocked`. A successful sibling suite is valid even when its
+  ID differs from the qualification run's suite. Missing or changing evidence
+  cannot establish a healthy state. These reports never authorize cleanup or
+  claim that GitHub's final merge evaluation will succeed.
+
   Any fresh-head recovery needs the author's or maintainer's explicit consent
   and confirmation that the PR is no longer queued. Use a normal merge from
   upstream `main` or **Update branch**, not a default rebase/force-push. Confirm
@@ -327,6 +351,15 @@ Summary check shows the effective conditions, including inherited requirements.
   stop and retain the evidence; do not change native failures to success or
   neutral. This is a controlled recovery path, not a guarantee that every
   branch update resolves every check conflict.
+
+- **Waiting Gate disappears after a Community rerun:** the trusted publisher
+  can restore a verified current-attempt pending Gate without another branch
+  push or manual Actions rerun. It keeps the check pending and preserves the
+  existing `/ci run` guidance; it does not authorize CI, publish success, or
+  replace a completed verdict. Recovery must confirm the replacement in the
+  latest check set before retiring the original pending check. An uncertain
+  write or visibility result stops repeated creation. Retain the qualification
+  run/attempt and check IDs for Maintainer investigation of #5866.
 
 To recover from a branch-update failure, merge upstream `main` into your PR
 branch and push it, or use GitHub's **Update branch** button when available.

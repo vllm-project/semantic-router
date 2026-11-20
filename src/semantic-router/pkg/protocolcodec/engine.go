@@ -93,10 +93,27 @@ func (engine *Engine) decodeRequest(
 	}
 	applyRequestSemanticDefaults(&request)
 	llmprotocol.MarkDeferredToolLinks(&request)
+	diagnostics = appendDiagnostics(diagnostics, closeTruncatedHistoryCalls(format, &request, engine.policy.Limits), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, diagnostics, err
 	}
 	return request, envelope, diagnostics, nil
+}
+
+// closeTruncatedHistoryCalls accepts the calls an output limit cut at the end
+// of an assistant turn in the request's history, as a client keeps a cut call
+// the Router passed on. Every backend receives the members completed before
+// the cut.
+func closeTruncatedHistoryCalls(source llmprotocol.WireFormat, request *llmprotocol.Request, limits llmprotocol.Limits) llmprotocol.Diagnostics {
+	if llmprotocol.CloseTruncatedHistoryCalls(request, limits.JSONDepth) == 0 {
+		return nil
+	}
+	// The source bytes still carry the cut arguments.
+	request.Generation++
+	return llmprotocol.Diagnostics{{
+		Source: source, Field: "tool_call.arguments", Action: llmprotocol.DiagnosticApproximated,
+		Reason: "a tool call an output limit cut at the end of its assistant turn is sent with the members completed before the cut",
+	}}
 }
 
 // applyRequestSemanticDefaults makes provider-documented defaults explicit in
@@ -164,6 +181,7 @@ func (engine *Engine) TranslateRequest(source, target llmprotocol.WireFormat, bo
 	}
 	applyRequestSemanticDefaults(&request)
 	llmprotocol.MarkDeferredToolLinks(&request)
+	diagnostics = appendDiagnostics(diagnostics, closeTruncatedHistoryCalls(source, &request, engine.policy.Limits), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.ValidateRequest(request, engine.policy.Limits); err != nil {
 		return RequestResult{Request: request, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -203,6 +221,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	if translateResponseErr != nil {
 		return ResponseResult{Diagnostics: diagnostics}, translateResponseErr
 	}
+	diagnostics = appendDiagnostics(diagnostics, engine.stopAtRequestOutputLimit(source, &response, &envelope), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
 	}
@@ -423,9 +442,14 @@ func (engine *Engine) NewStreamWithMutation(
 	if err != nil {
 		return nil, err
 	}
-	if !sourcePair.buffered.Capabilities().Supports(llmprotocol.CapabilityStreaming) ||
-		!targetPair.buffered.Capabilities().Supports(llmprotocol.CapabilityStreaming) {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "streaming_unsupported", "source or target wire format does not support streaming", nil)
+	for _, side := range []struct {
+		format llmprotocol.WireFormat
+		pair   codecPair
+	}{{source, sourcePair}, {target, targetPair}} {
+		if !side.pair.buffered.Capabilities().Supports(llmprotocol.CapabilityStreaming) {
+			return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "streaming_unsupported",
+				fmt.Sprintf("the %s API does not stream", side.format.APIName()), nil)
+		}
 	}
 	context.Source = source
 	context.Target = target
@@ -479,7 +503,7 @@ func (engine *Engine) NewEventStreamEncoder(
 		return nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"streaming_unsupported",
-			"wire format does not support streaming",
+			fmt.Sprintf("the %s API does not stream", format.APIName()),
 			nil,
 		)
 	}
@@ -556,7 +580,7 @@ func (engine *Engine) codec(format llmprotocol.WireFormat) (codecPair, error) {
 	if !ok {
 		return codecPair{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature, "wire_format_unavailable",
-			fmt.Sprintf("wire format %q is unavailable", format), nil,
+			fmt.Sprintf("the Router does not serve the %s API", format.APIName()), nil,
 		)
 	}
 	return pair, nil
@@ -582,6 +606,9 @@ func validatePolicy(policy llmprotocol.Policy) error {
 	}
 	if !positiveProtocolLimits(policy.Limits) {
 		return fmt.Errorf("protocol limits must be positive")
+	}
+	if policy.RequestOutputLimit < 0 {
+		return fmt.Errorf("request output limit must not be negative")
 	}
 	return nil
 }
@@ -711,7 +738,7 @@ func (engine *StreamEngine) prepareEvent(event *llmprotocol.Event) (llmprotocol.
 	if !engine.targetCapabilities.Supports(llmprotocol.CapabilityMatchedStopSequence) {
 		diagnostics = projectMatchedStopSequenceEvent(engine.sourceFormat, engine.targetFormat, event)
 	}
-	if err := projectReasoningContinuityEvent(engine.targetCapabilities, *event); err != nil {
+	if err := projectReasoningContinuityEvent(engine.targetFormat, engine.targetCapabilities, *event); err != nil {
 		if !engine.continuityDropped {
 			engine.continuityDropped = true
 			diagnostics = append(diagnostics, reasoningContinuityDropped(engine.sourceFormat, engine.targetFormat)...)

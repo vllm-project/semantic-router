@@ -37,10 +37,10 @@ providers:
           protocol: http
 ```
 
-In the Dashboard, open **Build → Routing → Models → Add Model**, select the Provider, and
-choose **Advanced settings → Reasoning family**. The **Built-in Reasoning
-Families** table on the Models page shows the available IDs and their native
-parameters.
+In the Dashboard, open **Models → Backend models**, choose **Connect model**,
+select the Provider, and choose **Advanced settings → Reasoning family**. The
+**Reasoning families** tab on the Backend models page shows the available IDs
+and their native parameters.
 
 ## Define a custom family inline
 
@@ -73,7 +73,7 @@ combination migrates to `providers.models[].reasoning`: built-in IDs become a
 `family` reference, while custom definitions are copied inline onto each custom
 Model that uses them.
 
-Use **Manual setup** in the Dashboard to author an inline family. Leave
+Use **Add manually** in the Dashboard to author an inline family. Leave
 **Built-in Catalog Model** and **Reasoning Family** empty, then fill the
 **Inline Reasoning** fields.
 
@@ -137,7 +137,8 @@ providers: the Responses request has no field for a named mode, so behind a
 provider with any other transport the Router removes the client's reasoning
 fields, sends no control, and the backend runs the model's default mode
 whatever `use_reasoning` says. A pass-through Model keeps the client's
-reasoning fields as sent.
+reasoning fields as sent, and the routing log, metrics and trace report no
+effort for it: its `routing_decision` log line says `reasoning_projected: false`.
 
 On an `api_format: anthropic` backend, `enabled` thinking needs a
 `budget_tokens` value. When the client sent none, an `enabled` mode reaches the
@@ -148,3 +149,72 @@ In the Dashboard decision editor, select the Model first. The UI derives the
 mode and effort choices from its effective family and disables controls that
 the Model or Provider cannot support. A custom Model without a family stays a
 pass-through model and has no Dashboard reasoning controls.
+
+## Turn reasoning off for small output limits
+
+A backend counts reasoning against the request's output limit. When a decision
+turns reasoning on, a request with a small limit can spend all of it thinking
+and end with no answer: a Messages response holds only a thinking block, a
+Chat response has `content: null`, and a Responses response holds only a
+reasoning item. Set the smallest limit that keeps the decision's reasoning:
+
+```yaml
+providers:
+  defaults:
+    reasoning_min_output_tokens: 512
+```
+
+- **No preference and a small limit: reasoning off.** A request that states no
+  reasoning preference and sets an output limit below the threshold runs with
+  the model's reasoning off. The limit is Messages `max_tokens`, Chat
+  `max_tokens` or `max_completion_tokens`, or Responses `max_output_tokens`.
+- **What states a preference.** Messages `thinking` of any type; a Chat
+  `reasoning_effort` (`none` and `minimal` included), `reasoning_budget_tokens`,
+  or an `enable_thinking`, `thinking` or `reasoning_effort` member of
+  `chat_template_kwargs`; a Responses `reasoning.effort` or
+  `reasoning.summary`. A Messages `output_config.effort` alone does not, since
+  it sets the effort of the whole answer. A request that states a preference
+  is routed as before, whatever its limit.
+- **Off through the model's own control.** The backend receives the
+  reasoning-off control of the model's family, as with `use_reasoning: false`.
+  A model whose family has none, such as an always-on family, keeps its
+  reasoning. A fallback candidate follows the same rule.
+- **Unchanged otherwise.** A request without an output limit, or with a limit
+  at or above the threshold, keeps the decision's reasoning, and its thinking
+  is returned as before. Unset or `0`, the default, turns the rule off.
+- **Reported.** The `reasoning` member of `x-vsr-trace` reads
+  `off;reason=output_budget`, and Router Replay records the reasoning mode as
+  `off`.
+
+## Turn reasoning off for requests with stop sequences
+
+Backends such as vLLM match stop sequences against all the text the model
+generates, its reasoning included. When a decision turns reasoning on for a
+client that asked for none, a stop sequence the reasoning writes ends the
+request before any answer: a Messages response holds only a thinking block
+with the `stop_sequence` stop reason, and a Chat response has
+`content: null`. The Router therefore runs such a request with the model's
+reasoning off. There is nothing to configure.
+
+- **Stop sequences and no preference: reasoning off.** A request that sets
+  stop sequences, Chat `stop` or Messages `stop_sequences`, and states no
+  reasoning preference runs with the model's reasoning off and keeps its stop
+  sequences. Responses has no stop sequences.
+- **A stated preference is routed as before.** The preferences are those
+  listed under [small output limits](#turn-reasoning-off-for-small-output-limits).
+  A request that states one keeps the reasoning its decision chooses.
+- **Off through the model's own control.** As for small output limits, the
+  backend receives the reasoning-off control of the model's family, a model
+  whose family has none keeps its reasoning, and a fallback candidate follows
+  the same rule. A decision whose `request_params` plugin blocks `stop` sends
+  the backend no stop sequences and keeps its reasoning.
+- **Reported.** The `reasoning` member of `x-vsr-trace` reads
+  `off;reason=stop_sequences`, and Router Replay records the reasoning mode as
+  `off`. When the request's output limit is also below
+  `providers.defaults.reasoning_min_output_tokens`, the reason reads
+  `output_budget`.
+- **Not covered.** A request that states a reasoning preference and sets stop
+  sequences reaches the backend with both when its decision turns reasoning
+  on, and on such a backend a stop sequence the reasoning writes still ends
+  the request inside the reasoning. The Router forwards stop sequences and
+  does not apply them itself.

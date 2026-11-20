@@ -60,6 +60,8 @@
             "x-user-vertex-ai-key",
             "x-vsr-bench-expected-config-hash",
             "x-vsr-bench-max-inference-calls",
+            "x-vsr-budget-remaining",
+            "x-vsr-budget-scope",
             "x-vsr-cache-control",
             "x-vsr-compression-control",
             "x-vsr-config-hash",
@@ -117,6 +119,7 @@
             "api-key",
             "api-subscription-key",
             "authorization",
+            "chatgpt-account-id",
             "content-length",
             "ocp-apim-subscription-key",
             "x-api-key",
@@ -180,6 +183,10 @@
             {
               "name": "x-vsr-selected-model",
               "value": "general-small"
+            },
+            {
+              "name": "x-vsr-replay-id",
+              "value": "<volatile>"
             }
           ],
           "remove": [
@@ -271,6 +278,10 @@
       {
         "name": "x-vsr-selected-model",
         "value": "general-small"
+      },
+      {
+        "name": "x-vsr-replay-id",
+        "value": "<volatile>"
       }
     ],
     "body": "{\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello from the upstream model.\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":6,\"total_tokens\":18}}"

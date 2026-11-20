@@ -1,6 +1,9 @@
+import { ChevronDown } from 'lucide-react'
+
+import { Button, Input, cn } from '../ui'
 import { KeyValueEditor } from './KeyValueEditor'
+import NativeSelect from './NativeSelect'
 import type { ObjectEditorField } from './ObjectListEditorTypes'
-import styles from './StructuredFieldEditors.module.css'
 
 interface ObjectEditorFieldControlProps<TItem extends object> {
   field: ObjectEditorField<TItem>
@@ -47,9 +50,9 @@ function ObjectEditorFieldControl<TItem extends object>({
   }
   if (field.type === 'select') {
     return (
-      <select
+      <NativeSelect
         id={fieldId}
-        className={styles.input}
+        size="sm"
         value={stringValue(value)}
         onChange={(event) => onChange(event.target.value || undefined)}
         disabled={disabled || readOnly}
@@ -61,14 +64,14 @@ function ObjectEditorFieldControl<TItem extends object>({
             {option}
           </option>
         ))}
-      </select>
+      </NativeSelect>
     )
   }
   if (field.type === 'number') {
     return (
-      <input
+      <Input
         id={fieldId}
-        className={styles.input}
+        className="h-8 tabular read-only:bg-surface-subtle read-only:text-muted-foreground"
         type="number"
         value={numberValue(value)}
         onChange={(event) =>
@@ -84,9 +87,9 @@ function ObjectEditorFieldControl<TItem extends object>({
     )
   }
   return (
-    <input
+    <Input
       id={fieldId}
-      className={styles.input}
+      className="h-8 read-only:bg-surface-subtle read-only:text-muted-foreground"
       type={field.type === 'password' ? 'password' : 'text'}
       value={readOnly && field.type === 'password' && value ? '••••••••' : stringValue(value)}
       onChange={(event) => onChange(event.target.value || (field.preserveEmpty ? '' : undefined))}
@@ -119,7 +122,7 @@ function ObjectEditorFields<TItem extends object>({
 }: ObjectEditorFieldsProps<TItem>) {
   const record = item as Record<string, unknown>
   return (
-    <div className={styles.objectGrid}>
+    <div className="grid grid-cols-1 gap-x-3 gap-y-3.5 border-t border-border px-3.5 py-3.5 sm:grid-cols-2">
       {fields.map((field) => {
         if (field.shouldHide?.(item)) return null
         const value = record[field.key]
@@ -128,16 +131,20 @@ function ObjectEditorFields<TItem extends object>({
         return (
           <div
             key={field.key}
-            className={field.fullWidth ? styles.objectFieldWide : styles.objectField}
+            className={cn('flex min-w-0 flex-col gap-1.5', field.fullWidth && 'sm:col-span-full')}
           >
             <label
-              className={styles.miniLabel}
+              className="text-xs font-medium text-foreground/90"
               htmlFor={field.type === 'key-value' ? undefined : fieldId}
             >
               {field.label}
-              {field.required ? <span className={styles.required}> *</span> : null}
+              {field.required ? <span className="text-destructive-foreground"> *</span> : null}
             </label>
-            {field.helpText ? <p className={styles.helpText}>{field.helpText}</p> : null}
+            {field.helpText ? (
+              <p className="-mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                {field.helpText}
+              </p>
+            ) : null}
             <ObjectEditorFieldControl
               field={field}
               fieldId={fieldId}
@@ -186,45 +193,66 @@ export function ObjectListEditorItem<TItem extends object>({
   onRemove,
   onChange,
 }: ObjectListEditorItemProps<TItem>) {
+  const invalid = errors.length > 0
   return (
     <section
-      className={`${styles.objectCard} ${errors.length > 0 ? styles.objectCardInvalid : ''}`}
+      className={cn(
+        'overflow-hidden rounded-lg border bg-surface shadow-xs transition-colors',
+        invalid ? 'border-destructive/40' : 'border-border',
+      )}
       aria-labelledby={`${editorId}-item-${index}`}
     >
-      <div className={styles.objectCardHeader}>
-        <div className={styles.objectCardHeading}>
-          <span className={styles.itemIndex}>{String(index + 1).padStart(2, '0')}</span>
-          <div>
-            <h4 id={`${editorId}-item-${index}`}>{label}</h4>
-            {description ? <p>{description}</p> : null}
+      <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-6 min-w-6 place-items-center rounded-md bg-surface-sunken px-1 font-mono text-[11px] font-medium tabular text-muted-foreground">
+            {String(index + 1).padStart(2, '0')}
+          </span>
+          <div className="min-w-0">
+            <h4
+              id={`${editorId}-item-${index}`}
+              className="truncate text-[13px] font-medium text-foreground"
+            >
+              {label}
+            </h4>
+            {description ? (
+              <p className="truncate text-xs text-muted-foreground">{description}</p>
+            ) : null}
           </div>
         </div>
         {!readOnly ? (
-          <div className={styles.cardActions}>
-            <button
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
               type="button"
-              className={styles.secondaryButton}
+              variant="ghost"
+              size="xs"
               onClick={onToggle}
               disabled={disabled}
               aria-expanded={expanded}
             >
               {expanded ? 'Done' : 'Edit'}
-            </button>
+              <ChevronDown
+                className={cn('transition-transform duration-200', expanded && 'rotate-180')}
+              />
+            </Button>
             {removable ? (
-              <button
+              <Button
                 type="button"
-                className={styles.removeButton}
+                variant="destructive-ghost"
+                size="xs"
                 onClick={onRemove}
                 disabled={disabled}
               >
                 Remove
-              </button>
+              </Button>
             ) : null}
           </div>
         ) : null}
       </div>
-      {errors.length ? (
-        <ul className={styles.validationList} aria-live="polite">
+      {invalid ? (
+        <ul
+          className="mx-3.5 mb-3 flex list-disc flex-col gap-0.5 rounded-md bg-destructive-soft py-2 pl-7 pr-3 text-xs text-destructive-foreground"
+          aria-live="polite"
+        >
           {errors.map((error) => (
             <li key={error}>{error}</li>
           ))}

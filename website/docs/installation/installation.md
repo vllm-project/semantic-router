@@ -24,7 +24,7 @@ request. `vllm-sr serve` runs the whole local stack in Docker:
 | Component | Port | Role |
 | --- | --- | --- |
 | **Router** | 8899 | Serves the OpenAI-compatible API itself (standalone mode, the default). |
-| **Dashboard** | 8700 | Setup, models, routing and insights. |
+| **Dashboard** | 8700 | Setup, routing, models and observability. |
 | **[Model runtime](../model-runtime/get-started/overview.md)** | internal | Runs the Router's own decision model, and the embedding model when a recall feature needs it. |
 
 The models that answer your users run elsewhere, such as Ollama, a vLLM
@@ -119,12 +119,15 @@ Open [http://localhost:8700](http://localhost:8700). The Dashboard listens on
 `127.0.0.1`; on a remote host, run `ssh -L 8700:127.0.0.1:8700 <host>` first.
 
 1. **Create the first administrator:** a name, an email and a password.
-2. **Connect a model:** its name, its provider (vLLM, Ollama, OpenAI
+2. **Connect models:** a model's name, its provider (vLLM, Ollama, OpenAI
    Compatible or Anthropic) and its address as the Router container sees it,
-   for example `host.docker.internal:11434` for Ollama on the same host. For a
-   first local model, follow [Configure models with Ollama](ollama).
+   for example `host.docker.internal:11434` for Ollama on the same host. The
+   first model is the default. For a first local model, follow
+   [Configure models with Ollama](ollama).
 3. **Choose routing:** **From scratch** makes one default route to that model.
-4. **Review and Activate.**
+4. **Decision model:** keep the recommended model, which answers the Router's
+   signal and decision questions.
+5. **Review & activate,** then select **Activate router**.
 
 `vllm-sr serve` waits during setup. After you activate, it starts the Router
 from that configuration, prints the endpoints and exits. If you stopped it

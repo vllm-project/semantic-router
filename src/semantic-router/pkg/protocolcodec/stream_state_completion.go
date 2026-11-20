@@ -259,6 +259,9 @@ func (state *streamState) applyUsageEvidence(event llmprotocol.Event) (llmprotoc
 func (state *streamState) applyTerminalEvent(event llmprotocol.Event) (llmprotocol.Event, error) {
 	var err error
 	if event.Type == llmprotocol.EventResponseCompleted {
+		if llmprotocol.ToolCallStopAtOutputLimit(event.StopReason, state.usage, state.policy.RequestOutputLimit) {
+			event.StopReason, state.stop = llmprotocol.StopMaxTokens, llmprotocol.StopMaxTokens
+		}
 		event, err = state.validateCompletedEvent(event)
 	} else {
 		if event.Usage == nil && state.usage.State == llmprotocol.UsageAvailable {
@@ -299,7 +302,7 @@ func (state *streamState) validateCompletedLifecycle(event llmprotocol.Event) er
 	if !state.started {
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_start_missing", "upstream stream completed before response start", nil)
 	}
-	if len(state.items) == 0 && event.StopReason != llmprotocol.StopContentFilter {
+	if len(state.items) == 0 && !llmprotocol.StopAllowsEmptyOutput(event.StopReason) {
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_output_missing", "upstream stream completed without output", nil)
 	}
 	for itemIndex := range state.items {

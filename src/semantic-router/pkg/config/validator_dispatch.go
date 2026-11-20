@@ -29,6 +29,7 @@ var (
 		validateContextWindowContracts,
 		validateRouterHeadersContracts,
 		validateDrainTimeoutContract,
+		validateBudgetsContract,
 		validateFlowContracts,
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,
@@ -41,6 +42,7 @@ var (
 		validateGlobalToolSessionsContracts,
 		validateGlobalRouterReplayCaptureContracts,
 		validateGlobalPluginContracts,
+		validateMaskingIdentity,
 	}
 
 	// These contracts need the complete routing graph, including all recipes.

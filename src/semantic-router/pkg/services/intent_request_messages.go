@@ -364,6 +364,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		},
 	}
 	previousWasToolResult := false
+	toolFailures := intentToolFailures{calls: map[string]*llmprotocol.ToolCall{}}
 	routing := selector.Walk(intentUserTexts(selector, messages)...)
 
 	for index, msg := range messages {
@@ -398,6 +399,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			msg.ToolCallID,
 			previousWasToolResult,
 		)
+		toolFailures.observe(role, msg, rawText)
 		if text != "" && (role == "user" || role == "assistant") {
 			history.turns = append(history.turns, classification.ConversationTurn{Role: role, Text: text})
 		}
@@ -407,8 +409,38 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		recordIntentNonUserMessage(&history, role, text)
 	}
 	history.routingInput = routing.Outcome()
+	history.conversationFacts.FailedToolResults = toolFailures.count.Failed
 
 	return history
+}
+
+// intentToolFailures counts failed tool results as live routing counts them
+// in a Chat Completions request: a user message starts a new turn, and a
+// tool message is read with the call it answers.
+type intentToolFailures struct {
+	count classification.ToolFailureCount
+	calls map[string]*llmprotocol.ToolCall
+}
+
+func (f *intentToolFailures) observe(role string, msg IntentMessage, text string) {
+	switch role {
+	case "user":
+		f.count = classification.ToolFailureCount{}
+	case "assistant":
+		for _, raw := range msg.ToolCalls {
+			var call struct {
+				ID       string `json:"id"`
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			}
+			if json.Unmarshal(raw, &call) == nil {
+				f.calls[call.ID] = &llmprotocol.ToolCall{ID: call.ID, Name: call.Function.Name}
+			}
+		}
+	case "tool":
+		f.count.Observe(classification.ToolResultStatusOf(llmprotocol.OpenAIChatV1, f.calls[msg.ToolCallID], nil, text))
+	}
 }
 
 // intentUserTexts lists the user messages as routing_input reads them, for a

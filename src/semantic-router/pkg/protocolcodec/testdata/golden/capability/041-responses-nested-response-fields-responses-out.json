@@ -112,16 +112,41 @@
     {
       "name": "reasoning_and_namespaced_tool",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "upstream_unavailable",
-          "code": "empty_output_item"
+        "status": "ok",
+        "body": {
+          "created_at": 100,
+          "error": null,
+          "id": "resp_tool",
+          "incomplete_details": null,
+          "instructions": null,
+          "metadata": {},
+          "model": "routed-model",
+          "object": "response",
+          "output": [
+            {
+              "content": [],
+              "encrypted_content": "encrypted",
+              "id": "reasoning_1",
+              "summary": [],
+              "type": "reasoning"
+            },
+            {
+              "arguments": "{\"q\":\"weather\"}",
+              "call_id": "call_1",
+              "id": "fc_1",
+              "name": "lookup",
+              "namespace": "weather",
+              "type": "function_call"
+            }
+          ],
+          "parallel_tool_calls": true,
+          "status": "completed",
+          "temperature": null,
+          "tool_choice": "auto",
+          "tools": [],
+          "top_p": null
         },
         "diagnostics": [
-          {
-            "field": "output.encrypted_content",
-            "action": "dropped"
-          },
           {
             "field": "output.status",
             "action": "dropped"

@@ -2,7 +2,9 @@ package modelruntime
 
 import (
 	"os"
+	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,14 +16,33 @@ type values struct {
 	Config struct {
 		Recipes []struct {
 			Signals struct {
+				Keywords []struct {
+					Name     string   `yaml:"name"`
+					Method   string   `yaml:"method"`
+					Keywords []string `yaml:"keywords"`
+				} `yaml:"keywords"`
 				SystemOne []struct {
-					Name       string `yaml:"name"`
-					Deployment string `yaml:"deployment"`
+					Name       string                 `yaml:"name"`
+					Deployment string                 `yaml:"deployment"`
+					Question   map[string]interface{} `yaml:"question"`
+					Predicate  map[string]float64     `yaml:"predicate"`
 				} `yaml:"systemone"`
 			} `yaml:"signals"`
 			ModelBindings map[string]string `yaml:"model_bindings"`
 			Decisions     []struct {
-				Name      string `yaml:"name"`
+				Name     string `yaml:"name"`
+				Priority int    `yaml:"priority"`
+				Rules    struct {
+					Operator   string `yaml:"operator"`
+					OnUnknown  string `yaml:"on_unknown"`
+					Conditions []struct {
+						Type string `yaml:"type"`
+						Name string `yaml:"name"`
+					} `yaml:"conditions"`
+				} `yaml:"rules"`
+				ModelRefs []struct {
+					Model string `yaml:"model"`
+				} `yaml:"modelRefs"`
 				Algorithm *struct {
 					SystemOne *struct {
 						Deployment string `yaml:"deployment"`
@@ -97,7 +118,7 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	// device: the lifecycle case checks independent workers, including auto
 	// resolving to CPU on a node without an accelerator.
 	managed := map[string]struct{ device string }{
-		"decision-fixture": {"cpu"}, "vela-embedding": {"auto"},
+		"decision-fixture": {"cpu"}, "vela-embedding": {"auto"}, "vela31-fixture": {"cpu"},
 	}
 	for name, want := range managed {
 		deployment, ok := deployments[name]
@@ -165,6 +186,66 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 		if _, ok := deployments[name]; !ok {
 			t.Fatalf("a consumer names undeclared deployment %s", name)
 		}
+	}
+}
+
+func TestProfileKeepsVela31DescribedNoulOnAMarkerSpecificRoute(t *testing.T) {
+	cases := NewProfile().GetTestCases()
+	if len(cases) != 11 || !slices.Contains(cases, "model-runtime-vela31-described-noul") {
+		t.Fatalf("profile must retain its ten contracts and the Vela 3.1 regression: %v", cases)
+	}
+	var profile values
+	load(t, "values.yaml", &profile)
+	recipe := profile.Config.Recipes[0]
+	foundSignal, foundRoute, foundMarker := false, false, false
+	for _, signal := range recipe.Signals.SystemOne {
+		if signal.Name != "vela31_described" {
+			continue
+		}
+		foundSignal = true
+		want := map[string]interface{}{
+			"type": "noul", "instructions": "Does this request need urgent action?",
+			"choices": []interface{}{
+				map[string]interface{}{"key": "false", "description": "can wait"},
+				map[string]interface{}{"key": "true", "description": "needs immediate action"},
+			},
+		}
+		if signal.Deployment != "vela31-fixture" || !reflect.DeepEqual(signal.Question, want) ||
+			!reflect.DeepEqual(signal.Predicate, map[string]float64{"gte": 0.0001}) {
+			t.Fatalf("Vela 3.1 must ask the described-Noul contract with a nonzero predicate: %+v", signal)
+		}
+	}
+	for _, marker := range recipe.Signals.Keywords {
+		if marker.Name != "vela31_marker" {
+			continue
+		}
+		foundMarker = true
+		if marker.Method != "regex" || len(marker.Keywords) != 1 {
+			t.Fatalf("marker must be one explicit regex: %+v", marker)
+		}
+		pattern := regexp.MustCompile(marker.Keywords[0])
+		if !pattern.MatchString("[vela31-described-noul] Please refund my duplicate charge.") ||
+			pattern.MatchString("Write a Go function that merges two sorted slices.") {
+			t.Fatalf("marker must distinguish the regression prompt from existing selector prompts")
+		}
+	}
+	for _, decision := range recipe.Decisions {
+		if decision.Name != "vela31_described_route" {
+			continue
+		}
+		foundRoute = true
+		conditions := map[string]string{}
+		for _, condition := range decision.Rules.Conditions {
+			conditions[condition.Type] = condition.Name
+		}
+		if decision.Priority <= 500 || decision.Rules.Operator != "AND" || decision.Rules.OnUnknown != "no_match" ||
+			len(decision.Rules.Conditions) != 2 || !reflect.DeepEqual(conditions, map[string]string{"keyword": "vela31_marker", "systemone": "vela31_described"}) ||
+			len(decision.ModelRefs) != 1 || decision.ModelRefs[0].Model != "math-expert" || decision.Algorithm != nil {
+			t.Fatalf("described Noul and marker must select math-expert without the old selector: %+v", decision)
+		}
+	}
+	if !foundSignal || !foundRoute || !foundMarker {
+		t.Fatalf("missing Vela 3.1 profile binding: signal=%v route=%v marker=%v", foundSignal, foundRoute, foundMarker)
 	}
 }
 

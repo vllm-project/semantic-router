@@ -23,10 +23,11 @@ const (
 // SRBenchHandler is an authenticated transport to the independent sr-bench
 // service. It owns no worker, run state, or process lifecycle.
 type SRBenchHandler struct {
-	origin   *url.URL
-	token    string
-	readonly bool
-	client   *http.Client
+	origin    *url.URL
+	token     string
+	readonly  bool
+	client    *http.Client
+	summaries runSummaryCache
 }
 
 func NewSRBenchHandler(origin, token string, readonly bool) (*SRBenchHandler, error) {
@@ -115,6 +116,9 @@ func (h *SRBenchHandler) forward(w http.ResponseWriter, r *http.Request, actor d
 	if err != nil || len(data) > maxSRBenchResponseBytes || !json.Valid(data) || response.StatusCode >= 300 && response.StatusCode < 400 {
 		writeSRBenchError(w, http.StatusBadGateway, "sr-bench service returned an invalid response")
 		return
+	}
+	if method == http.MethodGet && r.URL.Path == SRBenchAPIPath+"/runs" && response.StatusCode == http.StatusOK {
+		data = h.enrichRunList(r.Context(), actor, data)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(response.StatusCode)

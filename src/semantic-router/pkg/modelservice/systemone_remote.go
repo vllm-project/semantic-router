@@ -164,42 +164,6 @@ func siblingEndpoint(endpoint, segment string) string {
 	return base.ResolveReference(&url.URL{Path: segment, RawQuery: base.RawQuery}).String()
 }
 
-// Card is the card name's questions compile against: the question types and
-// presets its API lists for the model in GET <endpoint>/models, else the
-// declared ones, else the System One types; and the modalities it lists, else
-// the declared ones, else text. The first call reads the listing in the
-// background unless a preparation has read it; until it answers, the declared
-// or System One types apply.
-func (r *RemoteSystemOne) Card(name string) (ModelCard, bool) {
-	d := r.deployment(name)
-	if d == nil {
-		return ModelCard{}, false
-	}
-	if card := d.listed.Load(); card != nil {
-		return *card, true
-	}
-	if d.started.CompareAndSwap(false, true) {
-		go d.readListing(r.ctx, listingTimeout)
-	}
-	return d.declaredCard(), true
-}
-
-// ListedCard is the card name's API lists for its model, when the listing has
-// answered; like Card, the first call reads the listing in the background.
-func (r *RemoteSystemOne) ListedCard(name string) (ModelCard, bool) {
-	d := r.deployment(name)
-	if d == nil {
-		return ModelCard{}, false
-	}
-	if card := d.listed.Load(); card != nil {
-		return *card, true
-	}
-	if d.started.CompareAndSwap(false, true) {
-		go d.readListing(r.ctx, listingTimeout)
-	}
-	return ModelCard{}, false
-}
-
 // PrepareCard reads name's listing once, for at most
 // preparationListingTimeout, and returns its card as Card does. An API that
 // does not list leaves the declared or System One types; it never fails the
@@ -226,6 +190,7 @@ func (r *RemoteSystemOne) PrepareCard(ctx context.Context, name string) (ModelCa
 // another schema gets the request converted to its schema, and its answers
 // and errors come back in the native form, a batch reassembled.
 func (r *RemoteSystemOne) Forward(ctx context.Context, name string, body json.RawMessage) (SystemOneResult, error) {
+	ctx = WithMeterDeployment(ctx, name)
 	d := r.deployment(name)
 	if d == nil {
 		return SystemOneResult{}, ErrUnavailable
@@ -265,6 +230,7 @@ func (r *RemoteSystemOne) Empty() bool {
 // to name; alone it is one System One call. An answer the generation's cache
 // holds is not asked again.
 func (r *RemoteSystemOne) Decide(ctx context.Context, name string, request Request) (Response, error) {
+	ctx = WithMeterDeployment(ctx, name)
 	d := r.deployment(name)
 	if d == nil {
 		requestsTotal.WithLabelValues(name, ErrorReason(ErrUnknownDeployment)).Inc()
@@ -410,6 +376,7 @@ func (d *systemOneDeployment) sendBatch(ctx context.Context, task *bundleTask) {
 func (d *systemOneDeployment) post(ctx context.Context, body api.DecisionRequest) (int, []byte, error) {
 	started := time.Now()
 	status, data, err := d.exchangeDecisions(ctx, body)
+	reportRemoteCall(ctx, d.name, d.model, data)
 	outcome := err
 	if outcome == nil {
 		outcome = systemOneStatusError(status)

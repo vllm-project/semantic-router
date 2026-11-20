@@ -287,6 +287,15 @@ func TestConvertProviderMetadataPreservesCachePricing(t *testing.T) {
 	assert.InDelta(t, 6.0, pricing.CompletionPer1M, 1e-12)
 }
 
+// A pricing block without a currency is USD, so zero prices make a model free
+// instead of leaving it for the catalog's list price.
+func TestConvertProviderMetadataKeepsAWrittenZeroPrice(t *testing.T) {
+	converted := convertProviderMetadata([]v1alpha1.ModelConfig{{Name: "free", Pricing: &v1alpha1.ModelPricing{}}})
+
+	require.Len(t, converted, 1)
+	assert.Equal(t, config.ModelPricing{Currency: "USD"}, converted[0].Pricing)
+}
+
 func TestConvertProviderMetadataUsesCatalogAndNestedReasoning(t *testing.T) {
 	converted := convertProviderMetadata([]v1alpha1.ModelConfig{
 		{

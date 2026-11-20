@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
@@ -30,22 +31,8 @@ type Signal struct {
 	Conversation  []string `json:"conversation,omitempty"`
 	Metadata      []string `json:"metadata,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
+	Agent         []string `json:"agent,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
-}
-
-// UsageCost captures token usage and pricing-derived cost details for a record.
-type UsageCost struct {
-	ProviderCache      *ProviderCacheAccounting `json:"provider_cache,omitempty"`
-	PromptTokens       *int                     `json:"prompt_tokens,omitempty"`
-	CachedPromptTokens *int                     `json:"cached_prompt_tokens,omitempty"`
-	CacheWriteTokens   *int                     `json:"cache_write_tokens,omitempty"`
-	CompletionTokens   *int                     `json:"completion_tokens,omitempty"`
-	TotalTokens        *int                     `json:"total_tokens,omitempty"`
-	ActualCost         *float64                 `json:"actual_cost,omitempty"`
-	BaselineCost       *float64                 `json:"baseline_cost,omitempty"`
-	CostSavings        *float64                 `json:"cost_savings,omitempty"`
-	Currency           *string                  `json:"currency,omitempty"`
-	BaselineModel      *string                  `json:"baseline_model,omitempty"`
 }
 
 // Outcome captures typed post-route feedback linked to a replay record.
@@ -249,6 +236,7 @@ type RouteDiagnostics struct {
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies         map[string]string                    `json:"applied_unknown_policies,omitempty"`
 	DecisionRanking                *DecisionRanking                     `json:"decision_ranking,omitempty"`
+	Retention                      *retention.Outcome                   `json:"retention,omitempty"`
 }
 
 // DecisionRanking records how selection ordered the matched decisions,
@@ -284,7 +272,10 @@ type Record struct {
 	ID                       string                 `json:"id"`
 	Timestamp                time.Time              `json:"timestamp"`
 	RequestID                string                 `json:"request_id,omitempty"`
+	RequestKind              string                 `json:"request_kind,omitempty"`
+	Review                   *Review                `json:"review,omitempty"`
 	SessionID                string                 `json:"session_id,omitempty"`
+	SessionName              string                 `json:"session_name,omitempty"`
 	TurnIndex                int                    `json:"turn_index"`
 	PreviousResponseID       string                 `json:"previous_response_id,omitempty"`
 	ConversationID           string                 `json:"conversation_id,omitempty"`
@@ -296,6 +287,7 @@ type Record struct {
 	OriginalModel            string                 `json:"original_model,omitempty"`
 	SelectedModel            string                 `json:"selected_model,omitempty"`
 	ReasoningMode            string                 `json:"reasoning_mode,omitempty"`
+	ReasoningEffort          string                 `json:"reasoning_effort,omitempty"`
 	ConfidenceScore          float64                `json:"confidence_score,omitempty"`
 	SelectionMethod          string                 `json:"selection_method,omitempty"`
 	RouteDiagnostics         *RouteDiagnostics      `json:"route_diagnostics,omitempty"`
@@ -323,6 +315,25 @@ type Record struct {
 	Streaming                bool                   `json:"streaming,omitempty"`
 	RequestBodyTruncated     bool                   `json:"request_body_truncated,omitempty"`
 	ResponseBodyTruncated    bool                   `json:"response_body_truncated,omitempty"`
+
+	// The agent's own ids for the thread and turn a request belongs to, as
+	// Codex names them in its turn metadata. ParentTurnID is the turn that
+	// started the thread, such as the turn an approval review judges.
+	ThreadID     string `json:"thread_id,omitempty"`
+	TurnID       string `json:"turn_id,omitempty"`
+	ParentTurnID string `json:"parent_turn_id,omitempty"`
+	// Agent is the agent of the run, SessionID, that sent the request, and
+	// ParentRequestID the client request a Looper hop was made for.
+	Agent           *AgentIdentity `json:"agent,omitempty"`
+	ParentRequestID string         `json:"parent_request_id,omitempty"`
+	// ImageCount is the images in the request's newest turn, after its last
+	// assistant message, and HistoryImageCount the images before it.
+	ImageCount        int `json:"image_count,omitempty"`
+	HistoryImageCount int `json:"history_image_count,omitempty"`
+
+	// RequestedModel is the model the client named when its listener's
+	// unserved_models routed the request as OriginalModel.
+	RequestedModel string `json:"requested_model,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -402,6 +413,7 @@ type Record struct {
 	CostSavings        *float64                 `json:"cost_savings,omitempty"`
 	Currency           *string                  `json:"currency,omitempty"`
 	BaselineModel      *string                  `json:"baseline_model,omitempty"`
+	CostAccounting     *CostAccounting          `json:"cost_accounting,omitempty"`
 }
 
 // RecordWriter creates records and advances their routing lifecycle.
@@ -462,6 +474,9 @@ type Enricher interface {
 
 	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
+
+	// UpdateSessionName stores the name an existing record's answer gave its session.
+	UpdateSessionName(ctx context.Context, id string, name string) error
 }
 
 // StoredPrompt is a record's prompt as it is kept: the text and, when the text
@@ -485,6 +500,7 @@ type Storage interface {
 	Writer
 	Reader
 	Enricher
+	ReviewWriter
 	io.Closer
 }
 
@@ -589,6 +605,7 @@ func cloneSignal(signal Signal) Signal {
 		Conversation:  cloneStringSlice(signal.Conversation),
 		Metadata:      cloneStringSlice(signal.Metadata),
 		InputModality: cloneStringSlice(signal.InputModality),
+		Agent:         cloneStringSlice(signal.Agent),
 		Decision:      cloneStringSlice(signal.Decision),
 	}
 }
@@ -608,6 +625,8 @@ func cloneRecord(record Record) Record {
 	cloned.SignalValues = cloneFloat64Map(record.SignalValues)
 	cloned.SessionPolicy = cloneInterfaceMap(record.SessionPolicy)
 	cloned.ToolTrace = cloneToolTrace(record.ToolTrace)
+	cloned.Review = CloneReview(record.Review)
+	cloned.Agent = cloneAgentIdentity(record.Agent)
 	cloned.PIIEntities = cloneStringSlice(record.PIIEntities)
 	cloned.HallucinationSpans = cloneStringSlice(record.HallucinationSpans)
 	cloned.HallucinationSpanDetails = cloneHallucinationSpanDetails(record.HallucinationSpanDetails)
@@ -622,6 +641,7 @@ func cloneRecord(record Record) Record {
 	cloned.CostSavings = cloneFloat64Ptr(record.CostSavings)
 	cloned.Currency = cloneStringPtr(record.Currency)
 	cloned.BaselineModel = cloneStringPtr(record.BaselineModel)
+	cloned.CostAccounting = cloneCostAccounting(record.CostAccounting)
 	cloned.EndedAt = cloneTimePtr(record.EndedAt)
 	return cloned
 }
@@ -675,6 +695,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
+	cloned.Retention = value.Retention.Clone()
 	if value.DecisionRanking != nil {
 		ranking := *value.DecisionRanking
 		cloned.DecisionRanking = &ranking
