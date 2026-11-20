@@ -779,6 +779,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             ["adaptive", "disabled"],
         )
         self.assertEqual(families["claude-effort-opt-in"]["default_mode"], "disabled")
+        self.assertEqual(families["claude-effort-adaptive-medium"]["default"], "medium")
+        self.assertEqual(
+            families["claude-effort-adaptive-medium"]["modes"],
+            ["adaptive", "disabled"],
+        )
         self.assertEqual(families["kimi-k3"]["levels"], ["low", "high", "max"])
         self.assertEqual(families["kimi-k3"]["default"], "max")
         self.assertEqual(families["hunyuan-hy4"]["levels"], ["high"])
@@ -849,6 +854,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "anthropic/claude-sonnet-5": "claude-effort-adaptive",
             "anthropic/claude-opus-4.8": "claude-effort-opt-in",
             "anthropic/claude-opus-5": "claude-effort-adaptive",
+            "anthropic/claude-haiku-5.5": "claude-effort-adaptive-medium",
             "nvidia/nemotron-3.5-lightning": "nemotron-thinking-toggle",
             "nvidia/nemotron-3-super": "nemotron-super",
             "nvidia/nemotron-3-ultra": "nemotron-ultra",
