@@ -1080,11 +1080,11 @@ func (r *OpenAIRouter) recordFallbackExecution(ctx *RequestContext) {
 	if recorder == nil && r != nil {
 		recorder = r.ReplayRecorder
 	}
-	// Replay already records the primary response status when its 400 ends
-	// fallback evaluation before any candidate is tried.
-	primaryBadRequest := record.FinalStatus == "non_retryable" &&
-		len(record.Attempts) == 1 && record.Attempts[0].StatusCode == http.StatusBadRequest
-	if recorder == nil || ctx.RouterReplayID == "" || primaryBadRequest {
+	// Replay already records a primary response that ends the chain before
+	// a candidate is tried.
+	primaryResponseEndedChain := record.FinalStatus == "non_retryable" && len(record.Attempts) == 1 &&
+		!record.Attempts[0].LocalReply && record.Attempts[0].StatusCode >= http.StatusMultipleChoices
+	if recorder == nil || ctx.RouterReplayID == "" || primaryResponseEndedChain {
 		ctx.FallbackAuditRecorded = true
 		return
 	}

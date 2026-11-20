@@ -566,8 +566,9 @@ layer first:
 - **Records.** When a candidate answers, Router Replay's record names it in
   `selected_model`, with the reasoning it was sent with, and its `fallback`
   outcome keeps every attempt, the first model's included. Protection then
-  holds the session on the candidate. A request the first model answers has
-  no `fallback` outcome.
+  holds the session on the candidate. Replay omits the `fallback` outcome
+  when the first model serves the request or returns a non-retryable HTTP
+  status before any candidate is tried.
 - **Long prompts.** A candidate whose window the Router's
   [count](#check-prompts-against-the-context-window) exceeds beyond its band
   is never tried. After a backend refuses the prompt for its length, the chain

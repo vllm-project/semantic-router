@@ -283,6 +283,10 @@ func TestExhaustedFallbackReplayKeepsTheClientsStatus(t *testing.T) {
 			session.Close(nil)
 
 			requireReplayEnd(t, session.router, session.ctx, routerreplay.LifecycleFailed, tc.reason, tc.status)
+			record, _ := session.router.ReplayRecorder.GetRecord(session.ctx.RouterReplayID)
+			outcomes := fallbackOutcomes(record)
+			require.Len(t, outcomes, 1)
+			require.Equal(t, "2", outcomes[0].Metadata["attempts"])
 		})
 	}
 

@@ -274,6 +274,7 @@ func (f *sessionFallback) failedAttempt(outcome routing.Outcome) fallback.Attemp
 		Model:      f.model(),
 		Backend:    f.backend(),
 		StatusCode: outcome.Status,
+		LocalReply: outcome.Local,
 		Duration:   outcome.Duration,
 		Discarded:  true,
 	}
