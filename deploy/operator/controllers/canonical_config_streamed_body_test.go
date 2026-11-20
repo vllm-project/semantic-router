@@ -27,9 +27,11 @@ func TestOperatorStreamedBodyReachesParsedRouterConfig(t *testing.T) {
 			wantEnabled: true, wantBytes: 10485760, wantTimeout: 30,
 		},
 		{
-			name:        "enabled without limits",
+			// The Router refuses an enabled streamed body without a ceiling, so
+			// the CR that names none gets the declared default.
+			name:        "enabled without a ceiling",
 			spec:        &vllmv1alpha1.StreamedBodyConfig{Enabled: true},
-			wantEnabled: true,
+			wantEnabled: true, wantBytes: defaultStreamedBodyMaxBytes,
 		},
 	}
 	for _, tc := range cases {

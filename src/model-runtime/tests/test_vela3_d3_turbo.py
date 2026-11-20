@@ -68,6 +68,36 @@ def test_ordinary_questions_answer_as_d3_turbo_bit_for_bit(runtimes) -> None:
     assert got["usage"] == want["usage"]
 
 
+def test_a_question_whose_type_is_not_a_string_fails_alone(runtimes) -> None:
+    vela, _ = runtimes
+    questions = {
+        "listed": {"type": ["box"], "instructions": "the dog"},
+        "object": {"type": {"kind": "choice"}, "instructions": "x"},
+        "reasoning": NOUL,
+        "attack": NOUL,
+    }
+    status, body = call(vela, {"state": STATE, "questions": questions})
+    assert status == 200, body
+    for key in ("listed", "object"):
+        assert body["answers"][key]["error"] == "invalid_question", body
+        assert body["answers"][key]["reason"] == "type_unsupported"
+    assert "error" not in body["answers"]["reasoning"]
+    assert "error" not in body["answers"]["attack"]
+
+
+def test_a_blank_state_with_an_image_is_answered(runtimes, png_url) -> None:
+    vela, d3 = runtimes
+    image = [png_url(64, 48, 2)]
+    for state in ("", "   "):
+        body = {"state": state, "images": image, "questions": {"q": NOUL}}
+        status, got = call(vela, body)
+        assert status == 200 and "error" not in got["answers"]["q"], got
+        assert got["answers"] == call(d3, body)[1]["answers"]
+    status, refused = call(vela, {"state": "   ", "questions": {"q": NOUL}})
+    assert status == 400
+    assert "empty or whitespace" in refused["error"]["message"]
+
+
 def replay_reference(model, items, name):
     ids, mask, last = model._padded(items)
     output = model.engine_model.forward(

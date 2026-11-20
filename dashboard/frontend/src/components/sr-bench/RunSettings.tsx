@@ -1,11 +1,14 @@
 import { useId } from 'react'
-import ProductIcon from '../ProductIcon'
+import { Settings2 } from 'lucide-react'
+import { Input } from '../../ui'
 import BenchSelect from './BenchSelect'
 import type { Manifest, Target } from './types'
-import styles from './SrBench.module.css'
-import controls from './BenchControls.module.css'
+import { Disclosure, Notice } from './benchUi'
+import { benchText } from './benchStyles'
 
 export type SamplingSettings = Pick<Manifest['sampling'], 'temperature' | 'top_p' | 'seed'>
+
+const formGrid = 'my-3 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2'
 
 interface NumberFieldProps {
   label: string
@@ -32,14 +35,17 @@ function NumberField({
 }: NumberFieldProps) {
   const id = useId()
   return (
-    <div className={controls.selectField}>
-      <label htmlFor={id}>{label}</label>
-      <input
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
+        {label}
+      </label>
+      <Input
         id={id}
         type="number"
         min={min}
         max={max}
         step={step}
+        className="tabular-nums"
         value={typeof value === 'number' && !Number.isFinite(value) ? '' : value}
         disabled={disabled}
         placeholder={placeholder}
@@ -47,7 +53,7 @@ function NumberField({
         onChange={(event) => onChange(event.target.valueAsNumber)}
       />
       {help && (
-        <small id={`${id}-help`} className={controls.fieldHelp}>
+        <small id={`${id}-help`} className="text-[11.5px] leading-snug text-subtle-foreground">
           {help}
         </small>
       )}
@@ -112,35 +118,37 @@ export default function RunSettings({
   }
   return (
     <>
-      <BenchSelect
-        label="Output policy"
-        value={outputPolicy}
-        onChange={(value) => onOutputPolicyChange(value as 'bounded' | 'native')}
-        options={[
-          {
-            value: 'bounded',
-            label: 'Bounded output',
-            description: 'Set a shared output-token limit.',
-          },
-          ...(nativeAvailable || outputPolicy === 'native'
-            ? [
-                {
-                  value: 'native',
-                  label: 'Native capacity',
-                  description: 'Use available model capacity without a shared token cap.',
-                },
-              ]
-            : []),
-        ]}
-      />
-      <p className={styles.muted}>
+      <div className="max-w-md">
+        <BenchSelect
+          label="Output policy"
+          value={outputPolicy}
+          onChange={(value) => onOutputPolicyChange(value as 'bounded' | 'native')}
+          options={[
+            {
+              value: 'bounded',
+              label: 'Bounded output',
+              description: 'Set a shared output-token limit.',
+            },
+            ...(nativeAvailable || outputPolicy === 'native'
+              ? [
+                  {
+                    value: 'native',
+                    label: 'Native capacity',
+                    description: 'Use available model capacity without a shared token cap.',
+                  },
+                ]
+              : []),
+          ]}
+        />
+      </div>
+      <p className={`${benchText.muted} mt-1.5 max-w-3xl`}>
         {outputPolicy === 'native'
           ? 'Use each selected model’s available context for reasoning and its answer. No fixed shared token cap is sent; remaining output capacity depends on the actual input.'
           : !nativeAvailable
             ? 'Native capacity requires operator-registered model limits and a compatible target profile.'
             : 'A shared cap bounds each response; registered target overrides still apply.'}
       </p>
-      <div className={styles.formGrid}>
+      <div className={formGrid}>
         <NumberField
           label="Budget (USD)"
           value={costPolicy === 'capability_only' ? '' : limits.max_cost_usd}
@@ -179,22 +187,26 @@ export default function RunSettings({
           help="Cases processed in parallel."
         />
       </div>
-      <details className={controls.settingsBlock}>
-        <summary>
-          <ProductIcon name="settings" />
-          Sampling and advanced limits
-        </summary>
+      <Disclosure
+        summary={
+          <>
+            <Settings2 aria-hidden="true" className="size-4 text-muted-foreground" />
+            Sampling and advanced limits
+          </>
+        }
+        bodyClassName="flex flex-col gap-1 [&_h4]:mt-3 [&_h4:first-child]:mt-0"
+      >
         {mode === 'preview' && (
           <>
-            <h4>Preview context</h4>
-            <p className={styles.muted}>
+            <h4 className={benchText.h4}>Preview context</h4>
+            <p className={benchText.muted}>
               Optionally inspect routing for an existing session. Preview reads the current learning
               state without updating it.
             </p>
-            <div className={styles.formGrid}>
-              <label>
+            <div className={formGrid}>
+              <label className={benchText.field}>
                 Session ID
-                <input
+                <Input
                   value={previewContext.session_id ?? ''}
                   placeholder="Optional"
                   onChange={(event) =>
@@ -202,9 +214,9 @@ export default function RunSettings({
                   }
                 />
               </label>
-              <label>
+              <label className={benchText.field}>
                 Conversation ID
-                <input
+                <Input
                   value={previewContext.conversation_id ?? ''}
                   placeholder="Optional"
                   onChange={(event) =>
@@ -228,39 +240,41 @@ export default function RunSettings({
         )}
         {mode === 'live' && (
           <>
-            <h4>Cost accounting</h4>
-            <BenchSelect
-              label="Cost accounting"
-              value={costPolicy ?? 'require_priced'}
-              onChange={(value) =>
-                onCostPolicyChange(value as 'require_priced' | 'capability_only')
-              }
-              options={[
-                {
-                  value: 'require_priced',
-                  label: 'Quality and cost',
-                  description: 'Require complete prices and a model-cost budget.',
-                },
-                {
-                  value: 'capability_only',
-                  label: 'Quality only',
-                  description: 'Allow incomplete prices. No cost-saving claims.',
-                },
-              ]}
-            />
+            <h4 className={benchText.h4}>Cost accounting</h4>
+            <div className="my-2 max-w-md">
+              <BenchSelect
+                label="Cost accounting"
+                value={costPolicy ?? 'require_priced'}
+                onChange={(value) =>
+                  onCostPolicyChange(value as 'require_priced' | 'capability_only')
+                }
+                options={[
+                  {
+                    value: 'require_priced',
+                    label: 'Quality and cost',
+                    description: 'Require complete prices and a model-cost budget.',
+                  },
+                  {
+                    value: 'capability_only',
+                    label: 'Quality only',
+                    description: 'Allow incomplete prices. No cost-saving claims.',
+                  },
+                ]}
+              />
+            </div>
             {costPolicy === 'capability_only' && (
-              <p className={styles.notice}>
+              <Notice tone="info" as="p">
                 No USD budget is applied. Time, output and call limits still apply. Known costs are
                 recorded, but this run cannot prove cost savings.
-              </p>
+              </Notice>
             )}
           </>
         )}
-        <h4>Sampling defaults</h4>
-        <p className={styles.muted}>
+        <h4 className={benchText.h4}>Sampling defaults</h4>
+        <p className={benchText.muted}>
           Fixed target profiles take precedence. Their effective settings remain visible above.
         </p>
-        <div className={styles.formGrid}>
+        <div className={`${formGrid} lg:grid-cols-3`}>
           <NumberField
             label="Temperature"
             min={0}
@@ -271,8 +285,8 @@ export default function RunSettings({
           <NumberField label="Top P" min={0} max={1} step={0.05} {...samplingField('top_p', 1)} />
           <NumberField label="Sampling seed" {...samplingField('seed', seed)} />
         </div>
-        <h4>Request and case limits</h4>
-        <div className={styles.formGrid}>
+        <h4 className={benchText.h4}>Request and case limits</h4>
+        <div className={formGrid}>
           <NumberField
             label="Request deadline (seconds)"
             value={limits.total_timeout_s}
@@ -302,7 +316,7 @@ export default function RunSettings({
             help="Bounds model calls in multi-turn and agent benchmarks."
           />
         </div>
-      </details>
+      </Disclosure>
     </>
   )
 }

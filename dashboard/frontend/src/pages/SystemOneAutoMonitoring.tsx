@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  Alert,
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  ChartLegend,
+  ChartTooltip,
+  Segmented,
+  chartAxis,
+  chartGrid,
+  cn,
+} from '../ui'
 import { canAccessDashboardPath } from '../utils/accessControl'
 import { withRequestTimeout } from '../utils/boundedRequest'
 import {
@@ -13,20 +26,17 @@ import {
   loadSystemOneAutoMetrics,
   type AutoMetricSnapshot,
 } from './systemOneAutoMetrics'
-import SystemOneSelect from './SystemOneSelect'
-import styles from './DecisionModelPage.module.css'
-import autoStyles from './SystemOneAutoMonitoring.module.css'
 
 const empty: AutoMetricSnapshot = { values: {}, stages: [], unavailable: [] }
 const outcomes = [
-  { key: 'accepted', label: 'Accepted by gate', color: '#49bba5' },
-  { key: 'rejected', label: 'Did not pass gate', color: '#dca965' },
-  { key: 'failed', label: 'Errors or invalid results', color: '#ee8b9b' },
+  { key: 'accepted', label: 'Accepted by gate', color: 'var(--chart-6)' },
+  { key: 'rejected', label: 'Did not pass gate', color: 'var(--chart-2)' },
+  { key: 'failed', label: 'Errors or invalid results', color: 'var(--chart-5)' },
 ] as const
 
 export default function SystemOneAutoMonitoring({ refreshedAt }: { refreshedAt: Date | null }) {
   const { user } = useAuth()
-  const canReadMetrics = canAccessDashboardPath(user, '/monitoring')
+  const canReadMetrics = canAccessDashboardPath(user, '/observe/metrics')
   const [window, setWindow] = useState<DecisionModelTimeWindow>(3600)
   const [snapshot, setSnapshot] = useState(empty)
   const [loading, setLoading] = useState(false)
@@ -54,19 +64,21 @@ export default function SystemOneAutoMonitoring({ refreshedAt }: { refreshedAt: 
     return () => controller.abort()
   }, [window, refreshedAt, canReadMetrics])
   return (
-    <section className={styles.panel} aria-labelledby="auto-monitoring-title">
-      <div className={styles.monitoringHeader}>
-        <div>
-          <h2 id="auto-monitoring-title">Automatic routing</h2>
-          <p className={styles.muted}>
+    <section className="flex flex-col gap-4" aria-labelledby="auto-monitoring-title">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 id="auto-monitoring-title" className="text-[15px] font-semibold tracking-[-0.012em]">
+            Automatic routing
+          </h2>
+          <p className="text-[13px] text-muted-foreground">
             All native auto routes on this instance. Acceptance measures the configured gate, not
             answer accuracy.
           </p>
         </div>
-        <SystemOneSelect
-          label="Stage observation window"
+        <Segmented
+          aria-label="Stage observation window"
           value={String(window)}
-          onChange={(value) => setWindow(Number(value) as DecisionModelTimeWindow)}
+          onValueChange={(value) => setWindow(Number(value) as DecisionModelTimeWindow)}
           options={DECISION_MODEL_TIME_WINDOWS.map((item) => ({
             value: String(item.seconds),
             label: item.label,
@@ -74,75 +86,67 @@ export default function SystemOneAutoMonitoring({ refreshedAt }: { refreshedAt: 
         />
       </div>
       {!canReadMetrics ? (
-        <p className={styles.muted}>Your role does not include monitoring access.</p>
+        <Alert tone="neutral">Your role does not include monitoring access.</Alert>
       ) : (
         <>
           <dl
-            className={`${styles.statistics} ${autoStyles.statistics}`}
+            className="grid grid-cols-2 gap-3 lg:grid-cols-4"
             aria-label="Auto routing statistics"
           >
-            {AUTO_METRICS.map((metric) => (
-              <div key={metric.key}>
-                <dt>{metric.label}</dt>
-                <dd>{formatDecisionModelMetric(snapshot.values[metric.key], metric.unit)}</dd>
-              </div>
-            ))}
+            {AUTO_METRICS.map((metric) => {
+              const value = snapshot.values[metric.key]
+              return (
+                <div
+                  key={metric.key}
+                  className="rounded-xl border border-border bg-card px-4 py-3.5 shadow-xs"
+                >
+                  <dt className="text-[13px] font-medium text-muted-foreground">{metric.label}</dt>
+                  <dd
+                    className={cn(
+                      'mt-2 tabular',
+                      value == null
+                        ? 'text-[15px] font-medium leading-6 text-subtle-foreground'
+                        : 'text-[22px] font-semibold leading-6 tracking-[-0.03em]',
+                    )}
+                  >
+                    {formatDecisionModelMetric(value, metric.unit)}
+                  </dd>
+                </div>
+              )
+            })}
           </dl>
-          <p className={styles.muted}>
-            Statistics use a rolling 5-minute window. Execution time starts after recipe signals and
-            excludes their latency.
-          </p>
-          {snapshot.unavailable.length > 0 && (
-            <p className={styles.notice}>
+          {snapshot.unavailable.length > 0 ? (
+            <Alert tone="warning" title="Some observations are unavailable">
               Unavailable observations: {snapshot.unavailable.join(', ')}
-            </p>
-          )}
-          <div className={styles.chartCard}>
-            <div className={styles.chartHeader}>
-              <div>
-                <h4>Stage activity</h4>
-                <p>
-                  Estimated stage attempts in the selected window, grouped by algorithm and model. A
-                  request can visit several stages.
-                </p>
-              </div>
-            </div>
-            <div className={styles.chartLegend}>
-              {outcomes.map((outcome) => (
-                <span key={outcome.key}>
-                  <i style={{ background: outcome.color }} />
-                  {outcome.label}
-                </span>
-              ))}
+            </Alert>
+          ) : null}
+          <Card>
+            <CardHeader>
+              <CardTitle>Stage activity</CardTitle>
+              <CardDescription className="text-xs">
+                Estimated stage attempts in the selected window, grouped by algorithm and model. A
+                request can visit several stages. Statistics use a rolling 5-minute window;
+                execution time starts after recipe signals.
+              </CardDescription>
+            </CardHeader>
+            <div className="px-5 pt-3">
+              <ChartLegend
+                items={outcomes.map((outcome) => ({ label: outcome.label, color: outcome.color }))}
+              />
             </div>
             <div
-              className={styles.chartCanvas}
+              className="px-3 pb-3 pt-2"
               style={{ height: Math.max(220, snapshot.stages.length * 52) }}
             >
               {snapshot.stages.length ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={snapshot.stages} layout="vertical" accessibilityLayer>
-                    <CartesianGrid
-                      horizontal={false}
-                      stroke="var(--color-border)"
-                      strokeDasharray="3 5"
-                    />
-                    <XAxis
-                      type="number"
-                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="label"
-                      width={160}
-                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 11 }}
-                    />
+                    <CartesianGrid {...chartGrid} horizontal={false} vertical />
+                    <XAxis type="number" {...chartAxis} />
+                    <YAxis type="category" dataKey="label" width={180} {...chartAxis} />
                     <Tooltip
-                      contentStyle={{
-                        background: 'var(--color-bg-secondary)',
-                        border: '1px solid var(--color-border)',
-                        borderRadius: 10,
-                      }}
+                      cursor={{ fill: 'var(--muted)', opacity: 0.5 }}
+                      content={<ChartTooltip />}
                     />
                     {outcomes.map((outcome) => (
                       <Bar
@@ -151,21 +155,21 @@ export default function SystemOneAutoMonitoring({ refreshedAt }: { refreshedAt: 
                         name={outcome.label}
                         stackId="attempts"
                         fill={outcome.color}
-                        maxBarSize={32}
+                        maxBarSize={28}
                         isAnimationActive={false}
                       />
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className={styles.chartEmpty}>
+                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border text-[13px] text-muted-foreground">
                   {loading
                     ? 'Loading auto observations…'
                     : 'No native auto stage activity reported in this window.'}
                 </div>
               )}
             </div>
-          </div>
+          </Card>
         </>
       )}
     </section>

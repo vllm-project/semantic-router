@@ -39,14 +39,25 @@ func (r *SemanticRouterReconciler) applyOperatorConfigSpec(canonical *routerconf
 		canonical.Global.Router.Strategy = routerconfig.RoutingStrategy(spec.Strategy)
 	}
 	if spec.StreamedBody != nil {
+		// The Router refuses an enabled streamed body without a ceiling, so a CR
+		// that enables one without naming a size gets the declared default. The
+		// CRD carries the same default for what the API server admits.
+		maxBytes := spec.StreamedBody.MaxBytes
+		if maxBytes <= 0 {
+			maxBytes = defaultStreamedBodyMaxBytes
+		}
 		canonical.Global.Router.StreamedBody = routerconfig.CanonicalStreamedBody{
 			Enabled:    spec.StreamedBody.Enabled,
-			MaxBytes:   spec.StreamedBody.MaxBytes,
+			MaxBytes:   maxBytes,
 			TimeoutSec: spec.StreamedBody.TimeoutSec,
 		}
 	}
 	return nil
 }
+
+// defaultStreamedBodyMaxBytes is the ceiling an enabled streamed body gets when
+// the CR names none; it matches the value the reference configuration ships.
+const defaultStreamedBodyMaxBytes int64 = 10 << 20
 
 func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerconfig.CanonicalConfig, spec vllmv1alpha1.ConfigSpec) error {
 	if err := applyOperatorModelDeployments(canonical, spec); err != nil {

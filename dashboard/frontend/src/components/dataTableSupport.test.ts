@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 
-import { getPageWindow, paginateRows, updatePageSelection } from './dataTableSupport'
+import {
+  getPageWindow,
+  isInteractiveRowTarget,
+  paginateRows,
+  updatePageSelection,
+} from './dataTableSupport'
+
+function fakeElement(isControl: boolean, insideRow = true) {
+  const element = {
+    closest: (selector: string) => (isControl && selector.includes('button') ? element : null),
+    insideRow,
+  }
+  return element
+}
+
+const fakeRow = {
+  contains: (node: unknown) => Boolean((node as { insideRow?: boolean } | null)?.insideRow),
+}
 
 describe('data table scale support', () => {
   it('paginates a 500-row inventory without rendering the full collection', () => {
@@ -28,6 +45,20 @@ describe('data table scale support', () => {
     const withPage = updatePageSelection(selected, pageKeys, true)
 
     expect([...withPage].sort()).toEqual(['model-1', 'model-26', 'model-27', 'model-90'])
-    expect([...updatePageSelection(withPage, pageKeys, false)].sort()).toEqual(['model-1', 'model-90'])
+    expect([...updatePageSelection(withPage, pageKeys, false)].sort()).toEqual([
+      'model-1',
+      'model-90',
+    ])
+  })
+
+  it('opens a row only for clicks on plain row content', () => {
+    expect(isInteractiveRowTarget(fakeElement(false) as unknown as EventTarget, fakeRow)).toBe(
+      false,
+    )
+    expect(isInteractiveRowTarget(fakeElement(true) as unknown as EventTarget, fakeRow)).toBe(true)
+    expect(
+      isInteractiveRowTarget(fakeElement(false, false) as unknown as EventTarget, fakeRow),
+    ).toBe(true)
+    expect(isInteractiveRowTarget(null, fakeRow)).toBe(true)
   })
 })

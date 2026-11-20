@@ -19,6 +19,7 @@ from typing import Any
 
 from ...errors import PackageError
 from ...plugins.base import EngineModel, LMHeadSpec
+from ..decision3 import prompt
 
 CTX_MAX = 60
 MAX_NEW = 40
@@ -31,8 +32,6 @@ PROMPT = (
     'Define the entity type "{label}" in one short sentence: what kind of text span it covers. '
     "Reply with the definition only."
 )
-# The chat template's user turn and thinking-off generation prompt, with no system turn.
-USER_TURN = "<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
 
 
 def prompt_for(label: str, names: list[str]) -> str:
@@ -43,9 +42,9 @@ def prompt_for(label: str, names: list[str]) -> str:
     return PROMPT.format(ctx=context, label=label)
 
 
-def user_turn(text: str) -> str:
-    """``apply_chat_template`` of one user message with the generation prompt and thinking off."""
-    return USER_TURN.format(prompt=text)
+def user_turn(text: str) -> prompt.Prompt:
+    """``apply_chat_template`` of one user message with the generation prompt and thinking off, no system turn."""
+    return [prompt.IM_START, f"user\n{text}", *prompt.GENERATION]
 
 
 def cache_key(names: list[str]) -> tuple[str, ...] | None:
@@ -113,12 +112,13 @@ def writer_eos(text: dict[str, Any]) -> int:
 
 
 class LabelDefiner:
-    """The package's ``LabelDefiner.define`` over an engine that can ``generate``."""
+    """The package's ``LabelDefiner.define`` over an engine that can ``generate``; ``prompts`` is the base's
+    ``PromptEncoder``, so a label is read as text in its prompt."""
 
     def __init__(
         self,
         engine: EngineModel,
-        tokenizer: Any,
+        prompts: prompt.PromptEncoder,
         pad_id: int,
         cache: Path | None,
         *,
@@ -127,7 +127,7 @@ class LabelDefiner:
         max_cached: int = MAX_CACHED,
     ):
         self.engine = engine
-        self.tokenizer = tokenizer
+        self.prompts = prompts
         self.pad_id = pad_id
         self.batch = batch
         self.eos = eos_token_id
@@ -187,8 +187,10 @@ class LabelDefiner:
         for start in range(0, len(prompts), self.batch):
             chunk = prompts[start : start + self.batch]
             rows = [
-                self.tokenizer.encode(user_turn(text), add_special_tokens=False).ids
-                for text in chunk
+                encoding.ids
+                for encoding in self.prompts.encode_batch(
+                    [user_turn(text) for text in chunk]
+                )
             ]
             generated = self.engine.generate(
                 rows,
@@ -197,7 +199,7 @@ class LabelDefiner:
                 pad_token_id=self.pad_id,
             )
             lines += [
-                first_line(self.tokenizer.decode(ids, skip_special_tokens=True))
+                first_line(self.prompts.backend.decode(ids, skip_special_tokens=True))
                 for ids in generated
             ]
         return lines
@@ -206,7 +208,7 @@ class LabelDefiner:
 def writer_of(
     mode: str,
     engine: EngineModel,
-    tokenizer: Any,
+    prompts: prompt.PromptEncoder,
     pad_id: int,
     cache: Path | None,
     *,
@@ -219,4 +221,4 @@ def writer_of(
         or eos_token_id is None
     ):
         return None
-    return LabelDefiner(engine, tokenizer, pad_id, cache, eos_token_id=eos_token_id)
+    return LabelDefiner(engine, prompts, pad_id, cache, eos_token_id=eos_token_id)

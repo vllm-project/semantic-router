@@ -1,7 +1,7 @@
 ---
 title: "vela3-flash"
 sidebar_label: "vela3-flash"
-sidebar_position: 5
+sidebar_position: 6
 description: "Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the built-in questions and spans."
 custom_edit_url: null
 ---

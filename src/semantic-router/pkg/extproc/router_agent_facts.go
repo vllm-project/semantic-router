@@ -18,8 +18,8 @@ const maxAgentTypeBytes = 128
 // main agent's when it names a session and no agent. The type is the one the
 // harness sends with a subagent's requests: Claude Code's
 // x-claude-code-agent-type, Codex's x-openai-subagent. The request class is
-// Claude Code's x-claude-code-request-class, or the class an OpenCode call's
-// instructions show.
+// Claude Code's x-claude-code-request-class, or the class an OpenCode, Codex
+// or OpenClaw call's built-in prompts show.
 func agentFacts(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) classification.AgentFacts {
 	facts := classification.AgentFacts{Harness: agentHarness(ctx)}
 	if facts.Harness == config.AgentHarnessClaudeCode {
@@ -31,8 +31,14 @@ func agentFacts(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) 
 	} else if sessionID, _ := protectionSessionID(ctx, cfg); sessionID != "" {
 		facts.Role = config.AgentRoleMain
 	}
-	if facts.Harness == config.AgentHarnessOpenCode {
-		facts.RequestClass = openCodeRequestClass(ctx.SemanticRequest, facts.Role == config.AgentRoleSubagent)
+	subagent := facts.Role == config.AgentRoleSubagent
+	switch facts.Harness {
+	case config.AgentHarnessOpenCode:
+		facts.RequestClass = openCodeRequestClass(ctx.SemanticRequest, subagent)
+	case config.AgentHarnessCodex:
+		facts.RequestClass = codexRequestClass(ctx, subagent)
+	case config.AgentHarnessOpenClaw:
+		facts.RequestClass = openClawRequestClass(ctx.SemanticRequest, subagent)
 	}
 	return facts
 }
@@ -47,6 +53,12 @@ func agentHarness(ctx *RequestContext) string {
 		return config.AgentHarnessCodex
 	case isOpenCode(ctx):
 		return config.AgentHarnessOpenCode
+	case isDeepSeekHarness(ctx):
+		return config.AgentHarnessDeepSeekHarness
+	case isCursor(ctx):
+		return config.AgentHarnessCursor
+	case isOpenClaw(ctx):
+		return config.AgentHarnessOpenClaw
 	default:
 		return ""
 	}

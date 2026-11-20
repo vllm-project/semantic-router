@@ -4,13 +4,15 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 // Behind a decision, Claude Code's adaptive thinking on a Responses backend
 // follows the decision's use_reasoning, as it already does on Chat and
-// Messages backends. An explicit thinking-off from the client is still kept.
+// Messages backends. An explicit thinking-off from the client is still kept,
+// and the trace reports the reasoning the backend runs with.
 func TestResponsesBackendFollowsTheDecisionForAdaptiveThinking(t *testing.T) {
 	router := routingTestRouter("chat")
 	model := router.Config.ModelConfig["chat"]
@@ -49,5 +51,14 @@ func TestResponsesBackendFollowsTheDecisionForAdaptiveThinking(t *testing.T) {
 	off := decode(`{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"disabled"}}`)
 	if router.applySemanticReasoningMode(&off, "chat", llmprotocol.OpenAIResponsesV1, true, decision) || off.ReasoningMode != llmprotocol.ReasoningModeDisabled {
 		t.Fatalf("explicit thinking-off was overridden: %q", off.ReasoningMode)
+	}
+	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &off)
+	ctx.Headers[headers.VSRDebug] = "true"
+	ctx.VSRSelectedDecision, ctx.VSRReasoningMode = decision, "on"
+	if _, err := router.prepareProviderDispatch(&off, "chat", decision.Name, true, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := traceMembersOf(t, responseTrace(ctx))[headers.TraceReasoning]; got != "off" {
+		t.Fatalf("trace reasoning = %q for the kept thinking-off, want off", got)
 	}
 }

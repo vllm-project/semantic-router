@@ -29,7 +29,8 @@ listeners:
     # of chat_completions and messages.
     apis:
       # Standalone mode: accept only these request models (exact `model`
-      # values); others get 403 model_not_allowed. Omitted, every LLM model.
+      # values); others get 403 model_not_allowed, or 404 model_not_found
+      # when the Router serves them on no listener. Omitted, every LLM model.
       chat_completions:
         models: [vllm-sr/exhaustive-default]
       responses:
@@ -71,6 +72,11 @@ providers:
   defaults:
     model: qwen3-8b
     reasoning_effort: medium
+    # A backend counts reasoning against the output limit. A request that
+    # states no reasoning preference (no thinking, reasoning_effort, reasoning
+    # or chat_template_kwargs thinking switch) and sets a smaller limit than
+    # this runs with the model's reasoning off. 0 or unset turns the rule off.
+    reasoning_min_output_tokens: 512
     # The CA bundle of every https backend whose own tls names no ca_file. It
     # replaces the system roots for those backends, in Envoy and in the
     # Router's own calls, so it must hold every CA they chain to.
@@ -245,6 +251,8 @@ providers:
       # Request capabilities the backends reject, as vLLM rejects min_p and
       # logit_bias under speculative decoding: the Router sends this model
       # requests without those fields and reports each in x-vsr-warnings.
+      # developer_role, for a model that drops developer messages as DeepSeek V4
+      # does, sends them to it as system messages instead.
       unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
       backend_refs:
         - name: omni-primary
@@ -581,8 +589,14 @@ recipes:
           description: Detect common prompt-injection or jailbreak attempts.
           predicate:
             gte: 0.8
+          # The rule reads the user's text of the current turn. history adds
+          # the earlier user turns; tool_results (off by default) adds the tool
+          # results returned in this turn, where a fetched page or file can
+          # carry instructions, and makes a tool result the Router cannot read
+          # as text, such as a screenshot, resolve as on_unscanned says.
           input:
             history: true
+            tool_results: false
           deployment: primary
           timeout_ms: 300
           # A long input is read in windows. When the time runs out before
@@ -1056,18 +1070,17 @@ recipes:
               # model of the recipe's pool. It must name a model with pricing.
               cost_baseline_model: qwen3-32b
               shadow:
-                model: qwen3-32b
+                models: [qwen3-32b]
                 sample_rate: 0.05
-                max_concurrency: 2
-                max_queue_depth: 8
-                timeout_seconds: 30
-                max_response_bytes: 1048576
-                max_retries: 0
-                capture_response_body: false
-                max_capture_bytes: 4096
-                tls_skip_verify: false
-                # Decision header mutations reach the shadow only when listed here.
-                forward_headers: []
+                execution:
+                  max_concurrency: 2
+                  max_queue_size: 8
+                  timeout: 30s
+                budget:
+                  max_response_bytes: 1048576
+                capture:
+                  enabled: false
+                  max_bytes: 4096
           - type: system_prompt
             configuration:
               enabled: true
@@ -2322,7 +2335,7 @@ global:
       forward_request_headers: [x-user-id, x-request-id]
     streamed_body:
       enabled: true
-      max_bytes: 1048576
+      max_bytes: 10485760
       timeout_sec: 15
     skip_processing:
       enabled: false
@@ -2341,18 +2354,23 @@ global:
     # Protocol losses to translate with an x-vsr-warnings protocol entry instead
     # of rejecting them. tool_result.is_error omits the Anthropic failed tool
     # call flag that OpenAI Chat and Responses backends cannot carry, and
-    # messages[].role sends Anthropic system messages inside the conversation to
-    # those backends as user text, for chat templates that accept a system
-    # message only first. content.file sends each file in the conversation as
-    # a short note to a model whose capabilities leave out file_input.
+    # messages[].role sends a Chat backend the leading system and developer
+    # messages as one system message and those inside the conversation as user
+    # text, for chat templates that accept one system message, only first; an
+    # Anthropic system message inside the conversation reaches Responses
+    # backends as user text too. content.file sends each file in the
+    # conversation as a short note to a model whose capabilities leave out
+    # file_input.
     # tools.defer_loading sends tools that a coding agent marks for tool search
     # in full, for every backend format.
     # reasoning.signature drops the signature an Anthropic backend puts on its
-    # thinking, which Chat and Responses clients cannot carry. store sends a
+    # thinking, which Chat and Responses clients cannot carry, and the one a
+    # Messages client sends back to a Chat or Responses backend. store sends a
     # request's store: true without it to a backend that keeps no completions,
     # such as a Messages backend; store: false needs no entry. Empty keeps every
     # lossy translation failing closed.
     allow_lossy_translation: []
+    allow_request_extension_fields: []
     # The user text that routing reads. A user message whose text matches a
     # skip pattern (RE2) is never routing text, and each strip block cuts its
     # literal start...end spans from the routing text. Jailbreak, PII and

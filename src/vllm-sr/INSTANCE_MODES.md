@@ -74,11 +74,11 @@ vllm-sr serve vllm-sr/d3-lite --engine --platform rocm
 ```
 
 A request may carry any number of `images` as base64 PNG, JPEG or WebP data
-URLs and `videos` as base64 MP4, WebM, QuickTime or Matroska data URLs; every
-question sees them, images first, then videos, in front of the text. Each
-image may have up to 8,000,000 bytes and 16,000,000 pixels, and the model
-reads it at up to 1.6 megapixels. Send the body on standard input, as below:
-a command-line argument holds at most 128 KiB.
+URLs and `videos` as base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data
+URLs; every question sees them, images first, then videos, in front of the
+text. Each image may have up to 8,000,000 bytes and 16,000,000 pixels, and the
+model reads it at up to 1.6 megapixels. Send the body on standard input, as
+below: a command-line argument holds at most 128 KiB.
 
 ```bash
 curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF
