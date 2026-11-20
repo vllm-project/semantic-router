@@ -97,6 +97,7 @@ type CanonicalSignals struct {
 	Conversation  []ConversationRule  `yaml:"conversation,omitempty"`
 	Metadata      []MetadataRule      `yaml:"metadata,omitempty"`
 	InputModality []InputModalityRule `yaml:"input_modality,omitempty"`
+	Agent         []AgentRule         `yaml:"agent,omitempty"`
 	SystemOne     []SystemOneRule     `yaml:"systemone,omitempty"`
 }
 
@@ -144,7 +145,7 @@ func isCanonicalConfig(raw map[string]interface{}) bool {
 	return hasGlobal || hasRecipes || hasEntrypoints
 }
 
-func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error) {
+func normalizeCanonicalConfig(canonical *CanonicalConfig, skipExternalAssets bool) (*RouterConfig, error) {
 	if err := validateCanonicalContract(canonical); err != nil {
 		return nil, err
 	}
@@ -174,12 +175,16 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	cfg := DefaultGlobalConfig()
+	cfg.SkipExternalAssetValidation = skipExternalAssets
 	if applyErr := applyCanonicalGlobal(&cfg, &global); applyErr != nil {
 		return nil, applyErr
 	}
 
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	if err := normalizeListenerAPIs(cfg.Listeners); err != nil {
+		return nil, err
+	}
+	if err := readListenerKeyFiles(cfg.Listeners, skipExternalAssets); err != nil {
 		return nil, err
 	}
 	cfg.ModelConfig = make(map[string]ModelParams)
@@ -191,6 +196,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		return nil, err
 	}
 	cfg.DefaultBackendTLS = cloneProviderDefaultsTLS(canonical.Providers.Defaults.TLS)
+	cfg.ReasoningMinOutputTokens = canonical.Providers.Defaults.ReasoningMinOutputTokens
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -224,6 +230,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	aliases, err := canonicalProviderModelIndex(canonical.Providers.Models)
 	if err != nil {
 		return err
+	}
+	if canonical.Providers.Defaults.ReasoningMinOutputTokens < 0 {
+		return fmt.Errorf("providers.defaults.reasoning_min_output_tokens must not be negative")
 	}
 	return validateCanonicalDefaultModel(canonical.Providers, aliases, cards)
 }
@@ -549,6 +558,7 @@ func normalizeSignals(signals CanonicalSignals) Signals {
 		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
+		AgentRules:         append([]AgentRule(nil), signals.Agent...),
 		SystemOneRules:     append([]SystemOneRule(nil), signals.SystemOne...),
 	}
 }

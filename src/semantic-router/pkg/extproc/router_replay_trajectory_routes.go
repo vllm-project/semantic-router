@@ -27,7 +27,7 @@ func buildTrajectoryRoutes(records []routerreplay.RoutingRecord) []trajectoryRou
 			Decision:       record.Decision, SelectedModel: record.SelectedModel,
 			SelectionMethod: record.SelectionMethod, LifecycleState: record.LifecycleState,
 			ResponseStatus: record.ResponseStatus, DurationMS: record.DurationMS,
-			Agent: agentOf(record),
+			Agent: agentOf(record), TurnID: record.TurnID, ParentTurnID: record.ParentTurnID,
 		}
 		if diagnostics := record.RouteDiagnostics; diagnostics != nil {
 			route.PreviousModel = diagnostics.PreviousModel
@@ -41,11 +41,14 @@ func buildTrajectoryRoutes(records []routerreplay.RoutingRecord) []trajectoryRou
 	return routes
 }
 
-// agentOf is the short hash of the agent identity the protection policy
-// recorded for a call, "" when the harness sent none or named the session
-// itself: Codex sends its root thread's id as both, and that thread is the
-// main conversation.
+// agentOf is the short hash of the agent of its run a call came from, "" for
+// the main agent: Codex sends its root thread's id as both session and
+// thread, and that thread is the main conversation. A record written before
+// records named their agent has it only where protection recorded it.
 func agentOf(record routerreplay.RoutingRecord) string {
+	if record.Agent != nil {
+		return record.Agent.ID
+	}
 	identity, _ := record.SessionPolicy["identity"].(map[string]interface{})
 	agent := identityHash(identity["agent"])
 	if agent == identityHash(identity["session"]) {

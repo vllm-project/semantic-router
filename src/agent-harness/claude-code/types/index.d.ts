@@ -24,8 +24,10 @@ export type Spend = { actual: number; baseline: number; turns: number; sessionMo
 // The router's tier lines on the expected difficulty level (0 to 2): below the first easy, from the second on hard.
 export type Tiers = { easyBelow: number; hardFrom: number }
 
-// The tag a hidden piece of text is replaced with, without its brackets.
-export type Tag = 'name' | 'email' | 'phone' | 'card' | 'ip' | 'date' | 'ssn' | 'iban' | 'address' | 'id' | 'secret'
+// The tag a hidden piece of text is replaced with, without its brackets: one of the plugin's own, or the name of a
+// listener rule that found it.
+export type BuiltinTag = 'name' | 'email' | 'phone' | 'card' | 'ip' | 'date' | 'ssn' | 'iban' | 'address' | 'id' | 'secret'
+export type Tag = BuiltinTag | (string & {})
 
 // What a route or a keep decided on: a subagent, or one of your own turns (`routerTurns`), which is drawn under the
 // prompt that started it.
@@ -125,8 +127,11 @@ export type Decision =
       // The parts not checked: past the ones the guard checks one by one, or timed out or answered with an error
       // while the runtime was up. A command with any is held whatever its score.
       unchecked?: number
-      // The fixed rule that holds a catastrophic command whatever its score (`alwaysHeld`).
+      // The fixed rule that holds a catastrophic command whatever its score (`alwaysHeld`), or the description of the
+      // listener rule that matched it.
       rule?: string
+      // The listener's required rule that could not be checked, which holds the command.
+      ruleUnchecked?: string
       outcome?: Outcome
     }
   | {

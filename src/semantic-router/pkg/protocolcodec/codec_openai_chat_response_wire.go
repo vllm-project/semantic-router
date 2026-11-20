@@ -18,7 +18,7 @@ type chatResponseWire struct {
 	Provider          *string              `json:"provider,omitempty"`
 	Choices           []chatChoiceWire     `json:"choices"`
 	Usage             *chatUsageWire       `json:"usage,omitempty"`
-	Metadata          map[string]string    `json:"metadata,omitempty"`
+	Metadata          json.RawMessage      `json:"metadata,omitempty"`
 	Moderation        json.RawMessage      `json:"moderation,omitempty"`
 	Error             *chatErrorWire       `json:"error,omitempty"`
 	ServiceTier       *chatServiceTierWire `json:"service_tier,omitempty"`
@@ -26,8 +26,8 @@ type chatResponseWire struct {
 	PromptTokenIDs    []int64              `json:"prompt_token_ids,omitempty"`
 	// vLLM's serving metadata: prompt logprobs and text, routed experts, the
 	// KV and encoder-cache transfer handshakes and per-request metrics. Each
-	// is opaque and not model output, whatever its value; a same-format reply
-	// forwards it unchanged.
+	// is opaque and not model output, whatever its value, and no client
+	// receives it.
 	PromptLogprobs      json.RawMessage `json:"prompt_logprobs,omitempty"`
 	PromptText          json.RawMessage `json:"prompt_text,omitempty"`
 	PromptRoutedExperts json.RawMessage `json:"prompt_routed_experts,omitempty"`
@@ -52,6 +52,16 @@ type chatResponseWire struct {
 	// dropped with a diagnostic instead of failing the strict decode.
 	Citations     json.RawMessage `json:"citations,omitempty"`
 	SearchResults json.RawMessage `json:"search_results,omitempty"`
+}
+
+// hasMetadata preserves the string map's presence semantics: absent, null and
+// empty objects do not report a dropped field.
+func (wire chatResponseWire) hasMetadata() bool {
+	raw := bytes.TrimSpace(wire.Metadata)
+	if len(raw) >= 2 && raw[0] == '{' {
+		return len(bytes.TrimSpace(raw[1:len(raw)-1])) > 0
+	}
+	return jsonFieldPresent(raw)
 }
 
 // hasTimeInfo reports Cerebras's top-level serving timing metadata.
@@ -80,7 +90,7 @@ func (wire chatResponseWire) hasSearchResults() bool {
 	return jsonFieldPresent(wire.SearchResults)
 }
 
-const vllmServingMetadataReason = "vLLM serving metadata is not model output; a same-format replay forwards it unchanged"
+const vllmServingMetadataReason = "vLLM serving metadata is not model output; no client receives it"
 
 // vllmMetadataPresent reports a serving metadata member that carries a value.
 // Absent, null and empty members are the defaults vLLM and vLLM-Omni send.

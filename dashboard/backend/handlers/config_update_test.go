@@ -373,7 +373,8 @@ func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	UpdateConfigHandler(configPath, false, "")(w, req)
+	// A user who may read secrets names the operator's variable.
+	asSecretReader(UpdateConfigHandler(configPath, false, ""))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d. Response: %s", w.Code, w.Body.String())

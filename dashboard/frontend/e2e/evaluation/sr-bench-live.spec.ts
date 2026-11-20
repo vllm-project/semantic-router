@@ -45,9 +45,9 @@ async function openAcceptance(page: Page) {
     await route.continue()
   })
   await authenticateAcceptance(page, plan!)
-  await page.goto(`${plan!.base_url}/evaluation?view=runs`)
-  await expect(page.getByRole('heading', { name: 'sr-bench 1.0' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
+  await page.goto(`${plan!.base_url}/observe/evaluations?view=runs`)
+  await expect(page.getByRole('heading', { name: 'Evaluations', level: 1 })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Evaluation runs' })).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
   return blocked
 }
@@ -58,9 +58,9 @@ async function screenshot(page: Page, testInfo: TestInfo, name: string) {
 }
 
 async function openRun(page: Page, id: string) {
-  await page.goto(`${plan!.base_url}/evaluation?view=runs&run=${encodeURIComponent(id)}`)
+  await page.goto(`${plan!.base_url}/observe/evaluations?view=runs&run=${encodeURIComponent(id)}`)
   await expect(page.getByRole('heading', { name: 'Target comparison', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Refresh evidence', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'More run actions', exact: true })).toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
 }
 
@@ -168,20 +168,18 @@ test('live inventory, frozen dataset and persisted CLI run are visible', async (
     ),
   ).toBe(true)
   await screenshot(page, testInfo, 'live-run-management.png')
-  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
+  await page.getByRole('tab', { name: /^Datasets/ }).click()
+  await expect(page.getByRole('region', { name: 'Dataset library', exact: true })).toBeVisible()
   if (plan!.dataset_id) {
     await page.goto(
-      `${plan!.base_url}/evaluation?view=datasets&dataset=${encodeURIComponent(plan!.dataset_id)}`,
+      `${plan!.base_url}/observe/evaluations?view=datasets&dataset=${encodeURIComponent(plan!.dataset_id)}`,
     )
     await expect(page.getByRole('button', { name: 'Evaluate dataset', exact: true })).toBeVisible()
     await screenshot(page, testInfo, 'live-frozen-dataset.png')
     await page.getByRole('button', { name: 'Evaluate dataset', exact: true }).click()
-    await page.getByText('Prepared source collection', { exact: true }).click()
-    await expect(page.getByRole('combobox', { name: 'Prepared dataset', exact: true })).toHaveValue(
-      plan!.dataset_id,
-    )
-    await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+    await expect(page).toHaveURL(new RegExp(`dataset=${plan!.dataset_id}`))
+    await expect(page.getByRole('region', { name: 'Specific dataset', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toHaveCount(0)
   }
   if (plan!.baseline_run_id) {
     await openRun(page, plan!.baseline_run_id)
@@ -225,7 +223,7 @@ test('live comparison retains current Balance and two optimization revisions', a
     'Requires one real single-model baseline and three completed Balance revisions.',
   )
   const blocked = await openAcceptance(page)
-  await page.getByRole('button', { name: 'Compare iterations', exact: true }).click()
+  await page.goto(`${plan!.base_url}/observe/evaluations?view=compare`)
   await page.getByRole('combobox', { name: 'Reference run', exact: true }).click()
   await page
     .locator(`[role="option"][data-value=${JSON.stringify(plan!.baseline_run_id!)}]`)
@@ -264,7 +262,7 @@ test('live comparison retains current Balance and two optimization revisions', a
   await screenshot(page, testInfo, 'live-balance-two-optimization-loops.png')
   const comparisonURL = page.url()
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Compare iterations', exact: true })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Compare runs', exact: true })).toBeVisible()
   await expect(page.getByText('Single-model baseline metrics', { exact: true })).toBeVisible()
   await expect(
     page.getByRole('article').getByText(`Run ${plan!.balance_run_ids!.length}`, { exact: true }),
@@ -275,7 +273,7 @@ test('live comparison retains current Balance and two optimization revisions', a
   await expect
     .poll(() =>
       page
-        .getByRole('region', { name: 'sr-bench workspace' })
+        .locator('section[aria-label="sr-bench workspace"]')
         .evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth),
     )
     .toBe(true)
@@ -315,7 +313,7 @@ test('live final recipe is verified and downloadable without launching a job', a
   const model = run.manifest.targets.find((target) => target.id === plan!.final_target_id)?.model
   expect(model?.trim(), 'The saved run must retain its canonical model name.').toBeTruthy()
   await openRun(page, runID)
-  await page.getByRole('tab', { name: 'Recipe', exact: true }).click()
+  await page.getByRole('tab', { name: 'Protocol', exact: true }).click()
   const recipes = page.locator('#run-recipe')
   await expect(
     recipes.getByRole('heading', {

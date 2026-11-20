@@ -23,6 +23,37 @@ var (
 	errNonCanonicalField  = errors.New("non-canonical JSON field")
 )
 
+// unknownJSONField is a member the wire contract does not define, by its path
+// from the document walked. It reaches the client: a client that adds a field
+// learns which one to drop.
+type unknownJSONField struct{ path string }
+
+func (e unknownJSONField) Error() string {
+	return fmt.Sprintf("%s: unknown field %q", errNonCanonicalField, e.path)
+}
+
+func (e unknownJSONField) Is(target error) bool { return target == errNonCanonicalField }
+
+// mistypedJSONField is a member whose value is not the object or array its
+// wire type holds, described as want and got.
+type mistypedJSONField struct{ path, want, got string }
+
+func (e mistypedJSONField) Error() string {
+	return fmt.Sprintf("%s: %q is %s, not %s", errNonCanonicalField, e.path, e.got, e.want)
+}
+
+func (e mistypedJSONField) Is(target error) bool { return target == errNonCanonicalField }
+
+// nonCanonicalFieldMessage is the client's message for a non-canonical field,
+// naming the field when it is one the contract does not define.
+func nonCanonicalFieldMessage(err error) string {
+	var unknown unknownJSONField
+	if errors.As(err, &unknown) {
+		return fmt.Sprintf("request JSON contains a non-canonical field: unknown field %q", unknown.path)
+	}
+	return "request JSON contains a non-canonical field"
+}
+
 func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {
 	return decodeWireJSON(body, target, policy, true)
 }
@@ -48,6 +79,10 @@ func decodeWireJSON(body []byte, target any, policy llmprotocol.Policy, requireO
 		decoder.DisallowUnknownFields()
 	}
 	if err := decoder.Decode(target); err != nil {
+		var typeErr *json.UnmarshalTypeError
+		if requireObject && errors.As(err, &typeErr) && typeErr.Field != "" {
+			return invalidTypeError(jsonFieldPath(reflect.TypeOf(target), typeErr.Field), jsonTypeName(typeErr.Type), jsonValueName(typeErr.Value), err)
+		}
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
 	}
 	if err := requireEOF(decoder); err != nil {
@@ -79,7 +114,7 @@ func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireO
 			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "trailing_json", "request body contains trailing JSON", err)
 		}
 		if errors.Is(err, errNonCanonicalField) {
-			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON contains a non-canonical field", err)
+			return requestFieldError(err, requireObject)
 		}
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
 	}
@@ -463,6 +498,9 @@ type jsonWalker struct {
 	decoder      *json.Decoder
 	maximumDepth int
 	fieldErr     error
+	// path is where the walk is, as messages[].content: member names joined
+	// by dots, and [] for an array's elements.
+	path string
 }
 
 func (walker *jsonWalker) value(depth int, shape reflect.Type) error {
@@ -475,12 +513,12 @@ func (walker *jsonWalker) value(depth int, shape reflect.Type) error {
 	}
 	delimiter, ok := token.(json.Delim)
 	if shape != nil && token != nil {
-		want := json.Delim('[')
+		want, wantName := json.Delim('['), "an array"
 		if shape.Kind() == reflect.Struct {
-			want = '{'
+			want, wantName = '{', "an object"
 		}
 		if !ok || delimiter != want {
-			walker.fieldError(fmt.Errorf("%w: %s value is not %q", errNonCanonicalField, shape, want))
+			walker.fieldError(mistypedJSONField{path: walker.path, want: wantName, got: jsonTokenName(token)})
 			shape = nil
 		}
 	}
@@ -520,18 +558,24 @@ func (walker *jsonWalker) object(depth int, shape reflect.Type) error {
 			return fmt.Errorf("%w %q", errDuplicateJSONField, key)
 		}
 		seen[canonicalKey] = struct{}{}
+		parent := walker.path
+		walker.path = key
+		if parent != "" {
+			walker.path = parent + "." + key
+		}
 		var memberShape reflect.Type
 		if fields != nil {
 			memberType, known := fields[key]
 			if known {
 				memberShape = exactJSONShape(memberType.typeOf)
 			} else {
-				walker.fieldError(fmt.Errorf("%w: unknown field %q", errNonCanonicalField, key))
+				walker.fieldError(unknownJSONField{path: walker.path})
 			}
 		}
 		if err := walker.value(depth+1, memberShape); err != nil {
 			return err
 		}
+		walker.path = parent
 	}
 	closing, err := walker.decoder.Token()
 	if err != nil || closing != json.Delim('}') {
@@ -545,11 +589,14 @@ func (walker *jsonWalker) array(depth int, shape reflect.Type) error {
 	if shape != nil {
 		elementShape = exactJSONShape(shape.Elem())
 	}
+	parent := walker.path
+	walker.path = parent + "[]"
 	for walker.decoder.More() {
 		if err := walker.value(depth+1, elementShape); err != nil {
 			return err
 		}
 	}
+	walker.path = parent
 	closing, err := walker.decoder.Token()
 	if err != nil || closing != json.Delim(']') {
 		return fmt.Errorf("unterminated array")
@@ -602,7 +649,7 @@ func rejectUnsupportedRequestField(field string, value json.RawMessage) error {
 	return llmprotocol.NewError(
 		llmprotocol.ErrorUnsupportedFeature,
 		"unsupported_"+strings.ReplaceAll(field, ".", "_"),
-		field+" is not supported by the protocol-neutral request contract"+llmprotocol.OptInHint(field),
+		field+" is not supported by the Router"+llmprotocol.OptInHint(field),
 		nil,
 	)
 }

@@ -221,6 +221,15 @@ func reasoningValueAllowed(values []string, candidate string) bool {
 	return false
 }
 
+// CanProjectReasoningOff reports whether every Provider binding of model can
+// send its reasoning family's off control, as a decision's use_reasoning:
+// false requires.
+func (c *RouterConfig) CanProjectReasoningOff(model string) bool {
+	family := c.GetModelReasoningFamily(model)
+	return reasoningFamilyCanDisableConfig(family) &&
+		validateProviderReasoningControl(c, "", model, family, false, "", "") == nil
+}
+
 func reasoningFamilyCanDisableConfig(family *ReasoningFamilyConfig) bool {
 	if family == nil {
 		return false

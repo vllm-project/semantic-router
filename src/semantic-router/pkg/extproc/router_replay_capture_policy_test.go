@@ -409,7 +409,7 @@ func TestReplayQueriesIncludeGlobalAndDecisionMemoryStores(t *testing.T) {
 	selected := replayPolicyRequest(t)
 	router.applyDecisionResultToContext(&decision.DecisionResult{Decision: &cfg.Decisions[0]}, selected)
 	router.startRouterReplay(selected, "public", "backend", "ordinary")
-	page, err := router.queryRouterReplayPage(routerReplayListQuery{limit: 10})
+	page, err := router.queryRouterReplayPage(context.Background(), routerReplayListQuery{limit: 10})
 	if err != nil || len(page.Data) != 2 {
 		t.Fatalf("global/decision records not both queryable: %+v err=%v", page, err)
 	}
@@ -476,7 +476,7 @@ func TestReplayRecipeDefaultsCaptureBeforeDecisionOnMemoryStore(t *testing.T) {
 			}},
 		},
 	}
-	withGlobalPlugins(t, cfg)
+	withGlobalPlugins(t, cfg, replayTestPlugin(map[string]interface{}{"enabled": false}))
 	router := replayRuntimeRouter(t, cfg)
 	for i, recorded := range []bool{false, true} {
 		ctx := replayPolicyRequest(t)
@@ -486,7 +486,7 @@ func TestReplayRecipeDefaultsCaptureBeforeDecisionOnMemoryStore(t *testing.T) {
 			t.Fatalf("recipe %s: replay id %q, want recorded=%t", cfg.Recipes[i].Name, ctx.RouterReplayID, recorded)
 		}
 	}
-	page, err := router.queryRouterReplayPage(routerReplayListQuery{limit: 10})
+	page, err := router.queryRouterReplayPage(context.Background(), routerReplayListQuery{limit: 10})
 	if err != nil || len(page.Data) != 1 {
 		t.Fatalf("rejected request not queryable: %+v err=%v", page, err)
 	}

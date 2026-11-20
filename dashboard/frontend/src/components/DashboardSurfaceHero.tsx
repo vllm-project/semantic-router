@@ -1,5 +1,5 @@
 import React from 'react'
-import styles from './DashboardSurfaceHero.module.css'
+import { MetaItem, PageHeader } from '../ui'
 
 export interface DashboardSurfaceHeroMeta {
   label: string
@@ -14,32 +14,25 @@ interface DashboardSurfaceHeroProps {
   meta?: DashboardSurfaceHeroMeta[]
 }
 
+/** Compatibility wrapper: renders the standard page header. */
 export default function DashboardSurfaceHero({
-  compact = false,
-  eyebrow = 'Manager',
   title,
   description,
   meta = [],
 }: DashboardSurfaceHeroProps) {
   return (
-    <header className={`${styles.hero} ${compact ? styles.heroCompact : ''}`}>
-      <div className={styles.copy}>
-        <div className={styles.topline}>
-          <span className={styles.eyebrow}>{eyebrow}</span>
-        </div>
-        <h1 className={styles.title}>{title}</h1>
-        <p className={styles.description}>{description}</p>
-        {meta.length > 0 ? (
-          <dl className={styles.metaRow}>
-            {meta.map((item) => (
-              <div key={item.label} className={styles.metaItem}>
-                <dt className={styles.metaLabel}>{item.label}</dt>
-                <dd className={styles.metaValue}>{item.value}</dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
-      </div>
-    </header>
+    <PageHeader
+      title={title}
+      description={description}
+      meta={
+        meta.length > 0
+          ? meta.map((item) => (
+              <MetaItem key={item.label} label={item.label}>
+                {item.value}
+              </MetaItem>
+            ))
+          : undefined
+      }
+    />
   )
 }

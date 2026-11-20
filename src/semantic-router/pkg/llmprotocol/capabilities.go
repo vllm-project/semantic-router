@@ -60,6 +60,13 @@ const (
 	CapabilityTextVerbosity
 	CapabilityReasoningContinuity
 	CapabilitySamplingLogitBias
+	// CapabilityDeveloperRole is a backend reading a developer message as an
+	// instruction, the way OpenAI reads it. Models only declare it
+	// unsupported; no request requires it.
+	CapabilityDeveloperRole
+	// CapabilityServerTools covers tools the provider runs or defines itself
+	// and the blocks they leave in a reply, such as Anthropic's web search.
+	CapabilityServerTools
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -149,6 +156,8 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
 		{CapabilityReasoningContinuity, "reasoning_continuity"},
+		{CapabilityDeveloperRole, "developer_role"},
+		{CapabilityServerTools, "server_tools"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -291,6 +300,9 @@ func toolCapabilities(tools []Tool) Capability {
 		if tool.Kind == ToolKindCustom {
 			required |= CapabilityCustomTools
 		}
+		if tool.Kind == ToolKindServer {
+			required |= CapabilityServerTools
+		}
 	}
 	return required
 }
@@ -341,7 +353,10 @@ func RequiredResponseCapabilities(response Response) CapabilitySet {
 func RequiredEventCapabilities(event Event) CapabilitySet {
 	var required CapabilitySet
 	if event.Content != nil && event.Content.ReasoningDetail != nil {
-		required.bits |= CapabilityReasoningContinuity
+		required.bits |= CapabilityReasoning
+		if !IsResponsesReasoning(event.Content.ReasoningDetail) {
+			required.bits |= CapabilityReasoningContinuity
+		}
 	}
 	if event.MatchedStopSequence != "" {
 		required.bits |= CapabilityMatchedStopSequence
@@ -353,10 +368,26 @@ func RequiredEventCapabilities(event Event) CapabilitySet {
 	if event.ToolCall != nil && event.ToolCall.Kind == ToolKindCustom {
 		required.bits |= CapabilityCustomTools
 	}
+	if event.Content != nil {
+		required.bits |= serverToolContentCapability(*event.Content)
+	}
 	return required
 }
 
+// serverToolContentCapability is what a server tool's block, or the
+// citations it attached to text, asks of a wire format.
+func serverToolContentCapability(content Content) Capability {
+	if content.Kind == ContentServerTool || len(content.Raw) > 0 {
+		return CapabilityServerTools
+	}
+	return 0
+}
+
 func capabilityForRequestContent(content Content) Capability {
+	return requestContentCapabilities(content) | serverToolContentCapability(content)
+}
+
+func requestContentCapabilities(content Content) Capability {
 	var cache Capability
 	if content.Cache != nil {
 		cache = CapabilityCacheDirectives
@@ -371,6 +402,9 @@ func capabilityForRequestContent(content Content) Capability {
 	case ContentToolResult:
 		return requestToolResultCapabilities(content.ToolResult) | cache
 	case ContentReasoning:
+		if IsResponsesReasoning(content.ReasoningDetail) {
+			return CapabilityReasoning | cache
+		}
 		if content.ReasoningDetail != nil {
 			return CapabilityReasoning | CapabilityReasoningContinuity | cache
 		}
@@ -383,6 +417,10 @@ func capabilityForRequestContent(content Content) Capability {
 }
 
 func capabilityForResponseContent(content Content) Capability {
+	return responseContentCapabilities(content) | serverToolContentCapability(content)
+}
+
+func responseContentCapabilities(content Content) Capability {
 	if isCustomToolCall(content) {
 		return CapabilityTools | CapabilityCustomTools
 	}
@@ -393,6 +431,9 @@ func capabilityForResponseContent(content Content) Capability {
 	case ContentToolResult:
 		return responseToolResultCapabilities(content.ToolResult)
 	case ContentReasoning:
+		if IsResponsesReasoning(content.ReasoningDetail) {
+			return CapabilityReasoning
+		}
 		if content.ReasoningDetail != nil {
 			return CapabilityReasoning | CapabilityReasoningContinuity
 		}
@@ -502,6 +543,8 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
 		"reasoning_continuity":  CapabilityReasoningContinuity,
+		"developer_role":        CapabilityDeveloperRole,
+		"server_tools":          CapabilityServerTools,
 	}
 	var set CapabilitySet
 	for _, name := range names {

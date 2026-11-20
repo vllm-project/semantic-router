@@ -5,6 +5,7 @@ import type {
   ReplaySessionPolicy,
 } from './insightsPageRoutingTypes'
 import type { SignalType } from '../generated/routerConfigContract'
+import type { InsightsReview, InsightsReviewAggregate } from './insightsReviewTypes'
 
 export type Signal = Partial<Record<SignalType, string[]>> & Record<string, string[] | undefined>
 
@@ -99,13 +100,54 @@ export interface ProjectionTrace {
   mappings?: ProjectionTraceMapping[]
 }
 
+/**
+ * The agent of its run that sent a request (routerreplay/store/agent.go). An
+ * absent id is the run's main agent and a present one a subagent; redaction
+ * keeps an id or parent_id as an empty string. kind is the subagent kind Codex
+ * names, such as collab_spawn or review.
+ */
+export interface InsightsAgentIdentity {
+  harness?: string
+  id?: string
+  parent_id?: string
+  kind?: string
+  /** The subagent type the harness names, such as Claude Code's Explore. */
+  type?: string
+  /** The request class the agent signal reads: main, subagent, workflow, compaction or auxiliary. */
+  request_class?: string
+}
+
 export interface InsightsRecord {
   provider_cache?: ProviderCacheAccounting
   conversation_id?: string
   id: string
   timestamp: string
   request_id?: string
+  /**
+   * codex_approval_review for an agent approval review, session_title for the
+   * call a harness makes to title its session; absent otherwise.
+   */
+  request_kind?: string
+  review?: InsightsReview
   session_id?: string
+  /** The name the harness gave the session, on the call that named it. */
+  session_name?: string
+  agent?: InsightsAgentIdentity | null
+  /** The client request a Looper hop was made for. */
+  parent_request_id?: string
+  previous_response_id?: string
+  reasoning_effort?: string
+  prompt?: string
+  prompt_truncated?: boolean
+  cached_prompt_tokens?: number
+  /**
+   * The Codex thread and turn that sent the request. parent_turn_id is the
+   * turn that started the thread, such as the turn a review judges or a
+   * subagent was spawned from.
+   */
+  thread_id?: string
+  turn_id?: string
+  parent_turn_id?: string
   turn_index: number
   recipe?: string
   decision?: string
@@ -113,6 +155,12 @@ export interface InsightsRecord {
   decision_priority: number
   category?: string
   original_model?: string
+  /** A client's own model name that its listener routed to original_model. */
+  requested_model?: string
+  /** Image parts in the request's newest turn, after its last assistant message. */
+  image_count?: number
+  /** Image parts in the earlier messages of the request. */
+  history_image_count?: number
   selected_model?: string
   reasoning_mode?: string
   confidence_score?: number | null
@@ -183,6 +231,43 @@ export interface InsightsRecord {
   cost_savings?: number
   currency?: string
   baseline_model?: string
+  cost_accounting?: InsightsCostAccounting
+}
+
+/** Model calls the Router made itself to serve a request. */
+export interface InsightsRouterCallCost {
+  model?: string
+  kind: string
+  calls: number
+  prompt_tokens?: number
+  completion_tokens?: number
+  cost?: number
+  currency?: string
+  unpriced_calls?: number
+  unpriced_reasons?: Record<string, number>
+}
+
+/** Where a record's cost figures came from and what they leave out. */
+export interface InsightsCostAccounting {
+  pricing_source?: 'configured' | 'catalog_list_price'
+  caller_login?: boolean
+  unpriced_reason?: string
+  baseline_source?: 'configured_model' | 'recipe_most_expensive' | 'selected_model'
+  baseline_unavailable?: string
+  router_calls?: InsightsRouterCallCost[]
+  budget?: InsightsBudgetAccounting
+}
+
+/** The tightest spend budget a request belongs to, as it left it. */
+export interface InsightsBudgetAccounting {
+  scope: string
+  currency: string
+  limit: number
+  remaining: number
+  estimate: number
+  charged?: number
+  settlement?: 'usage' | 'estimate' | 'released'
+  unpriced_calls?: number
 }
 
 export interface TokenCostComponent {
@@ -243,6 +328,8 @@ export interface InsightsListResponse {
   offset?: number
   has_more?: boolean
   next_offset?: number
+  /** Records by harness under every filter but harness: a harness id, or api_client for none. */
+  harness_counts?: Record<string, number> | null
   data: InsightsRecord[]
 }
 
@@ -272,21 +359,53 @@ export interface InsightsAggregateValue {
 }
 
 export interface InsightsAggregateCurrencySummary {
+  /** Savings net of the Router calls of the compared requests. */
   total_saved: number
+  /** baseline_spend minus actual_spend, before those Router calls. */
+  gross_saved?: number
+  netted_router_call_spend?: number
   baseline_spend: number
   actual_spend: number
+  router_call_spend?: number
+  total_spend?: number
   currency: string
   cost_record_count: number
 }
 
+/** How much of the filtered traffic the cost figures leave out, and why. */
+export interface InsightsAggregateCostCoverage {
+  priced_records: number
+  partly_priced_records: number
+  unpriced_records: number
+  unpriced_reasons?: Record<string, number>
+  looper_hop_records: number
+  list_price_records: number
+  caller_login_records: number
+  router_calls: number
+  unpriced_router_calls: number
+  baseline_sources?: Record<string, number>
+  baseline_unavailable?: Record<string, number>
+  /** Router calls netted out of savings, by kind. */
+  netted_router_calls?: Record<string, number>
+  /** Requests left out of savings for a Router call without a price, by why. */
+  net_unavailable?: Record<string, number>
+}
+
 export interface InsightsAggregateSummary {
+  /** Savings net of the Router calls of the compared requests. */
   total_saved: number
+  /** baseline_spend minus actual_spend, before those Router calls. */
+  gross_saved?: number
+  netted_router_call_spend?: number
   baseline_spend: number
   actual_spend: number
+  router_call_spend?: number
+  total_spend?: number
   currency?: string
   cost_record_count: number
   excluded_record_count: number
   by_currency?: InsightsAggregateCurrencySummary[]
+  coverage?: InsightsAggregateCostCoverage
 }
 
 export interface InsightsProviderCacheCurrencyTotal {
@@ -352,4 +471,27 @@ export interface InsightsAggregateResponse {
   available_recipes: string[]
   available_decisions: string[]
   available_models: string[]
+  reviews?: InsightsReviewAggregate
+  available_review_models?: string[]
+  /** Present when the aggregate was asked for an interval along with since. */
+  traffic?: InsightsTrafficSeries
+}
+
+/** The aggregate's records in contiguous intervals from since to the query, oldest first. */
+export interface InsightsTrafficSeries {
+  since: string
+  interval_seconds: number
+  latency_p50_ms?: number
+  latency_p95_ms?: number
+  buckets: InsightsTrafficBucket[]
+}
+
+export interface InsightsTrafficBucket {
+  start: string
+  requests: number
+  cached: number
+  failed: number
+  latency_p50_ms?: number
+  latency_p95_ms?: number
+  cost: InsightsAggregateCurrencySummary[]
 }

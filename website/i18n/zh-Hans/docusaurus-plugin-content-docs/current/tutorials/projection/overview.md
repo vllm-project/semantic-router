@@ -110,7 +110,7 @@ recipes:
 
 只有映射输出名用 `type: projection` 引用。决策不直接引用分区名或分数名。
 
-DSL 通过 `PROJECTION partition`、`PROJECTION score` 和 `PROJECTION mapping` 块暴露同样的三个概念。控制面板在 **Config > 投影** 下暴露它们。
+DSL 通过 `PROJECTION partition`、`PROJECTION score` 和 `PROJECTION mapping` 块暴露同样的三个概念。控制面板在 **Routing → Projections** 下暴露它们。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

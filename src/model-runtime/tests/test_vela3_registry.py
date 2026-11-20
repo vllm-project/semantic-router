@@ -1,4 +1,4 @@
-"""The Vela 3.0 built-in table: both members' pins, identity formula and the vela3v detection."""
+"""The Vela 3.0 and 3.1 built-in table: every member's pins, identity formula and the vela3v detection."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import pytest
 from vllm_srun.errors import PackageError
 from vllm_srun.families.vela3.family import Vela3Family
 from vllm_srun.families.vela3.package import (
+    RENDER31_SHA256,
     VELA3V_CONFIG_FILE,
     VELA3V_ENCODER,
     member_of,
@@ -23,6 +24,21 @@ from vllm_srun.testing.vela3 import write_encoder_package
 MODELS = builtin.all_models("vela3")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 VISION = builtin.lookup("vela3-fast-vision")
+FAST31 = builtin.lookup("vela3.1-fast")
+# The weight files vela3.1-fast's identity is the digest set of: the backbone
+# and the nine adapters it routes to.
+FAST31_WEIGHTS = (
+    "model.safetensors",
+    "domain_adapter.safetensors",
+    "evidence_adapter.safetensors",
+    "factcheck_adapter.safetensors",
+    "feedback_df_adapter.safetensors",
+    "ner_adapter.safetensors",
+    "relation_adapter.safetensors",
+    "router_adapter.safetensors",
+    "span_adapter.safetensors",
+    "span_sets_adapter.safetensors",
+)
 # The weight files the image package's identity is the digest set of: the raw
 # backbone, the two task-named backbones and the four task adapters.
 VISION_WEIGHTS = (
@@ -41,12 +57,17 @@ def package(tmp_path_factory) -> Path:
     return write_encoder_package(tmp_path_factory.mktemp("vela3") / "fast")
 
 
-def test_the_table_pins_both_members() -> None:
+def test_the_table_pins_every_member() -> None:
     assert [model.repo_id for model in MODELS] == [
         "vllm-sr/vela3-fast",
+        "vllm-sr/vela3.1-fast",
         "vllm-sr/vela3-fast-vision",
     ]
-    assert [model.backbone for model in MODELS] == ["ultrabert", "ultravbert"]
+    assert [model.backbone for model in MODELS] == [
+        "ultrabert",
+        "ultrabert",
+        "ultravbert",
+    ]
     for model in MODELS:
         assert re.fullmatch(r"[0-9a-f]{40}", model.revision), model.repo_id
         assert model.access == "public"
@@ -54,10 +75,19 @@ def test_the_table_pins_both_members() -> None:
         assert builtin.by_identity(model.model_sha256) is model
 
 
-def test_the_text_entry_keeps_its_golden_answers_and_the_vision_has_none() -> None:
-    fast, vision = MODELS
+def test_the_text_entries_keep_their_golden_answers_and_the_vision_has_none() -> None:
+    fast, fast31, vision = MODELS
     assert fast.golden_answers, "vela3-fast must keep its recorded references"
+    assert fast31.golden_answers, "vela3.1-fast must keep its recorded references"
     assert vision.golden_answers == {}
+
+
+def test_the_vela31_fast_pin_carries_the_released_renderer() -> None:
+    assert FAST31.files["render31.py"] == RENDER31_SHA256
+    for name, digest in FAST31.files.items():
+        assert DIGEST.fullmatch(digest), name
+    weights = {name: FAST31.files[name] for name in FAST31_WEIGHTS}
+    assert sha256_json(weights) == FAST31.model_sha256
 
 
 def test_the_vision_identity_is_the_weight_digest_set() -> None:

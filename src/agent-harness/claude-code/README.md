@@ -262,8 +262,8 @@ and iTerm2 3.5 or later, and drawn in characters elsewhere (smooth wedge charact
 
 ### Set from the Router
 
-A Router listener can set the apps for every plugin pointed at it, in its config or as checkboxes in the
-Dashboard (Config › Global Config › vSR agent plugins):
+A Router listener can set the apps for every plugin pointed at it, in its config or as Default, On or Off
+in the Dashboard (Settings › Router settings › vSR agent plugins):
 
 ```yaml
 listeners:
@@ -281,6 +281,24 @@ a change in the Dashboard reaches a running session. Each field the profile sets
 option of the same name here, and a toast says what it changed. What you change yourself in Claude
 Code, with `/vsr`, the pane or the `/config` menu, stays yours; `/vsr follow` hands those options
 back to the listener.
+
+The listener can also bind rules of its own to guard and redact (`vsr.rules`, see
+[Rules of your own for guard and redact](https://vllm-sr.ai/docs/installation/agent-harness#rules-of-your-own-for-guard-and-redact)).
+vSR learns each rule's name and description from the same listing and asks the listener to evaluate
+it; the rule's pattern or question stays on the Router. Guard sends the whole command, read-only ones
+included, in one call beside its own questions: a rule that matches holds the command, its card says
+`always held: <description>`. Redact sends Read and Bash output with its secrets hidden, the same
+text the personal data check reads, and what a rule finds and the check finds are hidden together,
+a rule's find as `[vsr:<rule name>]`. A rule marked `required` that the listener could not check
+holds the command, or withholds the output, whatever the wait you chose; an advisory one is skipped
+with a `SKIPPED` row, as vSR's own checks are. The rules last read from a listener are kept (per
+listener and token), so an outage or a reload after that never drops a required rule. An answer for
+rules of another revision, such as after a change in the Dashboard, makes vSR read the listing again
+and ask once more in the same call; it counts as unchecked only when the listing does not answer or
+still names the old revision. Before vSR has
+read a listener's listing once with this token, it knows no rules, and when the listing does not
+answer its checks step aside as they do for any outage. Turning guard or redact off turns their
+rules off too.
 
 ## Troubleshooting
 

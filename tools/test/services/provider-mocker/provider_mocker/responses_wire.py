@@ -212,6 +212,13 @@ def build_responses_usage(body: dict[str, Any], output: str) -> dict[str, Any]:
     }
 
 
+# A request carrying this marker gets a reasoning item that holds only an
+# encrypted blob before its message, as an OpenAI reasoning model returns when
+# asked for reasoning.encrypted_content.
+ENCRYPTED_REASONING_MARKER = "__mock_responses_encrypted_reasoning__"
+ENCRYPTED_REASONING = "mock-encrypted-reasoning"
+
+
 def build_responses_response(body: dict[str, Any]) -> tuple[dict[str, Any], str]:
     response_id = "resp_mock_" + uuid.uuid4().hex
     item_id = "msg_mock_" + uuid.uuid4().hex
@@ -240,6 +247,16 @@ def build_responses_response(body: dict[str, Any]) -> tuple[dict[str, Any], str]
         "output_text": output,
         "usage": build_responses_usage(body, output),
     }
+    if response_input_contains(body, ENCRYPTED_REASONING_MARKER):
+        response["output"].insert(
+            0,
+            {
+                "type": "reasoning",
+                "id": "rs_mock_" + uuid.uuid4().hex,
+                "summary": [],
+                "encrypted_content": ENCRYPTED_REASONING,
+            },
+        )
     if response_input_contains(body, "__mock_responses_decorations__"):
         response.update(
             {
@@ -284,22 +301,33 @@ def generate_responses_stream(
     response: dict[str, Any], item_id: str, complete: bool = True
 ) -> Iterator[str]:
     output = response["output_text"]
-    item = response["output"][0]
+    *earlier, item = response["output"]
+    index = len(earlier)
     content = item["content"][0]
     in_progress_response = responses_in_progress_resource(response)
     in_progress_item = responses_in_progress_item(item)
     events = [
         ("response.created", {"response": in_progress_response}),
         ("response.in_progress", {"response": in_progress_response}),
+    ]
+    for at, reasoning in enumerate(earlier):
+        pending = {
+            key: value for key, value in reasoning.items() if key != "encrypted_content"
+        }
+        events += [
+            ("response.output_item.added", {"output_index": at, "item": pending}),
+            ("response.output_item.done", {"output_index": at, "item": reasoning}),
+        ]
+    events += [
         (
             "response.output_item.added",
-            {"output_index": 0, "item": in_progress_item},
+            {"output_index": index, "item": in_progress_item},
         ),
         (
             "response.content_part.added",
             {
                 "item_id": item_id,
-                "output_index": 0,
+                "output_index": index,
                 "content_index": 0,
                 "part": {**content, "text": ""},
             },
@@ -308,7 +336,7 @@ def generate_responses_stream(
             "response.output_text.delta",
             {
                 "item_id": item_id,
-                "output_index": 0,
+                "output_index": index,
                 "content_index": 0,
                 "delta": output,
             },
@@ -317,7 +345,7 @@ def generate_responses_stream(
             "response.output_text.done",
             {
                 "item_id": item_id,
-                "output_index": 0,
+                "output_index": index,
                 "content_index": 0,
                 "text": output,
             },
@@ -326,12 +354,12 @@ def generate_responses_stream(
             "response.content_part.done",
             {
                 "item_id": item_id,
-                "output_index": 0,
+                "output_index": index,
                 "content_index": 0,
                 "part": content,
             },
         ),
-        ("response.output_item.done", {"output_index": 0, "item": item}),
+        ("response.output_item.done", {"output_index": index, "item": item}),
         ("response.completed", {"response": response}),
     ]
     for sequence, (event, payload) in enumerate(events):

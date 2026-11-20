@@ -30,6 +30,9 @@ func NewFileStoreClient(baseURL string, apiKey string) *FileStoreClient {
 				MaxIdleConnsPerHost: 10,
 				IdleConnTimeout:     90 * time.Second,
 			},
+			// The base URL is configured by the operator: a redirect would
+			// replay the file and the API key to another origin.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 		baseURL: baseURL,
 		apiKey:  apiKey,

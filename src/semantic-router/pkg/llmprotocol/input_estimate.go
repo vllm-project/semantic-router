@@ -4,6 +4,8 @@ import "math"
 
 // These provider-neutral reserves are estimates, not tokenizer bounds. Media
 // preprocessing can differ by provider; callers must not present them as exact.
+// InputImageTokens is the reserve of an image whose size is unknown
+// (InlineImageTokens).
 const (
 	InputTextBytesPerToken           = 4
 	InputImageTokens                 = 8 * 1024
@@ -35,7 +37,7 @@ func EstimateInput(request *Request) InputEstimate {
 	}
 	var estimate InputEstimate
 	framing := saturatedMultiply(len(request.Messages)+len(request.Instructions), InputMessageFramingTokens)
-	images, mediaBytes := 0, 0
+	imageTokenSum, mediaBytes := 0, 0
 	var consume func([]Content)
 	consume = func(contents []Content) {
 		for _, content := range contents {
@@ -50,7 +52,7 @@ func EstimateInput(request *Request) InputEstimate {
 				}
 			case ContentImage:
 				estimate.HasNonText = true
-				images = SaturatingTokenSum(images, 1)
+				imageTokenSum = SaturatingTokenSum(imageTokenSum, imageTokens(content))
 			case ContentAudio, ContentVideo, ContentFile:
 				estimate.HasNonText = true
 				audioData := ""
@@ -90,7 +92,7 @@ func EstimateInput(request *Request) InputEstimate {
 	// is carried outside messages on the wire. Reserve its bytes consistently
 	// with tool schemas; this is conservative accounting, not tokenization.
 	estimate.StructuredBytes = SaturatingTokenSum(estimate.StructuredBytes, len(request.OutputFormat.Schema), len(request.OutputFormat.Name), len(request.OutputFormat.Description))
-	estimate.Tokens = SaturatingTokenSum(textRateTokens(estimate.TextBytes), estimate.StructuredBytes, saturatedMultiply(images, InputImageTokens), framing)
+	estimate.Tokens = SaturatingTokenSum(textRateTokens(estimate.TextBytes), estimate.StructuredBytes, imageTokenSum, framing)
 	estimate.EquivalentBytes = saturatedMultiply(estimate.Tokens, InputTextBytesPerToken)
 	optimistic := SaturatingTokenSum(textRateTokens(estimate.TextBytes), textRateTokens(estimate.StructuredBytes-mediaBytes), framing)
 	estimate.ReserveTokens = max(0, estimate.Tokens-optimistic)

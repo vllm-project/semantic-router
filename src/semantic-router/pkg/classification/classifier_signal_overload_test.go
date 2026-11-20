@@ -42,7 +42,7 @@ func (d *busyDecider) calls() int {
 
 func benignJailbreakDecider(busy time.Duration) *busyDecider {
 	return &busyDecider{fakeDecider: newFakeDecider(map[string]modelservice.Answer{
-		presetQuestionID(presets.Jailbreak): {Type: "choice", Choice: "benign", Probabilities: map[string]float64{"benign": 0.97, "jailbreak": 0.03}},
+		presetQuestionID(presets.Jailbreak): {Type: "choice", Choice: "benign", Probabilities: map[string]float64{"benign": 0.97, "jailbreak": 0.03}, InputCoverage: "complete"},
 	}), free: time.Now().Add(busy)}
 }
 

@@ -231,6 +231,9 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err := decodeWire(body, &wire, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
+	dropped := dropNoOpRequestFields(map[string]*json.RawMessage{
+		"service_tier": &wire.ServiceTier, "safety_identifier": &wire.SafetyIdentifier,
+	})
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"background": wire.Background, "context_management": wire.ContextManagement,
 		"max_tool_calls": wire.MaxToolCalls, "moderation": wire.Moderation, "prompt": wire.Prompt,
@@ -245,6 +248,7 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
+	appendNoOpFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, dropped)
 	if wire.MaxOutputTokens != nil && *wire.MaxOutputTokens < 16 {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
 			llmprotocol.ErrorInvalidRequest,
@@ -278,23 +282,23 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if !request.ToolNameOrigins.Flattened() {
 		request.ToolNameOrigins = nil
 	}
-	// Flattening a namespace advances request.Generation, which retires the replay
-	// claim on source bytes that still carry the namespace.
-	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy), diagnostics, nil
+	if len(dropped) > 0 {
+		request.Generation++
+	}
+	// Flattening a namespace or dropping a no-op value advances
+	// request.Generation, which retires the replay claim on source bytes that
+	// still carry them.
+	envelope := requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy)
+	envelope.ResponseRender.RequestEcho = responsesRequestEcho(wire)
+	return request, envelope, diagnostics, nil
 }
 
-// decodeResponsesDroppedFields accepts include and client_metadata without
-// forwarding them. The Router already drops provider-encrypted reasoning from
-// responses, so it can never honor that include, and client telemetry is not
-// model input. Each drop is reported instead of discarded silently.
+// decodeResponsesDroppedFields reports client telemetry that is not model input.
 func decodeResponsesDroppedFields(wire responsesRequestWire, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
-	include, err := decodeResponsesInclude(wire.Include, policy)
+	_, err := decodeResponsesInclude(wire.Include, policy)
 	if err != nil {
 		return nil, err
-	}
-	if len(include) > 0 {
-		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "include", "provider-encrypted reasoning is not relayed")
 	}
 	if len(wire.ClientMetadata) > 0 {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "client_metadata", "client telemetry is not model input")
@@ -323,7 +327,8 @@ func decodeResponsesInclude(raw json.RawMessage, policy llmprotocol.Policy) ([]s
 
 func decodeResponsesBaseRequest(wire responsesRequestWire, conversationID string) llmprotocol.Request {
 	request := llmprotocol.Request{
-		Generation: 1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
+		IncludeEncryptedReasoning: responsesRequestsEncryptedReasoning(wire.Include),
+		Generation:                1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
 		EndUserID: wire.User, PreviousResponseID: wire.PreviousResponseID, ConversationID: conversationID,
 		Truncation: wire.Truncation, PromptCacheKey: wire.PromptCacheKey,
 		Store: wire.Store, AutoStore: wire.AutoStore, ParallelToolCalls: wire.ParallelToolCalls,
@@ -508,7 +513,13 @@ func decodeResponsesFunctionTool(
 		return err
 	}
 	schema := tool.Parameters
-	if len(schema) == 0 {
+	if !jsonFieldPresent(schema) {
+		// Typed clients send null for a function without arguments. Replacing
+		// it advances request.Generation, which retires the replay claim on
+		// source bytes that still carry the null.
+		if len(schema) != 0 {
+			request.Generation++
+		}
 		schema = json.RawMessage(`{"type":"object"}`)
 	}
 	request.Tools = append(request.Tools, llmprotocol.Tool{

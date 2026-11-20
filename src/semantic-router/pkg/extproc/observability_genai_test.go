@@ -41,17 +41,28 @@ func TestUpstreamSpanCarriesGenAIAttributes(t *testing.T) {
 				require.Equal(t, int64(2), attrs["gen_ai.usage.input_tokens"].AsInt64())
 				require.Equal(t, int64(1), attrs["gen_ai.usage.output_tokens"].AsInt64())
 				responseModel, hasResponseModel := attrs["gen_ai.response.model"]
-				if streaming {
-					require.False(t, hasResponseModel, "stream events carry the client-facing model, not the provider's")
-				} else {
-					require.Equal(t, "source-model", responseModel.AsString())
-				}
+				require.True(t, hasResponseModel, "every answered request names the model that answered")
+				require.Equal(t, "source-model", responseModel.AsString())
 
 				require.Equal(t, logicalModel, attrs[tracing.AttrModelName].AsString())
 				require.Equal(t, "127.0.0.1:8000", attrs[tracing.AttrEndpointAddress].AsString())
 			})
 		}
 	}
+}
+
+// TestCompleteSemanticStreamSettlesAStreamThatNeverStarted pins the settle path
+// for a response body whose stream state was never created: an unsupported
+// source format never builds one, and settling must not read through it.
+func TestCompleteSemanticStreamSettlesAStreamThatNeverStarted(t *testing.T) {
+	router, _ := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	ctx := &RequestContext{Headers: map[string]string{}, SourceFormat: "bogus/v0", RequestID: "unstarted-stream"}
+
+	require.NotPanics(t, func() {
+		require.Nil(t, router.completeSemanticStream(ctx, nil))
+	})
+	require.True(t, ctx.StreamingComplete)
+	require.True(t, ctx.StreamingAborted)
 }
 
 // exportedUpstreamSpanAttributes dispatches one request and feeds the

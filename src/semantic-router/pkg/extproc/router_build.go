@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/maskingregistry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
@@ -67,6 +68,7 @@ type routerComponents struct {
 	recipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
 	fallbackCircuitBreaker      *fallback.BackendCircuitBreaker
 	resources                   *resourceScope
+	maskingIdentities           map[string]*maskingregistry.Identity
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -420,6 +422,10 @@ func (components *routerComponents) buildEarlyResources() error {
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
+	components.maskingIdentities, err = openMaskingIdentities(components.cfg)
+	if err != nil {
+		return rollbackResources(components.resources, err)
+	}
 
 	// The service wraps the generation's configuration around the recipe
 	// classifiers, which the signal runtime owns.
@@ -505,6 +511,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
 		signals:                     components.signals,
 		Config:                      components.cfg,
+		maskingIdentities:           components.maskingIdentities,
 		Embeddings:                  components.embeddings,
 		serviceEmbeddings:           components.serviceEmbeddings,
 		cacheEmbeddings:             components.cacheEmbeddings,

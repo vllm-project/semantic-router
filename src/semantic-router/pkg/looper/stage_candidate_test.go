@@ -196,6 +196,7 @@ func TestLooperCandidateChecksToolAndOutputCapabilities(t *testing.T) {
 		`{"model":"worker","messages":[{"role":"user","content":"Return an agenda object."}],"max_completion_tokens":16,"response_format":{"type":"json_object"}}`,
 		`{"model":"worker","messages":[{"role":"user","content":"Read the agenda."}],"max_completion_tokens":16,"reasoning_effort":"high"}`,
 		`{"model":"worker","messages":[{"role":"user","content":"Read the agenda."}],"max_completion_tokens":16,"modalities":["audio"]}`,
+		`{"model":"worker","messages":[{"role":"user","content":"Read the agenda."}],"max_completion_tokens":16,"modalities":["text","audio"]}`,
 		`{"model":"worker","messages":[{"role":"user","content":"Read the agenda."}],"max_completion_tokens":16,"modalities":["text","audio"],"audio":{"voice":"alloy","format":"wav"}}`,
 	} {
 		client, calls, _ := candidateStageClient(t)

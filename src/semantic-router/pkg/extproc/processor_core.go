@@ -99,6 +99,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		// Requests that ended through a normal path already zeroed the token,
 		// making this a no-op.
 		releaseInflightAdmission(ctx)
+		r.finishRequestSpend(ctx)
 		releaseStreamedBody(ctx)
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)
@@ -348,7 +349,13 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	var maskingErr *maskingDispatchError
 	if errors.As(err, &maskingErr) {
 		// A stream error would let failure_mode_allow forward the unmasked
-		// body upstream, so a masking failure always answers here (#3566).
+		// body upstream, so a masking failure always answers here (#3566),
+		// and the client's protocol carries this message, not a generic one.
+		if ctx != nil {
+			ctx.ImmediateProtocolError = llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable, "masking_unavailable", maskingUnavailableMessage, nil,
+			)
+		}
 		return r.createErrorResponse(http.StatusServiceUnavailable, maskingUnavailableMessage), true
 	}
 	var protocolError *llmprotocol.ProtocolError

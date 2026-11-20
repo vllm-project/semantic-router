@@ -1,8 +1,20 @@
-import type { ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
+import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 
-import ProductIcon from '../components/ProductIcon'
+import NativeSelect from '../components/NativeSelect'
+import {
+  ChipInput,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+  Field,
+  Input,
+  InputGroup,
+  SectionLabel,
+  Textarea,
+  cn,
+} from '../ui'
 import type { ConnectModelAdvancedValues } from './configPageConnectModelSupport'
-import styles from './ConfigPageConnectModelsDialog.module.css'
 
 interface Props {
   value: ConnectModelAdvancedValues
@@ -10,257 +22,203 @@ interface Props {
   onChange: (value: ConnectModelAdvancedValues) => void
 }
 
+type TextKey = {
+  [Key in keyof ConnectModelAdvancedValues]: ConnectModelAdvancedValues[Key] extends string
+    ? Key
+    : never
+}[keyof ConnectModelAdvancedValues]
+
+const chipValues = (value: string) =>
+  value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+
 export default function ConfigPageConnectModelAdvanced({
   value,
   reasoningFamilies,
   onChange,
 }: Props) {
-  const update = <Key extends keyof ConnectModelAdvancedValues>(
-    key: Key,
-    next: ConnectModelAdvancedValues[Key],
-  ) => onChange({ ...value, [key]: next })
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  const update = (key: TextKey, next: string) => onChange({ ...value, [key]: next })
+  const fieldId = (key: TextKey) => `${id}-${key}`
 
-  return (
-    <details className={styles.advanced}>
-      <summary>
-        <span className={styles.advancedSummaryIcon} aria-hidden="true">
-          <ProductIcon name="settings" />
-        </span>
-        <span>
-          <strong>Advanced settings</strong>
-          <small>Identity, routing metadata, cost, and delivery</small>
-        </span>
-        <ProductIcon className={styles.advancedChevron} name="chevron-down" aria-hidden="true" />
-      </summary>
-
-      <div className={styles.advancedContent}>
-        <section className={styles.advancedSection}>
-          <div className={styles.advancedHeading}>
-            <strong>Identity</strong>
-            <span>Keep imported models easy to recognize.</span>
-          </div>
-          <div className={styles.advancedGrid}>
-            <Field label="Name prefix" hint="Optional">
-              <input
-                value={value.namePrefix}
-                onChange={(event) => update('namePrefix', event.target.value)}
-                placeholder="team or environment"
-              />
-            </Field>
-            <Field label="Reasoning family" hint="Optional">
-              <select
-                value={value.reasoningFamily}
-                onChange={(event) => update('reasoningFamily', event.target.value)}
-              >
-                <option value="">None</option>
-                {reasoningFamilies.map((family) => (
-                  <option key={family} value={family}>
-                    {family}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Description" hint="Optional" fullWidth>
-              <textarea
-                value={value.description}
-                onChange={(event) => update('description', event.target.value)}
-                placeholder="What this model is best at"
-              />
-            </Field>
-          </div>
-        </section>
-
-        <section className={styles.advancedSection}>
-          <div className={styles.advancedHeading}>
-            <strong>Routing metadata</strong>
-            <span>Help recipes match work to this model.</span>
-          </div>
-          <div className={styles.advancedGrid}>
-            <Field label="Input modalities" hint="Comma-separated; text when empty">
-              <input
-                value={value.inputModalities}
-                onChange={(event) => update('inputModalities', event.target.value)}
-                placeholder="e.g. text, image"
-              />
-            </Field>
-            <Field label="Output modalities" hint="Comma-separated; text when empty">
-              <input
-                value={value.outputModalities}
-                onChange={(event) => update('outputModalities', event.target.value)}
-                placeholder="e.g. image"
-              />
-            </Field>
-            <Field label="Parameter size" hint="Optional">
-              <input
-                value={value.parameterSize}
-                onChange={(event) => update('parameterSize', event.target.value)}
-                placeholder="e.g. 32B"
-              />
-            </Field>
-            <Field label="Context window" hint="Optional">
-              <input
-                type="number"
-                min="1"
-                value={value.contextWindow}
-                onChange={(event) => update('contextWindow', event.target.value)}
-                placeholder="e.g. 131072"
-              />
-            </Field>
-            <Field label="Capabilities" hint="Comma separated" fullWidth>
-              <input
-                value={value.capabilities}
-                onChange={(event) => update('capabilities', event.target.value)}
-                placeholder="reasoning, coding, tools, vision"
-              />
-            </Field>
-            <Field label="Tags" hint="Comma separated" fullWidth>
-              <input
-                value={value.tags}
-                onChange={(event) => update('tags', event.target.value)}
-                placeholder="fast, local, frontier"
-              />
-            </Field>
-          </div>
-        </section>
-
-        <section className={styles.advancedSection}>
-          <div className={styles.advancedHeading}>
-            <strong>Pricing</strong>
-            <span>Cost per one million tokens.</span>
-          </div>
-          <div className={styles.advancedGrid}>
-            <CostField
-              label="Input cost"
-              value={value.inputCost}
-              onChange={(next) => update('inputCost', next)}
-            />
-            <CostField
-              label="Output cost"
-              value={value.outputCost}
-              onChange={(next) => update('outputCost', next)}
-            />
-            <CostField
-              label="Cache read cost"
-              value={value.cacheReadCost}
-              placeholder="Defaults to input cost"
-              onChange={(next) => update('cacheReadCost', next)}
-            />
-            <CostField
-              label="Cache write cost"
-              value={value.cacheWriteCost}
-              placeholder="Defaults to input cost"
-              onChange={(next) => update('cacheWriteCost', next)}
-            />
-          </div>
-        </section>
-
-        <section className={styles.advancedSection}>
-          <div className={styles.advancedHeading}>
-            <strong>Delivery</strong>
-            <span>Override platform defaults only when needed.</span>
-          </div>
-          <div className={styles.advancedGrid}>
-            <Field label="Max retries" hint="0–5">
-              <input
-                type="number"
-                min="0"
-                max="5"
-                step="1"
-                value={value.maxRetries}
-                onChange={(event) => update('maxRetries', event.target.value)}
-                placeholder="Platform default"
-              />
-            </Field>
-            <Field label="Load balancing" hint="Optional">
-              <select
-                value={value.loadBalancing}
-                onChange={(event) => update('loadBalancing', event.target.value)}
-              >
-                <option value="">Platform default</option>
-                <option value="ROUND_ROBIN">Round robin</option>
-                <option value="LEAST_REQUEST">Least requests</option>
-                <option value="RING_HASH">Ring hash</option>
-                <option value="MAGLEV">Maglev</option>
-              </select>
-            </Field>
-            <Field label="Retry conditions" hint="Optional" fullWidth>
-              <input
-                value={value.retryOn}
-                onChange={(event) => update('retryOn', event.target.value)}
-                placeholder="5xx,reset,connect-failure"
-              />
-            </Field>
-            <Field label="Health check path" hint="Optional">
-              <input
-                value={value.healthCheckPath}
-                onChange={(event) => update('healthCheckPath', event.target.value)}
-                placeholder="/health"
-              />
-            </Field>
-            <Field label="Check interval" hint="Optional">
-              <input
-                value={value.healthCheckInterval}
-                onChange={(event) => update('healthCheckInterval', event.target.value)}
-                placeholder="10s"
-              />
-            </Field>
-            <Field label="Check timeout" hint="Optional">
-              <input
-                value={value.healthCheckTimeout}
-                onChange={(event) => update('healthCheckTimeout', event.target.value)}
-                placeholder="2s"
-              />
-            </Field>
-          </div>
-        </section>
-      </div>
-    </details>
-  )
-}
-
-function Field({
-  label,
-  hint,
-  fullWidth = false,
-  children,
-}: {
-  label: string
-  hint?: string
-  fullWidth?: boolean
-  children: ReactNode
-}) {
-  return (
-    <label className={`${styles.field} ${fullWidth ? styles.fullField : ''}`}>
-      <span>
-        {label} {hint ? <small>{hint}</small> : null}
-      </span>
-      {children}
-    </label>
-  )
-}
-
-function CostField({
-  label,
-  value,
-  placeholder = '0.00',
-  onChange,
-}: {
-  label: string
-  value: string
-  placeholder?: string
-  onChange: (value: string) => void
-}) {
-  return (
-    <Field label={label} hint="Optional">
-      <div className={styles.costInput}>
-        <span>$</span>
-        <input
-          inputMode="decimal"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
-        />
-      </div>
+  const text = (key: TextKey, label: string, placeholder: string, hint?: ReactNode) => (
+    <Field label={label} htmlFor={fieldId(key)} optional hint={hint}>
+      <Input
+        id={fieldId(key)}
+        value={value[key]}
+        onChange={(event) => update(key, event.target.value)}
+        placeholder={placeholder}
+      />
     </Field>
+  )
+  const chips = (key: TextKey, label: string, placeholder: string, hint: string) => (
+    <Field label={label} htmlFor={fieldId(key)} optional hint={hint} className="sm:col-span-2">
+      <ChipInput
+        id={fieldId(key)}
+        value={chipValues(value[key])}
+        onChange={(next) => update(key, next.join(', '))}
+        placeholder={placeholder}
+      />
+    </Field>
+  )
+  const cost = (key: TextKey, label: string, placeholder = '0.00') => (
+    <Field label={label} htmlFor={fieldId(key)} optional>
+      <InputGroup
+        id={fieldId(key)}
+        inputMode="decimal"
+        value={value[key]}
+        onChange={(event) => update(key, event.target.value)}
+        placeholder={placeholder}
+        leading={<span className="text-[13px]">$</span>}
+        className="tabular"
+      />
+    </Field>
+  )
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="rounded-xl border border-border bg-card"
+    >
+      <CollapsibleTrigger className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left outline-none transition-colors hover:bg-surface-subtle focus-visible:ring-[3px] focus-visible:ring-ring/40">
+        <span className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-subtle text-muted-foreground">
+          <SlidersHorizontal className="size-3.5" />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[13px] font-medium">Advanced settings</span>
+          <span className="text-xs text-muted-foreground">
+            Identity, routing metadata, cost, and delivery
+          </span>
+        </span>
+        <ChevronDown
+          className={cn(
+            'size-4 shrink-0 text-subtle-foreground transition-transform duration-200',
+            open && 'rotate-180',
+          )}
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="flex flex-col gap-6 border-t border-border px-4 pb-5 pt-4">
+          <section className="flex flex-col gap-3">
+            <SectionLabel>Identity</SectionLabel>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {text('namePrefix', 'Name prefix', 'team or environment')}
+              <Field label="Reasoning family" htmlFor={fieldId('reasoningFamily')} optional>
+                <NativeSelect
+                  id={fieldId('reasoningFamily')}
+                  value={value.reasoningFamily}
+                  onChange={(event) => update('reasoningFamily', event.target.value)}
+                >
+                  <option value="">None</option>
+                  {reasoningFamilies.map((family) => (
+                    <option key={family} value={family}>
+                      {family}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+              <Field
+                label="Description"
+                htmlFor={fieldId('description')}
+                optional
+                className="sm:col-span-2"
+              >
+                <Textarea
+                  id={fieldId('description')}
+                  value={value.description}
+                  onChange={(event) => update('description', event.target.value)}
+                  placeholder="What this model is best at"
+                  rows={2}
+                />
+              </Field>
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <SectionLabel>Routing metadata</SectionLabel>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {chips('inputModalities', 'Input modalities', 'text, image', 'Text when empty.')}
+              {chips('outputModalities', 'Output modalities', 'image', 'Text when empty.')}
+              {text('parameterSize', 'Parameter size', 'e.g. 32B')}
+              <Field label="Context window" htmlFor={fieldId('contextWindow')} optional>
+                <Input
+                  id={fieldId('contextWindow')}
+                  type="number"
+                  min="1"
+                  value={value.contextWindow}
+                  onChange={(event) => update('contextWindow', event.target.value)}
+                  placeholder="e.g. 131072"
+                  className="tabular"
+                />
+              </Field>
+              {chips(
+                'capabilities',
+                'Capabilities',
+                'reasoning, coding, tools, vision',
+                'Press Enter or type a comma after each value.',
+              )}
+              {chips(
+                'tags',
+                'Tags',
+                'fast, local, frontier',
+                'Press Enter or type a comma after each value.',
+              )}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <SectionLabel>Pricing · per one million tokens</SectionLabel>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {cost('inputCost', 'Input cost')}
+              {cost('outputCost', 'Output cost')}
+              {cost('cacheReadCost', 'Cache read cost', 'Defaults to input cost')}
+              {cost('cacheWriteCost', 'Cache write cost', 'Defaults to input cost')}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <SectionLabel>Delivery · override platform defaults only when needed</SectionLabel>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Max retries" htmlFor={fieldId('maxRetries')} hint="Between 0 and 5.">
+                <Input
+                  id={fieldId('maxRetries')}
+                  type="number"
+                  min="0"
+                  max="5"
+                  step="1"
+                  value={value.maxRetries}
+                  onChange={(event) => update('maxRetries', event.target.value)}
+                  placeholder="Platform default"
+                  className="tabular"
+                />
+              </Field>
+              <Field label="Load balancing" htmlFor={fieldId('loadBalancing')} optional>
+                <NativeSelect
+                  id={fieldId('loadBalancing')}
+                  value={value.loadBalancing}
+                  onChange={(event) => update('loadBalancing', event.target.value)}
+                >
+                  <option value="">Platform default</option>
+                  <option value="ROUND_ROBIN">Round robin</option>
+                  <option value="LEAST_REQUEST">Least requests</option>
+                  <option value="RING_HASH">Ring hash</option>
+                  <option value="MAGLEV">Maglev</option>
+                </NativeSelect>
+              </Field>
+              <div className="sm:col-span-2">
+                {text('retryOn', 'Retry conditions', '5xx,reset,connect-failure')}
+              </div>
+              {text('healthCheckPath', 'Health check path', '/health')}
+              {text('healthCheckInterval', 'Check interval', '10s')}
+              {text('healthCheckTimeout', 'Check timeout', '2s')}
+            </div>
+          </section>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

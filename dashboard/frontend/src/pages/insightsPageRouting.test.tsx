@@ -3,9 +3,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import InsightsRecordSection from './InsightsRecordSection'
+import { ModelLabelsContext } from './insightsModelLabelSupport'
 import InsightsSessionRoutes from './InsightsSessionRoutes'
 import { fetchInsightsTrajectory } from './insightsPageApi'
-import { buildInsightsRecordSections, createInsightsTableColumns } from './insightsPageSupport'
+import { buildInsightsRecordSections } from './insightsPageSupport'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 
 const record: InsightsRecord = {
@@ -58,7 +59,12 @@ function renderRecord(value: InsightsRecord) {
   return renderToStaticMarkup(
     <>
       {buildInsightsRecordSections(value, { isReadonly: true }).map((section, index) => (
-        <InsightsRecordSection key={section.title} section={section} sectionIndex={index} />
+        <InsightsRecordSection
+          key={section.title}
+          section={section}
+          sectionIndex={index}
+          initiallyExpanded
+        />
       ))}
     </>,
   )
@@ -67,6 +73,31 @@ function renderRecord(value: InsightsRecord) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('recorded routing explanation', () => {
+  it('names the eligible models by their labels', () => {
+    const protection = { ...record.learning!.protection!, candidate_models: ['alpha', 'beta'] }
+    const html = renderToStaticMarkup(
+      <ModelLabelsContext.Provider value={{ alpha: 'Alpha Model', beta: 'Beta Model' }}>
+        {buildInsightsRecordSections(
+          { ...record, learning: { ...record.learning, protection } },
+          { isReadonly: true },
+        ).map((section, index) => (
+          <InsightsRecordSection
+            key={section.title}
+            section={section}
+            sectionIndex={index}
+            initiallyExpanded
+          />
+        ))}
+      </ModelLabelsContext.Provider>,
+    )
+    expect(html).toContain('Eligible models</span><div><span')
+    expect(html).toContain('title="Configured as alpha">Alpha Model</span>, <span')
+    expect(html).toContain('title="Configured as beta">Beta Model</span>')
+    // the candidate scores name each model the same way
+    expect(html).toContain('<td><span')
+    expect(html).not.toContain('<td>alpha</td>')
+  })
+
   it('renders actual selection separately from an observed hold and preserves zero scores', () => {
     const html = renderRecord(record)
     expect(html).toContain('Actual selected model</span><div>beta')
@@ -161,24 +192,11 @@ describe('recorded routing explanation', () => {
     expect(html).toContain('0.017s')
     expect(html).toContain('0.023s')
     expect(html).toContain('observe_only')
-    expect(html).toContain('/insights/one')
-    expect(html).toContain('/insights/two')
+    expect(html).toContain('/observe/requests/one')
+    expect(html).toContain('/observe/requests/two')
     // a subagent's call names its agent, the main conversation's says main
     expect(html).toContain('9f2c1a')
     expect(html).toContain('>main<')
-  })
-
-  it('lists each request with its session, next to the request id', () => {
-    const columns = createInsightsTableColumns()
-    expect(columns.map((column) => column.key).slice(0, 2)).toEqual(['request_id', 'session_id'])
-    const session = columns[1]
-    const cell = renderToStaticMarkup(
-      <>{session.render!({ ...record, session_id: '21f9e946-5ddf-4b90-a897-7db814a78317' })}</>,
-    )
-    expect(cell).toContain('title="21f9e946-5ddf-4b90-a897-7db814a78317"')
-    expect(renderToStaticMarkup(<>{session.render!({ ...record, session_id: undefined })}</>)).toBe(
-      '-',
-    )
   })
 
   it('says in words why a session kept or switched its model, with the code in the title', () => {
@@ -231,7 +249,7 @@ describe('recorded routing explanation', () => {
     )
     expect(html).toContain('>kept<')
     expect(html).toContain('aria-label="protected"')
-    expect(html).toContain('Kept this session&#x27;s model')
+    expect(html).toContain('Session protection held the model')
     expect(html).toContain('Kept this agent&#x27;s model')
     expect(html).toContain('>switched<')
     expect(html).toContain('The previous model is not a candidate here')

@@ -11,6 +11,9 @@ listeners:
     # Optional client keys the listener requires (standalone mode and the
     # CLI-managed Envoy listener).
     api_keys: []
+    # Optional owner-only files that each hold one more client key, read at
+    # every load (standalone mode).
+    api_key_files: []
   # One-way TLS, served in standalone mode. Relative paths are relative to this
   # file's directory.
   - name: https-8443
@@ -26,7 +29,8 @@ listeners:
     # of chat_completions and messages.
     apis:
       # Standalone mode: accept only these request models (exact `model`
-      # values); others get 403 model_not_allowed. Omitted, every LLM model.
+      # values); others get 403 model_not_allowed, or 404 model_not_found
+      # when the Router serves them on no listener. Omitted, every LLM model.
       chat_completions:
         models: [vllm-sr/exhaustive-default]
       responses:
@@ -47,6 +51,17 @@ listeners:
           redact: true
           guard: true
           router_turns: false
+          # Rules of a recipe that guard and redact enforce besides their own
+          # checks. The plugins learn each rule's name and description and
+          # ask this listener to evaluate it (POST /v1/systemone/rules). A
+          # required rule that cannot be checked holds the command or
+          # withholds the output; an advisory one goes unchecked.
+          rules:
+            recipe: default
+            guard:
+              - {type: keyword, name: prod_database, enforce: required}
+            redact:
+              - {type: keyword, name: employee_id}
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -57,6 +72,11 @@ providers:
   defaults:
     model: qwen3-8b
     reasoning_effort: medium
+    # A backend counts reasoning against the output limit. A request that
+    # states no reasoning preference (no thinking, reasoning_effort, reasoning
+    # or chat_template_kwargs thinking switch) and sets a smaller limit than
+    # this runs with the model's reasoning off. 0 or unset turns the rule off.
+    reasoning_min_output_tokens: 512
     # The CA bundle of every https backend whose own tls names no ca_file. It
     # replaces the system roots for those backends, in Envoy and in the
     # Router's own calls, so it must hold every CA they chain to.
@@ -231,6 +251,8 @@ providers:
       # Request capabilities the backends reject, as vLLM rejects min_p and
       # logit_bias under speculative decoding: the Router sends this model
       # requests without those fields and reports each in x-vsr-warnings.
+      # developer_role, for a model that drops developer messages as DeepSeek V4
+      # does, sends them to it as system messages instead.
       unsupported_capabilities: [sampling_min_p, sampling_logit_bias]
       backend_refs:
         - name: omni-primary
@@ -332,6 +354,8 @@ entrypoints:
   - model_names: ["vllm-sr/exhaustive-default"]
     recipe: default
     default: true
+    review_model: vllm-sr/exhaustive-privacy
+    memory_model: vllm-sr/exhaustive-privacy
   - model_names: ["vllm-sr/exhaustive-privacy"]
     recipe: privacy-first
   - api: systemone
@@ -429,6 +453,18 @@ recipes:
           operator: OR
           keywords: ["payment_failed", "transaction_declined", "critical", "high", "TXN_DECLINE", "urgent", "immediate", "asap"]
           case_sensitive: false
+        # An OR rule of literal or regex keywords says where it matched, so a
+        # masking plugin can hide what it finds (static_business_route below).
+        - name: employee_id
+          description: An employee ID such as E-104233.
+          operator: OR
+          method: regex
+          keywords: ['\bE-\d{6}\b']
+        - name: prod_database
+          description: Touches the production database.
+          operator: OR
+          method: regex
+          keywords: ['prod-db\.internal']
 
       domains:
         - name: business
@@ -553,8 +589,14 @@ recipes:
           description: Detect common prompt-injection or jailbreak attempts.
           predicate:
             gte: 0.8
+          # The rule reads the user's text of the current turn. history adds
+          # the earlier user turns; tool_results (off by default) adds the tool
+          # results returned in this turn, where a fetched page or file can
+          # carry instructions, and makes a tool result the Router cannot read
+          # as text, such as a screenshot, resolve as on_unscanned says.
           input:
             history: true
+            tool_results: false
           deployment: primary
           timeout_ms: 300
           # A long input is read in windows. When the time runs out before
@@ -671,6 +713,14 @@ recipes:
             type: exists
             source:
               type: flow_tool_state
+        - name: repeated_tool_failures
+          description: Two tool results of the current turn failed since the last two successes in a row.
+          feature:
+            type: count
+            source:
+              type: failed_tool_result
+          predicate:
+            gte: 2
         - name: has_developer_msg
           description: Request contains a developer message.
           feature:
@@ -703,6 +753,23 @@ recipes:
         - name: audio_input
           description: Request contains at least one audio content part.
           modality: audio
+
+      # The agent a request belongs to, as Claude Code's, Codex's and
+      # OpenCode's headers name it. Claude Code sends a subagent's type and a
+      # request's class only when CLAUDE_CODE_GATEWAY_HINT_HEADERS is set;
+      # OpenCode's session titles and summaries are auxiliary and compaction.
+      agent:
+        - name: exploration_subagent
+          description: A Claude Code Explore subagent or a Codex spawn_agent child.
+          role: subagent
+          types: [Explore, collab_spawn]
+        - name: codex_review
+          description: A Codex review child.
+          harness: codex
+          types: [review]
+        - name: housekeeping
+          description: Claude Code and OpenCode compactions and side requests such as session titles.
+          request_classes: [compaction, auxiliary]
 
       # Typed questions. deployment names the deployment that answers each one:
       # the built-in model runtime (provider model_runtime) or a remote System
@@ -997,6 +1064,11 @@ recipes:
           - type: router_replay
             configuration:
               enabled: true
+              # Savings compare each request with qwen3-32b at the same recorded
+              # tokens, so a request this route sends to a dearer model shows
+              # a negative saving. Unset, the baseline is the most expensive
+              # model of the recipe's pool. It must name a model with pricing.
+              cost_baseline_model: qwen3-32b
               shadow:
                 model: qwen3-32b
                 sample_rate: 0.05
@@ -1121,12 +1193,22 @@ recipes:
             configuration:
               enabled: true
               signal: business_contact_pii
+              # registry keeps one index per value for good in the identity
+              # namespace of global.services.masking_identity it names.
+              # sequence numbers values in the order one request meets them.
+              index: registry
+              identity_namespace: agents
+              # Rules that find text are masked as well, each under its own
+              # name; entity_types filters only the pii rule's labels.
+              rules:
+                - {type: keyword, name: employee_id}
               entity_types:
                 - EMAIL_ADDRESS
                 - PHONE_NUMBER
               placeholders:
                 EMAIL_ADDRESS: "[EMAIL_{index}]"
                 PHONE_NUMBER: "[PHONE_{index}]"
+                employee_id: "[EMPLOYEE_{index}]"
         retention:
           drop: false
           ttl_turns: 4
@@ -1806,6 +1888,32 @@ recipes:
           - model: qwen3-8b
             use_reasoning: false
 
+      - name: block_subagent_personal_data
+        description: Refuse an exploration subagent's request that carries personal data.
+        priority: 127
+        rules:
+          operator: AND
+          conditions:
+            - type: agent
+              name: exploration_subagent
+            - type: pii
+              name: restricted_pii
+        plugins:
+          - type: fast_response
+            configuration:
+              message: Exploration subagents may not send personal data.
+              block: true
+
+      - name: exploration_subagent_route
+        description: Keep exploration subagents on a small model at low effort.
+        priority: 126
+        rules:
+          type: agent
+          name: exploration_subagent
+        modelRefs:
+          - model: qwen3-8b
+            use_reasoning: false
+
       - name: classifier_band_route
         description: Route a bounded generic classifier score to a local model.
         priority: 125
@@ -2247,14 +2355,18 @@ global:
     # Protocol losses to translate with an x-vsr-warnings protocol entry instead
     # of rejecting them. tool_result.is_error omits the Anthropic failed tool
     # call flag that OpenAI Chat and Responses backends cannot carry, and
-    # messages[].role sends Anthropic system messages inside the conversation to
-    # those backends as user text, for chat templates that accept a system
-    # message only first. content.file sends each file in the conversation as
-    # a short note to a model whose capabilities leave out file_input.
+    # messages[].role sends a Chat backend the leading system and developer
+    # messages as one system message and those inside the conversation as user
+    # text, for chat templates that accept one system message, only first; an
+    # Anthropic system message inside the conversation reaches Responses
+    # backends as user text too. content.file sends each file in the
+    # conversation as a short note to a model whose capabilities leave out
+    # file_input.
     # tools.defer_loading sends tools that a coding agent marks for tool search
     # in full, for every backend format.
     # reasoning.signature drops the signature an Anthropic backend puts on its
-    # thinking, which Chat and Responses clients cannot carry. store sends a
+    # thinking, which Chat and Responses clients cannot carry, and the one a
+    # Messages client sends back to a Chat or Responses backend. store sends a
     # request's store: true without it to a backend that keeps no completions,
     # such as a Messages backend; store: false needs no entry. Empty keeps every
     # lossy translation failing closed.
@@ -2294,11 +2406,13 @@ global:
         scope: conversation
         identity:
           headers:
-            # Unset, protection keys on the session id the request pins.
+            # Unset, protection keys on the session id the request pins, else
+            # on the session-id Codex sends.
             session: x-session-id
             conversation: x-conversation-id
             # Optional: holds each named agent (a delegated subagent) on its own
-            # model inside the session. Claude Code sends this on subagent calls.
+            # model inside the session. Unset, protection reads the agent Claude
+            # Code (this header, on subagent calls) or Codex (thread-id) sends.
             agent: x-claude-code-agent-id
         tuning:
           idle_timeout_seconds: 300
@@ -2318,6 +2432,13 @@ global:
             min_consecutive_recoveries: 2
             cooldown_seconds: 120
             max_switches_per_window: 2
+          # Price a switch against the prompt cache it throws away, from the
+          # last response's cache reads and writes and the models' cache prices.
+          # Without a receipt or a cache price the scores above decide alone.
+          cache_economics:
+            enabled: true
+            cache_ttl_seconds: 300 # 3600 when the receipt wrote 1-hour entries.
+            default_remaining_turns: 3 # Used when no remaining-turn prior applies.
         # A client sends this header on one request to get a fresh decision for
         # its protection key, with at least min_user_turns_between user turns
         # between honored releases.
@@ -2336,6 +2457,19 @@ global:
           key_prefix: "vsr:router-session:v1:"
 
   services:
+    # Identity namespaces keep a masking placeholder per value across
+    # requests, sessions and restarts (masking index: registry). Each names a
+    # 32-byte key (key_file or key_env), scope: principal_or_installation,
+    # and a registry: {backend: file, path} or {backend: postgres, postgres}.
+    masking_identity:
+      namespaces:
+        agents:
+          key_env: VSR_MASKING_IDENTITY_KEY
+          scope: principal_or_installation
+          session_scope: false
+          registry:
+            backend: file
+            path: /var/lib/vllm-sr/masking/agents.log
     api:
       routing_preview:
         request_timeout_seconds: 120
@@ -2442,6 +2576,23 @@ global:
               requests_per_unit: 1000
               tokens_per_unit: 2000000
               unit: hour
+    # Spend limits per agent run and per user window, in one currency. A call
+    # reserves its estimated cost before it is sent and settles its actual
+    # cost after.
+    budgets:
+      currency: USD
+      unpriced: refuse
+      output_reserve_tokens: 4096
+      run:
+        limit: 5.0
+        idle_timeout_seconds: 86400
+      users:
+        - name: premium-daily
+          match:
+            user: "*"
+            group: premium-tier
+          limit: 50.0
+          window: day
     management_api:
       bind_address: 127.0.0.1
       port: 8080
@@ -2786,6 +2937,15 @@ global:
       primary:
         provider: model_runtime
         public_name: decision-public
+        # Explicit self-hosted rates; omit pricing to report unpriced calls.
+        # Remote deployments may inherit pricing from providers.models via model.
+        pricing:
+          currency: USD
+          prompt_per_1m: 0
+          completion_per_1m: 0
+          cached_input_per_1m: 0
+          cache_write_per_1m: 0
+          cache_write_1h_per_1m: 0
         artifact: vllm-sr/vela3-fast
         device: cpu
       # Vela 1.0 Omni-Nano, the embedding model of the vector store below:

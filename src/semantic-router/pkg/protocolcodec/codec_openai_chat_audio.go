@@ -14,6 +14,11 @@ func decodeChatAudioOutputOptions(raw json.RawMessage, audio *chatAudioRequestWi
 			return nil, invalidChatModalities(err)
 		}
 	}
+	if len(modalities) == 0 && len(raw) > 0 {
+		// An empty list asks for no output at all, which no backend can serve.
+		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_modalities",
+			"Chat modalities must name text or audio", nil)
+	}
 	hasAudio, hasText := false, false
 	for _, modality := range modalities {
 		switch modality {
