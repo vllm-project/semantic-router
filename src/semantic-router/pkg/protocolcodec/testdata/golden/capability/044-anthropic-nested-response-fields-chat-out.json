@@ -6,7 +6,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_citations"
+          "code": "unsupported_capability"
         }
       }
     },
@@ -16,7 +16,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_content"
+          "code": "unsupported_capability"
         }
       }
     }

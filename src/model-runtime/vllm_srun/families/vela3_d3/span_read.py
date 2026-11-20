@@ -5,7 +5,10 @@ noncausal full-attention mask. The route's span head (``SpanHeadV2``) reads the
 final-norm states of each target word's first token against the mean state of
 each option line; a word read by several windows takes their mean logits.
 Words over the threshold decode into spans (``decode.py``), and each span's
-probability is the mean of its words' probabilities for its label.
+probability is the mean of its words' probabilities for its label. A question
+that raises ``threshold`` above the package's decodes at the package's and
+keeps the spans whose probability reaches its own, whole: a higher word
+threshold would split an entity at its weaker words.
 """
 
 from __future__ import annotations
@@ -33,6 +36,9 @@ class SpanItem(Item):
     names: tuple[str, ...] = ()
     label_set: str | None = None
     threshold: float = 0.5
+    # The package's threshold, when the question's own ``threshold`` is above it: words decode at it and spans
+    # whose probability is under ``threshold`` drop. None: words decode at ``threshold``.
+    decode_threshold: float | None = None
     evidence: dict[str, Any] | None = None
     text: str = ""
     windows: tuple[Window, ...] = field(default=())
@@ -110,12 +116,13 @@ def answer(item: SpanItem, offsets: np.ndarray, logits: np.ndarray) -> dict[str,
     if not np.isfinite(probabilities).all():
         raise ValueError("the span head produced a non-finite score")
     threshold = item.threshold
+    words = threshold if item.decode_threshold is None else item.decode_threshold
     if item.evidence is not None:
         found = evidence_spans(
-            probabilities, offsets, names, item.text, threshold, item.evidence
+            probabilities, offsets, names, item.text, words, item.evidence
         )
-    elif float(np.max(probabilities)) > threshold:
-        found = decode(probabilities, offsets, names, item.text, threshold)
+    elif float(np.max(probabilities)) > words:
+        found = decode(probabilities, offsets, names, item.text, words)
     else:
         found = []
     spans = []
@@ -123,6 +130,11 @@ def answer(item: SpanItem, offsets: np.ndarray, logits: np.ndarray) -> dict[str,
         label = names.index(span["label"])
         # The released span_answer's probability: the mean over every word the trimmed span overlaps.
         overlap = (offsets[:, 0] < span["end"]) & (offsets[:, 1] > span["start"])
+        probability = (
+            float(probabilities[overlap, label].mean()) if overlap.any() else 0.0
+        )
+        if item.decode_threshold is not None and probability < threshold:
+            continue
         start, end = span["start"], span["end"]
         if item.evidence is None:
             start, end = without_separators(item.text, start, end)
@@ -134,11 +146,7 @@ def answer(item: SpanItem, offsets: np.ndarray, logits: np.ndarray) -> dict[str,
                 "start": start,
                 "end": end,
                 "text": item.text[start:end],
-                "probability": (
-                    float(probabilities[overlap, label].mean())
-                    if overlap.any()
-                    else 0.0
-                ),
+                "probability": probability,
             }
         )
     return {

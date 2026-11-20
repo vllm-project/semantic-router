@@ -257,7 +257,7 @@ func routerPermission(method, path string) (string, bool) {
 		return policy.Permissions[0], true
 	}
 	switch {
-	case path == "/api/models/catalog":
+	case path == "/api/models/catalog", path == "/api/models/health":
 		return PermConfigRead, true
 	case path == "/api/models/discover":
 		return PermConfigWrite, true
@@ -324,7 +324,7 @@ func observabilityPermission(_ string, path string) (string, bool) {
 		return PermTopologyRead, true
 	case strings.HasPrefix(path, "/api/logs"):
 		return PermLogsRead, true
-	case observability.IsGrafanaQueryPath(path), observability.IsJaegerAPIPath(path):
+	case observability.IsGrafanaQueryPath(path), observability.IsJaegerAPIPath(path), path == observability.TraceSummariesPath:
 		return PermLogsRead, true
 	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
 		return PermLogsRead, true

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"slices"
-	"strconv"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -27,7 +26,7 @@ func (AnthropicMessagesCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilitySamplingTopK,
 		llmprotocol.CapabilityStopSequences, llmprotocol.CapabilityReasoningAdaptive,
 		llmprotocol.CapabilityReasoningSignature, llmprotocol.CapabilityReasoningDisplay,
-		llmprotocol.CapabilityMatchedStopSequence,
+		llmprotocol.CapabilityMatchedStopSequence, llmprotocol.CapabilityServerTools,
 	)
 }
 
@@ -81,9 +80,17 @@ type anthropicContentWire struct {
 	ToolsetName     json.RawMessage            `json:"toolset_name,omitempty"`
 	Transformations json.RawMessage            `json:"transformations,omitempty"`
 	FileID          string                     `json:"file_id,omitempty"`
+	// raw is a server tool block, sent as it was written.
+	raw json.RawMessage
+	// signed renders a thinking block's signature even when it is empty, as
+	// Messages replies carry it. It is not a wire field.
+	signed bool
 }
 
 func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
+	if wire.raw != nil {
+		return wire.raw, nil
+	}
 	type wireAlias anthropicContentWire
 	body, err := json.Marshal(wireAlias(wire))
 	if err != nil {
@@ -98,6 +105,9 @@ func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
 		object["text"], _ = json.Marshal(wire.Text)
 	case "thinking":
 		object["thinking"], _ = json.Marshal(wire.Thinking)
+		if wire.signed {
+			object["signature"], _ = json.Marshal(wire.Signature)
+		}
 	}
 	return json.Marshal(object)
 }
@@ -375,7 +385,7 @@ func decodeAnthropicMessages(
 	diagnostics *llmprotocol.Diagnostics,
 ) ([]llmprotocol.Tool, error) {
 	var added []llmprotocol.Tool
-	for _, messageWire := range messages {
+	for position, messageWire := range messages {
 		rest, tools, err := takeAnthropicToolAdditions(messageWire, policy, diagnostics)
 		if err != nil {
 			return nil, err
@@ -387,6 +397,9 @@ func decodeAnthropicMessages(
 		message, err := decodeAnthropicMessage(*rest, policy)
 		if err != nil {
 			return nil, err
+		}
+		for part := range message {
+			message[part].SourcePosition = position + 1
 		}
 		request.Messages = append(request.Messages, message...)
 	}
@@ -486,7 +499,7 @@ func decodeAnthropicTool(toolBody json.RawMessage, policy llmprotocol.Policy, di
 		return llmprotocol.Tool{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Anthropic tool is invalid", err)
 	}
 	if discriminator.Type != "" && discriminator.Type != "custom" {
-		return llmprotocol.Tool{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "Anthropic tool type "+strconv.Quote(discriminator.Type)+" is unsupported; only custom tools enter the model protocol", nil)
+		return decodeAnthropicServerTool(toolBody, discriminator.Type)
 	}
 	var toolWire anthropicToolWire
 	if err := decodeWireValue(toolBody, &toolWire, policy); err != nil {

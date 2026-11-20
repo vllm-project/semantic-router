@@ -104,6 +104,14 @@ func (f *ResponseAPIFilter) PrepareObjectState(
 	request llmprotocol.Request,
 	sourceBody []byte,
 ) (*ResponseObjectState, error) {
+	// The Router keeps no Conversations objects: it could neither load a
+	// conversation's items nor add this response to it.
+	if request.ConversationID != "" {
+		protocolError := llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_conversation",
+			"conversation is not supported by the Router; continue a stored response with previous_response_id", nil)
+		protocolError.Parameter = "conversation"
+		return nil, protocolError
+	}
 	state := &ResponseObjectState{
 		GeneratedResponseID: responseapi.GenerateResponseID(),
 		PreviousResponseID:  request.PreviousResponseID,

@@ -9,7 +9,8 @@ interface UseTestQueryResult {
   setTestQuery: (query: string) => void
   testResult: TestQueryResult | null
   isLoading: boolean
-  runTest: () => Promise<void>
+  /** Runs the current query, or the given one (a sample or a deep link). */
+  runTest: (query?: string) => Promise<void>
   clearResult: () => void
 }
 
@@ -22,16 +23,20 @@ export function useTestQuery(
   const [isLoading, setIsLoading] = useState(false)
 
   // A failed Preview must not be presented as a simulated runtime result.
-  const runTest = useCallback(async () => {
-    if (!testQuery.trim()) return
+  const runTest = useCallback(
+    async (override?: string) => {
+      const query = override ?? testQuery
+      if (!query.trim()) return
 
-    setIsLoading(true)
-    try {
-      setTestResult(await runTestQueryPreview(testQuery, routingModel))
-    } finally {
-      setIsLoading(false)
-    }
-  }, [testQuery, routingModel])
+      setIsLoading(true)
+      try {
+        setTestResult(await runTestQueryPreview(query, routingModel))
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [testQuery, routingModel],
+  )
 
   const clearResult = useCallback(() => {
     setTestResult(null)
@@ -60,7 +65,8 @@ export async function runTestQueryPreview(query: string, model?: string): Promis
       matchedModels: [],
       highlightedPath: ['client'],
       isAccurate: false,
-      warning: error instanceof Error ? `Preview unavailable: ${error.message}` : 'Preview unavailable',
+      warning:
+        error instanceof Error ? `Preview unavailable: ${error.message}` : 'Preview unavailable',
     }
   }
 }

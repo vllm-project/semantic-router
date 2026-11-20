@@ -5,14 +5,17 @@ package routerreplay
 import "time"
 
 type ListResponse struct {
-	Object     string          `json:"object"`
-	Count      int             `json:"count"`
-	Total      int             `json:"total"`
-	Limit      int             `json:"limit"`
-	Offset     int             `json:"offset"`
-	HasMore    bool            `json:"has_more"`
-	NextOffset *int            `json:"next_offset,omitempty"`
-	Data       []RoutingRecord `json:"data"`
+	Object     string `json:"object"`
+	Count      int    `json:"count"`
+	Total      int    `json:"total"`
+	Limit      int    `json:"limit"`
+	Offset     int    `json:"offset"`
+	HasMore    bool   `json:"has_more"`
+	NextOffset *int   `json:"next_offset,omitempty"`
+	// HarnessCounts counts the records every filter but harness selects, by
+	// the harness that sent them: a harness id, or api_client for none.
+	HarnessCounts map[string]int  `json:"harness_counts"`
+	Data          []RoutingRecord `json:"data"`
 }
 
 type AggregateResponse struct {
@@ -33,6 +36,8 @@ type AggregateResponse struct {
 	Reviews *ReviewAggregate `json:"reviews,omitempty"`
 	// AvailableReviewModels lists the models that answered any review.
 	AvailableReviewModels []string `json:"available_review_models,omitempty"`
+	// Traffic is present when the query asked for it with an interval.
+	Traffic *TrafficSeries `json:"traffic,omitempty"`
 }
 
 type LifecycleSummary struct {

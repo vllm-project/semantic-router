@@ -232,6 +232,9 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err := decodeWire(body, &wire, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
+	dropped := dropNoOpRequestFields(map[string]*json.RawMessage{
+		"service_tier": &wire.ServiceTier, "safety_identifier": &wire.SafetyIdentifier,
+	})
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"background": wire.Background, "context_management": wire.ContextManagement,
 		"max_tool_calls": wire.MaxToolCalls, "moderation": wire.Moderation, "prompt": wire.Prompt,
@@ -246,6 +249,7 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
+	appendNoOpFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, dropped)
 	if wire.MaxOutputTokens != nil && *wire.MaxOutputTokens < 16 {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, llmprotocol.NewError(
 			llmprotocol.ErrorInvalidRequest,
@@ -279,9 +283,15 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if !request.ToolNameOrigins.Flattened() {
 		request.ToolNameOrigins = nil
 	}
-	// Flattening a namespace advances request.Generation, which retires the replay
-	// claim on source bytes that still carry the namespace.
-	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy), diagnostics, nil
+	if len(dropped) > 0 {
+		request.Generation++
+	}
+	// Flattening a namespace or dropping a no-op value advances
+	// request.Generation, which retires the replay claim on source bytes that
+	// still carry them.
+	envelope := requestEnvelope(llmprotocol.OpenAIResponsesV1, body, sourceGeneration, policy)
+	envelope.ResponseRender.RequestEcho = responsesRequestEcho(wire)
+	return request, envelope, diagnostics, nil
 }
 
 // decodeResponsesDroppedFields reports client telemetry that is not model input.
@@ -504,7 +514,13 @@ func decodeResponsesFunctionTool(
 		return err
 	}
 	schema := tool.Parameters
-	if len(schema) == 0 {
+	if !jsonFieldPresent(schema) {
+		// Typed clients send null for a function without arguments. Replacing
+		// it advances request.Generation, which retires the replay claim on
+		// source bytes that still carry the null.
+		if len(schema) != 0 {
+			request.Generation++
+		}
 		schema = json.RawMessage(`{"type":"object"}`)
 	}
 	request.Tools = append(request.Tools, llmprotocol.Tool{

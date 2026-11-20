@@ -1,6 +1,7 @@
 import React from 'react'
-import ProductIcon from './ProductIcon'
-import styles from './TableHeader.module.css'
+import { Plus, Search } from 'lucide-react'
+
+import { Badge, Button, InputGroup, cn } from '../ui'
 
 interface TableHeaderProps {
   title: string
@@ -34,41 +35,51 @@ const TableHeader: React.FC<TableHeaderProps> = ({
   const showSearch = Boolean(onSearchChange && searchPlaceholder.trim().length > 0)
 
   return (
-    <div className={`${styles.header} ${variant === 'embedded' ? styles.embedded : ''}`}>
-      <div className={styles.titleSection}>
-        {icon && <span className={styles.icon}>{icon}</span>}
-        <h3 className={styles.title}>{title}</h3>
-        {count !== undefined && (
-          <span className={styles.badge}>
-            {count} {count === 1 ? 'item' : 'items'}
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5',
+        variant === 'embedded' ? 'mb-3' : 'mb-4',
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        {icon ? (
+          <span className="shrink-0 text-base leading-none" aria-hidden="true">
+            {icon}
           </span>
-        )}
+        ) : null}
+        <h3 className="truncate text-[15px] font-semibold tracking-[-0.012em] text-foreground">
+          {title}
+        </h3>
+        {count !== undefined ? (
+          <Badge tone="neutral" size="sm" className="tabular">
+            {count} {count === 1 ? 'item' : 'items'}
+          </Badge>
+        ) : null}
       </div>
-      <div className={styles.actions}>
-        {showSearch && (
-          <label className={styles.searchControl}>
-            <ProductIcon name="search" />
-            <input
-              type="search"
-              aria-label={searchPlaceholder}
-              className={styles.searchInput}
-              placeholder={searchPlaceholder}
-              value={searchValue}
-              onChange={(e) => onSearchChange?.(e.target.value)}
-            />
-          </label>
-        )}
-        {onSecondaryAction && !disabled && (
-          <button className={styles.secondaryButton} onClick={onSecondaryAction}>
+      <div className="flex flex-wrap items-center gap-2">
+        {showSearch ? (
+          <InputGroup
+            type="search"
+            aria-label={searchPlaceholder}
+            placeholder={searchPlaceholder}
+            value={searchValue}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            leading={<Search />}
+            containerClassName="w-full sm:w-64"
+            className="h-8 [&::-webkit-search-cancel-button]:cursor-pointer"
+          />
+        ) : null}
+        {onSecondaryAction && !disabled ? (
+          <Button type="button" variant="outline" size="sm" onClick={onSecondaryAction}>
             {secondaryActionText}
-          </button>
-        )}
-        {onAdd && !disabled && (
-          <button className={styles.addButton} onClick={onAdd}>
-            <ProductIcon name="plus" />
+          </Button>
+        ) : null}
+        {onAdd && !disabled ? (
+          <Button type="button" size="sm" onClick={onAdd}>
+            <Plus />
             {addButtonText}
-          </button>
-        )}
+          </Button>
+        ) : null}
       </div>
     </div>
   )

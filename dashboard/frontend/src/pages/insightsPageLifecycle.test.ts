@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import styles from './InsightsPage.module.css'
-import {
-  getInsightsLifecyclePresentation,
-  getInsightsLifecycleStatusClass,
-} from './insightsPageSupport'
+import { getInsightsLifecyclePresentation, getInsightsLifecycleTone } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
 
 const record = (lifecycle_state: InsightsRecord['lifecycle_state'], response_status = 200) =>
@@ -35,21 +31,21 @@ describe('Insights lifecycle presentation', () => {
     })
   })
 
-  it('maps successful records onto the shared success status class', () => {
-    expect(
-      getInsightsLifecycleStatusClass(getInsightsLifecyclePresentation(record('completed'))),
-    ).toBe(styles.statusSuccess)
+  it('maps successful records onto the success status tone', () => {
+    expect(getInsightsLifecycleTone(getInsightsLifecyclePresentation(record('completed')))).toBe(
+      'success',
+    )
   })
 
-  it('maps failed records onto the shared error status class', () => {
-    expect(
-      getInsightsLifecycleStatusClass(getInsightsLifecyclePresentation(record('failed'))),
-    ).toBe(styles.statusError)
+  it('maps failed records onto the danger status tone', () => {
+    expect(getInsightsLifecycleTone(getInsightsLifecyclePresentation(record('failed')))).toBe(
+      'danger',
+    )
   })
 
-  it('maps in-progress records onto the shared pending status class', () => {
+  it('maps in-progress records onto the info status tone', () => {
     expect(
-      getInsightsLifecycleStatusClass(getInsightsLifecyclePresentation(record('in_progress', 0))),
-    ).toBe(styles.statusPending)
+      getInsightsLifecycleTone(getInsightsLifecyclePresentation(record('in_progress', 0))),
+    ).toBe('info')
   })
 })

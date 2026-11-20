@@ -1,7 +1,7 @@
 import { KeyValueEditor } from '../components/KeyValueEditor'
 import { ObjectListEditor, type ObjectEditorField } from '../components/ObjectListEditor'
-import { StringListEditor } from '../components/StringListEditor'
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
+import { Badge, ChipInput } from '../ui'
 import type {
   BackendRefEntry,
   LoRAAdapter,
@@ -341,75 +341,78 @@ function validateBackendRef(item: EditableBackendRef): string[] {
   return errors
 }
 
-export function ModelTagsEditor({
+const stringValues = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : normalizeStringList(value)
+
+function ChipListField({
   value,
   onChange,
   disabled,
   readOnly,
-}: StructuredModelFieldProps) {
-  const tagValues = Array.isArray(value)
-    ? value.filter((tag): tag is string => typeof tag === 'string')
-    : normalizeStringList(value)
-
+  label,
+  placeholder,
+  emptyLabel,
+}: StructuredModelFieldProps & { label: string; placeholder: string; emptyLabel: string }) {
+  const items = stringValues(value)
+  if (readOnly) {
+    return items.length ? (
+      <span className="flex flex-wrap gap-1.5">
+        {items.map((item) => (
+          <Badge key={item} tone="outline" className="font-mono">
+            {item}
+          </Badge>
+        ))}
+      </span>
+    ) : (
+      <span className="text-[13px] text-muted-foreground">{emptyLabel}</span>
+    )
+  }
   return (
-    <StringListEditor
-      value={tagValues}
+    <ChipInput
+      value={items}
       onChange={(nextValue) => onChange?.(nextValue)}
-      addLabel="Add tag"
-      emptyLabel="No tags configured. Add tags for filtering and policy targeting."
-      itemLabel="Tag"
-      placeholder="e.g. premium"
+      placeholder={placeholder}
       disabled={disabled}
-      readOnly={readOnly}
+      aria-label={label}
     />
   )
 }
 
-export function ModelCapabilitiesEditor({
-  value,
-  onChange,
-  disabled,
-  readOnly,
-}: StructuredModelFieldProps) {
-  const capabilities = Array.isArray(value)
-    ? value.filter((capability): capability is string => typeof capability === 'string')
-    : normalizeStringList(value)
-
+export function ModelTagsEditor(props: StructuredModelFieldProps) {
   return (
-    <StringListEditor
-      value={capabilities}
-      onChange={(nextValue) => onChange?.(nextValue)}
-      addLabel="Add capability"
+    <ChipListField
+      {...props}
+      label="Tags"
+      placeholder="premium, local, fast — press Enter after each"
+      emptyLabel="No tags configured."
+    />
+  )
+}
+
+export function ModelCapabilitiesEditor(props: StructuredModelFieldProps) {
+  return (
+    <ChipListField
+      {...props}
+      label="Capabilities"
+      placeholder="chat, reasoning, tool-use — press Enter after each"
       emptyLabel="No routing capabilities configured."
-      itemLabel="Capability"
-      placeholder="e.g. tool-use"
-      disabled={disabled}
-      readOnly={readOnly}
     />
   )
 }
 
 // Edits one direction of a model's modalities: the media it reads or writes.
 export function ModelModalitiesEditor({
-  value,
-  onChange,
-  disabled,
-  readOnly,
-}: StructuredModelFieldProps) {
-  const modalities = Array.isArray(value)
-    ? value.filter((modality): modality is string => typeof modality === 'string')
-    : normalizeStringList(value)
-
+  label = 'Modalities',
+  ...props
+}: StructuredModelFieldProps & { label?: string }) {
   return (
-    <StringListEditor
-      value={modalities}
-      onChange={(nextValue) => onChange?.(nextValue)}
-      addLabel="Add modality"
+    <ChipListField
+      {...props}
+      label={label}
+      placeholder="text, image, audio or video"
       emptyLabel="Not declared: the model reads and writes text."
-      itemLabel="Modality"
-      placeholder="e.g. image"
-      disabled={disabled}
-      readOnly={readOnly}
     />
   )
 }

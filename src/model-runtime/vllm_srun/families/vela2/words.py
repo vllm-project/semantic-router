@@ -6,12 +6,16 @@ its first sub-word token. Decoding labels each word by its most probable label
 above the threshold, votes and fills inside a unit, joins neighbours with the
 same label and trims brackets, quotes and URL tails. Every rule reproduces the
 packages' engine exactly (``vela2_inference.py``), including its float32
-decoding and its character classes.
+decoding and its character classes, except two boundary rules the packages
+get wrong: a span keeps an edge bracket whose partner lies inside it (the
+"(" of "(415) 555-0100"), and its end takes in the combining marks that
+follow it (the U+0301 of a decomposed "José").
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import TYPE_CHECKING, TypedDict
@@ -51,6 +55,19 @@ EDGE = frozenset(
     "[](){}<>\u300c\u300d\u300e\u300f\u3010\u3011\u300a\u300b\u3008\u3009"
     "\"'\u201c\u201d\u2018\u2019\u00ab\u00bb\u2039\u203a"
 )
+# The bracket pairs of ``EDGE``, opening to closing.
+BRACKETS = {
+    "(": ")",
+    "[": "]",
+    "{": "}",
+    "<": ">",
+    "\u300c": "\u300d",
+    "\u300e": "\u300f",
+    "\u3010": "\u3011",
+    "\u300a": "\u300b",
+    "\u3008": "\u3009",
+}
+OPENING = {closing: opening for opening, closing in BRACKETS.items()}
 URL_TRAIL = frozenset(".,;:!?)")
 # The tokenizers join one punctuation mark to the letters after it (",mina" in
 # "Park,mina@example.com"), so the mark's word reads the label of the value
@@ -158,11 +175,41 @@ def without_separators(text: str, start: int, end: int) -> tuple[int, int]:
     return start, end
 
 
+def _partner_inside(text: str, start: int, end: int, at: int) -> bool:
+    """Whether the bracket at ``at`` (``start`` or ``end - 1``) has its partner strictly inside ``[start, end)``."""
+    mark = text[at]
+    if mark in BRACKETS and at == start:
+        partner, step, stop = BRACKETS[mark], 1, end
+    elif mark in OPENING and at == end - 1:
+        partner, step, stop = OPENING[mark], -1, start - 1
+    else:
+        return False
+    depth = 0
+    for index in range(at, stop, step):
+        if text[index] == mark:
+            depth += 1
+        elif text[index] == partner:
+            depth -= 1
+            if depth == 0:
+                return index not in (start, end - 1)
+    return False
+
+
 def trim(text: str, start: int, end: int, *, url_tails: bool = True) -> tuple[int, int]:
-    """Drop surrounding whitespace, brackets and quotes, and (``url_tails``) a URL's trailing punctuation or CJK tail."""
-    while start < end and (text[start].isspace() or text[start] in EDGE):
+    """Drop surrounding whitespace, brackets and quotes, and (``url_tails``) a URL's trailing punctuation or CJK tail.
+
+    An edge bracket whose partner lies inside the span stays: ``(415) 555-0100`` keeps its ``(``, while the pair
+    around ``(tom@example.com)`` goes.
+    """
+    while start < end and (
+        text[start].isspace()
+        or (text[start] in EDGE and not _partner_inside(text, start, end, start))
+    ):
         start += 1
-    while end > start and (text[end - 1].isspace() or text[end - 1] in EDGE):
+    while end > start and (
+        text[end - 1].isspace()
+        or (text[end - 1] in EDGE and not _partner_inside(text, start, end, end - 1))
+    ):
         end -= 1
     if not url_tails or not _URL_START.match(text, start):
         return start, end
@@ -199,7 +246,8 @@ def decode_spans(
     compare). Inside one unit of the text, conflicting labels are resolved by
     summed probability and gaps between labelled words are filled; only units
     that hold a labelled word can change. Consecutive words with the same label
-    form a span, whose probability is the mean over its words.
+    form a span, whose probability is the mean over its words; a trimmed span
+    ends after the combining marks that follow it.
 
     ``dialect`` is the package's unit split and trimming (``VELA2`` here).
     """
@@ -249,6 +297,8 @@ def decode_spans(
         )
         if end <= start:
             continue
+        while end < len(text) and unicodedata.category(text[end]).startswith("M"):
+            end += 1
         spans.append(
             {
                 "start": start,

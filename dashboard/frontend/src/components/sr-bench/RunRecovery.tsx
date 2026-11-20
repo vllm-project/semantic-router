@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
+import { History } from 'lucide-react'
+import { Button, Checkbox, Label } from '../../ui'
 import { benchApi, SrBenchRequestError } from './api'
 import { money, number } from './model'
 import { targetName } from './targetPresentation'
 import type { RecoveryCell, RecoveryPlan, RecoveryRequest, Run } from './types'
-import styles from './SrBench.module.css'
 import BenchSelect from './BenchSelect'
 import BenchPagination from './BenchPagination'
+import { ActionRow, BenchBlock, Disclosure, Notice, TableFrame } from './benchUi'
+import { benchTable, benchText } from './benchStyles'
 import {
   clearRecovery,
   readRecovery,
@@ -121,19 +124,23 @@ export default function RunRecovery({
       if (current()) setPending(false)
     }
   }
+  const allSelected = !!plan && selected.size === plan.eligible_cells.length
   return (
-    <section className={styles.recovery} aria-labelledby="recovery-title">
-      <h3 id="recovery-title">Recover unfinished work</h3>
-      <p>
+    <BenchBlock className="mt-6" aria-labelledby="recovery-title">
+      <h3 id="recovery-title" className={`${benchText.h3} flex items-center gap-2`}>
+        <History aria-hidden="true" className="size-4 text-muted-foreground" />
+        Recover unfinished work
+      </h3>
+      <p className={`${benchText.muted} mt-1 max-w-3xl`}>
         Inspect eligibility, select cases and create a separate child run. The original run and its
         costs remain unchanged; the child reports only its own scope.
       </p>
       {saved.error ? (
-        <p className={styles.error} role="alert">
+        <Notice tone="danger" as="p" role="alert">
           {saved.error}
-        </p>
+        </Notice>
       ) : request ? (
-        <div className={styles.notice}>
+        <Notice tone="warning">
           <strong>Recovery submission needs reconciliation</strong>
           <p>
             The exact request is saved for this account and parent in this tab. Checking it again
@@ -142,13 +149,15 @@ export default function RunRecovery({
           <p>
             {number(request.cells.length)} cases · {request.mode}
           </p>
-          <button disabled={!canRun || pending} onClick={() => void recover()}>
-            {pending ? 'Reconciling…' : 'Check or submit same recovery'}
-          </button>
-        </div>
+          <div>
+            <Button size="sm" disabled={!canRun || pending} onClick={() => void recover()}>
+              {pending ? 'Reconciling…' : 'Check or submit same recovery'}
+            </Button>
+          </div>
+        </Notice>
       ) : (
         <>
-          <div className={styles.formGrid}>
+          <div className="mt-3 grid max-w-md gap-3">
             <BenchSelect
               label="Recovery scope"
               disabled={!canRun || pending}
@@ -165,16 +174,22 @@ export default function RunRecovery({
               ]}
             />
           </div>
-          <p className={styles.muted}>
+          <p className={`${benchText.muted} mt-2 max-w-3xl`}>
             {mode === 'undispatched'
               ? 'Only cases with no dispatched model call are eligible. Completed, previously attempted and claimed cases are excluded.'
               : 'Only failed cases with fully reconciled calls and known spend are eligible. Each selected case incurs a new attempt and new cost; ambiguous calls cannot be retried here.'}
           </p>
-          <button disabled={!canRun || pending} onClick={() => void review()}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            disabled={!canRun || pending}
+            onClick={() => void review()}
+          >
             {pending ? 'Inspecting…' : 'Review recovery plan'}
-          </button>
+          </Button>
           {plan && (
-            <div className={styles.plan}>
+            <Notice tone="success" icon={false} className="mt-4 bg-surface-subtle">
               <h4>
                 {number(plan.counts.eligible)} eligible · {number(plan.counts.excluded)} excluded
               </h4>
@@ -190,25 +205,22 @@ export default function RunRecovery({
               </p>
               {!!plan.eligible_cells.length && (
                 <>
-                  <label className={styles.checkbox}>
-                    <input
-                      type="checkbox"
-                      checked={selected.size === plan.eligible_cells.length}
-                      onChange={(event) =>
+                  <Label className="mt-1 font-normal text-foreground">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={(checked) =>
                         setSelected(
-                          event.target.checked
-                            ? new Set(plan.eligible_cells.map(cellKey))
-                            : new Set(),
+                          checked === true ? new Set(plan.eligible_cells.map(cellKey)) : new Set(),
                         )
                       }
                     />
                     Select all {number(plan.eligible_cells.length)} eligible cases
-                  </label>
-                  <div className={styles.tableScroll}>
-                    <table>
+                  </Label>
+                  <TableFrame className="my-1">
+                    <table className={benchTable}>
                       <thead>
                         <tr>
-                          <th>Select</th>
+                          <th className="w-14">Select</th>
                           <th>Target</th>
                           <th>Case</th>
                         </tr>
@@ -217,14 +229,13 @@ export default function RunRecovery({
                         {plan.eligible_cells.slice(page * 25, page * 25 + 25).map((cell) => (
                           <tr key={cellKey(cell)}>
                             <td>
-                              <input
-                                type="checkbox"
+                              <Checkbox
                                 aria-label={`Recover ${targetName(run.manifest, cell.target_id)} ${cell.case_id}`}
                                 checked={selected.has(cellKey(cell))}
-                                onChange={(event) =>
+                                onCheckedChange={(checked) =>
                                   setSelected((previous) => {
                                     const next = new Set(previous)
-                                    if (event.target.checked) next.add(cellKey(cell))
+                                    if (checked === true) next.add(cellKey(cell))
                                     else next.delete(cellKey(cell))
                                     return next
                                   })
@@ -232,12 +243,12 @@ export default function RunRecovery({
                               />
                             </td>
                             <td>{targetName(run.manifest, cell.target_id)}</td>
-                            <td>{cell.case_id}</td>
+                            <td className="font-mono">{cell.case_id}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </TableFrame>
                   <BenchPagination
                     label="Eligible cases"
                     total={plan.eligible_cells.length}
@@ -246,32 +257,33 @@ export default function RunRecovery({
                     onChange={setPage}
                   />
                   {mode === 'failed' && (
-                    <label className={styles.checkbox}>
-                      <input
-                        type="checkbox"
+                    <Label className="items-start font-normal leading-relaxed text-foreground">
+                      <Checkbox
+                        className="mt-0.5"
                         checked={acknowledged}
-                        onChange={(event) => setAcknowledged(event.target.checked)}
+                        onCheckedChange={(checked) => setAcknowledged(checked === true)}
                       />
                       I acknowledge these are new model attempts with additional cost, recorded
                       separately from the original run.
-                    </label>
+                    </Label>
                   )}
-                  <button
-                    className={styles.primary}
-                    disabled={
-                      !canRun || pending || !selected.size || (mode === 'failed' && !acknowledged)
-                    }
-                    onClick={() => void recover()}
-                  >
-                    Create recovery run ({number(selected.size)} cases)
-                  </button>
+                  <ActionRow>
+                    <Button
+                      size="sm"
+                      disabled={
+                        !canRun || pending || !selected.size || (mode === 'failed' && !acknowledged)
+                      }
+                      onClick={() => void recover()}
+                    >
+                      Create recovery run ({number(selected.size)} cases)
+                    </Button>
+                  </ActionRow>
                 </>
               )}
               {!!plan.excluded.length && (
-                <details>
-                  <summary>Excluded cases and reasons</summary>
-                  <div className={styles.tableScroll}>
-                    <table aria-label="Excluded recovery cases">
+                <Disclosure summary="Excluded cases and reasons" bare className="my-0">
+                  <TableFrame className="my-1">
+                    <table className={benchTable} aria-label="Excluded recovery cases">
                       <thead>
                         <tr>
                           <th>Target</th>
@@ -285,13 +297,13 @@ export default function RunRecovery({
                           .map((cell) => (
                             <tr key={cellKey(cell)}>
                               <td>{targetName(run.manifest, cell.target_id)}</td>
-                              <td>{cell.case_id}</td>
+                              <td className="font-mono">{cell.case_id}</td>
                               <td>{cell.reason}</td>
                             </tr>
                           ))}
                       </tbody>
                     </table>
-                  </div>
+                  </TableFrame>
                   <BenchPagination
                     label="Excluded cases"
                     total={plan.excluded.length}
@@ -299,17 +311,17 @@ export default function RunRecovery({
                     pageSize={25}
                     onChange={setExcludedPage}
                   />
-                </details>
+                </Disclosure>
               )}
-            </div>
+            </Notice>
           )}
         </>
       )}
       {error && (
-        <p className={styles.error} role="alert">
+        <Notice tone="danger" as="p" role="alert">
           {error}
-        </p>
+        </Notice>
       )}
-    </section>
+    </BenchBlock>
   )
 }
