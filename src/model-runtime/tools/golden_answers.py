@@ -7,6 +7,8 @@
         --record vllm_srun/registry/golden_answers_vela1.json
     python3 tools/golden_answers.py --family decision3 --device cpu --dtype bfloat16 \\
         --record vllm_srun/registry/golden_answers_decision3.json
+    VLLM_SRUN_ZENTORCH=1 python3 tools/golden_answers.py --family decision3 \\
+        --device cpu --cpu-bf16 --record vllm_srun/registry/golden_answers_decision3.json
 
 The model is served as ``vllm-srun serve`` serves it (verification,
 pinned kernel choices, ``--dtype``) and answers its family's golden requests
@@ -25,6 +27,13 @@ updated; a hardware entry that answers as its baseline is not kept. A new
 revision discards the old references and starts a new baseline; a new PyTorch
 version starts a new baseline for its device class. Record it on the intended
 baseline device before adding other hardware classes.
+
+``--cpu-bf16`` serves ``auto`` as a CPU class with BF16 references does
+(``dtypes.on_host``), with the approximate CPU kernels the family consents to,
+and records the BF16 reference that turns it on: under the hardware key that
+names those kernels (``cpu:…:amd:zentorch@bfloat16``), or the plain key where
+none run. Answers computed with approximate kernels never replace the generic
+baseline.
 """
 
 from __future__ import annotations
@@ -37,6 +46,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from vllm_srun import dtypes
 from vllm_srun import runtime as serving
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.registry import builtin
@@ -67,6 +77,18 @@ def unreferenced() -> Iterator[None]:
         serving.golden_check = check
 
 
+@contextlib.contextmanager
+def bf16_referenced(enabled: bool) -> Iterator[None]:
+    """``auto`` in BF16 on a native-BF16 CPU class as if its BF16 references were recorded."""
+    referenced = dtypes.referenced
+    if enabled:
+        dtypes.referenced = lambda policy, key: True
+    try:
+        yield
+    finally:
+        dtypes.referenced = referenced
+
+
 def answers(
     args: argparse.Namespace, model: str, revision: str | None
 ) -> dict[str, Any]:
@@ -87,7 +109,7 @@ def answers(
         )
     )
     try:
-        with unreferenced():
+        with unreferenced(), bf16_referenced(getattr(args, "cpu_bf16", False)):
             runtime.load()
         served = runtime.lookup(None)
         assert served.model is not None and served.placement is not None
@@ -112,9 +134,13 @@ def answers(
         info = served.model.info
         # An ``auto`` model in BF16 on a CPU class with BF16 references records at bfloat16.
         dtype = served.golden_dtype or served.dtype
-        goldens = {qualified(accelerator, dtype): values}
         key = served.placement.accelerator.golden_reference(served.placement.device)
+        # Answers from approximate kernels are recorded only under the key naming them.
+        goldens = (
+            {} if served.golden_kernels else {qualified(accelerator, dtype): values}
+        )
         if key is not None:
+            key = dtypes.with_kernels(key, served.golden_kernels)
             goldens[qualified(key, dtype)] = values
         return {
             "model": info.id,
@@ -192,6 +218,11 @@ def main() -> None:
     parser.add_argument("--device", default="cpu")
     parser.add_argument(
         "--dtype", default="auto", help="serve and record at this --dtype"
+    )
+    parser.add_argument(
+        "--cpu-bf16",
+        action="store_true",
+        help="serve auto in BF16 on this native-BF16 CPU class and record its BF16 reference",
     )
     parser.add_argument("--cache-dir")
     parser.add_argument("--base-path")

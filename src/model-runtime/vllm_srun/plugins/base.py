@@ -187,6 +187,15 @@ class DtypePolicy:
     cpu_bf16_references: frozenset[str] = frozenset()
     approximate_accelerators: frozenset[str] | None = None
 
+    def consents_on(self, accelerator: str, cpu: bool) -> bool | frozenset[str]:
+        """The approximate kernels this policy consents to on ``accelerator`` (a CPU's or another device class's)."""
+        if (
+            self.approximate_accelerators is not None
+            and accelerator not in self.approximate_accelerators
+        ):
+            return False
+        return self.approximate_cpu_kernels if cpu else self.approximate_kernels
+
     @property
     def needs_gpu_bf16(self) -> bool:
         """Whether GPU autocast or weight storage requires BF16 support."""
