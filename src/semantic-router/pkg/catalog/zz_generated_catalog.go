@@ -36110,6 +36110,119 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-deep-swe@1.0.0",
+      "metrics": {
+        "resolved": 0.721
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "mini-swe-agent v2.4.6",
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.813
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "terminus v2",
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-terminal-bench-4-0@1.0.0",
+      "metrics": {
+        "resolved": 0.131
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "mini-swe-agent v2.4.6",
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.93
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
+      "benchmark": "matharena/hmmt-feb@2026.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-hmmt-feb-2026@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.958
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
       "benchmark": "matharena/aime@2025.0.0",
       "benchmark_profile": "pass-at-1",
       "evidence": {
@@ -91978,6 +92091,330 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "thinking-machines/inkling-2-small-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.93,
+          "status": "available",
+          "value": 0.93,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [
+        "thinking-machines/inkling-2-small-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.813,
+          "status": "available",
+          "value": 0.813,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 81.3
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [
+        "thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 81.3,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.813,
+          "status": "available",
+          "value": 0.813,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [
+        "thinking-machines/inkling-2-small-gpqa-diamond@1.0.0",
+        "thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "tii/falcon-h1r-7b",
       "provenance": [],
       "reasoning_effort": "default",
@@ -106382,6 +106819,58 @@ const builtInCatalogJSON = `{
         "chat",
         "reasoning",
         "tools",
+        "vision",
+        "long_context"
+      ],
+      "description": "Multimodal mixture-of-experts model with a native NVFP4 checkpoint and an alternative MXFP8 release.",
+      "display_name": "Inkling 2 Small",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/thinkingmachines/Inkling-2-Small",
+        "type": "open_weights"
+      },
+      "family": "inkling",
+      "generation": 2,
+      "id": "thinking-machines/inkling-2-small",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "594B (17B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "TM"
+      },
+      "publisher": "Thinking Machines Lab",
+      "released_at": "2026-11-05",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "moe"
+      ],
+      "verification": {
+        "authority": "Thinking Machines Lab",
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/",
+        "status": "claimed",
+        "verified_at": "2026-11-20"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "coding",
         "long_context"
       ],
@@ -112958,6 +113447,20 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/thinkingmachines/Inkling-Small",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "thinking-machines/inkling-2-small",
+          "id": "thinkingmachines/Inkling-2-Small",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://recipes.vllm.ai/thinkingmachines/Inkling-2-Small",
+            "status": "claimed",
+            "verified_at": "2026-11-20"
           }
         },
         {

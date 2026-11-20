@@ -468,3 +468,91 @@
     verification: imported
     source: https://benchmarks.duellab.org/model-thinkingmachines-inkling-small
     redistributable: true
+- id: thinking-machines/inkling-2-small-deep-swe@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: mini-swe-agent v2.4.6
+  metrics:
+    resolved: 0.721
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: terminus v2
+  metrics:
+    resolved: 0.813
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-terminal-bench-4-0@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: mini-swe-agent v2.4.6
+  metrics:
+    resolved: 0.131
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-gpqa-diamond@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.93
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-hmmt-feb-2026@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: matharena/hmmt-feb@2026.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.958
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
