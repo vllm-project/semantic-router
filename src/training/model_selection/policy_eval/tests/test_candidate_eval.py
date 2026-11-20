@@ -101,6 +101,17 @@ class ChoiceTest(unittest.TestCase):
         # A cent less and the cheapest estimates no longer fit.
         self.assertEqual(choose_global(p, c, 0.99, resolution=50)[1], 1)
 
+    def test_fit_does_not_depend_on_the_resolution(self):
+        # A thousand cheapest estimates of 0.1 sum to slightly more than the
+        # budget of 0.1 per task in floating point. That error must not decide
+        # whether the batch fits, at any resolution.
+        p = np.tile([0.5, 0.9], (1000, 1))
+        c = np.tile([0.1, 0.3], (1000, 1))
+        self.assertGreater(c.min(axis=1).sum(), 0.1 * 1000)
+        for resolution in (50, 4000):
+            pick, infeasible = choose_global(p, c, 0.1, resolution=resolution)
+            self.assertEqual((pick.tolist(), infeasible), ([0] * 1000, 0))
+
     def test_global_takes_the_cheapest_estimate_when_no_assignment_fits(self):
         p = np.array([[0.5, 0.9]] * 3)
         c = np.array([[0.2, 0.5]] * 3)
@@ -123,18 +134,18 @@ class KnapsackTest(unittest.TestCase):
             base = c.min(axis=1)
             unit = budget / resolution
             units = np.ceil(np.round((c - base[:, None]) / unit, 9))
-            capacity = np.floor(np.round((budget * rows - base.sum()) / unit, 9))
+            slack = budget * rows - base.sum()
+            pick = knapsack(p, c, budget, resolution)
+            if slack < 0 and not np.isclose(slack, 0):
+                self.assertIsNone(pick)
+                continue
+            capacity = np.floor(np.round(max(slack, 0) / unit, 9))
             rowsel = np.arange(rows)
             feasible = [
                 (p[rowsel, list(a)].sum(), units[rowsel, list(a)].sum())
                 for a in itertools.product(range(k), repeat=rows)
                 if units[rowsel, list(a)].sum() <= capacity
             ]
-            pick = knapsack(p, c, budget, resolution)
-            if not feasible:
-                self.assertIsNone(pick)
-                self.assertGreater(base.sum(), budget * rows)
-                continue
             best = max(v for v, _ in feasible)
             fewest = min(u for v, u in feasible if np.isclose(v, best))
             self.assertAlmostEqual(p[rowsel, pick].sum(), best)

@@ -72,10 +72,12 @@ except ImportError:  # run as a script from this directory
 
 # Batch size and cost resolution of the global dynamic program. The cost a
 # candidate adds to its task's cheapest estimate is rounded up to units of
-# budget / DP_RESOLUTION, so the rounding can leave up to 1 / DP_RESOLUTION of
-# the budget per task unused, but never makes the cheapest assignment infeasible.
+# budget / DP_RESOLUTION, so rounding can rule out an upgrade that would
+# otherwise fit. Whether the cheapest assignment fits is decided before any
+# rounding, up to a relative tolerance FIT_TOLERANCE for floating-point error.
 DP_BATCH = 1000
 DP_RESOLUTION = 50
+FIT_TOLERANCE = 1e-9
 CALIBRATION_BINS = 10
 TIE = 1e-12
 
@@ -253,27 +255,31 @@ def cross_validated_gain(table, value, folds=5, quantiles=QUANTILES):
 def knapsack(p, c, budget, resolution=DP_RESOLUTION):
     """One candidate per row maximizing total p with total c at most budget per row, or None.
 
-    Every row starts on its cheapest estimate, which is kept exact. What a
-    candidate adds to that is rounded up to units of budget / resolution, and
-    the units must fit in the budget left after the cheapest assignment. So the
-    chosen assignment never exceeds the budget on the estimates, rounding can
-    only leave some of it unused, and None means that the cheapest estimates
-    alone exceed the budget. Among assignments with the same total p, the one
-    with the fewest rounded units wins.
+    Every row starts on its cheapest estimate, which is kept exact. None means
+    that the cheapest estimates alone exceed the budget, which is decided before
+    any rounding, up to a relative FIT_TOLERANCE for floating-point error. What
+    a candidate adds to its row's cheapest estimate is rounded up to units of
+    budget / resolution, and the units must fit in the budget left after the
+    cheapest assignment. So the chosen assignment never exceeds the budget on
+    the estimates, but rounding can rule out an upgrade that would otherwise
+    fit. Among assignments with the same total p, the one with the fewest
+    rounded units wins.
     """
     rows, k = p.shape
     base = c.min(axis=1)
     extra = c - base[:, None]
-    slack = budget * rows - base.sum()
+    total_budget, cheapest = budget * rows, base.sum()
+    slack = total_budget - cheapest
+    if slack < -FIT_TOLERANCE * max(abs(total_budget), abs(cheapest)):
+        return None
+    slack = max(slack, 0.0)
     if budget > 0:
         unit = budget / resolution
         capacity = int(np.floor(np.round(slack / unit, 9)))
         units = np.ceil(np.round(extra / unit, 9))
     else:
-        capacity = 0 if np.round(slack, 12) >= 0 else -1
+        capacity = 0
         units = np.where(extra > 0, 1, 0)
-    if capacity < 0:
-        return None
     units = np.minimum(units, capacity + 1).astype(np.int64)
     # total[u]: the highest total p of the rows so far using exactly u units
     # above their cheapest estimates, for u up to the most reachable so far.
