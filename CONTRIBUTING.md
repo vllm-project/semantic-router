@@ -294,6 +294,24 @@ Summary check shows the effective conditions, including inherited requirements.
   can be normal. Mergify checks each PR on a draft pull request that merges it
   onto current `main`, and that run needs no new `/ci run`.
   Avoid pushing while queued: a push restarts PR Gate, which the queue requires.
+- **Draft CI passed and `PR Gate` is still missing.** Open the queue draft
+  linked in the Mergify status and confirm its `Pull Request` run succeeded.
+  In the repository's **Actions** tab, look for `PR CI Status` runs created
+  around that time. When the resolver log is available, match its `run_id`
+  to the draft's `Pull Request` run. Check whether **Resolve qualification
+  identity** or **Publish PR qualification status** is still queued or
+  pending.
+
+  If Mergify reports **Checks timed out**, keep the original PR and draft
+  links, the draft head SHA, the qualification run and attempt, and the
+  queue deadline. Include any matching publisher runs and their job start
+  times, if available. If publication finished without a Gate, keep the
+  publisher's logs for diagnosis.
+
+  Once Gate publication is making progress again, a maintainer can consider
+  requeueing the original PR. First confirm its current head has a green
+  `PR Gate`, the required approvals still hold, and all review conversations
+  are resolved.
 - **Unresolved review conversation:** every review thread must be resolved,
   including threads marked **Outdated** after a push or branch update. Use
   the **Conversations** menu on **Files changed** to find them. The PR author
