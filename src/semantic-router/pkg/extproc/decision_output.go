@@ -69,7 +69,7 @@ func (r *OpenAIRouter) refuseUncarriableVideoDecision(ctx *RequestContext, decis
 		return nil
 	}
 	return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
-		fmt.Sprintf("the matched route answers with a video job, which the %s API cannot return; call the Videos API", clientAPIName(client)))
+		fmt.Sprintf("the matched route answers with a video job, which the %s API cannot return; call the Videos API", client.APIName()))
 }
 
 // applyVideosEntryDecision admits a Videos API create only to a decision that
@@ -86,7 +86,7 @@ func (r *OpenAIRouter) applyVideosEntryDecision(ctx *RequestContext, decision *c
 	}
 	if supported, ok := r.codecCapabilitiesForFormat(client); !ok || !supported.Supports(llmprotocol.CapabilityVideoGeneration) {
 		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
-			fmt.Sprintf("the Videos API cannot return a video job on the %s protocol", clientAPIName(client)))
+			fmt.Sprintf("the Videos API cannot return a video job on the %s protocol", client.APIName()))
 	}
 	if request.VideoGeneration == nil {
 		request.VideoGeneration = &llmprotocol.VideoGenerationOptions{}
