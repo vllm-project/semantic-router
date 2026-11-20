@@ -101,6 +101,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		releaseInflightAdmission(ctx)
 		r.finishRequestSpend(ctx)
 		releaseStreamedBody(ctx)
+		finishRequestWork(ctx)
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)
 		}
@@ -136,7 +137,19 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	}
 }
 
+func finishRequestWork(ctx *RequestContext) {
+	if ctx != nil && ctx.cancelAbandonedWork != nil {
+		if !ctx.responseComplete {
+			ctx.cancelAbandonedWork()
+		}
+		ctx.cancelAbandonedWork = nil
+	}
+}
+
 func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
+	if errors.Is(err, io.EOF) && ctx.bufferedResponseComplete {
+		ctx.responseComplete = true
+	}
 	if !errors.Is(err, io.EOF) {
 		ctx.TraceReceiveError = err
 	} else if ctx.RequestSpan != nil {
