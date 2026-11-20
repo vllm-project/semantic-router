@@ -1,0 +1,82 @@
+{
+  "cases": [
+    {
+      "name": "parameters_omitted",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "What time is it?",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": {
+            "type": "auto"
+          },
+          "tools": [
+            {
+              "input_schema": {
+                "type": "object"
+              },
+              "name": "get_time",
+              "strict": false
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    },
+    {
+      "name": "parameters_null",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "What time is it?",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": {
+            "type": "auto"
+          },
+          "tools": [
+            {
+              "input_schema": {
+                "type": "object"
+              },
+              "name": "get_time",
+              "strict": false
+            }
+          ]
+        },
+        "diagnostics": [
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
+      }
+    }
+  ]
+}

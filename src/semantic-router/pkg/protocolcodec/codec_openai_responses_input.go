@@ -262,7 +262,7 @@ func decodeResponsesMessageItem(item responsesItemWire, request *llmprotocol.Req
 		return err
 	}
 	if role == llmprotocol.RoleSystem || role == llmprotocol.RoleDeveloper {
-		request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: role, Content: content})
+		request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: role, Content: content, Position: len(request.Messages)})
 	} else {
 		request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: role, Content: content})
 	}
@@ -310,7 +310,7 @@ func decodeResponsesToolResult(item responsesItemWire, request *llmprotocol.Requ
 }
 
 func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
-	content, err := decodeResponsesReasoning(item.Summary, policy, false)
+	summary, err := decodeResponsesReasoning(item.Summary, policy, false)
 	if err != nil {
 		return err
 	}
@@ -318,12 +318,26 @@ func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.R
 	if err != nil {
 		return err
 	}
-	content = append(content, reasoning...)
-	if len(content) == 0 && len(item.EncryptedContent) > 0 {
-		// The provider blob was the item's only payload and the Router does not
-		// relay it, so the turn carries nothing a target can render. decode
-		// reported the omission; leave the empty turn out instead of rejecting
-		// the request the include path accepted.
+	var content []llmprotocol.Content
+	for _, part := range append(summary, reasoning...) {
+		if part.Text != "" {
+			content = append(content, part)
+		}
+	}
+	encrypted, err := decodeResponsesEncryptedReasoning(item, policy, false)
+	if err != nil {
+		return err
+	}
+	if encrypted != nil {
+		content = append(content, *encrypted)
+	} else if len(item.EncryptedContent) > 0 {
+		// Null and empty ciphertext carry no state and are omitted on re-encoding.
+		request.Generation++
+	}
+	// Stored ID-only references have no canonical provider scope yet.
+	if len(content) == 0 && (len(item.EncryptedContent) > 0 || len(reasoning) > 0 || item.ID != "") {
+		// Retire the source envelope so it cannot resurrect the omitted item.
+		request.Generation++
 		return nil
 	}
 	request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleAssistant, Content: content})
@@ -717,7 +731,7 @@ func decodeResponsesObjectToolChoice(raw json.RawMessage, policy llmprotocol.Pol
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_tool_choice",
-			"Responses tool choice cannot be represented by the neutral protocol",
+			"the Router does not support this Responses tool choice",
 			nil,
 		)
 	}

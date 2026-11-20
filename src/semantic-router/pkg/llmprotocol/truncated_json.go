@@ -2,6 +2,7 @@ package llmprotocol
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -36,6 +37,38 @@ func TruncatedJSONObject(arguments string, maximumDepth int) (string, bool) {
 func truncatedArguments(arguments string, maximumDepth int) bool {
 	_, truncated := TruncatedJSONObject(arguments, maximumDepth)
 	return truncated
+}
+
+// CloseTruncatedHistoryCalls gives each function call in the request's history
+// that an output limit cut the members TruncatedJSONObject reads, and returns
+// how many calls it closed. An output limit ends a reply, so only the last
+// content of an assistant turn can be such a call: the last block of an
+// assistant message that another role, or the end of the history, follows.
+// Malformed arguments anywhere else stay as they are for ValidateRequest.
+func CloseTruncatedHistoryCalls(request *Request, maximumDepth int) int {
+	closed := 0
+	for index := range request.Messages {
+		message := &request.Messages[index]
+		if message.Role != RoleAssistant || len(message.Content) == 0 ||
+			index+1 < len(request.Messages) && request.Messages[index+1].Role == RoleAssistant {
+			continue
+		}
+		last := len(message.Content) - 1
+		call := message.Content[last].ToolCall
+		if message.Content[last].Kind != ContentToolCall || call == nil || call.Kind != "" {
+			continue
+		}
+		members, cut := TruncatedJSONObject(call.Arguments, maximumDepth)
+		if !cut {
+			continue
+		}
+		repaired := *call
+		repaired.Arguments = members
+		message.Content = slices.Clone(message.Content)
+		message.Content[last].ToolCall = &repaired
+		closed++
+	}
+	return closed
 }
 
 const jsonWhitespace = " \t\r\n"

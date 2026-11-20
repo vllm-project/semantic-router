@@ -21,7 +21,11 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ....accel.kernels import KernelSet
+from ....accel.kernels import (
+    KernelSet,
+    causal_conv1d_update_ref,
+    recurrent_gated_delta_rule_ref,
+)
 from .branch import (
     LAYOUTS,
     Branches,
@@ -136,6 +140,95 @@ class GatedDeltaNet(nn.Module):
         out: torch.Tensor = self.out_proj(core)
         return out
 
+    def forward_cached(
+        self,
+        hidden_states: torch.Tensor,
+        mask: torch.Tensor | None,
+        kernels: KernelSet,
+        past: tuple[torch.Tensor, torch.Tensor] | None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        """``forward`` plus the conv and recurrent state a later token continues from.
+
+        ``past`` is that state. A first call (``past`` None) runs the chunked rule and keeps the
+        last ``conv_kernel_size`` pre-convolution frames, left-padded with zeros when the prompt
+        is shorter. A later call is one token: ``causal_conv1d_update`` and the recurrent rule.
+        """
+        if mask is not None:
+            dtype = hidden_states.dtype
+            hidden_states = (hidden_states * mask[:, :, None]).to(dtype)
+        batch_size, seq_len, _ = hidden_states.shape
+        mixed_qkv = self.in_proj_qkv(hidden_states).transpose(1, 2)
+        z = self.in_proj_z(hidden_states).reshape(
+            batch_size, seq_len, -1, self.head_v_dim
+        )
+        b = self.in_proj_b(hidden_states)
+        a = self.in_proj_a(hidden_states)
+        if past is None:
+            conv_state = conv_cache(mixed_qkv, self.conv_kernel_size)
+            mixed_qkv = kernels("causal_conv1d")(
+                mixed_qkv,
+                self.conv1d.weight.squeeze(1),
+                self.conv1d.bias,
+                activation=self.activation,
+            )
+        else:
+            mixed_qkv, conv_state = causal_conv1d_update_ref(
+                mixed_qkv,
+                past[0],
+                self.conv1d.weight.squeeze(1),
+                self.conv1d.bias,
+                self.activation,
+            )
+        mixed_qkv = mixed_qkv.transpose(1, 2)
+        query, key, value = torch.split(
+            mixed_qkv, [self.key_dim, self.key_dim, self.value_dim], dim=-1
+        )
+        query = query.reshape(batch_size, seq_len, -1, self.head_k_dim)
+        key = key.reshape(batch_size, seq_len, -1, self.head_k_dim)
+        value = value.reshape(batch_size, seq_len, -1, self.head_v_dim)
+        beta = b.sigmoid()
+        g = -self.A_log.float().exp() * F.softplus(a.float() + self.dt_bias)
+        if self.num_v_heads // self.num_k_heads > 1:
+            query = query.repeat_interleave(self.num_v_heads // self.num_k_heads, dim=2)
+            key = key.repeat_interleave(self.num_v_heads // self.num_k_heads, dim=2)
+        if past is None:
+            core, recurrent = kernels("chunk_gated_delta_rule")(
+                query,
+                key,
+                value,
+                g=g,
+                beta=beta,
+                initial_state=None,
+                output_final_state=True,
+                use_qk_l2norm_in_kernel=True,
+            )
+        else:
+            core, recurrent = recurrent_gated_delta_rule_ref(
+                query,
+                key,
+                value,
+                g,
+                beta,
+                initial_state=past[1],
+                output_final_state=True,
+                use_qk_l2norm_in_kernel=True,
+            )
+        if recurrent is None:
+            raise RuntimeError("a cached gated-delta step produced no recurrent state")
+        core = core.reshape(-1, self.head_v_dim)
+        z = z.reshape(-1, self.head_v_dim)
+        core = self.norm(core, z)
+        core = core.reshape(batch_size, seq_len, -1)
+        out: torch.Tensor = self.out_proj(core)
+        return out, (conv_state, recurrent)
+
+
+def conv_cache(mixed_qkv: torch.Tensor, kernel: int) -> torch.Tensor:
+    """The last ``kernel`` frames before the convolution, left-padded with zeros if shorter."""
+    if mixed_qkv.shape[-1] >= kernel:
+        return mixed_qkv[:, :, -kernel:].contiguous()
+    return F.pad(mixed_qkv, (kernel - mixed_qkv.shape[-1], 0))
+
 
 class GatedAttention(nn.Module):
     def __init__(self, config: dict[str, Any]):
@@ -190,6 +283,43 @@ class GatedAttention(nn.Module):
         out: torch.Tensor = self.o_proj(output)
         return out
 
+    def forward_cached(
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        mask: torch.Tensor | None,
+        kernels: KernelSet,
+        past: tuple[torch.Tensor, torch.Tensor] | None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        """``forward``, keeping the keys and values (already rotary-applied) a later token attends to.
+
+        ``past`` is those cached keys and values. A later call concatenates the new ones after them
+        and runs SDPA with no mask: one query is not causal.
+        """
+        input_shape = hidden_states.shape[:-1]
+        hidden_shape = (*input_shape, -1, self.head_dim)
+        query, gate = torch.chunk(
+            self.q_proj(hidden_states).view(*input_shape, -1, self.head_dim * 2),
+            2,
+            dim=-1,
+        )
+        gate = gate.reshape(*input_shape, -1)
+        query = self.q_norm(query.view(hidden_shape)).transpose(1, 2)
+        key = self.k_norm(self.k_proj(hidden_states).view(hidden_shape)).transpose(1, 2)
+        value = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        cos, sin = rotary
+        query, key = apply_partial_rotary(query, key, cos, sin)
+        if past is not None:
+            key = torch.cat([past[0], key], dim=2)
+            value = torch.cat([past[1], value], dim=2)
+        output = attention(
+            kernels, query, key, value, mask, groups=self.groups, scaling=self.scaling
+        )
+        output = output.reshape(*input_shape, -1).contiguous()
+        output = output * torch.sigmoid(gate)
+        out: torch.Tensor = self.o_proj(output)
+        return out, (key, value)
+
 
 class Qwen3_5Layer(nn.Module):
     def __init__(self, config: dict[str, Any], kind: str):
@@ -232,6 +362,32 @@ class Qwen3_5Layer(nn.Module):
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
         return residual + hidden_states
+
+    def forward_cached(
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        full_mask: torch.Tensor | None,
+        linear_mask: torch.Tensor | None,
+        kernels: KernelSet,
+        past: tuple[torch.Tensor, torch.Tensor] | None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        """The layer plus the state (conv and recurrent, or keys and values) the next token needs."""
+        residual = hidden_states
+        hidden_states = self.input_layernorm(hidden_states)
+        if self.kind == "linear_attention":
+            hidden_states, state = self.linear_attn.forward_cached(
+                hidden_states, linear_mask, kernels, past
+            )
+        else:
+            hidden_states, state = self.self_attn.forward_cached(
+                hidden_states, rotary, full_mask, kernels, past
+            )
+        hidden_states = residual + hidden_states
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        return residual + hidden_states, state
 
     def forward_forest(
         self,

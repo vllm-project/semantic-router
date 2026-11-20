@@ -16,10 +16,13 @@ where each "token" is a word of the target text:
 4. contiguous words of one label form a span, trimmed of whitespace and of
    enclosing bracket and quote characters.
 
-These are the Vela 2.0 decoder's rules (``vela2.words.decode_spans``); only
-the unit class differs, and URL tails are not trimmed.
+These are the Vela 2.0 decoder's rules (``vela2.words.decode_spans``), with
+its two corrections (a span keeps an edge bracket whose partner lies inside
+it, and ends after the combining marks that follow it); only the unit class
+differs, and URL tails are not trimmed.
 
-Evidence questions decode by sentence or paragraph (``evidence_spans``).
+Evidence questions decode by sentence or paragraph (``evidence_spans``), each
+span trimmed of the white space at its edges.
 """
 
 from __future__ import annotations
@@ -113,7 +116,8 @@ def evidence_spans(
 ) -> list[dict[str, Any]]:
     """Evidence spans of the first label: ``para`` keeps paragraphs, ``sentfill`` sentences (a paragraph
     when at least half of its sentences pass), ``sent`` sentences, anything else the word decoder; then
-    spans at most ``gap`` characters apart merge and spans shorter than ``min_chars`` drop.
+    spans at most ``gap`` characters apart merge, spans shorter than ``min_chars`` drop, and the rest lose
+    the white space at their edges (a sentence starts after the space that follows the one before it).
     """
     first = probabilities[:, 0]
     kind = decoding["name"]
@@ -153,8 +157,15 @@ def evidence_spans(
             merged[-1][1] = max(merged[-1][1], span[1])
         else:
             merged.append(list(span))
-    return [
-        {"start": a, "end": b, "label": names[0]}
-        for a, b in merged
-        if b - a >= decoding.get("min_chars", 0)
+    kept = [
+        span for span in merged if span[1] - span[0] >= decoding.get("min_chars", 0)
     ]
+    out = []
+    for a, b in kept:
+        while a < b and text[a].isspace():
+            a += 1
+        while b > a and text[b - 1].isspace():
+            b -= 1
+        if b > a:
+            out.append({"start": a, "end": b, "label": names[0]})
+    return out

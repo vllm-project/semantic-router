@@ -990,6 +990,54 @@ def test_listener_apis_are_named_by_the_api_registry():
             Listener(name="public", port=8000, **removed)
 
 
+def test_listener_llm_apis_route_unserved_models():
+    listener = Listener(
+        name="public",
+        port=8000,
+        apis={
+            "chat_completions": {
+                "models": ["vllm-sr/auto"],
+                "unserved_models": {"policy": "route", "route_to": "vllm-sr/auto"},
+            },
+            "messages": {"unserved_models": {"policy": "reject"}},
+        },
+    )
+    assert listener.apis["chat_completions"].unserved_models.route_to == "vllm-sr/auto"
+    for apis, message in (
+        (
+            {"chat_completions": {"unserved_models": {"policy": "route"}}},
+            "route_to is required with policy route",
+        ),
+        (
+            {
+                "chat_completions": {
+                    "unserved_models": {"policy": "reject", "route_to": "vllm-sr/auto"}
+                }
+            },
+            "route_to goes with policy route only",
+        ),
+        (
+            {
+                "chat_completions": {
+                    "models": ["vllm-sr/auto"],
+                    "unserved_models": {"policy": "route", "route_to": "other"},
+                }
+            },
+            "is not one of the API's models",
+        ),
+        (
+            {"images": {"unserved_models": {"policy": "route", "route_to": "m"}}},
+            "takes no unserved_models",
+        ),
+        (
+            {"chat_completions": {"unserved_models": {"policy": "forward"}}},
+            "policy",
+        ),
+    ):
+        with pytest.raises(PydanticValidationError, match=message):
+            Listener(name="public", port=8000, apis=apis)
+
+
 def test_listener_names_are_unique():
     listeners = [
         Listener(name="http", address="0.0.0.0", port=8000),
@@ -1001,3 +1049,61 @@ def test_listener_names_are_unique():
         UserConfig(version="v0.5", listeners=listeners)
     listeners[1].name = "http-8001"
     assert len(UserConfig(version="v0.5", listeners=listeners).listeners) == 2
+
+
+DELEGATE_KEYS = ["review_model", "memory_model"]
+
+
+@pytest.mark.parametrize("key", DELEGATE_KEYS)
+@pytest.mark.parametrize(
+    "target, message",
+    [
+        (None, None),
+        ("amd/rocm-v1-private", None),
+        ("missing", "unknown entrypoint model"),
+        ("model-a", "unknown entrypoint model"),
+        ("vllm-sr/auto", "own model name"),
+    ],
+)
+def test_entrypoint_delegate_model_contract(key, target, message):
+    config = recipe_config()
+    setattr(config.entrypoints[1], key, target)
+    errors = validate_user_config(config, log_summary=False)
+    found = [error for error in errors if error.field == f"entrypoints[1].{key}"]
+    if message:
+        assert any(message in error.message for error in found)
+    else:
+        assert not found
+        assert config.model_dump(exclude_none=True)["entrypoints"][1].get(key) == target
+
+
+@pytest.mark.parametrize("key", DELEGATE_KEYS)
+@pytest.mark.parametrize("back", DELEGATE_KEYS)
+def test_entrypoint_delegate_model_rejects_chains_and_cycles(key, back):
+    config = recipe_config()
+    setattr(config.entrypoints[1], key, "amd/rocm-v1-private")
+    setattr(config.entrypoints[0], back, "vllm-sr/auto")
+    errors = validate_user_config(config, log_summary=False)
+    assert any(
+        error.field == f"entrypoints[1].{key}"
+        and "must not have a review_model or memory_model" in error.message
+        for error in errors
+    )
+
+
+def test_entrypoint_takes_reviews_and_memories_to_one_target():
+    config = recipe_config()
+    config.entrypoints[1].review_model = "amd/rocm-v1-private"
+    config.entrypoints[1].memory_model = "amd/rocm-v1-private"
+    errors = validate_user_config(config, log_summary=False)
+    assert not [e for e in errors if (e.field or "").startswith("entrypoints[1].")]
+
+
+@pytest.mark.parametrize("key", DELEGATE_KEYS)
+def test_entrypoint_delegate_model_is_normalized(key):
+    entry = Entrypoint(model_names=["main"], recipe="default", **{key: " review "})
+    assert getattr(entry, key) == "review"
+    none = Entrypoint(model_names=["main"], recipe="default", **{key: None})
+    assert getattr(none, key) is None
+    with pytest.raises(PydanticValidationError, match=key):
+        Entrypoint(model_names=["main"], recipe="default", **{key: "  "})

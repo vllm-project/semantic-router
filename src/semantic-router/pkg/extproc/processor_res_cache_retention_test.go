@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 )
 
 func retBool(b bool) *bool { return &b }
@@ -95,7 +96,21 @@ func TestApplyDecisionRetentionNoMatch(t *testing.T) {
 	}
 }
 
-func TestApplyEmittedRetentionNilInputs(t *testing.T) {
+func TestApplyDecisionRetentionRecordsUnsupportedBackendOutcome(t *testing.T) {
+	decision := &config.Decision{Retention: &config.DecisionRetention{Drop: boolPtr(true)}}
+	ctx := &RequestContext{}
+	if got := applyDecisionRetention(decision, ctx); got == nil {
+		t.Fatal("expected retention directive")
+	}
+	if ctx.RetentionOutcome == nil || ctx.RetentionOutcome.Status != retention.StatusUnsupported {
+		t.Fatalf("retention outcome = %+v, want unsupported", ctx.RetentionOutcome)
+	}
+	if ctx.RetentionOutcome.Acknowledged != nil || ctx.RetentionOutcome.Observed != nil {
+		t.Fatalf("unsupported outcome fabricated lifecycle stages: %+v", ctx.RetentionOutcome)
+	}
+}
+
+func TestApplyDecisionRetentionNilInputs(t *testing.T) {
 	if got := applyDecisionRetention(nil, &RequestContext{}); got != nil {
 		t.Fatalf("nil decision must yield nil")
 	}

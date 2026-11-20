@@ -56,6 +56,9 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}
 	observeStreamedBodyArrival(ctx)
 	populatePinnedSessionFromHeaders(ctx)
+	if refusal := r.refuseExhaustedSpend(ctx); refusal != nil {
+		return requestDecisionState{}, r.respondBudgetRefused(ctx, "", refusal)
+	}
 	// Keep the general snapshot payload-free, but attach tool-result text at the
 	// signal-history boundary so opt-in PII rules can inspect it. This is the
 	// only pre-routing path for normal request-body processing.
@@ -112,12 +115,11 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	ctx.PluginBackendModel = selectedModel
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
-		r.updateRouterReplayStatus(ctx, 200, false)
-		r.attachRouterReplayResponse(
-			ctx,
-			resp.GetImmediateResponse().GetBody(),
-			true,
-		)
+		// A fast response that could not be encoded is an error, which ends
+		// the record when requestBodyReply sends it.
+		status := int(resp.GetImmediateResponse().GetStatus().GetCode())
+		r.updateRouterReplayStatus(ctx, status, false)
+		r.attachRouterReplayResponse(ctx, resp.GetImmediateResponse().GetBody(), status < http.StatusBadRequest)
 		return requestDecisionState{}, resp
 	}
 	metrics.RecordModelRequest(selectedModel)
@@ -181,6 +183,19 @@ func (r *OpenAIRouter) respondRoutingRejected(
 		resp = r.routingFailureResponse(ctx, failure)
 		logRoutingFailure(ctx, terminalReason, failure.code, routingErr)
 	}
+	return r.recordRejection(ctx, originalModel, "", status, resp, terminalReason)
+}
+
+// recordRejection records a request the Router answered itself with an
+// error, before any provider was called, as failed with terminalReason.
+func (r *OpenAIRouter) recordRejection(
+	ctx *RequestContext,
+	originalModel string,
+	selectedModel string,
+	status int,
+	resp *ext_proc.ProcessingResponse,
+	terminalReason string,
+) *ext_proc.ProcessingResponse {
 	// Retain exactly the client-visible error in Replay, including streams
 	// rejected before the provider has started an SSE response.
 	resp = r.encodeImmediateResponseForClient(resp, ctx)
@@ -196,7 +211,7 @@ func (r *OpenAIRouter) respondRoutingRejected(
 	if ctx.VSRSelectedDecision != nil {
 		decisionName = ctx.VSRSelectedDecision.Name
 	}
-	r.startRouterReplay(ctx, originalModel, "", decisionName)
+	r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 	r.updateRouterReplayStatus(ctx, status, false)
 	if immediate := resp.GetImmediateResponse(); immediate != nil {
 		r.attachRouterReplayResponse(ctx, immediate.Body, false)

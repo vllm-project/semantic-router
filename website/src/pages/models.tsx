@@ -5,7 +5,6 @@ import Layout from '@theme/Layout'
 import BrowseLayout from '@site/src/components/site/BrowseLayout'
 
 import catalogDocument from '../../static/model-catalog/catalog.json'
-import { ModelHubArena } from '../components/model-hub/ModelHubArena'
 import { ModelHubDirectory } from '../components/model-hub/ModelHubDirectory'
 import { ModelHubDetail } from '../components/model-hub/ModelHubDetail'
 import { ModelHubProviders } from '../components/model-hub/ModelHubProviders'
@@ -32,7 +31,6 @@ import styles from './models.module.css'
 const catalog = catalogDocument as unknown as CatalogSnapshot
 const MODEL_PAGE_SIZE = 10
 const MODEL_HUB_SECTIONS = [
-  { key: 'arena', label: 'Arena' },
   { key: 'models', label: 'Models' },
   { key: 'providers', label: 'Providers' },
 ] as const
@@ -44,7 +42,7 @@ type UpdateModelHubUrlState = (
 
 function modelHubActiveSection(hash: string): string {
   const id = hash.replace('#', '')
-  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'arena'
+  return MODEL_HUB_SECTIONS.some(section => section.key === id) ? id : 'models'
 }
 
 const supportedLifecycle = (
@@ -277,33 +275,6 @@ export default function ModelsPage() {
             </dl>
           )}
         >
-          <section className={styles.section} aria-labelledby="arena">
-            <header className={styles.sectionHeading}>
-              <h2 id="arena">Arena</h2>
-              <span>One index · same rules for single and virtual models</span>
-            </header>
-            <ModelHubArena
-              catalog={catalog}
-              scope={urlState.arenaScope}
-              setScope={arenaScope => updateUrlState(current => ({ ...current, arenaScope }))}
-              layer={urlState.arenaLayer}
-              setLayer={arenaLayer => updateUrlState(current => ({ ...current, arenaLayer }))}
-              capability={urlState.arenaCapability}
-              setCapability={arenaCapability => updateUrlState(current => ({
-                ...current,
-                arenaCapability,
-                arenaLayer: 'capabilities',
-              }))}
-              benchmark={urlState.arenaBenchmark}
-              setBenchmark={arenaBenchmark => updateUrlState(current => ({
-                ...current,
-                arenaBenchmark,
-                arenaLayer: 'benchmarks',
-              }))}
-              selectModel={selectModel}
-            />
-          </section>
-
           <section className={styles.section} aria-labelledby="models">
             <header className={styles.sectionHeading}>
               <h2 id="models">Models</h2>

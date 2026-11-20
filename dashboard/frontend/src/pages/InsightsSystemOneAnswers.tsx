@@ -1,6 +1,6 @@
 import type { InsightsRecord } from './insightsPageTypes'
 import { type SystemOneAnswer, systemOneAnswers } from './insightsSystemOneAnswers'
-import styles from './InsightsRoutingEvidence.module.css'
+import { PILL } from './insightsEvidenceStyles'
 
 const words = (name: string) => name.replace(/[_-]+/g, ' ')
 const percent = (probability: number) => `${Math.round(probability * 100)}%`
@@ -9,11 +9,16 @@ const percent = (probability: number) => `${Math.round(probability * 100)}%`
 // one probability's share; `lit` is the part that is the answer.
 function Bar({ parts, lit, label }: { parts: number[]; lit: number; label: string }) {
   return (
-    <span className={styles.answerBar} role="img" aria-label={label} title={label}>
+    <span
+      className="flex h-1.5 w-full gap-px overflow-hidden rounded-full bg-muted"
+      role="img"
+      aria-label={label}
+      title={label}
+    >
       {parts.map((part, index) => (
         <span
           key={index}
-          className={index === lit ? styles.answerTop : undefined}
+          className={index === lit ? 'bg-chart-2' : 'bg-chart-8/35'}
           style={{ flex: `0 0 ${part * 100}%` }}
         />
       ))}
@@ -55,10 +60,12 @@ function Row({ answer }: { answer: SystemOneAnswer }) {
     )
   }
   return (
-    <li className={styles.answer}>
-      <span className={styles.answerQuestion}>{words(answer.question)}</span>
-      {bar}
-      <span className={styles.answerValue}>{value}</span>
+    <li className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-3 py-1 text-[13px]">
+      <span className="truncate capitalize text-muted-foreground">{words(answer.question)}</span>
+      {bar ?? <span />}
+      <span className="font-mono text-xs tabular [&_strong]:font-semibold [&_strong]:text-foreground">
+        {value}
+      </span>
     </li>
   )
 }
@@ -69,11 +76,11 @@ export default function InsightsSystemOneAnswers({ record }: { record: InsightsR
   const answers = systemOneAnswers(record.signal_values, record.signal_confidences)
   if (answers.length === 0) return null
   return (
-    <section className={styles.metadataGroup} aria-label="System One answers">
-      <h3>
-        System One answers <span className={styles.count}>{answers.length}</span>
+    <section className="flex flex-col gap-2" aria-label="System One answers">
+      <h3 className="flex items-center gap-2 text-[13px] font-semibold">
+        System One answers <span className={PILL}>{answers.length}</span>
       </h3>
-      <ul className={styles.answers}>
+      <ul className="flex flex-col">
         {answers.map((answer) => (
           <Row key={answer.question} answer={answer} />
         ))}

@@ -286,6 +286,10 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
+	if rejectKeyReferenceRedirect(w, r, existingData, yamlBytes) {
+		return
+	}
+
 	warnings, err := validateMergedDeploy(yamlBytes)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -300,7 +304,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+	if _, err = checkConfigMapMutationFresh(configPath); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -325,10 +329,12 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
+	yamlBytes, keptKeys, err := persistConfig(configPath, yamlBytes)
+	if err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
+	warnings = append(warnings, keptKeys...)
 	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 		return
 	}
@@ -632,7 +638,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+	if _, err = checkConfigMapMutationFresh(configPath); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -654,7 +660,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if err := writeConfigAtomically(configPath, backupData); err != nil {
+	if backupData, _, err = persistConfig(configPath, backupData); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}

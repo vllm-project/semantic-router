@@ -94,7 +94,7 @@ func (f *sessionFallback) Next(callCtx context.Context, outcome routing.Outcome)
 			if record.FinalStatus == "" {
 				record.FinalStatus = fallbackHaltStatus(err)
 			}
-			return f.refusal(f.endAfter(failed, outcome))
+			return f.refusal(failed, outcome)
 		}
 	}
 }
@@ -119,13 +119,15 @@ func (f *sessionFallback) endAfter(failed *fallbackCandidate, outcome routing.Ou
 
 // refusal answers a chain that ended at a candidate refused for want of the
 // request's delegated credential with the request's 401, as the
-// response-phase fallback answers it; any other end keeps step.
-func (f *sessionFallback) refusal(step routing.FallbackStep) (routing.FallbackStep, error) {
+// response-phase fallback answers it; any other halt ends after the failed
+// call.
+func (f *sessionFallback) refusal(failed *fallbackCandidate, outcome routing.Outcome) (routing.FallbackStep, error) {
 	r, ctx := f.session.router, f.session.ctx
-	refused := r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
+	refused := r.fallbackCredentialRefusal(ctx)
 	if refused == nil {
-		return step, nil
+		return f.endAfter(failed, outcome), nil
 	}
+	step := f.end()
 	appendConfigVersionToImmediateResponse(refused, ctx)
 	appendRoutedResponseHeaders(refused, ctx)
 	effect, err := routingEffect(refused)
@@ -309,6 +311,9 @@ func (f *sessionFallback) succeeded(status int) {
 		ctx.InflightToken = 0
 	}
 	ctx.SemanticRequest = candidate.request
+	// A candidate's request carries its output format: only the primary
+	// dispatch held it back.
+	ctx.structuredOutputPass = nil
 	ctx.TargetFormat = candidate.dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(candidate.dispatch.profile)
 	ctx.RequestModel = candidate.model

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+import { Check, Copy } from 'lucide-react'
 import styles from './MarkdownRenderer.module.css'
 import type { Components } from 'react-markdown'
 
@@ -43,21 +44,13 @@ const CopyButton = ({ text }: { text: string }) => {
 
   return (
     <button
+      type="button"
       className={styles.copyButton}
       onClick={handleCopy}
       title={copied ? 'Copied!' : 'Copy code'}
       aria-label={copied ? 'Copied!' : 'Copy code'}
     >
-      {copied ? (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <rect x="9" y="9" width="13" height="13" rx="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
-      )}
+      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
     </button>
   )
 }

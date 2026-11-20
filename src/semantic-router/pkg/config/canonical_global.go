@@ -64,14 +64,16 @@ type CanonicalStreamedBody struct {
 
 // CanonicalServiceGlobal groups shared runtime services exposed by the router.
 type CanonicalServiceGlobal struct {
-	API           APIConfig           `yaml:"api"`
-	ResponseAPI   ResponseAPIConfig   `yaml:"response_api"`
-	Observability ObservabilityConfig `yaml:"observability"`
-	Authz         AuthzConfig         `yaml:"authz"`
-	RateLimit     RateLimitConfig     `yaml:"ratelimit"`
-	ManagementAPI ManagementAPIConfig `yaml:"management_api"`
-	RouterReplay  RouterReplayConfig  `yaml:"router_replay"`
-	StartupStatus StartupStatusConfig `yaml:"startup_status"`
+	API             APIConfig             `yaml:"api"`
+	ResponseAPI     ResponseAPIConfig     `yaml:"response_api"`
+	Observability   ObservabilityConfig   `yaml:"observability"`
+	MaskingIdentity MaskingIdentityConfig `yaml:"masking_identity,omitempty"`
+	Authz           AuthzConfig           `yaml:"authz"`
+	RateLimit       RateLimitConfig       `yaml:"ratelimit"`
+	Budgets         BudgetsConfig         `yaml:"budgets,omitempty"`
+	ManagementAPI   ManagementAPIConfig   `yaml:"management_api"`
+	RouterReplay    RouterReplayConfig    `yaml:"router_replay"`
+	StartupStatus   StartupStatusConfig   `yaml:"startup_status"`
 }
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
@@ -246,10 +248,12 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
 	cfg.API = services.API
-	cfg.ResponseAPI = services.ResponseAPI
+	cfg.ResponseAPI = services.ResponseAPI.withDefaultStoreBackend()
 	cfg.Observability = services.Observability
+	cfg.MaskingIdentity = services.MaskingIdentity
 	cfg.Authz = services.Authz
 	cfg.RateLimit = services.RateLimit
+	cfg.Budgets = services.Budgets
 	cfg.ManagementAPI = services.ManagementAPI
 	cfg.RouterReplay = services.RouterReplay
 	cfg.StartupStatus = services.StartupStatus
