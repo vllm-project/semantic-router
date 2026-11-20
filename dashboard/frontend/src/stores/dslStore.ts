@@ -50,6 +50,7 @@ let compileRequestId = 0
 let analysisRequestId = 0
 let importRequestId = 0
 let initRequestId = 0
+let deployPreviewRequestId = 0
 let editorRequests = new AbortController()
 
 // ---------- Store ----------
@@ -551,7 +552,11 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       deployPreviewError: null,
     })
 
-    // Fetch preview asynchronously
+    // Fetch preview asynchronously. The request id drops responses from
+    // previews that were cancelled or superseded by a later draft, so a stale
+    // response cannot fill the dialog with a diff the operator never sees
+    // while Deploy submits the current draft.
+    const previewId = ++deployPreviewRequestId
     fetch('/api/router/config/deploy/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -565,6 +570,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         return resp.json()
       })
       .then((data: { current: string; preview: string }) => {
+        if (previewId !== deployPreviewRequestId) return
         set({
           deployPreviewCurrent: data.current,
           deployPreviewMerged: data.preview,
@@ -572,6 +578,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         })
       })
       .catch((err) => {
+        if (previewId !== deployPreviewRequestId) return
         set({
           deployPreviewLoading: false,
           deployPreviewError: err instanceof Error ? err.message : String(err),
@@ -708,6 +715,9 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   dismissDeploy() {
+    // Cancelling the dialog also cancels its in-flight preview: a response
+    // that lands after this must not repopulate the deploy state.
+    deployPreviewRequestId++
     set({
       showDeployConfirm: false,
       deployResult: null,
