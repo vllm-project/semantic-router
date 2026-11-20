@@ -518,19 +518,21 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
   async requestDeploy() {
     const { yamlOutput, dslSource, compilerReady, dirty } = get()
-    const baseYaml = deployBaseYaml(get())
     if (!compilerReady || !dslSource.trim()) return
 
     const revision = sourceRevision
+    const previewId = ++deployPreviewRequestId
     // Re-compile if DSL was modified since last compile, or never compiled
     if (!yamlOutput || dirty) {
+      set({ showDeployConfirm: false })
       await get().compile()
     }
 
-    if (revision !== sourceRevision) return
+    if (previewId !== deployPreviewRequestId || revision !== sourceRevision) return
 
     // Check for compile errors
     const { diagnostics: diags, yamlOutput: yaml, compileError } = get()
+    const baseYaml = deployBaseYaml(get())
     const hasErrors = diags.some((d) => d.level === 'error')
     if (compileError || hasErrors || !yaml) {
       set({
@@ -553,11 +555,6 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       deployPreviewError: null,
     })
 
-    // Fetch preview asynchronously. The request id drops responses from
-    // previews that were cancelled or superseded by a later draft, so a stale
-    // response cannot fill the dialog with a diff the operator never sees
-    // while Deploy submits the current draft.
-    const previewId = ++deployPreviewRequestId
     fetch('/api/router/config/deploy/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -588,9 +585,9 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   async executeDeploy() {
-    const { yamlOutput, dslSource } = get()
+    const { yamlOutput, dslSource, showDeployConfirm, deployPreviewLoading } = get()
+    if (!showDeployConfirm || deployPreviewLoading || !yamlOutput) return
     const baseYaml = deployBaseYaml(get())
-    if (!yamlOutput) return
 
     console.log(
       '[dslStore.executeDeploy] Sending deploy: YAML size=%d, DSL size=%d',
@@ -828,8 +825,20 @@ if (typeof window !== 'undefined') {
 // Any source edit (including scoped visual mutations) invalidates in-flight
 // analysis. Comparing text alone would miss an A → B → A edit sequence.
 useDSLStore.subscribe((state, previous) => {
-  if (state.dslSource !== previous.dslSource || state.baseConfigYaml !== previous.baseConfigYaml) {
+  const sourceChanged = state.dslSource !== previous.dslSource
+  if (sourceChanged || state.baseConfigYaml !== previous.baseConfigYaml) {
     sourceRevision++
     renderedYamlRequestId++
+  }
+  // A completed import or compilation can replace the draft while the
+  // dialog is open. Require a fresh review if its POST body would change.
+  if (
+    previous.showDeployConfirm &&
+    state.showDeployConfirm &&
+    (sourceChanged ||
+      state.yamlOutput !== previous.yamlOutput ||
+      deployBaseYaml(state) !== deployBaseYaml(previous))
+  ) {
+    state.dismissDeploy()
   }
 })
