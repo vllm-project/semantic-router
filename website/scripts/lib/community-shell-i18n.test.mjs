@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import Module, { createRequire } from 'node:module'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
@@ -8,15 +9,13 @@ const repositoryRoot = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../../..',
 )
-const communityLayoutPath = resolve(
-  repositoryRoot,
-  'website/src/components/community/CommunityLayout/index.tsx',
+const websiteRoot = join(repositoryRoot, 'website')
+const communityLayoutPath = join(
+  websiteRoot,
+  'src/components/community/CommunityLayout/index.tsx',
 )
-const teamPagePath = resolve(repositoryRoot, 'website/src/pages/community/team.tsx')
-const zhHansCatalogPath = resolve(
-  repositoryRoot,
-  'website/i18n/zh-Hans/code.json',
-)
+const teamPagePath = join(websiteRoot, 'src/pages/community/team.tsx')
+const zhHansCatalogPath = join(websiteRoot, 'i18n/zh-Hans/code.json')
 
 const communityLayoutSource = readFileSync(communityLayoutPath, 'utf8')
 const teamPageSource = readFileSync(teamPagePath, 'utf8')
@@ -49,12 +48,6 @@ function declaredTranslations(source) {
     found.set(match[1], normalizeMessage(match[2]))
   }
 
-  for (const match of source.matchAll(
-    /labelId:\s*'([a-z][A-Za-z0-9.]*)',\s*label:\s*'([^']*)'/g,
-  )) {
-    found.set(match[1], normalizeMessage(match[2]))
-  }
-
   return found
 }
 
@@ -62,6 +55,93 @@ const declared = new Map([
   ...declaredTranslations(communityLayoutSource),
   ...declaredTranslations(teamPageSource),
 ])
+
+/* Render the real component against the real zh-Hans catalog, with the
+ * Docusaurus runtime and the browse shell stubbed to their contracts. The
+ * shell stub renders exactly the strings it is handed, so the assertion is
+ * about what this component passes into the rail rather than about a regex. */
+async function renderCommunityRail() {
+  const require = createRequire(join(websiteRoot, 'package.json'))
+  const React = require('react')
+  const { renderToStaticMarkup } = require('react-dom/server')
+  const babel = require('@babel/core')
+
+  const source = readFileSync(communityLayoutPath, 'utf8')
+  const { code } = babel.transformSync(source, {
+    filename: communityLayoutPath,
+    presets: [
+      [require.resolve('@babel/preset-typescript'), { isTSX: true, allExtensions: true }],
+      [require.resolve('@babel/preset-react'), { runtime: 'classic' }],
+    ],
+    plugins: [require.resolve('@babel/plugin-transform-modules-commonjs')],
+    babelrc: false,
+    configFile: false,
+  })
+
+  const translate = ({ id, message }) => zhHansCatalog[id]?.message ?? message ?? id
+  const Translate = ({ id, children }) => translate({ id, message: children })
+
+  const BrowseLayout = ({ groups, sidebarLabel }) => React.createElement(
+    'nav',
+    { 'aria-label': sidebarLabel },
+    groups.map(group => React.createElement(
+      'div',
+      { key: group.key },
+      React.createElement('span', { 'data-group-label': '' }, group.label),
+      group.items.map(item => React.createElement(
+        'a',
+        { 'key': item.key, 'href': item.to, 'data-nav-item': item.key },
+        item.label,
+      )),
+    )),
+  )
+
+  const stubs = {
+    'react': React,
+    '@docusaurus/Translate': Object.assign(Translate, { translate, default: Translate }),
+    '@site/src/components/site/BrowseLayout': BrowseLayout,
+  }
+
+  const originalLoad = Module._load
+  Module._load = function (request, parent, isMain) {
+    if (request in stubs) return stubs[request]
+    return originalLoad.call(this, request, parent, isMain)
+  }
+
+  try {
+    const compiled = new Module(communityLayoutPath)
+    compiled.filename = communityLayoutPath
+    compiled.paths = Module._nodeModulePaths(dirname(communityLayoutPath))
+    compiled._compile(code, communityLayoutPath)
+
+    const CommunityLayout = compiled.exports.default
+    const html = renderToStaticMarkup(
+      React.createElement(CommunityLayout, { activeKey: 'team', title: 'Team' }, 'body'),
+    )
+
+    return {
+      html,
+      groupLabels: [...html.matchAll(/data-group-label[^>]*>([^<]*)</g)].map(match => match[1]),
+      items: [...html.matchAll(/data-nav-item="([^"]*)"[^>]*>([^<]*)</g)]
+        .map(match => ({ key: match[1], label: match[2] })),
+      hrefs: [...html.matchAll(/href="([^"]*)"/g)].map(match => match[1]),
+      sidebarLabel: (html.match(/aria-label="([^"]*)"/) ?? [])[1],
+    }
+  }
+  finally {
+    Module._load = originalLoad
+  }
+}
+
+const NAV_ITEMS = [
+  ['team', '/community/team', '开源团队'],
+  ['steering-committee', '/community/steering-committee', '指导委员会'],
+  ['work-groups', '/community/work-groups', '工作组'],
+  ['leaderboard', '/community/contributors', '排行榜'],
+  ['governance', '/community/governance', '治理'],
+  ['contributing', '/community/contributing', '贡献指南'],
+  ['code-of-conduct', '/community/code-of-conduct', '行为准则'],
+]
 
 test('Team shell and shared navigation declare their translation IDs', () => {
   assert.ok(
@@ -109,6 +189,40 @@ test('every declared ID has a zh-Hans entry translated away from the English def
   }
 })
 
+test('the rendered rail shows the Chinese group headings and link labels', async () => {
+  const rail = await renderCommunityRail()
+
+  assert.deepEqual(
+    rail.groupLabels,
+    ['人员', '协作方式'],
+    'the rail must render the zh-Hans group headings',
+  )
+
+  assert.deepEqual(
+    rail.items.map(item => item.key),
+    NAV_ITEMS.map(([key]) => key),
+    'the rail must keep every navigation entry in order',
+  )
+
+  for (const [key, , label] of NAV_ITEMS) {
+    const item = rail.items.find(candidate => candidate.key === key)
+    assert.ok(item, `${key} is missing from the rendered rail`)
+    assert.equal(item.label, label, `${key} must render its zh-Hans label`)
+  }
+
+  assert.equal(rail.sidebarLabel, '社区栏目', 'the rail must render its zh-Hans accessible label')
+})
+
+test('the rendered rail keeps every destination unchanged', async () => {
+  const rail = await renderCommunityRail()
+
+  assert.deepEqual(
+    rail.hrefs,
+    NAV_ITEMS.map(([, to]) => to),
+    'every rendered link must keep its original destination',
+  )
+})
+
 test('the emeritus roster keeps its interpolated date placeholders', () => {
   const message = zhHansCatalog['community.team.emeritus.description']?.message ?? ''
 
@@ -132,33 +246,21 @@ test('the emeritus roster keeps its interpolated date placeholders', () => {
 })
 
 test('shared navigation keeps literal keys and destinations', () => {
-  const routePairs = [
-    ['team', '/community/team'],
-    ['steering-committee', '/community/steering-committee'],
-    ['work-groups', '/community/work-groups'],
-    ['leaderboard', '/community/contributors'],
-    ['governance', '/community/governance'],
-    ['contributing', '/community/contributing'],
-    ['code-of-conduct', '/community/code-of-conduct'],
-  ]
-
-  for (const [key, to] of routePairs) {
-    assert.match(
-      communityLayoutSource,
-      new RegExp(`key: '${key}'[^}]*to: '${to}'`),
+  for (const [key, to] of NAV_ITEMS) {
+    assert.ok(
+      communityLayoutSource.includes(`key: '${key}'`),
+      `navigation entry ${key} must keep its key`,
+    )
+    assert.ok(
+      communityLayoutSource.includes(`to: '${to}'`),
       `navigation entry ${key} must keep destination ${to}`,
     )
   }
 
-  assert.match(
+  assert.doesNotMatch(
     communityLayoutSource,
-    /function localizedNavGroups\(\): BrowseNavGroup\[\]/,
-    'the rail labels must be resolved through translate()',
-  )
-  assert.match(
-    communityLayoutSource,
-    /groups=\{localizedNavGroups\(\)\}/,
-    'the rail must receive the localized labels, not the untranslated data',
+    /label:\s*(?:translate\(\{\s*id:\s*)?group\.label/,
+    'the rail labels must be literal translate() calls so the extractor can read them',
   )
 })
 
