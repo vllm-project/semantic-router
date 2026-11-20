@@ -44,6 +44,10 @@ type Serving struct {
 	// a request path (nil accepts every model), or false and the detail of
 	// the 404 a path it does not serve answers.
 	Gate func(path string) (models []string, detail string, served bool)
+	// UnservedRoute, when set, is the model a request on a path is routed as
+	// when it names a model the path's API does not accept or the Router
+	// does not serve; empty, such a request is refused.
+	UnservedRoute func(path string) string
 	// ListsLLM and ListsSystemOne say which models GET /v1/models lists: the
 	// LLM APIs' as OpenAI data, the systemone API's as models.
 	ListsLLM, ListsSystemOne bool
@@ -210,7 +214,11 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		h.serveListing(w, r, serving, x)
 		return
 	}
-	h.serveRouted(w, r, serving, x, models)
+	route := ""
+	if serving.UnservedRoute != nil && !listing {
+		route = serving.UnservedRoute(r.URL.Path)
+	}
+	h.serveRouted(w, r, serving, x, models, route)
 }
 
 // isSystemOnePath reports whether a path is one of the System One API's.
@@ -228,7 +236,7 @@ func isSystemOnePath(path string) bool {
 // catalog Codex asks for, stays as the routing core wrote it.
 func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange) {
 	llm := newBufferedResponse()
-	h.serveRouted(llm, r, serving, x, serving.Models)
+	h.serveRouted(llm, r, serving, x, serving.Models, "")
 	systemOne := newBufferedResponse()
 	serving.SystemOne.ServeHTTP(systemOne, r.Clone(r.Context()))
 	var listed, native map[string]json.RawMessage
@@ -250,9 +258,10 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving S
 }
 
 // serveRouted serves a request through the routing core, accepting the
-// request models in models (nil accepts every model).
-func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, models []string) {
-	ctx := routing.WithListenerModels(r.Context(), models)
+// request models in models (nil accepts every model) and routing any other
+// as route when one is set.
+func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, models []string, route string) {
+	ctx := routing.WithUnservedModelRoute(routing.WithListenerModels(r.Context(), models), route)
 	x.record.RequestID = r.Header.Get(headers.RequestID)
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
 	if err != nil {

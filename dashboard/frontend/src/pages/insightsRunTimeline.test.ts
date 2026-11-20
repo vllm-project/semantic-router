@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildRunTimeline, idleGaps } from './insightsRunTimeline'
+import { buildRunTimeline, idleGaps, timelineTicks } from './insightsRunTimeline'
 import type { RunAgent, RunCall, RunResponse } from './insightsRunTypes'
 
 const START = Date.parse('2026-11-16T09:00:00Z')
@@ -189,5 +189,46 @@ describe('the run timeline', () => {
     const [block] = timeline.lanes[0].blocks
     expect(block.left).toBe(0)
     expect(block.width).toBeCloseTo(100)
+  })
+
+  it('marks each call’s events for the strip in time order, compaction first at one instant', () => {
+    const calls = [
+      call('main', 'small', 0),
+      call('main', 'large', 10, { markers: ['switch', 'tool_loop'] }),
+      call('main', 'large', 20, { markers: ['image', 'compaction'] }),
+      call('subagent 1', 'large', 30, { markers: ['subagent_start'] }),
+      call('main', 'large', 40, { markers: ['guard', 'block'] }),
+      call('main', 'large', 50, { markers: ['failure', 'housekeeping'] }),
+    ]
+    const timeline = buildRunTimeline(run(calls), 0, calls.length)
+    expect(timeline.marks.map((mark) => [mark.event, mark.call.record_id])).toEqual([
+      ['switch', 'main-10'],
+      ['compaction', 'main-20'],
+      ['image', 'main-20'],
+      ['subagent_start', 'subagent 1-30'],
+      ['block', 'main-40'],
+      ['failure', 'main-50'],
+    ])
+    // the guard flag of a refused call and the routine events stay off the strip
+    expect(timeline.marks.some((mark) => (mark.event as string) === 'guard')).toBe(false)
+    expect(timeline.marks[1].at).toBeCloseTo((20 / 51) * 100)
+  })
+
+  it('ticks round clock times only where the axis is drawn to scale', () => {
+    // two stretches of work 40 minutes apart: the gap folds and gets no tick
+    const calls = [
+      ...Array.from({ length: 6 }, (_, index) => call('main', 'small', index * 60)),
+      ...Array.from({ length: 6 }, (_, index) => call('main', 'small', 2_700 + index * 60)),
+    ]
+    const timeline = buildRunTimeline(run(calls), 0, calls.length)
+    expect(timeline.breaks).toHaveLength(1)
+    expect(timeline.segments).toHaveLength(2)
+    const ticks = timelineTicks(timeline, 8)
+    expect(ticks.length).toBeGreaterThan(2)
+    expect(ticks.every((tick) => tick.time % 60_000 === 0)).toBe(true)
+    const gap = timeline.breaks[0]
+    expect(ticks.some((tick) => tick.at > gap.left && tick.at < gap.left + gap.width)).toBe(false)
+    expect(ticks.every((tick, index) => index === 0 || tick.at > ticks[index - 1].at)).toBe(true)
+    expect(timelineTicks(timeline, 0)).toEqual([])
   })
 })

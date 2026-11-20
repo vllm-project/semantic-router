@@ -179,6 +179,7 @@ describe('Home traffic', () => {
         rows: [RECORDS[0]],
         window: null,
         titles: { claude: 'Fix login' },
+        harnessCounts: { claude_code: 2 },
       }),
     )
     const urls: string[] = []
@@ -196,6 +197,7 @@ describe('Home traffic', () => {
       aggregate: { record_count: 3 },
       rows: [{ id: 'r1' }],
       titles: { claude: 'Fix login' },
+      harnessCounts: { claude_code: 2 },
     })
 
     traffic.select('24h')

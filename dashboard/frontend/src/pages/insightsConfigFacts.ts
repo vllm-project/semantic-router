@@ -5,21 +5,32 @@ import { modelProviderIconAssets } from './modelProviderIcons'
 
 /**
  * What Insights reads from the router configuration: the agent rules of each
- * recipe, so a matched housekeeping rule marks its call, and the provider each
- * configured model is served by, for its logo. Without the configuration, as
- * for a viewer who may not read it, both stay empty and the pages degrade.
+ * recipe, so a matched housekeeping rule marks its call, the provider each
+ * configured model is served by, for its logo, and the model router_replay's
+ * cost_baseline_model names, so a saving reads against it. Without the
+ * configuration, as for a viewer who may not read it, they stay empty and the
+ * pages degrade.
  */
 export interface InsightsConfigFacts {
   agentRules?: AgentRuleIndex
   modelProviders: Record<string, string>
+  /** The one model every router_replay plugin that sets cost_baseline_model names. */
+  costBaselineModel?: string
+}
+
+interface ConfigPlugin {
+  type?: string
+  configuration?: { cost_baseline_model?: string }
 }
 
 export interface ConfigDocument {
   recipes?: Array<{
     name?: string
     signals?: { agent?: Array<AgentRuleFacts & { name?: string }> }
+    decisions?: Array<{ plugins?: ConfigPlugin[] }>
   }>
   providers?: { models?: Array<{ name?: string; backend_refs?: Array<{ provider?: string }> }> }
+  global?: { plugins?: ConfigPlugin[] }
 }
 
 export const EMPTY_CONFIG_FACTS: InsightsConfigFacts = { modelProviders: {} }
@@ -36,6 +47,27 @@ export function buildAgentRuleIndex(config: ConfigDocument): AgentRuleIndex {
     index.set(recipe.name || 'default', rules)
   }
   return index
+}
+
+/**
+ * The model router_replay compares savings with when the operator names one:
+ * global.plugins or a decision's plugins. Several different models leave it
+ * unnamed, as does none.
+ */
+export function buildCostBaselineModel(config: ConfigDocument): string | undefined {
+  const plugins = [
+    ...(config.global?.plugins ?? []),
+    ...(config.recipes ?? []).flatMap((recipe) =>
+      (recipe.decisions ?? []).flatMap((decision) => decision.plugins ?? []),
+    ),
+  ]
+  const models = new Set(
+    plugins
+      .filter((plugin) => plugin.type === 'router_replay')
+      .map((plugin) => plugin.configuration?.cost_baseline_model?.trim())
+      .filter((model): model is string => Boolean(model)),
+  )
+  return models.size === 1 ? [...models][0] : undefined
 }
 
 export function buildModelProviders(config: ConfigDocument): Record<string, string> {

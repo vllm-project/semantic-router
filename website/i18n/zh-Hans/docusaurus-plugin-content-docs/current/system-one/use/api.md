@@ -125,7 +125,7 @@ Router 拒绝任何其他契约的运行时：Router 和它的模型运行时来
 | `instructions` | 全部 | 用自然语言写的问题 |
 | `criteria` | `choice`、`noul`、`score`、`set`、`span` | `choice` 的选项（键到描述的对象）、`noul` 的 `true` 和 `false`、`score` 的等级（数组，从低到高），或 `set` 与 `span` 的标签 |
 | `preset` | 全部 | 扩展。模型训练过的问题（例如 `pii`），列在其模型卡的 `presets` 中；问题仍带有自己的 `instructions` 和 `criteria`，其他服务器按它们回答 |
-| `threshold` | `set`、`span` | 扩展。替换模型自己的判定阈值；实际使用的值在 `thresholds` 中返回 |
+| `threshold` | `set`、`span` | 扩展。替换模型自己的判定阈值；实际使用的值在 `thresholds` 中返回。在 span 问题上，高于模型自身阈值的值保留模型找到的、概率达到该值的 span，每个都完整返回；更低的值则标注概率高于它的每个词 |
 | `head` | `span` | 扩展。`router` 或 `broad`，用于有 broad span head 的模型 |
 | `over` | 全部 | 扩展。问题读取的 state 键，仅用于 Vela 模型：Vela 2.0 上任何问题都可用；Vela 3.0 上限于 `span`、预设问题和 vela3-fast 训练过的路由问题。Decision 1.0、2.0 和 3.0 以 `invalid_question` 拒绝 |
 | `overflow` | 全部 | 扩展。`window`（分窗完整读取长部分）或 `truncate`（只读前面的 token），用于有扫描预算的模型 |
@@ -199,6 +199,7 @@ Router 把一轮的媒体放在 state 前面：`"state": ["⟦img-1⟧", "⟦vid
 - 过载的服务器返回 529 并带 `Retry-After`；正在启动的服务器返回 503 并带 `Retry-After`。
 - 带有 schema 未定义成员的请求体以 400 `invalid_request` 拒绝，并写明其名称。
 - 不提供任何文本的 state（`""`、只有空白，或没有任何部分的对象）以 400 `invalid_request`（"the state is empty"）拒绝，除非请求带有可读取的图片、视频或 asset；既不是文本、由各部分组成的对象，也不是前置媒体加 state 的 state，同样以 400 拒绝，并写明是 state。
+- 模型无法读取的图片或视频以 400 拒绝，并带其 `reason`：不是模型可读格式的 base64 data URL 时为 `unsupported_media_type`（`image_format`、`video_format`），数据无法解码时为 `invalid_media`（`image_malformed`、`video_malformed`）；超过媒体限制（字节、像素、宽高比、时长、视频 token）时为 `invalid_request`，并带 `reason` 和 `limit`。
 - 每个问题的选项为 2 到 255 个，标签 1 到 255 个，等级 2 到 10 个；问题数量没有上限。
 
 Router 收到错误时，该调用的问题为未知：每条规则或功能的失败策略决定其含义。候选过多的 judge 永远不会使请求失败。

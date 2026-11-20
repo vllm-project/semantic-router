@@ -41,7 +41,7 @@ func TestCompileRecordsWhereEntrypointKeysComeFrom(t *testing.T) {
 	if got := secret.Spec.(SecretSpec); !reflect.DeepEqual(got, SecretSpec{Env: []string{"CODING_KEY_CURRENT", "CODING_KEY_NEXT"}}) {
 		t.Fatalf("secret spec = %+v", got)
 	}
-	route := mustGet(t, resources, KindRoute, "coding-auto")
+	route := mustGet(t, resources, KindRoute, "chat/coding-auto")
 	if got := refNames(route.Refs); !reflect.DeepEqual(got, []string{"program/coding", "secret/entrypoint/chat/coding-auto"}) {
 		t.Fatalf("route refs = %v", got)
 	}
@@ -62,7 +62,7 @@ func TestRouteHashFollowsTheClientPolicy(t *testing.T) {
 	t.Setenv("FAST_KEY_NEXT", "fast-2")
 	hash := func(cfg *config.RouterConfig) string {
 		t.Helper()
-		return mustGet(t, compileTest(t, cfg), KindRoute, "company/fast").Hash
+		return mustGet(t, compileTest(t, cfg), KindRoute, "chat/company/fast").Hash
 	}
 	public := testConfig("h")
 	public.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"company/fast"}, Recipe: config.DefaultRecipeName}}

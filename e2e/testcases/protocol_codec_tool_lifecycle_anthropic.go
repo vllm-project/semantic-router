@@ -2,12 +2,25 @@ package testcases
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 )
+
+// anthropicClientToolUseID is the tool_use id a Messages client receives for
+// the provider simulator's call: a Messages backend's own id, and for a backend
+// of another wire format the toolu_ id the Router derives from it.
+func anthropicClientToolUseID(anthropicBackend bool) string {
+	if anthropicBackend {
+		return mockLookupCall.CallID
+	}
+	sum := sha256.Sum256([]byte(mockLookupCall.CallID))
+	return "toolu_" + hex.EncodeToString(sum[:12])
+}
 
 func runAnthropicClientToolLifecycle(
 	ctx context.Context,
@@ -115,7 +128,7 @@ func decodeAnthropicToolUse(body []byte, expectDirectCaller bool) (responsesFunc
 	}
 	content := response.Content[0]
 	call := responsesFunctionCall{CallID: content.ID, Name: content.Name, Arguments: string(content.Input)}
-	if call.CallID != "call_mock_lookup" || call.Name != "lookup" || call.Arguments != `{"query":"weather"}` ||
+	if call.CallID != anthropicClientToolUseID(expectDirectCaller) || call.Name != "lookup" || call.Arguments != `{"query":"weather"}` ||
 		(expectDirectCaller && content.Caller.Type != "direct") || !json.Valid(content.Input) {
 		return responsesFunctionCall{}, fmt.Errorf("anthropic tool use changed identity, input, or caller provenance: %s", truncateString(string(body), 1000))
 	}
@@ -193,7 +206,7 @@ func (state *anthropicToolStreamState) consume(event anthropicToolStreamEvent, d
 
 func (state *anthropicToolStreamState) result(stream string) (responsesFunctionCall, error) {
 	call := state.call
-	if !state.blockStopped || !state.messageStopped || state.stopReason != "tool_use" || call.CallID != "call_mock_lookup" ||
+	if !state.blockStopped || !state.messageStopped || state.stopReason != "tool_use" || call.CallID != anthropicClientToolUseID(state.expectCaller) ||
 		call.Name != "lookup" || call.Arguments != `{"query":"weather"}` || !json.Valid([]byte(call.Arguments)) {
 		return responsesFunctionCall{}, fmt.Errorf("Anthropic tool stream lifecycle is incomplete: %s", truncateString(stream, 1200))
 	}

@@ -286,7 +286,7 @@ func callRouterAPI(ctx context.Context, req TestQueryRequest, routerAPIURL, conf
 
 func topologyPreviewTimeout(configPath string) time.Duration {
 	settings := routerconfig.RoutingPreviewConfig{}
-	if cfg, err := routerconfig.Parse(configPath); err == nil {
+	if cfg, err := ReadPersistedRouterConfig(configPath); err == nil {
 		settings = cfg.API.RoutingPreview
 	}
 	return settings.RequestTimeout() + routerconfig.RoutingPreviewResponseWriteAllowance

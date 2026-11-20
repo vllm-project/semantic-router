@@ -16,6 +16,12 @@ type CanonicalProviders struct {
 type CanonicalProviderDefaults struct {
 	DefaultModel           string `yaml:"model,omitempty"`
 	DefaultReasoningEffort string `yaml:"reasoning_effort,omitempty"`
+	// ReasoningMinOutputTokens is the smallest output limit a request keeps its
+	// decision's reasoning at. A backend counts reasoning against the limit, so
+	// a request that states no reasoning preference and sets a smaller one
+	// runs with the model's reasoning off; the client's own preference always
+	// wins. Unset or 0 keeps every request's reasoning as its decision chose.
+	ReasoningMinOutputTokens int `yaml:"reasoning_min_output_tokens,omitempty" jsonschema:"minimum=0"`
 	// TLS is the trust of every https backend whose own tls names no CA.
 	TLS *ProviderDefaultsTLS `yaml:"tls,omitempty"`
 }

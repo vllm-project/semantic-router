@@ -202,6 +202,9 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeWire(metadata.body, &wire, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
+	dropped := dropNoOpRequestFields(map[string]*json.RawMessage{
+		"service_tier": &wire.ServiceTier, "modalities": &wire.Modalities, "safety_identifier": &wire.SafetyIdentifier,
+	})
 	if err := validateChatRequestWire(wire); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -219,14 +222,22 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
+	switch {
+	case wire.MaxCompletionTokens != nil:
+		envelope.OutputLimitField = "max_completion_tokens"
+	case wire.MaxTokens != nil:
+		envelope.OutputLimitField = "max_tokens"
+	}
 	metadata.noteProviderSpecificFields(wire.Messages)
-	// Decoding drops client metadata and the text alias beside typed reasoning
-	// blocks and replaces null tool schemas, so the source bytes no longer
-	// describe the request and must not be replayed upstream.
-	if metadata.removed || chatMessagesDropReasoningAlias(wire.Messages) || chatToolsHaveNullSchema(wire.Tools) {
+	// Decoding drops client metadata, no-op values and the text alias beside
+	// typed reasoning blocks and replaces null tool schemas, so the source
+	// bytes no longer describe the request and must not be replayed upstream.
+	if metadata.removed || len(dropped) > 0 || chatMessagesDropReasoningAlias(wire.Messages) || chatToolsHaveNullSchema(wire.Tools) {
 		envelope.Request = nil
 	}
-	return request, envelope, metadata.diagnostics(policy), nil
+	diagnostics := metadata.diagnostics(policy)
+	appendNoOpFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, dropped)
+	return request, envelope, diagnostics, nil
 }
 
 func chatMessagesDropReasoningAlias(messages []chatMessageWire) bool {
@@ -328,7 +339,7 @@ func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request
 		}
 		if message.Role == llmprotocol.RoleSystem || message.Role == llmprotocol.RoleDeveloper {
 			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{
-				Role: message.Role, Content: message.Content, Name: message.Name,
+				Role: message.Role, Content: message.Content, Name: message.Name, Position: len(request.Messages),
 			})
 		} else {
 			request.Messages = append(request.Messages, message)
@@ -813,7 +824,7 @@ func decodeChatToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (llmpr
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_tool_choice",
-			"Chat Completions tool choice cannot be represented by the neutral protocol",
+			"the Router does not support the allowed_tools tool choice",
 			nil,
 		)
 	}
