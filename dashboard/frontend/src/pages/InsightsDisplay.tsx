@@ -259,6 +259,7 @@ export function SummaryTile({
   icon,
   value,
   hint,
+  detail,
   tone,
   info,
   infoLabel,
@@ -267,6 +268,8 @@ export function SummaryTile({
   icon?: ReactNode
   value: ReactNode
   hint?: ReactNode
+  /** A second line under the hint, for a figure that belongs beside this one but not in it. */
+  detail?: ReactNode
   tone?: 'negative'
   /** More about the figure, behind an info mark beside its label. */
   info?: string
@@ -298,6 +301,9 @@ export function SummaryTile({
         {value}
       </span>
       {hint ? <span className="truncate text-[11.5px] text-subtle-foreground">{hint}</span> : null}
+      {detail ? (
+        <span className="truncate text-[11.5px] text-subtle-foreground">{detail}</span>
+      ) : null}
     </div>
   )
 }

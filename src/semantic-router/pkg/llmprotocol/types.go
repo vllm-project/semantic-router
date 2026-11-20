@@ -80,6 +80,10 @@ const (
 	// image supplied as model input, while this kind preserves the lifecycle of
 	// a model-hosted image generation tool.
 	ContentGeneratedImage ContentKind = "generated_image"
+	// ContentServerTool is a call or a result of a tool the provider runs
+	// itself, such as Anthropic's web search. Raw holds the block as the
+	// provider wrote it, which only the same wire format can carry.
+	ContentServerTool ContentKind = "server_tool"
 )
 
 const (
@@ -108,6 +112,10 @@ type Content struct {
 	// ReasoningDetail is a typed continuity block, distinct from display text.
 	// Its identity and opaque payload must survive routing and tool turns.
 	ReasoningDetail *ReasoningDetail
+	// Raw is a ContentServerTool block as written, and for text the
+	// citations a server tool attached to it, as a JSON array. Neither has a
+	// neutral form, so only the wire format they came from carries them.
+	Raw json.RawMessage `json:",omitempty"`
 }
 
 // CacheDirective marks a request block or tool definition as an explicit
@@ -196,6 +204,10 @@ type ToolKind string
 
 const ToolKindCustom ToolKind = "custom"
 
+// ToolKindServer is a tool its provider defines, such as Anthropic's
+// web_search_20250305. Raw holds the definition as the client sent it.
+const ToolKindServer ToolKind = "server"
+
 type Tool struct {
 	Kind        ToolKind
 	Name        string
@@ -209,6 +221,8 @@ type Tool struct {
 	// namespace came from. Name holds the flat name every backend receives.
 	Namespace string
 	LocalName string
+	// Raw is a ToolKindServer definition as sent, in the source wire format.
+	Raw json.RawMessage `json:",omitempty"`
 }
 
 type CustomToolFormat struct {
@@ -352,6 +366,14 @@ type Request struct {
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
 	// output, but targets that cannot carry it must reject it, not drop it.
 	PromptCacheKey string
+	// ExtensionFields holds operator-whitelisted top-level request members
+	// the wire format does not declare (Policy.AllowedRequestExtensions),
+	// captured opaquely at ingress. Same-format dispatch merges them back;
+	// crossing formats drops them with a diagnostic. The Router never
+	// interprets their values.
+	ExtensionFields map[string]json.RawMessage
+	// ExtensionFieldsFormat is the wire format the members were captured from.
+	ExtensionFieldsFormat WireFormat
 	// ToolNameOrigins is decode state that no wire carries. A request that
 	// flattened a Responses namespace keeps where each tool name came from, so
 	// retained history prepended later is checked against the same names.

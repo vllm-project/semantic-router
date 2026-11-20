@@ -11,6 +11,7 @@ type anthropicStreamDecoder struct {
 	streamState
 	framer       sseFramer
 	stopSequence string
+	serverTool   *anthropicServerToolStream
 }
 type anthropicStreamEncoder struct {
 	streamState
@@ -171,6 +172,9 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 		if err = decoder.observeProviderIdentity(wire.Message.ID, wire.Message.Model); err != nil {
 			return nil, nil, err
 		}
+	}
+	if events, held, serverErr := decoder.decodeAnthropicServerToolEvent(wire, data); held {
+		return events, unknownFieldDiagnostics, serverErr
 	}
 	events, diagnostics, err := decoder.decodeEvent(wire, frame)
 	diagnostics = appendDiagnostics(unknownFieldDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
@@ -383,7 +387,12 @@ func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, er
 			Reasoning: llmprotocol.ReasoningScopeText,
 		}
 	case "text":
-		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentText}
+		citations, err := anthropicTextCitations("text", wire.ContentBlock.Citations)
+		if bytes.Equal(bytes.TrimSpace(wire.ContentBlock.Citations), []byte("[]")) {
+			citations = json.RawMessage(`[]`)
+		}
+		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentText, Raw: citations}
+		return event, err
 	default:
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "Anthropic stream content block is unsupported", nil)
 	}
@@ -413,6 +422,9 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 			Kind: llmprotocol.ContentReasoning, Signature: wire.Delta.Signature,
 			Reasoning: llmprotocol.ReasoningScopeText,
 		}
+	case "citations_delta":
+		citations := append(append([]byte("["), wire.Delta.Citation...), ']')
+		event.Type, event.Content = llmprotocol.EventOutputTextDelta, &llmprotocol.Content{Kind: llmprotocol.ContentText, Raw: citations}
 	default:
 		return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unknown_stream_delta", "Anthropic stream delta is unsupported", nil)
 	}
@@ -581,7 +593,13 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicItemStartEvent(
 	if event.Content.Kind != "" {
 		kind = event.Content.Kind
 	}
-	frames, _, err := encoder.ensureAnthropicBlockStarted(event, kind)
+	frames, key, err := encoder.ensureAnthropicBlockStarted(event, kind)
+	if err == nil {
+		frames, err = encodeAnthropicServerToolStart(frames, encoder.blockIndexes[key], event.Content)
+	}
+	if err == nil && kind == llmprotocol.ContentText {
+		frames, err = encodeAnthropicCitationDeltas(frames, encoder.blockIndexes[key], event.Content)
+	}
 	return frames, nil, err
 }
 
@@ -757,6 +775,12 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(
 ) anthropicEventWire {
 	block := &anthropicContentWire{Type: "text", Text: ""}
 	switch kind {
+	case llmprotocol.ContentText:
+		if event.Content != nil && len(event.Content.Raw) > 0 {
+			block.Citations = json.RawMessage(`[]`)
+		}
+	case llmprotocol.ContentServerTool:
+		block.raw, _ = splitAnthropicServerToolInput(event.Content.Raw)
 	case llmprotocol.ContentToolCall:
 		block.Type, block.Name, block.Input = "tool_use", event.ToolCall.Name, json.RawMessage(`{}`)
 		block.ID = anthropicReplyID(encoder.context.Source, anthropicToolUseIDPrefix, event.ToolCall.ID)
@@ -930,8 +954,8 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicTextDelta(
 	if err != nil {
 		return nil, diagnostics, err
 	}
-	if event.Delta == "" {
-		return frames, diagnostics, nil
+	if frames, err = encodeAnthropicCitationDeltas(frames, encoder.blockIndexes[key], event.Content); err != nil || event.Delta == "" {
+		return frames, diagnostics, err
 	}
 	wire := anthropicEventWire{
 		Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),

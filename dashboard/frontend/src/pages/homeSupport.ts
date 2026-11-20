@@ -337,9 +337,16 @@ export function formatUpdatedAgo(at: number, now: number): string {
 export interface SpendSummary {
   currency?: string
   spend: number
-  /** Net savings against the baseline; undefined when no request was compared. */
+  /**
+   * The compared requests' reference cost less their model cost, before the
+   * Router's own calls; undefined when no request was compared.
+   */
   saved?: number
+  /** The compared requests' model cost and reference cost. */
+  actual?: number
   baseline?: number
+  /** What the Router's own calls cost (decision model and similar), apart from the models'. */
+  routerCalls: number
   /** The priced calls the total leaves out because another currency or plain units price them. */
   otherCurrencies: { currency: string; calls: number }[]
   /** Calls with no price at all. */
@@ -348,10 +355,19 @@ export interface SpendSummary {
 
 type SpendGroup = Pick<
   InsightsAggregateCurrencySummary,
-  'total_saved' | 'baseline_spend' | 'actual_spend' | 'total_spend' | 'cost_record_count'
+  | 'total_saved'
+  | 'gross_saved'
+  | 'baseline_spend'
+  | 'actual_spend'
+  | 'router_call_spend'
+  | 'total_spend'
+  | 'cost_record_count'
 > & { currency?: string }
 
 const groupSpend = (group: SpendGroup) => Math.abs(group.total_spend ?? group.actual_spend ?? 0)
+// A router without gross_saved reports the same difference as its two spends.
+const grossSaved = (group: SpendGroup) =>
+  group.gross_saved ?? group.baseline_spend - group.actual_spend
 const isCurrency = (currency?: string) =>
   Boolean(currency?.trim()) && !isInsightsNoCurrency(currency)
 
@@ -371,8 +387,10 @@ export function spendSummary(aggregate: Pick<InsightsAggregateResponse, 'summary
   return {
     currency: lead.currency,
     spend: lead.total_spend ?? lead.actual_spend,
-    saved: compared ? lead.total_saved : undefined,
+    saved: compared ? grossSaved(lead) : undefined,
+    actual: compared ? lead.actual_spend : undefined,
     baseline: compared ? lead.baseline_spend : undefined,
+    routerCalls: lead.router_call_spend ?? 0,
     otherCurrencies: groups
       .filter((group) => group !== lead && groupSpend(group) > 0)
       .map((group) => ({ currency: group.currency ?? '', calls: group.cost_record_count })),
