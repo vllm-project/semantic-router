@@ -71,6 +71,12 @@ Set `VLLM_SR_DASHBOARD_HOST_BIND=0.0.0.0`, and either provision both
 `DASHBOARD_ADMIN_EMAIL` and `DASHBOARD_ADMIN_PASSWORD`, or set
 `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` when first-admin registration on that
 network is intended. The CLI rejects a wildcard bind with neither.
+
+If the browser's origin differs from the Dashboard's own scheme and `Host`,
+such as behind a TLS-terminating or Host-rewriting reverse proxy, set
+`DASHBOARD_ALLOWED_ORIGINS` to a comma-separated list of those origins, for
+example `https://dashboard.example.com`. `vllm-sr serve` passes it to the
+Dashboard.
 :::
 
 After starting containers, the CLI waits up to 1800 seconds for the Router to
