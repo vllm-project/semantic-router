@@ -1368,7 +1368,7 @@ type RuleConditionConfig struct {
 	// Type specifies the signal or projection type a leaf references: a type
 	// the router accepts in decision rules.
 	// +optional
-	// +kubebuilder:validation:Enum=authz;complexity;context;conversation;domain;fact_check;input_modality;jailbreak;keyword;language;metadata;modality;pii;projection;safety;systemone;turn_relation;user_feedback
+	// +kubebuilder:validation:Enum=agent;authz;complexity;context;conversation;domain;fact_check;input_modality;jailbreak;keyword;language;metadata;modality;pii;projection;safety;systemone;turn_relation;user_feedback
 	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 
 	// Name is the name of the rule a leaf references

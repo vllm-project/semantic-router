@@ -93,8 +93,8 @@ func TestChatPublicStreamFilterOmitsOnlyRepeatedContentFreeFinish(t *testing.T) 
 	withContent := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"late\"},\"finish_reason\":\"stop\"}]}\n\n")
 	for _, frame := range [][]byte{first, other, withContent} {
 		output, err := filter.Push(frame)
-		if err != nil || !bytes.Equal(output, frame) {
-			t.Fatalf("nonduplicate finish changed: output=%q want=%q err=%v", output, frame, err)
+		if err != nil || !bytes.Equal(output, withNullUsage(frame)) {
+			t.Fatalf("nonduplicate finish changed: output=%q want=%q err=%v", output, withNullUsage(frame), err)
 		}
 	}
 	if output, err := filter.Push(repeated); err != nil || len(output) != 0 {
@@ -181,7 +181,7 @@ func TestChatPublicStreamFilterDropsProviderErrorEvent(t *testing.T) {
 				t.Fatalf("finalize failed: %v", err)
 			}
 			output = append(output, out...)
-			if !bytes.Equal(output, content) {
+			if !bytes.Equal(output, withNullUsage(content)) {
 				t.Fatalf("want only the content frame, got %q", output)
 			}
 			if !filter.UpstreamFailed() {
@@ -208,7 +208,7 @@ func TestChatPublicStreamFilterRejectsAnErrorEventAfterTerminal(t *testing.T) {
 func TestChatPublicStreamFilterTreatsNullErrorAsData(t *testing.T) {
 	frame := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"}}],\"error\":null}\n\n")
 	filter := NewChatPublicStreamFilter(1<<20, true)
-	if output, err := filter.Push(frame); err != nil || !bytes.Equal(output, frame) || filter.UpstreamFailed() {
+	if output, err := filter.Push(frame); err != nil || !bytes.Equal(output, withNullUsage(frame)) || filter.UpstreamFailed() {
 		t.Fatalf("null error changed the stream: output=%q err=%v failed=%v", output, err, filter.UpstreamFailed())
 	}
 	var missing *ChatUsageStreamFilter
