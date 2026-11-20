@@ -38,7 +38,12 @@ function stubDeferredPreviews() {
     previewBodies: () =>
       fetchMock.mock.calls
         .filter(([url]) => url === '/api/router/config/deploy/preview')
-        .map(([, init]) => JSON.parse(String(init.body)) as { yaml: string }),
+        .map(
+          (call) =>
+            JSON.parse(String((call as unknown as [string, RequestInit])[1].body)) as {
+              yaml: string
+            },
+        ),
   }
 }
 
