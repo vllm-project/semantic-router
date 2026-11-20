@@ -115,8 +115,8 @@ ROUTE reasoning_deep {
 
 ## Dashboard
 
-- `Config -> Projections` edits mappings in canonical config form
-- `Config -> Decisions` can reference mapping outputs with condition type `projection`
+- **Routing → Projections** edits mappings in canonical config form
+- **Routing → Decisions** can reference mapping outputs with condition type `projection`
 
 ## When to Use
 

@@ -134,7 +134,8 @@ func (c *RouterConfig) applicationRuleSpecs() []applicationRuleSpec {
 	for _, r := range c.JailbreakRules {
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypeJailbreak, preset: presets.Jailbreak, stage: r.EffectiveStage(), name: r.Name,
-			description: r.Description, deployment: r.Deployment, predicate: r.Predicate, input: SystemOneInput{History: r.Input.History},
+			description: r.Description, deployment: r.Deployment, predicate: r.Predicate,
+			input:       SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults},
 			onUnscanned: cmp.Or(r.OnUnscanned, SystemOneUnscannedBestEffort), onUnknown: r.OnUnknown, minCoverage: r.MinCoverage, timeoutMs: r.TimeoutMs,
 		})
 	}

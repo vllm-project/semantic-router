@@ -1512,6 +1512,7 @@ spec:
                                       Type specifies the signal or projection type a leaf references: a type
                                       the router accepts in decision rules.
                                     enum:
+                                    - agent
                                     - authz
                                     - complexity
                                     - context
@@ -3050,10 +3051,12 @@ spec:
                           routing at end-of-stream.
                         type: boolean
                       max_bytes:
+                        default: 10485760
                         description: |-
                           MaxBytes caps the accumulated body size. A larger body is rejected and the
                           ExtProc stream ends; the downstream response follows the gateway's ExtProc
-                          failure policy. Zero disables the limit.
+                          failure policy. The Router refuses an enabled streamed body without a
+                          ceiling, so an omitted value takes the default.
                         format: int64
                         minimum: 0
                         type: integer

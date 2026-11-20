@@ -1,4 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
+import { RotateCw } from 'lucide-react'
+
+import { Alert, Button } from '../ui'
 
 interface Props {
   children: ReactNode
@@ -39,34 +42,21 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div style={{
-          padding: '20px',
-          margin: '10px',
-          borderRadius: '8px',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid rgba(239, 68, 68, 0.3)',
-          color: '#ef4444',
-        }}>
-          <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
-            Something went wrong
-          </h3>
-          <p style={{ margin: '0 0 10px 0', fontSize: '12px', opacity: 0.8 }}>
-            {this.state.error?.message || 'An unexpected error occurred'}
-          </p>
-          <button
-            onClick={this.handleRetry}
-            style={{
-              padding: '6px 12px',
-              fontSize: '12px',
-              borderRadius: '4px',
-              border: 'none',
-              backgroundColor: '#ef4444',
-              color: 'white',
-              cursor: 'pointer',
-            }}
+        <div role="alert" className="my-2">
+          <Alert
+            tone="danger"
+            title="Something went wrong"
+            actions={
+              <Button type="button" variant="outline" size="xs" onClick={this.handleRetry}>
+                <RotateCw />
+                Try again
+              </Button>
+            }
           >
-            Try Again
-          </button>
+            <span className="[overflow-wrap:anywhere]">
+              {this.state.error?.message || 'An unexpected error occurred'}
+            </span>
+          </Alert>
         </div>
       )
     }

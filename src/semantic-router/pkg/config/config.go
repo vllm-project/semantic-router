@@ -288,18 +288,19 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	RouterEnabled          *bool                `yaml:"router_enabled,omitempty"`
-	ListBackendModels      bool                 `yaml:"list_backend_models,omitempty"`
-	ClearRouteCache        bool                 `yaml:"clear_route_cache"`
-	StreamedBodyMode       bool                 `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
-	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
-	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
-	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
-	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
-	ContextWindow          ContextWindowConfig  `yaml:"context_window,omitempty"`
-	DrainTimeoutSeconds    *int                 `yaml:"drain_timeout_seconds,omitempty"`
+	RouterEnabled               *bool                `yaml:"router_enabled,omitempty"`
+	ListBackendModels           bool                 `yaml:"list_backend_models,omitempty"`
+	ClearRouteCache             bool                 `yaml:"clear_route_cache"`
+	StreamedBodyMode            bool                 `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes        int64                `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec      int                  `yaml:"streamed_body_timeout_sec,omitempty"`
+	SkipProcessing              SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	AllowLossyTranslation       []string             `yaml:"allow_lossy_translation,omitempty"`
+	AllowRequestExtensionFields []string             `yaml:"allow_request_extension_fields,omitempty"`
+	RoutingInput                RoutingInputConfig   `yaml:"routing_input,omitempty"`
+	Headers                     RouterHeadersConfig  `yaml:"headers,omitempty"`
+	ContextWindow               ContextWindowConfig  `yaml:"context_window,omitempty"`
+	DrainTimeoutSeconds         *int                 `yaml:"drain_timeout_seconds,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend
@@ -378,4 +379,8 @@ type BackendModels struct {
 type ReasoningConfig struct {
 	DefaultReasoningEffort string                           `yaml:"default_reasoning_effort,omitempty"`
 	ReasoningFamilies      map[string]ReasoningFamilyConfig `yaml:"reasoning_families,omitempty"`
+	// ReasoningMinOutputTokens is providers.defaults.reasoning_min_output_tokens:
+	// a request that states no reasoning preference and sets a smaller output
+	// limit runs with reasoning off. Zero turns the rule off.
+	ReasoningMinOutputTokens int `yaml:"reasoning_min_output_tokens,omitempty"`
 }

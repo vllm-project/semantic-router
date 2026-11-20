@@ -33,7 +33,7 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           key: 'harness',
           label: 'Harness',
           type: 'select',
-          options: ['claude_code', 'codex', 'opencode'],
+          options: ['claude_code', 'codex', 'opencode', 'deepseek_harness', 'cursor', 'openclaw'],
           description: 'The harness whose identity headers the request carries.',
         },
         {

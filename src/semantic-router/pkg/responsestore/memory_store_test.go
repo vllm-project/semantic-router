@@ -4,8 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
@@ -101,6 +106,115 @@ func TestMemoryStoreGetConversationChainSelfReference(t *testing.T) {
 	chain, err := getConversationChainWithTimeout(t, store, "resp_self")
 	if err == nil {
 		t.Fatalf("GetConversationChain(resp_self) = %d entries, err = nil; want an error", len(chain))
+	}
+}
+
+const logSinkTimeout = 5 * time.Second
+
+// blockingLogSink stands in for a log destination that has stopped accepting
+// writes, such as a full pipe: every write blocks until the gate is released.
+type blockingLogSink struct {
+	entered     chan struct{}
+	gate        chan struct{}
+	enterOnce   sync.Once
+	releaseOnce sync.Once
+
+	mu    sync.Mutex
+	lines []string
+}
+
+func (s *blockingLogSink) Write(p []byte) (int, error) {
+	s.enterOnce.Do(func() { close(s.entered) })
+	<-s.gate
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lines = append(s.lines, string(p))
+	return len(p), nil
+}
+
+func (s *blockingLogSink) release() {
+	s.releaseOnce.Do(func() { close(s.gate) })
+}
+
+func (s *blockingLogSink) written() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.lines...)
+}
+
+// useBlockingLogSink points the global logger at a sink that blocks every
+// warning. The gate is released on cleanup so a failing test cannot leave a
+// goroutine stuck in a write while the store is closed.
+func useBlockingLogSink(t *testing.T) *blockingLogSink {
+	t.Helper()
+
+	sink := &blockingLogSink{entered: make(chan struct{}), gate: make(chan struct{})}
+	core := zapcore.NewCore(zapcore.NewConsoleEncoder(zap.NewProductionEncoderConfig()), zapcore.AddSync(sink), zapcore.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+	t.Cleanup(sink.release)
+	return sink
+}
+
+func waitForLogSinkEvent(t *testing.T, done <-chan struct{}, event string) {
+	t.Helper()
+
+	select {
+	case <-done:
+	case <-time.After(logSinkTimeout):
+		t.Fatalf("timed out waiting for %s", event)
+	}
+}
+
+// The cycle warning goes through a synchronous logger whose destination can
+// stall. A write stuck on that destination must not also hold the store lock,
+// or every writer waits for the log sink.
+func TestMemoryStoreGetConversationChainCycleWarningDoesNotBlockWriters(t *testing.T) {
+	store := newChainTestStore(t)
+
+	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_log_1", PreviousResponseID: "resp_log_2"})
+	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_log_2", PreviousResponseID: "resp_log_1"})
+	sink := useBlockingLogSink(t)
+
+	var walkErr error
+	walkDone := make(chan struct{})
+	go func() {
+		defer close(walkDone)
+		_, walkErr = store.GetConversationChain(context.Background(), "resp_log_1")
+	}()
+	waitForLogSinkEvent(t, sink.entered, "the cycle warning to reach the log sink")
+
+	var storeErr error
+	storeDone := make(chan struct{})
+	started := time.Now()
+	go func() {
+		defer close(storeDone)
+		storeErr = store.StoreResponse(context.Background(), &responseapi.StoredResponse{ID: "resp_log_writer"})
+	}()
+	stalled := false
+	select {
+	case <-storeDone:
+		t.Logf("StoreResponse returned after %v while the log sink was blocked", time.Since(started))
+	case <-time.After(logSinkTimeout):
+		stalled = true
+	}
+
+	sink.release()
+	waitForLogSinkEvent(t, walkDone, "GetConversationChain to return once the log sink is released")
+	waitForLogSinkEvent(t, storeDone, "StoreResponse to return once the log sink is released")
+
+	if stalled {
+		t.Errorf("StoreResponse blocked for %v until the log sink was released: the log write holds the store lock", logSinkTimeout)
+	}
+	if storeErr != nil {
+		t.Errorf("StoreResponse(resp_log_writer) error = %v", storeErr)
+	}
+	if want := "response chain loops back to resp_log_1"; walkErr == nil || walkErr.Error() != want {
+		t.Errorf("GetConversationChain(resp_log_1) error = %v, want %q", walkErr, want)
+	}
+	lines := sink.written()
+	if len(lines) != 1 || !strings.Contains(lines[0], "MemoryStore: circular reference detected at resp_log_1") {
+		t.Errorf("log lines = %q, want one circular reference warning for resp_log_1", lines)
 	}
 }
 

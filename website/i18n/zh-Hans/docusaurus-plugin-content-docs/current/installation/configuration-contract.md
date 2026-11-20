@@ -63,10 +63,10 @@ vllm-sr config schema \
 | 视图 | Schema |
 | --- | --- |
 | 控制面板，`GET /api/router/config/schema` | 代理已部署 Router 的契约。如果该 Router 端点不可用，则使用控制面板构建中嵌入的 schema，并标记 `X-Vllm-Sr-Schema-Source: bundled`。 |
-| 控制面板，**Operate → Platform & Access → Schema Reference** | 显示使用的是哪一份，并在已部署契约与捆绑契约不同时发出警告。 |
+| 控制面板，**Settings → Schema reference** | 显示使用的是哪一份，并在已部署契约与捆绑契约不同时发出警告。 |
 | 网站，[配置 Schema 参考](../api/configuration-schema) | 当前文档发行版，不代表任何部署。 |
 
-Agent 不需要控制面板。在 Router 上查询 `GET /api/v1` 获取紧凑端点清单，然后用 `GET /openapi.json?path=...&method=...` 请求一项操作；仅在需要完整 API 文档时使用 `GET /openapi.json`。控制面板的 **Router API Docs** 链接是指向同一运行时文档的面向人工的代理。
+Agent 不需要控制面板。在 Router 上查询 `GET /api/v1` 获取紧凑端点清单，然后用 `GET /openapi.json?path=...&method=...` 请求一项操作；仅在需要完整 API 文档时使用 `GET /openapi.json`。控制面板帮助菜单中的 **Router API reference** 链接是指向同一运行时文档的面向人工的代理。
 
 每种表示都有自己的 `ETag`；当 Agent 或编辑器缓存它时，使用 `If-None-Match`。
 

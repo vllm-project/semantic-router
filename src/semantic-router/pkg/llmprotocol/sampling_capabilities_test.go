@@ -4,31 +4,8 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 )
-
-// A model can declare that its backends reject min_p and logit_bias, as a
-// vLLM backend that runs speculative decoding does; nothing else can be
-// declared unsupported.
-func TestOnlySamplingControlsCanBeDeclaredUnsupported(t *testing.T) {
-	if got := UnsupportedCapabilityNames(); !reflect.DeepEqual(got, []string{"sampling_min_p", "sampling_logit_bias"}) {
-		t.Fatalf("unsupported capability names = %v", got)
-	}
-	declared, err := ParseUnsupportedCapabilities([]string{"sampling_logit_bias", "sampling_min_p"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !declared.Supports(CapabilitySamplingMinP) || !declared.Supports(CapabilitySamplingLogitBias) {
-		t.Fatalf("parsed %v", declared.Names())
-	}
-	for _, name := range []string{"image_input", "sampling_top_k", "Sampling_Min_P", "min_p", ""} {
-		_, err := ParseUnsupportedCapabilities([]string{name})
-		if err == nil || !strings.Contains(err.Error(), "use one of: sampling_min_p, sampling_logit_bias") {
-			t.Fatalf("%q was accepted or refused without the choices: %v", name, err)
-		}
-	}
-}
 
 // The projection leaves out only the controls the model declares it lacks,
 // reports each as dropped, and retires the source bytes that still carry

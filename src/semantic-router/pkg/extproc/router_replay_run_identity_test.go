@@ -89,13 +89,14 @@ func TestReplayFilesEachCallUnderItsHarnessRun(t *testing.T) {
 			for _, record := range []store.Record{root, child, grandchild} {
 				require.Equal(t, "cx-run", record.SessionID)
 			}
-			require.Equal(t, &store.AgentIdentity{Harness: store.HarnessCodex}, root.Agent)
+			require.Equal(t, &store.AgentIdentity{Harness: store.HarnessCodex, RequestClass: config.AgentRequestClassMain}, root.Agent)
 			require.Equal(t, &store.AgentIdentity{
 				Harness: store.HarnessCodex, ID: shortLearningIdentityHash("child"), Kind: "collab_spawn",
+				RequestClass: config.AgentRequestClassSubagent,
 			}, child.Agent)
 			require.Equal(t, &store.AgentIdentity{
 				Harness: store.HarnessCodex, ID: shortLearningIdentityHash("grandchild"),
-				ParentID: shortLearningIdentityHash("child"), Kind: "collab_spawn",
+				ParentID: shortLearningIdentityHash("child"), Kind: "collab_spawn", RequestClass: config.AgentRequestClassSubagent,
 			}, grandchild.Agent)
 
 			main := recordRunCall(t, router, claudeHeaders(""), llmprotocol.AnthropicMessagesV1)
