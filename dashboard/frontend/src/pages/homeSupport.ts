@@ -1,6 +1,7 @@
 import { ListTree, Lock, ServerOff, type LucideIcon } from 'lucide-react'
 
 import type { Tone } from '../ui'
+import { isInsightsNoCurrency } from '../utils/insightsCost'
 import type { InsightsUnavailableReason } from './insightsPageApi'
 import type {
   InsightsAggregateCurrencySummary,
@@ -336,37 +337,90 @@ export function formatUpdatedAgo(at: number, now: number): string {
 export interface SpendSummary {
   currency?: string
   spend: number
-  /** Net savings against the baseline; undefined when no request was compared. */
+  /**
+   * The compared requests' reference cost less their model cost, before the
+   * Router's own calls; undefined when no request was compared.
+   */
   saved?: number
+  /** The compared requests' model cost and reference cost. */
+  actual?: number
   baseline?: number
-  /** Further currencies with spend that the lead one leaves out. */
-  otherCurrencies: number
+  /** What the Router's own calls cost (decision model and similar), apart from the models'. */
+  routerCalls: number
+  /** The priced calls the total leaves out because another currency or plain units price them. */
+  otherCurrencies: { currency: string; calls: number }[]
+  /** Calls with no price at all. */
+  noPrice: number
 }
 
 type SpendGroup = Pick<
   InsightsAggregateCurrencySummary,
-  'total_saved' | 'baseline_spend' | 'actual_spend' | 'total_spend' | 'cost_record_count'
+  | 'total_saved'
+  | 'gross_saved'
+  | 'baseline_spend'
+  | 'actual_spend'
+  | 'router_call_spend'
+  | 'total_spend'
+  | 'cost_record_count'
 > & { currency?: string }
 
 const groupSpend = (group: SpendGroup) => Math.abs(group.total_spend ?? group.actual_spend ?? 0)
+// A router without gross_saved reports the same difference as its two spends.
+const grossSaved = (group: SpendGroup) =>
+  group.gross_saved ?? group.baseline_spend - group.actual_spend
+const isCurrency = (currency?: string) =>
+  Boolean(currency?.trim()) && !isInsightsNoCurrency(currency)
 
-/** The currency that carries the most spend leads; currencies without spend are not counted. */
+/**
+ * The totals in one currency: the real currency that carries the most spend,
+ * else the plain price units when nothing else is priced. Calls priced in
+ * anything else are counted, never added.
+ */
 export function spendSummary(aggregate: Pick<InsightsAggregateResponse, 'summary'>): SpendSummary {
   const summary = aggregate.summary
   const groups: SpendGroup[] = summary.by_currency?.length ? summary.by_currency : [summary]
-  const lead = groups.reduce((best, group) => (groupSpend(group) > groupSpend(best) ? group : best))
+  const priced = (group: SpendGroup) => groupSpend(group) > 0 || group.cost_record_count > 0
+  const real = groups.filter((group) => isCurrency(group.currency) && priced(group))
+  const pool = real.length ? real : groups
+  const lead = pool.reduce((best, group) => (groupSpend(group) > groupSpend(best) ? group : best))
   const compared = lead.cost_record_count > 0
   return {
     currency: lead.currency,
     spend: lead.total_spend ?? lead.actual_spend,
-    saved: compared ? lead.total_saved : undefined,
+    saved: compared ? grossSaved(lead) : undefined,
+    actual: compared ? lead.actual_spend : undefined,
     baseline: compared ? lead.baseline_spend : undefined,
-    otherCurrencies: groups.filter((group) => group !== lead && groupSpend(group) > 0).length,
+    routerCalls: lead.router_call_spend ?? 0,
+    otherCurrencies: groups
+      .filter((group) => group !== lead && groupSpend(group) > 0)
+      .map((group) => ({ currency: group.currency ?? '', calls: group.cost_record_count })),
+    noPrice: summary.coverage?.unpriced_records ?? 0,
   }
 }
 
-export function moreCurrenciesLabel(count: number): string | undefined {
-  return count > 0 ? `+${count} more currenc${count > 1 ? 'ies' : 'y'}` : undefined
+/** The calls a spend total leaves out, as a short hint; none when it leaves out nothing. */
+export function unpricedHint(money: Pick<SpendSummary, 'otherCurrencies' | 'noPrice'>) {
+  const calls = money.otherCurrencies.reduce((sum, group) => sum + group.calls, 0) + money.noPrice
+  if (calls > 0) return `${calls.toLocaleString('en-US')} call${calls === 1 ? '' : 's'} unpriced`
+  return money.otherCurrencies.length ? 'Some calls unpriced' : undefined
+}
+
+/** Why the total leaves those calls out, in words. */
+export function unpricedNote(
+  money: Pick<SpendSummary, 'currency' | 'otherCurrencies' | 'noPrice'>,
+): string {
+  const lead = isCurrency(money.currency) ? money.currency : 'plain price units'
+  const parts = money.otherCurrencies.map(({ currency, calls }) => {
+    const count = calls > 0 ? `${calls.toLocaleString('en-US')} calls` : 'Calls'
+    return isCurrency(currency)
+      ? `${count} priced in ${currency.trim().toUpperCase()}`
+      : `${count} priced in plain units, by rates set without a currency`
+  })
+  if (money.noPrice > 0)
+    parts.push(
+      `${money.noPrice.toLocaleString('en-US')} without a price (no usage or not completed)`,
+    )
+  return `The total is in ${lead} only. Not added: ${parts.join('; ')}.`
 }
 
 export function greeting(hour: number): string {

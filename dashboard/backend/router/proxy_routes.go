@@ -182,7 +182,9 @@ func serveRouterAPIProxy(
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/router/api/v1/observability/replays") {
 		// Let the proxy transport negotiate decompression so replay JSON can
-		// be redacted safely for read-only Dashboard principals.
+		// be redacted safely for read-only Dashboard principals; the answer
+		// is compressed again for the browser once redacted.
+		r = withReplayGzip(r)
 		r.Header.Del("Accept-Encoding")
 	}
 	if err := routerauth.RewriteAuthorization(r, credentialProvider); err != nil {
