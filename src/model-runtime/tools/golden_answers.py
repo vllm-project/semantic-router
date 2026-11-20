@@ -32,8 +32,9 @@ baseline device before adding other hardware classes.
 (``dtypes.on_host``), with the approximate CPU kernels the family consents to,
 and records the BF16 reference that turns it on: under the hardware key that
 names those kernels (``cpu:…:amd:zentorch@bfloat16``), or the plain key where
-none run. Answers computed with approximate kernels never replace the generic
-baseline.
+none run, with each kernel library's version beside the PyTorch version
+(``kernels``: a new version can sum in another order, so it is recorded again).
+Answers computed with approximate kernels never replace the generic baseline.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -150,12 +152,22 @@ def answers(
             "device": served.placement.device.label,
             "dtype": dtype,
             "torch": torch.__version__,
+            # A key naming kernels holds their libraries' summation order too.
+            "kernels": kernel_versions(served.golden_kernels),
             "readiness": served.health.golden.describe(),
             "previous": previous,
             "golden_answers": goldens,
         }
     finally:
         runtime.stop()
+
+
+def kernel_versions(sources: tuple[str, ...]) -> dict[str, str | None]:
+    """Each approximate kernel source's library version (``zentorch``: its module's)."""
+    return {
+        source: getattr(sys.modules.get(source), "__version__", None)
+        for source in sources
+    }
 
 
 def record(
@@ -167,6 +179,7 @@ def record(
         if current is None or current.get("revision") != entry["revision"]:
             current = {"revision": entry["revision"], "answers": {}}
         answers, recorded_with = current["answers"], current.get("torch", {})
+        kernels_with = current.get("kernels", {})
         version = entry.get("torch")
         device_class = entry["device"].split(":", 1)[0]
         generic = qualified(device_class, entry.get("dtype", "auto"))
@@ -194,8 +207,13 @@ def record(
             ):
                 answers.pop(key, None)
                 recorded_with.pop(key, None)
+                kernels_with.pop(key, None)
                 continue
             answers[key] = values
+            if entry.get("kernels"):
+                kernels_with[key] = entry["kernels"]
+            else:
+                kernels_with.pop(key, None)
             if version is None:
                 recorded_with.pop(key, None)
             else:
@@ -204,6 +222,10 @@ def record(
             current["torch"] = recorded_with
         else:
             current.pop("torch", None)
+        if kernels_with:
+            current["kernels"] = kernels_with
+        else:
+            current.pop("kernels", None)
         table[entry["repo"]] = current
     path.write_text(
         json.dumps(table, indent=1, sort_keys=True) + "\n", encoding="utf-8"

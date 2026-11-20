@@ -443,13 +443,15 @@ def zentorch_linear(monkeypatch):
 
 @pytest.mark.parametrize("named", [True, False])
 def test_auto_keeps_zentorch_at_bf16_only_where_the_class_references_name_it(
-    d3_package, monkeypatch, named
+    d3_package, monkeypatch, tmp_path, named
 ):
     """A BF16 reference holds one GEMM order: zentorch's linear runs at BF16 against the key naming it, else exact kernels against the plain key."""
     key = "cpu:fixture"
     monkeypatch.setattr(CPUAccelerator, "golden_reference", lambda self, device: key)
     monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: True)
     zentorch_linear(monkeypatch)
+    library = argparse.Namespace(__version__="2.14.1.0")
+    monkeypatch.setitem(sys.modules, "zentorch", library)
     fp32 = recorder.answers(recording_args(), str(d3_package), None)
     exact = recorder.answers(recording_args("bfloat16"), str(d3_package), None)
     args = recording_args()
@@ -458,6 +460,12 @@ def test_auto_keeps_zentorch_at_bf16_only_where_the_class_references_name_it(
     # Recorded under the key naming the kernel only, never as the generic baseline.
     tagged = f"{key}:zentorch@bfloat16"
     assert set(approximate["golden_answers"]) == {tagged}
+    # With the kernel library's version: a new one can sum in another order.
+    assert approximate["kernels"] == {"zentorch": "2.14.1.0"}
+    path = tmp_path / "goldens.json"
+    recorder.record(path, [exact, approximate])
+    table = next(iter(json.loads(path.read_text()).values()))
+    assert table["kernels"] == {tagged: {"zentorch": "2.14.1.0"}}
     expected = {
         "cpu": fp32["golden_answers"]["cpu"],
         # Each key's references pass only the kernels they were recorded with.
