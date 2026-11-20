@@ -345,7 +345,8 @@ def test_auto_serves_fp32_where_the_bf16_answers_differ_from_the_class_reference
         card = served.card([])
         assert card["dtype"] == "fp32"
         assert card["reason"] == (
-            f"BF16 golden answers differ from {key}@bfloat16; computes in FP32"
+            "BF16 golden answers differ from the reference "
+            f"({key}@bfloat16); computes in FP32"
         )
     finally:
         runtime.stop()
@@ -357,6 +358,57 @@ def test_auto_serves_fp32_where_the_bf16_answers_differ_from_the_class_reference
     try:
         with pytest.raises(VerificationError, match="differ from the reference"):
             runtime.load()
+    finally:
+        runtime.stop()
+
+
+def test_auto_serves_fp32_where_the_bf16_answers_are_not_deterministic(
+    d3_package, monkeypatch
+):
+    """A BF16 run whose two golden answers differ falls back to FP32 at ``auto``, and the reason says why."""
+    key = "cpu:fixture"
+    monkeypatch.setattr(CPUAccelerator, "golden_reference", lambda self, device: key)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: False)
+    fp32 = recorder.answers(recording_args(), str(d3_package), None)
+    bf16 = recorder.answers(recording_args("bfloat16"), str(d3_package), None)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: True)
+    # The BF16 reference matches, so only the drift between runs fails the check.
+    expected = {
+        "cpu": fp32["golden_answers"]["cpu"],
+        f"{key}@bfloat16": bf16["golden_answers"][f"{key}@bfloat16"],
+    }
+    golden = Decision3Family.golden
+    monkeypatch.setattr(
+        Decision3Family,
+        "golden",
+        lambda self, package: [
+            {**request, "expected": expected} for request in golden(self, package)
+        ],
+    )
+
+    def drifting(run, *args):
+        """``golden_check`` whose BF16 runs answer differently each time."""
+        if args[-1] != "bfloat16":
+            return golden_check(run, *args)
+        calls = iter(range(1_000_000))
+        return golden_check(
+            lambda surface, body: {**run(surface, body), "run": next(calls)}, *args
+        )
+
+    monkeypatch.setattr("vllm_srun.runtime.golden_check", drifting)
+    runtime = Runtime(
+        ServeConfig(models=(ModelConfig(model=str(d3_package), device="cpu"),))
+    )
+    try:
+        runtime.load()
+        served = runtime.lookup(None)
+        assert served.health.golden.status == "matched"
+        assert served.health.golden.reference == "cpu"
+        card = served.card([])
+        assert card["dtype"] == "fp32"
+        assert card["reason"] == (
+            "BF16 golden answers are not deterministic; computes in FP32"
+        )
     finally:
         runtime.stop()
 

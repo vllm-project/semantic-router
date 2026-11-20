@@ -383,19 +383,23 @@ class ServedModel:
 
         A CPU class's BF16 references can't vouch for a later CPU that shares
         its key but rounds BF16 otherwise (#5273); FP32 answers agree on every
-        CPU class, so the model serves in FP32 there instead of failing.
+        CPU class, so the model serves in FP32 there instead of failing. Any
+        failed check falls back (a mismatch, answers that aren't deterministic,
+        malformed answers), and the reason names which. The retry is placed at
+        the FP32 size, so a memory budget has to fit FP32 for it to serve.
         """
         self.bf16_refused = None
         try:
             self._load(cpu_bf16=True)
-        except VerificationError as error:
+        except VerificationError:
             if self.golden_dtype is None:
                 raise
-            reference = self.health.golden.reference
-            self.bf16_refused = (
-                f"BF16 golden answers differ from {reference}; computes in FP32"
-            )
-            log.warning("%s: %s (%s)", self.label, self.bf16_refused, error)
+            golden = self.health.golden
+            detail = golden.detail or "golden check failed"
+            if golden.reference is not None:
+                detail = f"{detail} ({golden.reference})"
+            self.bf16_refused = f"BF16 {detail}; computes in FP32"
+            log.warning("%s: %s", self.label, self.bf16_refused)
             self._load(cpu_bf16=False)
 
     def _load(self, cpu_bf16: bool) -> None:

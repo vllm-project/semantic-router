@@ -165,8 +165,11 @@ decisions there
 ([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/d3-cpu-bf16-native.md)).
 A CPU without its own reference, such as an Intel Xeon with AMX until one is
 recorded, keeps FP32. `--dtype float32` keeps FP32 on every CPU. If a CPU's
-BF16 answers still differ from its class's reference, `auto` loads the model
-again in FP32, and the model card's `reason` says so.
+BF16 answers fail its golden check there (they differ from its class's
+reference, or two runs differ), `auto` loads the model again in FP32, and the
+model card's `reason` says which. That load is placed at the FP32 size, about
+twice the BF16 weights, so on these CPUs `--memory-budget` has to fit FP32 for
+the model to serve after a failed BF16 check.
 
 Another value holds every weight of the backbone in that dtype and computes in
 it, with the reference kernels. A value that names the `auto` precision is the
