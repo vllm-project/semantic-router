@@ -1480,6 +1480,15 @@ process that still serves ONNX Runtime beside other CPU models on the
 default (a third-party package only ONNX Runtime runs, or a runtime embedded
 in another program) logs a warning that names the fix.
 
+On a CUDA build of PyTorch, `serve` then sets
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` unless the caller set
+`PYTORCH_ALLOC_CONF`, `PYTORCH_CUDA_ALLOC_CONF` or `PYTORCH_HIP_ALLOC_CONF`.
+PyTorch reads it when CUDA initializes, not when it loads. With the default
+fixed segments a long Decision 3.0 forward reserved about as much unused
+memory as its activations took: 30.0 GiB against 24.4 GiB for one
+32,215-token d3-ultra-NVFP4 question on a GB10, with the same answer (#7179).
+ROCm builds keep their allocator's default, which was not measured.
+
 ## 13. Router integration
 
 ### 13.1 Configuration
