@@ -6,6 +6,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 // Each phase's reply is built here once and shared by every adapter: the
@@ -95,9 +96,27 @@ func (r *OpenAIRouter) responseBodyReply(
 	return response, nil
 }
 
+// cutResponseBodyReply answers in place of an upstream body that ended before
+// it was whole, which no response-body phase reads: the 504 Envoy gives a
+// timeout, else the 502 that phase gives a body it cannot read.
+func (r *OpenAIRouter) cutResponseBodyReply(ctx *RequestContext, cause error) *ext_proc.ProcessingResponse {
+	recordSessionTurnOutcome(ctx, responseUsageMetrics{})
+	var response *ext_proc.ProcessingResponse
+	if upstream.KindOf(cause) == upstream.KindTimeout {
+		response = r.answerInPlaceOfUpstream(ctx, http.StatusGatewayTimeout, "The selected model did not answer in time", "upstream_timeout")
+	} else {
+		response = r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
+	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
+	r.bindBenchmarkConfigResponse(response, ctx)
+	return response
+}
+
 func responseHeadersReplySent(ctx *RequestContext, response *ext_proc.ProcessingResponse, endOfStream bool) {
 	finishImmediateResponseTrace(ctx, response)
 	if endOfStream {
+		ctx.responseComplete = true
 		finishRequestTrace(ctx, nil)
 	}
 }
@@ -105,6 +124,7 @@ func responseHeadersReplySent(ctx *RequestContext, response *ext_proc.Processing
 func responseBodyReplySent(ctx *RequestContext, response *ext_proc.ProcessingResponse, endOfStream bool) {
 	finishImmediateResponseTrace(ctx, response)
 	if endOfStream || ctx.StreamingComplete {
+		ctx.responseComplete = true
 		finishRequestTrace(ctx, nil)
 	}
 }

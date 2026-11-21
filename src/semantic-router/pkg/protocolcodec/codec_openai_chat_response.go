@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -418,6 +419,11 @@ func encodeChatOutput(items []llmprotocol.OutputItem, index int, stop llmprotoco
 	message, err := encodeChatMessage(combined)
 	if err != nil {
 		return chatChoiceWire{}, err
+	}
+	if len(combined.Content) == 0 {
+		// A reply with no output, such as a turn the model ended with nothing
+		// to say, is an empty assistant message, as OpenAI sends one.
+		message.Content = json.RawMessage(`""`)
 	}
 	reason := encodeChatStop(stop)
 	return chatChoiceWire{Index: index, Message: message, FinishReason: &reason}, nil

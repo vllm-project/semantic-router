@@ -124,10 +124,8 @@ func (s *routingSession) RequestBody(body []byte, endOfStream bool) (*routing.Ef
 
 func (s *routingSession) ResponseHeaders(header routing.Header, endOfStream bool) (*routing.Effect, error) {
 	if s.fallback != nil {
-		// The caller asks the fallback only about failures, so a fallback
-		// candidate's success is recorded here, before its headers are built.
 		if status, err := strconv.Atoi(header.Get(":status")); err == nil && status >= 200 && status < 300 {
-			s.fallback.succeeded(status)
+			s.fallback.beginResponse(status)
 		}
 	}
 	v := &ext_proc.ProcessingRequest_ResponseHeaders{
@@ -151,6 +149,16 @@ func (s *routingSession) ResponseBody(body []byte, endOfStream bool) (*routing.E
 	})
 }
 
+// ResponseBodyCut answers for an upstream body that ended before it was
+// whole, which Envoy answers with its own local reply.
+func (s *routingSession) ResponseBodyCut(cause error) (*routing.Effect, error) {
+	return s.phase(func() (*ext_proc.ProcessingResponse, error) {
+		return s.router.cutResponseBodyReply(s.ctx, cause), nil
+	}, func(response *ext_proc.ProcessingResponse) {
+		responseBodyReplySent(s.ctx, response, true)
+	})
+}
+
 func (s *routingSession) Evidence() routing.Evidence {
 	return routingEvidence(s.ctx)
 }
@@ -164,10 +172,6 @@ func (s *routingSession) Close(err error) {
 		return
 	}
 	s.closed = true
-	if s.fallback != nil {
-		// A chain the caller abandoned still leaves one audit record.
-		s.router.recordFallbackExecution(s.ctx)
-	}
 	if s.ended {
 		return
 	}
@@ -224,9 +228,14 @@ func (s *routingSession) end(err error) {
 		return
 	}
 	s.ended = true
+	if s.fallback != nil {
+		s.router.finishNativeFallbackResponse(s.ctx, "response_incomplete")
+		s.router.recordFallbackExecution(s.ctx)
+	}
 	releaseInflightAdmission(s.ctx)
 	s.router.finishRequestSpend(s.ctx)
 	releaseStreamedBody(s.ctx)
+	finishRequestWork(s.ctx)
 	finishRequestTrace(s.ctx, err)
 	if s.release != nil {
 		s.release()

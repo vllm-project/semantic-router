@@ -117,6 +117,31 @@ def test_media_leading_a_five_state_is_read_in_front_of_it() -> None:
     assert read(FIVE, schemas.PATH_SYSTEMONE, inline).body["assets"] == inline["assets"]
 
 
+@pytest.mark.parametrize(
+    "name,mime",
+    [
+        ("mp4", "video/mp4"),
+        ("webm", "video/webm"),
+        ("mov", "video/quicktime"),
+        ("mkv", "video/x-matroska"),
+        ("ts", "video/mp2t"),
+    ],
+)
+def test_a_five_video_asset_is_read_as_the_data_url_of_its_format(
+    name: str, mime: str
+) -> None:
+    body = {
+        "state": ["clip", "What happens?"],
+        "questions": NOUL,
+        "assets": {"clip": {"type": "video", "format": name, "data_base64": "AAAA"}},
+    }
+    internal = read(FIVE, schemas.PATH_SYSTEMONE, body).body
+    assert internal["videos"] == [f"data:{mime};base64,AAAA"]
+    body["assets"]["clip"]["format"] = "avi"
+    with pytest.raises(schemas.ReadError, match="mp4, webm, mov, mkv or ts"):
+        read(FIVE, schemas.PATH_SYSTEMONE, body)
+
+
 def test_a_batch_is_named_requests_on_either_schema() -> None:
     body = {
         "model": "m",

@@ -308,7 +308,7 @@ fields:
       required: [type]
       properties:
         type: {const: video}
-        format: {type: string, enum: [mp4, webm, mov, mkv]}
+        format: {type: string, enum: [mp4, webm, mov, mkv, ts]}
         data_base64: {type: string}
         part: {type: string}
     summary: >-
