@@ -39,7 +39,34 @@ func conversationSourceValue(source config.ConversationSource) ObjectValue {
 	if source.Role != "" {
 		fields["role"] = StringValue{V: source.Role}
 	}
+	if len(source.Tools) > 0 {
+		fields["tools"] = stringsToArray(source.Tools)
+	}
+	if len(source.Calls) > 0 {
+		calls := make([]Value, 0, len(source.Calls))
+		for _, call := range source.Calls {
+			calls = append(calls, ObjectValue{Fields: toolCallMatchFields(call)})
+		}
+		fields["calls"] = ArrayValue{Items: calls}
+	}
+	if source.Match != "" {
+		fields["match"] = StringValue{V: source.Match}
+	}
 	return ObjectValue{Fields: fields}
+}
+
+func toolCallMatchFields(call config.ToolCallMatch) map[string]Value {
+	fields := map[string]Value{}
+	if len(call.Tools) > 0 {
+		fields["tools"] = stringsToArray(call.Tools)
+	}
+	if call.Argument != "" {
+		fields["argument"] = StringValue{V: call.Argument}
+	}
+	if call.Pattern != "" {
+		fields["pattern"] = StringValue{V: call.Pattern}
+	}
+	return fields
 }
 
 func conversationFeatureToMap(feature config.ConversationFeature) map[string]interface{} {
@@ -55,6 +82,29 @@ func conversationSourceToMap(source config.ConversationSource) map[string]interf
 	}
 	if source.Role != "" {
 		values["role"] = source.Role
+	}
+	if len(source.Tools) > 0 {
+		values["tools"] = source.Tools
+	}
+	if len(source.Calls) > 0 {
+		calls := make([]interface{}, 0, len(source.Calls))
+		for _, call := range source.Calls {
+			entry := map[string]interface{}{}
+			if len(call.Tools) > 0 {
+				entry["tools"] = call.Tools
+			}
+			if call.Argument != "" {
+				entry["argument"] = call.Argument
+			}
+			if call.Pattern != "" {
+				entry["pattern"] = call.Pattern
+			}
+			calls = append(calls, entry)
+		}
+		values["calls"] = calls
+	}
+	if source.Match != "" {
+		values["match"] = source.Match
 	}
 	return values
 }
