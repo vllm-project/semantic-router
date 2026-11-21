@@ -23,6 +23,7 @@ from provenance.metrics import (
     calibration_metrics,
     classification_metrics,
     discrimination,
+    gold_class_comparability,
     latency_percentiles,
     operating_points,
 )
@@ -130,6 +131,7 @@ def summarise(
         separation = discrimination(truth, rows, mapping, positive_labels)
 
     latency = latency_percentiles(latencies)
+    comparability = gold_class_comparability(truth, mapping)
     return {
         "metrics": metrics,
         # Labels the split has no rows for: kept in per_label with support 0,
@@ -146,6 +148,7 @@ def summarise(
             "peak_memory_mb": peak_memory_mb,
             "throughput_rows_per_s": 1000.0 / latency["mean"],
         },
+        **comparability,
     }
 
 

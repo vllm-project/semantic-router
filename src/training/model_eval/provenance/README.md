@@ -39,6 +39,10 @@ Schema level:
   provenance
 - a credential, an absolute host path, or an over-long string that reads as
   embedded sample data
+- an evaluation manifest with a single surviving mapped gold class that omits
+  `comparable: false` and matching `comparability` metadata, or pairs
+  `comparability` with `comparable: true`, or disagrees with `label_mapping` or
+  `metrics.per_label`
 
 Cross-reference level:
 

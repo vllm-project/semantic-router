@@ -255,4 +255,6 @@ def _build_evaluation(
         performance=summary["performance"],
         slices=summary["slices"],
         discrimination=summary["discrimination"],
+        comparable=summary.get("comparable"),
+        comparability=summary.get("comparability"),
     )

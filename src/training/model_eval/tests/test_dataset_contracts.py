@@ -2,14 +2,20 @@
 
 import argparse
 import ast
+import contextlib
 import importlib
 import importlib.util
+import io
+import json
 import logging
+import math
 import random
 import sys
+import tempfile
 import unittest
 from collections.abc import Sequence
 from dataclasses import dataclass
+from numbers import Integral
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -83,6 +89,9 @@ def legacy_mapping(task):
 class Split(list):
     def filter(self, keep):
         return Split(row for row in self if keep(row))
+
+    def select(self, indices):
+        return Split(self[index] for index in indices)
 
     def select_columns(self, names):
         return Split({name: row[name] for name in names} for row in self)
@@ -665,3 +674,962 @@ class DatasetContractTest(unittest.TestCase):
                 SimpleNamespace(seed=42, config="config.yaml", task="jailbreak")
             )
         dataset_revision.assert_not_called()
+
+    def _run_model_free_baseline(
+        self,
+        *,
+        task,
+        published_rows,
+        mapping,
+        artifact_repo,
+        is_served,
+        predict_class_id,
+        limit=None,
+        eval_dataset_load=None,
+    ):
+        def default_load_dataset(repo, data_files=None, split=None, revision=None):
+            if data_files is not None:
+                return Split(published_rows[data_files])
+            return Split(published_rows)
+
+        tasks_ns = baseline_loader(eval_dataset_load or default_load_dataset)
+        metrics_ns = load_definitions(
+            "provenance/metrics.py",
+            {
+                "SINGLE_MAPPED_GOLD_CLASS_REASON",
+                "abstention_curve",
+                "calibration_metrics",
+                "classification_metrics",
+                "gold_class_comparability",
+            },
+            {
+                "Any": Any,
+                "Integral": Integral,
+                "MIN_BIN_COUNT": 2,
+                "MAX_BIN_COUNT": 100,
+                "Sequence": Sequence,
+            },
+        )
+        inventory = served_artifacts(load_config(gap_report.DEFAULT_CONFIG))
+        served = inventory[task]
+        measured = SimpleNamespace(
+            referenced=None,
+            model_dir=Path("model"),
+            repo=artifact_repo,
+            revision="0" * 40,
+            is_served_by=lambda candidate: candidate.hf_repo == artifact_repo,
+        )
+
+        def fake_measure(
+            args, measured_artifact, served_artifact, texts, labels, label_map
+        ):
+            truth = list(labels)
+            if callable(predict_class_id):
+                predicted = [predict_class_id(index) for index in range(len(truth))]
+            else:
+                predicted = [predict_class_id for _ in truth]
+            confidences = [0.99 for _ in truth]
+            classification = metrics_ns["classification_metrics"](
+                truth, predicted, label_map
+            )
+            thresholds = tuple(sorted({0.0, 0.5, *served_artifact.thresholds}))
+            return (
+                {
+                    "metrics": classification,
+                    "unsupported_labels": sorted(
+                        name
+                        for name, entry in classification["per_label"].items()
+                        if not entry["support"]
+                    ),
+                    "discrimination": None,
+                    "calibration": metrics_ns["calibration_metrics"](
+                        truth, predicted, confidences, bin_count=args.bin_count
+                    ),
+                    "abstention": metrics_ns["abstention_curve"](
+                        truth, predicted, confidences, thresholds=thresholds
+                    ),
+                    "slices": [],
+                    "performance": {
+                        "latency_ms": {"mean": 1.0, "p50": 1.0, "p95": 1.0, "p99": 1.0},
+                        "peak_memory_mb": 0.0,
+                        "throughput_rows_per_s": 1000.0,
+                    },
+                },
+                {"max_position_embeddings": 32768},
+            )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            captured_logs: list[str] = []
+
+            class ListHandler(logging.Handler):
+                def emit(self, record):
+                    captured_logs.append(self.format(record))
+
+            test_logger = logging.getLogger(f"test.{task}.{id(mapping)}.{limit}")
+            test_logger.setLevel(logging.INFO)
+            test_logger.propagate = False
+            handler = ListHandler()
+            test_logger.addHandler(handler)
+            args = SimpleNamespace(
+                task=task,
+                config="config.yaml",
+                output_dir=Path(tmp_dir),
+                device="cpu",
+                batch_size=32,
+                max_length=512,
+                limit=limit,
+                seed=42,
+                bin_count=10,
+                artifact_repo=None if is_served else artifact_repo,
+                artifact_dir=None,
+                artifact_manifest=None,
+                manifest_dir=None,
+                warmup_batches=0,
+                skip_manifests=True,
+            )
+            runner_ns = load_definitions(
+                "quality_baseline.py",
+                {"run", "_build_result", "main"},
+                {
+                    "Any": Any,
+                    "BaselineError": ValueError,
+                    "MODEL_REGISTRY": MODEL_REGISTRY,
+                    "MeasuredArtifact": Any,
+                    "SHORT_REVISION": 12,
+                    "ServedArtifact": Any,
+                    "TASK_SPECS": tasks_ns["TASK_SPECS"],
+                    "_measure": fake_measure,
+                    "_provenance_findings": lambda _args, _measured: [],
+                    "argparse": argparse,
+                    "check_registry_label_order": lambda _task, _repo, _map: [],
+                    "emit_baseline_manifests": Mock(),
+                    "gold_class_comparability": metrics_ns["gold_class_comparability"],
+                    "json": json,
+                    "load_config": lambda _path: {},
+                    "load_rows": tasks_ns["load_rows"],
+                    "logging": logging,
+                    "logger": test_logger,
+                    "np": SimpleNamespace(
+                        random=SimpleNamespace(seed=lambda _seed: None)
+                    ),
+                    "parse_args": lambda _argv=None: args,
+                    "registry_drift": lambda _inv, _reg: [],
+                    "resolve_hf_revision": lambda *_args, **_kwargs: "0" * 40,
+                    "resolve_label_mapping": lambda _model_dir, _served: mapping,
+                    "resolve_measured_artifact": (
+                        lambda _args, _served, validate_repo: (
+                            validate_repo(artifact_repo) or measured
+                        )
+                    ),
+                    "served_artifacts": lambda _config: {task: served},
+                    "sys": sys,
+                    "tokenizer_class": lambda _model_dir: "PreTrainedTokenizerFast",
+                    "torch": SimpleNamespace(manual_seed=lambda _seed: None),
+                    "uncovered_artifacts": lambda _config: [],
+                },
+            )
+            stdout_buffer = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(stdout_buffer):
+                    exit_code = runner_ns["main"]([])
+            finally:
+                test_logger.removeHandler(handler)
+            self.assertEqual(exit_code, 0)
+            written = json.loads(
+                (Path(tmp_dir) / f"{task}_baseline.json").read_text(encoding="utf-8")
+            )
+            return written, stdout_buffer.getvalue(), captured_logs
+
+    def test_single_class_feedback_constant_predictor_is_marked_non_comparable_and_isolated(
+        self,
+    ):
+        published = {
+            "text/crosswoz/feedback/fresh-crosswoz.jsonl": [
+                {
+                    "text": "thanks",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "thanks a lot",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 7,
+                },
+                {
+                    "text": "book a table",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "open now",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 7,
+                },
+            ],
+        }
+        legacy_repo = LEGACY_MODEL_REGISTRY["feedback"]["id"]
+        legacy_map = legacy_mapping("feedback")
+        single_class_run, stdout, logs = self._run_model_free_baseline(
+            task="feedback",
+            published_rows=published,
+            mapping=legacy_map,
+            artifact_repo=legacy_repo,
+            is_served=False,
+            predict_class_id=legacy_map["SAT"],
+        )
+
+        # Metric formulas and unsupported-label handling remain unchanged.
+        self.assertEqual(single_class_run["metrics"]["rows"], 2)
+        self.assertEqual(single_class_run["metrics"]["accuracy"], 1.0)
+        self.assertEqual(single_class_run["metrics"]["macro_f1"], 1.0)
+        self.assertEqual(
+            single_class_run["unsupported_labels"],
+            ["NEED_CLARIFICATION", "WANT_DIFFERENT", "WRONG_ANSWER"],
+        )
+        self.assertEqual(
+            single_class_run["dataset"]["dropped_rows"], {"NO_FEEDBACK": 2}
+        )
+
+        # Explicit run-level non-comparable classification is persisted.
+        self.assertIs(single_class_run["comparable"], False)
+        self.assertEqual(
+            single_class_run["comparability"],
+            {
+                "reason": "single_mapped_gold_class",
+                "surviving_gold_class_count": 1,
+                "surviving_gold_classes": [
+                    {"class_id": 0, "label": "SAT", "support": 2}
+                ],
+            },
+        )
+        self.assertIn("comparable=false (single_mapped_gold_class)", stdout)
+        self.assertTrue(any("single_mapped_gold_class" in message for message in logs))
+
+        # Served two-class control run without `comparable` (and realistic 0.7000 accuracy).
+        served_repo = MODEL_REGISTRY["feedback"]["id"]
+        served_two_class_run = {
+            "task": "feedback",
+            "artifact": {"repo": served_repo, "is_served_artifact": True},
+            "dataset": {
+                "repo": "vllm-sr/router-signal-suite",
+                "split": "test",
+                "split_rule": "by_source",
+            },
+            "metrics": {
+                "rows": 4,
+                "accuracy": 0.7,
+                "macro_f1": 0.769,
+                "per_label": {
+                    "SAT": {"precision": 0.9, "recall": 0.98, "support": 2},
+                    "NO_FEEDBACK": {"precision": 0.9, "recall": 0.42, "support": 2},
+                    "NEED_CLARIFICATION": {
+                        "precision": 0.0,
+                        "recall": 0.0,
+                        "support": 0,
+                    },
+                    "WRONG_ANSWER": {"precision": 0.0, "recall": 0.0, "support": 0},
+                    "WANT_DIFFERENT": {"precision": 0.0, "recall": 0.0, "support": 0},
+                },
+            },
+            "calibration": {"ece": 0.02, "mce": 0.04},
+            "abstention": {"curve": []},
+            "gaps": [],
+        }
+
+        report = gap_report.render(
+            [served_two_class_run, single_class_run], gap_report.DEFAULT_CONFIG
+        )
+        measured_section = report.split("## Measured baselines")[1].split("## ")[0]
+        diagnostic_section = report.split("## Non-comparable diagnostics")[1].split(
+            "## "
+        )[0]
+        gaps_section = report.split("## Gaps")[1].split("## Reproduction")[0]
+
+        self.assertIn("Vela-1.0-Encoder-307M-Feedback", measured_section)
+        self.assertNotIn("mmbert32k-feedback-detector-merged", measured_section)
+        self.assertNotIn("1.0000", measured_section)
+
+        self.assertIn("mmbert32k-feedback-detector-merged", diagnostic_section)
+        self.assertIn("`single_mapped_gold_class`", diagnostic_section)
+        self.assertIn("`SAT` (2)", diagnostic_section)
+        self.assertIn("1.0000", diagnostic_section)
+
+        self.assertNotIn("scores 1.0000 on the same split against", gaps_section)
+        self.assertIn(
+            "is marked non-comparable (`single_mapped_gold_class`)", gaps_section
+        )
+        self.assertNotIn("mmbert32k-feedback-detector-merged` has ECE", gaps_section)
+        self.assertNotIn("gating on the argmax score", gaps_section)
+        self.assertNotIn(
+            "mmbert32k-feedback-detector-merged` recalls only", gaps_section
+        )
+
+        # Even a non-constant low-recall single-class run does not emit
+        # threshold, calibration, or quality gaps.
+        low_recall_single, _, _ = self._run_model_free_baseline(
+            task="feedback",
+            published_rows=published,
+            mapping=legacy_map,
+            artifact_repo=legacy_repo,
+            is_served=False,
+            predict_class_id=lambda idx: (
+                legacy_map["SAT"] if idx == 0 else legacy_map["WRONG_ANSWER"]
+            ),
+        )
+        self.assertEqual(low_recall_single["metrics"]["accuracy"], 0.5)
+        low_recall_report = gap_report.render(
+            [low_recall_single], gap_report.DEFAULT_CONFIG
+        )
+        self.assertNotIn("### Threshold", low_recall_report)
+        self.assertNotIn("### Calibration", low_recall_report)
+        self.assertNotIn("### Quality", low_recall_report)
+
+    def test_row_limit_collapse_to_single_class_marks_non_comparable(self):
+        published = {
+            "text/nf-cats/fact_check/test.jsonl": [
+                {"text": "a", "label": "FACT_CHECK_NEEDED", "source": "nf-cats"},
+                {"text": "b", "label": "FACT_CHECK_NEEDED", "source": "nf-cats"},
+                {"text": "c", "label": "NO_FACT_CHECK_NEEDED", "source": "nf-cats"},
+            ],
+            "text/open-question-type/fact_check/test.jsonl": [],
+            "text/search-arena/fact_check/test.jsonl": [],
+            "text/urs/fact_check/test.jsonl": [],
+        }
+        mapping = {"NO_FACT_CHECK_NEEDED": 0, "FACT_CHECK_NEEDED": 1}
+        limited_run, _, _ = self._run_model_free_baseline(
+            task="fact-check",
+            published_rows=published,
+            mapping=mapping,
+            artifact_repo=MODEL_REGISTRY["fact-check"]["id"],
+            is_served=True,
+            predict_class_id=mapping["FACT_CHECK_NEEDED"],
+            limit=2,
+        )
+        self.assertIs(limited_run["comparable"], False)
+        self.assertEqual(
+            limited_run["comparability"],
+            {
+                "reason": "single_mapped_gold_class",
+                "surviving_gold_class_count": 1,
+                "surviving_gold_classes": [
+                    {"class_id": 1, "label": "FACT_CHECK_NEEDED", "support": 2}
+                ],
+            },
+        )
+
+    def test_exclude_prefix_collapse_to_single_class_marks_non_comparable(self):
+        rows = [
+            {"question": "a", "category": "math", "src": "ori_mmlu-algebra"},
+            {"question": "b", "category": "physics", "src": "scibench"},
+            {"question": "c", "category": "physics", "src": "theoremqa"},
+        ]
+        filtered_run, _, _ = self._run_model_free_baseline(
+            task="domain",
+            published_rows=rows,
+            mapping=DOMAIN_SUBSET,
+            artifact_repo=MODEL_REGISTRY["intent"]["id"],
+            is_served=True,
+            predict_class_id=DOMAIN_SUBSET["physics"],
+            eval_dataset_load=lambda repo, split, revision: Split(rows),
+        )
+        self.assertIs(filtered_run["comparable"], False)
+        self.assertEqual(
+            filtered_run["comparability"],
+            {
+                "reason": "single_mapped_gold_class",
+                "surviving_gold_class_count": 1,
+                "surviving_gold_classes": [
+                    {"class_id": 1, "label": "physics", "support": 2}
+                ],
+            },
+        )
+
+    def test_non_comparable_only_and_legacy_missing_field_report_behavior(self):
+        inventory = served_artifacts(load_config(gap_report.DEFAULT_CONFIG))
+        non_comparable_only = {
+            "task": "feedback",
+            "artifact": {
+                "repo": inventory["feedback"].hf_repo,
+                "is_served_artifact": True,
+            },
+            "dataset": {"repo": "source", "split": "test", "split_rule": "by_source"},
+            "metrics": {
+                "rows": 2,
+                "accuracy": 1.0,
+                "macro_f1": 1.0,
+                "per_label": {"SAT": {"precision": 1.0, "recall": 1.0, "support": 2}},
+            },
+            "calibration": {"ece": 0.0, "mce": 0.0},
+            "abstention": {"curve": []},
+            "comparable": False,
+            "gaps": [],
+        }
+        report = gap_report.render([non_comparable_only], gap_report.DEFAULT_CONFIG)
+        measured_section = report.split("## Measured baselines")[1].split("## ")[0]
+        self.assertIn("No comparable baseline was supplied.", measured_section)
+        self.assertIn("## Non-comparable diagnostics", report)
+        self.assertIn(
+            f"- feedback: no comparable baseline has been measured for the served "
+            f"`{inventory['feedback'].artifact_name}` (only non-comparable "
+            "diagnostics were supplied)",
+            report,
+        )
+        self.assertNotIn(
+            f"- feedback: no baseline has been measured for the served "
+            f"`{inventory['feedback'].artifact_name}`",
+            report,
+        )
+        self.assertIn("is marked non-comparable (`non_comparable`)", report)
+
+        # Malformed comparability payloads do not crash or render `class_id=None`.
+        malformed = [
+            {
+                **non_comparable_only,
+                "comparability": {
+                    "reason": "single_mapped_gold_class",
+                    "surviving_gold_classes": 1,
+                },
+            },
+            {
+                **non_comparable_only,
+                "comparability": {
+                    "reason": "single_mapped_gold_class",
+                    "surviving_gold_classes": [{"class_id": None, "support": 2}],
+                },
+            },
+        ]
+        malformed_report = gap_report.render(malformed, gap_report.DEFAULT_CONFIG)
+        self.assertNotIn("class_id=None", malformed_report)
+        self.assertIn("class_id=unknown (2)", malformed_report)
+
+        # Gate single-class diagnostic preserves Safe recall in Non-comparable diagnostics.
+        benign_only_gate = {
+            "task": "jailbreak",
+            "artifact": {
+                "repo": inventory["jailbreak"].hf_repo,
+                "is_served_artifact": True,
+                "configured_thresholds": [0.7],
+            },
+            "dataset": {"repo": "source", "split": "test", "split_rule": "by_source"},
+            "metrics": {
+                "rows": 2,
+                "accuracy": 1.0,
+                "macro_f1": 1.0,
+                "per_label": {
+                    "benign": {"precision": 1.0, "recall": 1.0, "support": 2},
+                    "jailbreak": {"precision": 0.0, "recall": 0.0, "support": 0},
+                },
+            },
+            "calibration": {"ece": 0.0, "mce": 0.0},
+            "abstention": {
+                "curve": [],
+                "operating_points": [
+                    {
+                        "threshold": 0.7,
+                        "positive_labels": ["jailbreak"],
+                        "flagged_rate": 0.05,
+                        "recall": None,
+                        "false_positive_rate": 0.05,
+                        "precision": None,
+                    }
+                ],
+            },
+            "comparable": False,
+            "comparability": {
+                "reason": "single_mapped_gold_class",
+                "surviving_gold_class_count": 1,
+                "surviving_gold_classes": [
+                    {"class_id": 0, "label": "benign", "support": 2}
+                ],
+            },
+            "gaps": [],
+        }
+        gate_report = gap_report.render([benign_only_gate], gap_report.DEFAULT_CONFIG)
+        gate_diag = gate_report.split("## Non-comparable diagnostics")[1].split("## ")[
+            0
+        ]
+        self.assertIn("Safe recall", gate_diag)
+        self.assertIn("0.9500", gate_diag)
+
+        # Older artifact without `comparable` stays in Measured baselines.
+        legacy_artifact_without_flag = {
+            "task": "feedback",
+            "artifact": {
+                "repo": inventory["feedback"].hf_repo,
+                "is_served_artifact": True,
+            },
+            "dataset": {"repo": "source", "split": "test", "split_rule": "by_source"},
+            "metrics": {
+                "rows": 2,
+                "accuracy": 0.85,
+                "macro_f1": 0.85,
+                "per_label": {
+                    "SAT": {"precision": 0.85, "recall": 0.85, "support": 1},
+                    "NO_FEEDBACK": {"precision": 0.85, "recall": 0.85, "support": 1},
+                },
+            },
+            "calibration": {"ece": 0.01, "mce": 0.02},
+            "abstention": {"curve": []},
+            "gaps": [],
+        }
+        legacy_report = gap_report.render(
+            [legacy_artifact_without_flag], gap_report.DEFAULT_CONFIG
+        )
+        self.assertNotIn("## Non-comparable diagnostics", legacy_report)
+        self.assertIn(
+            "0.8500", legacy_report.split("## Measured baselines")[1].split("## ")[0]
+        )
+
+    def test_zero_usable_rows_continues_to_raise_error(self):
+        published = {
+            "text/crosswoz/feedback/fresh-crosswoz.jsonl": [
+                {
+                    "text": "book a table",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+            ],
+        }
+        namespace = baseline_loader(
+            lambda repo, data_files, split, revision: Split(published[data_files])
+        )
+        spec = namespace["TASK_SPECS"]["feedback"]
+        with self.assertRaisesRegex(
+            ValueError, "produced no rows the artifact can score"
+        ):
+            namespace["load_rows"](
+                spec, legacy_mapping("feedback"), None, spec.revision
+            )
+
+        comparability = load_definitions(
+            "provenance/metrics.py",
+            {"SINGLE_MAPPED_GOLD_CLASS_REASON", "gold_class_comparability"},
+            {"Any": Any, "Integral": Integral, "Sequence": Sequence},
+        )["gold_class_comparability"]
+        with self.assertRaisesRegex(ValueError, "at least one row"):
+            comparability([], legacy_mapping("feedback"))
+
+    def test_two_class_feedback_control_keeps_existing_comparative_behavior(self):
+        published = {
+            "text/crosswoz/feedback/fresh-crosswoz.jsonl": [
+                {
+                    "text": "thanks",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "thanks a lot",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 7,
+                },
+                {
+                    "text": "book a table",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "open now",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 7,
+                },
+            ],
+        }
+        vela_map = {
+            label: index
+            for index, label in enumerate(MODEL_REGISTRY["feedback"]["labels"])
+        }
+        two_class_run, stdout, _ = self._run_model_free_baseline(
+            task="feedback",
+            published_rows=published,
+            mapping=vela_map,
+            artifact_repo=MODEL_REGISTRY["feedback"]["id"],
+            is_served=True,
+            predict_class_id=vela_map["SAT"],
+        )
+        self.assertEqual(two_class_run["metrics"]["rows"], 4)
+        self.assertEqual(
+            two_class_run["unsupported_labels"],
+            ["NEED_CLARIFICATION", "WANT_DIFFERENT", "WRONG_ANSWER"],
+        )
+        self.assertNotIn("comparable", two_class_run)
+        self.assertNotIn("comparability", two_class_run)
+        self.assertNotIn("comparable=false", stdout)
+
+        report = gap_report.render([two_class_run], gap_report.DEFAULT_CONFIG)
+        self.assertNotIn("## Non-comparable diagnostics", report)
+        measured_section = report.split("## Measured baselines")[1].split("## ")[0]
+        self.assertIn("Vela-1.0-Encoder-307M-Feedback", measured_section)
+
+    def test_baseline_metrics_summarise_marks_single_class_and_leaves_two_class_unchanged(
+        self,
+    ):
+        class _IntList(list):
+            def tolist(self):
+                return list(self)
+
+        class _ProbMatrix:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def argmax(self, axis):
+                return _IntList(row.index(max(row)) for row in self._rows)
+
+            def max(self, axis):
+                return _IntList(max(row) for row in self._rows)
+
+            def tolist(self):
+                return [list(row) for row in self._rows]
+
+        class _MatrixStub:
+            def __init__(self, n):
+                self._n = n
+
+            def astype(self, _dtype):
+                return self
+
+            def tolist(self):
+                return [[0] * self._n for _ in range(self._n)]
+
+        metrics_ns = load_definitions(
+            "provenance/metrics.py",
+            {
+                "SINGLE_MAPPED_GOLD_CLASS_REASON",
+                "abstention_curve",
+                "calibration_metrics",
+                "classification_metrics",
+                "discrimination",
+                "gold_class_comparability",
+                "latency_percentiles",
+                "operating_points",
+            },
+            {
+                "Any": Any,
+                "Integral": Integral,
+                "MIN_BIN_COUNT": 2,
+                "MAX_BIN_COUNT": 100,
+                "Sequence": Sequence,
+                "math": math,
+            },
+        )
+        summary_ns = load_definitions(
+            "baseline_metrics.py",
+            {"summarise", "_length_slice_metrics"},
+            {
+                "Any": Any,
+                "LENGTH_BOUNDARIES": (16, 32, 64, 256, 1024),
+                "confusion_matrix": lambda _y, _p, labels: _MatrixStub(len(labels)),
+                "np": SimpleNamespace(ndarray=object),
+                **metrics_ns,
+            },
+        )
+        mapping = {"SAT": 0, "NO_FEEDBACK": 1}
+        single_summary = summary_ns["summarise"](
+            _ProbMatrix([[0.99, 0.01], [0.99, 0.01]]),
+            _IntList([0, 0]),
+            ["thanks", "thanks a lot"],
+            mapping,
+            [1.0, 1.0],
+            10,
+            (0.0, 0.5),
+            0.0,
+        )
+        self.assertIs(single_summary["comparable"], False)
+        self.assertEqual(
+            single_summary["comparability"],
+            {
+                "reason": "single_mapped_gold_class",
+                "surviving_gold_class_count": 1,
+                "surviving_gold_classes": [
+                    {"class_id": 0, "label": "SAT", "support": 2}
+                ],
+            },
+        )
+        self.assertEqual(single_summary["unsupported_labels"], ["NO_FEEDBACK"])
+        self.assertEqual(single_summary["metrics"]["macro_f1"], 1.0)
+
+        two_class_summary = summary_ns["summarise"](
+            _ProbMatrix([[0.9, 0.1], [0.1, 0.9]]),
+            _IntList([0, 1]),
+            ["thanks", "book a table"],
+            mapping,
+            [1.0, 1.0],
+            10,
+            (0.0, 0.5),
+            0.0,
+        )
+        self.assertNotIn("comparable", two_class_summary)
+        self.assertNotIn("comparability", two_class_summary)
+        self.assertEqual(two_class_summary["unsupported_labels"], [])
+
+    @unittest.skipUnless(
+        importlib.util.find_spec("jsonschema")
+        and importlib.util.find_spec("referencing"),
+        "needs provenance schema dependencies",
+    )
+    def test_baseline_manifests_forwards_single_class_comparability_into_validated_manifest(
+        self,
+    ):
+        sys.path.insert(0, str(ROOT))
+        emit_mod = importlib.import_module("provenance.emit")
+        manifest_mod = importlib.import_module("provenance.manifest")
+
+        class _Mask(list):
+            def sum(self):
+                return sum(1 for item in self if item)
+
+        class _LabelArray(list):
+            __hash__ = None
+
+            def tolist(self):
+                return list(self)
+
+            def __eq__(self, other):
+                return _Mask(item == other for item in self)
+
+        published = {
+            "text/crosswoz/feedback/fresh-crosswoz.jsonl": [
+                {
+                    "text": "thanks",
+                    "label": "SAT",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+                {
+                    "text": "book a table",
+                    "label": "NO_FEEDBACK",
+                    "source": "crosswoz",
+                    "script": "cjk",
+                    "length_bin": 6,
+                },
+            ]
+        }
+
+        def load_dataset(repo, data_files, split, revision):
+            return Split(published[data_files])
+
+        tasks_ns = baseline_loader(load_dataset)
+        tasks_ns["np"] = SimpleNamespace(
+            array=lambda values, dtype: _LabelArray(values),
+            int64=int,
+            ndarray=_LabelArray,
+        )
+        metrics_ns = load_definitions(
+            "provenance/metrics.py",
+            {
+                "SINGLE_MAPPED_GOLD_CLASS_REASON",
+                "abstention_curve",
+                "calibration_metrics",
+                "classification_metrics",
+                "gold_class_comparability",
+            },
+            {
+                "Any": Any,
+                "Integral": Integral,
+                "MIN_BIN_COUNT": 2,
+                "MAX_BIN_COUNT": 100,
+                "Sequence": Sequence,
+            },
+        )
+        legacy_repo = LEGACY_MODEL_REGISTRY["feedback"]["id"]
+        legacy_map = legacy_mapping("feedback")
+        served = served_artifacts(load_config(gap_report.DEFAULT_CONFIG))["feedback"]
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            model_dir = root / "model"
+            model_dir.mkdir()
+            (model_dir / "config.json").write_text("{}", encoding="utf-8")
+
+            measured = SimpleNamespace(
+                referenced=None,
+                model_dir=model_dir,
+                repo=legacy_repo,
+                revision="a" * 40,
+                is_served_by=lambda candidate: candidate.hf_repo == legacy_repo,
+            )
+
+            orig_code_revision = emit_mod.code_revision
+            orig_dep_versions = emit_mod.dependency_versions
+            emit_mod.code_revision = lambda entrypoint, repo_root: {
+                "repo": "vllm-project/semantic-router",
+                "revision": "b" * 40,
+                "entrypoint": entrypoint,
+                "dirty": False,
+            }
+            emit_mod.dependency_versions = lambda: {
+                "python": "3.12.4",
+                "packages": {"pyyaml": "6.0"},
+            }
+            try:
+                manifests_ns = load_definitions(
+                    "baseline_manifests.py",
+                    {
+                        "REPO_ROOT",
+                        "ENTRYPOINT",
+                        "emit_baseline_manifests",
+                        "_build_measured_artifact",
+                        "_slug",
+                        "_build_dataset",
+                        "_build_evaluation",
+                    },
+                    {
+                        "Any": Any,
+                        "ENTRYPOINT": "src/training/model_eval/quality_baseline.py",
+                        "Path": Path,
+                        "REPO_ROOT": root,
+                        "ServedArtifact": Any,
+                        "TaskSpec": Any,
+                        "argparse": argparse,
+                        "build_artifact_manifest": emit_mod.build_artifact_manifest,
+                        "build_dataset_manifest": emit_mod.build_dataset_manifest,
+                        "build_evaluation_manifest": emit_mod.build_evaluation_manifest,
+                        "np": tasks_ns["np"],
+                        "os": SimpleNamespace(
+                            uname=lambda: SimpleNamespace(machine="x86_64")
+                        ),
+                        "split_digest": emit_mod.split_digest,
+                        "tokenizer_class": lambda _dir: "PreTrainedTokenizerFast",
+                        "torch": SimpleNamespace(
+                            cuda=SimpleNamespace(get_device_name=lambda _i: "cpu")
+                        ),
+                        "write_manifest": emit_mod.write_manifest,
+                    },
+                )
+
+                def fake_measure(
+                    args, measured_artifact, served_artifact, texts, labels, label_map
+                ):
+                    truth = labels.tolist()
+                    predicted = [label_map["SAT"] for _ in truth]
+                    confidences = [0.99 for _ in truth]
+                    return (
+                        {
+                            "metrics": metrics_ns["classification_metrics"](
+                                truth, predicted, label_map
+                            ),
+                            "unsupported_labels": [
+                                "NEED_CLARIFICATION",
+                                "WANT_DIFFERENT",
+                                "WRONG_ANSWER",
+                            ],
+                            "discrimination": None,
+                            "calibration": metrics_ns["calibration_metrics"](
+                                truth, predicted, confidences, bin_count=args.bin_count
+                            ),
+                            "abstention": metrics_ns["abstention_curve"](
+                                truth, predicted, confidences, thresholds=(0.0, 0.5)
+                            ),
+                            "slices": [],
+                            "performance": {
+                                "latency_ms": {
+                                    "mean": 1.0,
+                                    "p50": 1.0,
+                                    "p95": 1.0,
+                                    "p99": 1.0,
+                                },
+                                "peak_memory_mb": 0.0,
+                                "throughput_rows_per_s": 1000.0,
+                            },
+                        },
+                        {"max_position_embeddings": 32768},
+                    )
+
+                args = SimpleNamespace(
+                    task="feedback",
+                    config="config.yaml",
+                    output_dir=root / "out",
+                    device="cpu",
+                    batch_size=32,
+                    max_length=512,
+                    limit=None,
+                    seed=42,
+                    bin_count=10,
+                    artifact_repo=legacy_repo,
+                    artifact_dir=None,
+                    artifact_manifest=None,
+                    manifest_dir=None,
+                    warmup_batches=0,
+                    skip_manifests=False,
+                )
+                runner_ns = load_definitions(
+                    "quality_baseline.py",
+                    {"run", "_build_result"},
+                    {
+                        "Any": Any,
+                        "BaselineError": ValueError,
+                        "MODEL_REGISTRY": MODEL_REGISTRY,
+                        "MeasuredArtifact": Any,
+                        "SHORT_REVISION": 12,
+                        "ServedArtifact": Any,
+                        "TASK_SPECS": tasks_ns["TASK_SPECS"],
+                        "_measure": fake_measure,
+                        "_provenance_findings": lambda _args, _measured: [],
+                        "argparse": argparse,
+                        "check_registry_label_order": lambda _task, _repo, _map: [],
+                        "emit_baseline_manifests": manifests_ns[
+                            "emit_baseline_manifests"
+                        ],
+                        "gold_class_comparability": metrics_ns[
+                            "gold_class_comparability"
+                        ],
+                        "json": json,
+                        "load_config": lambda _path: {},
+                        "load_rows": tasks_ns["load_rows"],
+                        "logging": logging,
+                        "logger": logging.getLogger("test.manifests"),
+                        "np": SimpleNamespace(
+                            random=SimpleNamespace(seed=lambda _seed: None)
+                        ),
+                        "registry_drift": lambda _inv, _reg: [],
+                        "resolve_hf_revision": Mock(),
+                        "resolve_label_mapping": lambda _model_dir, _served: legacy_map,
+                        "resolve_measured_artifact": (
+                            lambda _args, _served, validate_repo: (
+                                validate_repo(legacy_repo) or measured
+                            )
+                        ),
+                        "served_artifacts": lambda _config: {"feedback": served},
+                        "tokenizer_class": lambda _dir: "PreTrainedTokenizerFast",
+                        "torch": SimpleNamespace(manual_seed=lambda _seed: None),
+                        "uncovered_artifacts": lambda _config: [],
+                    },
+                )
+                result = runner_ns["run"](args)
+            finally:
+                emit_mod.code_revision = orig_code_revision
+                emit_mod.dependency_versions = orig_dep_versions
+
+            eval_manifest = manifest_mod.load_manifest(
+                Path(result["manifests"]["evaluation"]),
+                expected_kind="evaluation",
+            )
+            self.assertIs(eval_manifest["comparable"], False)
+            self.assertEqual(
+                eval_manifest["comparability"],
+                {
+                    "reason": "single_mapped_gold_class",
+                    "surviving_gold_class_count": 1,
+                    "surviving_gold_classes": [
+                        {"class_id": 0, "label": "SAT", "support": 1}
+                    ],
+                },
+            )

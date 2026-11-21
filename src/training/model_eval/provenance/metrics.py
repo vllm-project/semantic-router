@@ -9,21 +9,80 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from numbers import Integral
 from typing import Any
 
 MIN_BIN_COUNT = 2
 MAX_BIN_COUNT = 100
+SINGLE_MAPPED_GOLD_CLASS_REASON: str = "single_mapped_gold_class"
 
 __all__ = [
+    "SINGLE_MAPPED_GOLD_CLASS_REASON",
     "abstention_curve",
     "calibration_metrics",
     "classification_metrics",
     "discrimination",
+    "gold_class_comparability",
     "latency_percentiles",
     "operating_points",
     "recall_at_fpr",
     "roc_auc",
 ]
+
+
+def gold_class_comparability(
+    y_true: Sequence[int],
+    label_mapping: dict[str, int],
+) -> dict[str, Any]:
+    """Return run-level comparability metadata when only one gold class survives.
+
+    An evaluation over a single surviving gold class (for example after
+    artifact-label mapping drops rows whose label the checkpoint does not
+    define) is a conditional diagnostic rather than a multi-class comparison.
+    When two or more distinct gold classes survive, no override is returned so
+    other comparability rules remain unaffected.
+    """
+    if len(y_true) == 0:
+        raise ValueError("an evaluation needs at least one row")
+
+    index_to_label: dict[int, str] = {}
+    for name, index in label_mapping.items():
+        if isinstance(index, bool) or not isinstance(index, Integral) or int(index) < 0:
+            raise ValueError(
+                f"label_mapping index for {name!r} must be a non-negative integer, "
+                f"got {index!r}"
+            )
+        index_to_label[int(index)] = name
+
+    counts: dict[int, int] = {}
+    for raw_id in y_true:
+        if isinstance(raw_id, bool) or not isinstance(raw_id, Integral):
+            raise ValueError(f"gold class id must be an integer, got {raw_id!r}")
+        class_id = int(raw_id)
+        if class_id not in index_to_label:
+            raise ValueError(
+                f"gold class id {class_id} is not defined in label_mapping"
+            )
+        counts[class_id] = counts.get(class_id, 0) + 1
+
+    if len(counts) != 1:
+        return {}
+
+    class_id, support = next(iter(counts.items()))
+    surviving_class: dict[str, Any] = {
+        "class_id": class_id,
+        "label": index_to_label[class_id],
+        "support": support,
+    }
+
+    return {
+        "comparable": False,
+        "comparability": {
+            "reason": SINGLE_MAPPED_GOLD_CLASS_REASON,
+            "surviving_gold_class_count": 1,
+            "surviving_gold_classes": [surviving_class],
+        },
+    }
 
 
 def classification_metrics(
