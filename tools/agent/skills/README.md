@@ -8,8 +8,9 @@ Router behavior. Choose one by the task below. The development harness
 
 | Your task | Start here | First supported step |
 | --- | --- | --- |
-| Install or run a Router stack with `vllm-sr serve` | [Operations](vllm-sr-agent-operations/SKILL.md) | Run its read-only preflight, then choose the maintained local or Kubernetes path. |
-| Choose or inspect the decision model | [Operations: optimize](vllm-sr-agent-operations/references/optimization.md) | Measure the baseline and inspect the model-runtime inventory. |
+| Run a local Router stack or decision model with `vllm-sr serve` | [Serve](vllm-sr-serve/SKILL.md) | Inspect the existing stack and config, then choose Router or Engine mode. |
+| Install or operate a Router stack beyond first start | [Operations](vllm-sr-agent-operations/SKILL.md) | Run its read-only preflight, then choose the maintained local or Kubernetes path. |
+| Choose or inspect the decision model behind a route | [Decision model](vllm-sr-decision-model/SKILL.md) | Resolve the recipe's questions to deployments, then check readiness and a traced answer. |
 | Prepare a Router configuration or recipe change | [Operations: configure](vllm-sr-agent-operations/references/configuration-loop.md) | Read the current canonical configuration and discover the installed schema. |
 | Verify or diagnose a route | [Operations: verify](vllm-sr-agent-operations/references/route-verification.md) | Preview the route, then probe the full data path. |
 | Evaluate quality, latency, and cost | [Operations: sr-bench](vllm-sr-agent-operations/references/sr-bench.md) | Freeze the workload and choose preview, live, or replay scope. |
@@ -19,15 +20,18 @@ Router behavior. Choose one by the task below. The development harness
 | Set up the vSR Claude Code plugin | [Plugin setup](../../../src/agent-harness/claude-code/skills/setup/SKILL.md) | Detect the machine and current runtime. |
 | Tune the vSR Claude Code plugin | [Plugin calibration](../../../src/agent-harness/claude-code/skills/calibrate/SKILL.md) | Inspect its recorded decisions. |
 
-The first five rows use the single [public operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md).
-Its authored source is `tools/agent/skills/vllm-sr-agent-operations/`;
-`make agent-skill-sync` generates `website/static/install/agent/vllm-sr/`.
+The [public serve skill](https://vllm-sr.ai/install/agent/vllm-sr-serve/SKILL.md)
+handles a focused first start. The [public decision-model skill](https://vllm-sr.ai/install/agent/vllm-sr-decision-model/SKILL.md)
+resolves model-backed questions and traces their answers. The
+[public operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md)
+covers the broader lifecycle. Their authored sources are under
+`tools/agent/skills/`; `make agent-skill-sync` generates their website copies.
 The contributor skills are repository-local. The plugin skills ship inside
 the Claude Code plugin and are specific to that harness. Install the public
 skill using the [agent installation guide](https://vllm-sr.ai/docs/installation/agent).
 
 For example, a request to “run vLLM-SR with my local Ollama model” starts at
-Operations → preflight. The first checks read Docker access, Python, memory,
+Serve → preflight. The first checks read Docker access, Python, memory,
 disk, ports, and existing stacks. The agent then follows the supported
 `vllm-sr serve --config config.yaml` path and verifies a routed request.
 It must not start an incomplete config or replace a running stack without a
@@ -43,8 +47,6 @@ and do not yet have standalone skill files:
 
 | Proposed skill | Bounded workflow | Current entry |
 | --- | --- | --- |
-| `vllm-sr-serve` | Preflight, validate config, start through `vllm-sr serve`, check readiness and a routed request, then stop or recover safely. | [Deployment reference](vllm-sr-agent-operations/references/deployment-loop.md) |
-| `vllm-sr-decision-model` | Choose a supported model/runtime, check required recipe signals, readiness and answers, then collect calibration evidence. | [Optimization reference](vllm-sr-agent-operations/references/optimization.md) |
 | `vllm-sr-configure-recipe` | Turn workload goals into a reviewable canonical config proposal. | [Configuration reference](vllm-sr-agent-operations/references/configuration-loop.md) |
 | `vllm-sr-diagnose-routing` | Explain a selected route or failure from real Router evidence. | [Verification reference](vllm-sr-agent-operations/references/route-verification.md) |
 | `vllm-sr-benchmark` | Run a bounded, reproducible sr-bench evaluation. | [sr-bench reference](vllm-sr-agent-operations/references/sr-bench.md) |
@@ -61,9 +63,9 @@ Link to that skill when it lands; do not create a competing tuning workflow.
 - Add each shipped skill to `catalog.yaml`. Its `source` must be the sole
   authored `SKILL.md`; a public copy needs an explicit `published` path and
   `public_url`. A plugin-bundled skill stays within its plugin directory.
-- The website operations skill is generated from its repository source.
+- Public website skills are generated from their repository sources.
   Edit the source, run `make agent-skill-sync`, and commit both. Do not edit
-  the website mirror directly.
+  website mirrors directly.
 - Use the installed CLI schema, Router API, and maintained docs as authority.
   Describe unsupported versions and environments; do not guess commands.
 - Keep credentials out of prompts, files, arguments, and published evidence.
