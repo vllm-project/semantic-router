@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
@@ -120,6 +121,14 @@ func (s *routingSession) RequestBody(body []byte, endOfStream bool) (*routing.Ef
 	}, func(response *ext_proc.ProcessingResponse) {
 		finishImmediateResponseTrace(s.ctx, response)
 	})
+}
+
+// SetUpstreamDeadline gives the pending structured-output pass the deadline
+// used by the native upstream call.
+func (s *routingSession) SetUpstreamDeadline(deadline time.Time) {
+	if pass := s.ctx.structuredOutputPass; pass != nil {
+		pass.deadline = deadline
+	}
 }
 
 func (s *routingSession) ResponseHeaders(header routing.Header, endOfStream bool) (*routing.Effect, error) {
