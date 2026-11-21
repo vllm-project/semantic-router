@@ -131,7 +131,26 @@ config:
               source:
                 type: message
                 role: developer
+          - name: late_session
+            description: The request is the third or later user turn of the session (zero-based turn index >= 2).
+            feature:
+              type: count
+              source:
+                type: turn_index
+            predicate:
+              gte: 2
       decisions:
+        - name: late_session_routing
+          description: Route later-session turns through the late-session lane.
+          priority: 105
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: late_session
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
         - name: multi_turn_user_routing
           description: Route requests whose conversation signal matches multi_turn_user.
           priority: 100

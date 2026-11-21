@@ -8,15 +8,17 @@ var validConversationFeatureTypes = map[string]bool{
 }
 
 var validConversationSourceTypes = map[string]bool{
-	"message":              true,
-	"tool_definition":      true,
-	"tool_choice_required": true,
-	"tool_choice_none":     true,
-	"assistant_tool_call":  true,
-	"assistant_tool_cycle": true,
-	"active_tool_loop":     true,
-	"flow_tool_state":      true,
-	"failed_tool_result":   true,
+	"message":                true,
+	"tool_definition":        true,
+	"tool_choice_required":   true,
+	"tool_choice_none":       true,
+	"assistant_tool_call":    true,
+	"assistant_tool_cycle":   true,
+	"active_tool_loop":       true,
+	"flow_tool_state":        true,
+	"turn_index":             true,
+	"session_history_tokens": true,
+	"failed_tool_result":     true,
 }
 
 var validConversationSourceRoles = map[string]bool{
