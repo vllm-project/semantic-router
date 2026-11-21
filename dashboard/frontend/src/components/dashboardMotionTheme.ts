@@ -1,4 +1,5 @@
-export const DASHBOARD_MOTION_COLORS = ['#f5f5f7', '#e31b23', '#5f636a'] as const
+// WebGL shader inputs cannot read CSS tokens; these are the vLLM brand blue between neutrals.
+export const DASHBOARD_MOTION_COLORS = ['#f5f5f7', '#30a2ff', '#5f636a'] as const
 
 export const DASHBOARD_COLOR_BENDS_MOTION = {
   rotation: 20,

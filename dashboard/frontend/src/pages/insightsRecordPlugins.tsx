@@ -1,7 +1,14 @@
+import { ChevronDown } from 'lucide-react'
+
 import type { ViewField } from '../components/ViewPanel'
-import ProductIcon from '../components/ProductIcon'
+import { CHEVRON, DETAIL } from './insightsEvidenceStyles'
 import type { InsightsOutcome, InsightsRecord } from './insightsPageTypes'
-import styles from './InsightsPage.module.css'
+
+const STACK = 'flex min-w-0 flex-col gap-1'
+const SUBTLE = 'text-xs text-subtle-foreground'
+const DANGER = 'text-[13px] font-medium text-destructive-foreground'
+const WARN = 'text-[13px] font-medium text-warning-foreground'
+const INFO = 'text-[13px] font-medium text-info-foreground'
 
 const finite = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
@@ -40,27 +47,30 @@ function outcomeEvidence(outcomes: InsightsOutcome[]) {
     counts.set(label, (counts.get(label) ?? 0) + 1)
   }
   return (
-    <details className={styles.pluginEvidence}>
+    <details className={DETAIL}>
       <summary>
         {Array.from(counts, ([label, count]) => `${count} ${label.toLowerCase()}`).join(' · ')}
-        <span className={styles.costSubtle}>Inspect recorded checks</span>
-        <ProductIcon name="chevron-down" width={14} height={14} />
+        <span className="ml-auto font-normal text-subtle-foreground">Inspect recorded checks</span>
+        <ChevronDown className={CHEVRON} />
       </summary>
       {outcomes.map((outcome, index) => (
-        <div className={styles.pluginStack} key={`${outcome.target}-${index}`}>
+        <div
+          className={`${STACK} border-t border-border px-3 py-2`}
+          key={`${outcome.target}-${index}`}
+        >
           <strong>{outcome.target}</strong>
           <span>{verdictLabels[outcome.verdict] ?? outcome.verdict}</span>
-          {outcome.reason ? <span className={styles.costSubtle}>{outcome.reason}</span> : null}
-          <span className={styles.costSubtle}>
+          {outcome.reason ? <span className={SUBTLE}>{outcome.reason}</span> : null}
+          <span className={SUBTLE}>
             {outcome.metadata?.score_available === 'true'
               ? `Score: ${finite(outcome.score) ? outcome.score.toFixed(4) : outcome.score === undefined ? '0.0000' : 'Not recorded'}${outcome.metadata.score_kind ? ` (${outcome.metadata.score_kind})` : ''}`
               : 'Score unavailable'}
           </span>
           {outcome.metadata?.action ? (
-            <span className={styles.costSubtle}>Action: {outcome.metadata.action}</span>
+            <span className={SUBTLE}>Action: {outcome.metadata.action}</span>
           ) : null}
           {outcome.metadata?.stream ? (
-            <span className={styles.costSubtle}>
+            <span className={SUBTLE}>
               {streamLabels[outcome.metadata.stream] ?? outcome.metadata.stream}
             </span>
           ) : null}
@@ -84,9 +94,9 @@ function guardrails(record: InsightsRecord) {
     return 'Disabled'
 
   return (
-    <div className={styles.pluginStack}>
+    <div className={STACK}>
       {requestObserved ? (
-        <span className={record.jailbreak_detected ? styles.alertDanger : styles.costSubtle}>
+        <span className={record.jailbreak_detected ? DANGER : SUBTLE}>
           Request jailbreak:{' '}
           {record.jailbreak_detected ? record.jailbreak_type || 'detected' : 'Not detected'} (
           {riskScore(record.jailbreak_confidence, record.jailbreak_score_available)})
@@ -95,13 +105,13 @@ function guardrails(record: InsightsRecord) {
         <span>No request jailbreak result recorded</span>
       ) : null}
       {responses.length ? (
-        <div className={styles.pluginStack}>
+        <div className={STACK}>
           <span>Response jailbreak</span>
           {outcomeEvidence(responses)}
         </div>
       ) : null}
       {record.pii_detected ? (
-        <span className={record.pii_blocked ? styles.alertDanger : styles.alertWarn}>
+        <span className={record.pii_blocked ? DANGER : WARN}>
           {record.pii_blocked ? 'PII blocked' : 'PII found'}:{' '}
           {record.pii_entities?.join(', ') || 'detected'}
         </span>
@@ -123,12 +133,12 @@ function guardrails(record: InsightsRecord) {
 function hallucination(record: InsightsRecord) {
   const outcomes = responseOutcomes(record, 'hallucination')
   const spans = record.hallucination_spans?.length ? (
-    <details className={styles.pluginEvidence}>
+    <details className={DETAIL}>
       <summary>
         Inspect {record.hallucination_spans.length} unsupported spans
-        <ProductIcon name="chevron-down" width={14} height={14} />
+        <ChevronDown className={CHEVRON} />
       </summary>
-      <ul>
+      <ul className="flex list-disc flex-col gap-1 border-t border-border py-2 pl-7 pr-3 text-[13px]">
         {record.hallucination_spans.map((span, index) => (
           <li key={index}>{span}</li>
         ))}
@@ -137,7 +147,7 @@ function hallucination(record: InsightsRecord) {
   ) : null
   if (outcomes.length) {
     return (
-      <div className={styles.pluginStack}>
+      <div className={STACK}>
         {outcomeEvidence(outcomes)}
         {spans}
       </div>
@@ -155,15 +165,15 @@ function hallucination(record: InsightsRecord) {
   const score = record.hallucination_confidence === undefined ? 0 : record.hallucination_confidence
   const available = record.hallucination_score_available === true && finite(score)
   return (
-    <div className={styles.pluginStack}>
-      <span className={record.hallucination_detected ? styles.alertDanger : styles.costSubtle}>
+    <div className={STACK}>
+      <span className={record.hallucination_detected ? DANGER : SUBTLE}>
         {record.hallucination_detected
           ? 'Detected'
           : available
             ? 'Not detected'
             : 'No detection result recorded'}
       </span>
-      <span className={styles.costSubtle}>
+      <span className={SUBTLE}>
         {available
           ? `Score: ${score.toFixed(4)}${record.hallucination_score_kind ? ` (${record.hallucination_score_kind})` : ''}`
           : 'Score unavailable'}
@@ -185,9 +195,9 @@ export function buildInsightsPluginFields(record: InsightsRecord): ViewField[] {
     {
       label: 'RAG',
       value: record.rag_enabled ? (
-        <div className={styles.pluginStack}>
-          <span className={styles.alertInfo}>Context retrieved</span>
-          <span className={styles.costSubtle}>
+        <div className={STACK}>
+          <span className={INFO}>Context retrieved</span>
+          <span className={SUBTLE}>
             Backend: {record.rag_backend || 'Not recorded'} · Length:{' '}
             {record.rag_context_length ?? 0} chars
             {' · '}Score:{' '}

@@ -166,7 +166,7 @@ func TestFailedEscalationPaidAttemptsStayInTheAggregateSpend(t *testing.T) {
 		t.Fatalf("handleLooperExecution: %v", err)
 	}
 
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/aggregate")
 	var aggregate routerreplay.AggregateResponse
 	if err := json.Unmarshal(response.GetImmediateResponse().Body, &aggregate); err != nil {
 		t.Fatal(err)

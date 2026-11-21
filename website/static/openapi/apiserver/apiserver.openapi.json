@@ -19657,9 +19657,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -19808,6 +19824,12 @@
                                 "type": "string"
                               },
                               "parent_id": {
+                                "type": "string"
+                              },
+                              "request_class": {
+                                "type": "string"
+                              },
+                              "type": {
                                 "type": "string"
                               }
                             }
@@ -20058,8 +20080,14 @@
                               "type": "string"
                             }
                           },
+                          "history_image_count": {
+                            "type": "integer"
+                          },
                           "id": {
                             "type": "string"
+                          },
+                          "image_count": {
+                            "type": "integer"
                           },
                           "jailbreak_confidence": {
                             "nullable": true,
@@ -21331,6 +21359,9 @@
                           "request_kind": {
                             "type": "string"
                           },
+                          "requested_model": {
+                            "type": "string"
+                          },
                           "response_body": {
                             "type": "string"
                           },
@@ -21851,6 +21882,178 @@
                                   ]
                                 }
                               },
+                              "retention": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "acknowledged": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "actions": {
+                                        "nullable": true,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "feature": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "feature"
+                                          ]
+                                        }
+                                      },
+                                      "capability": {
+                                        "type": "object",
+                                        "properties": {
+                                          "backend": {
+                                            "type": "string"
+                                          },
+                                          "features": {
+                                            "nullable": true,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "version": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "backend",
+                                          "version"
+                                        ]
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "capability",
+                                      "status"
+                                    ]
+                                  },
+                                  "observed": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "enforced": {
+                                        "type": "boolean"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "status",
+                                      "enforced"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "requested": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "drop": {
+                                        "nullable": true,
+                                        "type": "boolean"
+                                      },
+                                      "keep_current_model": {
+                                        "nullable": true,
+                                        "type": "boolean"
+                                      },
+                                      "prefer_prefix_retention": {
+                                        "nullable": true,
+                                        "type": "boolean"
+                                      },
+                                      "ttl_turns": {
+                                        "nullable": true,
+                                        "type": "integer"
+                                      }
+                                    }
+                                  },
+                                  "schema_version": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "translated": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "actions": {
+                                        "nullable": true,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "feature": {
+                                              "type": "string"
+                                            },
+                                            "value": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "feature"
+                                          ]
+                                        }
+                                      },
+                                      "capability": {
+                                        "type": "object",
+                                        "properties": {
+                                          "backend": {
+                                            "type": "string"
+                                          },
+                                          "features": {
+                                            "nullable": true,
+                                            "type": "array",
+                                            "items": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "version": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "required": [
+                                          "backend",
+                                          "version"
+                                        ]
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "capability",
+                                      "status"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "schema_version",
+                                  "status"
+                                ]
+                              },
                               "routing_input_skipped_messages": {
                                 "type": "integer"
                               },
@@ -22340,6 +22543,13 @@
                         ]
                       }
                     },
+                    "harness_counts": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    },
                     "has_more": {
                       "type": "boolean"
                     },
@@ -22367,6 +22577,7 @@
                     "limit",
                     "offset",
                     "has_more",
+                    "harness_counts",
                     "data"
                   ]
                 }
@@ -22669,9 +22880,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -22752,6 +22979,14 @@
                 "high",
                 "critical"
               ]
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "description": "With since, also return traffic: the records in contiguous intervals of this length from since to now, such as 5m or 1h; at least 1m and at most 1000 intervals.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -23437,6 +23672,116 @@
                         "total_tokens",
                         "excluded_record_count"
                       ]
+                    },
+                    "traffic": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "buckets": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "cached": {
+                                "type": "integer"
+                              },
+                              "cost": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "actual_spend": {
+                                      "type": "number"
+                                    },
+                                    "baseline_spend": {
+                                      "type": "number"
+                                    },
+                                    "cost_record_count": {
+                                      "type": "integer"
+                                    },
+                                    "currency": {
+                                      "type": "string"
+                                    },
+                                    "gross_saved": {
+                                      "type": "number"
+                                    },
+                                    "netted_router_call_spend": {
+                                      "type": "number"
+                                    },
+                                    "router_call_spend": {
+                                      "type": "number"
+                                    },
+                                    "total_saved": {
+                                      "type": "number"
+                                    },
+                                    "total_spend": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "currency",
+                                    "total_saved",
+                                    "gross_saved",
+                                    "netted_router_call_spend",
+                                    "baseline_spend",
+                                    "actual_spend",
+                                    "router_call_spend",
+                                    "total_spend",
+                                    "cost_record_count"
+                                  ]
+                                }
+                              },
+                              "failed": {
+                                "type": "integer"
+                              },
+                              "latency_p50_ms": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
+                              "latency_p95_ms": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
+                              "requests": {
+                                "type": "integer"
+                              },
+                              "start": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "start",
+                              "requests",
+                              "cached",
+                              "failed",
+                              "cost"
+                            ]
+                          }
+                        },
+                        "interval_seconds": {
+                          "type": "integer"
+                        },
+                        "latency_p50_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "latency_p95_ms": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "since": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "since",
+                        "interval_seconds",
+                        "buckets"
+                      ]
                     }
                   },
                   "required": [
@@ -23754,9 +24099,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -24368,9 +24729,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -25163,6 +25540,9 @@
                           "agent": {
                             "type": "string"
                           },
+                          "agent_type": {
+                            "type": "string"
+                          },
                           "completion_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -25195,6 +25575,9 @@
                             "items": {
                               "type": "object"
                             }
+                          },
+                          "image_count": {
+                            "type": "integer"
                           },
                           "lifecycle_state": {
                             "type": "string"
@@ -25272,6 +25655,9 @@
                             "type": "string"
                           },
                           "record_id": {
+                            "type": "string"
+                          },
+                          "request_class": {
                             "type": "string"
                           },
                           "request_id": {
@@ -25453,6 +25839,9 @@
                                 "type": "string"
                               },
                               "spawned_after_record_id": {
+                                "type": "string"
+                              },
+                              "type": {
                                 "type": "string"
                               }
                             },
@@ -25962,9 +26351,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -26170,6 +26575,9 @@
                                   "type": "string"
                                 },
                                 "spawned_after_record_id": {
+                                  "type": "string"
+                                },
+                                "type": {
                                   "type": "string"
                                 }
                               },
@@ -27162,6 +27570,12 @@
                         },
                         "parent_id": {
                           "type": "string"
+                        },
+                        "request_class": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
                         }
                       }
                     },
@@ -27411,8 +27825,14 @@
                         "type": "string"
                       }
                     },
+                    "history_image_count": {
+                      "type": "integer"
+                    },
                     "id": {
                       "type": "string"
+                    },
+                    "image_count": {
+                      "type": "integer"
                     },
                     "jailbreak_confidence": {
                       "nullable": true,
@@ -28684,6 +29104,9 @@
                     "request_kind": {
                       "type": "string"
                     },
+                    "requested_model": {
+                      "type": "string"
+                    },
                     "response_body": {
                       "type": "string"
                     },
@@ -29203,6 +29626,178 @@
                               "request_generation"
                             ]
                           }
+                        },
+                        "retention": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "acknowledged": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "actions": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "feature": {
+                                        "type": "string"
+                                      },
+                                      "value": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "feature"
+                                    ]
+                                  }
+                                },
+                                "capability": {
+                                  "type": "object",
+                                  "properties": {
+                                    "backend": {
+                                      "type": "string"
+                                    },
+                                    "features": {
+                                      "nullable": true,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "version": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "backend",
+                                    "version"
+                                  ]
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "capability",
+                                "status"
+                              ]
+                            },
+                            "observed": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "enforced": {
+                                  "type": "boolean"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "status",
+                                "enforced"
+                              ]
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "requested": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "drop": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "keep_current_model": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "prefer_prefix_retention": {
+                                  "nullable": true,
+                                  "type": "boolean"
+                                },
+                                "ttl_turns": {
+                                  "nullable": true,
+                                  "type": "integer"
+                                }
+                              }
+                            },
+                            "schema_version": {
+                              "type": "string"
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "translated": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "actions": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "feature": {
+                                        "type": "string"
+                                      },
+                                      "value": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "feature"
+                                    ]
+                                  }
+                                },
+                                "capability": {
+                                  "type": "object",
+                                  "properties": {
+                                    "backend": {
+                                      "type": "string"
+                                    },
+                                    "features": {
+                                      "nullable": true,
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "version": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "backend",
+                                    "version"
+                                  ]
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "capability",
+                                "status"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "schema_version",
+                            "status"
+                          ]
                         },
                         "routing_input_skipped_messages": {
                           "type": "integer"

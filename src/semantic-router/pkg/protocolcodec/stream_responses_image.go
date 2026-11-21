@@ -34,7 +34,7 @@ func (encoder *responsesStreamEncoder) encodeResponsesImageGenerationProgress(
 			nil,
 		)
 	}
-	frames, key, err := encoder.ensureResponsesOutputStarted(event, responsesOutputImage)
+	frames, key, err := encoder.openResponsesOutput(event, responsesOutputImage)
 	if err != nil {
 		return nil, err
 	}

@@ -1233,6 +1233,90 @@ recipes:
 }
 
 // ============================================================
+func TestRollbackHandlerChecksRouterActivation(t *testing.T) {
+	for _, tc := range []struct {
+		name, reason, response string
+		status                 int
+		pending, restored      bool
+	}{
+		{name: "active", status: http.StatusOK, response: `"status":"success"`},
+		{name: "restart required", reason: restartRequiredCode, status: http.StatusAccepted, response: `"status":"restart_required"`, pending: true},
+		{name: "rejected", reason: "model_unavailable", status: http.StatusInternalServerError, response: "Previous config restored.", restored: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("VLLM_SR_GATEWAY", "standalone")
+			dir := t.TempDir()
+			path := createValidTestConfig(t, dir)
+			previous, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := bytes.ReplaceAll(previous, []byte("default-business"), []byte("restored-business"))
+			if bytes.Equal(previous, target) {
+				t.Fatal("fixture did not produce a distinct rollback target")
+			}
+			version, err := createConfigBackup(dir, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			previousHash := strings.TrimPrefix(activationDigest(previous), "sha256:")
+			router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/config/hash" {
+					http.NotFound(w, r)
+					return
+				}
+				written, readErr := os.ReadFile(path)
+				if readErr != nil {
+					http.Error(w, "reading the test config failed", http.StatusInternalServerError)
+					return
+				}
+				hash := strings.TrimPrefix(activationDigest(written), "sha256:")
+				verdict := routerConfigHash{GeneratedRuntimeHash: hash, ActiveRuntimeHash: previousHash, ActivationStatus: "active"}
+				if hash != previousHash {
+					verdict.Activation = &routerConfigAttempt{DocumentHash: hash, Status: "active"}
+					if tc.reason == "" {
+						verdict.ActiveRuntimeHash = hash
+					} else {
+						verdict.ActivationStatus = "failed"
+						verdict.Activation.Status = "failed"
+						verdict.Activation.Reasons = []routerConfigReason{{Code: tc.reason, Message: "test activation verdict"}}
+					}
+				}
+				_ = json.NewEncoder(w).Encode(verdict)
+			}))
+			t.Cleanup(router.Close)
+			ConfigureRouterVerdict(router.URL, nil)
+			t.Cleanup(func() { ConfigureRouterVerdict("", nil) })
+			originalPropagate := propagateConfig
+			propagateConfig = func(path, _ string) error { return awaitManagedRuntime(path) }
+			t.Cleanup(func() { propagateConfig = originalPropagate })
+
+			req := httptest.NewRequest(http.MethodPost, "/api/router/config/rollback", strings.NewReader(fmt.Sprintf(`{"version":%q}`, version)))
+			response := httptest.NewRecorder()
+			RollbackHandler(path, false, dir).ServeHTTP(response, req)
+			if response.Code != tc.status || !strings.Contains(response.Body.String(), tc.response) {
+				t.Errorf("rollback = %d %s, want %d containing %q", response.Code, response.Body, tc.status, tc.response)
+			}
+			expected := target
+			if tc.restored {
+				expected = previous
+				var failure map[string]string
+				if decodeErr := json.Unmarshal(response.Body.Bytes(), &failure); decodeErr != nil || failure["error"] != "config_activation_failed" || !strings.Contains(failure["message"], tc.reason) {
+					t.Errorf("rollback failure lacks structured reason: %s", response.Body)
+				}
+			}
+			written, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(written, expected) {
+				t.Errorf("unexpected config after rollback (restored=%v, read error=%v)", tc.restored, err)
+			}
+			if pending := pendingActivationRecorded(path); pending != tc.pending {
+				t.Errorf("pending activation = %v, want %v", pending, tc.pending)
+			}
+		})
+	}
+}
+
 // ConfigVersionsHandler tests
 // ============================================================
 

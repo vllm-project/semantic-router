@@ -1,18 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Database, FlaskConical, Plus } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canRunEvaluation, canWriteEvaluation } from '../utils/accessControl'
+import {
+  Button,
+  IconTile,
+  PageContainer,
+  PageHeader,
+  StatusDot,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  Tooltip,
+} from '../ui'
 import { benchApi } from '../components/sr-bench/api'
 import { active } from '../components/sr-bench/model'
-import RunComposer from '../components/sr-bench/RunComposer'
-import RunDetails from '../components/sr-bench/RunDetails'
-import RunComparison from '../components/sr-bench/RunComparison'
-import ReplayComposer from '../components/sr-bench/ReplayComposer'
-import RunList, { type RunFilters } from '../components/sr-bench/RunList'
-import DatasetInventory from '../components/sr-bench/DatasetInventory'
-import DatasetPreparationPanel from '../components/sr-bench/DatasetPreparationPanel'
-import ExperimentWorkspace from '../components/sr-bench/ExperimentWorkspace'
+import { canReuseBaseline } from '../components/sr-bench/baselineReuse'
+import RunsView from '../components/sr-bench/RunsView'
+import RunSheet from '../components/sr-bench/RunSheet'
+import CompareSheet from '../components/sr-bench/CompareSheet'
+import DatasetsView from '../components/sr-bench/DatasetsView'
+import NewEvaluationSheet, { type EvaluationMode } from '../components/sr-bench/NewEvaluationSheet'
+import { rerunSource } from '../components/sr-bench/rerunSource'
+import { Notice } from '../components/sr-bench/benchUi'
+import {
+  parseRunFilters,
+  runFilterEntries,
+  runSection,
+  type RunFilters,
+} from '../components/sr-bench/runPresentation'
 import type {
   Catalog,
   Dataset,
@@ -20,11 +38,19 @@ import type {
   Run,
   Target,
 } from '../components/sr-bench/types'
-import styles from '../components/sr-bench/SrBench.module.css'
-import ProductIcon from '../components/ProductIcon'
-import ProductLoadingState from '../components/ProductLoadingState'
 
 type Inventory = 'catalog' | 'datasets' | 'targets' | 'runs'
+
+const COMPOSER_VIEWS: Record<string, EvaluationMode> = {
+  new: 'live',
+  preview: 'preview',
+  estimate: 'estimate',
+}
+
+function engineLabel(version?: string) {
+  const match = version?.match(/^sr-bench-(.+)$/)
+  return match ? `sr-bench ${match[1]}` : (version ?? 'sr-bench')
+}
 
 export default function EvaluationPage() {
   const { user, refreshSession } = useAuth()
@@ -50,76 +76,35 @@ export default function EvaluationPage() {
   useEffect(() => {
     pendingSearch.current = search
   }, [search])
-  const selectedID = search.get('run')
-  const experimentID = search.get('experiment')
-  const experimentRoute: Record<string, string> = experimentID ? { experiment: experimentID } : {}
-  const openComposer = (mode: 'live' | 'preview', baseline = search.get('baseline') ?? '') => {
-    const role =
-      mode === 'preview'
-        ? 'preview'
-        : !baseline
-          ? 'baseline'
-          : runs.find((run) => run.id === baseline)?.manifest.profile === 'standard'
-            ? 'validation'
-            : 'candidate'
-    setSearch({
-      view: mode === 'preview' ? 'preview' : 'new',
-      ...experimentRoute,
-      ...(baseline ? { baseline } : {}),
-      ...(experimentID ? { role } : {}),
-    })
-  }
-  const runFilters: RunFilters = {
-    query: search.get('q') ?? '',
-    status: ['active', 'completed', 'failed', 'interrupted', 'cancelled'].includes(
-      search.get('status') ?? '',
-    )
-      ? search.get('status')!
-      : 'all',
-    mode: ['live', 'preview', 'replay'].includes(search.get('mode') ?? '')
-      ? search.get('mode')!
-      : 'all',
-    profile: ['smoke', 'quick', 'standard'].includes(search.get('profile') ?? '')
-      ? search.get('profile')!
-      : 'all',
-    page: Math.max(0, Math.floor(Number(search.get('page')) || 0)),
-  }
-  const openRun = (id?: string) => {
-    const next = new URLSearchParams(search)
-    next.set('view', 'runs')
-    next.delete('section')
-    if (id) next.set('run', id)
-    else next.delete('run')
-    setSearch(next)
-  }
-  const updateRunFilters = (patch: Partial<RunFilters>) => {
-    // Router setters do not queue functional updates. Keep same-event patches
-    // together until navigation renders; external navigation resyncs above.
-    const next = new URLSearchParams(pendingSearch.current)
-    for (const [field, value] of Object.entries(patch)) {
-      const key = field === 'query' ? 'q' : field
-      if (!value || value === 'all') next.delete(key)
-      else next.set(key, String(value))
-    }
-    pendingSearch.current = next
-    setSearch(next, { replace: true })
-  }
   const requestedView = search.get('view') ?? (search.has('model') ? 'new' : 'runs')
-  const view = ['runs', 'experiments', 'compare', 'datasets', 'new', 'preview'].includes(
-    requestedView,
-  )
+  const view = [
+    'runs',
+    'experiments',
+    'compare',
+    'datasets',
+    'new',
+    'preview',
+    'estimate',
+  ].includes(requestedView)
     ? requestedView
     : 'runs'
-  const creating = view === 'new' || view === 'preview'
+  const tab = view === 'datasets' ? 'datasets' : 'runs'
+  const shownTab = useRef(tab)
+  shownTab.current = tab
+  const composerMode = COMPOSER_VIEWS[view]
+  const experimentID = search.get('experiment') ?? undefined
+  const experimentRoute: Record<string, string> = experimentID ? { experiment: experimentID } : {}
+  const runFilters = parseRunFilters(search)
+
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [targets, setTargets] = useState<Target[]>([])
   const [runs, setRuns] = useState<Run[]>([])
   const [readErrors, setReadErrors] = useState<Partial<Record<Inventory, string>>>({})
   const [loaded, setLoaded] = useState<Partial<Record<Inventory, boolean>>>({})
-  const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
   const [lastRead, setLastRead] = useState<string | null>(null)
+  const [anyActive, setAnyActive] = useState(false)
   const refresh = useCallback(() => setRevision((value) => value + 1), [])
   const error = Object.entries(readErrors)
     .filter(([, message]) => message)
@@ -129,7 +114,6 @@ export default function EvaluationPage() {
   useEffect(() => {
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
-    setLoading(true)
     async function read<T>(name: Inventory, response: Promise<T>, accept: (value: T) => void) {
       try {
         const value = await response
@@ -150,31 +134,26 @@ export default function EvaluationPage() {
       }
     }
     async function load() {
-      try {
-        const responses = await Promise.allSettled([
-          read('catalog', benchApi.catalog(controller.signal), setCatalog),
-          read('datasets', benchApi.datasets(controller.signal), (value) =>
-            setDatasets(value.datasets),
-          ),
-          read('targets', benchApi.targets(controller.signal), (value) =>
-            setTargets(value.targets),
-          ),
-          read('runs', benchApi.runs(controller.signal), (value) => {
-            setRuns(value.runs)
-            setLastRead(new Date().toLocaleTimeString())
-          }),
-        ])
-        if (controller.signal.aborted) return
-        const failure = responses.find((response) => response.status === 'rejected')
-        // Retry reads after a disconnect and discover runs started from the CLI.
-        // This timer never submits, resumes or retries an evaluation.
-        const running =
-          responses[3].status === 'fulfilled' &&
-          responses[3].value.runs.some((run) => active(run.status))
-        timer = setTimeout(() => void load(), failure || running ? 5000 : 15000)
-      } finally {
-        if (!controller.signal.aborted) setLoading(false)
-      }
+      const responses = await Promise.allSettled([
+        read('catalog', benchApi.catalog(controller.signal), setCatalog),
+        read('datasets', benchApi.datasets(controller.signal), (value) =>
+          setDatasets(value.datasets),
+        ),
+        read('targets', benchApi.targets(controller.signal), (value) => setTargets(value.targets)),
+        read('runs', benchApi.runs(controller.signal), (value) => {
+          setRuns(value.runs)
+          setLastRead(new Date().toLocaleTimeString())
+        }),
+      ])
+      if (controller.signal.aborted) return
+      const failure = responses.find((response) => response.status === 'rejected')
+      // Retry reads after a disconnect and discover runs started from the CLI.
+      // This timer never submits, resumes or retries an evaluation.
+      const running =
+        responses[3].status === 'fulfilled' &&
+        responses[3].value.runs.some((run) => active(run.status))
+      setAnyActive(running)
+      timer = setTimeout(() => void load(), failure || running ? 5000 : 15000)
     }
     void load()
     return () => {
@@ -183,264 +162,313 @@ export default function EvaluationPage() {
     }
   }, [revision])
 
+  const navigate = (params: Record<string, string>) => setSearch(params)
+  const updateRunFilters = (patch: Partial<RunFilters>) => {
+    // Router setters do not queue functional updates. Keep same-event patches
+    // together until navigation renders; external navigation resyncs above.
+    const next = new URLSearchParams(pendingSearch.current)
+    for (const [key, value] of runFilterEntries(patch)) {
+      if (value === null) next.delete(key)
+      else next.set(key, value)
+    }
+    pendingSearch.current = next
+    setSearch(next, { replace: true })
+  }
+  const openRun = (id?: string) => {
+    const next = new URLSearchParams(search)
+    next.set('view', 'runs')
+    next.delete('section')
+    for (const key of [
+      'baseline',
+      'candidate',
+      'role',
+      'rerun',
+      'dataset',
+      'model',
+      'comparison_scope',
+    ])
+      next.delete(key)
+    if (id) next.set('run', id)
+    else next.delete('run')
+    setSearch(next)
+  }
+  const composerRole = (mode: 'live' | 'preview', baseline: string) =>
+    mode === 'preview'
+      ? 'preview'
+      : !baseline
+        ? 'baseline'
+        : runs.find((run) => run.id === baseline)?.manifest.profile === 'standard'
+          ? 'validation'
+          : 'candidate'
+  const openComposer = (mode: 'live' | 'preview', baseline = '') => {
+    const role = composerRole(mode, baseline)
+    navigate({
+      view: mode === 'preview' ? 'preview' : 'new',
+      ...experimentRoute,
+      ...(baseline ? { baseline } : {}),
+      ...(experimentID ? { role } : {}),
+    })
+  }
+  const openCompare = (ids: string[]) => {
+    const selected = ids.flatMap((id) => runs.filter((run) => run.id === id))
+    const reference = selected.find(
+      (run) =>
+        canReuseBaseline(run) && run.manifest.targets.every((target) => target.kind === 'single'),
+    )
+    const next = new URLSearchParams({ view: 'compare', ...experimentRoute })
+    if (reference) next.set('baseline', reference.id)
+    for (const id of ids) if (id !== reference?.id) next.append('candidate', id)
+    setSearch(next)
+  }
+  const closeOverlay = () => navigate({ view: 'runs', ...experimentRoute })
+  const rerun = search.get('rerun')
+  const rerunRun = rerun ? runs.find((run) => run.id === rerun) : undefined
+  const composerExperiment: ExperimentRunContext | undefined = experimentID
+    ? {
+        id: experimentID,
+        role:
+          view === 'preview'
+            ? 'preview'
+            : (search.get('role') as ExperimentRunContext['role']) ||
+              (search.has('baseline') ? 'candidate' : 'baseline'),
+      }
+    : undefined
+  const composerOpen = !!composerMode && (!rerun || !!rerunRun || !loaded.runs)
+
   return (
-    <section className={styles.page} aria-label="sr-bench workspace">
-      <header className={styles.hero}>
-        <div>
-          <p className={styles.eyebrow}>
-            <ProductIcon name="evaluation" /> Evaluation
-          </p>
-          <h1>
-            sr-bench <span>1.0</span>
-          </h1>
-          <p>
-            Measure capability, cost and speed. Improve Balance against your strongest single model.
-          </p>
-        </div>
-        <div className={styles.actions}>
-          <button onClick={refresh} disabled={loading}>
-            <ProductIcon name="refresh" />
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
-          {view !== 'preview' && (
-            <button onClick={() => openComposer('preview')}>
-              <ProductIcon name="decision" />
-              Preview routing
-            </button>
-          )}
-          {view !== 'new' && (
-            <button className={styles.primary} onClick={() => openComposer('live')}>
-              <ProductIcon name="plus" />
-              Create evaluation
-            </button>
-          )}
-        </div>
-      </header>
-      <nav className={styles.tabs} aria-label="Evaluation views">
-        {(
-          [
-            ['runs', 'Runs', 'list'],
-            ['experiments', 'Experiments', 'evaluation'],
-            ['compare', 'Compare iterations', 'chart'],
-            ['datasets', 'Datasets', 'database'],
-          ] as const
-        ).map(([key, label, icon]) => (
-          <button
-            key={key}
-            aria-current={view === key ? 'page' : undefined}
-            onClick={() => setSearch({ view: key, ...experimentRoute })}
-          >
-            <ProductIcon name={icon} />
-            {label}
-            {key === 'runs' && loaded.runs ? ` (${runs.length})` : ''}
-          </button>
-        ))}
-      </nav>
-      {lastRead && (
-        <p className={styles.muted} role="status">
-          Last synchronized {lastRead} · Read-only updates continue automatically.
-        </p>
-      )}
-      {error && (
-        <div className={styles.error} role="alert">
-          <strong>sr-bench needs attention.</strong> {error}
-          <p>
-            Check that the sr-bench service is running and configured for this Dashboard, then
-            refresh. Existing runs are owned by the service and continue independently of this page.
-          </p>
-        </div>
-      )}
-      {!catalog && loading && <ProductLoadingState compact label="Loading sr-bench…" />}
-      {experimentID && view !== 'experiments' && (
-        <button
-          className={styles.backLink}
-          onClick={() => setSearch({ view: 'experiments', experiment: experimentID })}
-        >
-          <ProductIcon name="arrow-left" />
-          Back to experiment
-        </button>
-      )}
-      {!experimentID && (creating || (view === 'runs' && selectedID)) && (
-        <button className={styles.backLink} onClick={() => openRun()}>
-          <ProductIcon name="arrow-left" />
-          Back to runs
-        </button>
-      )}
-      {creating && catalog && loaded.datasets && loaded.targets && (
-        <RunComposer
-          catalog={catalog}
-          datasets={datasets}
-          targets={targets}
-          canRun={canRun}
-          actorID={user?.id ?? ''}
-          key={`${user?.id ?? ''}:${view}:${search.get('dataset') ?? 'new'}:${search.get('baseline') ?? ''}:${search.get('experiment') ?? ''}:${search.get('role') ?? ''}`}
-          mode={view === 'preview' ? 'preview' : 'live'}
-          baselineID={search.get('baseline') ?? undefined}
-          experiment={
-            search.get('experiment')
-              ? {
-                  id: search.get('experiment')!,
-                  role:
-                    view === 'preview'
-                      ? 'preview'
-                      : (search.get('role') as ExperimentRunContext['role']) ||
-                        (search.has('baseline') ? 'candidate' : 'baseline'),
+    <PageContainer>
+      <section aria-label="sr-bench workspace" className="min-w-0">
+        <PageHeader
+          icon={<IconTile icon={FlaskConical} tone="orange" size="lg" />}
+          title="Evaluations"
+          description="Benchmark recipes and the models they route to on the same frozen questions, then compare quality, cost and routing."
+          actions={
+            <>
+              <Tooltip
+                content={
+                  error
+                    ? 'Some sr-bench reads failed; retrying every 5 s.'
+                    : lastRead
+                      ? `Synced ${lastRead} · updates every ${anyActive ? '5' : '15'} s`
+                      : 'Connecting to sr-bench…'
                 }
-              : undefined
+              >
+                <span
+                  role="status"
+                  aria-label={`${engineLabel(catalog?.version)} ${error ? 'needs attention' : lastRead ? `synced ${lastRead}` : 'connecting'}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 text-xs font-medium text-foreground/85 shadow-xs"
+                >
+                  <StatusDot
+                    tone={error ? 'warning' : lastRead ? 'success' : 'neutral'}
+                    pulse={!lastRead && !error}
+                  />
+                  {engineLabel(catalog?.version)}
+                </span>
+              </Tooltip>
+              {tab === 'datasets' && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate({ view: 'datasets', prepare: '1', ...experimentRoute })}
+                >
+                  <Database aria-hidden="true" />
+                  Prepare dataset
+                </Button>
+              )}
+              <Button onClick={() => openComposer('live')}>
+                <Plus aria-hidden="true" />
+                New evaluation
+              </Button>
+            </>
           }
-          initialModel={search.get('model') ?? undefined}
-          initialDataset={search.get('dataset') ?? undefined}
-          onStarted={(run) => {
-            setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)])
-            setSearch({ view: 'runs', run: run.id, ...experimentRoute })
-            refresh()
-          }}
-        />
-      )}
-      {view === 'experiments' && (
-        <ExperimentWorkspace
-          key={`${user?.id ?? ''}:${search.get('experiment') ?? 'all'}`}
-          id={search.get('experiment') ?? undefined}
-          actorID={user?.id ?? ''}
-          runs={runs}
-          canWrite={canWrite}
-          canRun={canRun}
-          onSelect={(id) =>
-            setSearch(id ? { view: 'experiments', experiment: id } : { view: 'experiments' })
-          }
-          onOpenRun={openRun}
-          onCandidate={(baseline, experiment, mode, role) =>
-            setSearch({
-              view: mode === 'preview' ? 'preview' : 'new',
-              ...(baseline ? { baseline } : {}),
-              experiment,
-              role,
-            })
-          }
-          onCompare={(baseline) => setSearch({ view: 'compare', baseline, ...experimentRoute })}
-        />
-      )}
-      {view === 'runs' && (
-        <>
-          {!selectedID &&
-            (loaded.runs ? (
-              <RunList
-                runs={runs}
-                selectedID={selectedID}
-                filters={runFilters}
-                onFilters={updateRunFilters}
-                onSelect={openRun}
-              />
-            ) : readErrors.runs ? (
-              <p role="status">Run inventory is unavailable.</p>
-            ) : (
-              <ProductLoadingState compact label="Loading evaluation runs…" />
-            ))}
-          {selectedID && (
-            <RunDetails
-              key={`${user?.id ?? ''}:${selectedID}`}
-              id={selectedID}
-              section={
-                ['results', 'questions', 'calls', 'evidence', 'recipe'].includes(
-                  search.get('section') ?? '',
-                )
-                  ? search.get('section')!
-                  : 'results'
-              }
-              onSectionChange={(section) => {
+        >
+          <Tabs
+            value={tab}
+            onValueChange={(value) => {
+              // Tabs activate on mousedown and again on focus; push one history entry.
+              if (value === shownTab.current) return
+              shownTab.current = value
+              navigate({ view: value, ...experimentRoute })
+            }}
+            className="gap-0"
+          >
+            <TabsList aria-label="Evaluation views">
+              <TabsTrigger value="runs">
+                Runs
+                {loaded.runs ? (
+                  <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] text-muted-foreground">
+                    {runs.length}
+                  </span>
+                ) : null}
+              </TabsTrigger>
+              <TabsTrigger value="datasets">
+                Datasets
+                {loaded.datasets ? (
+                  <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] text-muted-foreground">
+                    {datasets.length}
+                  </span>
+                ) : null}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </PageHeader>
+        {error && (
+          <Notice tone="danger" role="alert" className="mb-4 mt-0">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <p className="min-w-0 flex-1">
+                <strong>sr-bench needs attention.</strong> {error} Existing runs are owned by the
+                service and continue independently of this page; reads retry automatically.
+              </p>
+              <Button variant="outline" size="xs" onClick={refresh}>
+                Retry now
+              </Button>
+            </div>
+          </Notice>
+        )}
+        {tab === 'runs' ? (
+          <RunsView
+            runs={runs}
+            loaded={!!loaded.runs}
+            readError={readErrors.runs}
+            catalog={catalog}
+            filters={runFilters}
+            onFilters={updateRunFilters}
+            experimentID={experimentID}
+            onExperiment={(id) =>
+              navigate(id ? { view: 'runs', experiment: id } : { view: 'runs' })
+            }
+            actorID={user?.id ?? ''}
+            canWrite={canWrite}
+            canRun={canRun}
+            openRunID={search.get('run') ?? undefined}
+            onOpenRun={openRun}
+            onCompare={openCompare}
+            onRerun={(run) =>
+              navigate({
+                view: run.manifest.mode === 'preview' ? 'preview' : 'new',
+                rerun: run.id,
+                ...experimentRoute,
+              })
+            }
+            onNewEvaluation={() => openComposer('live')}
+            onCandidate={(baseline, experiment, mode, role) =>
+              navigate({
+                view: mode === 'preview' ? 'preview' : 'new',
+                ...(baseline ? { baseline } : {}),
+                experiment,
+                role,
+              })
+            }
+            onChanged={refresh}
+          />
+        ) : (
+          <DatasetsView
+            key={user?.id ?? ''}
+            datasets={datasets}
+            loaded={!!loaded.datasets}
+            readError={readErrors.datasets}
+            runs={runs}
+            runsLoaded={!!loaded.runs}
+            catalog={catalog}
+            canRun={canRun}
+            writeDisabledReason={writeDisabledReason}
+            accessRefreshing={settingsLoading}
+            onRefreshAccess={() => {
+              refreshSettings()
+              void refreshSession()
+            }}
+            selectedDatasetID={search.get('dataset') ?? undefined}
+            onSelectDataset={(id) =>
+              navigate({ view: 'datasets', ...(id ? { dataset: id } : {}), ...experimentRoute })
+            }
+            prepareOpen={search.get('prepare') === '1'}
+            onPrepareOpen={(open) =>
+              navigate({ view: 'datasets', ...(open ? { prepare: '1' } : {}), ...experimentRoute })
+            }
+            onUse={(dataset) =>
+              navigate({
+                view: 'new',
+                dataset: dataset.id,
+                ...experimentRoute,
+                ...(experimentID ? { role: 'baseline' } : {}),
+              })
+            }
+            onInventoryChanged={refresh}
+          />
+        )}
+      </section>
+      <RunSheet
+        id={tab === 'runs' && !composerMode && view !== 'compare' ? search.get('run') : null}
+        onClose={() => openRun()}
+        section={runSection(search.get('section'))}
+        onSectionChange={(section) => {
+          const next = new URLSearchParams(search)
+          next.set('section', section)
+          setSearch(next)
+        }}
+        actorID={user?.id ?? ''}
+        canRun={canRun}
+        onChanged={refresh}
+        onRecovered={(run) => {
+          navigate({ view: 'runs', run: run.id, ...experimentRoute })
+          refresh()
+        }}
+        onCandidate={(baseline, mode) => openComposer(mode, baseline)}
+        onCompare={(run) => openCompare([run.id])}
+        onRerun={(run) =>
+          navigate({
+            view: run.manifest.mode === 'preview' ? 'preview' : 'new',
+            rerun: run.id,
+            ...experimentRoute,
+          })
+        }
+      />
+      <NewEvaluationSheet
+        open={composerOpen}
+        onOpenChange={(open) => !open && closeOverlay()}
+        mode={composerMode ?? 'live'}
+        onModeChange={
+          rerun
+            ? undefined
+            : (mode) => {
                 const next = new URLSearchParams(search)
-                next.set('section', section)
-                setSearch(next)
-              }}
-              actorID={user?.id ?? ''}
-              canRun={canRun}
-              onChanged={refresh}
-              onRecovered={(run) => {
-                setSearch({ view: 'runs', run: run.id, ...experimentRoute })
-                refresh()
-              }}
-              onCandidate={(baseline, mode) => openComposer(mode, baseline)}
-            />
-          )}
-        </>
-      )}
-      {view === 'datasets' && search.get('prepare') === '1' && (
-        <DatasetPreparationPanel
-          key={user?.id ?? ''}
-          disabledReason={writeDisabledReason}
-          accessRefreshing={settingsLoading}
-          onRefreshAccess={() => {
-            refreshSettings()
-            void refreshSession()
-          }}
-          onCompleted={refresh}
-          onOpenDataset={(dataset) =>
-            setSearch({ view: 'datasets', dataset: dataset.id, ...experimentRoute })
-          }
-          onClose={() => setSearch({ view: 'datasets', ...experimentRoute })}
-        />
-      )}
-      {view === 'datasets' && loaded.datasets && (
-        <DatasetInventory
-          datasets={datasets}
-          runs={runs}
-          runsLoaded={!!loaded.runs}
-          canRun={canRun}
-          onPrepare={
-            search.get('prepare') === '1'
-              ? undefined
-              : () => setSearch({ view: 'datasets', prepare: '1', ...experimentRoute })
-          }
-          selectedDatasetId={search.get('dataset') ?? ''}
-          onSelectDataset={(id) => setSearch({ view: 'datasets', dataset: id, ...experimentRoute })}
-          onBackToDatasets={() => setSearch({ view: 'datasets', ...experimentRoute })}
-          onUse={(dataset) =>
-            setSearch({
-              view: 'new',
-              dataset: dataset.id,
-              ...experimentRoute,
-              ...(experimentID ? { role: 'baseline' } : {}),
-            })
-          }
-        />
-      )}
-      {view === 'datasets' &&
-        !loaded.datasets &&
-        (readErrors.datasets ? (
-          <p role="status">Dataset inventory is unavailable.</p>
-        ) : (
-          <ProductLoadingState compact label="Loading prepared datasets…" />
-        ))}
-      {creating && (!catalog || !loaded.datasets || !loaded.targets) && (
-        <ProductLoadingState
-          compact
-          label="Waiting for the benchmark catalog, prepared datasets and configured targets."
-        />
-      )}
-      {view === 'compare' &&
-        !loaded.runs &&
-        (readErrors.runs ? (
-          <p role="status">Run inventory is unavailable.</p>
-        ) : (
-          <ProductLoadingState compact label="Loading evaluation runs…" />
-        ))}
-      {view === 'compare' && loaded.runs && (
-        <>
-          <RunComparison key={user?.id ?? ''} runs={runs} />
-          <details className={styles.panel}>
-            <summary>Estimate a routing change</summary>
-            <ReplayComposer
-              key={user?.id ?? ''}
-              actorID={user?.id ?? ''}
-              canRun={canRun}
-              onCreated={(run) => {
-                setSearch({ view: 'runs', run: run.id, ...experimentRoute })
-                refresh()
-              }}
-            />
-          </details>
-        </>
-      )}
-    </section>
+                next.set('view', mode === 'live' ? 'new' : mode)
+                if (experimentID)
+                  next.set(
+                    'role',
+                    composerRole(
+                      mode === 'preview' ? 'preview' : 'live',
+                      search.get('baseline') ?? '',
+                    ),
+                  )
+                setSearch(next, { replace: true })
+              }
+        }
+        allowEstimate={!experimentID}
+        catalog={catalog}
+        datasets={datasets}
+        targets={targets}
+        ready={!!catalog && !!loaded.datasets && !!loaded.targets}
+        canRun={canRun}
+        actorID={user?.id ?? ''}
+        baselineID={search.get('baseline') ?? undefined}
+        experiment={composerExperiment}
+        initialModel={search.get('model') ?? undefined}
+        initialDataset={search.get('dataset') ?? undefined}
+        rerun={rerunRun ? rerunSource(rerunRun) : undefined}
+        onStarted={(run) => {
+          setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)])
+          navigate({ view: 'runs', run: run.id, ...experimentRoute })
+          refresh()
+        }}
+      />
+      <CompareSheet
+        open={view === 'compare'}
+        onClose={closeOverlay}
+        runs={runs}
+        loaded={!!loaded.runs}
+        readError={readErrors.runs}
+        actorID={user?.id ?? ''}
+      />
+    </PageContainer>
   )
 }
