@@ -85,11 +85,11 @@
     judge_selection: One judge sampled per verdict from the respective panel, balanced across checks and
       matches
   metrics:
-    elo: 1485.08
-    elo_lower: 1475.65
-    elo_upper: 1494.32
+    elo: 1484.19
+    elo_lower: 1475.15
+    elo_upper: 1493.71
   status: available
-  observed_at: 2026-11-20
+  observed_at: 2026-11-21
   evidence:
     provenance: third_party
     verification: imported
@@ -244,7 +244,7 @@
     elo_lower: 1600.75
     elo_upper: 1621.24
   status: available
-  observed_at: 2026-11-20
+  observed_at: 2026-11-21
   evidence:
     provenance: third_party
     verification: imported
@@ -395,11 +395,11 @@
     judge_selection: One judge sampled per verdict from the respective panel, balanced across checks and
       matches
   metrics:
-    elo: 1568.83
-    elo_lower: 1558.77
-    elo_upper: 1579.75
+    elo: 1568.48
+    elo_lower: 1557.9
+    elo_upper: 1579.19
   status: available
-  observed_at: 2026-11-20
+  observed_at: 2026-11-21
   evidence:
     provenance: third_party
     verification: imported
@@ -550,11 +550,11 @@
     judge_selection: One judge sampled per verdict from the respective panel, balanced across checks and
       matches
   metrics:
-    elo: 1699.17
-    elo_lower: 1688.01
-    elo_upper: 1710.26
+    elo: 1698.69
+    elo_lower: 1687.24
+    elo_upper: 1709.65
   status: available
-  observed_at: 2026-11-20
+  observed_at: 2026-11-21
   evidence:
     provenance: third_party
     verification: imported

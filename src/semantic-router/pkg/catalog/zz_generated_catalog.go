@@ -12292,12 +12292,12 @@ const builtInCatalogJSON = `{
       },
       "id": "independent/gemini-4-argon-high-briefcase@1.1.0",
       "metrics": {
-        "elo": 1485.08,
-        "elo_lower": 1475.65,
-        "elo_upper": 1494.32
+        "elo": 1484.19,
+        "elo_lower": 1475.15,
+        "elo_upper": 1493.71
       },
       "model": "google/gemini-4-argon",
-      "observed_at": "2026-11-20",
+      "observed_at": "2026-11-21",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -12478,7 +12478,7 @@ const builtInCatalogJSON = `{
         "elo_upper": 1621.24
       },
       "model": "google/gemini-4-carbon",
-      "observed_at": "2026-11-20",
+      "observed_at": "2026-11-21",
       "reasoning_effort": "high",
       "status": "available",
       "subject": {
@@ -12654,12 +12654,12 @@ const builtInCatalogJSON = `{
       },
       "id": "independent/gemini-4-hydrogen-xhigh-briefcase@1.1.0",
       "metrics": {
-        "elo": 1568.83,
-        "elo_lower": 1558.77,
-        "elo_upper": 1579.75
+        "elo": 1568.48,
+        "elo_lower": 1557.9,
+        "elo_upper": 1579.19
       },
       "model": "google/gemini-4-hydrogen",
-      "observed_at": "2026-11-20",
+      "observed_at": "2026-11-21",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
@@ -12835,12 +12835,12 @@ const builtInCatalogJSON = `{
       },
       "id": "independent/gemini-4-neon-xhigh-briefcase@1.1.0",
       "metrics": {
-        "elo": 1699.17,
-        "elo_lower": 1688.01,
-        "elo_upper": 1710.26
+        "elo": 1698.69,
+        "elo_lower": 1687.24,
+        "elo_upper": 1709.65
       },
       "model": "google/gemini-4-neon",
-      "observed_at": "2026-11-20",
+      "observed_at": "2026-11-21",
       "reasoning_effort": "xhigh",
       "status": "available",
       "subject": {
