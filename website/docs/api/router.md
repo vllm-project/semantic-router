@@ -22,6 +22,7 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
 | `POST` | `/v1/messages/count_tokens` | Anthropic Messages | Counts with the Messages backend of the named model, or of the model that last served the session, at its `count_tokens` path; otherwise answers with its own estimate, which counts text by tokenizer-style pieces rather than bytes. No turn is routed or recorded. A recipe with candidate requirements, or with a decision that reads content (any signal but conversation shape and context size) or has a plugin, always gets the estimate. Rate limits, token budgets included, admit a count by its input before it is forwarded |
 | `POST` | `/v1/images/generations` | OpenAI Images | Routed on the prompt like any text request, and answered only by a decision whose `output` is an image. See [Images API](#images-api) |
+| `POST` | `/v1/audio/speech` | OpenAI Speech | Routed on the input text to a model with `api_format: speech`. The audio response is forwarded unchanged. See [Speech API](#speech-api) |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
@@ -355,6 +356,39 @@ the Images API; a decision whose models are all on the Responses API answers it
 with `400` `unsupported_capability` before any model is called, unless its
 [`request_params`](../tutorials/plugin/request-params) `max_n` caps `n` to 1
 or its `blocked_params` removes `n`.
+
+### Speech API
+
+```bash
+curl -sS http://localhost:8899/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "tts",
+    "input": "Hello from the Speech API.",
+    "voice": "alloy"
+  }' \
+  --output speech.wav
+```
+
+The Router routes a Speech API request on its `input` text, the same way it
+routes any other request on the user's text. The selected model must serve
+`api_format: speech` (catalog protocol `openai/audio-speech@1`). A chat,
+Responses, Messages or Images model fails closed with `unsupported_capability`
+before the backend is called.
+
+The response is the backend's audio bytes and response headers, forwarded
+unchanged. It is not a JSON completion. Response-side policy, the response
+cache, token limits and cost estimates do not apply, and the request completes
+with zero token usage. Request-text checks still run. A non-2xx JSON error
+keeps the existing error path, including the backend's message.
+
+`stream: true` and any `stream_format` are rejected. An unknown top-level field
+is a `400`. Named fields, including the vLLM-Omni extension object
+`extra_params`, are forwarded as sent. The Router rewrites only `model`.
+
+Built-in virtual models do not advertise this protocol. Point `model` at a
+concrete speech model. Plain vLLM does not serve `POST /v1/audio/speech`; the
+built-in catalog lists the protocol on the `vllm-omni` provider.
 
 ### Azure OpenAI clients
 

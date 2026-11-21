@@ -309,10 +309,10 @@ class Listener(BaseModel):
     apis: Optional[Dict[str, ListenerAPI]] = Field(
         default=None,
         description="The APIs this listener serves, by API name: "
-        "chat_completions, responses, messages, images and systemone (openai "
+        "chat_completions, responses, messages, images, speech and systemone (openai "
         "and anthropic are aliases of chat_completions and messages). Other "
         "API paths answer 404. Omitted, the listener serves chat_completions, "
-        "responses, messages and images, and not systemone. A model "
+        "responses, messages, images and speech, and not systemone. A model "
         "allow-list is enforced in standalone mode; --gateway extproc rejects it. "
         "Standalone mode serves systemone; --gateway extproc rejects it.",
     )
@@ -354,7 +354,7 @@ class Listener(BaseModel):
         if not apis:
             raise ValueError(
                 "apis names no API; name the APIs the listener serves, or omit apis to serve "
-                "chat_completions, responses, messages and images"
+                "chat_completions, responses, messages, images and speech"
             )
         resolved: dict[str, ListenerAPI] = {}
         named: dict[str, str] = {}
@@ -2783,7 +2783,7 @@ class Model(ModelFacts):
     api_format: Optional[str] = Field(
         default=None,
         description="The API the model's backends serve: chat_completions "
-        "(the default), responses, messages, images or systemone; openai and "
+        "(the default), responses, messages, images, speech or systemone; openai and "
         "anthropic are aliases of chat_completions and messages.",
     )
     schema_: Optional[str] = Field(
