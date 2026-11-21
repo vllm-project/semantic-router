@@ -272,6 +272,14 @@ func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *e
 	if ctx.ProtocolResponseStream != nil &&
 		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted || buffers.bridged) {
 		body := buffers.translated
+		// A stream failure switches a same-format client from the public
+		// filter's bytes to the codec's frames, which carry only the failing
+		// read's output. The tool-argument frames the filter held back in
+		// earlier reads must ride along, or the client loses the accepted
+		// prefix of the call the provider went on to break.
+		if ctx.StreamingAborted && !requiresClientResponseRewrite(ctx) {
+			body = append(ctx.PublicChatUsageFilter.ReleaseHeldForAbort(), body...)
+		}
 		// A bridged answer replaces a gzip provider body, and the client's
 		// content-encoding still names that coding, so the frames carry it too.
 		if buffers.bridged && ctx.UpstreamResponseGzip {
