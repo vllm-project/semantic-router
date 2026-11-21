@@ -93,8 +93,8 @@ func testDashboardDeploySafeFailure(ctx context.Context, client *kubernetes.Clie
 	if err != nil {
 		return err
 	}
-	if err := postRejectedDashboardUnknownFieldUpdate(ctx, httpClient, baseURL, token, configBefore); err != nil {
-		return err
+	if updateErr := postRejectedDashboardUnknownFieldUpdate(ctx, httpClient, baseURL, token, configBefore); updateErr != nil {
+		return updateErr
 	}
 
 	if err := assertDashboardConfigUnchanged(ctx, httpClient, baseURL, token, configBefore, versionsBefore); err != nil {
