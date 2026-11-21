@@ -15053,6 +15053,136 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "arc-prize/arc-agi-1@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://arcprize.org/results/meta-muse-spark-open",
+        "verification": "imported"
+      },
+      "id": "arc-prize/muse-spark-open-arc-agi-1@1.0.0",
+      "metrics": {
+        "accuracy": 0.89
+      },
+      "model": "meta/muse-spark-open",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "evaluator": "ARC Prize",
+        "run_kind": "independent",
+        "source_model": "Muse Spark Open (XHigh)",
+        "source_model_slug": "meta-muse-spark-open"
+      }
+    },
+    {
+      "benchmark": "arc-prize/arc-agi-2@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://arcprize.org/results/meta-muse-spark-open",
+        "verification": "imported"
+      },
+      "id": "arc-prize/muse-spark-open-arc-agi-2@1.0.0",
+      "metrics": {
+        "accuracy": 0.575
+      },
+      "model": "meta/muse-spark-open",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "evaluator": "ARC Prize",
+        "run_kind": "independent",
+        "source_model": "Muse Spark Open (XHigh)",
+        "source_model_slug": "meta-muse-spark-open"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/",
+        "verification": "imported"
+      },
+      "id": "duellab/muse-spark-open-xhigh-gamebench-2@1.0.0",
+      "measured_at": "2026-11-19",
+      "metrics": {
+        "score": 58.95964511856345
+      },
+      "model": "meta/muse-spark-open",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20261119-235af8c04037",
+        "provider_model": "meta/muse-spark-open",
+        "provider_route": "openrouter",
+        "provider_setting": "XHigh",
+        "run_kind": "independent",
+        "source_model": "Muse Spark Open",
+        "source_model_slug": "meta-muse-spark-open",
+        "track": "full_freedom/mixed"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B#benchmarks",
+        "verification": "imported"
+      },
+      "id": "independent/muse-spark-open-scicode@1.0.0",
+      "metrics": {
+        "score": 0.585
+      },
+      "model": "meta/muse-spark-open",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "evaluator": "Artificial Analysis",
+        "methodology_source": "https://research.meta.ai/static/muse-spark-open-evaluation-methodology",
+        "run_kind": "independent",
+        "source_kind": "official_vendor_republication",
+        "source_model": "Muse Spark Open (xhigh)",
+        "source_model_slug": "muse-spark-open"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B#benchmarks",
+        "verification": "imported"
+      },
+      "id": "independent/muse-spark-open-terminalbench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.764
+      },
+      "model": "meta/muse-spark-open",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "environment": "E2B",
+        "evaluator": "Artificial Analysis",
+        "harness": "Terminus 2",
+        "methodology_source": "https://research.meta.ai/static/muse-spark-open-evaluation-methodology",
+        "run_kind": "independent",
+        "source_kind": "official_vendor_republication",
+        "source_model": "Muse Spark Open (xhigh)",
+        "source_model_slug": "muse-spark-open"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/briefcase@1.0.0",
       "benchmark_profile": "independent-agent",
       "evidence": {
@@ -60783,6 +60913,640 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/muse-spark-open-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.585,
+          "status": "available",
+          "value": 0.585,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [
+        "independent/muse-spark-open-scicode@1.0.0"
+      ],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/muse-spark-open-terminalbench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.764,
+          "status": "available",
+          "value": 0.764,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 76.4
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [
+        "independent/muse-spark-open-terminalbench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "xhigh",
+      "score": 76.4,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.764,
+          "status": "available",
+          "value": 0.764,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [
+        "independent/muse-spark-open-scicode@1.0.0",
+        "independent/muse-spark-open-terminalbench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "meta/muse-spark-1.3",
       "provenance": [],
       "reasoning_effort": "minimal",
@@ -103185,6 +103949,63 @@ const builtInCatalogJSON = `{
         "chat",
         "reasoning",
         "tools",
+        "vision",
+        "video",
+        "audio",
+        "long_context"
+      ],
+      "description": "Meta's multimodal mixture-of-experts model for reasoning and tool use. Access to the weights requires approval.",
+      "display_name": "Muse Spark Open",
+      "distribution": {
+        "license": "Muse Model License",
+        "source": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B",
+        "type": "open_weights"
+      },
+      "family": "muse-spark",
+      "id": "meta/muse-spark-open",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "816B (42B active)",
+      "presentation": {
+        "logo": "package:meta",
+        "monochrome": false,
+        "monogram": "M"
+      },
+      "publisher": "Meta",
+      "reasoning_family": "muse-spark-open",
+      "released_at": "2026-10-15",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "moe",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Meta",
+        "source": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "structured_output",
         "vision",
         "audio",
@@ -109258,6 +110079,33 @@ const builtInCatalogJSON = `{
       "id": "fireworks",
       "models": [
         {
+          "catalog": "meta/muse-spark-open",
+          "id": "accounts/fireworks/models/muse-spark-open",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.15,
+            "completion_per_1m": 4.25,
+            "currency": "USD",
+            "prompt_per_1m": 1.25
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "input_modalities": [
+              "text",
+              "image"
+            ]
+          },
+          "verification": {
+            "source": "https://fireworks.ai/models/fireworks/muse-spark-open",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
           "catalog": "meta/muse-glimmer-30b",
           "id": "accounts/fireworks/models/muse-glimmer-30b",
           "lifecycle": "active",
@@ -114354,6 +115202,22 @@ const builtInCatalogJSON = `{
       "modes": [
         "enabled",
         "disabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "xhigh",
+      "default_mode": "enabled",
+      "id": "muse-spark-open",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "modes": [
+        "enabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"

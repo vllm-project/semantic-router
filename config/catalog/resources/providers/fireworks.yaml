@@ -21,6 +21,24 @@ presentation:
 conformance:
   status: unverified
 models:
+- catalog: meta/muse-spark-open
+  relationship: managed_cloud
+  id: accounts/fireworks/models/muse-spark-open
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_effort
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.25
+    cached_input_per_1m: 0.15
+    completion_per_1m: 4.25
+  restrictions:
+    input_modalities: [text, image]
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://fireworks.ai/models/fireworks/muse-spark-open
 - catalog: meta/muse-glimmer-30b
   relationship: managed_cloud
   id: accounts/fireworks/models/muse-glimmer-30b
