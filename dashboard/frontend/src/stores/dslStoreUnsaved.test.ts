@@ -67,6 +67,7 @@ describe('unsaved changes signal', async () => {
     useDSLStore.setState({
       dslSource: 'MODEL "draft" {}',
       yamlOutput: 'compiled output',
+      showDeployConfirm: true,
       savedSource: 'previous baseline',
       dirty: true,
     })
@@ -95,6 +96,7 @@ describe('unsaved changes signal', async () => {
     useDSLStore.setState({
       dslSource: 'MODEL "draft" {}',
       yamlOutput: 'compiled output',
+      showDeployConfirm: true,
       savedSource: 'previous baseline',
       dirty: true,
     })
@@ -122,6 +124,7 @@ describe('unsaved changes signal', async () => {
     useDSLStore.setState({
       dslSource: 'MODEL "draft" {}',
       yamlOutput: 'compiled output',
+      showDeployConfirm: true,
       savedSource: 'previous baseline',
       dirty: true,
     })
@@ -150,6 +153,7 @@ describe('unsaved changes signal', async () => {
     useDSLStore.setState({
       dslSource: 'MODEL "draft" {}',
       yamlOutput: 'compiled output',
+      showDeployConfirm: true,
       savedSource: 'previous baseline',
     })
     vi.stubGlobal(
