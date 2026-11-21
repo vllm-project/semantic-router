@@ -60,9 +60,6 @@ answers recorded for its revision. They are recorded for:
 - NVIDIA Ada (sm_89) (`cuda:sm_89`)
 - AMD GPU (ROCm) (`rocm`)
 
-Where a hardware reference and its device class's are both recorded, the
-hardware one is checked.
-
 On a CPU no reference is recorded, so the model serves
 there with its self-check reported as `unverified`.
 
