@@ -69,7 +69,15 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 	}
 	// The router of the retained generation evaluates the listener's rules.
 	rules, _ := router.(systemone.ListenerRules)
-	systemone.HandlerWithRules(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name), rules)(w, request)
+	systemone.HandlerWithRules(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name), rules, s.forwardClientAuth(snapshot))(w, request)
+}
+
+// forwardClientAuth admits forwarded requests with the client policy of the
+// retained generation, checked against the serving owner's active policy
+// once the handler knows a request's model. The registry's published snapshot
+// can lag that owner during a reload handoff.
+func (s *ClassificationAPIServer) forwardClientAuth(retained *configsnapshot.Snapshot) systemone.ClientAuth {
+	return systemone.ClientAuth{Served: retained.ClientAuth(), Active: s.runtimeRegistry.ActiveClientAuth}
 }
 
 // retainedSystemOneInvoker uses only services from the caller's acquired

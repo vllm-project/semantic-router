@@ -79,10 +79,13 @@ async function setup(page: Page, registered = target) {
 }
 
 async function chooseTarget(page: Page, view = 'new') {
-  await page.goto(`/evaluation?view=${view}`)
-  await page.getByRole('combobox', { name: 'Add configured target' }).click()
-  await page.locator(`[role="option"][data-value="${target.id}"]`).click()
+  await page.goto(`/observe/evaluations?view=${view}`)
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.locator(`[data-target-id="${target.id}"]`).click()
 }
+
+const step = (page: Page, name: 'Continue' | 'Back') =>
+  page.getByRole('button', { name, exact: true }).click()
 
 for (const width of [1280, 390]) {
   test(`changes unpriced evaluation to Quality only only after an explicit click at ${width}px`, async ({
@@ -95,6 +98,13 @@ for (const width of [1280, 390]) {
     await expect(notice).toContainText(
       'Quality only removes the USD budget; time, token and call limits remain.',
     )
+    const action = notice.getByRole('button', { name: 'Use Quality only', exact: true })
+    expect((await action.boundingBox())!.height).toBeLessThanOrEqual(40)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+    await notice.screenshot({ path: testInfo.outputPath(`missing-prices-${width}.png`) })
+    await step(page, 'Continue')
     const budget = page.getByRole('spinbutton', { name: 'Budget (USD)', exact: true })
     await expect(budget).toBeEnabled()
     await budget.fill('12')
@@ -114,22 +124,20 @@ for (const width of [1280, 390]) {
     ])
       await page.getByLabel(label, { exact: true }).fill(value)
     await advanced.click()
-    const action = notice.getByRole('button', { name: 'Use Quality only', exact: true })
-    expect((await action.boundingBox())!.height).toBeLessThanOrEqual(40)
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true)
-    await notice.screenshot({ path: testInfo.outputPath(`missing-prices-${width}.png`) })
     expect(state.plans).toEqual([])
     await page.getByRole('button', { name: 'Review plan', exact: true }).click()
     await expect(page.getByRole('alert')).toHaveText('Known prices are required for this target.')
     expect(state.plans).toHaveLength(1)
     expect(state.plans[0].cost_policy).toBe('require_priced')
     expect(state.plans[0].limits.max_cost_usd).toBe(12)
+    await expect(notice).toBeVisible()
+    await step(page, 'Back')
     await expect(budget).toBeEnabled()
     await expect(budget).toHaveValue('12')
+    await step(page, 'Back')
     await action.click()
     await expect(notice).toHaveCount(0)
+    await step(page, 'Continue')
     await expect(budget).toBeDisabled()
     await expect(budget).toHaveValue('')
     await expect(budget).toHaveAttribute('placeholder', 'Not applied')
@@ -167,6 +175,7 @@ for (const [name, prices] of [
     const state = await setup(page, { ...target, prices })
     await chooseTarget(page)
     await expect(page.getByRole('button', { name: 'Use Quality only', exact: true })).toBeVisible()
+    await step(page, 'Continue')
     await expect(page.getByLabel('Budget (USD)', { exact: true })).toBeEnabled()
     expect(state.plans).toEqual([])
     expect(state.runs).toBe(0)
@@ -177,6 +186,7 @@ test('keeps explicitly zero-priced targets in the priced workflow', async ({ pag
   const state = await setup(page, { ...target, prices: { [target.model]: freePrice } })
   await chooseTarget(page)
   await expect(page.getByRole('button', { name: 'Use Quality only', exact: true })).toHaveCount(0)
+  await step(page, 'Continue')
   await expect(page.getByLabel('Budget (USD)', { exact: true })).toBeEnabled()
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()

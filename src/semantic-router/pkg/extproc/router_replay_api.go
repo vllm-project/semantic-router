@@ -1,8 +1,10 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const (
@@ -18,6 +21,12 @@ const (
 	routerReplayDefaultListLimit = 20
 	routerReplayMaxListLimit     = 100
 )
+
+// routerReplayHarnesses are the values a harness filter lists.
+var routerReplayHarnesses = []string{
+	store.HarnessClaudeCode, store.HarnessCodex, store.HarnessOpenCode, store.HarnessDeepSeekHarness,
+	store.HarnessCursor, store.HarnessOpenClaw, store.HarnessAPIClient,
+}
 
 type routerReplayFilters struct {
 	search      string
@@ -27,8 +36,37 @@ type routerReplayFilters struct {
 	cacheStatus string
 	sessionID   string
 	turnID      string
-	since       time.Time
-	review      routerReplayReviewFilters
+	// hasSession keeps the records that belong to a session, as the
+	// Sessions view lists them.
+	hasSession bool
+	// harness is a sorted, comma-separated list of routerReplayHarnesses.
+	harness string
+	since   time.Time
+	review  routerReplayReviewFilters
+}
+
+// cacheKey names the filters in one canonical form, so that two spellings of
+// one query share a cached answer.
+func (filters routerReplayFilters) cacheKey() string {
+	values := url.Values{}
+	for key, value := range map[string]string{
+		"search": filters.search, "recipe": filters.recipe, "decision": filters.decision,
+		"model": filters.model, "cache_status": filters.cacheStatus, "session_id": filters.sessionID,
+		"turn_id": filters.turnID, "harness": filters.harness, "request_kind": filters.review.requestKind,
+		"review_status": filters.review.status, "review_outcome": filters.review.outcome,
+		"review_risk": filters.review.risk,
+	} {
+		if value != "" {
+			values.Set(key, value)
+		}
+	}
+	if !filters.since.IsZero() {
+		values.Set("since", filters.since.UTC().Format(time.RFC3339Nano))
+	}
+	if filters.hasSession {
+		values.Set("has_session", "true")
+	}
+	return values.Encode()
 }
 
 type routerReplayListQuery struct {
@@ -41,7 +79,8 @@ type routerReplayListQuery struct {
 type routerReplayListResponse = routerreplay.ListResponse
 
 // handleRouterReplayAPI serves read-only endpoints for router replay records.
-func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_proc.ProcessingResponse {
+// Reads end with ctx: a caller that leaves stops the storage queries it began.
+func (r *OpenAIRouter) handleRouterReplayAPI(ctx context.Context, method string, path string) *ext_proc.ProcessingResponse {
 	if !r.hasRouterReplayRecorders() {
 		return nil
 	}
@@ -53,21 +92,21 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 
 	switch {
 	case isRouterReplayListPath(normalizedPath):
-		return r.handleRouterReplayListAPI(method, rawQuery)
+		return r.handleRouterReplayListAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayAggregatePath:
-		return r.handleRouterReplayAggregateAPI(method, rawQuery)
+		return r.handleRouterReplayAggregateAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayTrajectoryPath:
-		return r.handleRouterReplayTrajectoryAPI(method, rawQuery)
+		return r.handleRouterReplayTrajectoryAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayRunsPath:
-		return r.handleRouterReplayRunsAPI(method, rawQuery)
+		return r.handleRouterReplayRunsAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayRunPath:
-		return r.handleRouterReplayRunAPI(method, rawQuery)
+		return r.handleRouterReplayRunAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayModelsPath:
 		return r.handleRouterReplayModelsAPI(method)
 	case normalizedPath == routerReplayDatasetPath:
-		return r.handleRouterReplayDatasetAPI(method, rawQuery)
+		return r.handleRouterReplayDatasetAPI(ctx, method, rawQuery)
 	case normalizedPath == routerReplayJudgeTasksPath:
-		return r.handleRouterReplayJudgeTasksAPI(method, rawQuery)
+		return r.handleRouterReplayJudgeTasksAPI(ctx, method, rawQuery)
 	case strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/"):
 		replayID := strings.TrimPrefix(normalizedPath, routerReplayAPIBasePath+"/")
 		return r.handleRouterReplayRecordAPI(method, replayID)
@@ -98,7 +137,7 @@ func isRouterReplayListPath(path string) bool {
 	return path == routerReplayAPIBasePath || path == routerReplayAPIBasePath+"/"
 }
 
-func (r *OpenAIRouter) handleRouterReplayListAPI(method string, rawQuery string) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) handleRouterReplayListAPI(ctx context.Context, method string, rawQuery string) *ext_proc.ProcessingResponse {
 	if method != "GET" {
 		return r.createErrorResponse(405, "method not allowed")
 	}
@@ -108,7 +147,7 @@ func (r *OpenAIRouter) handleRouterReplayListAPI(method string, rawQuery string)
 		return r.createErrorResponse(400, err.Error())
 	}
 
-	payload, err := r.queryRouterReplayPage(query)
+	payload, err := r.queryRouterReplayPage(ctx, query)
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")
 	}
@@ -230,9 +269,43 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		filters.since = since
 	}
 
+	if raw := strings.TrimSpace(values.Get("has_session")); raw != "" {
+		hasSession, err := strconv.ParseBool(raw)
+		if err != nil {
+			return filters, fmt.Errorf("has_session must be true or false")
+		}
+		filters.hasSession = hasSession
+	}
+
+	harness, err := parseRouterReplayHarnesses(values)
+	if err != nil {
+		return filters, err
+	}
+	filters.harness = harness
+
 	review, err := parseRouterReplayReviewFilters(values)
 	filters.review = review
 	return filters, err
+}
+
+// parseRouterReplayHarnesses reads the harness filter, comma-separated or
+// repeated, as one sorted list without repeats.
+func parseRouterReplayHarnesses(values url.Values) (string, error) {
+	var harnesses []string
+	for _, raw := range values["harness"] {
+		for harness := range strings.SplitSeq(raw, ",") {
+			harness = strings.TrimSpace(harness)
+			if harness == "" {
+				continue
+			}
+			if !slices.Contains(routerReplayHarnesses, harness) {
+				return "", fmt.Errorf("harness must list one or more of %s", strings.Join(routerReplayHarnesses, ", "))
+			}
+			harnesses = append(harnesses, harness)
+		}
+	}
+	slices.Sort(harnesses)
+	return strings.Join(slices.Compact(harnesses), ","), nil
 }
 
 func parseRouterReplayQueryInt(values url.Values, key string, positiveOnly bool) (int, error) {
@@ -279,7 +352,9 @@ func doesRouterReplayRecordMatchFilters(
 		matchesOptionalValue(record.Recipe, filters.recipe),
 		matchesOptionalModel(record, filters.model),
 		matchesOptionalValue(record.SessionID, filters.sessionID),
+		!filters.hasSession || record.SessionID != "",
 		matchesOptionalTurn(record, filters.turnID),
+		matchesOptionalHarness(record, filters.harness),
 		filters.since.IsZero() || !record.Timestamp.Before(filters.since),
 		filters.review.matches(record),
 		matchesReplaySearch(record, search),
@@ -308,6 +383,10 @@ func matchesOptionalModel(record routerreplay.RoutingRecord, model string) bool 
 // started, such as its approval reviews, as the Postgres store filters them.
 func matchesOptionalTurn(record routerreplay.RoutingRecord, turnID string) bool {
 	return turnID == "" || record.TurnID == turnID || record.ParentTurnID == turnID
+}
+
+func matchesOptionalHarness(record routerreplay.RoutingRecord, harness string) bool {
+	return harness == "" || store.HarnessListed(harness, store.FilterHarness(record))
 }
 
 func matchesReplaySearch(record routerreplay.RoutingRecord, search string) bool {

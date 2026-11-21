@@ -5,7 +5,7 @@
       {
         "data": {
           "response": {
-            "created_at": 0,
+            "created_at": 100,
             "error": null,
             "id": "resp_1",
             "incomplete_details": null,
@@ -29,7 +29,7 @@
       {
         "data": {
           "response": {
-            "created_at": 0,
+            "created_at": 100,
             "error": null,
             "id": "resp_1",
             "incomplete_details": null,
@@ -67,10 +67,24 @@
       {
         "data": {
           "content_index": 0,
+          "item_id": "reasoning_1",
+          "output_index": 0,
+          "part": {
+            "text": "",
+            "type": "reasoning_text"
+          },
+          "sequence_number": 3,
+          "type": "response.content_part.added"
+        },
+        "event": "response.content_part.added"
+      },
+      {
+        "data": {
+          "content_index": 0,
           "delta": "inspect the evidence",
           "item_id": "reasoning_1",
           "output_index": 0,
-          "sequence_number": 3,
+          "sequence_number": 4,
           "type": "response.reasoning_text.delta"
         },
         "event": "response.reasoning_text.delta"
@@ -80,11 +94,25 @@
           "content_index": 0,
           "item_id": "reasoning_1",
           "output_index": 0,
-          "sequence_number": 4,
+          "sequence_number": 5,
           "text": "inspect the evidence",
           "type": "response.reasoning_text.done"
         },
         "event": "response.reasoning_text.done"
+      },
+      {
+        "data": {
+          "content_index": 0,
+          "item_id": "reasoning_1",
+          "output_index": 0,
+          "part": {
+            "text": "inspect the evidence",
+            "type": "reasoning_text"
+          },
+          "sequence_number": 6,
+          "type": "response.content_part.done"
+        },
+        "event": "response.content_part.done"
       },
       {
         "data": {
@@ -101,7 +129,7 @@
             "type": "reasoning"
           },
           "output_index": 0,
-          "sequence_number": 5,
+          "sequence_number": 7,
           "type": "response.output_item.done"
         },
         "event": "response.output_item.done"
@@ -109,7 +137,7 @@
       {
         "data": {
           "response": {
-            "created_at": 0,
+            "created_at": 100,
             "error": null,
             "id": "resp_1",
             "incomplete_details": null,
@@ -150,7 +178,7 @@
               "total_tokens": 6
             }
           },
-          "sequence_number": 6,
+          "sequence_number": 8,
           "type": "response.completed"
         },
         "event": "response.completed"

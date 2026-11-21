@@ -66,3 +66,20 @@ export async function fetchInsightsSessionReviews(sessionId: string) {
 export function isInsightsReplayUnavailableError(error: unknown) {
   return error instanceof InsightsRequestError && error.status === 404
 }
+
+/**
+ * Why replay data cannot load, when the answer says: Replay is off (404), the
+ * viewer may not read it (401, 403), or the dashboard cannot reach the router
+ * (502, 503, 504, as when it is down or on setup standby).
+ */
+export type InsightsUnavailableReason = 'replay_off' | 'forbidden' | 'router_unreachable'
+
+export function insightsUnavailableReason(error: unknown): InsightsUnavailableReason | undefined {
+  if (!(error instanceof InsightsRequestError)) return undefined
+  if (error.status === 404) return 'replay_off'
+  if (error.status === 401 || error.status === 403) return 'forbidden'
+  if (error.status === 502 || error.status === 503 || error.status === 504) {
+    return 'router_unreachable'
+  }
+  return undefined
+}

@@ -54,6 +54,13 @@ async function choose(page: Page, label: string, value: string) {
   await page.locator(`[role="option"][data-value="${value}"]`).click()
 }
 
+const step = (page: Page, name: 'Continue' | 'Back') =>
+  page.getByRole('button', { name, exact: true }).click()
+
+async function chooseTarget(page: Page, id: string) {
+  await page.locator(`[data-target-id="${id}"]`).click()
+}
+
 async function setup(page: Page, loseFirstStart = false) {
   await mockAuthenticatedAppShell(page)
   const plans: Manifest[] = []
@@ -139,8 +146,10 @@ test('native single-model plans omit artificial caps and reconcile a lost start 
   page,
 }, testInfo) => {
   const state = await setup(page, true)
-  await page.goto('/evaluation?view=new')
-  await choose(page, 'Add configured target', single.id)
+  await page.goto('/observe/evaluations?view=new')
+  await step(page, 'Continue')
+  await chooseTarget(page, single.id)
+  await step(page, 'Continue')
   await expect(
     page.getByRole('spinbutton', { name: 'Max output tokens', exact: true }),
   ).toHaveValue('4096')
@@ -149,10 +158,12 @@ test('native single-model plans omit artificial caps and reconcile a lost start 
     page.getByRole('spinbutton', { name: 'Max output tokens', exact: true }),
   ).toHaveCount(0)
   await expect(page.getByText(/No fixed shared token cap is sent/)).toBeVisible()
+  await step(page, 'Back')
   await page.getByText('Registered model capacities', { exact: true }).click()
   await expect(
     page.getByText('131,072 context tokens · 65,536 maximum output tokens', { exact: true }),
   ).toBeVisible()
+  await step(page, 'Continue')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Plan ready for review', exact: true }),
@@ -188,26 +199,38 @@ test('native selection blocks unsupported existing targets and filters new targe
   page,
 }) => {
   const state = await setup(page)
-  await page.goto('/evaluation?view=new')
-  await choose(page, 'Add configured target', unsupported.id)
+  await page.goto('/observe/evaluations?view=new')
+  await step(page, 'Continue')
+  await chooseTarget(page, unsupported.id)
+  await step(page, 'Continue')
   await choose(page, 'Output policy', 'native')
   await expect(
     page.getByText(/Native capacity is unavailable for the selected targets/),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeDisabled()
-  await page.getByRole('button', { name: 'Remove target 1', exact: true }).click()
-  await page.getByRole('combobox', { name: 'Add configured target', exact: true }).click()
-  await expect(page.locator('[role="option"][data-value="unsupported"]')).toHaveCount(0)
-  await page.locator('[role="option"][data-value="mom"]').click()
+  await step(page, 'Back')
+  await chooseTarget(page, unsupported.id)
+  await expect(page.locator('[data-target-id="unsupported"]')).toBeDisabled()
+  await chooseTarget(page, 'mom')
+  await step(page, 'Continue')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect.poll(() => state.plans.length).toBe(1)
   expect(state.plans[0].targets[0].kind).toBe('mom')
   expect(state.plans[0].sampling).not.toHaveProperty('max_tokens')
+  await step(page, 'Back')
   await choose(page, 'Output policy', 'bounded')
   await expect(
     page.getByRole('spinbutton', { name: 'Max output tokens', exact: true }),
   ).toHaveValue('4096')
-  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toHaveCount(0)
+  await page
+    .getByRole('navigation', { name: 'Steps' })
+    .getByRole('button', { name: /Review/ })
+    .click()
+  await expect(
+    page.getByRole('heading', { name: 'Plan changed — review again', exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toHaveCount(0)
   expect(state.starts).toHaveLength(0)
 })
 
@@ -215,18 +238,22 @@ test('candidate plans inherit native policy and preview uses the same cap-free r
   page,
 }) => {
   const state = await setup(page)
-  await page.goto(`/evaluation?view=new&baseline=${baseline.id}`)
+  await page.goto(`/observe/evaluations?view=new&baseline=${baseline.id}`)
   await expect(
     page.getByRole('region', { name: 'Frozen baseline protocol', exact: true }),
   ).toContainText('Native capacity · no shared token cap')
+  await step(page, 'Continue')
+  await chooseTarget(page, mom.id)
+  await step(page, 'Continue')
   await expect(page.getByRole('combobox', { name: 'Output policy', exact: true })).toHaveCount(0)
-  await choose(page, 'Add configured target', mom.id)
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect.poll(() => state.candidates.length).toBe(1)
   expect(state.candidates[0]).toMatchObject({ target_ids: ['mom'], mode: 'live' })
-  await page.goto('/evaluation?view=preview')
+  await page.goto('/observe/evaluations?view=preview')
+  await step(page, 'Continue')
+  await chooseTarget(page, mom.id)
+  await step(page, 'Continue')
   await choose(page, 'Output policy', 'native')
-  await choose(page, 'Add configured target', mom.id)
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect.poll(() => state.plans.length).toBe(1)
   expect(state.plans[0]).toMatchObject({ mode: 'preview', output_policy: 'native' })

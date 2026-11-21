@@ -55,7 +55,7 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	source, target := responseWireFormats(ctx)
 	// An upstream may echo the caller's login in its error.
 	body = redactCallerCredential(ctx, body)
-	translated, err := engine.TranslateTransportError(source, target, body, normalizeUpstreamContextLength(ctx.UpstreamStatusCode))
+	translated, err := engine.TranslateTransportError(source, target, body, normalizeUpstreamClientError(ctx, ctx.UpstreamStatusCode))
 	if err != nil {
 		if !isConnectTimeout {
 			metrics.RecordRequestError(ctx.RequestModel, "invalid_upstream_error")

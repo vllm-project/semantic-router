@@ -21,22 +21,34 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
+// reportedReasoningEffort is the effort a log, a metric or a trace reports for
+// a request to model, and whether the Router projected reasoning onto it. A
+// model without a reasoning family passes the request through as the client
+// sent it, so no effort was applied and none is reported.
+func (r *OpenAIRouter) reportedReasoningEffort(decision *config.Decision, model string) (string, bool) {
+	if r.getModelReasoningFamily(model) == nil {
+		return "", false
+	}
+	return r.getReasoningEffort(decision, model), true
+}
+
 // logRoutingDecision logs routing decision with structured logging
 func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string, originalModel string, selectedModel string, decisionName string, reasoningEnabled bool) {
-	effortForMetrics := ""
-	if reasoningEnabled && decisionName != "" {
-		effortForMetrics = r.getReasoningEffort(ctx.VSRSelectedDecision, selectedModel)
+	effortForMetrics, projected := r.reportedReasoningEffort(ctx.VSRSelectedDecision, selectedModel)
+	if !reasoningEnabled || decisionName == "" {
+		effortForMetrics = ""
 	}
 
 	logging.ComponentEvent("extproc", "routing_decision", map[string]interface{}{
-		"reason_code":        reasonCode,
-		"request_id":         ctx.RequestID,
-		"original_model":     originalModel,
-		"selected_model":     selectedModel,
-		"decision":           decisionName,
-		"reasoning_enabled":  reasoningEnabled,
-		"reasoning_effort":   effortForMetrics,
-		"routing_latency_ms": time.Since(ctx.ProcessingStartTime).Milliseconds(),
+		"reason_code":         reasonCode,
+		"request_id":          ctx.RequestID,
+		"original_model":      originalModel,
+		"selected_model":      selectedModel,
+		"decision":            decisionName,
+		"reasoning_enabled":   reasoningEnabled,
+		"reasoning_effort":    effortForMetrics,
+		"reasoning_projected": projected,
+		"routing_latency_ms":  time.Since(ctx.ProcessingStartTime).Milliseconds(),
 	})
 	metrics.RecordRoutingReasonCode(reasonCode, selectedModel)
 }
@@ -54,7 +66,7 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 		"decision_reason":   reasoningDecision.DecisionReason,
 	})
 
-	effortForMetrics := r.getReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
+	effortForMetrics, _ := r.reportedReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
 	metrics.RecordReasoningDecision(requestDecisionStateKey(ctx), matchedModel, useReasoning, effortForMetrics)
 
 	// Resolution is a point-in-time event; it does not pretend to measure backend execution.
@@ -296,6 +308,7 @@ func buildReplayRoutingRecord(
 		CacheEntryAgeSeconds: ctx.VSRCacheEntryAgeSeconds,
 		CacheTTLSeconds:      ctx.VSRCacheTTLSeconds,
 		ContextTokenCount:    ctx.VSRContextTokenCount,
+		RequestedModel:       ctx.RequestedModel,
 		HallucinationEnabled: hallucinationEnabled,
 	}
 	if state := ctx.ResponseObjectState; state != nil {
@@ -306,6 +319,7 @@ func buildReplayRoutingRecord(
 	sessionKind, sessionName := replaySessionNaming(ctx)
 	record.RequestKind, record.SessionName = firstNonEmptyString(record.RequestKind, sessionKind), sessionName
 	record.ThreadID, record.TurnID, record.ParentTurnID = ctx.AgentTurn.ThreadID, ctx.AgentTurn.TurnID, ctx.AgentTurn.ParentTurnID
+	record.ImageCount, record.HistoryImageCount = requestImageCounts(ctx.SemanticRequest)
 	// The sanitiser drops tool-result payloads unless the route captures tool
 	// results; a masking route persists no request text at all, because Replay
 	// snapshots the request before masking runs (D3, #3566).

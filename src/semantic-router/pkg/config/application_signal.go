@@ -83,10 +83,12 @@ type JailbreakRule struct {
 	OnUnknown string `yaml:"on_unknown,omitempty" jsonschema:"enum=match,enum=no_match"`
 }
 
-// JailbreakRuleInput adds the earlier user turns to the text a jailbreak rule
-// reads.
+// JailbreakRuleInput adds to the current user turn a jailbreak rule reads: the
+// earlier user turns, and the tool results returned in the current turn, which
+// a rule reads only when asked, as a pii rule does.
 type JailbreakRuleInput struct {
-	History bool `yaml:"history,omitempty"`
+	History     bool `yaml:"history,omitempty"`
+	ToolResults bool `yaml:"tool_results,omitempty"`
 }
 
 // SafetyRule matches harmful content in the request or, at the response

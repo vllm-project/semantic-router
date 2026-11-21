@@ -63,11 +63,10 @@ async function setup(page: Page, handler: (route: Route) => Promise<void>) {
     if (path.endsWith('/results')) return route.fulfill({ json: { results: [], total: 0 } })
     return route.fulfill({ json: estimate })
   })
-  await page.goto('/evaluation?view=compare')
-  await page
-    .locator('summary')
-    .filter({ hasText: /^Estimate a routing change$/ })
-    .click()
+  await page.goto('/observe/evaluations?view=estimate')
+  await expect(
+    page.getByRole('region', { name: 'Estimate a routing change', exact: true }),
+  ).toBeVisible()
 }
 test('shows only eligible baselines and previews with explicit bounded page loading', async ({
   page,
@@ -135,7 +134,6 @@ test('empty authoritative combinations have one clear state and no selection con
   await expect(replay.getByText(/^No compatible saved pairs\./)).toBeVisible()
   await expect(replay.getByRole('combobox')).toHaveCount(0)
   await expect(replay.getByRole('button')).toHaveCount(0)
-  await expect(page.getByText(/^No comparable results yet\./)).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('empty-combinations-desktop.png') })
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -215,10 +213,6 @@ test('lost creation response survives reload and reconciles the exact saved iden
   await page.getByRole('button', { name: 'Create offline estimate' }).click()
   await expect(page.getByRole('button', { name: 'Check or submit same estimate' })).toBeEnabled()
   await page.reload()
-  await page
-    .locator('summary')
-    .filter({ hasText: /^Estimate a routing change$/ })
-    .click()
   await expect(
     page.getByRole('heading', { name: 'Estimate submission needs reconciliation' }),
   ).toBeVisible()

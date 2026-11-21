@@ -233,7 +233,7 @@ func TestPostgresReviewMetadataScanIntegration(t *testing.T) {
 	denied, _ := seedPostgresReviews(ctx, t, postgres)
 	// The metadata scan carries no record ID; these fixtures share it as the request ID.
 	scanned := map[string]Record{}
-	if err := postgres.ScanMetadata(ctx, func(record Record) error {
+	if err := postgres.ScanMetadata(ctx, QueryFilters{}, func(record Record) error {
 		scanned[record.RequestID] = record
 		return nil
 	}); err != nil {

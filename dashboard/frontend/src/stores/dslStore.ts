@@ -639,6 +639,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
             version: data.version,
             message:
               data.message || 'Configuration saved. Roll out Router and Envoy to activate it.',
+            outcome: data.status === 'persisted' ? 'persisted' : 'restart-required',
             warnings,
           },
           savedSource: dslSource,
@@ -683,6 +684,7 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
           message: healthy
             ? `Deployed v${data.version} — ${reloaded} reloaded successfully.`
             : `Deployed v${data.version} — Runtime reload status unknown (check logs).`,
+          outcome: healthy ? 'reloaded' : 'reload-unknown',
           warnings,
         },
         savedSource: dslSource,

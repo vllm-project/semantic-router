@@ -435,7 +435,7 @@ func TestResponsesTextEncoderEmitsCompleteContentLifecycleOnce(t *testing.T) {
 	encoder := OpenAIResponsesCodec{}.NewEncoder(
 		llmprotocol.StreamContext{
 			Context: context.Background(), PublicModel: "model", ResponseID: "response_1",
-			PreviousResponseID: "response_previous",
+			ResponseRender: llmprotocol.ResponseRenderContext{PreviousResponseID: "response_previous"},
 		},
 		llmprotocol.DefaultPolicy(),
 	)
@@ -545,8 +545,11 @@ func TestPublicChatStreamUsageIsExplicitAndEmittedOnce(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := strings.Count(string(body), `"usage":`); got != test.wantUsage {
+			if got := strings.Count(string(body), `"usage":{`); got != test.wantUsage {
 				t.Fatalf("usage chunks = %d, want %d\n%s", got, test.wantUsage, body)
+			}
+			if test.wantUsage == 0 && strings.Contains(string(body), `"usage"`) {
+				t.Fatalf("a client that did not ask for usage received a usage member\n%s", body)
 			}
 		})
 	}
@@ -575,7 +578,7 @@ func TestTranslatedStreamUsageIsNeverDuplicated(t *testing.T) {
 				t.Fatal(err)
 			}
 			wire := string(bytes.Join(append(frames, final...), nil))
-			marker := `"usage":`
+			marker := `"usage":{`
 			if target == llmprotocol.AnthropicMessagesV1 {
 				marker = `"type":"message_delta"`
 			}
