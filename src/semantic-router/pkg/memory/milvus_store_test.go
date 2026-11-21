@@ -1012,7 +1012,6 @@ func TestMilvusStore_Update_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup mock for Get (Query) - returns existing memory with embedding
-	// Update calls Get to fetch CreatedAt and Embedding when missing from the input
 	mockClient.QueryFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
 		embedding := make([]float32, 384)
 		embedding[0] = 0.1
@@ -1055,14 +1054,20 @@ func TestMilvusStore_Update_NotFound(t *testing.T) {
 	mockClient.QueryFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error) {
 		return []entity.Column{}, nil
 	}
+	mockClient.UpsertFunc = func(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+		return nil, nil
+	}
 
 	err := store.Update(ctx, "non-existent", &Memory{
-		ID:      "non-existent",
-		Content: "New content",
-		UserID:  "user-123",
+		Content:   "New content",
+		UserID:    "user-123",
+		Type:      MemoryTypeSemantic,
+		CreatedAt: time.Unix(1704067200, 0),
+		Embedding: memoryUpdateTestVector(1),
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "memory not found")
+	assert.ErrorContains(t, err, "memory not found")
+	assert.Equal(t, 1, mockClient.QueryCallCount)
+	assert.Zero(t, mockClient.UpsertCallCount, "Update must not create a missing memory")
 }
 
 // ============================================================================
