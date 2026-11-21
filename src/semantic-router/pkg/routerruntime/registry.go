@@ -43,6 +43,7 @@ type Registry struct {
 	classificationService  *services.ClassificationService
 	acquireGeneration      AcquireClassification
 	memoryStore            memory.Store
+	memoryStoreSlot        *memory.StoreSlot
 	memoryStatus           MemoryStatus
 	vectorStore            *VectorStoreRuntime
 	modelSelector          *selection.Registry
@@ -83,6 +84,7 @@ type RouterRuntimeSnapshot struct {
 	ClassificationService *services.ClassificationService
 	AcquireClassification AcquireClassification
 	MemoryStore           memory.Store
+	MemoryStoreSlot       *memory.StoreSlot
 	MemoryStatus          MemoryStatus
 	ModelSelector         *selection.Registry
 	LearningRuntime       LearningRuntime
@@ -301,7 +303,7 @@ func (r *Registry) MemoryStore() memory.Store {
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.memoryStore
+	return r.currentMemoryStoreLocked()
 }
 
 // AcquireMemoryStore returns one generation's memory store and keeps that
@@ -311,7 +313,7 @@ func (r *Registry) AcquireMemoryStore() (memory.Store, func(), bool) {
 		return nil, nil, false
 	}
 	r.mu.RLock()
-	store := r.memoryStore
+	store := r.currentMemoryStoreLocked()
 	if store == nil {
 		r.mu.RUnlock()
 		return nil, nil, false
@@ -335,6 +337,7 @@ func (r *Registry) SetMemoryStore(store memory.Store) {
 	}
 	r.mu.Lock()
 	r.memoryStore = store
+	r.memoryStoreSlot = nil
 	if store != nil {
 		r.memoryStatus = MemoryStatus{}
 	}
@@ -347,10 +350,10 @@ func (r *Registry) MemoryStatus() MemoryStatus {
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if r.currentMemoryStoreLocked() != nil {
+		return MemoryStatus{}
+	}
 	if r.memoryStatus.Reason == "" {
-		if r.memoryStore != nil {
-			return MemoryStatus{}
-		}
 		return MemoryStatus{Reason: MemoryReasonStarting}
 	}
 	return r.memoryStatus
@@ -497,6 +500,7 @@ func (r *Registry) PublishRouterRuntime(
 	}
 	r.classificationService = classificationService
 	r.memoryStore = memoryStore
+	r.memoryStoreSlot = nil
 	r.acquireGeneration = nil
 	r.mu.Unlock()
 	r.notifyConfig(cfg)
@@ -515,6 +519,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.classificationService = snapshot.ClassificationService
 	r.acquireGeneration = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore
+	r.memoryStoreSlot = snapshot.MemoryStoreSlot
 	r.memoryStatus = snapshot.MemoryStatus
 	r.modelSelector = snapshot.ModelSelector
 	r.learningRuntime = snapshot.LearningRuntime
@@ -526,6 +531,13 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.nativeRouter = snapshot.NativeRouter
 	r.mu.Unlock()
 	r.notifyConfig(snapshot.Config)
+}
+
+func (r *Registry) currentMemoryStoreLocked() memory.Store {
+	if r.memoryStoreSlot != nil {
+		return r.memoryStoreSlot.Load()
+	}
+	return r.memoryStore
 }
 
 func (r *Registry) RefreshRuntimeConfig(newCfg *config.RouterConfig) {
