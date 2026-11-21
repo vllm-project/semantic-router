@@ -58,13 +58,25 @@ jobs:
       - name: Resolve Go Linter Version
         if: ${{ !inputs.docs_only }}
         id: golangci_lint
-        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+        run: |
+          {
+            echo "version=v$(cat tools/linter/go/golangci-lint.version)"
+            echo "path=$(go env GOPATH)/bin/golangci-lint"
+            echo "go=$(go env GOVERSION)"
+          } >> "$GITHUB_OUTPUT"
+      - name: Cache Go Linter
+        if: ${{ !inputs.docs_only }}
+        id: golangci_lint_cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.golangci_lint.outputs.path }}
+          key: ${{ runner.os }}-${{ runner.arch }}-golangci-lint-${{ steps.golangci_lint.outputs.version }}-${{ steps.golangci_lint.outputs.go }}
       - name: Set Up Go Linter
         if: ${{ !inputs.docs_only }}
         uses: golangci/golangci-lint-action@v7
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
-          install-mode: goinstall
+          install-mode: ${{ steps.golangci_lint_cache.outputs.cache-hit == 'true' && 'none' || 'goinstall' }}
           args: --help
       - name: Cache Node Dependencies
         uses: actions/cache@v4
