@@ -124,7 +124,7 @@ var responseHeaderPaths = []struct {
 		return immediateHeaders(httputil.CreateCacheHitResponseWithBody([]byte(`{}`), "application/json"), ctx)
 	}},
 	{name: "fast response", debug: true, routing: true, write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
-		return immediateHeaders(httputil.CreateFastResponseWithBody([]byte(`{}`), "application/json"), ctx)
+		return immediateHeaders(httputil.CreateFastResponseWithBody([]byte(`{}`), "application/json", headers.ResponsePathFastResponse), ctx)
 	}},
 	{name: "looper", debug: true, routing: true, write: func(_ *testing.T, _ *OpenAIRouter, ctx *RequestContext) []*core.HeaderValueOption {
 		ctx.LooperTrace = newLooperTrace(looperResponseWithLatencyAndUsage())

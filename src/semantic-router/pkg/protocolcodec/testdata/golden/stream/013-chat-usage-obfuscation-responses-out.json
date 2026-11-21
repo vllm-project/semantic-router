@@ -55,7 +55,7 @@
       "data": {
         "item": {
           "content": [],
-          "id": "item_d2224c2806947f1ca3a8a665",
+          "id": "msg_766ad55b5fabb2013868aa40",
           "role": "assistant",
           "status": "in_progress",
           "type": "message"
@@ -70,7 +70,7 @@
       "event": "response.content_part.added",
       "data": {
         "content_index": 0,
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "obfuscation": "\u003crandom\u003e",
         "output_index": 0,
         "part": {
@@ -87,7 +87,7 @@
       "data": {
         "content_index": 0,
         "delta": "hello",
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "obfuscation": "\u003crandom\u003e",
         "output_index": 0,
         "sequence_number": 4,
@@ -98,7 +98,7 @@
       "event": "response.output_text.done",
       "data": {
         "content_index": 0,
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "obfuscation": "\u003crandom\u003e",
         "output_index": 0,
         "sequence_number": 5,
@@ -110,7 +110,7 @@
       "event": "response.content_part.done",
       "data": {
         "content_index": 0,
-        "item_id": "item_d2224c2806947f1ca3a8a665",
+        "item_id": "msg_766ad55b5fabb2013868aa40",
         "obfuscation": "\u003crandom\u003e",
         "output_index": 0,
         "part": {
@@ -133,7 +133,7 @@
               "type": "output_text"
             }
           ],
-          "id": "item_d2224c2806947f1ca3a8a665",
+          "id": "msg_766ad55b5fabb2013868aa40",
           "role": "assistant",
           "status": "completed",
           "type": "message"
@@ -166,7 +166,7 @@
                   "type": "output_text"
                 }
               ],
-              "id": "item_d2224c2806947f1ca3a8a665",
+              "id": "msg_766ad55b5fabb2013868aa40",
               "role": "assistant",
               "status": "completed",
               "type": "message"

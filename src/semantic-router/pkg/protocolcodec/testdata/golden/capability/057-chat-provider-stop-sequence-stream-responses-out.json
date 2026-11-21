@@ -58,7 +58,7 @@
               "data": {
                 "item": {
                   "content": [],
-                  "id": "item_4d94af3ee49557647cd32b30",
+                  "id": "msg_a329d2a015df56d57198c83f",
                   "role": "assistant",
                   "status": "in_progress",
                   "type": "message"
@@ -72,7 +72,7 @@
             {
               "data": {
                 "content_index": 0,
-                "item_id": "item_4d94af3ee49557647cd32b30",
+                "item_id": "msg_a329d2a015df56d57198c83f",
                 "output_index": 0,
                 "part": {
                   "annotations": [],
@@ -88,7 +88,7 @@
               "data": {
                 "content_index": 0,
                 "delta": "ALPHA BRAVO ",
-                "item_id": "item_4d94af3ee49557647cd32b30",
+                "item_id": "msg_a329d2a015df56d57198c83f",
                 "output_index": 0,
                 "sequence_number": 4,
                 "type": "response.output_text.delta"
@@ -98,7 +98,7 @@
             {
               "data": {
                 "content_index": 0,
-                "item_id": "item_4d94af3ee49557647cd32b30",
+                "item_id": "msg_a329d2a015df56d57198c83f",
                 "output_index": 0,
                 "sequence_number": 5,
                 "text": "ALPHA BRAVO ",
@@ -109,7 +109,7 @@
             {
               "data": {
                 "content_index": 0,
-                "item_id": "item_4d94af3ee49557647cd32b30",
+                "item_id": "msg_a329d2a015df56d57198c83f",
                 "output_index": 0,
                 "part": {
                   "annotations": [],
@@ -131,7 +131,7 @@
                       "type": "output_text"
                     }
                   ],
-                  "id": "item_4d94af3ee49557647cd32b30",
+                  "id": "msg_a329d2a015df56d57198c83f",
                   "role": "assistant",
                   "status": "completed",
                   "type": "message"
@@ -162,7 +162,7 @@
                           "type": "output_text"
                         }
                       ],
-                      "id": "item_4d94af3ee49557647cd32b30",
+                      "id": "msg_a329d2a015df56d57198c83f",
                       "role": "assistant",
                       "status": "completed",
                       "type": "message"

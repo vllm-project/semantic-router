@@ -53,7 +53,7 @@
       {
         "data": {
           "item": {
-            "id": "reasoning_1",
+            "id": "rs_3bff0ee5e6ef907f9e3a9456",
             "status": "in_progress",
             "summary": [],
             "type": "reasoning"
@@ -67,7 +67,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "reasoning_1",
+          "item_id": "rs_3bff0ee5e6ef907f9e3a9456",
           "output_index": 0,
           "part": {
             "text": "",
@@ -82,7 +82,7 @@
         "data": {
           "content_index": 0,
           "delta": "inspect the evidence",
-          "item_id": "reasoning_1",
+          "item_id": "rs_3bff0ee5e6ef907f9e3a9456",
           "output_index": 0,
           "sequence_number": 4,
           "type": "response.reasoning_text.delta"
@@ -92,7 +92,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "reasoning_1",
+          "item_id": "rs_3bff0ee5e6ef907f9e3a9456",
           "output_index": 0,
           "sequence_number": 5,
           "text": "inspect the evidence",
@@ -103,7 +103,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "reasoning_1",
+          "item_id": "rs_3bff0ee5e6ef907f9e3a9456",
           "output_index": 0,
           "part": {
             "text": "inspect the evidence",
@@ -123,7 +123,7 @@
                 "type": "reasoning_text"
               }
             ],
-            "id": "reasoning_1",
+            "id": "rs_3bff0ee5e6ef907f9e3a9456",
             "status": "completed",
             "summary": [],
             "type": "reasoning"
@@ -153,7 +153,7 @@
                     "type": "reasoning_text"
                   }
                 ],
-                "id": "reasoning_1",
+                "id": "rs_3bff0ee5e6ef907f9e3a9456",
                 "status": "completed",
                 "summary": [],
                 "type": "reasoning"

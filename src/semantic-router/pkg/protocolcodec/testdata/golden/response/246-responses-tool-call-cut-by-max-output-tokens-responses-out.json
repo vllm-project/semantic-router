@@ -13,7 +13,7 @@
     {
       "arguments": "{\"city\":\"Paris\",\"days\":[1,2",
       "call_id": "call_weather_2",
-      "id": "item_weather_2",
+      "id": "fc_a016cb9bd2aee126e41f62b5",
       "name": "lookup_weather",
       "type": "function_call"
     }

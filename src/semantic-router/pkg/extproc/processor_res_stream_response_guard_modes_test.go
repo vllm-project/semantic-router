@@ -104,7 +104,7 @@ func TestBothGatewayModesHoldAStreamedAnswerForAnEnforcingGuard(t *testing.T) {
 						t.Fatalf("reply = %d %q, want a 200 event stream", out.Status, out.Header.Get("content-type"))
 					}
 					if tc.blocked {
-						assertRefusedStream(t, llmprotocol.OpenAIChatV1, body, "Response blocked by the response guard", benignAnswer)
+						assertBlockedStream(t, llmprotocol.OpenAIChatV1, body, "Response blocked by the response guard", benignAnswer)
 						return
 					}
 					if !strings.Contains(chatStreamContent(body), benignAnswer) || !strings.HasSuffix(body, "data: [DONE]\n\n") {

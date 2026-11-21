@@ -610,19 +610,21 @@ func buildNonStreamingFastBody(message string, unixTimeStep int64) []byte {
 func CreateFastResponse(message string, isStreaming bool) *ext_proc.ProcessingResponse {
 	unixTimeStep := time.Now().Unix()
 	if isStreaming {
-		return CreateFastResponseWithBody(buildStreamingFastBody(message, unixTimeStep), "text/event-stream")
+		return CreateFastResponseWithBody(buildStreamingFastBody(message, unixTimeStep), "text/event-stream", headers.ResponsePathFastResponse)
 	}
-	return CreateFastResponseWithBody(buildNonStreamingFastBody(message, unixTimeStep), "application/json")
+	return CreateFastResponseWithBody(buildNonStreamingFastBody(message, unixTimeStep), "application/json", headers.ResponsePathFastResponse)
 }
 
 // CreateFastResponseWithBody wraps a public response already encoded by the
-// protocol layer, with its content-type and the keystone headers of the
-// fast_response path. This transport helper never parses or rewrites its body.
-func CreateFastResponseWithBody(responseBody []byte, contentType string) *ext_proc.ProcessingResponse {
+// protocol layer, with its content-type and the keystone headers of
+// responsePath: the fast_response path, or the blocked path for a blocking
+// fast_response that answers a stream. This transport helper never parses or
+// rewrites its body.
+func CreateFastResponseWithBody(responseBody []byte, contentType, responsePath string) *ext_proc.ProcessingResponse {
 	setHeaders := []*core.HeaderValueOption{
 		{Header: &core.HeaderValue{Key: "content-type", RawValue: []byte(contentType)}},
 	}
-	setHeaders = append(setHeaders, KeystoneHeaderOptions(headers.ResponsePathFastResponse)...)
+	setHeaders = append(setHeaders, KeystoneHeaderOptions(responsePath)...)
 	return createImmediateOK(responseBody, setHeaders)
 }
 

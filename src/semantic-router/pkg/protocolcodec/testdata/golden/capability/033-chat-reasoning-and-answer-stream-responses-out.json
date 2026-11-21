@@ -53,7 +53,7 @@
       {
         "data": {
           "item": {
-            "id": "item_4d94af3ee49557647cd32b30",
+            "id": "rs_8329d808884cf7bf55a5dfac",
             "status": "in_progress",
             "summary": [],
             "type": "reasoning"
@@ -67,7 +67,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_4d94af3ee49557647cd32b30",
+          "item_id": "rs_8329d808884cf7bf55a5dfac",
           "output_index": 0,
           "part": {
             "text": "",
@@ -82,7 +82,7 @@
         "data": {
           "content_index": 0,
           "delta": "inspect the evidence",
-          "item_id": "item_4d94af3ee49557647cd32b30",
+          "item_id": "rs_8329d808884cf7bf55a5dfac",
           "output_index": 0,
           "sequence_number": 4,
           "type": "response.reasoning_text.delta"
@@ -92,7 +92,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_4d94af3ee49557647cd32b30",
+          "item_id": "rs_8329d808884cf7bf55a5dfac",
           "output_index": 0,
           "sequence_number": 5,
           "text": "inspect the evidence",
@@ -103,7 +103,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_4d94af3ee49557647cd32b30",
+          "item_id": "rs_8329d808884cf7bf55a5dfac",
           "output_index": 0,
           "part": {
             "text": "inspect the evidence",
@@ -123,7 +123,7 @@
                 "type": "reasoning_text"
               }
             ],
-            "id": "item_4d94af3ee49557647cd32b30",
+            "id": "rs_8329d808884cf7bf55a5dfac",
             "status": "completed",
             "summary": [],
             "type": "reasoning"
@@ -138,7 +138,7 @@
         "data": {
           "item": {
             "content": [],
-            "id": "item_112b331d384e12d9f8d38a0f",
+            "id": "msg_d9dbffec41021f92e21b11ee",
             "role": "assistant",
             "status": "in_progress",
             "type": "message"
@@ -152,7 +152,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_112b331d384e12d9f8d38a0f",
+          "item_id": "msg_d9dbffec41021f92e21b11ee",
           "output_index": 1,
           "part": {
             "annotations": [],
@@ -168,7 +168,7 @@
         "data": {
           "content_index": 0,
           "delta": "final answer",
-          "item_id": "item_112b331d384e12d9f8d38a0f",
+          "item_id": "msg_d9dbffec41021f92e21b11ee",
           "output_index": 1,
           "sequence_number": 10,
           "type": "response.output_text.delta"
@@ -178,7 +178,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_112b331d384e12d9f8d38a0f",
+          "item_id": "msg_d9dbffec41021f92e21b11ee",
           "output_index": 1,
           "sequence_number": 11,
           "text": "final answer",
@@ -189,7 +189,7 @@
       {
         "data": {
           "content_index": 0,
-          "item_id": "item_112b331d384e12d9f8d38a0f",
+          "item_id": "msg_d9dbffec41021f92e21b11ee",
           "output_index": 1,
           "part": {
             "annotations": [],
@@ -211,7 +211,7 @@
                 "type": "output_text"
               }
             ],
-            "id": "item_112b331d384e12d9f8d38a0f",
+            "id": "msg_d9dbffec41021f92e21b11ee",
             "role": "assistant",
             "status": "completed",
             "type": "message"
@@ -241,7 +241,7 @@
                     "type": "reasoning_text"
                   }
                 ],
-                "id": "item_4d94af3ee49557647cd32b30",
+                "id": "rs_8329d808884cf7bf55a5dfac",
                 "status": "completed",
                 "summary": [],
                 "type": "reasoning"
@@ -254,7 +254,7 @@
                     "type": "output_text"
                   }
                 ],
-                "id": "item_112b331d384e12d9f8d38a0f",
+                "id": "msg_d9dbffec41021f92e21b11ee",
                 "role": "assistant",
                 "status": "completed",
                 "type": "message"

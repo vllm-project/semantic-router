@@ -11,7 +11,7 @@
     {
       "arguments": "{\"city\":\"Paris\"}",
       "call_id": "call_weather_1",
-      "id": "item_tool_1",
+      "id": "fc_1827aa67c24f148bfd9b0928",
       "name": "lookup_weather",
       "type": "function_call"
     }

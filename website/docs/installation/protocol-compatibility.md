@@ -1065,6 +1065,18 @@ count. Reported zero and positive counts are preserved. Codex CLI fails a turn
 on a `null` count (0.163.0 for `cache_write_tokens`, 0.166.0 for
 `cached_tokens`) and on a details object without `cached_tokens`.
 
+Every output item a Responses client receives has the id prefix the
+Responses API gives its type: `msg_` for a message, `rs_` for reasoning, `fc_`
+for a function call, `ctc_` for a custom tool call and `ig_` for an image
+generation call. A backend's id that has its type's prefix, as an OpenAI
+backend's does, passes unchanged. Any other item is named by the Router, the
+same way for the same answer: the items of a Chat or Messages backend's
+answer, which the Router splits into reasoning, message and call items, and
+those of an answer the Router makes itself. A call keeps its `call_id`. Codex
+sends the items back with their ids, and an OpenAI backend refuses an id whose
+prefix is not its type's, so a session whose turn a local Chat model answered
+can go on with a model on the ChatGPT backend.
+
 Codex sends each step of its history as separate items: reasoning, the
 assistant message and every call. Toward Chat and Messages backends, the
 Router joins adjacent items in that order into one assistant turn, as those

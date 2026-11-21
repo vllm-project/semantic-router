@@ -186,8 +186,8 @@ func testResponseJailbreakStreamingPassthrough(ctx context.Context, client *kube
 // testResponseJailbreakStreamingBlock sends the answer the buffered block
 // case refuses, as a stream. The Router holds the stream until the guard has
 // read the whole answer, so its jailbreak content at the very end is found
-// before any byte leaves, and the client receives the refusal as the Chat
-// stream's error event and none of the answer.
+// before any byte leaves, and the client receives the block's message as the
+// stream's answer, which ends the turn, and none of the answer.
 func testResponseJailbreakStreamingBlock(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing that a block rule refuses a streamed answer it reads in full")
@@ -197,11 +197,11 @@ func testResponseJailbreakStreamingBlock(ctx context.Context, client *kubernetes
 	if err != nil {
 		return err
 	}
-	if !strings.Contains(stream.body, `data: {"error":`) || !strings.Contains(stream.body, "jailbreak content detected") {
-		return fmt.Errorf("the stream did not end in the guard's refusal: %s", truncateString(stream.body, 400))
+	if !strings.Contains(stream.content, "jailbreak content detected") || !strings.Contains(stream.body, `"finish_reason":"stop"`) {
+		return fmt.Errorf("the stream did not end with the guard's message as its answer: %s", truncateString(stream.body, 400))
 	}
-	if stream.content != "" || strings.Contains(stream.body, responseJailbreakFiller) {
-		return fmt.Errorf("%d bytes of the refused answer reached the client", len(stream.content))
+	if strings.Contains(stream.body, responseJailbreakFiller) {
+		return fmt.Errorf("the refused answer reached the client: %s", truncateString(stream.body, 400))
 	}
 	if guard := traceValue(stream.header, "response_guard"); guard != "blocked" || traceParam(stream.header, "response_guard", "buffered") != "?1" {
 		return fmt.Errorf("trace response_guard = %q, want blocked on a buffered stream", guard)

@@ -9,11 +9,33 @@ import (
 
 // ID prefixes following OpenAI conventions
 const (
-	ResponseIDPrefix     = "resp_"
-	ItemIDPrefix         = "item_"
-	MessageIDPrefix      = "msg_"
-	ConversationIDPrefix = "conv_"
+	ResponseIDPrefix            = "resp_"
+	ItemIDPrefix                = "item_"
+	MessageIDPrefix             = "msg_"
+	ReasoningIDPrefix           = "rs_"
+	FunctionCallIDPrefix        = "fc_"
+	CustomToolCallIDPrefix      = "ctc_"
+	ImageGenerationCallIDPrefix = "ig_"
+	ConversationIDPrefix        = "conv_"
 )
+
+// OutputItemIDPrefix is the prefix the Responses API gives the id of an
+// output item of itemType, and item_ for a type it is not listed for.
+func OutputItemIDPrefix(itemType string) string {
+	switch itemType {
+	case ItemTypeMessage:
+		return MessageIDPrefix
+	case ItemTypeReasoning:
+		return ReasoningIDPrefix
+	case ItemTypeFunctionCall:
+		return FunctionCallIDPrefix
+	case ItemTypeCustomToolCall:
+		return CustomToolCallIDPrefix
+	case ItemTypeImageGenerationCall:
+		return ImageGenerationCallIDPrefix
+	}
+	return ItemIDPrefix
+}
 
 // GenerateResponseID generates a new response ID with the resp_ prefix.
 func GenerateResponseID() string {

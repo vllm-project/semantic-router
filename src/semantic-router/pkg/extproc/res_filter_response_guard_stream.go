@@ -237,9 +237,9 @@ func (r *OpenAIRouter) refuseHeldStream(ctx *RequestContext, protocolError *llmp
 }
 
 // responseGuardRefusal is the error a client receives for an answer a rule
-// blocked: a buffered answer's 400 and a stream's error event. It is the
-// invalid request a blocking fast_response gives, not a permission error,
-// which Claude Code reads as a failed login and retries.
+// blocked when it did not stream: the invalid request a blocking
+// fast_response gives, not a permission error, which Claude Code reads as a
+// failed login and retries.
 func responseGuardRefusal(rule *responseGuardRuleRun) *llmprotocol.ProtocolError {
 	return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "response_blocked", responseGuardBlockMessage(rule), nil)
 }
@@ -253,13 +253,25 @@ func (r *OpenAIRouter) streamedFallbackRefusal(ctx *RequestContext, refusal *llm
 
 // encodeStreamRefusal renders protocolError as a stream of the client's
 // protocol that fails at once: a Chat error chunk, a Responses response.failed
-// event or a Messages error event. It is empty when the refusal cannot be
-// encoded, so the answer stays refused.
+// event or a Messages error event. A block instead ends the stream as a
+// finished answer whose text is its message: agent harnesses re-send a
+// request whose stream fails, and Claude Code merges the next prompt into a
+// turn that has no answer, so a block would refuse that prompt too. The
+// answer reports the usage of the model call it replaces, which was made and
+// paid for and which harnesses count in their cost and context. It is empty
+// when the refusal cannot be encoded, so the answer stays refused.
 func (r *OpenAIRouter) encodeStreamRefusal(ctx *RequestContext, protocolError *llmprotocol.ProtocolError) []byte {
-	body, err := r.encodeClientStream(ctx, llmprotocol.Response{
+	response := llmprotocol.Response{
 		Generation: 1, ID: heldStreamResponseID(ctx), CreatedAt: time.Now().UTC(),
 		Model: ctx.RequestModel, StopReason: llmprotocol.StopError, Error: protocolError,
-	})
+	}
+	if ctx.ResponsePath == headers.ResponsePathBlocked {
+		response = *syntheticTextResponse(ctx, protocolError.Message)
+		if answered := ctx.SemanticResponse; answered != nil && answered.Usage.State == llmprotocol.UsageAvailable {
+			response.Usage = answered.Usage
+		}
+	}
+	body, err := r.encodeClientStream(ctx, response)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "response_guard_refusal_encode_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,

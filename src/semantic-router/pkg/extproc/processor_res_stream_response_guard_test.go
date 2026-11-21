@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -143,6 +145,39 @@ func assertRefusedStream(t *testing.T, format llmprotocol.WireFormat, client, me
 	}
 }
 
+// assertBlockedStream checks that client is format's stream of a finished
+// answer whose text carries the block's message and nothing of the answer it
+// replaced: a stream that fails reads to an agent harness as one to send
+// again, and an answer ends its turn. It returns the answer the client reads.
+func assertBlockedStream(t *testing.T, format llmprotocol.WireFormat, client, message, answer string) llmprotocol.Response {
+	t.Helper()
+	got, _, err := protocolcodec.NewBuiltinEngine().DecodeResponseStream(format, []byte(client), llmprotocol.StreamContext{Context: t.Context()})
+	if err != nil || got.Error != nil || got.StopReason != llmprotocol.StopEndTurn || !strings.Contains(semanticAssistantContent(&got), message) {
+		t.Fatalf("client stream = %s (decode error %v), want a finished answer carrying %q", client, err, message)
+	}
+	if strings.Contains(client, answer) {
+		t.Fatalf("client stream = %s, yet the blocked answer must not reach the client", client)
+	}
+	assertAnswerIDs(t, format, got)
+	return got
+}
+
+// assertAnswerIDs checks that an answer the Router made itself has the ids
+// a model's answer has in format: a Responses client sends the message's id
+// back, and an OpenAI backend refuses one that does not start with msg_.
+func assertAnswerIDs(t *testing.T, format llmprotocol.WireFormat, answer llmprotocol.Response) {
+	t.Helper()
+	prefix := map[llmprotocol.WireFormat]string{
+		llmprotocol.OpenAIChatV1: "chatcmpl-", llmprotocol.AnthropicMessagesV1: "msg_", llmprotocol.OpenAIResponsesV1: "resp_",
+	}[format]
+	if !strings.HasPrefix(answer.ID, prefix) {
+		t.Fatalf("answer id = %q, want the %s prefix of %s", answer.ID, prefix, format)
+	}
+	if format == llmprotocol.OpenAIResponsesV1 && (len(answer.Output) == 0 || !strings.HasPrefix(answer.Output[0].ID, "msg_")) {
+		t.Fatalf("answer output = %+v, want a message whose id starts with msg_", answer.Output)
+	}
+}
+
 // guardOutcomes are the response_guard rule outcomes of the request's record.
 func guardOutcomes(t *testing.T, recorder *routerreplay.Recorder, ctx *RequestContext) []routerreplay.Outcome {
 	t.Helper()
@@ -232,11 +267,12 @@ func TestHeldStreamReleasesAPassedAnswerAsTheStream(t *testing.T) {
 	}
 }
 
-// An answer the guard blocks never reaches the client: it receives the
-// refusal a buffered answer's 400 carries, in its protocol's streaming form,
-// an invalid request rather than a permission error, which Claude Code reads
-// as a failed login.
-func TestHeldStreamRefusesABlockedAnswerInStreamForm(t *testing.T) {
+// An answer the guard blocks never reaches the client: the stream ends as a
+// finished answer whose text is the block's message, so an agent harness ends
+// its turn instead of sending the request, and paying for the model, again.
+// The answer reports the usage of the call it replaces, which was paid for.
+// The record is still the refusal, under the stream's 200.
+func TestHeldStreamAnswersABlockedAnswerWithTheBlockMessage(t *testing.T) {
 	for _, format := range guardProtocols {
 		t.Run(string(format), func(t *testing.T) {
 			router, ctx := guardedStreamingRouter(t, 0.95, config.ResponseGuardBlock, format)
@@ -248,10 +284,16 @@ func TestHeldStreamRefusesABlockedAnswerInStreamForm(t *testing.T) {
 			answerHeaders(t, router, ctx, "text/event-stream")
 			client, replies := answerBody(t, router, ctx, whole(streamOf(format, unsafeAnswer)))
 
-			assertRefusedStream(t, format, client, "Response blocked: jailbreak content detected in LLM output", unsafeAnswer)
-			if strings.Contains(client, "permission") {
-				t.Fatalf("client stream = %s, want an invalid request error", client)
+			blocked := assertBlockedStream(t, format, client, "Response blocked: jailbreak content detected in LLM output", unsafeAnswer)
+			// The fixture's model call used 2 input and 1 output tokens, which
+			// the client is told although it never sees the answer.
+			if in, out := blocked.Usage.InputTotal.Value, blocked.Usage.OutputTotal.Value; in == nil || out == nil || *in != 2 || *out != 1 {
+				t.Fatalf("usage = %+v, want the refused call's 2 input and 1 output tokens", blocked.Usage)
 			}
+			if path := bodyPhaseHeader(replies[0], headers.VSRResponsePath); path != headers.ResponsePathBlocked {
+				t.Fatalf("%s = %q, want %q", headers.VSRResponsePath, path, headers.ResponsePathBlocked)
+			}
+			requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "request_rejected", http.StatusOK)
 			if trace := bodyPhaseHeader(replies[0], headers.VSRTrace); !strings.Contains(trace, "response_guard=blocked;buffered") {
 				t.Fatalf("%s = %q, want the blocked outcome of a buffered stream", headers.VSRTrace, trace)
 			}
@@ -352,7 +394,7 @@ func TestHeldStreamSendsNothingBeforeTheGuardRead(t *testing.T) {
 				}
 			}
 			if tc.jailbreak > 0.5 {
-				assertRefusedStream(t, llmprotocol.OpenAIChatV1, client, "jailbreak content detected", tc.answer)
+				assertBlockedStream(t, llmprotocol.OpenAIChatV1, client, "jailbreak content detected", tc.answer)
 			} else if want := streamedThroughUnguarded(t, llmprotocol.OpenAIChatV1, parts); client != want {
 				t.Fatalf("client stream =\n%s\nwant\n%s", client, want)
 			}
@@ -384,7 +426,7 @@ func TestHeldStreamOverTheLimitIsRefusedUnread(t *testing.T) {
 			answerHeaders(t, router, ctx, "text/event-stream")
 			client, replies := answerBody(t, router, ctx, tc.parts(parts))
 
-			assertRefusedStream(t, llmprotocol.OpenAIChatV1, client, "larger than the response guard can check", benignAnswer)
+			assertBlockedStream(t, llmprotocol.OpenAIChatV1, client, "larger than the response guard can check", benignAnswer)
 			blocked := false
 			for _, reply := range replies {
 				blocked = blocked || bodyPhaseHeader(reply, headers.VSRResponsePath) == headers.ResponsePathBlocked

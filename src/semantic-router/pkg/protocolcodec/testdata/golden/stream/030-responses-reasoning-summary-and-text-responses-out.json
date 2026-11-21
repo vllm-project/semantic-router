@@ -52,7 +52,7 @@
       "event": "response.output_item.added",
       "data": {
         "item": {
-          "id": "reasoning_scopes",
+          "id": "rs_4b5be9e0959dc8d0fddd242f",
           "status": "in_progress",
           "summary": [],
           "type": "reasoning"
@@ -65,7 +65,7 @@
     {
       "event": "response.reasoning_summary_part.added",
       "data": {
-        "item_id": "reasoning_scopes",
+        "item_id": "rs_4b5be9e0959dc8d0fddd242f",
         "output_index": 0,
         "part": {
           "text": "",
@@ -80,7 +80,7 @@
       "event": "response.reasoning_summary_text.delta",
       "data": {
         "delta": "Short summary.",
-        "item_id": "reasoning_scopes",
+        "item_id": "rs_4b5be9e0959dc8d0fddd242f",
         "output_index": 0,
         "sequence_number": 4,
         "summary_index": 0,
@@ -91,7 +91,7 @@
       "event": "response.content_part.added",
       "data": {
         "content_index": 0,
-        "item_id": "reasoning_scopes",
+        "item_id": "rs_4b5be9e0959dc8d0fddd242f",
         "output_index": 0,
         "part": {
           "text": "",
@@ -106,7 +106,7 @@
       "data": {
         "content_index": 0,
         "delta": "Full reasoning.",
-        "item_id": "reasoning_scopes",
+        "item_id": "rs_4b5be9e0959dc8d0fddd242f",
         "output_index": 0,
         "sequence_number": 6,
         "type": "response.reasoning_text.delta"
@@ -115,7 +115,7 @@
     {
       "event": "response.reasoning_summary_text.done",
       "data": {
-        "item_id": "reasoning_scopes",
+        "item_id": "rs_4b5be9e0959dc8d0fddd242f",
         "output_index": 0,
         "sequence_number": 7,
         "summary_index": 0,
@@ -126,7 +126,7 @@
     {
       "event": "response.reasoning_summary_part.done",
       "data": {
-        "item_id": "reasoning_scopes",
+        "item_id": "rs_4b5be9e0959dc8d0fddd242f",
         "output_index": 0,
         "part": {
           "text": "Short summary.",
@@ -141,7 +141,7 @@
       "event": "response.reasoning_text.done",
       "data": {
         "content_index": 0,
-        "item_id": "reasoning_scopes",
+        "item_id": "rs_4b5be9e0959dc8d0fddd242f",
         "output_index": 0,
         "sequence_number": 9,
         "text": "Full reasoning.",
@@ -152,7 +152,7 @@
       "event": "response.content_part.done",
       "data": {
         "content_index": 0,
-        "item_id": "reasoning_scopes",
+        "item_id": "rs_4b5be9e0959dc8d0fddd242f",
         "output_index": 0,
         "part": {
           "text": "Full reasoning.",
@@ -172,7 +172,7 @@
               "type": "reasoning_text"
             }
           ],
-          "id": "reasoning_scopes",
+          "id": "rs_4b5be9e0959dc8d0fddd242f",
           "status": "completed",
           "summary": [
             {
@@ -207,7 +207,7 @@
                   "type": "reasoning_text"
                 }
               ],
-              "id": "reasoning_scopes",
+              "id": "rs_4b5be9e0959dc8d0fddd242f",
               "status": "completed",
               "summary": [
                 {

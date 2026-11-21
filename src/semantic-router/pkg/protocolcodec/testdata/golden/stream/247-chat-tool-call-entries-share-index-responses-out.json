@@ -54,7 +54,7 @@
         "item": {
           "arguments": "",
           "call_id": "call_weather_1",
-          "id": "item_32d98dae3ae4c65960d8c8dc",
+          "id": "fc_6684a070ebca4aff931ea572",
           "name": "lookup_weather",
           "status": "in_progress",
           "type": "function_call"
@@ -68,7 +68,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "{\"city\": \"",
-        "item_id": "item_32d98dae3ae4c65960d8c8dc",
+        "item_id": "fc_6684a070ebca4aff931ea572",
         "output_index": 0,
         "sequence_number": 3,
         "type": "response.function_call_arguments.delta"
@@ -78,7 +78,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "Par",
-        "item_id": "item_32d98dae3ae4c65960d8c8dc",
+        "item_id": "fc_6684a070ebca4aff931ea572",
         "output_index": 0,
         "sequence_number": 4,
         "type": "response.function_call_arguments.delta"
@@ -88,7 +88,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "is\"}",
-        "item_id": "item_32d98dae3ae4c65960d8c8dc",
+        "item_id": "fc_6684a070ebca4aff931ea572",
         "output_index": 0,
         "sequence_number": 5,
         "type": "response.function_call_arguments.delta"
@@ -98,7 +98,7 @@
       "event": "response.function_call_arguments.done",
       "data": {
         "arguments": "{\"city\": \"Paris\"}",
-        "item_id": "item_32d98dae3ae4c65960d8c8dc",
+        "item_id": "fc_6684a070ebca4aff931ea572",
         "name": "lookup_weather",
         "output_index": 0,
         "sequence_number": 6,
@@ -111,7 +111,7 @@
         "item": {
           "arguments": "{\"city\": \"Paris\"}",
           "call_id": "call_weather_1",
-          "id": "item_32d98dae3ae4c65960d8c8dc",
+          "id": "fc_6684a070ebca4aff931ea572",
           "name": "lookup_weather",
           "status": "completed",
           "type": "function_call"
@@ -139,7 +139,7 @@
             {
               "arguments": "{\"city\": \"Paris\"}",
               "call_id": "call_weather_1",
-              "id": "item_32d98dae3ae4c65960d8c8dc",
+              "id": "fc_6684a070ebca4aff931ea572",
               "name": "lookup_weather",
               "status": "completed",
               "type": "function_call"
