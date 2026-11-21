@@ -111,6 +111,9 @@
     - id: published-agent
       display_name: Published agent
       description: Terminal-Bench 4.0 result with the agent and harness retained on the evaluation record; separate from the 2.1 default index component.
+    - id: independent-agent
+      display_name: Independent agent run
+      description: Independently measured full 66-task Terminal-Bench 4.0 pass@1, with the agent, repeat count, and constraints retained on the evaluation record.
   metrics:
     - id: resolved
       unit: proportion

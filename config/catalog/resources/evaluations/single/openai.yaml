@@ -1,3 +1,329 @@
+- id: arc-prize/gpt-6-2-astra-xhigh-arc-agi-1@1.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra
+    source_model_slug: openai-gpt-6-2-astra
+    variant: astra-xhigh
+    run_kind: independent
+    subset: semi-private
+  metrics:
+    accuracy: 0.985
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/openai-gpt-6-2
+    redistributable: true
+- id: arc-prize/gpt-6-2-astra-xhigh-arc-agi-2@1.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra
+    source_model_slug: openai-gpt-6-2-astra
+    variant: astra-xhigh
+    run_kind: independent
+    subset: semi-private
+  metrics:
+    accuracy: 0.9583333333333334
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/openai-gpt-6-2
+    redistributable: true
+- id: duellab/gpt-6-2-astra-xhigh-gamebench@2.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra
+    source_model_slug: gpt-6-2-astra
+    run_kind: independent
+    benchmark_release: gb2-20261119-235af8c04037
+    suite_version: 2-known8-r3
+    track: full_freedom/intensive
+    row_kind: track
+    provider_setting: xhigh
+  metrics:
+    score: 97.146404
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/
+    redistributable: true
+- id: independent/gpt-6-2-astra-xhigh-terminal-bench@4.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra (Xhigh)
+    source_model_slug: gpt-6-2-astra-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/terminalbench-4-0
+    agent_harness: mini-swe-agent
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    context_compaction: false
+  metrics:
+    resolved: 0.641414141414141
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol
+    redistributable: true
+- id: independent/gpt-6-2-astra-xhigh-gdp-pdf@1.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra (Xhigh)
+    source_model_slug: gpt-6-2-astra-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    task_count: 100
+    repeats: 5
+    scoring: all_pass
+  metrics:
+    all_pass: 0.28
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol
+    redistributable: true
+- id: arc-prize/gpt-6-2-sol-xhigh-arc-agi-1@1.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol
+    source_model_slug: openai-gpt-6-2-sol
+    variant: sol-xhigh
+    run_kind: independent
+    subset: semi-private
+  metrics:
+    accuracy: 0.97
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/openai-gpt-6-2
+    redistributable: true
+- id: arc-prize/gpt-6-2-sol-xhigh-arc-agi-2@1.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol
+    source_model_slug: openai-gpt-6-2-sol
+    variant: sol-xhigh
+    run_kind: independent
+    subset: semi-private
+  metrics:
+    accuracy: 0.8583333333333333
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/openai-gpt-6-2
+    redistributable: true
+- id: duellab/gpt-6-2-sol-xhigh-gamebench@2.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol
+    source_model_slug: gpt-6-2-sol
+    run_kind: independent
+    benchmark_release: gb2-20261119-235af8c04037
+    suite_version: 2-known8-r3
+    track: full_freedom/intensive
+    row_kind: track
+    provider_setting: xhigh
+  metrics:
+    score: 94.330527
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/
+    redistributable: true
+- id: independent/gpt-6-2-sol-xhigh-terminal-bench@4.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol (Xhigh)
+    source_model_slug: gpt-6-2-sol-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/terminalbench-4-0
+    agent_harness: mini-swe-agent
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    context_compaction: false
+  metrics:
+    resolved: 0.560606060606061
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol
+    redistributable: true
+- id: independent/gpt-6-2-sol-xhigh-gdp-pdf@1.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol (Xhigh)
+    source_model_slug: gpt-6-2-sol-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    task_count: 100
+    repeats: 5
+    scoring: all_pass
+  metrics:
+    all_pass: 0.284
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-gdp-pdf@1.0.0
+  model: openai/gpt-6.1-terra
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    task_count: 100
+    repeats: 5
+    scoring: all_pass
+  metrics:
+    all_pass: 0.28
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-scicode@1.0.0
+  model: openai/gpt-6.1-terra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/scicode
+    sample_count: 288
+    repeats: 3
+    dataset_status: under review by Artificial Analysis
+  metrics:
+    score: 0.516203703703704
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-hle@1.0.0
+  model: openai/gpt-6.1-terra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    sample_count: 2158
+    tool_policy: no_tools
+  metrics:
+    accuracy: 0.432808155699722
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-critpt@1.0.0
+  model: openai/gpt-6.1-terra
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/critpt
+    sample_count: 70
+    agent_harness: none
+  metrics:
+    score: 0.257142857142857
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-lcr@1.1.0
+  model: openai/gpt-6.1-terra
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    sample_count: 100
+  metrics:
+    score: 0.823333333333333
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
 - id: independent/gpt-5-4-non-reasoning-critpt@1.0.0
   model: openai/gpt-5.4
   benchmark: artificial-analysis/critpt@1.0.0

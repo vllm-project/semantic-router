@@ -143,6 +143,22 @@ describe('model hub presentation support', () => {
 })
 
 describe('model hub benchmark evidence', () => {
+  it.each([
+    ['gpt-6.2-astra', 'xhigh', 0.28],
+    ['gpt-6.2-sol', 'xhigh', 0.284],
+    ['gpt-6.1-terra', 'high', 0.28],
+  ] as const)('finds %s on OpenAI with its measured GDP.pdf effort', (id, effort, score) => {
+    const rows = modelHubRows(catalog, filters({ query: id, providers: ['openai'] }))
+    expect(rows.map((row) => row.model.id)).toEqual([`openai/${id}`])
+    const evidence = modelHubPublicEvaluations(catalog).filter(
+      (record) =>
+        record.model === rows[0].model.id && record.benchmark === 'artificial-analysis/gdp-pdf@1.0.0',
+    )
+    expect(evidence.map((record) => [record.reasoning_effort, record.metrics.all_pass])).toEqual([
+      [effort, score],
+    ])
+  })
+
   it('presents Elo as a normalized percentage without replacing the raw measurement', () => {
     const metric = catalog.benchmarks
       .find((benchmark) => benchmark.id === 'artificial-analysis/gdpval-aa@2.0.0')!
