@@ -85,7 +85,7 @@ repos:
         entry: .venv-agent/bin/python tools/agent/scripts/sync_public_skill.py --check
         language: system
         pass_filenames: false
-        files: ^(tools/agent/skills/vllm-sr-agent-operations/|website/static/install/agent/vllm-sr/|tools/agent/scripts/sync_public_skill\.py$|tools/make/agent\.mk$|\.pre-commit-config\.yaml$)
+        files: ^(tools/agent/skills/(vllm-sr-agent-operations|vllm-sr-serve|vllm-sr-decision-model|vllm-sr-configure-recipe|vllm-sr-diagnose-routing|vllm-sr-benchmark)/|website/static/install/agent/(vllm-sr|vllm-sr-serve|vllm-sr-decision-model|vllm-sr-configure-recipe|vllm-sr-diagnose-routing|vllm-sr-benchmark)/|tools/agent/scripts/sync_public_skill\.py$|tools/make/agent\.mk$|\.pre-commit-config\.yaml$)
 
       - id: deployment-support-matrix
         name: deployment support matrix coverage
