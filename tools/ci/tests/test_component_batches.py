@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import yaml
@@ -136,6 +137,51 @@ class ComponentBatchTests(unittest.TestCase):
             self.assertTrue(evaluate_gate(plan, receipts).passed)
             self.assertEqual(len(receipts), 2)
             self.assertTrue(all(len(row["evidence"]["cases"]) == 1 for row in receipts))
+
+    def test_evalscope_make_target_preserves_component_observers(self) -> None:
+        batch: dict[str, Any] = make_plan(
+            [], source_sha=SHA, requested=("bench-tools",)
+        )["component_batches"][0]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "tools").mkdir()
+            (root / "tools/ci").symlink_to(ROOT / "tools/ci", target_is_directory=True)
+            test = root / "bench/router_flow/real_eval/test_evalscope_gpqa_contracts.py"
+            test.parent.mkdir(parents=True)
+            test.write_text(
+                "import sys\n"
+                "import python_test_evidence\n"
+                "def test_observers_are_loaded() -> None:\n"
+                "    assert 'sitecustomize' in sys.modules\n"
+                "    assert python_test_evidence._UNITTEST_STATE['installed']\n"
+            )
+            command = [
+                "make",
+                "--no-print-directory",
+                "-f",
+                str(ROOT / "tools/make/tooling.mk"),
+                "-o",
+                "router-flow-evalscope-deps",
+                "test-router-flow-evalscope",
+                f"AGENT_PYTHON={sys.executable}",
+                f"ROUTER_FLOW_EVALSCOPE_PYTHON={sys.executable}",
+            ]
+            output = root / "component"
+            captured = io.StringIO()
+            with (
+                patch.object(runner, "ROOT", root),
+                patch.object(runner.subprocess, "check_output", return_value=SHA),
+                patch.object(runner, "actual_platform", return_value="linux/amd64"),
+                patch.object(runner, "commands", return_value=[command]),
+                contextlib.redirect_stdout(captured),
+            ):
+                passed: bool = runner.run_batch(batch=batch, output=output)
+            self.assertTrue(passed, captured.getvalue())
+            receipt: dict[str, Any] = json.loads(
+                (output / "results/bench-tools.json").read_text()
+            )
+            self.assertEqual(len(receipt["evidence"]["cases"]), 1)
+            self.assertEqual(receipt["evidence"]["cases"][0]["status"], "passed")
 
     def test_failed_command_does_not_hide_successful_sibling_or_write_receipt(self):
         passed, plan, receipts, raw, calls = self.run_contracts(

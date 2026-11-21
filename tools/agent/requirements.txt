@@ -7,6 +7,7 @@ nodeenv==1.10.0
 pre-commit==4.3.0
 pytest==9.0.3
 pytest-xdist==3.8.0
+uv==0.12.5
 ruff==0.15.5
 tree-sitter==0.25.2
 tree-sitter-go==0.25.0

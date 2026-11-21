@@ -148,3 +148,64 @@ A result intended for comparison or publication should satisfy all of these:
 Generated results belong under `bench/router_flow/results/`, which is ignored
 by Git. Curated scorecards should contain derived, reviewable data rather than
 raw private run logs.
+
+## EvalScope-derived sr-bench smoke diagnostic
+
+`router-flow-gpqa-evalscope` runs the default suite's GPQA smoke prefix through
+sr-bench's ordinary worker and call journal. It reuses EvalScope 1.8.1's native
+choice processing, CoT prompt and grader, but grades only completed final
+answers. sr-bench still requires streaming, makes no automatic retries, and
+counts truncated answers as output failures. This is a separate diagnostic,
+not unchanged native benchmark parity or the published sr-bench GPQA score.
+The native commands above remain supported.
+
+Install the optional harness on each execution worker explicitly:
+
+```bash
+vllm-sr benchmark setup --benchmark router-flow-gpqa-evalscope --install
+```
+
+Setup requires `uv`. It reports the pinned source root and Python interpreter;
+it does not acquire a dataset or start a model. The managed Dashboard discovers
+the adapter from its copied CLI code, without installing EvalScope in the
+Dashboard's base environment. Missing data still requires local preparation.
+
+From a repository checkout, use that optional interpreter to export an
+authorized local CSV or JSONL snapshot of `AI-ModelScope/gpqa_diamond` in its
+native order. Supply a normal sr-bench target/limits manifest without existing
+cases or dataset fields. The exporter defaults to 20 cases and seed 42;
+`--limit` selects a smaller, explicitly labeled prefix.
+
+```bash
+PYTHONPATH=src/vllm-sr <optional-harness-python> \
+  -m bench.router_flow.real_eval.export_sr_bench_gpqa \
+  --source-path /path/to/native-gpqa.csv \
+  --revision SOURCE_REVISION \
+  --manifest targets-and-limits.json \
+  --output bench/router_flow/results/gpqa-diagnostic.json
+
+vllm-sr benchmark plan \
+  --manifest bench/router_flow/results/gpqa-diagnostic.json \
+  --output bench/router_flow/results/gpqa-frozen.json
+vllm-sr benchmark run --manifest bench/router_flow/results/gpqa-frozen.json
+```
+
+Create the output directory before exporting. Source identity records the
+operator-declared revision and actual content digest, not proof of upstream
+authenticity. The frozen manifest retains the source, suite digest, native
+choices and exact messages. Generation keeps temperature 0 and max_tokens
+32768, with concurrency 2 and a 900-second request bound. Conflicting target
+generation settings or smaller output caps fail instead of silently changing
+the diagnostic. Other sr-bench time, output, cost and cancellation guards stay
+active.
+
+Accuracy uses all planned cases, including failed or undispatched cases, on
+a 0-to-1 scale. Reports identify the extension protocol and never produce a
+published sr-bench score or join public reference columns. Retain the frozen
+manifest with the report for source provenance. Formal runs, other suite rows,
+native prediction-cache reuse and runner retirement are outside this path.
+
+`make verify DOMAIN=router-flow-bench` runs the pinned native-framework and
+real CLI/HTTP-fixture checks without downloading benchmark data or using a
+model. The same checks run in bench-tools CI. Fixture results establish the
+execution contract, not benchmark quality.
