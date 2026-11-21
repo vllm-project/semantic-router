@@ -15,9 +15,16 @@ export interface CommunityNavGroup {
   items: CommunityNavItem[]
 }
 
-/* Grouped like the docs sidebar. The labels and their order are unchanged
- * from the workgroups reset; the rule falls between the fourth and fifth. */
+/* Grouped like the docs sidebar, with a rule between groups. The guide leads,
+ * so a newcomer meets it first in the rail and in the pill row on narrow screens. */
 export const COMMUNITY_NAV_GROUPS: CommunityNavGroup[] = [
+  {
+    key: 'start-here',
+    label: 'Start here',
+    items: [
+      { key: 'contributor-guide', label: 'Contributor Guide', to: '/community/contributor-guide' },
+    ],
+  },
   {
     key: 'people',
     label: 'People',
@@ -47,6 +54,7 @@ export interface CommunityLayoutProps {
   activeKey: string
   title: ReactNode
   description?: ReactNode
+  actions?: ReactNode
   children: ReactNode
 }
 
@@ -54,11 +62,13 @@ export default function CommunityLayout({
   activeKey,
   title,
   description,
+  actions,
   children,
 }: CommunityLayoutProps): ReactNode {
   return (
     <BrowseLayout
       activeKey={activeKey}
+      actions={actions}
       description={description}
       eyebrow={<Translate id="community.layout.eyebrow">Community</Translate>}
       groups={COMMUNITY_NAV_GROUPS}
