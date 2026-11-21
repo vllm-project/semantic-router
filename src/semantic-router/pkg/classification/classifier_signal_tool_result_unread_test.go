@@ -139,7 +139,8 @@ func TestAScannedRuleMissingPartOfItsToolResultsReadsInPart(t *testing.T) {
 	unread := askedRule{signalType: config.SignalTypeSystemOne, rule: rule("unread"), unread: unreadToolResult}
 	whole := askedRule{signalType: config.SignalTypeSystemOne, rule: rule("whole")}
 	response := modelservice.Response{Answers: map[string]modelservice.Answer{
-		unread.questionID(): {Type: "noul", Noul: 0.1}, whole.questionID(): {Type: "noul", Noul: 0.1},
+		unread.questionID(): {Type: "noul", Noul: 0.1, InputCoverage: "complete"},
+		whole.questionID():  {Type: "noul", Noul: 0.1, InputCoverage: "complete"},
 	}}
 	scan := &guardScan{
 		deployment: "kai",

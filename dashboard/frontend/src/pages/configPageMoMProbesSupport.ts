@@ -1,3 +1,5 @@
+import type { RecipeProbeValidationResult } from '../types/recipe'
+
 export interface RecipeProbeKey {
   id: string
   decision: string
@@ -12,4 +14,10 @@ export function mapRecipeProbeFacetOptions(values: Record<string, number>, curre
     options.unshift([current, 0])
   }
   return options
+}
+
+/** A validation's outcome: the route held, it did not, or the Router could not judge it. */
+export function validationOutcome(result: RecipeProbeValidationResult) {
+  if (result.error) return 'unavailable' as const
+  return result.passed ? ('pass' as const) : ('mismatch' as const)
 }

@@ -20,6 +20,20 @@ func (r *Recorder) QueryPage(ctx context.Context, filters store.QueryFilters, li
 	return page, true, err
 }
 
+// QueryRun reads an agent run's records without their captured bodies when
+// the store can; the boolean is false when it cannot, and the caller reads the
+// full records instead.
+func (r *Recorder) QueryRun(ctx context.Context, filters store.QueryFilters) ([]store.Record, bool, error) {
+	reader, ok := r.storage.(store.RunReader)
+	if !ok {
+		return nil, false, nil
+	}
+	ctx, cancel := r.replayReadContext(ctx)
+	defer cancel()
+	records, err := reader.QueryRun(ctx, filters)
+	return records, true, err
+}
+
 // ScanMetadata visits the retained records without their captured bodies.
 // Database backends visit only the records the filters select; bounded stores
 // visit every record, so callers still apply the filters themselves.

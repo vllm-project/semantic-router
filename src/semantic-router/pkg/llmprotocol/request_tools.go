@@ -18,8 +18,9 @@ func StripTools(request *Request, stripHistory bool) (bool, int) {
 		return changed, 0
 	}
 	filtered := make([]Message, 0, len(request.Messages))
+	kept := make([]bool, len(request.Messages))
 	removed := 0
-	for _, message := range request.Messages {
+	for index, message := range request.Messages {
 		if message.Role == RoleTool {
 			removed++
 			changed = true
@@ -43,7 +44,9 @@ func StripTools(request *Request, stripHistory bool) (bool, int) {
 		}
 		message.Content = content
 		filtered = append(filtered, message)
+		kept[index] = true
 	}
 	request.Messages = filtered
+	request.Instructions = KeepInstructionPositions(request.Instructions, kept)
 	return changed, removed
 }

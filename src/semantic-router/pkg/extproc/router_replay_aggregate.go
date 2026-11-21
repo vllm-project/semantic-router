@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"sort"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -42,9 +43,13 @@ func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 	if err != nil {
 		return r.createErrorResponse(400, err.Error())
 	}
+	traffic, err := parseRouterReplayTrafficQuery(values, filters.since, time.Now())
+	if err != nil {
+		return r.createErrorResponse(400, err.Error())
+	}
 
-	payload, err := r.replayAggregates.get(ctx, filters.cacheKey(), func(ctx context.Context) (routerReplayAggregateResponse, error) {
-		return r.queryRouterReplayAggregate(ctx, filters)
+	payload, err := r.replayAggregates.get(ctx, traffic.cacheKey(filters.cacheKey()), func(ctx context.Context) (routerReplayAggregateResponse, error) {
+		return r.queryRouterReplayAggregateTraffic(ctx, filters, traffic)
 	})
 	if err != nil {
 		return r.createErrorResponse(500, "router replay storage query failed")

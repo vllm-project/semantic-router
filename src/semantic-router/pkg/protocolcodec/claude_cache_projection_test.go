@@ -59,6 +59,81 @@ func TestClaudeToolResultOuterCacheProjectsToChatLastText(t *testing.T) {
 	}
 }
 
+func TestClaudeToolUseCacheBoundaryOmitsExplicitlyForChat(t *testing.T) {
+	body := strings.Replace(claudeCachedToolResult,
+		`"input":{"query":"weather"}}`,
+		`"input":{"query":"weather"},"cache_control":{"type":"ephemeral"}}`, 1)
+	engine := NewBuiltinEngine()
+	request, _, _, err := engine.DecodeRequestForMutation(llmprotocol.AnthropicMessagesV1, []byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, []byte(body), nil)
+	if err != nil {
+		t.Fatalf("Claude Code's tool_use cache boundary was rejected: %v", err)
+	}
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].Field != "cache_control" ||
+		result.Diagnostics[0].Target != llmprotocol.OpenAIChatV1 ||
+		result.Diagnostics[0].Action != llmprotocol.DiagnosticDropped ||
+		!strings.Contains(result.Diagnostics[0].Reason, "1 Anthropic prompt-cache boundaries") {
+		t.Fatalf("tool_use cache omission was not explicit: %+v", result.Diagnostics)
+	}
+	unmarked, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, []byte(claudeCachedToolResult), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire chatRequestWire
+	if err := json.Unmarshal(result.Body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	kept := bytes.Count(result.Body, []byte("cache_control"))
+	if len(wire.Messages) != 4 || len(wire.Messages[2].ToolCalls) != 1 || len(wire.Tools) != 1 ||
+		wire.Tools[0].CacheControl == nil || kept == 0 || kept != bytes.Count(unmarked.Body, []byte("cache_control")) {
+		t.Fatalf("Chat lost a tool call or a representable cache boundary: %s", result.Body)
+	}
+	if result.Request.Generation <= request.Generation {
+		t.Fatalf("projection kept the stale envelope: original=%d projected=%d", request.Generation, result.Request.Generation)
+	}
+}
+
+func TestClaudeEmptyToolResultCacheBoundaryOmitsForChat(t *testing.T) {
+	body := `{
+		"model":"m","max_tokens":64,
+		"messages":[
+			{"role":"user","content":"run it"},
+			{"role":"assistant","content":[{"type":"tool_use","id":"call-1","name":"run","input":{}}]},
+			{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","cache_control":{"type":"ephemeral"}}]}
+		],
+		"tools":[{"name":"run","input_schema":{"type":"object"}}]
+	}`
+	result, err := NewBuiltinEngine().TranslateRequest(llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, []byte(body), nil)
+	if err != nil {
+		t.Fatalf("an empty tool result's cache boundary was rejected: %v", err)
+	}
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].Field != "cache_control" ||
+		result.Diagnostics[0].Action != llmprotocol.DiagnosticDropped {
+		t.Fatalf("empty tool result cache omission was not explicit: %+v", result.Diagnostics)
+	}
+	if bytes.Contains(result.Body, []byte("cache_control")) || !bytes.Contains(result.Body, []byte(`"tool_call_id":"call-1"`)) {
+		t.Fatalf("Chat lost the tool result or kept an unplaceable cache directive: %s", result.Body)
+	}
+}
+
+func TestDirectChatCodecCannotSilentlyOmitToolUseCacheDirective(t *testing.T) {
+	body := strings.Replace(claudeCachedToolResult,
+		`"input":{"query":"weather"}}`,
+		`"input":{"query":"weather"},"cache_control":{"type":"ephemeral"}}`, 1)
+	request, envelope, _, err := NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = (OpenAIChatCodec{}).EncodeRequest(request, envelope, llmprotocol.DefaultPolicy())
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != "unsupported_cache_directive" {
+		t.Fatalf("direct Chat codec silently omitted a tool_use cache directive: %v", err)
+	}
+}
+
 func TestClaudeToolResultConflictingCacheBoundariesRejectChat(t *testing.T) {
 	body := strings.Replace(claudeCachedToolResult,
 		`"text":"72 F"`,

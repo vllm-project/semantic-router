@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestReadToolSelectionReturnsToolsDBPath(t *testing.T) {
-	configPath := writeRouterConfig(t, `version: v0.5
+func TestToolSelectionFromConfigReturnsToolsDBPath(t *testing.T) {
+	cfg := parseRouterConfig(t, `version: v0.5
 providers:
   defaults: {model: local}
   models:
@@ -28,32 +30,27 @@ recipes:
               select: {mode: add, tools_db_path: "/var/lib/vsr/tools.json"}
 `)
 
-	selection, err := ReadToolSelection(configPath)
-	if err != nil {
-		t.Fatalf("ReadToolSelection() error = %v", err)
-	}
+	selection := ToolSelectionFromConfig(cfg)
 	if selection.ToolsDBPath != "/var/lib/vsr/tools.json" {
 		t.Fatalf("ToolsDBPath = %q, want %q", selection.ToolsDBPath, "/var/lib/vsr/tools.json")
 	}
 }
 
-func TestReadToolSelectionWithoutCatalogIsEmpty(t *testing.T) {
-	selection, err := ReadToolSelection(writeRouterConfig(t, "version: v0.5\nglobal: {}\n"))
-	if err != nil {
-		t.Fatalf("ReadToolSelection() error = %v", err)
-	}
+func TestToolSelectionFromConfigWithoutCatalogIsEmpty(t *testing.T) {
+	selection := ToolSelectionFromConfig(parseRouterConfig(t, "version: v0.5\nglobal: {}\n"))
 	if selection.ToolsDBPath != "" {
 		t.Fatalf("ToolsDBPath = %q, want none", selection.ToolsDBPath)
 	}
 }
 
-func TestReadToolSelectionReturnsParseError(t *testing.T) {
-	configPath := writeRouterConfig(t, "recipes: [")
+func parseRouterConfig(t *testing.T, content string) *routerconfig.RouterConfig {
+	t.Helper()
 
-	_, err := ReadToolSelection(configPath)
-	if err == nil {
-		t.Fatal("ReadToolSelection() error = nil, want parse error")
+	cfg, err := routerconfig.ParseYAMLBytes([]byte(content))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes(config): %v", err)
 	}
+	return cfg
 }
 
 func writeRouterConfig(t *testing.T, content string) string {

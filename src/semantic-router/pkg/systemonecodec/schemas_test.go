@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemoneprotocol"
 )
@@ -281,8 +282,8 @@ func TestARequestWithNoValidQuestionIsRefusedAsTheRuntimeRefusesIt(t *testing.T)
 	}
 }
 
-// A medium a codec cannot carry is refused before any call, as the runtime
-// refuses it: invalid_request with the medium's format reason.
+// A medium a codec cannot carry is refused before any call, as the runtime's
+// refusal reads: unsupported_media_type with the medium's format reason.
 func TestMediaACodecCannotCarryAreRefusedByFormat(t *testing.T) {
 	called := false
 	exchange := Exchange{Codec: VLLMSR50Codec{}, Send: func(context.Context, WireCall, []byte) (WireReply, error) {
@@ -296,11 +297,41 @@ func TestMediaACodecCannotCarryAreRefusedByFormat(t *testing.T) {
 	}
 	results := exchange.Ask(context.Background(), systemoneprotocol.Batch{Items: []systemoneprotocol.NamedRequest{{Request: request}}}, nil)
 	var problem *systemoneprotocol.Problem
-	if called || !errors.As(results[0].Err, &problem) || problem.Code != "invalid_request" || problem.Reason != "image_format" {
+	if called || !errors.As(results[0].Err, &problem) || problem.Code != "unsupported_media_type" || problem.Reason != "image_format" {
 		t.Fatalf("an image that is no data URL: called %v, %v", called, results[0].Err)
 	}
-	if status, body := NativeErrorBody(problem, ""); status != http.StatusBadRequest || !strings.Contains(string(body), `"reason":"image_format"`) {
+	if status, body := NativeErrorBody(problem, ""); status != http.StatusBadRequest || !strings.Contains(string(body), `"reason":"image_format"`) ||
+		!strings.Contains(string(body), `"code":"unsupported_media_type"`) {
 		t.Fatalf("answers %d %s", status, body)
+	}
+}
+
+// A runtime's or a vllm-sr/5.0 server's media refusal takes the code the public
+// API names it by, with its status and reason; other refusals keep theirs.
+func TestMediaRefusalsTakeTheirPublicCodes(t *testing.T) {
+	for reason, want := range map[string]string{
+		"image_format":    "unsupported_media_type",
+		"video_format":    "unsupported_media_type",
+		"image_malformed": "invalid_media",
+		"video_malformed": "invalid_media",
+		"image_pixels":    "invalid_request",
+		"request_tokens":  "invalid_request",
+	} {
+		native := NativeProblem(http.StatusBadRequest, []byte(`{"error":{"code":"invalid_request","reason":"`+reason+`","message":"x"}}`))
+		five := FiveProblem(WireReply{Status: http.StatusBadRequest, Body: []byte(`{"detail":"x","code":"invalid_request","reason":"` + reason + `"}`)}, time.Now())
+		for _, problem := range []*systemoneprotocol.Problem{native, five} {
+			if problem.Code != want || problem.Reason != reason || problem.Status != http.StatusBadRequest {
+				t.Fatalf("%s => %+v", reason, problem)
+			}
+		}
+		status, body := NativeErrorBody(native, "")
+		if status != http.StatusBadRequest || !strings.Contains(string(body), `"code":"`+want+`"`) || !strings.Contains(string(body), `"reason":"`+reason+`"`) {
+			t.Fatalf("%s answers %d %s", reason, status, body)
+		}
+	}
+	if PublicCode("unsupported_media_type", "encoding_unsupported") != "unsupported_media_type" ||
+		PublicCode("question_failed", "image_format") != "question_failed" {
+		t.Fatal("PublicCode changed a code that is not an invalid_request media refusal")
 	}
 }
 
@@ -485,6 +516,42 @@ func TestMediaLeadingTheStateRoundTrips(t *testing.T) {
 	}
 }
 
+// Each video container the model runtime decodes is an asset of its own
+// format, and reads back as the data URL it was sent as. An MPEG transport
+// stream segment is one of them.
+func TestEveryVideoContainerRoundTripsAsAnAsset(t *testing.T) {
+	for mime, format := range map[string]string{
+		"video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/x-matroska": "mkv", "video/mp2t": "ts",
+	} {
+		url := "data:" + mime + ";base64,AAAA"
+		if !DecodesVideo(url) {
+			t.Fatalf("%s is not read as a video", url)
+		}
+		state, assets, err := placeMedia(systemoneprotocol.String("Describe it."), nil, []string{url}, nil)
+		if err != nil || len(assets) != 1 {
+			t.Fatalf("%s: placed %v %v", mime, assets, err)
+		}
+		if got := textOf(mustGet(assets[0].Value, "format")); got != format {
+			t.Fatalf("%s: format %q, want %q", mime, got, format)
+		}
+		_, _, videos, _, ok, err := UnplaceMedia(state, assets)
+		if err != nil || !ok || len(videos) != 1 || videos[0] != url {
+			t.Fatalf("%s: unplaced %v %v %v", mime, videos, ok, err)
+		}
+	}
+	if DecodesVideo("data:video/avi;base64,AAAA") {
+		t.Fatal("AVI is not a container the model runtime decodes")
+	}
+	avi := systemoneprotocol.Object(
+		systemoneprotocol.Member{Key: "type", Value: systemoneprotocol.String("video")},
+		systemoneprotocol.Member{Key: "format", Value: systemoneprotocol.String("avi")},
+		systemoneprotocol.Member{Key: "data_base64", Value: systemoneprotocol.String("AAAA")},
+	)
+	if _, err := assetDataURL("video", avi); err == nil || !strings.Contains(err.Error(), "mp4, webm, mov, mkv or ts") {
+		t.Fatalf("an unknown format answered %v", err)
+	}
+}
+
 func TestQuestionErrorsFollowTheirReasons(t *testing.T) {
 	for reason, want := range map[string]string{
 		"scan_budget": "scan_budget_exceeded", "question_tokens": "max_length_exceeded", "input_malformed": "invalid_input",
@@ -509,5 +576,43 @@ func TestTheLegacyCodecRefusesRolesItCannotCarry(t *testing.T) {
 	request.Roles = systemoneprotocol.Roles{Mode: systemoneprotocol.RolesNone}
 	if _, _, err := (VLLMSR40Codec{}).Plan(systemoneprotocol.Batch{Items: []systemoneprotocol.NamedRequest{{Request: request}}}, Target{Model: "m"}, DefaultPolicy); err == nil {
 		t.Fatal("no roles cannot go to vllm-sr/4.0")
+	}
+}
+
+// A state no question can read is refused by both listeners, naming it: a
+// state that gives no text ("", white space, an object without a part) where
+// the request has no image, video or asset to read instead, and a state of
+// another JSON type than a text, an object or an array of media in front of
+// it. Such a request was answered (and billed) as if it had text.
+func TestAStateWithNothingToReadIsRefused(t *testing.T) {
+	q := `"questions":{"q":{"type":"noul","instructions":"Is it urgent?"}}`
+	for _, listener := range []ListenerCodec{Listener40{}, Listener50{}} {
+		for body, want := range map[string]string{
+			`{"model":"d3","state":"",` + q + `}`:          "the state is empty",
+			`{"model":"d3","state":"  \n",` + q + `}`:      "the state is empty",
+			`{"model":"d3","state":{},` + q + `}`:          "the state is empty",
+			`{"model":"d3","state":5,` + q + `}`:           "state must be a text or an object of text parts",
+			`{"model":"d3","state":true,` + q + `}`:        "state must be a text or an object of text parts",
+			`{"model":"d3","state":"Hi there",` + q + `}`:  "",
+			`{"model":"d3","state":{"user":""},` + q + `}`: "",
+			`{"model":"d3","state":["img",""],` + q + `,"assets":{"img":{"type":"image","format":"png","data_base64":"iVBORw0KGgo="}}}`: "",
+		} {
+			_, err := listener.Read(PathSystemOne, []byte(body), http.Header{})
+			switch {
+			case want == "" && err != nil:
+				t.Errorf("%s %s: refused: %v", listener.ID(), body, err)
+			case want != "" && (err == nil || !strings.Contains(err.Error(), want)):
+				t.Errorf("%s %s: %v, want %q", listener.ID(), body, err, want)
+			}
+		}
+	}
+	// a vllm-sr/4.0 request's images are the input of an empty text
+	if _, err := (Listener40{}).Read(PathSystemOne, []byte(`{"model":"d3","state":"","images":["data:image/png;base64,iVBORw0KGgo="],`+q+`}`), http.Header{}); err != nil {
+		t.Errorf("an empty text with an image: %v", err)
+	}
+	// a batch names the entry
+	_, err := Listener50{}.Read(PathBatch, []byte(`{"model":"d3","requests":{"a":{"state":"one",`+q+`},"b":{"state":"",`+q+`}}}`), http.Header{})
+	if err == nil || !strings.Contains(err.Error(), "the state is empty") || !strings.Contains(err.Error(), "b") {
+		t.Errorf("a batch entry with an empty state: %v", err)
 	}
 }

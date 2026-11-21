@@ -26,6 +26,7 @@ import (
 type semanticResponseStreamState struct {
 	responseID string
 	model      string
+	createdAt  time.Time
 	stop       llmprotocol.StopReason
 	stopSeq    string
 	usage      llmprotocol.Usage
@@ -33,6 +34,8 @@ type semanticResponseStreamState struct {
 	order      []int
 	terminal   bool
 	failed     *llmprotocol.ProtocolError
+	// decoded reports that the stream decoder read at least one event.
+	decoded bool
 }
 
 type semanticStreamItem struct {
@@ -46,6 +49,10 @@ type semanticStreamItem struct {
 	image            *llmprotocol.GeneratedImage
 	completed        bool
 	reasoningDetails map[int]llmprotocol.ReasoningDetail
+	// serverTool and citations are what an Anthropic server tool left: its
+	// call or result as written, and the citations on this item's text.
+	serverTool json.RawMessage
+	citations  json.RawMessage
 }
 
 func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
@@ -61,6 +68,10 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	buffers := semanticStreamBuffers{}
 	responseBody, endOfStream = r.bridgeBufferedBody(&buffers, responseBody, endOfStream, ctx)
 	buffers.push(responseBody, ctx)
+	if endOfStream && buffers.unread(ctx) {
+		// The client gets what a buffered client gets for such a body.
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
@@ -126,6 +137,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
+}
+
+// unread reports a body the provider answered whole, which its client has not
+// seen yet, that neither the bridge nor the stream decoder could read
+// anything from.
+func (buffers *semanticStreamBuffers) unread(ctx *RequestContext) bool {
+	state := ctx.SemanticStreamState
+	return !ctx.UpstreamBodyStreamed && !buffers.bridged && ctx.ProtocolResponseStream != nil && state != nil && !state.decoded
 }
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
@@ -267,6 +286,14 @@ func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *e
 	if ctx.ProtocolResponseStream != nil &&
 		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted || buffers.bridged) {
 		body := buffers.translated
+		// A stream failure switches a same-format client from the public
+		// filter's bytes to the codec's frames, which carry only the failing
+		// read's output. The tool-argument frames the filter held back in
+		// earlier reads must ride along, or the client loses the accepted
+		// prefix of the call the provider went on to break.
+		if ctx.StreamingAborted && !requiresClientResponseRewrite(ctx) {
+			body = append(ctx.PublicChatUsageFilter.ReleaseHeldForAbort(), body...)
+		}
 		// A bridged answer replaces a gzip provider body, and the client's
 		// content-encoding still names that coding, so the frames carry it too.
 		if buffers.bridged && ctx.UpstreamResponseGzip {
@@ -315,12 +342,17 @@ func responseStreamContext(
 	streamContext := llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Source: source, Target: target,
 		Options:     clientStreamOptions(ctx),
-		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
+		PublicModel: ctx.RequestModel, ResponseRender: responseObjectRender(ctx),
 		// The model the upstream reports, as buffered and same-format replies pass it through.
 		PreferProviderModel: true,
 	}
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
 		streamContext.ResponseID = responseID
+	}
+	// Chat and Responses providers report usage only at the end, after the
+	// message_start a Messages client reads input usage from.
+	if target == llmprotocol.AnthropicMessagesV1 && source != llmprotocol.AnthropicMessagesV1 && ctx.SemanticRequest != nil {
+		streamContext.EstimatedInputTokens = int64(estimateCountTokens(ctx.SemanticRequest))
 	}
 	return streamContext
 }
@@ -345,9 +377,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	}
 	ctx.ProtocolResponseStream = stream
 	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
-			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
-		)
+		ctx.PublicChatUsageFilter = engine.NewChatPublicStreamFilter(streamUsageRequestedByClient(ctx))
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -366,12 +396,16 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	if state == nil {
 		return
 	}
+	state.decoded = state.decoded || len(events) > 0
 	for _, event := range events {
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
 		}
 		if event.Model != "" {
 			state.model = event.Model
+		}
+		if state.createdAt.IsZero() {
+			state.createdAt = event.CreatedAt
 		}
 		if event.Usage != nil {
 			state.usage = *event.Usage
@@ -391,8 +425,14 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
 				item.reasoningSig = event.Content.Signature
 			}
+			if event.Content != nil && event.Content.Kind == llmprotocol.ContentServerTool {
+				item.serverTool = event.Content.Raw
+			}
 		case llmprotocol.EventOutputTextDelta:
 			item := state.item(event.ItemIndex)
+			if event.Content != nil {
+				item.citations = llmprotocol.AppendCitations(item.citations, event.Content.Raw)
+			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentRefusal {
 				item.refusal += event.Delta
 			} else {
@@ -511,7 +551,10 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: item.refusal})
 		}
 		if item.text != "" {
-			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: item.text})
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: item.text, Raw: item.citations})
+		}
+		if item.serverTool != nil {
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentServerTool, Raw: item.serverTool})
 		}
 		if item.toolCall != nil {
 			call := *item.toolCall
@@ -533,8 +576,12 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 	if state.stop == "" {
 		state.stop = llmprotocol.StopUnknown
 	}
+	createdAt := state.createdAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
 	return &llmprotocol.Response{
-		Generation: 1, ID: state.responseID, CreatedAt: time.Now().UTC(),
+		Generation: 1, ID: state.responseID, CreatedAt: createdAt,
 		Model: state.model, Output: output, StopReason: state.stop,
 		MatchedStopSequence: state.stopSeq, Usage: state.usage,
 	}, nil
@@ -543,6 +590,9 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
 	clean := streamErr == nil && !ctx.StreamingAborted
 	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
+		if !ctx.StreamingAborted {
+			r.finishNativeFallbackResponse(ctx, "")
+		}
 		r.commitStreamedAnswer(ctx, semanticResponse)
 	}
 	r.endStreamRouterReplay(ctx, clean)
@@ -552,6 +602,15 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 // and inflight admission. It returns the answer the stream reconstructs, or
 // nil when the stream ended without one or was settled before.
 func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr error) *llmprotocol.Response {
+	return r.completeSemanticStreamWith(ctx, streamErr, nil)
+}
+
+// completeSemanticStreamWith settles a stream as completeSemanticStream does,
+// with the answer replace makes of the whole answer the stream reconstructs
+// in place of that answer, when replace is set.
+func (r *OpenAIRouter) completeSemanticStreamWith(
+	ctx *RequestContext, streamErr error, replace func(*llmprotocol.Response) *llmprotocol.Response,
+) *llmprotocol.Response {
 	if ctx == nil || ctx.StreamingComplete {
 		return nil
 	}
@@ -561,7 +620,15 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 	}
 	semanticResponse, responseErr := ctx.SemanticStreamState.response()
 	if responseErr == nil {
+		if ctx.SourceFormat == llmprotocol.AnthropicMessagesV1 {
+			// The answer the Router keeps carries the identifiers the client read.
+			source, _ := responseWireFormats(ctx)
+			*semanticResponse = protocolcodec.AnthropicReplyIdentifiers(source, *semanticResponse)
+		}
 		ctx.SemanticResponse = semanticResponse
+		if replace != nil && !ctx.StreamingAborted {
+			semanticResponse = replace(semanticResponse)
+		}
 	} else {
 		ctx.StreamingAborted = true
 	}
@@ -642,6 +709,31 @@ func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticRespons
 	r.attachRouterReplayResponse(ctx, encoded, true)
 }
 
+// reportStreamingAnswerEstimate debits a stream that carried no usage from its
+// rate-limit budget, with the provider-calibrated estimate of the answer the
+// stream reconstructed. The metrics stay unreported - nothing measured them -
+// but a token budget must not treat the output as free.
+func (r *OpenAIRouter) reportStreamingAnswerEstimate(ctx *RequestContext, response *llmprotocol.Response) int {
+	if r == nil || ctx == nil || r.RateLimiter == nil || ctx.RateLimitCtx == nil || response == nil {
+		return 0
+	}
+	bytes := 0
+	for _, item := range response.Output {
+		for _, content := range item.Content {
+			bytes += len(content.Text)
+		}
+	}
+	if bytes == 0 {
+		return 0
+	}
+	tokens, _ := r.classifierForRequest(ctx).EstimateTokens(tokenCalibrationCategory(ctx), bytes)
+	if tokens <= 0 {
+		return 0
+	}
+	r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{OutputTokens: tokens, TotalTokens: tokens})
+	return tokens
+}
+
 func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	ctx *RequestContext,
 	completionLatency time.Duration,
@@ -652,11 +744,20 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
+		if r.recordInterruptedStreamUsage(ctx) {
+			// Request finalization settles the partial charge.
+			return
+		}
+		// The stream carried no usable usage, so the request is settled with
+		// what it knows, as the buffered path does: skipping the report would
+		// leave its output tokens out of a token budget. What it knows is an
+		// estimate of the answer it reconstructed.
 		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
-		return
+		r.reportStreamingAnswerEstimate(ctx, ctx.SemanticResponse)
+		usage = responseUsageMetrics{}
 	}
 	totalTokens := responseUsageTotal(usage)
-	if r.RateLimiter != nil && ctx.RateLimitCtx != nil && totalTokens > 0 {
+	if r.RateLimiter != nil && ctx.RateLimitCtx != nil {
 		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
 			InputTokens:  usage.promptTokens,
 			OutputTokens: usage.completionTokens,

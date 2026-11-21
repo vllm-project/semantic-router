@@ -154,6 +154,32 @@ describe('InsightsRecordTrace', () => {
     expect(hidden).toContain('Arguments hidden for this role')
   })
 
+  it("pages a long session's turns from the page that holds the record's own turn", () => {
+    const trajectory: InsightsTrajectory = {
+      object: 'router_replay.trajectory',
+      session_id: 'session-1',
+      record_count: 45,
+      turn_count: 45,
+      messages: Array.from({ length: 45 }, (_, index) => ({
+        role: 'user' as const,
+        content: `question ${index + 1}`,
+        turn_index: index,
+      })),
+    }
+    const markup = renderToStaticMarkup(
+      <InsightsRecordTrace record={{ ...record, turn_index: 30 }} trajectory={trajectory} />,
+    )
+    expect(markup).toContain('45 turns')
+    expect(markup).toContain('21–40 of 45 turns')
+    expect(markup).toContain('question 31')
+    expect(markup).not.toContain('question 20<')
+    expect(markup).toContain('Turn 21')
+    const first = renderToStaticMarkup(
+      <InsightsRecordTrace record={{ ...record, turn_index: 0 }} trajectory={trajectory} />,
+    )
+    expect(first).toContain('1–20 of 45 turns')
+  })
+
   it('keeps a redacted tool result hidden with its status', () => {
     const markup = renderToStaticMarkup(
       <InsightsRecordTrace
