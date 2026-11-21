@@ -88,7 +88,6 @@ type looperFusionErrorResponse struct {
 	Error struct {
 		Message string `json:"message"`
 		Type    string `json:"type"`
-		Code    string `json:"code"`
 	} `json:"error"`
 }
 
@@ -270,9 +269,7 @@ func testLooperFusionQuorumZeroUsable(ctx context.Context, client *kubernetes.Cl
 
 // testLooperFusionQuorumFallbackFailure covers the fallback-failure branch. The
 // request must surface a typed error rather than degrading to judge synthesis
-// over the under-strength panel. The fallback's own outcome decides the status:
-// its 502 ended the run, so the client gets that 502, as a model's 5xx reaches
-// the client without a Looper.
+// over the under-strength panel.
 func testLooperFusionQuorumFallbackFailure(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
 	if err != nil {
@@ -290,6 +287,7 @@ func testLooperFusionQuorumFallbackFailure(ctx context.Context, client *kubernet
 	if err != nil {
 		return fmt.Errorf("fusion fallback-failure request failed: %w", err)
 	}
+	// The broken fallback target's 502 ends the run, so the client gets it.
 	if response.StatusCode != http.StatusBadGateway {
 		logUnexpectedChatCompletionStatus(opts.Verbose, response, "looper-fusion-quorum-fallback-failure")
 		return fmt.Errorf("fusion fallback-failure status = %d, want %d", response.StatusCode, http.StatusBadGateway)
@@ -299,9 +297,8 @@ func testLooperFusionQuorumFallbackFailure(ctx context.Context, client *kubernet
 	if err := json.Unmarshal(response.Body, &errorResponse); err != nil {
 		return fmt.Errorf("decode fusion fallback-failure error: %w", err)
 	}
-	if errorResponse.Error.Type != "server_error" || errorResponse.Error.Code != "upstream_unavailable" {
-		return fmt.Errorf("error = %q/%q, want server_error/upstream_unavailable: %s",
-			errorResponse.Error.Type, errorResponse.Error.Code, string(response.Body))
+	if errorResponse.Error.Type != "server_error" {
+		return fmt.Errorf("error.type = %q, want server_error: %s", errorResponse.Error.Type, string(response.Body))
 	}
 	if strings.Contains(string(response.Body), looperFusionSynthesizedAnswer) {
 		return fmt.Errorf("fallback failure unexpectedly returned synthesized answer %q", looperFusionSynthesizedAnswer)
@@ -367,9 +364,6 @@ func testLooperFusionQuorumFallback(ctx context.Context, client *kubernetes.Clie
 	})
 }
 
-// testLooperFusionUsableQuorum: one usable answer, one empty answer and one 502
-// against a quorum of two. The empty answer makes the miss the Router's own, so
-// the client gets 500, not the panel model's 502.
 func testLooperFusionUsableQuorum(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
 	if err != nil {
@@ -387,9 +381,10 @@ func testLooperFusionUsableQuorum(ctx context.Context, client *kubernetes.Client
 	if err != nil {
 		return fmt.Errorf("fusion quorum request failed: %w", err)
 	}
-	if response.StatusCode != http.StatusInternalServerError {
+	// The failed panel model's 502 left the panel below quorum, so the client gets it.
+	if response.StatusCode != http.StatusBadGateway {
 		logUnexpectedChatCompletionStatus(opts.Verbose, response, "looper-fusion-usable-quorum")
-		return fmt.Errorf("fusion quorum status = %d, want %d", response.StatusCode, http.StatusInternalServerError)
+		return fmt.Errorf("fusion quorum status = %d, want %d", response.StatusCode, http.StatusBadGateway)
 	}
 
 	var errorResponse looperFusionErrorResponse

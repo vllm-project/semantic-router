@@ -260,10 +260,8 @@ Best practice:
 - `quorum_failure_policy` selects what happens instead of that error. It
   defaults to `fail`, which keeps the behavior above.
 - A panel that ends below quorum under `fail` answers the client 500, unless
-  every panel model without a usable answer failed with a rate limit (429) or
-  a server error (5xx): then the client gets that model's status, as it would
-  without Fusion. A model that answered without usable content makes the miss
-  the Router's own. Under `fallback`, the fallback call's outcome decides: its
+  a panel model failed with a rate limit (429) or a server error (5xx): then
+  the client gets that model's status, as it would without Fusion. Under `fallback`, the fallback call's outcome decides: its
   own 429 or 5xx, else 500.
 
 :::warning Every panel model must answer by default

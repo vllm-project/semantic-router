@@ -167,7 +167,9 @@ global:
   each hold their reservation, so they cannot together spend past a budget.
 - **After the reply**, its priced usage (`x-vsr-cost`) replaces the
   reservation. A reply without usage that can be priced is charged its
-  estimate, and a call no provider answered is charged nothing. A call that
+  estimate, a stream cut short, such as by its client, is charged the usage it
+  reported before it stopped (settlement `partial_usage`), and a call no
+  provider answered is charged nothing. A call that
   costs more than its estimate can leave a budget below zero.
 - **At the limit** the call is refused with `429` and the code
   `budget_exceeded`, with `Retry-After` until a user budget's window starts
