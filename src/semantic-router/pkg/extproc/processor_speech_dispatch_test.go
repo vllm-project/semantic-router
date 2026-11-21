@@ -269,3 +269,70 @@ func TestSemanticCacheIsDisabledForSpeechRequests(t *testing.T) {
 		t.Fatal("speech requests must neither read nor write the response cache")
 	}
 }
+
+func speechRateLimitRouter(rule config.RateLimitRule) *OpenAIRouter {
+	cfg := &config.RouterConfig{}
+	cfg.RateLimit.Providers = []config.RateLimitProviderConfig{{
+		Type:  "local-limiter",
+		Rules: []config.RateLimitRule{rule},
+	}}
+	return &OpenAIRouter{
+		Config:         cfg,
+		RateLimiter:    buildRateLimitResolver(cfg),
+		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
+	}
+}
+
+// A speech request completes with zero token usage, so tokens_per_unit must
+// not reject it at admission either. The audio still comes back unchanged and
+// the request leaves the token budget untouched for the next chat request.
+func TestSpeechRequestIsNotChargedAgainstTokenLimitsThroughItsResponse(t *testing.T) {
+	router := speechRateLimitRouter(config.RateLimitRule{
+		Name: "one-token-per-minute", TokensPerUnit: 1, Unit: "minute",
+	})
+	model := "speech-token-limit-test"
+	ctx := speechResponseTestContext(t, router.ReplayRecorder, router, model)
+	ctx.VSRContextTokenCount = 5
+
+	if response := router.applyRateLimit(ctx, model); response != nil {
+		t.Fatalf("speech request was rate limited by tokens_per_unit: %+v", response.GetImmediateResponse())
+	}
+	if _, err := router.handleResponseHeaders(speechResponseHeaders("200", "audio/wav"), ctx); err != nil {
+		t.Fatalf("handleResponseHeaders: %v", err)
+	}
+	audio := []byte("RIFF\x24\x00\x00\x00WAVEfmt ")
+	response, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
+		ResponseBody: &ext_proc.HttpBody{Body: audio, EndOfStream: true},
+	}, ctx)
+	if err != nil {
+		t.Fatalf("handleResponseBody: %v", err)
+	}
+	if common := response.GetResponseBody().GetResponse(); common == nil ||
+		common.GetStatus() != ext_proc.CommonResponse_CONTINUE || common.GetBodyMutation() != nil {
+		t.Fatalf("audio must reach the client unchanged, got %+v", response)
+	}
+
+	chat := &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1, VSRContextTokenCount: 1}
+	if response := router.applyRateLimit(chat, model); response != nil {
+		t.Fatalf("the speech request consumed the token budget: %+v", response.GetImmediateResponse())
+	}
+	chat = &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1, VSRContextTokenCount: 1}
+	if response := router.applyRateLimit(chat, model); response.GetImmediateResponse().GetStatus().GetCode() != 429 {
+		t.Fatalf("a chat request over the token budget must still get 429, got %+v", response)
+	}
+}
+
+func TestSpeechRequestsStillCountAgainstRequestLimits(t *testing.T) {
+	router := speechRateLimitRouter(config.RateLimitRule{
+		Name: "one-request-per-minute", RequestsPerUnit: 1, Unit: "minute",
+	})
+	model := "speech-request-limit-test"
+	first := speechResponseTestContext(t, router.ReplayRecorder, router, model)
+	if response := router.applyRateLimit(first, model); response != nil {
+		t.Fatalf("first speech request was rejected: %+v", response.GetImmediateResponse())
+	}
+	second := speechResponseTestContext(t, router.ReplayRecorder, router, model)
+	if response := router.applyRateLimit(second, model); response.GetImmediateResponse().GetStatus().GetCode() != 429 {
+		t.Fatalf("second speech request response = %+v, want 429", response)
+	}
+}
