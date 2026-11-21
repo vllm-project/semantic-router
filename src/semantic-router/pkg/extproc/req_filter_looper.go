@@ -398,6 +398,11 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	// response policy commits here, once Replay is open: Replay, memory and
 	// the Responses object keep only an answer the guard released.
 	plan.commit()
+	if plan != nil && plan.blocked != nil && reqCtx.ExpectStreamingResponse {
+		// A stream carries the refusal under its 200, which no later phase
+		// ends, so the record ends with it as a held stream's refusal does.
+		r.failStreamedRouterReplay(reqCtx, plan.finalBody, "request_rejected")
+	}
 }
 
 func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper.TokenUsage, calls int) {

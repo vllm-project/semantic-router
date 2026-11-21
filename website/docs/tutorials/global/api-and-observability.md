@@ -169,8 +169,10 @@ global:
   reservation. Each Looper call is charged its own usage at its model's price,
   as the request's record prices it, so a run spends what Insights and
   `vllm-sr usage` report for it. A reply without usage that can be priced is
-  charged its estimate, and a call no provider answered is charged nothing. A
-  call that costs more than its estimate can leave a budget below zero.
+  charged its estimate, a stream cut short, such as by its client, is charged
+  the usage it reported before it stopped (settlement `partial_usage`), and a
+  call no provider answered is charged nothing. A call that costs more than
+  its estimate can leave a budget below zero.
 - **At the limit** the call is refused with `429` and the code
   `budget_exceeded`. A request whose budget is already spent is refused before
   its signals run. A fallback candidate that does not fit is skipped for the
