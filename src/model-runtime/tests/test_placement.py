@@ -298,6 +298,74 @@ def test_d3_on_a_cpu_needs_its_fp32_size_unless_it_runs_bfloat16(monkeypatch):
     assert placement.estimated_bytes / GIB == pytest.approx(55.45, abs=0.01)
 
 
+AMD_BF16 = "cpu:x86_64:avx512:bf16_native:amd"
+D3_RECORDED = replace(
+    D3, dtype=replace(D3.dtype, cpu_bf16_references=frozenset({AMD_BF16}))
+)
+
+
+def cpu_host(monkeypatch, key, bf16=True):
+    monkeypatch.setattr(ROCmAccelerator, "available", lambda self: False)
+    monkeypatch.setattr(CUDAAccelerator, "available", lambda self: False)
+    monkeypatch.setattr(torch._C, "has_lapack", True)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: bf16)
+    monkeypatch.setattr(CPUAccelerator, "golden_reference", lambda self, device: key)
+    accelerator = CPUAccelerator()
+    (device,) = accelerator.devices()
+    return accelerator, device
+
+
+def test_auto_holds_bf16_only_on_a_native_cpu_class_with_its_own_references(
+    monkeypatch,
+):
+    from vllm_srun import dtypes
+
+    accelerator, device = cpu_host(monkeypatch, AMD_BF16)
+    consenting = replace(
+        D3_RECORDED,
+        dtype=replace(
+            D3_RECORDED.dtype, reduced_cpu="int8", approximate_cpu_kernels=True
+        ),
+    )
+    held = dtypes.on_host(consenting, "auto", accelerator, device).dtype
+    assert held.cpu_weights == "bfloat16"
+    # The consents rest on records at the policy's own precision, FP32.
+    assert held.reduced_cpu is None and held.approximate_cpu_kernels is False
+    assert dtypes.published(held, False) == "bfloat16"
+    # Explicit dtypes keep their meaning.
+    for explicit in ("bfloat16", "float32"):
+        assert dtypes.on_host(D3_RECORDED, explicit, accelerator, device) is D3_RECORDED
+    # No references for the class (another vendor, or none recorded).
+    assert dtypes.on_host(D3, "auto", accelerator, device) is D3
+    _, intel = cpu_host(monkeypatch, "cpu:x86_64:avx512:bf16_native:intel")
+    assert dtypes.on_host(D3_RECORDED, "auto", CPUAccelerator(), intel) is D3_RECORDED
+    # A class whose BF16 is emulated stays FP32, references or not.
+    emulated_key = "cpu:x86_64:avx2:bf16_emulated:amd"
+    emulated_spec = replace(
+        D3, dtype=replace(D3.dtype, cpu_bf16_references=frozenset({emulated_key}))
+    )
+    accelerator, emulated = cpu_host(monkeypatch, emulated_key, bf16=False)
+    assert dtypes.on_host(emulated_spec, "auto", accelerator, emulated) is emulated_spec
+    # A package already in BF16 on CPUs (quantized) is unchanged.
+    accelerator, device = cpu_host(monkeypatch, AMD_BF16)
+    quantized = replace(
+        D3_RECORDED, dtype=replace(D3_RECORDED.dtype, cpu_weights="bfloat16")
+    )
+    assert dtypes.on_host(quantized, "auto", accelerator, device) is quantized
+
+
+def test_d3_is_placed_at_its_bf16_size_where_auto_holds_bf16(monkeypatch):
+    cpu_host(monkeypatch, AMD_BF16)
+    placement = place(D3_RECORDED, "cpu", D3_PARAMETERS, 64)
+    assert placement.estimated_bytes / GIB == pytest.approx(55.45, abs=0.01)
+    # Loading again in FP32 after a BF16 golden mismatch needs the FP32 size.
+    with pytest.raises(PlacementError, match=r"needs about 99\.2 GiB"):
+        place(D3_RECORDED, "cpu", D3_PARAMETERS, 64, cpu_bf16=False)
+    cpu_host(monkeypatch, "cpu:x86_64:avx512:bf16_native:intel")
+    with pytest.raises(PlacementError, match=r"needs about 99\.2 GiB"):
+        place(D3_RECORDED, "cpu", D3_PARAMETERS, 64)
+
+
 def test_a_bf16_resident_family_counts_its_bf16_linear_weights_on_gpus():
     billion, linear = 1_000_000_000, 750_000_000
     held = 1_500_000_000 + 150_000_000 + 4 * 250_000_000

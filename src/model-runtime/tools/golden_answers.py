@@ -109,17 +109,19 @@ def answers(
                 totals["checked"] += checked
                 totals["matched"] += matched
         info = served.model.info
-        goldens = {qualified(accelerator, served.dtype): values}
+        # An ``auto`` model in BF16 on a CPU class with BF16 references records at bfloat16.
+        dtype = served.golden_dtype or served.dtype
+        goldens = {qualified(accelerator, dtype): values}
         key = served.placement.accelerator.golden_reference(served.placement.device)
         if key is not None:
-            goldens[qualified(key, served.dtype)] = values
+            goldens[qualified(key, dtype)] = values
         return {
             "model": info.id,
             "repo": info.repo,
             "revision": info.revision,
             "model_sha256": info.model_sha256,
             "device": served.placement.device.label,
-            "dtype": served.dtype,
+            "dtype": dtype,
             "torch": torch.__version__,
             "readiness": served.health.golden.describe(),
             "previous": previous,
@@ -143,7 +145,14 @@ def record(path: Path, entries: list[dict[str, Any]]) -> None:
         for key, values in entry["golden_answers"].items():
             if key == generic and key in answers and recorded_with.get(key) == version:
                 continue
-            if key != generic and values == answers.get(generic):
+            # A hardware key at the generic key's values adds nothing, except
+            # at BF16 on a CPU: there it is what lets ``auto`` hold BF16 on
+            # that class (``DtypePolicy.cpu_bf16_references``).
+            if (
+                key != generic
+                and values == answers.get(generic)
+                and not (key.startswith("cpu:") and key.endswith("@bfloat16"))
+            ):
                 answers.pop(key, None)
                 recorded_with.pop(key, None)
                 continue
