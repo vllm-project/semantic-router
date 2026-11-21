@@ -104,9 +104,13 @@ def test_later_hardware_recording_preserves_generic_and_updates_qualified(
 ):
     path = tmp_path / "goldens.json"
     generic = device.split(":")[0]
-    recorder.record(path, [entry(device, key, 0.5)])
+    # A GPU keys its own architecture alone unless asked for the class baseline.
+    baseline = generic != "cpu"
+    recorder.record(path, [entry(device, key, 0.5)], baseline)
     recorder.record(
-        path, [entry(device, key, 0.6), entry(device, "other-hardware", 0.7)]
+        path,
+        [entry(device, key, 0.6), entry(device, "other-hardware", 0.7)],
+        baseline,
     )
     expected = json.loads(path.read_text())["fixture/model"]["answers"]
     assert expected[generic] == values(0.5)
@@ -315,3 +319,24 @@ def test_explicit_model_still_attempts_the_unserved_package(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["golden_answers.py", "vllm-sr/vela3-fast-vision"])
     recorder.main()
     assert seen == [("vllm-sr/vela3-fast-vision", None)]
+
+
+@pytest.mark.parametrize(
+    "device,key", [("cuda:0", "cuda:sm_89"), ("rocm:0", "rocm:gfx942")]
+)
+def test_a_gpu_records_its_hardware_key_alone(tmp_path, device, key):
+    """A class reference is compared with every other architecture of that class."""
+    path = tmp_path / "goldens.json"
+    recorder.record(path, [entry(device, key, 0.5)])
+    recorded = json.loads(path.read_text())["fixture/model"]["answers"]
+    assert set(recorded) == {key}
+
+
+def test_a_gpu_re_recording_keeps_the_hardware_key_it_answers_as(tmp_path):
+    """Its answers match the class baseline, which must not displace the entry again."""
+    path = tmp_path / "goldens.json"
+    recorder.record(path, [entry("cuda:0", "cuda:sm_89", 0.5)], True)
+    assert set(json.loads(path.read_text())["fixture/model"]["answers"]) == {"cuda"}
+    recorder.record(path, [entry("cuda:0", "cuda:sm_89", 0.5)])
+    recorded = json.loads(path.read_text())["fixture/model"]["answers"]
+    assert recorded == {"cuda": values(0.5), "cuda:sm_89": values(0.5)}
