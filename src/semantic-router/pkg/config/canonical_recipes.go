@@ -160,7 +160,7 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 		if err := validatePluginLayer(path+".plugins", recipe.Plugins); err != nil {
 			return err
 		}
-		if err := validateCanonicalDecisions(path, recipe.Decisions, aliases, cards); err != nil {
+		if err := validateCanonicalDecisions(path, recipe.Decisions, aliases, cards, canonicalProviderDefaults(canonical.Providers).DefaultModel); err != nil {
 			return err
 		}
 	}

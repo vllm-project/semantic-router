@@ -463,7 +463,7 @@ func validateCanonicalReasoning(modelName string, reasoning *CanonicalReasoning)
 	return nil
 }
 
-func validateCanonicalDecisions(path string, decisions []Decision, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel) error {
+func validateCanonicalDecisions(path string, decisions []Decision, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel, defaultModel string) error {
 	decisionNames := make(map[string]bool, len(decisions))
 	for _, decision := range decisions {
 		if decision.Name != "" {
@@ -476,9 +476,35 @@ func validateCanonicalDecisions(path string, decisions []Decision, aliases map[s
 		if err := validateCanonicalDecisionModelRefs(path, decision, aliases, cards); err != nil {
 			return err
 		}
+		if !canonicalDecisionNamesAModel(decision) && len(aliases) > 0 &&
+			(defaultModel == "" || !canonicalDefaultModelExists(defaultModel, aliases, cards)) {
+			// The routing runtime falls back to the default model when a
+			// decision names none, so a document that declares models has to
+			// declare the fallback too. A routing-only fragment declares none.
+			return fmt.Errorf(
+				"%s.decisions[%s]: names no model and providers.defaults.model %q is not declared",
+				path, decision.Name, defaultModel,
+			)
+		}
 	}
 
 	return nil
+}
+
+// canonicalDecisionNamesAModel reports whether a decision answers with a model
+// of its own: a modelRef, or an answer that needs none. A fast_response refusal
+// answers with its message and a route answers with a declared destination, so
+// neither reaches the default-model fallback. A candidate iteration's models
+// are not one of these: the runtime resolves those turns through the default
+// model, so a decision that names only iterations still needs the fallback.
+func canonicalDecisionNamesAModel(decision Decision) bool {
+	if len(decision.ModelRefs) > 0 {
+		return true
+	}
+	if decision.GetFastResponseConfig() != nil {
+		return true
+	}
+	return decision.Action != nil && decision.Action.Type == DecisionActionRoute
 }
 
 // validateCanonicalDecisionModelRefs checks the models a decision names: its
@@ -501,10 +527,10 @@ func validateCanonicalModelRefs(path string, refs []ModelRef, aliases map[string
 		if modelRef.Model == "" {
 			continue
 		}
-		if len(aliases) > 0 {
-			if _, ok := aliases[modelRef.Model]; !ok && !aliasLoRAExists(modelRef.Model, aliases, cards) {
-				return fmt.Errorf("%s[%s] references unknown model %q", path, modelRef.Model, modelRef.Model)
-			}
+		if _, ok := aliases[modelRef.Model]; !ok && len(aliases) > 0 && !aliasLoRAExists(modelRef.Model, aliases, cards) {
+			// A document that declares models names them, but a routing-only
+			// fragment references models the document it lands in declares.
+			return fmt.Errorf("%s[%s] references unknown model %q", path, modelRef.Model, modelRef.Model)
 		}
 		if modelRef.LoRAName == "" {
 			continue
