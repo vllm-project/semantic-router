@@ -31,14 +31,11 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if plugin == nil {
 		return responseBody, nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(requestCtx)
 	if err != nil {
 		return responseBody, err
 	}
-	format := requestCtx.SourceFormat
-	if format == "" {
-		format = llmprotocol.OpenAIChatV1
-	}
+	format := contextRecoveryUpstreamFormat(requestCtx)
 	decoded, err := engine.TranslateResponse(format, format, responseBody, nil)
 	if err != nil {
 		return responseBody, fmt.Errorf("decode context recovery response: %w", err)
@@ -184,7 +181,7 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if model == "" {
 		model = strings.TrimSpace(requestCtx.RequestModel)
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(requestCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -233,10 +230,7 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	// recovery does.
 	decoded.Response.Model = firstNonEmpty(decoded.Response.Model, initial.Model, requestCtx.RequestModel)
 	decoded.Response.Generation++
-	format := requestCtx.SourceFormat
-	if format == "" {
-		format = llmprotocol.OpenAIChatV1
-	}
+	format := contextRecoveryUpstreamFormat(requestCtx)
 	encoded, err := engine.EncodeResponse(format, decoded.Response, llmprotocol.Envelope{})
 	if err != nil {
 		return nil, fmt.Errorf("encode context recovery followup: %w", err)
@@ -369,14 +363,11 @@ func (r *OpenAIRouter) redactContextRecoveryToolCalls(responseBody []byte, ctx *
 	if ctx == nil {
 		return responseBody
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return responseBody
 	}
-	format := ctx.SourceFormat
-	if format == "" {
-		format = llmprotocol.OpenAIChatV1
-	}
+	format := contextRecoveryUpstreamFormat(ctx)
 	decoded, err := engine.TranslateResponse(format, format, responseBody, nil)
 	if err != nil {
 		return responseBody
@@ -411,4 +402,18 @@ func (r *OpenAIRouter) redactContextRecoveryToolCalls(responseBody []byte, ctx *
 		return responseBody
 	}
 	return encoded.Body
+}
+
+// contextRecoveryUpstreamFormat is the backend wire of the body under recovery
+// or redaction. The Chat follow-up hop stays OpenAIChatV1; this format is used
+// for the initial upstream decode, the encode that handleNonStreamingResponseBody
+// later translates to the client, and redaction of that same upstream body.
+func contextRecoveryUpstreamFormat(ctx *RequestContext) llmprotocol.WireFormat {
+	if ctx != nil && ctx.TargetFormat != "" {
+		return ctx.TargetFormat
+	}
+	if ctx != nil && ctx.SourceFormat != "" {
+		return ctx.SourceFormat
+	}
+	return llmprotocol.OpenAIChatV1
 }
