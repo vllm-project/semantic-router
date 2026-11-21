@@ -1,0 +1,169 @@
+{
+  "cli_version": "0.5.0 (checkout CLI)",
+  "comparisons": {
+    "router_base": {
+      "cost_saving_percent": null,
+      "losses": 0,
+      "paired_cases": 2,
+      "quality_delta": 0.0,
+      "quality_delta_ci95": [
+        -1,
+        1
+      ],
+      "router_run_id": "run-2a1c73fb299543daba27",
+      "single_reference_run_id": "run-9533e461a7104c51ba2e",
+      "ties": 2,
+      "wins": 0
+    },
+    "router_candidate": {
+      "cost_saving_percent": null,
+      "losses": 0,
+      "paired_cases": 2,
+      "quality_delta": 0.0,
+      "quality_delta_ci95": [
+        -1,
+        1
+      ],
+      "router_run_id": "run-2a5fdfe4b440490a9642",
+      "single_reference_run_id": "run-9533e461a7104c51ba2e",
+      "ties": 2,
+      "wins": 0
+    }
+  },
+  "configs": {
+    "base": {
+      "active_runtime_hash": "b2b40e41dc2c6d2ca6a736a957bc4d90ac2ce2afa660e032e31e10405723d352",
+      "code_signal_threshold": 0.5,
+      "file_sha256": "be879c750b842c758ca7f43f6def0b7dc8bbe2097b2917ef2cbf7757ec5f50be",
+      "fixture": "local-ollama-base.yaml"
+    },
+    "candidate": {
+      "active_runtime_hash": "17b95ddc357e7d2e0a2534f323391dc1d80495ad2fde6fd85ed3ac28b67d24a4",
+      "code_signal_threshold": 0.99,
+      "file_sha256": "e5021b344ea7ab4935c73445d8e301071e543bde58f7f1d97f5a71320b270a37",
+      "fixture": "local-ollama-candidate.yaml"
+    }
+  },
+  "dataset": {
+    "case_ids": [
+      "mmlu-pro/capital-france",
+      "mmlu-pro/sum-2-plus-2"
+    ],
+    "custom_subset": true,
+    "fixture": "two-case-mcq.jsonl",
+    "prepared_sha256": "0da687fda6ca748a07a0b0acc555f75f5f8d61976e418adb30391688e054fe20",
+    "profile": "smoke",
+    "source_sha256": "b8a1eee4958fd029a8dab87e88ba1a1e9d22877bf90701ec688475c9c47b2ffc",
+    "split": "dev"
+  },
+  "date_utc": "2026-11-16",
+  "environment": {
+    "answer_backend": "local Ollama qwen3:8b",
+    "decision_model": "vllm-sr/Vela-2.0-0.3B",
+    "decision_model_revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+    "platform": "macOS arm64 with Colima CPU VM"
+  },
+  "failed_attempts": [
+    {
+      "cause": "debug trace disabled, so the config-hash acknowledgement was unavailable",
+      "excluded_from_comparison": true,
+      "failed_cells": 1,
+      "mode": "live",
+      "run_id": "run-92abf93e2e694066976c"
+    }
+  ],
+  "limits": {
+    "concurrency": 1,
+    "cost_policy": "capability_only",
+    "max_output_tokens": 512,
+    "max_run_seconds": 600
+  },
+  "notes": [
+    "Run IDs identify a local disposable sr-bench store; they are not public service URLs.",
+    "These are two synthetic development cases; the result is a mechanics smoke, not a quality or savings claim.",
+    "The initial live attempt failed because debug trace was disabled and the config-hash acknowledgement was missing; it is excluded from the compatible comparisons."
+  ],
+  "router_image_digest": "sha256:e6786409758befb7cf72b0d305ff9a86f126a527c384f73640af5a0e4015fc15",
+  "routing_failure_diagnosis": {
+    "first_failing_boundary": "upstream answer delivery exhausted the output cap; route selection succeeded",
+    "first_probe": {
+      "delivery_assertion": false,
+      "final_text_present": false,
+      "finish_reason": "length",
+      "http_status": 200,
+      "max_completion_tokens": 128,
+      "response_path": "upstream",
+      "selected_decision": "code-route",
+      "selected_model": "qwen3:8b"
+    },
+    "initial_active_config_hash": "4e02170d3ae47f29415dbb93a66e892ac5cc8480e84201563e1702adac1d8b5d",
+    "recovery": "Freeze the same request, inspect the reasoning-only truncated response, then retry with a reviewed 512-token cap.",
+    "request_sha256": "984c04a07b63ac4d6f311fc8117d6d501749447e331e9a703feaed6dbe5fddc9",
+    "retry": {
+      "delivery_assertion": true,
+      "final_text_present": true,
+      "finish_reason": "stop",
+      "http_status": 200,
+      "max_completion_tokens": 512,
+      "response_path": "upstream",
+      "selected_decision": "code-route",
+      "selected_model": "qwen3:8b"
+    }
+  },
+  "runs": {
+    "router_base": {
+      "completed": 2,
+      "config_hash": "b2b40e41dc2c6d2ca6a736a957bc4d90ac2ce2afa660e032e31e10405723d352",
+      "correct": 2,
+      "cost_complete": false,
+      "decisions": {
+        "code-route": 2
+      },
+      "failed": 0,
+      "graded": 2,
+      "plan_sha256": "d7b04f74ce4433fad83c2eb195afc86c1e23f233e211b6f0d9d6b7aeb58fc81b",
+      "planned": 2,
+      "run_id": "run-2a1c73fb299543daba27",
+      "selected_models": {
+        "qwen3:8b": 2
+      },
+      "status": "completed"
+    },
+    "router_candidate": {
+      "completed": 2,
+      "config_hash": "17b95ddc357e7d2e0a2534f323391dc1d80495ad2fde6fd85ed3ac28b67d24a4",
+      "correct": 2,
+      "cost_complete": false,
+      "decisions": {
+        "default-route": 2
+      },
+      "failed": 0,
+      "graded": 2,
+      "plan_sha256": "6083c74747daabad18cabc5226463c6e34b00fec1a9134d49eceeb32c295d9ee",
+      "planned": 2,
+      "run_id": "run-2a5fdfe4b440490a9642",
+      "selected_models": {
+        "qwen3:8b": 2
+      },
+      "status": "completed"
+    },
+    "single": {
+      "completed": 2,
+      "config_hash": null,
+      "correct": 2,
+      "cost_complete": false,
+      "decisions": {},
+      "failed": 0,
+      "graded": 2,
+      "plan_sha256": "b15733eca87da1bf54b24f5bc480e186c306291b1463aa32ba6cca3c1884e9ec",
+      "planned": 2,
+      "run_id": "run-9533e461a7104c51ba2e",
+      "selected_models": {
+        "qwen3:8b": 2
+      },
+      "status": "completed"
+    }
+  },
+  "schema": "vllm-sr-agent-skills-local-smoke-v1",
+  "source_commit": "be222e2758db67fcba9be90893e0611921d93800"
+}
