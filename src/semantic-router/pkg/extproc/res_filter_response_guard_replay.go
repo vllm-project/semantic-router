@@ -120,6 +120,13 @@ func (run *responseGuardRun) replayOutcomes(ctx *RequestContext, now time.Time) 
 		}
 		outcomes = append(outcomes, outcome)
 	}
+	// An alternative's outcomes name its choice, the index a Chat client sees.
+	for i, alternative := range run.alternatives {
+		for _, outcome := range alternative.replayOutcomes(ctx, now) {
+			outcome.Metadata["choice"] = strconv.Itoa(i + 1)
+			outcomes = append(outcomes, outcome)
+		}
+	}
 	return outcomes
 }
 
