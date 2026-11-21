@@ -71,7 +71,7 @@ its own protocol, and Router Replay records the request as refused; see
 | `stage` | `request` (default) or `response`, which reads the model's answer |
 | `input.history` | Also read the earlier user turns |
 | `input.tool_results` | Also read the tool results returned in the current turn. Off by default |
-| `on_unscanned` | What the rule reports when only some windows of a long input were read: `best_effort` (the default), `match`, `no_match` or `unknown` |
+| `on_unscanned` | What the rule reports when it cannot read all of its input: `best_effort` (the default), `match`, `no_match` or `unknown` |
 | `min_coverage` | With `best_effort`, the share of the windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
 | `on_unknown` | Request stage: what the rule reports when its model gives no answer, `match` (the default) or `no_match` |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
@@ -84,8 +84,7 @@ assistant message. A system message inside the conversation, which Claude Code
 inserts after the user's message or a tool result, does not end the turn. With
 `input.tool_results`, it also reads the textual tool results of the turn,
 where a fetched page or file can carry instructions; without it, the default,
-a turn that holds only tool results, as an agent's tool loop does, or only a
-picture, gives the rule nothing to read, and it does not match. With
+a turn that holds only tool results gives the rule nothing to read. With
 `input.history`, it also reads the earlier user text. System and developer
 instructions and assistant replies are not read as attack evidence. It also
 reads what `global.router.routing_input` removes from the routing text, so a
@@ -113,8 +112,14 @@ found an attack, `on_unscanned` decides:
 - `no_match` does not match;
 - `unknown` leaves the rule unknown, for `on_unknown`.
 
-A window read that found an attack matches whatever `on_unscanned` says: the
-windows not read cannot undo it. A request routed after a partial read carries
+Non-text content in the user turns or tool results the rule reads is also
+unscanned, even if the model read all the accompanying text. `on_unscanned`
+applies even when there is no text to send to the model; `best_effort` then
+does not match. Content outside the rule's configured input does not affect
+its coverage.
+
+A read that found an attack matches whatever `on_unscanned` says: unread
+content cannot undo it. A request routed after a partial windowed scan carries
 `scan_partial` in `x-vsr-warnings`.
 
 ### When the model gives no answer
