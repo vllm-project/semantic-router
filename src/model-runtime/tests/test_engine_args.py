@@ -554,15 +554,56 @@ def test_runtime_health_retains_preload_labels_for_same_package(
             )
         )
     )
-    runtime.start(background=False)
     try:
         assert [served.label for served in runtime.served] == [
             qwen3_package.name,
             package_copy.name,
         ]
-        health = runtime.health.describe()
-        assert set(health.keys()) == {qwen3_package.name, package_copy.name}
+        # IDs are fixed from config before serving starts and do not change as models load.
+        assert [served.served_id for served in runtime.served] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        assert [card["id"] for card in runtime.model_cards()] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
 
+        # Progressive loading: load the first model alone while the second copy is still
+        # loading in the background. The advertised ID must not switch to the package ID.
+        runtime.served[0].load()
+        assert runtime.served[0].model is not None
+        assert runtime.served[1].model is None
+        assert [served.served_id for served in runtime.served] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        assert [card["id"] for card in runtime.model_cards()] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        client = TestClient(create_app(runtime))
+        response = client.get("/v1/models")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert [item["id"] for item in data] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        assert runtime.lookup(data[0]["id"]) is runtime.served[0]
+
+        shared_package_id = runtime.served[0].model.info.id
+        with pytest.raises(RuntimeServiceError) as exc_info:
+            runtime.lookup(shared_package_id)
+        assert exc_info.value.code == "model_not_found"
+
+        # Now load the second copy: IDs and lookups must not mutate.
+        runtime.served[1].load()
+        assert runtime.served[1].model is not None
+        assert [served.served_id for served in runtime.served] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
         cards = runtime.model_cards()
         assert [card["id"] for card in cards] == [
             qwen3_package.name,
@@ -571,7 +612,6 @@ def test_runtime_health_retains_preload_labels_for_same_package(
         for card, served in zip(cards, runtime.served, strict=True):
             assert runtime.lookup(card["id"]) is served
 
-        client = TestClient(create_app(runtime))
         response = client.get("/v1/models")
         assert response.status_code == 200
         data = response.json()["data"]
@@ -582,8 +622,6 @@ def test_runtime_health_retains_preload_labels_for_same_package(
         for item, served in zip(data, runtime.served, strict=True):
             assert runtime.lookup(item["id"]) is served
 
-        assert runtime.served[0].model is not None
-        shared_package_id = runtime.served[0].model.info.id
         with pytest.raises(RuntimeServiceError) as exc_info:
             runtime.lookup(shared_package_id)
         assert exc_info.value.code == "model_not_found"
