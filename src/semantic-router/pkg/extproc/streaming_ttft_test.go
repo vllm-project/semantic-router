@@ -37,6 +37,48 @@ func TestStreamingTTFTIgnoresKeepaliveFrames(t *testing.T) {
 	}
 }
 
+func TestStreamingTTFTWaitsForNonEmptyContent(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		format llmprotocol.WireFormat
+		start  string
+		delta  string
+	}{
+		{
+			name: "responses", format: llmprotocol.OpenAIResponsesV1,
+			start: `data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","model":"general","status":"in_progress","output":[]}}` + "\n\n" +
+				`data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"type":"message","id":"msg_1","role":"assistant","status":"in_progress","content":[]}}` + "\n\n" +
+				`data: {"type":"response.content_part.added","sequence_number":2,"output_index":0,"content_index":0,"item_id":"msg_1","part":{"type":"output_text","text":"","annotations":[]}}` + "\n\n",
+			delta: `data: {"type":"response.output_text.delta","sequence_number":3,"output_index":0,"content_index":0,"item_id":"msg_1","delta":"hello"}` + "\n\n",
+		},
+		{
+			name: "anthropic", format: llmprotocol.AnthropicMessagesV1,
+			start: `data: {"type":"message_start","message":{"id":"msg_1","model":"general","usage":{"input_tokens":1,"output_tokens":0}}}` + "\n\n" +
+				`data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}` + "\n\n",
+			delta: `data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"considering"}}` + "\n\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := &OpenAIRouter{Config: &config.RouterConfig{}}
+			ctx := &RequestContext{
+				Headers: map[string]string{}, SourceFormat: tc.format, TargetFormat: tc.format,
+				RequestModel: "general", ProcessingStartTime: time.Now().Add(-time.Second),
+			}
+			router.handleSemanticStreamingResponseBody([]byte(tc.start), false, ctx)
+			if ctx.StreamingAborted || ctx.SemanticStreamState == nil || len(ctx.SemanticStreamState.items) != 1 {
+				t.Fatal("the stream did not decode its opening item")
+			}
+			if ctx.TTFTRecorded {
+				t.Fatal("the empty start recorded TTFT")
+			}
+			router.handleSemanticStreamingResponseBody([]byte(tc.delta), false, ctx)
+			if ctx.StreamingAborted || !ctx.TTFTRecorded {
+				t.Fatal("the first content delta did not record TTFT")
+			}
+		})
+	}
+}
+
 // A body that carries both the answer and its end settles the stream in one
 // read: the turn it records must already know the latency.
 func TestStreamingTTFTSurvivesSingleReadSettle(t *testing.T) {

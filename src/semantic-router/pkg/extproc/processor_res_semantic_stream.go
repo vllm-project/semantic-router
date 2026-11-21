@@ -385,10 +385,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 		return
 	}
 	for _, event := range events {
-		switch event.Type {
-		case llmprotocol.EventOutputItemStarted, llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta, llmprotocol.EventToolCallDelta:
-			state.sawContent = true
-		}
+		state.sawContent = state.sawContent || streamEventCarriesContent(event)
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
 		}
@@ -489,6 +486,38 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			state.terminal = true
 			state.failed = event.Error
 		}
+	}
+}
+
+// streamEventCarriesContent recognizes the first model output for TTFT.
+func streamEventCarriesContent(event llmprotocol.Event) bool {
+	switch {
+	case event.Delta != "":
+		return true
+	case event.ToolCall != nil:
+		call := event.ToolCall
+		return call.ID != "" || call.Name != "" || call.Arguments != ""
+	case event.GeneratedImage != nil:
+		return event.GeneratedImage.PartialImage != ""
+	default:
+		return streamBlockCarriesContent(event.Content)
+	}
+}
+
+func streamBlockCarriesContent(block *llmprotocol.Content) bool {
+	if block == nil {
+		return false
+	}
+	switch block.Kind {
+	case llmprotocol.ContentReasoning:
+		return block.Text != "" || block.ReasoningDetail != nil && block.ReasoningDetail.PayloadBytes() > 0
+	case llmprotocol.ContentServerTool:
+		return len(block.Raw) > 0
+	case llmprotocol.ContentGeneratedImage:
+		image := block.GeneratedImage
+		return image != nil && image.Result != nil && *image.Result != ""
+	default:
+		return block.Text != ""
 	}
 }
 
