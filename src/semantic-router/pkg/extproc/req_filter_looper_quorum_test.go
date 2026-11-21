@@ -163,6 +163,41 @@ func TestHandleServedFallbackPersistsOutcomeAndRoutingFacts(t *testing.T) {
 	assert.NotContains(t, body, `"fusion"`)
 }
 
+func TestHandleEmptyFinalFusionJudgeReturnsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		var payload struct {
+			Model string `json:"model"`
+		}
+		require.NoError(t, json.NewDecoder(request.Body).Decode(&payload))
+		switch payload.Model {
+		case "panel-a":
+			writeFusionReplayCompletion(w, payload.Model, []map[string]interface{}{{
+				"index": 0, "message": map[string]interface{}{"role": "assistant", "content": "panel answer"}, "finish_reason": "stop",
+			}}, map[string]int64{"prompt_tokens": 4, "completion_tokens": 2, "total_tokens": 6})
+		case "judge":
+			writeFusionReplayCompletion(w, payload.Model, []map[string]interface{}{{
+				"index": 0, "message": map[string]interface{}{"role": "assistant", "content": ""}, "finish_reason": "stop",
+			}}, map[string]int64{"prompt_tokens": 8, "completion_tokens": 0, "total_tokens": 8})
+		default:
+			http.Error(w, "unexpected model", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	router, requestContext, request := quorumFallbackRouter(server.URL)
+	decision := quorumFallbackDecision()
+	decision.Algorithm.Fusion.AnalysisModels = []string{"panel-a"}
+	decision.Algorithm.Fusion.AnalysisMode = config.FusionAnalysisModeNone
+	decision.Algorithm.Fusion.MinSuccessfulResponses = 1
+
+	response, err := router.handleLooperExecution(context.Background(), request, decision, requestContext)
+	require.NoError(t, err)
+	require.NotNil(t, response.GetImmediateResponse())
+	assert.EqualValues(t, 500, response.GetImmediateResponse().GetStatus().GetCode())
+	assert.Contains(t, string(response.GetImmediateResponse().GetBody()), "empty final answer")
+	assert.NotContains(t, string(response.GetImmediateResponse().GetBody()), `"choices"`)
+}
+
 // When protocol translation fails after a fallback is ready, the caller gets a
 // 502 and the evidence must still be persisted. Recording the outcome without
 // starting Replay would silently persist nothing.

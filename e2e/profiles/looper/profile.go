@@ -61,6 +61,7 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"looper-ratings-happy-path",
 		"looper-fusion-analysis-modes",
+		"looper-fusion-empty-final-judge",
 		"looper-fusion-synthesis-trace",
 		"looper-fusion-usable-quorum",
 		"looper-escalate-telemetry",

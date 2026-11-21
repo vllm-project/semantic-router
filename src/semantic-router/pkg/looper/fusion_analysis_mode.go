@@ -79,6 +79,9 @@ func (l *FusionLooper) runFusionSingleJudge(
 	applyJSONActionOutputContract(req.OutputContractSpec, resp, panelResponses)
 	applyReferenceSelectionOutputContract(req.OutputContractSpec, resp, panelResponses)
 	applyFinalOutputContract(req.OutputContractSpec, resp)
+	if err := validateFusionFinalResponse(resp); err != nil {
+		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
+	}
 	return resp, nil
 }
 
