@@ -248,8 +248,23 @@ func scanSource(state modelservice.Request, size int) (string, int, func(string)
 			return modelservice.Request{Parts: parts, Images: state.Images, Videos: state.Videos}
 		}
 	}
-	names := make([]string, 0, len(state.Parts))
-	for name := range state.Parts {
+	names := scanPartNames(state.Parts)
+	texts := make([]string, len(names))
+	for index, name := range names {
+		texts[index] = state.Parts[name]
+	}
+	return strings.Join(texts, scanPartSeparator), size, func(window string) modelservice.Request {
+		return modelservice.Request{State: window, Images: state.Images, Videos: state.Videos}
+	}
+}
+
+const scanPartSeparator = "\n\n"
+
+// scanPartNames orders named parts as the scan reads them, with the current
+// request last.
+func scanPartNames(parts map[string]string) []string {
+	names := make([]string, 0, len(parts))
+	for name := range parts {
 		names = append(names, name)
 	}
 	slices.SortFunc(names, func(a, b string) int {
@@ -261,13 +276,7 @@ func scanSource(state modelservice.Request, size int) (string, int, func(string)
 		}
 		return strings.Compare(a, b)
 	})
-	texts := make([]string, len(names))
-	for index, name := range names {
-		texts[index] = state.Parts[name]
-	}
-	return strings.Join(texts, "\n\n"), size, func(window string) modelservice.Request {
-		return modelservice.Request{State: window, Images: state.Images, Videos: state.Videos}
-	}
+	return names
 }
 
 // scanWindowsOf cuts text into windows of at most size bytes, each starting
