@@ -146,6 +146,7 @@ export interface EvaluationRecordConfig {
 export interface ProviderModelConfig {
   name: string
   catalog?: string
+  deployment?: string
   reasoning?: ModelReasoningConfig
   provider_model_id?: string
   api_format?: string
