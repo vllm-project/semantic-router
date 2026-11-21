@@ -28,18 +28,22 @@ capture limits that match the data you are allowed to keep.
 ### Keep records across restarts
 
 Without a store in `global.services.router_replay`, Replay uses the `file`
-store. It writes each record once, when the request ends (completed, failed or
-aborted), to `.vllm-sr/router-replay.jsonl` in the configuration file's
-directory, a file only its owner can read, and reads the records back when the
-Router starts, so the **Requests** page keeps its history across restarts and
-configuration reloads. `vllm-sr serve` mounts that directory from the host, so the file
-outlives the Router container.
+store. Requests appear immediately on the **Requests** page. When a request
+ends (completed, failed or aborted), a background writer batches it into
+`.vllm-sr/router-replay.jsonl` beside the configuration file. Only the file's
+owner can read it. Router generations share this store across configuration
+reloads. `vllm-sr serve` mounts the directory from the host, so the next Router
+can read the history when it starts.
 
-- **In progress.** A request still in progress when the Router crashes is not
-  in the file. What reaches a record after its request ends, such as a late
-  outcome or a review, is written when the file is next rewritten: when the
-  Router stops, and whenever the file reaches twice as many lines as the
-  records it keeps.
+- **Persistence.** A graceful shutdown writes the retained, ended records,
+  including late outcomes and reviews. A crash can lose in-progress requests,
+  recent completions still waiting to be written, and updates since the last
+  rewrite.
+- **Slow or unavailable storage.** Requests continue recording in memory.
+  When the pending batch fills, the writer replaces the file with a snapshot
+  of the retained, ended records. Records evicted before that snapshot can
+  be lost. The writer also rewrites at twice the retention limit and retries
+  from memory after a write error.
 - **Size.** The file keeps at most 1,000 records, or `max_records` when that
   is lower. A record of routing data takes about 8 KB, so the file stays near
   8 MB and reaches about 16 MB just before a rewrite. The `memory` backend
