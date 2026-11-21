@@ -31,7 +31,7 @@ func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 			t.Fatalf("native question order/types changed: %s", body)
 		}
 		return 200, []byte(`{"model":"private-served","answers":{"choice":{"choice":"yes"}},"spans":{},"sets":{},"usage":{"input_tokens":4},"meta":{"dtype":"float32"}}`), nil
-	})
+	}, ClientAuth{})
 	for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
 		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"vllm-sr/test","state":"input","questions":{"span":{"type":"classification"},"set":{"type":"set"},"choice":{"type":"choice"},"score":{"type":"score"},"noul":{"type":"noul"}}}`))
 		request.Header.Set("Authorization", "Bearer test-key")
@@ -69,7 +69,7 @@ func TestPublicSystemOneChecksOptionsBeforeAModelReadsThem(t *testing.T) {
 	handler := Handler(cfg, listener, func(_ context.Context, _ string, body json.RawMessage) (int, []byte, error) {
 		forwarded = append(forwarded, string(body))
 		return 200, []byte(`{"model":"private","answers":{},"usage":{"input_tokens":1}}`), nil
-	})
+	}, ClientAuth{})
 	post := func(body string) (int, string, string) {
 		response := httptest.NewRecorder()
 		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(body)))
@@ -124,12 +124,12 @@ func TestPublicDiscoveryAndListenerSelectionFailClosed(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/v1/systemone/models", nil)
 	request.Header.Set("Api-Key", "b")
 	response := httptest.NewRecorder()
-	Handler(cfg, selected, nil)(response, request)
+	Handler(cfg, selected, nil, ClientAuth{})(response, request)
 	if response.Code != 200 || strings.Contains(response.Body.String(), "private") || strings.Contains(response.Body.String(), "secret") || strings.Contains(response.Body.String(), "public-a") {
 		t.Fatal(response.Body.String())
 	}
 	response = httptest.NewRecorder()
-	Handler(cfg, nil, nil)(response, request)
+	Handler(cfg, nil, nil, ClientAuth{})(response, request)
 	if response.Code != 404 {
 		t.Fatal("unpublished listener exposed SystemOne")
 	}
@@ -146,7 +146,7 @@ func TestTheListingCarriesTheListenersVSRProfile(t *testing.T) {
 		for _, vsr := range []*config.VSRProfile{profile, nil} {
 			listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: schema, Models: []string{"vllm-sr/vela3-lite"}, VSR: vsr}}}
 			response := httptest.NewRecorder()
-			Handler(cfg, listener, nil)(response, httptest.NewRequest(http.MethodGet, "/v1/systemone/models", nil))
+			Handler(cfg, listener, nil, ClientAuth{})(response, httptest.NewRequest(http.MethodGet, "/v1/systemone/models", nil))
 			var listed struct {
 				VSR map[string]any `json:"vsr"`
 			}
@@ -170,7 +170,7 @@ func TestPublicDiscoveryListsTheQuestionTypesARemoteDeploymentReads(t *testing.T
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/vela3-fast"}}
 	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/vela3-fast"}}}}
-	server := httptest.NewServer(Handler(cfg, listener, nil))
+	server := httptest.NewServer(Handler(cfg, listener, nil, ClientAuth{}))
 	defer server.Close()
 	client := &config.RouterConfig{}
 	client.ModelDeployments = map[string]config.ModelDeployment{"engine": {Provider: config.SystemOneProvider, Schema: "vllm-sr/4.0", Endpoint: server.URL + "/v1/systemone", Model: "vllm-sr/vela3-fast"}}
@@ -191,7 +191,7 @@ func TestPublicDiscoveryListsTheModalitiesARemoteDeploymentReads(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/d3-ultra"}}
 	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/d3-ultra"}}}}
-	server := httptest.NewServer(Handler(cfg, listener, nil))
+	server := httptest.NewServer(Handler(cfg, listener, nil, ClientAuth{}))
 	defer server.Close()
 	client := &config.RouterConfig{}
 	client.ModelDeployments = map[string]config.ModelDeployment{"engine": {Provider: config.SystemOneProvider, Schema: "vllm-sr/4.0", Endpoint: server.URL + "/v1/systemone", Model: "vllm-sr/d3-ultra"}}
@@ -236,7 +236,7 @@ func TestPublicSystemOneRequiresNonemptyCredentialsOnProtectedListeners(t *testi
 					handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 						calls++
 						return http.StatusOK, []byte(`{"answers":{}}`), nil
-					})
+					}, ClientAuth{})
 					method := http.MethodPost
 					if path == "/v1/systemone/models" {
 						method = http.MethodGet
@@ -266,7 +266,7 @@ func TestPublicNativeBoundsAndSanitizesFailures(t *testing.T) {
 	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 		return 429, []byte(`{"error":"/private/model/path"}`), io.ErrUnexpectedEOF
-	})
+	}, ClientAuth{})
 	response := httptest.NewRecorder()
 	handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
 	if response.Code != 429 || strings.Contains(response.Body.String(), "private") {
@@ -319,7 +319,7 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 	} {
 		handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 			return test.status, []byte(test.body), nil
-		})
+		}, ClientAuth{})
 		response := httptest.NewRecorder()
 		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
 		var got struct {
@@ -352,7 +352,7 @@ func TestPublicNativeMediaRejectionsTakeTheDocumentedCodes(t *testing.T) {
 		body := `{"error":{"code":"` + test.code + `","reason":"` + test.reason + `","limit":100,"message":"images[0]: /private/models/test"}}`
 		handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 			return test.status, []byte(body), nil
-		})
+		}, ClientAuth{})
 		response := httptest.NewRecorder()
 		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
 		var got struct {
@@ -385,7 +385,7 @@ func TestPublicNativeRequestTokenRefusalsCarryTheLimit(t *testing.T) {
 	} {
 		handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 			return http.StatusBadRequest, []byte(test.body), nil
-		})
+		}, ClientAuth{})
 		response := httptest.NewRecorder()
 		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
 		var got struct {
@@ -430,7 +430,7 @@ func TestPublicNativeWaitFollowsTheRequestDeadline(t *testing.T) {
 			deadline, _ := ctx.Deadline()
 			wait = time.Until(deadline)
 			return 200, []byte(`{"model":"private","answers":{"q":{"type":"noul","noul":0.5}}}`), nil
-		})
+		}, ClientAuth{})
 		response := httptest.NewRecorder()
 		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"`+test.options+`}`)))
 		if response.Code != 200 || wait > test.want || wait < test.want-time.Second {
@@ -445,7 +445,7 @@ func TestPublicNativeDeadlineSaysHowToWaitLonger(t *testing.T) {
 	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 		return 0, nil, context.DeadlineExceeded
-	})
+	}, ClientAuth{})
 	for options, want := range map[string]string{
 		``:                                 "no answer within 30s; options.deadline_ms waits longer, up to this listener's systemone.max_deadline_ms (600000 ms)",
 		`,"options":{"long_context":true}`: "no answer within 10m0s, this listener's systemone.max_deadline_ms",
@@ -484,7 +484,7 @@ func TestPublicNativeRefusalsTellClientsWhenToRetry(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 				return test.status, []byte(test.body), test.err
-			})
+			}, ClientAuth{})
 			response := httptest.NewRecorder()
 			handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"}`)))
 			var got struct {

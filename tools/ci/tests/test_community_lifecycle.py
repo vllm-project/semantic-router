@@ -609,6 +609,8 @@ class FakePullRequestApi:
         self.issues = {int(item["number"]): item for item in (issues or [])}
         self.listings = listings or {}
         self.requests: list[tuple[str, str]] = []
+        self.writes: list[tuple[str, str, dict | None]] = []
+        self.batched_merge_states: dict[int, str] = {}
         self.fetched: list[int] = []
         self.added: set[str] = set()
         self.removed: set[str] = set()
@@ -634,6 +636,8 @@ class FakePullRequestApi:
         self.requests.append((method, endpoint))
         if endpoint == "graphql":
             return self.graphql(payload)
+        if method != "GET":
+            self.writes.append((method, endpoint, payload))
         path, _, query = endpoint.partition("?")
         parts = path.split("/")
         if query and parts[3] == "issues" and parts[5:] == ["comments"]:
@@ -687,6 +691,29 @@ class FakePullRequestApi:
         return None
 
     def graphql(self, payload):
+        if "number" not in payload["variables"]:
+            nodes = {}
+            for alias, number_text in re.findall(
+                r"\b(pr\d+): pullRequest\(number: (\d+)\)", payload["query"]
+            ):
+                number = int(number_text)
+                if number not in self.pull_requests:
+                    nodes[alias] = None
+                    continue
+                response = self.graphql({"variables": {"number": number}})
+                node = response["data"]["repository"]["pullRequest"]
+                pr = self.pull_requests[number]
+                node.update(
+                    state=pr["state"].upper(),
+                    isDraft=pr["draft"],
+                    updatedAt=pr.get("updated_at"),
+                    headRefOid=(pr.get("head") or {}).get("sha"),
+                )
+                if number in self.batched_merge_states:
+                    node["mergeStateStatus"] = self.batched_merge_states[number]
+                nodes[alias] = node
+            return {"data": {"repository": nodes}}
+
         pull_request = self.pull_requests[payload["variables"]["number"]]
         nodes = [{"number": number} for number in pull_request.get("closes", ())]
         signals = pull_request.get("signals", {})
@@ -737,6 +764,8 @@ class PullRequestReconciliationTests(unittest.TestCase):
     def pull_request(self, **overrides):
         item = {
             "number": 7,
+            "title": "[Feature] Update routing",
+            "body": "",
             "state": "closed",
             "draft": False,
             "user": {"type": "User"},
@@ -1224,6 +1253,173 @@ class PullRequestReconciliationTests(unittest.TestCase):
             f"&labels={quote(label, safe='')}"
             f"&per_page={community_lifecycle_github.API_PAGE_SIZE}&page={page}"
         )
+
+    def open_listing(self, page: int = 1) -> str:
+        return (
+            f"repos/{self.REPO}/pulls?state=open"
+            f"&per_page={community_lifecycle_github.API_PAGE_SIZE}&page={page}"
+        )
+
+    def test_open_sweep_confirms_merge_state_even_without_a_label_change(self) -> None:
+        # Like #3786, the batched DIRTY result agrees with the existing label.
+        pull_request = self.pull_request(
+            state="open",
+            labels=labels("pr/needs-rebase", "wg/mom-routing"),
+            signals={"review_decision": "REVIEW_REQUIRED", "merge_state": "CLEAN"},
+        )
+        client = FakePullRequestApi(
+            [pull_request],
+            [self.accepted_issue()],
+            listings={self.open_listing(): [pull_request]},
+        )
+        client.batched_merge_states[7] = "DIRTY"
+
+        community_lifecycle_github.sync_open_pull_requests(client, self.REPO)
+
+        self.assertEqual(client.removed, {"pr/needs-rebase"})
+        self.assertEqual(client.added, {"pr/needs-review"})
+        self.assertEqual(
+            client.requests[:5],
+            [
+                ("GET", self.open_listing()),
+                ("POST", "graphql"),
+                ("GET", f"repos/{self.REPO}/issues/5"),
+                ("GET", f"repos/{self.REPO}/pulls/7"),
+                ("POST", "graphql"),
+            ],
+        )
+
+    def test_open_sweep_uses_fresh_linked_issue_after_confirmation(self) -> None:
+        listed = self.pull_request(state="open", body="Related #5")
+        current = {**listed, "closes": [], "body": "Related #6"}
+        new_issue = {
+            **self.accepted_issue(),
+            "number": 6,
+            "labels": labels("accepted", "wg/evaluation-quality"),
+            "milestone": {"number": 9},
+        }
+        client = FakePullRequestApi(
+            [current],
+            [self.accepted_issue(), new_issue],
+            listings={self.open_listing(): [listed]},
+        )
+
+        community_lifecycle_github.sync_open_pull_requests(client, self.REPO)
+
+        self.assertIn("wg/evaluation-quality", client.added)
+        self.assertIn("wg/mom-routing", client.removed)
+        self.assertIn(
+            ("PATCH", f"repos/{self.REPO}/issues/7", {"milestone": 9}), client.writes
+        )
+        self.assertIn(("GET", f"repos/{self.REPO}/issues/6"), client.requests)
+
+    def test_open_sweep_missing_batch_node_uses_existing_lookup(self) -> None:
+        missing = self.pull_request(number=7, state="open")
+        draft = self.pull_request(number=8, state="open", draft=True, closes=[])
+        client = FakePullRequestApi(
+            [draft], listings={self.open_listing(): [missing, draft]}
+        )
+
+        community_lifecycle_github.sync_open_pull_requests(client, self.REPO)
+
+        self.assertIn(("GET", f"repos/{self.REPO}/pulls/7"), client.requests)
+        self.assertNotIn(("GET", f"repos/{self.REPO}/pulls/8"), client.requests)
+        self.assertEqual(client.added, {"pr/needs-author"})
+
+    def test_open_sweep_rechecks_a_pr_closed_since_listing(self) -> None:
+        listed = self.pull_request(state="open", draft=True)
+        closed = {**listed, "state": "closed"}
+        client = FakePullRequestApi(
+            [closed], [self.accepted_issue()], listings={self.open_listing(): [listed]}
+        )
+
+        community_lifecycle_github.sync_open_pull_requests(client, self.REPO)
+
+        self.assertIn(("GET", f"repos/{self.REPO}/pulls/7"), client.requests)
+        self.assertEqual(client.added, set())
+        self.assertEqual(client.removed, {"pr/blocked"})
+
+    @mock.patch.object(community_lifecycle_github, "API_PAGE_SIZE", 10)
+    def test_pr_sweep_reduces_reads_and_preserves_mutations(self) -> None:
+        first_open_number = 100
+        first_unchanged_number = 103
+        first_draft_number = 115
+        open_prs = [
+            self.pull_request(
+                number=number,
+                state="open",
+                draft=number >= first_draft_number,
+                closes=[5, 6] if number == first_open_number else [5],
+                labels=labels(
+                    "wg/mom-routing",
+                    (
+                        "pr/needs-author"
+                        if number >= first_draft_number
+                        else "pr/needs-rebase"
+                    ),
+                ),
+                signals={
+                    "review_decision": "REVIEW_REQUIRED",
+                    "merge_state": (
+                        "CLEAN" if number < first_unchanged_number else "DIRTY"
+                    ),
+                },
+            )
+            for number in range(first_open_number, 129)
+        ]
+        closed_prs = [self.pull_request(number=number) for number in range(129, 133)]
+        open_listings = {
+            self.open_listing(page): open_prs[start : start + 10]
+            for page, start in enumerate(range(0, len(open_prs), 10), 1)
+        }
+        listings = {
+            **open_listings,
+            self.closed_listing("pr/blocked"): [
+                {"number": pr["number"], "pull_request": {}} for pr in closed_prs
+            ],
+        }
+        issues = [
+            self.accepted_issue(),
+            {**self.accepted_issue(), "number": 6, "milestone": {"number": 9}},
+        ]
+        legacy = FakePullRequestApi(open_prs + closed_prs, issues, listings)
+        optimized = FakePullRequestApi(open_prs + closed_prs, issues, listings)
+        for client in (legacy, optimized):
+            lead = community_reviewers.WORKGROUP_REVIEWERS["wg/mom-routing"][0]
+            client.requested_reviewers = {
+                number: {lead}
+                for number in range(first_open_number + 1, first_draft_number)
+            }
+
+        for endpoint in open_listings:
+            for pr in legacy.request(endpoint):
+                community_lifecycle_github.sync_pull_request(
+                    legacy, self.REPO, pr["number"]
+                )
+        community_lifecycle_github.sync_labeled_closed_pull_requests(legacy, self.REPO)
+        community_lifecycle_github.sync_pull_request_queue(
+            optimized, {"repository": {"full_name": self.REPO}}
+        )
+
+        self.assertEqual(optimized.writes, legacy.writes)
+        self.assertTrue(legacy.review_posts)
+        self.assertIn(
+            (
+                "PATCH",
+                f"repos/{self.REPO}/issues/{first_open_number}",
+                {"milestone": 9},
+            ),
+            legacy.writes,
+        )
+
+        def reads(client):
+            return sum(
+                method == "GET" or endpoint == "graphql"
+                for method, endpoint in client.requests
+            )
+
+        self.assertEqual(reads(legacy), 110)
+        self.assertEqual(reads(optimized), 88)
 
     def test_closed_sweep_reconciles_only_labeled_pull_requests(self) -> None:
         listings = {

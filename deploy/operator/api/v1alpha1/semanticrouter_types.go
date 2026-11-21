@@ -445,8 +445,10 @@ type StreamedBodyConfig struct {
 
 	// MaxBytes caps the accumulated body size. A larger body is rejected and the
 	// ExtProc stream ends; the downstream response follows the gateway's ExtProc
-	// failure policy. Zero disables the limit.
+	// failure policy. The Router refuses an enabled streamed body without a
+	// ceiling, so an omitted value takes the default.
 	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=10485760
 	// +optional
 	MaxBytes int64 `json:"max_bytes,omitempty"`
 

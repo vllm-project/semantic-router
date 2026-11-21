@@ -302,7 +302,7 @@ func (w *warmedRouter) Activate(context.Context) error {
 		if router != nil {
 			router.WorkflowStateService.CommitStorePolicy()
 		}
-		publishSnapshotState(candidate, snapshot, router, s.runtime, acquire)
+		publishSnapshotState(candidate, snapshot, router, s.runtime, acquire, s.service)
 	})
 	if err != nil {
 		return configsnapshot.Reject(configsnapshot.StageActivate, configsnapshot.CodeShuttingDown, err)
