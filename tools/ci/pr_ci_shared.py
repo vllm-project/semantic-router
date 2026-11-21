@@ -9,10 +9,14 @@ from urllib.parse import urlencode
 
 from manual_ci import (
     MERGE_EVIDENCE_UNAVAILABLE,
-    PAGE_SIZE,
+    MAX_PAGES as MAX_PAGES,
+    PUBLISHER_FILES as CAPABILITIES,
     ManualCIError,
     merge_revision_matches,
+    latest_run as latest_run,
+    pages as pages,
     read_artifact,
+    status_publisher_available as publisher_ready,
 )
 
 CHECK = "PR Gate"
@@ -21,25 +25,8 @@ PREFIX = "semantic-router-ci:"
 APP_ID = 15368  # GitHub Actions; also the branch-protection check owner.
 SHA = re.compile(r"[0-9a-f]{40}")
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_.-]{1,160}")
-CAPABILITIES = (".github/workflows/ci-status.yml", "tools/ci/pr_ci_status.py")
-MAX_PAGES = 100
 MAX_IDENTIFIERS = 1000
 COMMENT_ITEM_LIMIT = 30
-
-
-def pages(client, endpoint: str, key: str | None = None):
-    separator = "&" if "?" in endpoint else "?"
-    for page in range(1, MAX_PAGES + 1):
-        response = client.request(
-            f"{endpoint}{separator}per_page={PAGE_SIZE}&page={page}"
-        )
-        items = response[key] if key else response
-        if not isinstance(items, list):
-            raise ManualCIError("Invalid GitHub collection response.")
-        yield from items
-        if len(items) < PAGE_SIZE:
-            return
-    raise ManualCIError("GitHub collection exceeds the reconciliation limit.")
 
 
 def current_pull(client, repo: str, run: dict) -> dict | None:
@@ -77,26 +64,6 @@ def current_pull(client, repo: str, run: dict) -> dict | None:
             "The CI run is associated with multiple open pull requests."
         )
     return matches[0] if matches else None
-
-
-def latest_run(client, repo: str, run: dict) -> bool:
-    query = urlencode({"event": "pull_request", "head_sha": run["head_sha"]})
-    candidates = [
-        item
-        for item in pages(
-            client,
-            f"repos/{repo}/actions/workflows/pr.yml/runs?{query}",
-            "workflow_runs",
-        )
-        if item.get("head_branch") == run.get("head_branch")
-        and (item.get("head_repository") or {}).get("full_name")
-        == (run.get("head_repository") or {}).get("full_name")
-    ]
-    return (
-        bool(candidates)
-        and max(candidates, key=lambda item: (item["created_at"], item["id"]))["id"]
-        == run["id"]
-    )
 
 
 def artifact(client, repo: str, run: dict, name: str, filename: str, limit: int):
@@ -153,16 +120,6 @@ def validate_plan(client, repo: str, run: dict, plan: dict) -> None:
     identifiers(plan.get("deferred_images"))
     if set(selected) & set(deferred) or set(required) != set(selected) | set(deferred):
         raise ManualCIError("Qualification inventories do not partition the plan.")
-
-
-def publisher_ready(client, repo: str, base: str) -> bool:
-    tree = client.request(f"repos/{repo}/git/trees/{base}?recursive=1")
-    if tree.get("truncated"):
-        raise ManualCIError("Cannot establish the trusted base's status publisher.")
-    paths = {
-        item.get("path") for item in tree.get("tree", []) if item.get("type") == "blob"
-    }
-    return set(CAPABILITIES) <= paths
 
 
 def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
