@@ -1798,7 +1798,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(afterCompletion).To(BeNumerically(">", beforeCompletion))
 	})
 
-	It("records TTFT on first streamed body chunk for SSE responses", func() {
+	It("records TTFT on first streamed content for SSE responses", func() {
 		ctx := &RequestContext{
 			RequestModel:        "model-stream",
 			ProcessingStartTime: time.Now().Add(-120 * time.Millisecond),
@@ -1824,9 +1824,9 @@ var _ = Describe("Metrics recording", func() {
 		Expect(ctx.IsStreamingResponse).To(BeTrue())
 		Expect(ctx.TTFTRecorded).To(BeFalse())
 
-		// Now simulate the first streamed body chunk
+		// Now simulate the first streamed body chunk that carries content
 		respBody := &ext_proc.ProcessingRequest_ResponseBody{
-			ResponseBody: &ext_proc.HttpBody{Body: []byte("data: chunk-1\n")},
+			ResponseBody: &ext_proc.HttpBody{Body: []byte("data: {\"id\":\"r1\",\"model\":\"model-stream\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"}}]}\n\n")},
 		}
 
 		response2, err := router.handleResponseBody(respBody, ctx)

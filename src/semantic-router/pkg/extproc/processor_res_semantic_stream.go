@@ -26,6 +26,9 @@ import (
 type semanticResponseStreamState struct {
 	responseID string
 	model      string
+	// sawContent marks the first event that carries an answer item, so TTFT
+	// and the session's latency keep ignoring keepalive frames.
+	sawContent bool
 	createdAt  time.Time
 	stop       llmprotocol.StopReason
 	stopSeq    string
@@ -58,7 +61,6 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	endOfStream bool,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	recordStreamingTTFT(ctx)
 	if ctx.ResponseGuardHold != nil {
 		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
 	}
@@ -66,6 +68,11 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	buffers := semanticStreamBuffers{}
 	responseBody, endOfStream = r.bridgeBufferedBody(&buffers, responseBody, endOfStream, ctx)
 	buffers.push(responseBody, ctx)
+	// TTFT waits for the first event that carries content: a keepalive or
+	// comment frame a gateway sends while it queues is not the model's answer.
+	// It is recorded before the stream settles, because the turn's session
+	// evidence is written there and takes the latency it has by then.
+	recordStreamingTTFT(ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
@@ -295,6 +302,9 @@ func recordStreamingTTFT(ctx *RequestContext) {
 	if ctx == nil || ctx.TTFTRecorded || ctx.ProcessingStartTime.IsZero() || ctx.RequestModel == "" {
 		return
 	}
+	if state := ctx.SemanticStreamState; state == nil || !state.sawContent {
+		return
+	}
 
 	ttft := time.Since(ctx.ProcessingStartTime).Seconds()
 	if ttft <= 0 {
@@ -375,6 +385,10 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 		return
 	}
 	for _, event := range events {
+		switch event.Type {
+		case llmprotocol.EventOutputItemStarted, llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta, llmprotocol.EventToolCallDelta:
+			state.sawContent = true
+		}
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
 		}
