@@ -1,0 +1,29 @@
+[
+  {
+    "algorithm": "multi_factor",
+    "tier": "supported",
+    "status": "planned",
+    "target_profile": "selector-algorithms"
+  },
+  {
+    "algorithm": "random",
+    "tier": "supported",
+    "status": "planned",
+    "target_profile": "selector-algorithms"
+  },
+  {
+    "algorithm": "static",
+    "tier": "supported",
+    "status": "covered",
+    "profile": "selector-algorithms",
+    "testcase": "selector-static"
+  },
+  {
+    "algorithm": "systemone",
+    "tier": "supported",
+    "status": "partial",
+    "profile": "model-runtime",
+    "testcase": "decision-runtime-routing",
+    "prerequisite": "System One selector failure and fallback diagnostics"
+  }
+]

@@ -29,6 +29,7 @@ import (
 	routeaction "github.com/vllm-project/semantic-router/e2e/profiles/route-action"
 	routerreplay "github.com/vllm-project/semantic-router/e2e/profiles/router-replay"
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
+	selectoralgorithms "github.com/vllm-project/semantic-router/e2e/profiles/selector-algorithms"
 	signalrouting "github.com/vllm-project/semantic-router/e2e/profiles/signal-routing"
 	standalone "github.com/vllm-project/semantic-router/e2e/profiles/standalone"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
@@ -154,6 +155,11 @@ func init() {
 	register(
 		"router-replay",
 		func() framework.Profile { return routerreplay.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
+	)
+	register(
+		"selector-algorithms",
+		func() framework.Profile { return selectoralgorithms.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("routing-strategies", func() framework.Profile { return routingstrategies.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
