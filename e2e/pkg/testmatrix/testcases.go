@@ -62,6 +62,8 @@ var BaselineRouterContract = []string{
 	"reask-routing",
 	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
 	"context-safety-overlap",
+	// Canonical version gate accepts the supported contract, rejects others (issue #2469)
+	"router-config-version-gate",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
