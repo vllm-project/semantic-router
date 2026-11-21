@@ -60,11 +60,9 @@ case $COMMAND in
   test)
     echo -e "${YELLOW}Publishing to Test PyPI...${NC}"
     
-    # Check if package is built
-    if [ ! -d "dist" ]; then
-      echo "Building package first..."
-      ./scripts/publish.sh check
-    fi
+    # Always rebuild so stale artifacts from a previous version are never uploaded.
+    echo "Building fresh package..."
+    ./scripts/publish.sh check
     
     # Upload to Test PyPI
     echo "Uploading to Test PyPI..."
@@ -94,11 +92,9 @@ case $COMMAND in
       exit 1
     fi
     
-    # Check if package is built
-    if [ ! -d "dist" ]; then
-      echo "Building package first..."
-      ./scripts/publish.sh check
-    fi
+    # Always rebuild so stale artifacts from a previous version are never uploaded.
+    echo "Building fresh package..."
+    ./scripts/publish.sh check
     
     # Upload to PyPI
     echo "Uploading to PyPI..."
