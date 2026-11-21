@@ -267,9 +267,9 @@ func (c *Classifier) EvaluateResponseSignals(ctx context.Context, input Response
 }
 
 // missingResponsePart names the part of the answer a rule reads that it does
-// not have: "answer" for an answer without text, such as one made of tool
-// calls, and "context" for an answer with no grounding context to check it
-// against.
+// not have: "answer" for an answer without client-visible text, refusals, or
+// tool-call arguments, and "context" for an answer with no grounding context
+// to check it against.
 func missingResponsePart(input config.SystemOneInput, response ResponseInput) string {
 	switch {
 	case input.Answer && strings.TrimSpace(response.Answer) == "":

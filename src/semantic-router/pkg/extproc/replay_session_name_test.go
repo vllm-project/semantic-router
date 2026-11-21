@@ -116,6 +116,20 @@ func TestSessionTitleAnswerNamesTheSession(t *testing.T) {
 	}
 }
 
+func TestSessionTitleUsesOnlyAssistantProse(t *testing.T) {
+	response := assistantToolCallResponse("lookup", "{}", "")
+	openCode := &RequestContext{SessionTitleRequest: true, Headers: openCodeHeaders("session", "")}
+	observeSessionTitle(openCode, response)
+	require.Empty(t, openCode.sessionName)
+
+	response.Output[0].Content = append(response.Output[0].Content, llmprotocol.Content{
+		Kind: llmprotocol.ContentText, Text: `{"title":"Reading list"}`,
+	})
+	claude := &RequestContext{SessionTitleRequest: true, Headers: map[string]string{headers.XClaudeCodeSessionID: "session"}}
+	observeSessionTitle(claude, response)
+	require.Equal(t, "Reading list", claude.sessionName)
+}
+
 func renameEcho(name string) []llmprotocol.Content {
 	text := func(value string) llmprotocol.Content {
 		return llmprotocol.Content{Kind: llmprotocol.ContentText, Text: value}

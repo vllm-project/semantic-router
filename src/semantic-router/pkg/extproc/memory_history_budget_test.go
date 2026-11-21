@@ -63,6 +63,13 @@ func TestMemorySnapshotBudgetRejectsBeforeSnapshot(t *testing.T) {
 		{"bytes", func(ctx *budgetHistory) {
 			ctx.messages[0].Content[0].Text = strings.Repeat("x", maxMemorySnapshotBytes+1)
 		}},
+		{"history_tool_namespace", func(ctx *budgetHistory) {
+			ctx.messages[0].Role = llmprotocol.RoleAssistant
+			ctx.messages[0].Content = []llmprotocol.Content{{
+				Kind:     llmprotocol.ContentToolCall,
+				ToolCall: &llmprotocol.ToolCall{Namespace: strings.Repeat("x", maxMemorySnapshotBytes+1)},
+			}}
+		}},
 		{"blocks", func(ctx *budgetHistory) {
 			ctx.messages[0].Content = make([]llmprotocol.Content, maxMemorySnapshotNodes+1)
 		}},
@@ -116,6 +123,37 @@ func TestMemorySnapshotBudgetSharesResponseAndHistoryBytes(t *testing.T) {
 	ctx.response.Output[0].Content[1].Text += "x"
 	require.ErrorIs(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, ctx.response), errMemoryHistoryTooLarge)
 	require.NoError(t, validateMemorySnapshotBudget(ctx.messages, ctx.retained, nil))
+}
+
+// A tool-call-only response charges the answer's tool names, namespaces, and
+// arguments, so an oversized argument is rejected before it reaches the
+// memory job instead of passing validation as a textless turn.
+func TestMemorySnapshotBudgetRejectsOversizedToolCallOnlyResponse(t *testing.T) {
+	oversized := strings.Repeat("x", maxMemorySnapshotBytes+1)
+	for _, field := range []string{"arguments", "name", "namespace"} {
+		call := &llmprotocol.ToolCall{Namespace: "fs", Name: "write", Arguments: `{"path":"notes.txt"}`}
+		switch field {
+		case "arguments":
+			call.Arguments = oversized
+		case "name":
+			call.Name = oversized
+		case "namespace":
+			call.Namespace = oversized
+		}
+		response := &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+			Role:    llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: call}},
+		}}}
+		require.ErrorIs(t, validateMemorySnapshotBudget(nil, nil, response), errMemoryHistoryTooLarge, field)
+	}
+	withinBudget := &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{
+			Kind:     llmprotocol.ContentToolCall,
+			ToolCall: &llmprotocol.ToolCall{Namespace: "fs", Name: "write", Arguments: `{"path":"notes.txt"}`},
+		}},
+	}}}
+	require.NoError(t, validateMemorySnapshotBudget(nil, nil, withinBudget))
 }
 
 type budgetHistory struct {

@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/openai/openai-go"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -64,6 +66,47 @@ func extractAssistantContentString(c openai.ChatCompletionAssistantMessageParamC
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// sdkHistoryMessages adapts the string-based extractor API to the same
+// ordered content used by the router. Other roles still separate turns.
+func sdkHistoryMessages(history []openai.ChatCompletionMessageParamUnion) []llmprotocol.Message {
+	messages := make([]llmprotocol.Message, len(history))
+	for i, msg := range history {
+		switch {
+		case msg.OfUser != nil:
+			messages[i] = llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentText, Text: SDKMessageContent(msg),
+			}}}
+		case msg.OfAssistant != nil:
+			messages[i] = llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: sdkAssistantParts(msg.OfAssistant)}
+		}
+	}
+	return messages
+}
+
+func sdkAssistantParts(msg *openai.ChatCompletionAssistantMessageParam) []llmprotocol.Content {
+	var parts []llmprotocol.Content
+	if text := msg.Content.OfString.Value; text != "" {
+		parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: text})
+	}
+	for _, part := range msg.Content.OfArrayOfContentParts {
+		switch {
+		case part.OfText != nil:
+			parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.OfText.Text})
+		case part.OfRefusal != nil:
+			parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: part.OfRefusal.Refusal})
+		}
+	}
+	if refusal := msg.Refusal.Value; refusal != "" {
+		parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: refusal})
+	}
+	for _, call := range msg.ToolCalls {
+		parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+			Name: call.Function.Name, Arguments: call.Function.Arguments,
+		}})
+	}
+	return parts
 }
 
 // sdkUserMessage constructs an SDK user message from a plain string.
@@ -122,7 +165,7 @@ const DefaultSessionStride = 3
 
 // MemoryExtractor stores conversation turns directly in the vector store.
 // No LLM extraction is performed -- the original user question and assistant
-// response (with think tags stripped) are embedded and stored as-is, preserving
+// response (with think tags stripped from prose) are embedded and stored as-is, preserving
 // full conversation fidelity with zero additional inference cost.
 //
 // In addition to per-turn chunks, a session-level rolling window chunk is
@@ -203,6 +246,8 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 // ProcessResponseWithHistoryCount stores the current conversation turn directly in
 // the vector store (Q: ... / A: ...) and, every N turns, a session-level
 // rolling window chunk that concatenates recent turns for multi-hop retrieval.
+// assistantResponse is raw prose. Call StoreAssistantTurn with an answer
+// rendered from structured prose and tool calls.
 //
 // The session chunk is built from the conversation history (obtained from the
 // Response API's previous_response_id chain) plus the current turn. This gives
@@ -221,6 +266,27 @@ func (e *MemoryExtractor) ProcessResponseWithHistoryCount(
 	assistantResponse string,
 	history []openai.ChatCompletionMessageParamUnion,
 ) (int, error) {
+	return e.storeAssistantTurn(ctx, userID, userMessage, func() (string, []llmprotocol.Message) {
+		return StripThinkTags(assistantResponse), sdkHistoryMessages(history)
+	})
+}
+
+// StoreAssistantTurn stores a rendered assistant answer and any due session
+// window. The caller has already stripped reasoning from the answer's prose
+// while it could distinguish prose from tool arguments. Prior messages retain
+// their structured content until the rolling window needs them.
+func (e *MemoryExtractor) StoreAssistantTurn(
+	ctx context.Context, userID, userMessage, assistantResponse string,
+	history []llmprotocol.Message,
+) (int, error) {
+	return e.storeAssistantTurn(ctx, userID, userMessage, func() (string, []llmprotocol.Message) {
+		return assistantResponse, history
+	})
+}
+
+func (e *MemoryExtractor) storeAssistantTurn(
+	ctx context.Context, userID, userMessage string, prepare func() (string, []llmprotocol.Message),
+) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
@@ -229,8 +295,7 @@ func (e *MemoryExtractor) ProcessResponseWithHistoryCount(
 		return 0, nil
 	}
 
-	assistantResponse = StripThinkTags(assistantResponse)
-
+	assistantResponse, history := prepare()
 	if userMessage == "" && assistantResponse == "" {
 		logging.Debugf("Memory chunk store: SKIPPED - empty turn")
 		return 0, nil
@@ -311,7 +376,7 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 	userID string,
 	userMessage string,
 	assistantResponse string,
-	history []openai.ChatCompletionMessageParamUnion,
+	history []llmprotocol.Message,
 ) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -374,10 +439,10 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 }
 
 // countTurns counts user turns in a message history. Each user message is one turn.
-func countTurns(history []openai.ChatCompletionMessageParamUnion) int {
+func countTurns(history []llmprotocol.Message) int {
 	n := 0
 	for _, m := range history {
-		if m.OfUser != nil {
+		if m.Role == llmprotocol.RoleUser {
 			n++
 		}
 	}
@@ -386,40 +451,29 @@ func countTurns(history []openai.ChatCompletionMessageParamUnion) int {
 
 // buildSessionChunk concatenates the last windowSize turns from history plus
 // the current turn into a single multi-turn context chunk.
-func buildSessionChunk(history []openai.ChatCompletionMessageParamUnion, userMsg, assistantResp string, windowSize int) string {
-	// Collect the tail of history: last (windowSize-1) user-assistant pairs
-	// plus the current turn = windowSize total turns.
-	var pairs []string
-
-	// Walk history backwards to find the last (windowSize-1) user messages
-	// and their following assistant responses.
-	type turn struct{ user, assistant string }
-	var turns []turn
-	for i := len(history) - 1; i >= 0 && len(turns) < windowSize-1; i-- {
-		if history[i].OfUser != nil {
-			t := turn{user: SDKMessageContent(history[i])}
-			// Look ahead for the assistant response
-			if i+1 < len(history) && history[i+1].OfAssistant != nil {
-				t.assistant = StripThinkTags(SDKMessageContent(history[i+1]))
-			}
-			turns = append(turns, t)
+func buildSessionChunk(history []llmprotocol.Message, userMsg, assistantResp string, windowSize int) string {
+	var chunks []string
+	for i := len(history) - 1; i >= 0 && len(chunks) < windowSize-1; i-- {
+		if msg := history[i]; msg.Role == llmprotocol.RoleUser {
+			chunks = append(chunks, formatTurnChunk(llmprotocol.TextContent(msg.Content), historyAssistantText(history[i+1:])))
 		}
 	}
+	slices.Reverse(chunks)
+	chunks = append(chunks, formatTurnChunk(userMsg, assistantResp))
+	return strings.Join(chunks, "\n---\n")
+}
 
-	// Reverse to chronological order
-	for i, j := 0, len(turns)-1; i < j; i, j = i+1, j-1 {
-		turns[i], turns[j] = turns[j], turns[i]
+// Responses can represent the prose and tool calls of one assistant turn as
+// consecutive items. Keep their boundaries until the complete answer is rendered.
+func historyAssistantText(history []llmprotocol.Message) string {
+	var output []llmprotocol.OutputItem
+	for _, msg := range history {
+		if msg.Role != llmprotocol.RoleAssistant {
+			break
+		}
+		output = append(output, llmprotocol.OutputItem{Role: msg.Role, Content: msg.Content})
 	}
-
-	// Format each historical turn
-	for _, t := range turns {
-		pairs = append(pairs, formatTurnChunk(t.user, t.assistant))
-	}
-
-	// Append current turn
-	pairs = append(pairs, formatTurnChunk(userMsg, assistantResp))
-
-	return strings.Join(pairs, "\n---\n")
+	return (&llmprotocol.Response{Output: output}).AssistantText(StripThinkTags)
 }
 
 // formatTurnChunk combines a user message and assistant response into a single

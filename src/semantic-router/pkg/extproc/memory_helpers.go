@@ -311,15 +311,11 @@ func extractCurrentUserMessage(ctx *RequestContext) string {
 }
 
 func semanticText(contents []llmprotocol.Content) string {
-	parts := make([]string, 0, len(contents))
-	for _, content := range contents {
-		if content.Kind == llmprotocol.ContentText && content.Text != "" {
-			parts = append(parts, content.Text)
-		}
-	}
-	return strings.Join(parts, " ")
+	return llmprotocol.TextContent(contents)
 }
 
+// extractSemanticAssistantResponseText cleans reasoning tags from the prose
+// parts of the answer while tool calls keep their arguments verbatim.
 func extractSemanticAssistantResponseText(response *llmprotocol.Response) string {
-	return memory.StripThinkTags(semanticAssistantContent(response))
+	return response.AssistantText(memory.StripThinkTags)
 }

@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"runtime/debug"
 
-	"github.com/openai/openai-go"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -112,13 +110,12 @@ type memoryPersistenceJob struct {
 }
 
 func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceOutcome, error) {
-	extractorHistory, historyErr := memoryHistoryForExtractor(job.codecs, job.allowedLossy, job.history)
-	if historyErr != nil {
+	if _, err := encodeMemoryHistory(job.codecs, job.allowedLossy, job.history); err != nil {
 		return memory.PersistenceOutcome{
 			Status:   "extraction_failed",
 			Reason:   "history_encode_error",
 			FailOpen: true,
-		}, historyErr
+		}, err
 	}
 
 	logging.Infof(
@@ -130,13 +127,12 @@ func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceO
 		len(job.history),
 	)
 
-	storedCount, err := job.extractor.ProcessResponseWithHistoryCount(
+	storedCount, err := job.extractor.StoreAssistantTurn(
 		jobCtx,
-		job.sessionID,
 		job.userID,
 		job.userMessage,
 		job.assistantResponse,
-		extractorHistory,
+		job.history,
 	)
 	if err != nil {
 		return memory.PersistenceOutcome{}, err
@@ -208,11 +204,14 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 	return r.Config.Memory.AutoStore
 }
 
-func memoryHistoryForExtractor(
+// encodeMemoryHistory enforces the configured history translation policy and
+// records its losses. Storage reads the ordered neutral messages because Chat
+// moves tool calls out of the content sequence.
+func encodeMemoryHistory(
 	codecs *protocolcodec.Registry,
 	allowedLossy []string,
 	history []llmprotocol.Message,
-) ([]openai.ChatCompletionMessageParamUnion, error) {
+) ([]byte, error) {
 	if len(history) == 0 {
 		return nil, nil
 	}
@@ -231,9 +230,5 @@ func memoryHistoryForExtractor(
 	// The extraction runs after the reply, so what the encode dropped, such
 	// as a Responses blob, is counted and logged rather than sent to a client.
 	recordProtocolDiagnostics(&RequestContext{TargetFormat: llmprotocol.OpenAIChatV1}, encoded.Diagnostics)
-	request, err := parseOpenAIRequest(encoded.Body)
-	if err != nil {
-		return nil, fmt.Errorf("parse encoded history: %w", err)
-	}
-	return request.Messages, nil
+	return encoded.Body, nil
 }
