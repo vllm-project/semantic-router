@@ -15,8 +15,10 @@ type responsesNamespaceToolWire struct {
 }
 
 // decodeResponsesNamespaceTool flattens a namespace into the neutral tool list.
-// Every backend receives flat names, including a Responses backend, so one
-// mapping serves all three formats and no backend needs namespace support.
+// Every backend receives flat names, including a compatible Responses backend,
+// so one mapping serves all three formats and no backend needs namespace
+// support. A request that keeps namespaces, for an OpenAI-hosted backend,
+// encodes them back.
 func decodeResponsesNamespaceTool(body json.RawMessage, request *llmprotocol.Request, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) error {
 	var wire responsesNamespaceToolWire
 	if err := decodeWireValue(body, &wire, policy); err != nil {
@@ -63,10 +65,69 @@ func decodeResponsesNamespaceEntry(
 	if strings.TrimSpace(tool.Name) == "" {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool", "Responses namespace tool requires a name", nil)
 	}
-	tool.Namespace, tool.LocalName = namespace.Name, tool.Name
+	tool.Namespace, tool.LocalName, tool.NamespaceDescription = namespace.Name, tool.Name, namespace.Description
 	tool.Name = llmprotocol.FlattenToolName(namespace.Name, tool.Name)
 	tool.Description = joinNamespaceDescription(namespace.Description, tool.Description)
 	return nil
+}
+
+type responsesNamespaceEncodeWire struct {
+	Type        string              `json:"type"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	Tools       []responsesToolWire `json:"tools"`
+}
+
+// encodeResponsesToolList is the tools array of a Responses request: each
+// tool as it is, or, where the request keeps namespaces, a tool flattened
+// from one back under its namespace with its own name and description.
+func encodeResponsesToolList(request llmprotocol.Request) []any {
+	tools := make([]any, 0, len(request.Tools)+1)
+	namespaces := make(map[string]int)
+	for _, tool := range request.Tools {
+		if !request.KeepToolNamespaces || tool.Namespace == "" {
+			tools = append(tools, encodeResponsesTool(tool))
+			continue
+		}
+		local := tool
+		local.Name, local.Description = tool.LocalName, namespaceLocalDescription(tool)
+		index, seen := namespaces[tool.Namespace]
+		if !seen {
+			index, namespaces[tool.Namespace] = len(tools), len(tools)
+			tools = append(tools, &responsesNamespaceEncodeWire{Type: "namespace", Name: tool.Namespace, Description: tool.NamespaceDescription})
+		}
+		namespace := tools[index].(*responsesNamespaceEncodeWire)
+		namespace.Tools = append(namespace.Tools, encodeResponsesTool(local))
+	}
+	return tools
+}
+
+// namespaceLocalDescription takes the namespace's description back off the
+// front of a flattened tool's.
+func namespaceLocalDescription(tool llmprotocol.Tool) string {
+	switch tool.NamespaceDescription {
+	case "":
+		return tool.Description
+	case tool.Description:
+		return ""
+	}
+	return strings.TrimPrefix(tool.Description, tool.NamespaceDescription+"\n\n")
+}
+
+// restoreResponsesHistoryNamespaces names each history call by the namespace
+// and name its client sent, where the request keeps namespaces.
+func restoreResponsesHistoryNamespaces(request llmprotocol.Request, items []responsesItemWire) {
+	if !request.KeepToolNamespaces {
+		return
+	}
+	for index := range items {
+		item := &items[index]
+		if item.Type == "function_call" || item.Type == "custom_tool_call" {
+			if namespace, name := request.ToolNameOrigins.Origin(item.Name); namespace != "" {
+				item.Namespace, item.Name = namespace, name
+			}
+		}
+	}
 }
 
 // A flat tool has no namespace left to describe it, so its description carries

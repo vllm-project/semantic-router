@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const (
@@ -130,7 +131,14 @@ func buildReplayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
 			}
 		}
 	}
-	return newReplayToolTrace(steps)
+	trace := newReplayToolTrace(steps)
+	if offered := replayOfferedTools(ctx.SemanticRequest.Tools); len(offered) > 0 {
+		if trace == nil {
+			trace = &routerreplay.ToolTrace{}
+		}
+		trace.OfferedTools = offered
+	}
+	return trace
 }
 
 func buildReplayResponseToolTrace(
@@ -266,11 +274,34 @@ func mergeReplayToolTraces(
 		steps = append(steps, step)
 	}
 	merged := newReplayToolTrace(steps)
+	if merged == nil && len(left.OfferedTools)+len(right.OfferedTools) > 0 {
+		merged = &routerreplay.ToolTrace{}
+	}
 	if merged != nil {
 		merged.StepsTruncated = left.StepsTruncated || right.StepsTruncated
 		merged.DroppedStepCount = left.DroppedStepCount + right.DroppedStepCount
+		merged.OfferedTools = append([]string(nil), left.OfferedTools...)
+		if len(merged.OfferedTools) == 0 {
+			merged.OfferedTools = append([]string(nil), right.OfferedTools...)
+		}
 	}
 	return merged
+}
+
+// replayOfferedTools names the tools a request offered the model, an MCP or
+// namespaced tool by its flat name with its server, at most store.MaxOfferedTools.
+func replayOfferedTools(tools []llmprotocol.Tool) []string {
+	var names []string
+	for _, tool := range tools {
+		name := tool.Name
+		if tool.Namespace != "" && tool.LocalName != "" {
+			name = llmprotocol.FlattenToolName(tool.Namespace, tool.LocalName)
+		}
+		if name != "" && len(names) < store.MaxOfferedTools {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func newReplayToolTrace(steps []routerreplay.ToolTraceStep) *routerreplay.ToolTrace {
@@ -311,6 +342,7 @@ func cloneReplayToolTraceForRecord(trace *routerreplay.ToolTrace) *routerreplay.
 	}
 	cloned := *trace
 	cloned.ToolNames = append([]string(nil), trace.ToolNames...)
+	cloned.OfferedTools = append([]string(nil), trace.OfferedTools...)
 	cloned.Steps = append([]routerreplay.ToolTraceStep(nil), trace.Steps...)
 	return &cloned
 }

@@ -65,6 +65,36 @@ func omitUncapturedStepText(trace *ToolTrace, policy recorderPolicy) {
 	}
 }
 
+// ToolTraceStructure is a trace's tool history without its text: each tool
+// call's, result's and answer's step with its type, source, role, tool name,
+// call id and result status, and the names of the tools the request offered,
+// so a run keeps its tool history, and whether a turn ended with an answer,
+// where no text is captured. The user's turns hold only text and are left
+// out, and a trace left with no step and no offered tool is nil.
+func ToolTraceStructure(trace *ToolTrace) *ToolTrace {
+	if trace == nil {
+		return nil
+	}
+	out := &ToolTrace{
+		Flow: trace.Flow, Stage: trace.Stage, ToolNames: append([]string(nil), trace.ToolNames...),
+		StepsTruncated: trace.StepsTruncated, DroppedStepCount: trace.DroppedStepCount,
+		OfferedTools: append([]string(nil), trace.OfferedTools...),
+	}
+	for _, step := range trace.Steps {
+		if step.Type == "user_input" {
+			continue
+		}
+		out.Steps = append(out.Steps, ToolTraceStep{
+			Type: step.Type, Source: step.Source, Role: step.Role, ToolName: step.ToolName,
+			ToolCallID: step.ToolCallID, Status: step.Status, APIType: step.APIType,
+		})
+	}
+	if len(out.Steps) == 0 && len(out.OfferedTools) == 0 {
+		return nil
+	}
+	return out
+}
+
 // omitUncapturedSpans drops the detector's excerpts of the answer when the
 // response is not captured. Span offsets and severities stay.
 func omitUncapturedSpans(spans []string, details []HallucinationSpan, policy recorderPolicy) ([]string, []HallucinationSpan) {

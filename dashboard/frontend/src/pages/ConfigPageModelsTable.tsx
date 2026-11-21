@@ -70,6 +70,8 @@ interface ConfigPageModelsTableProps {
   catalog: BuiltInModelCatalog
   health: BackendModelHealth
   traffic: BackendModelTraffic
+  /** The catalog list price of each model that sets no pricing, as the Router prices it. */
+  catalogPrices?: Readonly<Record<string, NonNullable<NormalizedModel['pricing']>>>
   isReadonly: boolean
   activeName: string | null
   resetKey: string
@@ -162,6 +164,7 @@ export default function ConfigPageModelsTable({
   catalog,
   health,
   traffic,
+  catalogPrices,
   isReadonly,
   activeName,
   resetKey,
@@ -302,18 +305,23 @@ export default function ConfigPageModelsTable({
         header: 'Price / 1M',
         align: 'right',
         ...hideWhenNarrow('price', showTraffic),
-        sortValue: (model) => model.pricing?.completion_per_1m ?? -1,
+        sortValue: (model) =>
+          (model.pricing ?? catalogPrices?.[model.name])?.completion_per_1m ?? -1,
         cell: (model) => {
-          const price = modelPriceSummary(model.pricing)
+          const catalogPrice = model.pricing ? undefined : catalogPrices?.[model.name]
+          const price = modelPriceSummary(model.pricing ?? catalogPrice)
           if (!price.input && !price.output)
             return <span className="text-subtle-foreground">—</span>
           return (
             <span
               className="whitespace-nowrap font-mono text-xs tabular text-muted-foreground"
-              title="Input / output price per one million tokens"
+              title={`Input / output price per one million tokens${catalogPrice ? ', the catalog list price' : ''}`}
             >
               {price.input ?? '—'} <span className="text-subtle-foreground">/</span>{' '}
               {price.output ?? '—'}
+              {catalogPrice ? (
+                <span className="block text-[11px] text-subtle-foreground">catalog list price</span>
+              ) : null}
             </span>
           )
         },
@@ -455,6 +463,7 @@ export default function ConfigPageModelsTable({
     canBeDefault,
     canCheckHealth,
     catalog,
+    catalogPrices,
     defaultModel,
     deployments,
     getDeleteBlocker,

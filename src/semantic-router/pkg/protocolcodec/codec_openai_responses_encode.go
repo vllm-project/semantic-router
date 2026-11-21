@@ -114,8 +114,9 @@ func encodeResponsesRequestWire(request llmprotocol.Request) (responsesRequestWi
 	if err != nil {
 		return responsesRequestWire{}, err
 	}
+	restoreResponsesHistoryNamespaces(request, items)
 	wire.Input, _ = json.Marshal(items)
-	wire.Tools = encodeResponsesTools(request.Tools, request.ImageGeneration)
+	wire.Tools = encodeResponsesTools(request)
 	wire.ToolChoice = encodeResponsesToolChoice(request.ToolChoice)
 	wire.Text = encodeResponsesOutputFormat(request.OutputFormat, request.TextVerbosity)
 	return wire, nil
@@ -162,22 +163,12 @@ func encodeResponsesRequestItems(request llmprotocol.Request) ([]responsesItemWi
 	return items, nil
 }
 
-func encodeResponsesTools(input []llmprotocol.Tool, imageGeneration *llmprotocol.ImageGenerationOptions) json.RawMessage {
-	if len(input) == 0 && imageGeneration == nil {
+func encodeResponsesTools(request llmprotocol.Request) json.RawMessage {
+	imageGeneration := request.ImageGeneration
+	if len(request.Tools) == 0 && imageGeneration == nil {
 		return nil
 	}
-	tools := make([]responsesToolWire, 0, len(input)+1)
-	for _, tool := range input {
-		if tool.Kind == llmprotocol.ToolKindCustom {
-			encoded := responsesToolWire{Type: "custom", Name: tool.Name, Description: tool.Description}
-			if tool.CustomFormat != nil {
-				encoded.Format = &responsesCustomToolFormat{Type: "grammar", Syntax: tool.CustomFormat.Syntax, Definition: tool.CustomFormat.Definition}
-			}
-			tools = append(tools, encoded)
-			continue
-		}
-		tools = append(tools, responsesToolWire{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, Strict: tool.Strict})
-	}
+	tools := encodeResponsesToolList(request)
 	if imageGeneration != nil {
 		tool := responsesToolWire{
 			Type: "image_generation", Model: imageGeneration.Model,
@@ -198,6 +189,17 @@ func encodeResponsesTools(input []llmprotocol.Tool, imageGeneration *llmprotocol
 	}
 	encoded, _ := json.Marshal(tools)
 	return encoded
+}
+
+func encodeResponsesTool(tool llmprotocol.Tool) responsesToolWire {
+	if tool.Kind == llmprotocol.ToolKindCustom {
+		encoded := responsesToolWire{Type: "custom", Name: tool.Name, Description: tool.Description}
+		if tool.CustomFormat != nil {
+			encoded.Format = &responsesCustomToolFormat{Type: "grammar", Syntax: tool.CustomFormat.Syntax, Definition: tool.CustomFormat.Definition}
+		}
+		return encoded
+	}
+	return responsesToolWire{Type: "function", Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, Strict: tool.Strict}
 }
 
 func encodeResponsesOutputFormat(output llmprotocol.OutputFormat, verbosity string) *responsesTextWire {

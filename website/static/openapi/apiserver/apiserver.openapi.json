@@ -22259,6 +22259,9 @@
                           "session_name": {
                             "type": "string"
                           },
+                          "session_name_from_prompt": {
+                            "type": "boolean"
+                          },
                           "session_policy": {
                             "nullable": true,
                             "type": "object",
@@ -22444,6 +22447,13 @@
                               },
                               "flow": {
                                 "type": "string"
+                              },
+                              "offered_tools": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "stage": {
                                 "type": "string"
@@ -23524,7 +23534,13 @@
                             "priced_records": {
                               "type": "integer"
                             },
+                            "refused_records": {
+                              "type": "integer"
+                            },
                             "router_calls": {
+                              "type": "integer"
+                            },
+                            "unanswered_records": {
                               "type": "integer"
                             },
                             "unpriced_reasons": {
@@ -23546,6 +23562,8 @@
                             "partly_priced_records",
                             "unpriced_records",
                             "looper_hop_records",
+                            "refused_records",
+                            "unanswered_records",
                             "list_price_records",
                             "caller_login_records",
                             "router_calls",
@@ -25245,8 +25263,8 @@
     },
     "/api/v1/observability/replays/models": {
       "get": {
-        "summary": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
-        "description": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
+        "summary": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id, else its configured name where two models would read alike",
+        "description": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id, else its configured name where two models would read alike",
         "operationId": "get_api_v1_observability_replays_models",
         "tags": [
           "observability"
@@ -25595,6 +25613,20 @@
                           "model": {
                             "type": "string"
                           },
+                          "offered_tools_added": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "offered_tools_removed": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "outcomes": {
                             "nullable": true,
                             "type": "array",
@@ -25642,6 +25674,9 @@
                             }
                           },
                           "previous_model": {
+                            "type": "string"
+                          },
+                          "pricing_source": {
                             "type": "string"
                           },
                           "prompt_tokens": {
@@ -25733,6 +25768,64 @@
                           "timestamp": {
                             "type": "string",
                             "format": "date-time"
+                          },
+                          "tool_calls": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "approval_ms": {
+                                  "nullable": true,
+                                  "type": "integer"
+                                },
+                                "arguments": {
+                                  "type": "string"
+                                },
+                                "client_ms": {
+                                  "nullable": true,
+                                  "type": "integer"
+                                },
+                                "ended_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "requested_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "returned_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "started_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "status": {
+                                  "type": "string"
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "timing_source": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name"
+                              ]
+                            }
                           },
                           "tool_failures": {
                             "type": "integer"
@@ -25835,10 +25928,26 @@
                                   "type": "string"
                                 }
                               },
+                              "offered_tools": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "parent": {
                                 "type": "string"
                               },
+                              "return_status": {
+                                "type": "string"
+                              },
+                              "returned_to_record_id": {
+                                "type": "string"
+                              },
                               "spawned_after_record_id": {
+                                "type": "string"
+                              },
+                              "task": {
                                 "type": "string"
                               },
                               "type": {
@@ -26571,10 +26680,26 @@
                                     "type": "string"
                                   }
                                 },
+                                "offered_tools": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "parent": {
                                   "type": "string"
                                 },
+                                "return_status": {
+                                  "type": "string"
+                                },
+                                "returned_to_record_id": {
+                                  "type": "string"
+                                },
                                 "spawned_after_record_id": {
+                                  "type": "string"
+                                },
+                                "task": {
                                   "type": "string"
                                 },
                                 "type": {
@@ -30004,6 +30129,9 @@
                     "session_name": {
                       "type": "string"
                     },
+                    "session_name_from_prompt": {
+                      "type": "boolean"
+                    },
                     "session_policy": {
                       "nullable": true,
                       "type": "object",
@@ -30189,6 +30317,13 @@
                         },
                         "flow": {
                           "type": "string"
+                        },
+                        "offered_tools": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "stage": {
                           "type": "string"

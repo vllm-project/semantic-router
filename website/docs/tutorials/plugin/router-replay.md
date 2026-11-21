@@ -92,7 +92,9 @@ routing data only, as `prompt_capture: none` does: the recipe and decision,
 the requested and selected model, token usage, cost, latency, status, the
 session, turn and agent identifiers the request carries, and the answer's
 SHA-256 and character count, which pair it with a shadow arm's answer without
-keeping its text. It keeps no request or response body and no prompt, and it
+keeping its text, the run's name (see [Session names](#session-names)) and its
+tool history without text.
+It keeps no request or response body and no prompt, and it
 writes to the store `global.services.router_replay` names: the `file` store
 unless you configure another, at most 1,000 records there. On the `memory`
 store, the decisions on this default and the requests that match no decision
@@ -107,6 +109,8 @@ field. Storage, retention and asynchronous writes are global service settings.
 | Capture setting | Default |
 | --- | --- |
 | `prompt_capture` | `none`: routing data only |
+| `capture_session_name` | `true`: the name a run reads by, whatever `prompt_capture` says (see [Session names](#session-names)) |
+| `capture_tool_names` | `true`: a run's tool history, each call's tool name, call id and result status, the names of the tools each request offered and each subagent's kind, without arguments, results, schemas or descriptions, whatever `prompt_capture` says |
 | Request and response bodies | captured, under `raw` |
 | Tool results | redacted |
 | `max_records` | 10,000 |
@@ -130,7 +134,11 @@ decision, model, signals, scores, timing, token usage and ids.
 - **`none`** keeps no request or response text, whatever
   `capture_request_body`, `capture_response_body`, `capture_tool_results` and
   the shadow’s `capture.enabled` say, and reads nothing for personal
-  data, so Replay adds no work for the decision model.
+  data, so Replay adds no work for the decision model. The exceptions are a
+  run's name, at most 120 characters, which `capture_session_name: false`
+  turns off, and its tool history without text (tool names, call ids, result
+  statuses, offered tool names and subagent kinds), which
+  `capture_tool_names: false` turns off.
 - **`raw`** keeps what the capture switches allow without checking it, so
   records can hold secrets and personal data. Restrict who reads them with
   `replay.read` and `replay.detail`, and choose a retention. A record keeps
@@ -869,7 +877,9 @@ compared with a baseline; with none it reads `n/a`. Amounts stay per currency.
 appears when the window holds Codex approval reviews. These come from the
 aggregate. Requests, sessions and the top three models and entrypoints come
 from the window's records, each client request once: a Looper hop's record
-counts in the request that made it, not as a request of its own. `Requests`
+counts in the request that made it, not as a request of its own. `Sessions`
+counts the sessions Runs lists: a session of only side requests, such as a title
+or a quota check, is none. `Requests`
 adds `in progress` and `unknown` when there are any. Models are ranked by
 `selected_model`, entrypoints by `original_model`, the model the client asked
 for. Above, one request asked for `qwen-chat` directly: it is the entrypoint of
@@ -877,9 +887,16 @@ that one request and the selected model of three, the two review requests routed
 to it included. A row's spend adds its requests' own costs as `total_spend` adds
 them, `actual_cost` and the cost of the Router's calls for each request, per
 currency; a request with no price is counted as such, so a row that reads
-`no price` has every one of its requests in `unpriced`. `--json` prints the
-same, with the aggregate's `by_currency`, provider-cache and `reviews` objects
-as the Router returns them and an `unpriced` count on each row.
+`no price` has every one of its requests in `unpriced`. A request the Router
+refused, or that ended with a `4xx`, before any model answered it, such as a
+block or a spend budget's refusal, cost nothing: the row counts it as `refused`, not as unpriced, as the
+aggregate's `refused_records` does. So did a request no provider answered,
+whose upstream connection failed, was reset or timed out before any response:
+the row counts it as `unanswered`, as the aggregate's `unanswered_records`
+does. A provider's own error reply, and a response with no price, stay
+unpriced. `--json` prints the same, with the aggregate's `by_currency`,
+provider-cache and `reviews` objects as the Router returns them and
+`unpriced`, `refused` and `unanswered` counts on each row.
 
 The command reads the management API at `--endpoint`, by default the local one
 on port 8080 plus `VLLM_SR_PORT_OFFSET`, and sends `VSR_MGMT_TOKEN` as the
@@ -1005,7 +1022,7 @@ not send, is filed under its `session-id`. Each record keeps its agent in
 | `harness` | `claude_code` or `codex` when the request carries their identity headers, `opencode`, `deepseek_harness` or `cursor` when its User-Agent names OpenCode, DeepSeek Harness or Cursor, `openclaw` when its system prompt opens with OpenClaw's `<!-- openclaw:` comment, or for OpenClaw's compaction, a call without tools whose system prompt opens with `You are a context summarization assistant.`, sent with `User-Agent: OpenAI/JS` and a `prompt_cache_key`. |
 | `id` | The short SHA-256 hash of the agent id, empty for the main agent. |
 | `parent_id` | The hash of the agent that spawned it, empty when the main agent did. |
-| `kind` | The subagent kind Codex sends in `x-openai-subagent`, such as `collab_spawn` or `review`. |
+| `kind` | The subagent kind the harness sends: Codex's `x-openai-subagent`, such as `collab_spawn` or `review`, or Claude Code's `x-claude-code-agent-type`, such as `Explore`. Kept unless `capture_tool_names: false`. |
 | `type` | The subagent type the harness names, such as Claude Code's `Explore` in `x-claude-code-agent-type`. |
 | `request_class` | The call's class as the [agent signal](../signal/heuristic/agent) reads it: Claude Code's `x-claude-code-request-class`, or `main`, `subagent`, `compaction` or `auxiliary` for an OpenCode call. |
 
@@ -1026,14 +1043,25 @@ recipes: the same summary in `run` and every call in time order in `calls`.
 
 | Field | Holds |
 | --- | --- |
-| `session_name` | The name the harness last gave the session, when Replay saw one: see [Session names](#session-names). |
+| `session_name` | The name the run reads by: the one the harness last gave the session, else the main agent's earliest first prompt, shortened. See [Session names](#session-names). |
 | `prompt` | The main agent's first prompt, when Replay kept it, without `<system-reminder>` blocks. A session-title request is not the task. |
-| `harness`, `models`, `duration_ms` | The harness, the calls each model answered with Looper hops included, and the time from the first call's start to the last one's end. |
-| `agents` | Each agent: its `label` (`main`, then `subagent 1`, `subagent 2` by first call), the `parent` agent's label, `kind`, `type`, `id`, `calls`, first and last call, `spawned_after_record_id` (the parent's last call before this agent's first), `models` and `cost`. |
-| `outcome` | `status` from the main agent's last call: `answered` when it gave a final answer, `failed`, `aborted`, `in_progress`, or `unknown` when it asked for a tool and no call followed. With it `final_answer_record_id`, the tool results the calls carried and how many failed, each counted once, and `reported`, the outcomes posted to `/api/v1/observability/outcomes` for the run's calls. |
-| `cost` | Spend per currency as the aggregate's `total_spend` adds it, the Router's own calls apart, with the calls missing a price counted, never as free, and the tokens. |
-| `events` | Calls per marker: `switch` (another model than the agent's previous call to the same entrypoint), `escalation` (an `escalate` Looper answered by a later model than its first), `guard` (jailbreak, PII or hallucination detected), `block` (a guard refused the call, with an error status or with a guard decision's fast response), `fallback` (a cross-model fallback tried another candidate), `failure`, `tool_failure`, `subagent_start` (a subagent's first call), `compaction` (request class `compaction`), `housekeeping` (request class `auxiliary`, or a session title), `tool_loop` (the call carried tool results), `image` (its newest turn holds an image). |
-| `calls` | Each call's `agent` label, `decision`, matched `signals` as `type:name`, `entrypoint`, `model`, `previous_model` on a switch, `effort`, `selection_method`, `session_action`, `reason` (protection's reason, and the Looper algorithm with its final attempt's reason), `request_class`, `agent_type`, `image_count`, lifecycle and status, tokens, `cost`, `router_calls`, `looper_attempts`, `tool_results`, `tool_failures`, `final_answer`, `outcomes`, `markers`, and the Looper `hops` it made. |
+| `harness`, `models`, `duration_ms` | The harness, the calls each model answered, and the time from the first call's start to the last one's end. A Looper call counts its hops, which answered it; a call refused or failed before any usage came back counts none; a fallback counts the candidate that answered. |
+| `agents` | Each agent: its `label` (`main`, then `subagent 1`, `subagent 2` by first call), the `parent` agent's label, `kind`, `type`, `id`, `calls`, first and last call, `spawned_after_record_id` (the parent's last call before this agent's first), `task` (the summary of the parent's spawn tool call, Claude Code's `Agent` or Codex's `spawn_agent`, matched to its subagents in the order both happened), `returned_to_record_id` (the parent's first call after this agent's last one, which took its result) with `return_status` (`succeeded`, or `failed` when its last call or its spawn tool's result failed), `offered_tools` (the tools its first turn offered the model, by name, an MCP tool with its server), `models` (the models of its turns, its side requests left out) and `cost`. |
+| `outcome` | `status` from the main agent's last call: `answered` when it gave a final answer, `failed`, `aborted`, `in_progress`, or `unknown` when it asked for a tool and no call followed, or its record says neither. A call gave a final answer when its tool trace ends with one, or, where Replay kept no tool trace, when the stop reason its `primary_response` outcome records is `end_turn`, `stop_sequence` or `max_tokens` rather than `tool_call`. With it `final_answer_record_id`, the tool results the calls carried and how many failed, each counted once on the call that first carried it, and `reported`, the outcomes posted to `/api/v1/observability/outcomes` for the run's calls. |
+| `cost` | Spend per currency as the aggregate's `total_spend` adds it, the Router's own calls apart, with the calls missing a price counted, never as free, and the tokens. A call the Router refused, or that ended with a `4xx`, before any model answered, and a call no provider answered, whose upstream connection failed, was reset or timed out before any response, cost nothing and are not counted as missing a price, nor is a call the Router made itself that no deployment answered (see `router_calls` in the [Router API](../../api/router.md)). |
+| `events` | Calls per marker: `switch` (another model than the agent's previous call to the same entrypoint; a side request neither switches nor is switched from), `escalation` (an `escalate` Looper answered by a later model than its first), `guard` (jailbreak, PII or hallucination detected), `block` (the Router refused the call itself: a guard, with an error status or with a guard decision's fast response, a `fast_response` block, a response guard, also in a stream it had begun, a rate limit or a spend budget), `fallback` (a cross-model fallback tried another candidate), `failure` (any other failed call or error status; a failed side request, such as Claude Code's quota probe, keeps the marker on its call but is not counted, since it fails no turn), `tool_failure` (a call that sent a failed tool result: a result counts on the call that first carried it, as `tool_results` and `tool_failures` do, and not on a later call, side request or Looper hop that carries it again in its history), `subagent_start` (a subagent's first call), `compaction` (request class `compaction`), `housekeeping` (request class `auxiliary`, or a session title), `tool_loop` (the call carried tool results, counted as `tool_results` is), `image` (its newest turn holds an image). |
+| `calls` | Each call's `agent` label, `decision`, matched `signals` as `type:name`, `entrypoint`, `model` (after a fallback, the candidate that answered), `previous_model` on a switch, `effort`, `selection_method`, `session_action`, `reason` (protection's reason, and the Looper algorithm with its final attempt's reason), `request_class`, `agent_type`, `image_count`, lifecycle and status, tokens, `cost` with `pricing_source` (`configured`, or `catalog_list_price` for the catalog's list price estimate), `router_calls`, `looper_attempts`, `tool_results`, `tool_failures`, `final_answer`, `outcomes`, `markers`, `tool_calls`, `offered_tools_added` and `offered_tools_removed` (the tools this turn offered beyond, or no longer offered after, the agent's previous turn, as when Claude Code's ToolSearch loads deferred tools), and the Looper `hops` it made. `tool_calls` lists the tool calls of the call's turn, from its response or else from the agent's next request when that request continues the same user turn, each tool call under one call only, each with `name`, `id`, a short `summary` (a command, a file name, a subagent's type and description), its `arguments` on one bounded line, `status`, `succeeded` or `failed`, once the agent's next request carried the result, and its timing: see [Tool timing](#tool-timing). |
+
+A side request is no turn of its agent, and its model is neither a switch nor
+the model a later call switches from. Replay records its kind in
+`request_kind`: `auxiliary` or `compaction` for a Claude Code request of that
+`x-claude-code-request-class`, `session_title` for a title request (see
+[Session names](#session-names)), and `probe` for a request that carries
+`x-vsr-probe`, as the probes and the harness run of `vllm-sr connect --check` do. A session of only
+side requests is no run and is left out of the list, such as the one `claude --continue` starts
+with its quota check: Claude Code 2.1.325 opens each interactive session with an `auxiliary`
+request of `max_tokens: 1` and the prompt `quota`, which Anthropic answers `429 rate_limit_error`
+through a custom base URL, with the Router in the path or without it.
 
 Without `replay.detail` a run keeps its tree, labels, markers and counts, and
 loses what its records would: the session name, the prompt, the agent hashes,
@@ -1061,10 +1089,18 @@ Events of one kind too close to tell apart share a marker with a count, and
 markers of different kinds move apart instead of merging, so each kind keeps
 a marker at every zoom; each marker has a hover card and opens its call. The
 legend names every model and event in words, and an event in it moves the
-timeline to the next call that has it. A segment lists its calls, and a call
-shows its decision and signals, model and effort, tokens and cost, status and
-reason, with a link to its record. The table of every call is one click
-further, its events as the same labelled badges, and the request list and a
+timeline to the next call that has it. A segment lists the tool calls its
+turns made, a line each with its arguments where they were kept, the time it
+took (see [Tool timing](#tool-timing)) and its result, a failed one in red,
+and then its calls. A call shows its decision and signals, model and effort,
+tokens and cost (marked `list price` when it is the catalog's estimate), status
+and reason, with a link to its record. Tool calls follow the record's capture.
+By default a record keeps each tool call's name and its result's status,
+whatever `prompt_capture` says; `capture_tool_names: false` keeps none, and a
+masking route never keeps them. A tool's arguments show only under `raw` with
+the request or response body that carried them captured, and a viewer without
+replay detail access sees tool names and results but no arguments. The table
+of every call is one click further, its events as the same labelled badges, and the request list and a
 session's turns show them too. A record page opens its run with **Open run**.
 
 Money on the **Requests** page reads in one currency: where a range holds
@@ -1103,15 +1139,40 @@ the one recognised by its prompt:
 | Harness | How it names the session | What Replay records |
 | --- | --- | --- |
 | Claude Code 2.1.273 and later | After the first prompt, an `x-claude-code-request-class: auxiliary` request asking for a JSON object of one `title` field. `/rename` sends nothing; the next request carries the command and its output in its history. | The title the answer gives on the title request's record, and the name a `/rename` gave on the record of each request whose history shows it. The latest names the run. |
-| Codex CLI 0.166.0 | Its terminal UI starts a thread of its own whose turn metadata says `thread_source: thread_title`, under a new `session-id`. No field of that request names the thread it titles, and `/rename` sends nothing. `codex exec` names no thread. | Neither name. A session holding only title requests is no run and is left out of the list. |
+| Codex CLI 0.166.0 | Its terminal UI starts a thread of its own, under a new `session-id`, whose turn metadata says `thread_source: thread_title` and whose request carries the first prompt after `User prompt:`. `/rename` sends nothing. | A title thread whose prompt matches a run's first prompt from the same client within two minutes, as Codex sends it right after the first turn, is filed under that run, and its answer names it. The match uses a hash of the client and the prompt that the Router holds in memory for that window only, so it needs the first turn and the title on the same Router. An unmatched title thread stays a session of its own, holding only title requests, which is no run and is left out of the list. |
 | OpenCode 1.18.10 | At the start of a session, a call without tools, under the session's own `x-session-id`, whose instructions open with `You are a title generator.` | The first line of the answer on the title request's record, which names the run. |
 
+A headless run, such as `claude -p` or `codex exec`, gets no title: its main
+agent's first prompt names it instead, cut to 120 characters on one line,
+without `<system-reminder>` blocks, and its record carries
+`session_name_from_prompt: true`. A title or `/rename` names the run over it,
+sent before or after the first prompt. Claude Code drops a first turn the
+person stops while it thinks, so the prompt after it is a first prompt too:
+the earliest one names a run that has no title.
+
 Claude Code marks its request class only with `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1`,
-which `vllm-sr connect claude-code` sets. The title is response text and a rename
-request text, so `session_name` is kept only under `prompt_capture: raw` with
-that side's body capture on, never from a masking route's request, and cleared
-for a viewer without `replay.detail`. A run without a name reads by its first
-prompt, then by its session id.
+which `vllm-sr connect claude-code` sets. Decision: a run's name is kept by
+default, whatever `prompt_capture` says, at most 120 characters, because the
+user already sees it in the harness and it holds far less than the prompt.
+Set `capture_session_name: false` on the `router_replay` plugin to keep none.
+It is never kept from a masking route's request, and it is cleared for a viewer
+without `replay.detail`. A run without a name reads by its session id.
+
+#### Tool timing
+
+Each tool call in a run's `tool_calls` carries `timing_source: gateway` and
+the times the Router sees: `requested_at`, when the response that asked for
+the call ended, `returned_at`, when the agent's next request that carried its
+result began, and `client_ms`, the time between. That window holds the tool's
+execution, any approval the harness waited for and the harness's own time,
+and the tool calls one response asked for share it, since the gateway sees
+them leave together and their results come back together. A call whose result
+no later request carried has no `returned_at`.
+
+`started_at`, `ended_at` and `approval_ms` are kept for a harness plugin that
+reports when each tool ran and how long it waited for approval; such a report
+joins the call by its tool call id (Claude Code's `tool_use` id, Codex's
+`call_id`) and sets `timing_source: plugin`. They are empty from the gateway.
 
 #### Model labels
 
@@ -1129,4 +1190,7 @@ one, else the display name of the catalog card its backend's provider maps its
 ]}
 ```
 
-A record of a model the configuration no longer holds reads by its name.
+No two models read alike: models whose labels would match, such as
+`qwen-small` and `qwen-strong` both on `provider_model_id: qwen36`, each read
+by their configured name instead. A record of a model the configuration no
+longer holds reads by its name.

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"cmp"
 	"context"
 	"strings"
 
@@ -104,7 +105,10 @@ func harnessRunAgent(ctx *RequestContext, cfg config.RouterLearningProtectionCon
 		identity.Type = facts.Type
 	}
 	if identity.ID != "" {
-		identity.Kind = boundedIdentityValue(headerValueCI(ctx, headers.XOpenAISubagent), maxAgentKindLength)
+		// Codex names a child's kind, such as collab_spawn or review, and
+		// Claude Code a subagent's type, such as Explore.
+		kind := cmp.Or(headerValueCI(ctx, headers.XOpenAISubagent), headerValueCI(ctx, headers.XClaudeCodeAgentType))
+		identity.Kind = boundedIdentityValue(kind, maxAgentKindLength)
 	}
 	if identity == (store.AgentIdentity{}) {
 		return nil

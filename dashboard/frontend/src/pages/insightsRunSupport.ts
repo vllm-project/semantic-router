@@ -141,7 +141,9 @@ export function runCostView(
   const others = (cost.by_currency ?? []).filter(
     (entry) => entry.currency !== currency && entry.total !== 0,
   )
-  const missing = cost.unpriced_records + cost.unpriced_router_calls
+  // An unpriced Router call leaves its record unpriced or partly priced, so
+  // the records count it already.
+  const missing = cost.unpriced_records
   const text = lead ? formatInsightsCost(lead.total, lead.currency) : 'no price'
   const counted = calls
     ? calls.filter((call) => call.cost !== undefined && call.currency !== currency).length

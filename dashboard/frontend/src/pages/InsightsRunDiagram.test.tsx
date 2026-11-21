@@ -197,4 +197,46 @@ describe('run diagram', () => {
     expect(html).toContain('data-legend="failure"')
     expect(html).toMatch(/data-legend="failure"[^]*Failed<\/span>[^]*>1<\/span>/)
   })
+
+  it("lists a block's tool calls with their time and result, and prices a list price", () => {
+    const toolCall: RunCall = {
+      ...failed,
+      request_kind: 'tool turn',
+      cost: 0.002,
+      currency: 'USD',
+      pricing_source: 'catalog_list_price',
+      tool_results: 2,
+      tool_calls: [
+        { name: 'Bash', arguments: 'pytest -q', status: 'succeeded', client_ms: 13_000 },
+        {
+          name: 'Read',
+          summary: 'README.md',
+          status: 'failed',
+          timing_source: 'plugin',
+          started_at: '2026-11-16T09:00:06Z',
+          ended_at: '2026-11-16T09:00:08Z',
+        },
+      ],
+    }
+    const [, subagent] = timeline.lanes
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TooltipProvider>
+          <RunSegmentPanel
+            segment={{ ...subagent.blocks[0], calls: [toolCall, toolCall] }}
+            call={toolCall}
+            onSelectCall={() => undefined}
+          />
+        </TooltipProvider>
+      </MemoryRouter>,
+    )
+    expect(html).toContain('aria-label="Tool calls"')
+    expect(html).toContain('pytest -q')
+    expect(html).toContain('13.0s')
+    expect(html).toContain('title="Run time the harness reported">2.0s')
+    expect(html).toContain('data-status="failed"')
+    expect(html).toContain('tool turn')
+    expect(html).toContain('list price')
+    expect(html).toContain('2 results sent')
+  })
 })

@@ -464,6 +464,9 @@ type RequestContext struct {
 	// only, like ApprovalReview.
 	SessionTitleRequest bool
 	sessionName         string
+	// titleSession is the run a Codex title thread was matched to, whose
+	// first prompt it titles.
+	titleSession string
 	// cancelAbandonedWork stops request-scoped background work if the response
 	// ends early. Completed responses allow that work to finish on its own.
 	cancelAbandonedWork      context.CancelFunc
@@ -512,6 +515,7 @@ type RequestContext struct {
 	// shadow arm's.
 	PrimaryOutputDigest      string
 	PrimaryOutputChars       int
+	PrimaryOutputStop        llmprotocol.StopReason
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ResponseBodyNeedsRewrite bool // The decoded client wire differs from the provider body.

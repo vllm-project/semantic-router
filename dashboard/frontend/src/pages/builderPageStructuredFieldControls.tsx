@@ -33,8 +33,12 @@ interface StructuredFieldEditorProps {
   renderField: RenderNestedField
 }
 
+// One item of a list field: Request Classes holds a request class,
+// Priorities a priority, Rules a rule.
 function fieldItemLabel(label: string): string {
-  return label.endsWith('s') ? label.slice(0, -1) : label
+  if (label.endsWith('ies')) return `${label.slice(0, -3)}y`
+  if (/(ss|sh|ch|x|z)es$/.test(label)) return label.slice(0, -2)
+  return label.endsWith('s') && !label.endsWith('ss') ? label.slice(0, -1) : label
 }
 
 function FieldShell({

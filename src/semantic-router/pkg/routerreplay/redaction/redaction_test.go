@@ -266,3 +266,24 @@ func TestRedactResponseBodyKeepsReviewVerdictAndClearsItsText(t *testing.T) {
 		}
 	}
 }
+
+// A viewer without replay detail access sees a run's tool calls by name and
+// result, and its subagents' places, but not what a tool or subagent was asked.
+func TestRedactResponseBodyKeepsRunToolNamesAndClearsArguments(t *testing.T) {
+	body := []byte(`{"object":"router_replay.run",
+		"run":{"agents":[{"label":"subagent 1","task":"Explore · private-canary","returned_to_record_id":"rec-3","return_status":"succeeded"}]},
+		"calls":[{"record_id":"rec-1","tool_calls":[{"name":"Bash","id":"call-1","summary":"private-canary","arguments":"{\"command\":\"private-canary\"}","status":"failed"}]}]}`)
+
+	redacted, changed, err := RedactResponseBody(body)
+	if err != nil || !changed {
+		t.Fatalf("RedactResponseBody() changed = %v, err = %v", changed, err)
+	}
+	if bytes.Contains(redacted, []byte("private-canary")) {
+		t.Fatalf("run kept tool or task text: %s", redacted)
+	}
+	for _, kept := range []string{`"name":"Bash"`, `"status":"failed"`, `"returned_to_record_id":"rec-3"`, `"return_status":"succeeded"`} {
+		if !bytes.Contains(redacted, []byte(kept)) {
+			t.Fatalf("run lost %s: %s", kept, redacted)
+		}
+	}
+}

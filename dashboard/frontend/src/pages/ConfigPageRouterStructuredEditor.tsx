@@ -311,15 +311,19 @@ export default function ConfigPageRouterStructuredEditor({
   }
   if (readOnly) return <ReadOnlyScalar schema={schema} value={value} />
   if (schema.kind === 'boolean') {
+    // An unset field shows what the Router does without it, and stays unset
+    // until changed.
+    const checked = (value ?? schema.defaultValue) === true
     return (
       <label className={styles.checkField}>
         <input
           type="checkbox"
           aria-label={schema.label}
-          checked={value === true}
+          checked={checked}
           onChange={(event) => onChange(event.target.checked)}
         />
-        {value === true ? 'Enabled' : 'Disabled'}
+        {checked ? 'Enabled' : 'Disabled'}
+        {value === undefined && schema.defaultValue !== undefined ? ' (default)' : null}
       </label>
     )
   }

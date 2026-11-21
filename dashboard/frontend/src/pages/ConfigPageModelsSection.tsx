@@ -486,6 +486,7 @@ export default function ConfigPageModelsSection(props: ConfigPageModelsSectionPr
           catalog={catalog}
           health={health}
           traffic={traffic}
+          catalogPrices={controller.catalogPrices}
           isReadonly={props.isReadonly}
           activeName={active?.name ?? null}
           resetKey={filters.resetKey}
