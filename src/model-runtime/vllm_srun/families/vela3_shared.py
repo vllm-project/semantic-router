@@ -18,6 +18,7 @@ from typing import Any
 
 from ..errors import INVALID_QUESTION, PackageError, QuestionError
 from ..registry.artifacts import package_file
+from ..text import bounds
 from .vela2.encoder_layout import MARKERS, EncoderLayout
 from .vela2.layout import Tokens
 
@@ -64,6 +65,23 @@ def tokens(root: Path) -> Tokens:
         ids=lambda value: list(cached(value)) if value else [],
         tokenizer=tokenizer,
     )
+
+
+def decision_state(
+    tokens: Tokens, state: str, max_len: int, truncates: bool
+) -> list[int] | None:
+    """The first ``max_len + 1`` tokens of a decision's state, read only that far.
+
+    A decision fits its whole state, keeps the state's first tokens
+    (``overflow: truncate``) or fails with ``max_length_exceeded``, so one
+    token past the input tells a longer state from one that fits. ``None`` for
+    a state certainly over the input when no decision ``truncates``: each of
+    them fails, and the state is not read at all.
+    """
+    if not truncates and bounds.surely_over(tokens.tokenizer, state, max_len):
+        return None
+    need = max_len + 1
+    return list(bounds.read(tokens.tokenizer, state, need).encoding.ids[:need])
 
 
 def layout(config: Mapping[str, Any], window: int, overlap: int) -> EncoderLayout:
