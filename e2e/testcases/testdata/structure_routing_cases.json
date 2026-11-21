@@ -16,6 +16,14 @@
     "should_match": true
   },
   {
+    "name": "Thai keyword inside running text",
+    "description": "The literal keyword ราคา matches inside Thai text written without spaces between words",
+    "query": "อยากทราบราคาสินค้านี้ครับ",
+    "expected_decision": "thai_price_routing",
+    "expected_matched_signal": "thai_price",
+    "should_match": true
+  },
+  {
     "name": "No structure rule matches",
     "description": "A short, unstructured query matches neither many_questions nor numbered_steps",
     "query": "What's a good recipe for pasta tonight?",
