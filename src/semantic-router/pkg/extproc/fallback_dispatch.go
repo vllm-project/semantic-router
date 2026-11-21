@@ -105,7 +105,7 @@ func (r *OpenAIRouter) shouldAttemptFallback(ctx *RequestContext) bool {
 	if !orch.Policy().Enabled {
 		return false
 	}
-	if ctx.LooperRequest || ctx.ResponseHeadersContinued || ctx.fallbackExecutedByCaller {
+	if ctx.LooperRequest || ctx.LooperStreamingActive || ctx.ResponseHeadersContinued || ctx.fallbackExecutedByCaller {
 		return false
 	}
 	return len(ctx.VSREligibleModelRefs) > 1

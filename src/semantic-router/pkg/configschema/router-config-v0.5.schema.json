@@ -3603,6 +3603,18 @@
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
+        },
+        "streaming": {
+          "$ref": "#/$defs/LooperStreamingConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LooperStreamingConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,

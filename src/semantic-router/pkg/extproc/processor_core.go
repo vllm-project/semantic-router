@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"runtime/debug"
+	"time"
 
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -18,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // handleRequestBodyDispatch routes body messages to the correct handler.
@@ -128,6 +130,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		}
 
 		if err := r.handleProcessRequest(stream, req, ctx); err != nil {
+			r.settleAbortedLooperStreamingUsage(ctx, err)
 			state, reason := replayLifecycleForProcessError(err)
 			r.finalizeRouterReplay(ctx, state, reason)
 			return err
@@ -172,6 +175,10 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
 	r.recordHeldStreamOverMessageLimit(ctx, err)
+	// Settle already-consumed Looper intermediate panel tokens even if the
+	// client disconnected during upstream prefill/queueing before ResponseHeaders
+	// arrived (ctx.IsStreamingResponse == false).
+	r.settleAbortedLooperStreamingUsage(ctx, err)
 	if ctx.InflightToken != 0 {
 		releaseInflightAdmission(ctx)
 	}
@@ -194,6 +201,81 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 
 	logging.Errorf("Error receiving request: %v", err)
 	return err
+}
+
+func (r *OpenAIRouter) settleAbortedLooperStreamingUsage(ctx *RequestContext, err error) {
+	if r == nil || ctx == nil || !ctx.LooperStreamingActive || ctx.LooperUsageSettled {
+		return
+	}
+	ctx.LooperUsageSettled = true
+	ctx.StreamingAborted = true
+	if !ctx.IsStreamingResponse {
+		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
+	}
+
+	if estimated := estimateAbortedLooperOutputTokens(ctx.SemanticStreamState); estimated > 0 {
+		ctx.LooperAuditedOutputTokens += estimated
+	}
+
+	promptTokens := int(ctx.LooperIntermediateUsage.PromptTokens)
+	completionTokens := int(ctx.LooperIntermediateUsage.CompletionTokens) + ctx.LooperAuditedOutputTokens
+	totalTokens := promptTokens + completionTokens
+
+	if ctx.RouterReplayID != "" {
+		r.updateRouterReplayUsageCost(ctx, routerreplay.UsageCost{
+			PromptTokens:     replayIntPtr(promptTokens),
+			CompletionTokens: replayIntPtr(completionTokens),
+			TotalTokens:      replayIntPtr(totalTokens),
+		})
+	}
+	if totalTokens > 0 {
+		recordSessionTurn(ctx, responseUsageMetrics{
+			promptTokens:     promptTokens,
+			completionTokens: completionTokens,
+		}, sessiontelemetry.TurnPricing{})
+	}
+
+	abortStage := "response_stream"
+	if ctx.UpstreamStatusCode >= 400 {
+		abortStage = "upstream_error_response"
+	} else if !ctx.IsStreamingResponse {
+		abortStage = "upstream_prefill"
+	}
+	abortReason := "upstream_response_failed"
+	if ctx.UpstreamStatusCode < 400 {
+		_, abortReason = replayLifecycleForReceiveError(err)
+	}
+	completionLatency := time.Duration(0)
+	if !ctx.StartTime.IsZero() {
+		completionLatency = time.Since(ctx.StartTime)
+	}
+	eventFields := map[string]interface{}{
+		"request_id":                     ctx.RequestID,
+		"model":                          firstNonEmpty(ctx.RequestModel, ctx.LooperTargetModel, ctx.VSRSelectedModel),
+		"target_model":                   firstNonEmpty(ctx.LooperTargetModel, ctx.VSRSelectedModel),
+		"decision":                       ctx.VSRSelectedDecisionName,
+		"prompt_tokens":                  promptTokens,
+		"intermediate_prompt_tokens":     ctx.LooperIntermediateUsage.PromptTokens,
+		"intermediate_completion_tokens": ctx.LooperIntermediateUsage.CompletionTokens,
+		"audited_stream_output_tokens":   ctx.LooperAuditedOutputTokens,
+		"completion_tokens":              completionTokens,
+		"total_tokens":                   totalTokens,
+		"usage_provenance":               "estimated",
+		"stream_aborted":                 true,
+		"abort_stage":                    abortStage,
+		"abort_reason":                   abortReason,
+		"completion_latency_ms":          completionLatency.Milliseconds(),
+		"cost":                           0.0,
+		"currency":                       "unknown",
+		"pricing":                        "looper_aborted_unpriced",
+	}
+	if len(ctx.LooperModelsUsed) > 0 {
+		eventFields["looper_models_used"] = ctx.LooperModelsUsed
+	}
+	if ctx.LooperIterations > 0 {
+		eventFields["looper_iterations"] = ctx.LooperIterations
+	}
+	logging.LogEvent("llm_usage", eventFields)
 }
 
 func replayLifecycleForProcessError(err error) (string, string) {
