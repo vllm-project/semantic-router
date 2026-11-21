@@ -15,7 +15,14 @@ from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import Protocol
 
-from .grading import MCQ_GRADER_VERSION, basic_grade
+from .grading import (
+    BINARY_RESULT,
+    MCQ_GRADER_VERSION,
+    TOKEN_COVERAGE_RESULT,
+    WEIGHTED_RUBRIC_RESULT,
+    ResultKind,
+    basic_grade,
+)
 
 
 class AdapterContext(Protocol):
@@ -41,15 +48,19 @@ class BenchmarkAdapter:
     requires_answer: bool = False
     requires_messages: bool = True
     weight: float = 1.0
+    result_kind: ResultKind = BINARY_RESULT
 
     def catalog_entry(self):
-        return {
+        entry = {
             "id": self.id,
             "title": self.title,
             "kind": self.kind,
             "source_url": self.source_url,
             "adapter_version": self.version,
         }
+        if self.result_kind != BINARY_RESULT:
+            entry["result_kind"] = self.result_kind
+        return entry
 
 
 _adapters: dict[str, BenchmarkAdapter] = {}
@@ -74,6 +85,12 @@ def _validate(adapter):
     for callback in (adapter.preflight, adapter.prepare):
         if callback is not None and not callable(callback):
             raise ValueError("Invalid benchmark plugin callback")
+    if adapter.result_kind not in {
+        BINARY_RESULT,
+        WEIGHTED_RUBRIC_RESULT,
+        TOKEN_COVERAGE_RESULT,
+    }:
+        raise ValueError("Unknown benchmark result kind")
 
 
 def _basic_execute(case, context):
@@ -123,6 +140,11 @@ def _initialize():
                 not in {"scicode", "tau3", "terminal-bench-2.1"},
                 weight=BENCHMARK_WEIGHTS[identity],
             )
+        from . import agent_task, draco  # noqa: PLC0415 - adapter initialization cycle
+
+        for diagnostic in (draco.adapter(), agent_task.adapter()):
+            _validate(diagnostic)
+            found[diagnostic.id] = diagnostic
         # Only the operator's installed Python environment supplies entry points.
         for entry in entry_points(group="vllm_sr.sr_bench.adapters"):
             value = entry.load()

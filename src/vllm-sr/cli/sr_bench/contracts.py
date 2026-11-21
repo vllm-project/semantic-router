@@ -29,6 +29,7 @@ from .dataset_io import (
     verified_lines,
 )
 from .experiments import validate_membership, validate_role
+from .grading import BINARY_RESULT
 from .native_output import configure as configure_output_policy
 
 MAX_PARAMETER_BYTES = 65536
@@ -597,6 +598,17 @@ def plan(manifest, *, policy=None):
     if m.get("adapter_versions", versions) != versions:
         raise ValueError("Frozen adapter versions differ from installed adapters")
     m["adapter_versions"] = versions
+    result_kinds = {
+        c["benchmark"]: get_adapter(c["benchmark"]).result_kind
+        for c in cases
+        if get_adapter(c["benchmark"]).result_kind != BINARY_RESULT
+    }
+    if m.get("result_kinds", result_kinds) != result_kinds:
+        raise ValueError("Frozen result kinds differ from installed adapters")
+    if result_kinds:
+        m["result_kinds"] = result_kinds
+    else:
+        m.pop("result_kinds", None)
     if m["mode"] == "live":
         cache = {}
         for case in cases:

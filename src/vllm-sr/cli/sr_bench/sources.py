@@ -9,7 +9,9 @@ import json
 import subprocess
 import tempfile
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from .contracts import VERSION, canonical, digest
 from .dataset_io import (
@@ -392,10 +394,21 @@ def prepare_dataset(
 
 
 def _write_dataset(
-    root, cases, profile, seed, sources, custom=False, *, preparation=None
-):
+    root: Path | str,
+    cases: Iterable[dict[str, Any]],
+    profile: str,
+    seed: int,
+    sources: dict[str, Any],
+    custom: bool = False,
+    *,
+    preparation: dict[str, Any] | None = None,
+    selection: str | None = None,
+) -> dict[str, Any]:
     """Stream canonical rows to a private stage, then publish immutable artifacts."""
     root = Path(root).expanduser().resolve()
+    if preparation and selection is not None:
+        raise ValueError("History preparation cannot override its selection protocol")
+    selection = SELECTION if preparation else selection or "stratified-hash-v1"
     datasets = root / "datasets"
     datasets.mkdir(parents=True, exist_ok=True, mode=0o700)
     if datasets.is_symlink() or datasets.resolve() != datasets:
@@ -437,7 +450,7 @@ def _write_dataset(
                 "profile": profile,
                 "seed": seed,
                 "custom_subset": custom,
-                "selection": SELECTION if preparation else "stratified-hash-v1",
+                "selection": selection,
                 **({"preparation": preparation} if preparation else {}),
             }
         )
@@ -455,7 +468,7 @@ def _write_dataset(
             "benchmarks": sorted(sources),
             "sources": sources,
             "seed": seed,
-            "selection": SELECTION if preparation else "stratified-hash-v1",
+            "selection": selection,
             **({"preparation": preparation} if preparation else {}),
             "split": "holdout" if profile == "standard" else "dev",
         }
@@ -512,11 +525,17 @@ def combine_datasets(manifests, store):
                 raise ValueError("Prepared dataset case count does not match")
 
     return _write_dataset(
-        Path(store).expanduser().resolve(),
-        cases(),
-        manifests[0]["profile"],
-        manifests[0]["seed"],
-        sources,
-        any(m.get("custom_subset") for m in manifests),
+        root=Path(store).expanduser().resolve(),
+        cases=cases(),
+        profile=manifests[0]["profile"],
+        seed=manifests[0]["seed"],
+        sources=sources,
+        custom=any(m.get("custom_subset") for m in manifests),
         preparation=preparation or None,
+        selection=(
+            "frozen-source-composition-v1"
+            if not preparation
+            and any(m.get("selection") != "stratified-hash-v1" for m in manifests)
+            else None
+        ),
     )

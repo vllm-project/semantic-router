@@ -55,6 +55,9 @@ class Target(BaseHTTPRequestHandler):
             trace.append(f'session_phase="{phase}"')
         if self.server.ack:
             trace.append(f'config_hash="{self.server.ack}"')
+        if self.server.inference_call_count is not None:
+            trace.append(f"inference_calls={self.server.inference_call_count}")
+            self.send_header("X-VSR-Selected-Model", "model")
         if trace:
             self.send_header("X-VSR-Trace", ", ".join(trace))
         self.end_headers()
@@ -117,6 +120,7 @@ def target():
     server.truncated = False
     server.delay = 0
     server.ack = None
+    server.inference_call_count = None
     server.session_phase = None
     server.usage_events = None
     server.cache_write_field = "cache_creation_tokens"
@@ -267,6 +271,7 @@ def test_session_aware_target_sends_case_stable_session_ids(
     tmp_path, target, monkeypatch
 ):
     target.ack = "fixed"
+    target.inference_call_count = 1
     document = manifest(target)
     document["cost_policy"] = "capability_only"
     document["targets"][0].update(
@@ -327,6 +332,7 @@ def test_run_compares_session_modes_without_leaking_to_auxiliary_calls(
     tmp_path, target, monkeypatch
 ):
     target.ack = "fixed"
+    target.inference_call_count = 1
     document = manifest(target)
     document["cost_policy"] = "capability_only"
     document["targets"] = [
@@ -426,6 +432,7 @@ def test_target_rejects_unsupported_session_mode(target, session_mode):
 
 def test_session_mode_defaults_to_stateless_requests(tmp_path, target, monkeypatch):
     target.ack = "fixed"
+    target.inference_call_count = 1
     document = manifest(target)
     document["cost_policy"] = "capability_only"
     document["targets"][0].update(
@@ -1214,7 +1221,7 @@ def test_evidence_pages_are_bounded_and_call_detail_is_run_scoped(tmp_path, targ
         store.page(run["id"], "calls", limit=501)
 
 
-def usage_trace(receipt: dict) -> str:
+def usage_trace(receipt: object) -> str:
     """The x-vsr-trace of a config-bound request with a usage receipt."""
     encoded = json.dumps(receipt).replace("\\", "\\\\").replace('"', '\\"')
     return f'config_hash="{"a" * 64}", model_usage="{encoded}"'

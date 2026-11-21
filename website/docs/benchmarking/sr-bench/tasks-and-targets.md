@@ -243,6 +243,118 @@ Record the pricing basis, and use exactly the same rates in paired runs.
 
 Preflight reports missing prerequisites before dispatch.
 
+## Scripted agent-task Chat diagnostic
+
+The opt-in `agent-task-chat-v1` adapter runs the maintained tasks from
+`bench/agent_task_live_benchmark.py`. It shares their task definitions, prompts and
+substring grader with the retained script. Each call receives the scripted full
+history, including tool-result fixtures. The diagnostic does not execute tools or
+use earlier model replies to construct later requests.
+
+| Suite | Tasks per repetition | Requests per repetition | Maximum calls per task |
+| --- | --- | --- | --- |
+| `smoke` | 4 | 12 | 3 |
+| `long-horizon` | 28 | 163 | 6 |
+| `all` | 32 | 175 | 6 |
+
+Prepare the bundled tasks locally on the worker host:
+
+```bash
+python -m cli.sr_bench.agent_task \
+  --suite smoke --task-repetitions 2 \
+  --store ./data/sr-bench > agent-task-dataset.json
+```
+
+Use the returned dataset object in a run manifest with `profile: quick` and
+`seed: 0`. Preparation preserves native task order and freezes all scripted turns,
+repetition identities and the bundled kernel digest. Repetitions must be positive
+and fit the dataset case limit; invalid values are rejected rather than clamped.
+The supported profiles are `smoke` and `quick`, not a Standard holdout.
+
+Set the subject target's `session_mode` to `session_aware`. The shared worker
+sends one stable session ID per task instance. Keep `max_calls_per_case` large
+enough for the selected suite, and freeze generation settings in the usual
+`sampling` or target `request_params` fields. The retained defaults are
+`temperature: 0` and `max_tokens: 96`. Set these benchmark options:
+
+```json
+{
+  "agent-task-chat-v1": {
+    "grader_version": "agent-task-native-substrings-v1"
+  }
+}
+```
+
+The shared streaming transport reads visible final content only and stops on
+unexpected failures or truncated output. Failed and unattempted task grades stay
+missing. It does not copy the retained runner's continuation after HTTP failures
+or its grading of truncated or hidden content. Both targets must support streaming
+for a live sr-bench comparison. Missing usage or model observations remain unknown;
+use `capability_only` when complete pricing evidence is unavailable.
+
+The CLI registers this adapter directly, including workers that copy the CLI
+without package metadata. Its shared kernel uses only the standard library.
+The source-only retained runner requires Python 3.10+ and an installed CLI;
+the bench distribution, Looper dependencies and Python floor remain unchanged.
+Responses, previous-response-ID continuation and existing plots remain in the
+retained runner. Real-model qualification and owner review still gate retirement.
+
+See [token-coverage results](./results.md#scripted-agent-task-diagnostics) before
+interpreting the diagnostic.
+
+## DRACO final-answer diagnostic
+
+The opt-in `draco-routed-answer-v1` adapter preserves the existing grounded-fusion
+rubric and runs subject and judge calls through the shared worker. It does not
+change the published benchmark suite or provide a cached-panel policy comparison.
+
+Prepare an existing DRACO JSON export locally on the worker host:
+
+```bash
+python -m cli.sr_bench.draco \
+  --source-path "$DRACO_PATH" --revision "$DRACO_REVISION" \
+  --source-partition "$DRACO_PARTITION" \
+  --domains Medicine,Law --seed 42 --max-samples 8 \
+  --store ./data/sr-bench > draco-dataset.json
+```
+
+The source revision and upstream partition are required. The output freezes
+source bytes, native task identities and the legacy domain filter, shuffle and
+cap. Use its dataset object in a run manifest with the same profile and seed.
+Only smoke/quick diagnostics are supported; missing inputs require local
+preparation, not an automatic download or an inferred holdout.
+
+Register a fixed single-model auxiliary judge and set these benchmark options:
+
+```json
+{
+  "draco-routed-answer-v1": {
+    "judge": "rubric-judge",
+    "grader_version": "draco-legacy-rubric-strict-v1",
+    "batch_size": 8
+  }
+}
+```
+
+Both endpoints must support OpenAI-compatible streaming. The legacy
+grounded-fusion Ollama proxy returns buffered JSON and cannot serve as this
+adapter's judge endpoint. Freeze generation settings rather than bypassing the
+transport's parameter policy. Each case needs one subject call plus one judge
+call per criterion batch; preflight rejects an insufficient call budget.
+
+For a Fusion subject, use `kind: mom`, `cost_policy: capability_only` and omit
+`max_inference_calls`. The Router's priced-call gate supports a direct call limit
+of one, not a Fusion bound. Do not relabel a compound route as a single model to
+obtain a price; missing child usage or prices must remain unknown.
+
+The adapter is registered in the trusted CLI initializer, including worker images
+that copy the CLI without distribution metadata. Python 3.10+ and the updated CLI
+are also required by the retained grounded-fusion commands that share its rubric
+kernel. Reasoning/Looper distribution requirements are unchanged.
+
+See [weighted diagnostic results](./results.md#weighted-rubric-diagnostics) before
+interpreting a run.
+
 ## Next
 
 - [Plan and run](./plan-and-run.md)

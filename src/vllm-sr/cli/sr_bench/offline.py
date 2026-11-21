@@ -9,7 +9,7 @@ from .accounting import BUCKETS, correction_metadata, effective_calls
 from .adapters import get_adapter
 from .contracts import plan_digest
 from .experiments import inherit_membership
-from .grading import FINAL_GRADER_VERSION, basic_grade
+from .grading import FINAL_GRADER_VERSION, basic_grade, require_binary_results
 from .provenance import capture_runner
 from .replay_validation import ReplayEligibilityError, ReplayValidator
 
@@ -18,6 +18,7 @@ BASIC = {"mmlu-pro", "gpqa-diamond", "arc-agi-2"}
 
 def regrade(store, run_id):
     run = store.get(run_id)
+    require_binary_results(manifest=run["manifest"], operation="Offline regrading")
     if run["status"] != "completed" or run["manifest"]["mode"] != "live":
         raise ValueError("Regrading requires a completed live run")
     cases = {case["id"]: case for case in run["manifest"]["cases"]}
@@ -78,6 +79,7 @@ def regrade(store, run_id):
 
 def export_training(store, run_id):
     run = store.get(run_id)
+    require_binary_results(manifest=run["manifest"], operation="Training export")
     if run["status"] != "completed" or run["manifest"]["mode"] != "live":
         raise ValueError("Training export requires a completed live run")
     manifest = run["manifest"]
