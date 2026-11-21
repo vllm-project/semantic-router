@@ -37,6 +37,8 @@ type semanticResponseStreamState struct {
 	order      []int
 	terminal   bool
 	failed     *llmprotocol.ProtocolError
+	// decoded reports that the stream decoder read at least one event.
+	decoded bool
 }
 
 type semanticStreamItem struct {
@@ -68,6 +70,10 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	buffers := semanticStreamBuffers{}
 	responseBody, endOfStream = r.bridgeBufferedBody(&buffers, responseBody, endOfStream, ctx)
 	buffers.push(responseBody, ctx)
+	if endOfStream && buffers.unread(ctx) {
+		// The client gets what a buffered client gets for such a body.
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
 	// TTFT waits for the first event that carries content: a keepalive or
 	// comment frame a gateway sends while it queues is not the model's answer.
 	// It is recorded before the stream settles, because the turn's session
@@ -138,6 +144,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
+}
+
+// unread reports a body the provider answered whole, which its client has not
+// seen yet, that neither the bridge nor the stream decoder could read
+// anything from.
+func (buffers *semanticStreamBuffers) unread(ctx *RequestContext) bool {
+	state := ctx.SemanticStreamState
+	return !ctx.UpstreamBodyStreamed && !buffers.bridged && ctx.ProtocolResponseStream != nil && state != nil && !state.decoded
 }
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
@@ -279,6 +293,14 @@ func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *e
 	if ctx.ProtocolResponseStream != nil &&
 		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted || buffers.bridged) {
 		body := buffers.translated
+		// A stream failure switches a same-format client from the public
+		// filter's bytes to the codec's frames, which carry only the failing
+		// read's output. The tool-argument frames the filter held back in
+		// earlier reads must ride along, or the client loses the accepted
+		// prefix of the call the provider went on to break.
+		if ctx.StreamingAborted && !requiresClientResponseRewrite(ctx) {
+			body = append(ctx.PublicChatUsageFilter.ReleaseHeldForAbort(), body...)
+		}
 		// A bridged answer replaces a gzip provider body, and the client's
 		// content-encoding still names that coding, so the frames carry it too.
 		if buffers.bridged && ctx.UpstreamResponseGzip {
@@ -384,6 +406,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	if state == nil {
 		return
 	}
+	state.decoded = state.decoded || len(events) > 0
 	for _, event := range events {
 		state.sawContent = state.sawContent || streamEventCarriesContent(event)
 		if event.ResponseID != "" {
@@ -610,6 +633,9 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
 	clean := streamErr == nil && !ctx.StreamingAborted
 	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
+		if !ctx.StreamingAborted {
+			r.finishNativeFallbackResponse(ctx, "")
+		}
 		r.commitStreamedAnswer(ctx, semanticResponse)
 	}
 	r.endStreamRouterReplay(ctx, clean)
@@ -761,6 +787,10 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
+		if r.recordInterruptedStreamUsage(ctx) {
+			// Request finalization settles the partial charge.
+			return
+		}
 		// The stream carried no usable usage, so the request is settled with
 		// what it knows, as the buffered path does: skipping the report would
 		// leave its output tokens out of a token budget. What it knows is an

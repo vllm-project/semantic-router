@@ -222,8 +222,9 @@ A new SLO ceiling on estimated request cost removes candidates whose
 `estimated_cost` exceeds it before the objective runs. With a lexicographic
 objective whose first priority is quality, that is CONCUR's local constrained
 rule: the most accurate candidate within the per-request budget. When no
-candidate fits, the existing `on_no_candidates` policy applies (the default is
-`cheapest`).
+candidate fits, the existing `on_no_candidates` policy applies. Its default,
+`cheapest`, can still pick a candidate whose estimated cost exceeds the ceiling;
+a decision that must never exceed it sets `on_no_candidates: fail`.
 
 ### Budgets
 

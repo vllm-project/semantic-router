@@ -48,8 +48,10 @@ func (a *replayCostAccumulator) add(record routerreplay.RoutingRecord) {
 	routerPriced, routerGap := a.addRouterCalls(record)
 	if record.LifecycleState != routerreplay.LifecycleCompleted {
 		// Its cost may still miss calls, and only a completed request is
-		// compared with a baseline.
-		a.countRecord(modelPriced || routerPriced, false, store.UnpricedNotCompleted)
+		// compared with a baseline. A stream cut short is priced at the
+		// usage it reported.
+		partial := modelPriced && routerGap == "" && record.CostAccounting != nil && record.CostAccounting.PartialUsage
+		a.countRecord(modelPriced || routerPriced, partial, store.UnpricedNotCompleted)
 		return
 	}
 	a.addSavings(record, modelPriced)

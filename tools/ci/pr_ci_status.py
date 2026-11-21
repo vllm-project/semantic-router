@@ -19,6 +19,7 @@ from manual_ci import (
     main_contains,
     plan_for_run,
     source_identity,
+    trusted_queue_pull,
 )
 from pr_ci_events import resolve_event
 from pr_ci_pending import fingerprint, provenance, recover_pending, repair
@@ -84,6 +85,15 @@ class StatusClient(GitHubClient):
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 
+def qualifies_for_merge(repo: str, pull: dict, plan: dict | None) -> bool:
+    # A new Ready event must not promote the old draft run's receipt.
+    return (
+        plan is not None
+        and plan.get("draft") is False
+        and (pull.get("draft") is False or trusted_queue_pull(pull, repo))
+    )
+
+
 def publish(
     client,
     repo: str,
@@ -96,6 +106,8 @@ def publish(
     dry_run=False,
     reason: str | None = None,
 ) -> dict:
+    if state == "success" and not qualifies_for_merge(repo, pull, plan):
+        return {"ignored": "draft CI does not qualify this revision for merge"}
     title, summary = presentation(state, repo, pull, run, plan, reason)
     external = f"{PREFIX}{pull['number']}:{run['id']}:{run['run_attempt']}"
     payload = {
@@ -150,6 +162,8 @@ def publish(
         or not latest_run(client, repo, run)
     ):
         return {"ignored": "superseded while preparing status"}
+    if state == "success" and not qualifies_for_merge(repo, current, plan):
+        return {"ignored": "PR became draft while preparing its Gate"}
     if state != "legacy":
         fresh_checks = owned_checks(client, repo, pull)
         current_checks = [c for c in fresh_checks if c.get("external_id") == external]

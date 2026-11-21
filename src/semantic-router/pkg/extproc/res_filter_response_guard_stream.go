@@ -91,6 +91,10 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	buffers := semanticStreamBuffers{}
 	body, endOfStream = r.bridgeBufferedBody(&buffers, body, endOfStream, ctx)
 	buffers.push(body, ctx)
+	if endOfStream && buffers.unread(ctx) {
+		r.recordUnreadStream(ctx, responseGuardIncomplete)
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
 	// A held stream is still the model's answer arriving: it records TTFT here
 	// too, before the release decides what the client sees.
 	recordStreamingTTFT(ctx)
@@ -144,6 +148,7 @@ func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *
 		metrics.RecordResponseGuardBuffered(requestDecisionStateKey(ctx), hold.outcome)
 	}
 	if plan.blocked != nil {
+		r.finishNativeFallbackResponse(ctx, "policy_blocked")
 		plan.commit()
 		return r.refuseHeldStream(ctx, plan.refusal, "request_rejected")
 	}
@@ -157,6 +162,7 @@ func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *
 	if delivered != nil {
 		r.updateResponseCache(ctx, delivered)
 	}
+	r.finishNativeFallbackResponse(ctx, "")
 	plan.commit()
 	response := heldStreamPart(frames)
 	if options := plan.headerOptions(); len(options) > 0 {

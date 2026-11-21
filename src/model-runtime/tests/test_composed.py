@@ -17,11 +17,14 @@ import pytest
 import torch
 from vllm_srun import assets as assetlib
 from vllm_srun.config import EngineArgs, ServeConfig
+from vllm_srun.errors import RequestError
 from vllm_srun.families.decision3 import composed, prompt
 from vllm_srun.families.decision3.state_once import StateOnceModel
 from vllm_srun.plugins.base import SurfaceRequest
+from vllm_srun.text import bounds
 
 from .conftest import start_runtime
+from .test_input_bounds import SENTENCE, PromptRecorder
 
 FP32_TOLERANCE = 2e-5
 
@@ -469,3 +472,74 @@ def test_an_at_past_the_clip_fails_alone_with_its_reason(model, located):
         and answers["late"]["reason"] == "at_out_of_range"
     )
     assert answers["last"]["time"] == 19.25
+
+
+# ------------------------------------------------------------------ a state over the request's token cap
+
+
+def check_long_states(model, monkeypatch, plan, blocks):
+    """``plan(state)`` refuses a state over the request's token cap as it did read whole, reading no further than the cap.
+
+    The request has ``blocks`` state blocks. A state certainly over the cap is
+    not read; any other is read in part, once for each block.
+    """
+    cap = model.info.limits["max_request_tokens"]
+    recorder = PromptRecorder(model.prompts.text)
+    monkeypatch.setattr(model.prompts, "text", recorder)
+    # The probe that tells which cuts this tokenizer keeps exact is not a read of a state.
+    known = bounds.facts(recorder)
+    over = SENTENCE * (3 * bounds.reach(cap + 1) // len(SENTENCE))
+    certain = SENTENCE * (2 * cap * known.chars_per_token // len(SENTENCE))
+
+    def refused(state):
+        """The characters of each text holding ``state`` that the tokenizer encoded, and the refusal's message."""
+        recorder.texts.clear()
+        with pytest.raises(RequestError) as error:
+            plan(state)
+        assert error.value.reason == "request_tokens" and error.value.limit == cap
+        return [len(text) for text in recorder.texts if SENTENCE in text], str(
+            error.value
+        )
+
+    reads, message = refused(certain)
+    assert reads == [] and f"more than {cap} tokens" in message
+    reads, bounded = refused(over)
+    assert len(reads) == blocks and max(reads) < len(over) // 2
+    with monkeypatch.context() as patch:
+        patch.setattr(bounds, "facts", lambda tokenizer: bounds.WHOLE)
+        _, whole = refused(over)
+    assert bounded == whole == message
+
+
+def test_a_state_over_the_request_cap_is_refused_before_its_end_is_read(
+    model, monkeypatch
+):
+    def plan(state):
+        return model.plan_composed(
+            {"photo": "<photo>", "notes": state},
+            {"box": QUESTIONS["box"], "plain": QUESTIONS["plain"]},
+            [],
+            None,
+            ASSETS,
+        )
+
+    check_long_states(model, monkeypatch, plan, blocks=1)
+
+
+def test_a_track_over_a_state_past_the_request_cap_reads_no_further(
+    model, located, monkeypatch
+):
+    def plan(state):
+        return model.plan_composed(
+            state,
+            {
+                "track": {"type": "track", "instructions": "the dog"},
+                "at": {"type": "box", "instructions": "the dog", "at": 7.3},
+            },
+            [],
+            [CLIP],
+            {},
+        )
+
+    # The request's state block and the track windows' are the same text, each read as far as the cap.
+    check_long_states(model, monkeypatch, plan, blocks=2)

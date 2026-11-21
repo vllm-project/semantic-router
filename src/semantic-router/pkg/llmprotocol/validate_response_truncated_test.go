@@ -103,14 +103,15 @@ func TestToolCallStopAtOutputLimit(t *testing.T) {
 	}
 }
 
-// A content filter or an output limit can end a reply before any output, as
-// when the limit went to reasoning the client asked to omit. Any other stop
-// with no output is an upstream defect.
+// A model that ended its turn with nothing to say, a content filter or an
+// output limit can end a reply before any output, as when the limit went to
+// reasoning the client asked to omit. Any other stop with no output, such as a
+// tool call that names no call, is an upstream defect.
 func TestValidateResponseAcceptsNoOutputOnlyWhenTheStopExplainsIt(t *testing.T) {
 	limits := DefaultPolicy().Limits
 	for stop, explained := range map[StopReason]bool{
 		StopMaxTokens: true, StopContextWindow: true, StopContentFilter: true,
-		StopEndTurn: false, StopToolCall: false,
+		StopEndTurn: true, StopToolCall: false,
 	} {
 		err := ValidateResponse(Response{Generation: 1, ID: "response", StopReason: stop, Usage: Usage{State: UsageUnavailable}}, limits)
 		if !explained {

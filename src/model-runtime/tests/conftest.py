@@ -141,9 +141,8 @@ def png_url():
     return make
 
 
-@pytest.fixture(scope="session")
-def mp4_url(tmp_path_factory):
-    """``mp4_url(width, height, frames, fps, seed)``: a data URL of a deterministic MPEG-4 video (OpenCV)."""
+def _video_urls(tmp_path_factory, container: str, mime: str):
+    """``make(width, height, frames, fps, seed)``: a data URL of a deterministic MPEG-4 video in this container."""
     import base64
 
     import numpy as np
@@ -155,7 +154,8 @@ def mp4_url(tmp_path_factory):
         width: int, height: int, frames: int, fps: float = 8.0, seed: int = 0
     ) -> str:
         rng = np.random.default_rng(seed)
-        path = root / f"{width}x{height}-{frames}-{fps}-{seed}.mp4"
+        # OpenCV's FFmpeg writer takes the container from the file name.
+        path = root / f"{width}x{height}-{frames}-{fps}-{seed}.{container}"
         writer = cv2.VideoWriter(
             str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (width, height)
         )
@@ -169,6 +169,18 @@ def mp4_url(tmp_path_factory):
             frame[top : top + side, left : left + side] = (255 - 7 * index) % 256
             writer.write(frame)
         writer.release()
-        return "data:video/mp4;base64," + base64.b64encode(path.read_bytes()).decode()
+        return f"data:{mime};base64," + base64.b64encode(path.read_bytes()).decode()
 
     return make
+
+
+@pytest.fixture(scope="session")
+def mp4_url(tmp_path_factory):
+    """``mp4_url(width, height, frames, fps, seed)``: a data URL of a deterministic MPEG-4 video (OpenCV)."""
+    return _video_urls(tmp_path_factory, "mp4", "video/mp4")
+
+
+@pytest.fixture(scope="session")
+def ts_url(tmp_path_factory):
+    """``ts_url(width, height, frames, fps, seed)``: the frames of ``mp4_url`` as one MPEG transport stream segment."""
+    return _video_urls(tmp_path_factory, "ts", "video/mp2t")
