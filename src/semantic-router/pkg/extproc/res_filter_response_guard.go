@@ -47,6 +47,27 @@ type responseGuardRuleRun struct {
 	matchedRules []string
 }
 
+// responseGuardAnswer combines the primary text with the generated audio transcripts.
+func responseGuardAnswer(response *llmprotocol.Response) string {
+	var parts []string
+	if text := semanticAssistantContent(response); text != "" {
+		parts = append(parts, text)
+	}
+	for _, choice := range slices.Concat([][]llmprotocol.OutputItem{response.Output}, response.Alternatives) {
+		for _, item := range choice {
+			if item.Role != llmprotocol.RoleAssistant {
+				continue
+			}
+			for _, block := range item.Content {
+				if audio := block.GeneratedAudio; audio != nil && audio.Transcript != "" {
+					parts = append(parts, audio.Transcript)
+				}
+			}
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
 // runResponseGuard reads the response_guard rules of the plugins the request
 // runs over answer, in order, until one blocks, and returns nil when it runs
 // no guard. Without the recipe's classifier no rule can be read, so every
