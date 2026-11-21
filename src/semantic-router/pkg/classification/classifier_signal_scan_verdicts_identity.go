@@ -46,7 +46,8 @@ func (c *Classifier) windowModelIdentity(name string) ([]string, bool) {
 			return cmp.Or(cmp.Compare(a[0], b[0]), cmp.Compare(a[1], b[1]))
 		})
 		if card, ok := c.decisionTaskCard(name); ok {
-			model = append(model, card.Repo, card.Revision, card.ModelSHA256)
+			// With dtype: auto, the same weights can run at different precisions.
+			model = append(model, card.Repo, card.Revision, card.ModelSHA256, card.Dtype)
 		} else if len(connection.Placements) == 0 && declared.Artifact == "" {
 			return nil, false
 		}

@@ -70,6 +70,34 @@ func TestSharedGuardWindowsAttachedIdentity(t *testing.T) {
 	}
 }
 
+func TestSharedGuardWindowsEffectivePrecision(t *testing.T) {
+	_, store := sharedVerdictTestServer(t)
+	const model = "guard-v1"
+	fake := runtimetest.New(runtimetest.Model{
+		ID: model, Repo: "example/guard", Revision: "v1", Family: presets.FamilyVela3D3,
+		MaxInputTokens: 32_768, Dtype: "fp32",
+	})
+	upstream := httptest.NewServer(fake.Handler())
+	t.Cleanup(upstream.Close)
+	text := scanProse(4_000)
+	// Each replica starts with an empty local cache and the same deployment.
+	scanOnNewReplica := func() int {
+		t.Helper()
+		classifier := attachedVerdictTestClassifier(t, store, upstream.URL, func(d *config.ModelDeployment) { d.Dtype = "auto" })
+		before := len(guardStates(fake))
+		got := evaluateTurn(classifier, text)
+		require.Empty(t, got.SignalErrors)
+		require.Equal(t, scanCoverageFull, got.ScanCoverage["jailbreak:prompt_attack"])
+		return len(guardStates(fake)) - before
+	}
+	windows := scanOnNewReplica()
+	require.Positive(t, windows)
+	require.Zero(t, scanOnNewReplica(), "unchanged fp32 windows should be reused")
+	fake.SetDtype(model, "bf16/fp32-readout")
+	require.Equal(t, windows, scanOnNewReplica(), "a change in reported precision must rescan every window")
+	require.Zero(t, scanOnNewReplica(), "unchanged bf16 windows should be reused")
+}
+
 func attachedVerdictTestClassifier(t *testing.T, store *config.GuardVerdictStoreConfig, endpoint string, configure ...func(*config.ModelDeployment)) *Classifier {
 	t.Helper()
 	cfg := verdictTestConfig(t, store, endpoint, "guard-v1", func(d *config.ModelDeployment) {

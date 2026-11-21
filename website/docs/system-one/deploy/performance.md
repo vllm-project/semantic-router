@@ -427,6 +427,9 @@ For `systemone` deployments, the hash also binds the remote endpoint, model
 name, API schema and deviations. Attached `model_runtime` deployments bind each
 effective endpoint and served model, including attached workers in a mixed
 managed/attached replica pool, alongside the observed model identity.
+For `model_runtime`, that identity includes the precision reported by the runtime.
+With `dtype: auto`, replicas running the same weights at different precisions
+therefore scan their windows independently.
 Both providers bind static deployment `headers` and `tls.server_name`, which
 is sent as SNI and can select a different backend policy. Changing these inputs
 forces a fresh scan across classifier generations; reordering headers or replicas
