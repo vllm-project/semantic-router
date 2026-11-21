@@ -55,3 +55,14 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://platform.moonshot.ai/docs/api/chat
+- catalog: moonshot/kimi-k3.1-pro
+  relationship: first_party
+  id: kimi-k3.1-pro
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_effort
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-20
+    source: https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart

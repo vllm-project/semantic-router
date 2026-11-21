@@ -101,6 +101,7 @@ inventory:
           - mistral/mistral-large-3
       - publisher: Moonshot / Kimi
         representative_models:
+          - moonshot/kimi-k3.1-pro
           - moonshot/kimi-k3
           - moonshot/kimi-k2.7-code
           - moonshot/kimi-k2.6
