@@ -36,6 +36,9 @@ type ModelCard struct {
 	Accelerator    string
 	Device         string
 	Dtype          string
+	// PrecisionEpoch is local to an observed pool. It changes when the common
+	// effective precision is lost, restored or replaced; it is not a model ID.
+	PrecisionEpoch uint64 `json:"-"`
 	Ready          bool
 	Status         string
 	Reason         string

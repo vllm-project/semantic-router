@@ -105,7 +105,7 @@ func (v *windowVerdicts) put(key windowVerdictKey, response modelservice.Respons
 // keptWindow returns the answers an earlier request's read of the same input
 // gave a window call, and marks the window reused.
 func (c *Classifier) keptWindow(ctx context.Context, call *systemOneCall) (modelservice.Response, bool) {
-	if call.verdict == nil {
+	if !c.windowVerdictCurrent(call) {
 		return modelservice.Response{}, false
 	}
 	response, ok := c.windowVerdicts.get(*call.verdict)
@@ -115,7 +115,7 @@ func (c *Classifier) keptWindow(ctx context.Context, call *systemOneCall) (model
 		}
 		var expires time.Time
 		response, expires, ok = c.sharedVerdicts.get(ctx, *call.verdict)
-		if !ok {
+		if !ok || !c.windowVerdictCurrent(call) {
 			return modelservice.Response{}, false
 		}
 		if !keptAnswers(call, response) || !restoreWindowSpans(call, response) {
@@ -143,11 +143,24 @@ func (c *Classifier) keepWindow(ctx context.Context, call *systemOneCall, respon
 		return
 	}
 	metrics.RecordSignalScanWindow(call.deployment, "read")
-	if call.verdict != nil && keptAnswers(call, response) {
+	if c.windowVerdictCurrent(call) && keptAnswers(call, response) {
 		c.windowVerdicts.put(*call.verdict, response)
 		expires := c.sharedVerdicts.put(ctx, *call.verdict, response)
 		c.windowVerdicts.published(*call.verdict, expires)
 	}
+}
+
+// Reads and publications may run after a queued window's pool has changed.
+// Even a return to the original dtype cannot validate an intervening result.
+func (c *Classifier) windowVerdictCurrent(call *systemOneCall) bool {
+	if call.verdict == nil {
+		return false
+	}
+	if call.scan.verdicts == nil || call.scan.verdicts.precisionEpoch == 0 {
+		return true
+	}
+	card, ok := c.models.runtime.CurrentDeploymentCard(call.deployment)
+	return ok && card.PrecisionEpoch == call.scan.verdicts.precisionEpoch
 }
 
 // verdictKey keys a window of the scan in windowVerdicts, nil when the scan
@@ -195,8 +208,9 @@ func cloneWindowResponse(response modelservice.Response) modelservice.Response {
 // scan of the response stage keeps nothing: it reads an answer that is new
 // on every request.
 type scanVerdictKeys struct {
-	seed   [sha256.Size]byte
-	blocks [][sha256.Size]byte
+	seed           [sha256.Size]byte
+	blocks         [][sha256.Size]byte
+	precisionEpoch uint64
 }
 
 func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
@@ -217,10 +231,10 @@ func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
 	if !ok {
 		return nil
 	}
-	for _, field := range append(model, string(sent)) {
+	for _, field := range append(model.fields, string(sent)) {
 		writeVerdictField(seed, field)
 	}
-	keys := &scanVerdictKeys{}
+	keys := &scanVerdictKeys{precisionEpoch: model.precisionEpoch}
 	seed.Sum(keys.seed[:0])
 	chain := keys.seed
 	for from := 0; from+windowVerdictBlock <= len(scan.text); from += windowVerdictBlock {

@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 func TestGuardWindowCredentialsDisableEveryProvider(t *testing.T) {
@@ -41,6 +43,19 @@ func TestGuardWindowMixedReplicaIdentity(t *testing.T) {
 	}}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"guard": d}
 	c := &Classifier{Config: cfg}
+	card := modelservice.ModelCard{Dtype: "fp32", PrecisionEpoch: 1}
+	c.decisionCards = map[string]modelservice.ModelCard{"guard": card}
+	services := &observedDecisionServices{cardServices: cardServices{card: card}}
+	c.models = &classifierModelRuntime{runtime: serving.New(services, nil)}
+	_, ok := c.windowModelIdentity("guard")
+	require.False(t, ok, "a prepared card cannot substitute for a live observation, even for managed pools")
+	services.ready = true
+	for _, unknown := range []string{"", "auto"} {
+		services.card.Dtype = unknown
+		_, ok = c.windowModelIdentity("guard")
+		require.False(t, ok, "unknown effective precision must disable both caches")
+	}
+	services.card = card
 	before, ok := c.windowModelIdentity("guard")
 	require.True(t, ok)
 	d.Replicas[0], d.Replicas[2] = d.Replicas[2], d.Replicas[0]

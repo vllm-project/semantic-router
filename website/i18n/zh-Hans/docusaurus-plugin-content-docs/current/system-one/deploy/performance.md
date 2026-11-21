@@ -217,7 +217,7 @@ Redis 必须位于 Router 专用网络并启用认证。ACL 必须允许在 `~vs
 
 查询先查本地内存，再查 Redis。仅保留所有问题均有回答、无错误且输入覆盖完整的结果。共享 key 沿用现有窗口哈希，并按 recipe 隔离命名空间。`systemone` 部署还绑定远端地址、模型名、API schema 和 deviations；attached `model_runtime` 部署在已观测模型身份之外，还绑定每个实际地址及其 served model，包括混合 managed/attached 副本池中的 attached worker。两类部署都绑定静态 `headers` 和 `tls.server_name`；后者会作为 SNI 发送，可能选择不同的后端策略。修改这些输入后，新一代 classifier 会重新扫描；调整请求头或副本顺序不影响复用。缺少可识别模型或连接身份的部署不保留窗口结果。在同一地址替换 guard 时，应使用带版本的远端模型名；配置无法识别模型名不变时服务端模型的变化。存储中只有哈希和回答，不含提示词原文；PII 片段文本根据偏移从当前请求恢复。签名绑定 key、回答、格式版本及过期时间。篡改、过期、超大或其他无效记录均视为未命中。响应阶段的检查结果不会共享。
 
-`model_runtime` 的模型身份包含运行时报告的实际精度。配置 `dtype: auto` 时，即使模型权重相同，实际精度不同的副本也会分别扫描窗口。
+`model_runtime` 的模型身份包含运行时报告的实际精度。配置 `dtype: auto` 时，即使模型权重相同，实际精度不同的 worker 池也使用不同的缓存键。同一池中，只要有一个可接收请求的 worker 没有报告实际精度，或其精度与其他 worker 不同，Router 就不读写本地和 Redis 窗口缓存；这些 worker 仍然可以执行扫描。升级后的 Router 不会复用旧版本写入的多 worker 窗口结果。
 
 配置了 `auth`（静态密钥或 delegated 认证）、TLS 客户端证书（`tls.cert_file` 和 `tls.key_file`）或 `forward_request_headers` 的 `systemone` 和 attached `model_runtime` 部署都会跳过本地和 Redis 两级窗口缓存。凭据、客户端证书和转发的请求头可能选择不同的 guard 策略。静态密钥在发送远端调用时读取，无需修改配置即可轮换；不同副本或不同代 classifier 的相同证书路径也可能对应不同身份，因此窗口 key 无法将其绑定到固定身份。仅验证服务端的 TLS 配置在 SNI 身份不变时仍允许复用；单独修改 `tls.ca_file` 不改变 guard 的策略身份。
 
