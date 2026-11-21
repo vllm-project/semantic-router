@@ -15,8 +15,8 @@
       "outcome": {
         "status": "error",
         "error": {
-          "category": "upstream_unavailable",
-          "code": "unsupported_upstream_audio"
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
         }
       }
     },

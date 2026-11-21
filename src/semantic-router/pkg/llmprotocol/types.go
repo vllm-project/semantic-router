@@ -107,6 +107,7 @@ type Content struct {
 	ToolCall       *ToolCall
 	ToolResult     *ToolResult
 	GeneratedImage *GeneratedImage
+	GeneratedAudio *GeneratedAudio
 	Signature      string
 	Reasoning      ReasoningScope
 	// ReasoningDetail is a typed continuity block, distinct from display text.
@@ -321,6 +322,7 @@ type Request struct {
 	Messages          []Message
 	Tools             []Tool
 	ImageGeneration   *ImageGenerationOptions
+	AudioOutput       *AudioOutputOptions
 	ToolChoice        ToolChoice
 	ParallelToolCalls *bool
 	CandidateCount    *int64

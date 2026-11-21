@@ -1,0 +1,17 @@
+{
+  "model": "m",
+  "messages": [
+    {
+      "role": "user",
+      "content": "say hi"
+    }
+  ],
+  "modalities": [
+    "text",
+    "audio"
+  ],
+  "audio": {
+    "voice": "alloy",
+    "format": "wav"
+  }
+}

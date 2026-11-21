@@ -145,7 +145,6 @@ func TestOtherValuesOfNoOpFieldsAreStillRefused(t *testing.T) {
 		name, path, body, code string
 	}{
 		{"chat flex tier", "/v1/chat/completions", `{"model":"chat-model","service_tier":"flex","messages":[{"role":"user","content":"hi"}]}`, "unsupported_service_tier"},
-		{"chat audio output", "/v1/chat/completions", `{"model":"chat-model","modalities":["text","audio"],"messages":[{"role":"user","content":"hi"}]}`, "unsupported_modalities"},
 		{"responses priority tier", "/v1/responses", `{"model":"responses-model","store":false,"service_tier":"priority","input":"hi"}`, "unsupported_service_tier"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

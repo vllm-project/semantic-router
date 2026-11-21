@@ -11,6 +11,29 @@
       }
     },
     {
+      "name": "audio_output",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "audio": {
+            "format": "wav",
+            "voice": "alloy"
+          },
+          "messages": [
+            {
+              "content": "say hi",
+              "role": "user"
+            }
+          ],
+          "modalities": [
+            "text",
+            "audio"
+          ],
+          "model": "routed-model"
+        }
+      }
+    },
+    {
       "name": "file_data",
       "outcome": {
         "status": "ok",

@@ -69,8 +69,8 @@
       "outcome": {
         "status": "error",
         "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_audio"
+          "category": "invalid_request",
+          "code": "audio_requires_modality"
         }
       }
     },
