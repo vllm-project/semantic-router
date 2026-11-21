@@ -33,6 +33,7 @@ from tokenizers import (
 from vllm_srun.api.app import create_app
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.families.vela2.layout import word_windows
+from vllm_srun.families.vela3_d3.package import SPAN_TARGET_TOKENS
 from vllm_srun.runtime import Runtime
 from vllm_srun.testing.embed_packages import write_tokenizer
 from vllm_srun.testing.fixtures import write_fixture
@@ -598,6 +599,280 @@ def questions_for(name):
     return QUESTIONS
 
 
+@pytest.fixture(scope="module")
+def decision3_runtime(tmp_path_factory):
+    package = write_fixture(
+        tmp_path_factory.mktemp("bounded-decision3") / "decision3",
+        family="decision3",
+        variant="text",
+    )
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), name="decision3", device="cpu"),),
+            result_cache_entries=0,
+        )
+    )
+    runtime.start(background=False)
+    yield runtime
+    runtime.stop()
+
+
+SENTENCE = "Please summarise the attached release notes. "
+
+
+def decision3_states(model) -> dict[str, str]:
+    """States of a Decision 3.0 request on each side of its cap.
+
+    The fixture's tokenizer reads prose at about a token a character. A typed
+    added token is text (``prompt.PromptEncoder``), so a state of them is as
+    long in tokens as its characters spell, not one token each. A prompt
+    longer than the first prefix (``bounds.reach``) is read in part, and one
+    of more characters than any token covers times the cap is certainly over
+    it.
+    """
+    limit = model.limit
+    text = model.prompts.text
+    known = bounds.facts(text)
+    per_sentence = len(text.encode(SENTENCE * 8).ids) // 8
+    prefix = bounds.reach(limit + 1)
+    return {
+        "short": SENTENCE,
+        "fits": SENTENCE * (limit // per_sentence // 2),
+        "typed added tokens": "<|vision_start|>" * (limit // 2),
+        "just over": SENTENCE * (limit // per_sentence + 2),
+        "over": SENTENCE * (3 * prefix // len(SENTENCE)),
+        "certainly over": SENTENCE
+        * (limit * known.chars_per_token // len(SENTENCE) + 1),
+    }
+
+
+def test_decision3_fails_a_long_state_as_it_fails_it_read_whole(
+    decision3_runtime, monkeypatch
+):
+    model = decision3_runtime.lookup(None).model
+    limit = model.limit
+    states = decision3_states(model)
+    assert len(states["just over"]) < bounds.reach(limit + 1)
+    assert len(states["typed added tokens"]) > bounds.reach(limit + 1)
+    client = TestClient(create_app(decision3_runtime))
+    outcomes = {}
+    for name, state in states.items():
+        body = {"state": state, "questions": questions_for("decision3")}
+        bounded, whole = answers(
+            client, monkeypatch, "/v1/decisions", body, "DecisionResponse"
+        )
+        assert bounded == whole
+        outcomes[name] = {
+            (answer.get("error"), answer.get("reason"))
+            for answer in bounded["answers"].values()
+        }
+    answered = {(None, None)}
+    over = {("max_length_exceeded", "question_tokens")}
+    assert outcomes == {
+        "short": answered,
+        "fits": answered,
+        "typed added tokens": over,
+        "just over": over,
+        "over": over,
+        "certainly over": over,
+    }
+    # The cap is exact: a prompt of as many tokens is planned, and one token
+    # more fails it. The tokenizer reads each "!" as one token.
+    question = {"reasoning": questions_for("decision3")["reasoning"]}
+    left = limit - len(model.plan(states["fits"], question).items[0].ids)
+    full = model.plan(states["fits"] + "!" * left, question)
+    assert len(full.items[0].ids) == limit and not full.errors
+    past = model.plan(states["fits"] + "!" * (left + 1), question)
+    assert not past.items
+    assert past.errors["reasoning"]["reason"] == "question_tokens"
+
+
+def test_decision3_counts_the_tokens_of_an_image_in_the_cap(d3_runtime, png_url):
+    model = d3_runtime.lookup(None).model
+    limit = model.limit
+    question = {"reasoning": questions_for("decision3")["reasoning"]}
+    images = [png_url(80, 60, 21)]
+    state = SENTENCE * 40
+    item = model.plan_images(state, question, images).items[0]
+    # The prompt is read as far as the cap less the image's tokens allows.
+    assert item.media.images[0].tokens > 1
+    left = limit - len(item.ids)
+    full = model.plan_images(state + "!" * left, question, images)
+    assert len(full.items[0].ids) == limit and not full.errors
+    past = model.plan_images(state + "!" * (left + 1), question, images)
+    assert not past.items
+    assert past.errors["reasoning"]["reason"] == "question_tokens"
+
+
+class PromptRecorder:
+    """A tokenizer that records every text it encodes, alone or in a batch."""
+
+    def __init__(self, tokenizer):
+        self.tokenizer, self.texts = tokenizer, []
+
+    def encode(self, text, **options):
+        self.texts.append(text)
+        return self.tokenizer.encode(text, **options)
+
+    def encode_batch(self, texts, **options):
+        self.texts.extend(texts)
+        return self.tokenizer.encode_batch(texts, **options)
+
+    def __getattr__(self, name):
+        return getattr(self.tokenizer, name)
+
+
+def test_decision3_reads_no_more_of_a_long_state_than_a_question_may_hold(
+    decision3_runtime, monkeypatch
+):
+    model = decision3_runtime.lookup(None).model
+    states = decision3_states(model)
+    recorder = PromptRecorder(model.prompts.text)
+    monkeypatch.setattr(model.prompts, "text", recorder)
+    # The probe that tells which cuts this tokenizer keeps exact is not a read
+    # of a prompt.
+    bounds.facts(recorder)
+    over, certain = states["over"], states["certainly over"]
+    questions = questions_for("decision3")
+
+    def read_of(state):
+        """Characters of the longest text the tokenizer encoded for the refused ``state``, and the reads of it.
+
+        A prompt is read as its runs of text between the template's tokens;
+        one run of each holds the state.
+        """
+        recorder.texts.clear()
+        plan = model.plan(state, questions)
+        assert not plan.items and set(plan.errors) == set(questions)
+        assert {error["error"] for error in plan.errors.values()} == {
+            "max_length_exceeded"
+        }
+        reads = sum(SENTENCE in text for text in recorder.texts)
+        return max(map(len, recorder.texts), default=0), reads
+
+    # A prompt certainly over the cap is refused unread.
+    assert read_of(certain) == (0, 0)
+    # Any other is read one token past the cap and no further: one prefix of
+    # each question's prompt.
+    longest, reads = read_of(over)
+    assert 0 < longest < len(over) // 2 and reads == len(questions)
+
+
+@pytest.fixture(scope="module")
+def state_once_runtime(tmp_path_factory):
+    """A Decision 3.0 package whose layout reads a request's state once (``state_once.py``)."""
+    package = write_fixture(
+        tmp_path_factory.mktemp("bounded-state-once") / "prefix_bidir",
+        family="decision3",
+        variant="prefix_bidir",
+    )
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), name="state-once", device="cpu"),),
+            result_cache_entries=0,
+        )
+    )
+    runtime.start(background=False)
+    yield runtime
+    runtime.stop()
+
+
+def test_state_once_fails_a_long_state_as_it_fails_it_read_whole(
+    state_once_runtime, monkeypatch
+):
+    model = state_once_runtime.lookup(None).model
+    limit = model.limit
+    states = decision3_states(model)
+    client = TestClient(create_app(state_once_runtime))
+    outcomes = {}
+    for name, state in states.items():
+        body = {"state": state, "questions": questions_for("decision3")}
+        bounded, whole = answers(
+            client, monkeypatch, "/v1/decisions", body, "DecisionResponse"
+        )
+        assert bounded == whole
+        outcomes[name] = {
+            (answer.get("error"), answer.get("reason"))
+            for answer in bounded["answers"].values()
+        }
+    answered = {(None, None)}
+    over = {("max_length_exceeded", "question_tokens")}
+    assert outcomes == {
+        "short": answered,
+        "fits": answered,
+        "typed added tokens": over,
+        "just over": over,
+        "over": over,
+        "certainly over": over,
+    }
+    # The cap is exact: a state and a question of as many tokens are planned,
+    # and one token more fails the question. The tokenizer reads each "!" as
+    # one token.
+    question = {"reasoning": questions_for("decision3")["reasoning"]}
+    left = limit - len(model.plan(states["fits"], question).items[0].ids)
+    full = model.plan(states["fits"] + "!" * left, question)
+    assert len(full.items[0].ids) == limit and not full.errors
+    past = model.plan(states["fits"] + "!" * (left + 1), question)
+    assert not past.items
+    assert past.errors["reasoning"]["reason"] == "question_tokens"
+    # That state is within the cap, so it was read whole and the question is
+    # told its count. A state over the cap by itself is not read to its end.
+    assert f"has {limit + 1} tokens" in past.errors["reasoning"]["message"]
+    unread = model.plan(states["over"], question).errors["reasoning"]
+    assert f"has more than {limit} tokens" in unread["message"]
+
+
+def test_state_once_counts_the_tokens_of_an_image_in_the_cap(
+    state_once_runtime, png_url
+):
+    model = state_once_runtime.lookup(None).model
+    limit = model.limit
+    question = {"reasoning": questions_for("decision3")["reasoning"]}
+    images = [png_url(80, 60, 21)]
+    state = SENTENCE * 40
+    item = model.plan_images(state, question, images).items[0]
+    # The state is read as far as the cap less the image's tokens allows.
+    assert item.media.images[0].tokens > 1
+    left = limit - len(item.ids)
+    full = model.plan_images(state + "!" * left, question, images)
+    assert len(full.items[0].ids) == limit and not full.errors
+    past = model.plan_images(state + "!" * (left + 1), question, images)
+    assert not past.items
+    assert f"has {limit + 1} tokens" in past.errors["reasoning"]["message"]
+
+
+def test_state_once_reads_no_more_of_a_long_state_than_a_question_may_hold(
+    state_once_runtime, monkeypatch
+):
+    model = state_once_runtime.lookup(None).model
+    states = decision3_states(model)
+    recorder = PromptRecorder(model.prompts.text)
+    monkeypatch.setattr(model.prompts, "text", recorder)
+    # The probe that tells which cuts this tokenizer keeps exact is not a read
+    # of a state.
+    bounds.facts(recorder)
+    over, certain = states["over"], states["certainly over"]
+    questions = questions_for("decision3")
+
+    def read_of(state):
+        """Characters of the longest text holding the refused ``state`` that the tokenizer encoded, and the reads of it."""
+        recorder.texts.clear()
+        plan = model.plan(state, questions)
+        assert not plan.items and set(plan.errors) == set(questions)
+        assert {error["error"] for error in plan.errors.values()} == {
+            "max_length_exceeded"
+        }
+        reads = [len(text) for text in recorder.texts if SENTENCE in text]
+        return max(reads, default=0), len(reads)
+
+    # A state certainly over the cap is refused unread.
+    assert read_of(certain) == (0, 0)
+    # Any other is read one token past the cap and no further, once for the
+    # request's questions.
+    longest, reads = read_of(over)
+    assert 0 < longest < len(over) // 2 and reads == 1
+
+
 @pytest.mark.parametrize("name", ["decision2", "decision1-qwen", "decision1-vela"])
 def test_decisions_fail_a_long_state_as_they_fail_it_read_whole(
     decision_runtimes, monkeypatch, name
@@ -828,3 +1103,110 @@ def test_vela2_reports_its_scan_budget_and_takes_one_from_its_options(
         assert vela2_scan(configured) == (window, 3 * window)
     finally:
         configured.stop()
+
+
+@pytest.fixture(scope="module")
+def vela3_d3_runtime(tmp_path_factory):
+    package = write_fixture(
+        tmp_path_factory.mktemp("bounded-spans") / "vela3-d3",
+        family="vela3_d3",
+        variant="text",
+    )
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), name="vela3-d3", device="cpu"),),
+            base_path=str(package.parent / f"{package.name}-base"),
+            result_cache_entries=0,
+        )
+    )
+    runtime.start(background=False)
+    yield runtime
+    runtime.stop()
+
+
+# A span question of the Vela 3.0 d3 sizes over the answer part, which the
+# fixture's tokenizer reads at a token a character. The targets are within the
+# span budget in one window and in several, just over it, far enough over it
+# to be read in part, and certainly over it.
+VELA3_D3_SPAN = {"type": "span", "criteria": ["dose"], "over": "answer"}
+VELA3_D3_TARGETS = {
+    "one window": "Adults can take up to 4 grams of paracetamol.",
+    "several windows": " ".join(f"w{index}" for index in range(3000)),
+    "just over": " ".join(["alpha"] * 6_000),
+    "over": " ".join(["alpha"] * 100_000),
+    "certainly over": " ".join(["alpha"] * 300_000),
+}
+
+
+def test_vela3_d3_spans_fail_a_long_target_as_they_fail_it_read_whole(
+    vela3_d3_runtime, monkeypatch
+):
+    client = TestClient(create_app(vela3_d3_runtime))
+    refused = {}
+    for name, target in VELA3_D3_TARGETS.items():
+        body = {
+            "state": {"user": "What is the dose?", "answer": target},
+            "questions": {"dose": VELA3_D3_SPAN},
+        }
+        bounded, whole = answers(
+            client, monkeypatch, "/v1/decisions", body, "DecisionResponse"
+        )
+        assert bounded == whole
+        answer = bounded["answers"]["dose"]
+        refused[name] = (answer.get("error"), answer.get("reason"))
+        assert ("dose" in bounded.get("spans", {})) == ("error" not in answer)
+    over = ("scan_budget_exceeded", "scan_budget")
+    assert refused == {
+        "one window": (None, None),
+        "several windows": (None, None),
+        "just over": over,
+        "over": over,
+        "certainly over": over,
+    }
+
+
+class TokenizerSpy:
+    """A tokenizer that records the texts it is asked to encode."""
+
+    def __init__(self, tokenizer):
+        self.tokenizer, self.texts = tokenizer, []
+
+    def encode(self, text, **options):
+        self.texts.append(text)
+        return self.tokenizer.encode(text, **options)
+
+    def __getattr__(self, name):
+        return getattr(self.tokenizer, name)
+
+
+def test_vela3_d3_spans_read_no_more_of_a_long_target_than_the_span_budget(
+    vela3_d3_runtime, monkeypatch
+):
+    model = vela3_d3_runtime.lookup(None).model
+    renderer = model.spans.renderer
+    spy = TokenizerSpy(renderer.prompts.text)
+    monkeypatch.setattr(renderer.prompts, "text", spy)
+    # The probe that tells which cuts this tokenizer keeps exact is not a read
+    # of the target.
+    bounds.facts(spy)
+    over, certain = VELA3_D3_TARGETS["over"], VELA3_D3_TARGETS["certainly over"]
+    assert bounds.surely_over(spy, certain, SPAN_TARGET_TOKENS)
+    assert not bounds.surely_over(spy, over, SPAN_TARGET_TOKENS)
+
+    def read_of(target):
+        """Characters of the longest prefix of the refused ``target`` the tokenizer encoded."""
+        spy.texts.clear()
+        plan = model.plan(
+            {"user": "What is the dose?", "answer": target}, {"dose": VELA3_D3_SPAN}
+        )
+        assert plan.errors["dose"]["error"] == "scan_budget_exceeded"
+        assert not plan.items
+        return max(
+            (len(text) for text in spy.texts if text and target.startswith(text)),
+            default=0,
+        )
+
+    # A target certainly over the budget is refused unread.
+    assert read_of(certain) == 0
+    # Any other is read one token past the budget and no further.
+    assert 0 < read_of(over) < len(over) // 2

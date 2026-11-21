@@ -23,6 +23,7 @@ from community_lifecycle_policy import (
     RELEASE_BLOCKER,
     WORKGROUP_LABELS,
     WORKGROUP_OPTIONS,
+    PullRequestEvaluation,
     assignment_command,
     evaluate_issue_acceptance,
     evaluate_pull_request,
@@ -694,10 +695,7 @@ def accept_issue_queue(client: GitHubClient, event: dict[str, Any]) -> None:
     )
 
 
-PULL_REQUEST_QUERY = """
-  query ($owner: String!, $repo: String!, $number: Int!) {
-    repository(owner: $owner, name: $repo) {
-      pullRequest(number: $number) {
+PULL_REQUEST_GRAPH_FIELDS = """
         reviewDecision
         mergeStateStatus
         reviewRequests(first: 100) {
@@ -708,10 +706,23 @@ PULL_REQUEST_QUERY = """
         commits(last: 1) {
           nodes { commit { statusCheckRollup { state } } }
         }
+"""
+
+PULL_REQUEST_QUERY = (
+    """
+  query ($owner: String!, $repo: String!, $number: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+"""
+    + PULL_REQUEST_GRAPH_FIELDS
+    + """
       }
     }
   }
 """
+)
+
+PR_SWEEP_BATCH_SIZE = 5
 
 
 def pull_request_graph(client: GitHubClient, repo: str, number: int) -> dict[str, Any]:
@@ -730,11 +741,37 @@ def pull_request_graph(client: GitHubClient, repo: str, number: int) -> dict[str
     return repository.get("pullRequest") or {}
 
 
+def pull_request_graph_batch(
+    client: GitHubClient, repo: str, numbers: list[int]
+) -> dict[str, Any]:
+    """Load sweep signals and fields that detect stale REST list data."""
+    owner, name = repo.split("/", 1)
+    fields = "\n".join(
+        f"pr{number}: pullRequest(number: {number}) {{"
+        f" state isDraft updatedAt headRefOid {PULL_REQUEST_GRAPH_FIELDS} }}"
+        for number in numbers
+    )
+    result = client.request(
+        "graphql",
+        method="POST",
+        payload={
+            "query": "query ($owner: String!, $repo: String!) {"
+            " repository(owner: $owner, name: $repo) {\n" + fields + "\n} }",
+            "variables": {"owner": owner, "repo": name},
+        },
+    )
+    if not result or result.get("errors"):
+        return {}
+    return (result.get("data") or {}).get("repository") or {}
+
+
 def linked_issues_for_pull_request(
     client: GitHubClient,
     repo: str,
     pull_request: dict[str, Any],
     graph: dict[str, Any] | None = None,
+    *,
+    issue_cache: dict[int, dict[str, Any] | None] | None = None,
 ) -> list[dict[str, Any]]:
     if graph is None:
         graph = pull_request_graph(client, repo, int(pull_request["number"]))
@@ -748,12 +785,16 @@ def linked_issues_for_pull_request(
             repository=repo,
         )
     )
+    if issue_cache is None:
+        issue_cache = {}
     issues = []
     for issue_number in sorted(issue_numbers):
-        issue = client.request(
-            f"repos/{repo}/issues/{issue_number}",
-            ignore_not_found=True,
-        )
+        if issue_number not in issue_cache:
+            issue_cache[issue_number] = client.request(
+                f"repos/{repo}/issues/{issue_number}",
+                ignore_not_found=True,
+            )
+        issue = issue_cache[issue_number]
         if issue and not issue.get("pull_request"):
             issues.append(issue)
     return issues
@@ -792,12 +833,15 @@ def sync_pull_request(
     number: int,
     *,
     validation_succeeded: bool = True,
+    issue_cache: dict[int, dict[str, Any] | None] | None = None,
 ) -> None:
     pull_request = client.request(f"repos/{repo}/pulls/{number}", ignore_not_found=True)
     if not pull_request:
         return
     graph = pull_request_graph(client, repo, number)
-    linked = linked_issues_for_pull_request(client, repo, pull_request, graph)
+    linked = linked_issues_for_pull_request(
+        client, repo, pull_request, graph, issue_cache=issue_cache
+    )
     signals = pull_request_signals(graph)
     evaluation = evaluate_pull_request(
         pull_request,
@@ -805,7 +849,17 @@ def sync_pull_request(
         validation_succeeded=validation_succeeded,
         **signals,
     )
+    apply_pull_request_evaluation(client, repo, number, pull_request, graph, evaluation)
 
+
+def apply_pull_request_evaluation(
+    client: GitHubClient,
+    repo: str,
+    number: int,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any],
+    evaluation: PullRequestEvaluation,
+) -> None:
     current_labels = label_names(pull_request)
     desired_state = (
         {evaluation.state_label} if pull_request.get("state") == "open" else set()
@@ -993,6 +1047,44 @@ def sync_pull_request_event(client: GitHubClient, event: dict[str, Any]) -> None
     )
 
 
+def sync_listed_pull_request(
+    client: GitHubClient,
+    repo: str,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any] | None,
+) -> None:
+    number = int(pull_request["number"])
+    if (
+        pull_request.get("state") != "open"
+        or not graph
+        or graph.get("state") != "OPEN"
+        or graph.get("isDraft") != pull_request.get("draft")
+        or graph.get("updatedAt") != pull_request.get("updated_at")
+        or graph.get("headRefOid") != (pull_request.get("head") or {}).get("sha")
+    ):
+        sync_pull_request(client, repo, number)
+        return
+
+    issue_cache: dict[int, dict[str, Any] | None] = {}
+    linked = linked_issues_for_pull_request(
+        client, repo, pull_request, graph, issue_cache=issue_cache
+    )
+    signals = pull_request_signals(graph)
+    evaluation = evaluate_pull_request(pull_request, linked, **signals)
+    # The current label can agree with a stale batch result (#3786). Confirm
+    # whenever DIRTY, CLEAN, or an unknown merge state could change the decision.
+    if any(
+        evaluate_pull_request(
+            pull_request, linked, **{**signals, "merge_state": merge_state}
+        ).state_label
+        != evaluation.state_label
+        for merge_state in ("DIRTY", "CLEAN", None)
+    ):
+        sync_pull_request(client, repo, number, issue_cache=issue_cache)
+        return
+    apply_pull_request_evaluation(client, repo, number, pull_request, graph, evaluation)
+
+
 def sync_open_pull_requests(client: GitHubClient, repo: str) -> None:
     page = 1
     while True:
@@ -1002,8 +1094,18 @@ def sync_open_pull_requests(client: GitHubClient, repo: str) -> None:
             )
             or []
         )
-        for pull_request in pull_requests:
-            sync_pull_request(client, repo, int(pull_request["number"]))
+        for start in range(0, len(pull_requests), PR_SWEEP_BATCH_SIZE):
+            batch = pull_requests[start : start + PR_SWEEP_BATCH_SIZE]
+            graphs = pull_request_graph_batch(
+                client, repo, [int(pr["number"]) for pr in batch]
+            )
+            for pull_request in batch:
+                sync_listed_pull_request(
+                    client,
+                    repo,
+                    pull_request,
+                    graphs.get(f"pr{pull_request['number']}"),
+                )
         if len(pull_requests) < API_PAGE_SIZE:
             return
         page += 1

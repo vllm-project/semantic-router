@@ -71,6 +71,18 @@ class CIStatusWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(job)
         self.assertEqual(set(job["permissions"].values()), {"read"})
 
+    def test_resolver_cannot_admit_every_community_event(self):
+        self.publisher.jobs["resolve"]["if"] = (
+            "github.event_name == 'workflow_run' || (github.event_name == "
+            "'workflow_dispatch' && github.ref == 'refs/heads/main')"
+        )
+
+        errors = []
+        validate_status_publisher(self.workflows, errors)
+        self.assertTrue(
+            any("resolve must enforce" in error for error in errors), errors
+        )
+
     def test_trigger_run_lock_cannot_replace_qualification_lock(self):
         job = self.publisher.jobs["publish"]
         job["concurrency"] = {
