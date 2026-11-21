@@ -303,3 +303,32 @@ inventory. Keep representative failed runs in that comparison. Use those
 results to decide the next reductions, especially remaining Operator behavior
 assertions, repeated tool installation, and maintenance polling; do not infer savings from fewer
 green check names alone.
+
+Core Router package selection is initially **shadow only**: `run_core_tests.py`
+continues discovering and running every eligible package and writes
+`.agent-harness/core/unit/selection.json` alongside the framework logs, including
+on failure. It records the selected import paths, fallback reasons, completion,
+and failing packages outside the selection, and prints one summary line to the
+job log and the step summary. An interrupted run without package
+failure events is not a complete comparison. The current fail-fast lane can
+observe only failures reached before it stops.
+
+The stdlib selector uses `go list -json ./...` production, test and external-test
+imports to close changed packages over reverse dependencies. Explicit input
+mappings cover config, website docs/catalog, agent skill examples, deployment
+manifests and runtime schemas; `testdata` selects its owner plus explicitly
+mapped cross-package readers (protocolcodec/parity/config fixtures).
+Source-scanning contracts in headers/extproc also run for production Go changes.
+Unmapped paths, deleted packages, shared test helpers, any go.mod/go.sum change,
+and unavailable/incomplete graphs or change history select everything.
+
+Supply `CORE_TEST_CHANGED_FILES` as a JSON array of repository-relative paths,
+or `CORE_TEST_BASE` as a Git comparison base (both rename sides are included).
+Otherwise a pull request compares its merge commit with the first parent, which
+the Router Contracts checkout fetches at depth 2, and a push compares `before`
+with HEAD; missing history safely falls back to all packages. A change to
+`core_test_profiles.json` also selects everything, since it moves tests in or
+out of the lane. Set
+`CORE_TEST_SELECTION_ENFORCE=1` to opt into filtering module discovery, ordinary
+units, race contracts and Ginkgo suites. External repository Go tool tests still
+run in full. Review shadow misses and fallback rates before enabling this switch.
