@@ -37,7 +37,12 @@ def test_recorded_references_are_for_the_pinned_revisions() -> None:
 
 
 def test_every_size_has_a_rocm_reference_for_the_golden_request() -> None:
-    """The recorder keeps the device class's baseline, and a hardware entry only while it differs."""
+    """Every size carries the ROCm class baseline these references were recorded on.
+
+    A GPU recording keys its own architecture alone; the class baseline is a
+    deliberate choice (``golden_answers.py --generic``), kept here so a host
+    without an entry of its own still compares with something.
+    """
     for model in builtin.all_models("vela3_d3"):
         assert model.golden_answers.get("rocm"), model.repo_id
         for key, answers in model.golden_answers.items():

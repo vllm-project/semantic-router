@@ -4,6 +4,7 @@ import { ProviderLogo, cn } from '../ui'
 
 import {
   buildAgentRuleIndex,
+  buildCostBaselineModel,
   buildModelProviders,
   EMPTY_CONFIG_FACTS,
   InsightsConfigContext,
@@ -126,6 +127,7 @@ export function InsightsConfigProvider({ children }: { children: ReactNode }) {
         setFacts({
           agentRules: buildAgentRuleIndex(config),
           modelProviders: buildModelProviders(config),
+          costBaselineModel: buildCostBaselineModel(config),
         }),
       )
       .catch(() => undefined)
