@@ -78,7 +78,9 @@ func TestResponsesGroupingDoesNotAcceptEmptyMessages(t *testing.T) {
 	}
 }
 
-func TestResponsesGroupingUsesNormalizedInstructions(t *testing.T) {
+// An instruction item between parallel calls stays in the conversation, after
+// the calls' outputs, so the calls still join one assistant turn.
+func TestResponsesGroupingMovesInstructionsAfterTheOutputs(t *testing.T) {
 	for _, role := range []string{"system", "developer"} {
 		t.Run(role, func(t *testing.T) {
 			messages := projectResponsesHistoryToChat(t, `[
@@ -88,8 +90,9 @@ func TestResponsesGroupingUsesNormalizedInstructions(t *testing.T) {
 				{"type":"function_call_output","call_id":"a","output":"one"},
 				{"type":"function_call_output","call_id":"b","output":"two"}
 			]`)
-			if len(messages) != 4 || messages[0].Role != role || string(messages[0].Content) != `"Keep answers brief"` || len(messages[1].ToolCalls) != 2 {
-				t.Fatalf("instruction normalization or grouping changed: %+v", messages)
+			if len(messages) != 4 || len(messages[0].ToolCalls) != 2 || messages[1].Role != "tool" || messages[2].Role != "tool" ||
+				messages[3].Role != role || string(messages[3].Content) != `"Keep answers brief"` {
+				t.Fatalf("instruction placement or grouping changed: %+v", messages)
 			}
 		})
 	}

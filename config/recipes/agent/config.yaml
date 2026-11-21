@@ -26,6 +26,10 @@ global:
         ssl_mode: disable
         table_name: router_replay_records
   router:
+    # Qwen3.5 and Qwen3.6 chat templates take a system message only first, so
+    # later system and developer messages reach them as user text in place.
+    allow_lossy_translation:
+      - messages[].role
     learning:
       enabled: true
       adaptation:
