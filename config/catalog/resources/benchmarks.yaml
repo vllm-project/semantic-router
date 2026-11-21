@@ -292,6 +292,20 @@
       unit: proportion
       direction: higher_is_better
       range: [0, 1]
+- id: mercor/apex-agents@1.1.0
+  display_name: APEX-Agents 1.1
+  domain: knowledge_work
+  source: https://huggingface.co/datasets/mercor/apex-agents-v1.1
+  default_profile: published-loop-250-steps
+  profiles:
+    - id: published-loop-250-steps
+      display_name: Published Loop agent, 250 steps
+      description: Vendor-published APEX-Agents 1.1 pass@1 with the official Loop reference agent at 250 steps per trial, which is not comparable to the 100-step leaderboard harness. The ID names minor version 1.1; records keep the dataset patch (1.1.1 or 1.1.2) unspecified when the source does not state it.
+  metrics:
+    - id: pass_at_1
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
 - id: mmmu-benchmark/mmmu-pro@1.0.0
   display_name: MMMU-Pro
   domain: multimodal_reasoning

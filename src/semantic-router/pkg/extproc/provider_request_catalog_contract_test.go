@@ -419,6 +419,30 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},
 		},
 		{
+			name: "OpenRouter Hy4 high effort reasoning object", catalog: "tencent/hy4", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "high"}},
+		},
+		{
+			name: "OpenRouter Hy4 disabled reasoning object", catalog: "tencent/hy4", provider: "openrouter",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": false}},
+		},
+		{
+			name: "OpenRouter Hy4 flash high effort reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "high"}},
+		},
+		{
+			name: "OpenRouter Hy4 flash disabled reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": false}},
+		},
+		{
 			name: "OpenRouter GPT-6 Astra Chat reasoning object", catalog: "openai/gpt-6-astra", provider: "openrouter",
 			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
 			wantTransport: modelcatalog.ReasoningTransportReasoningObject,

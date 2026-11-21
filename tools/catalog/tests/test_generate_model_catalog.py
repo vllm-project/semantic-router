@@ -525,6 +525,52 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {"score": 0},
         )
 
+    def test_tencent_hy4_cards_keep_published_harness_evidence(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        hy4_models = {"tencent/hy4", "tencent/hy4-flash"}
+        published_benchmarks = {
+            "datacurve/deep-swe@1.1.0",
+            "harbor/terminal-bench@4.0.0",
+            "mercor/apex-agents@1.1.0",
+            "zapier/automation-bench@1.0.6",
+            "cais/humanitys-last-exam@1.0.0",
+        }
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, hy4_models)
+        self.assertEqual(
+            buckets,
+            {
+                (model_id, "high", "vendor_claimed"): published_benchmarks
+                for model_id in hy4_models
+            },
+        )
+        apex_records = [
+            evaluation
+            for evaluation in resources["evaluations"]
+            if evaluation["model"] in hy4_models
+            and evaluation["benchmark"] == "mercor/apex-agents@1.1.0"
+        ]
+        self.assertEqual(len(apex_records), 2)
+        for evaluation in apex_records:
+            self.assertEqual(
+                evaluation["benchmark_profile"], "published-loop-250-steps"
+            )
+            self.assertEqual(evaluation["subject"]["max_steps"], 250)
+            self.assertEqual(
+                evaluation["subject"]["benchmark_revision"], "unspecified_by_source"
+            )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        openrouter_ids = {
+            binding["catalog"]: binding["id"]
+            for binding in providers["openrouter"]["models"]
+            if binding.get("catalog") in hy4_models
+        }
+        self.assertEqual(
+            openrouter_ids,
+            {"tencent/hy4": "tencent/hy4", "tencent/hy4-flash": "tencent/hy4-flash"},
+        )
+
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         stepfun_models = {
@@ -835,6 +881,8 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "xai/grok-4.6": "grok-4.6",
             "xai/grok-4.7": "grok-4.6",
             "tencent/hy4-preview": "hunyuan-hy4",
+            "tencent/hy4": "hunyuan-hy4",
+            "tencent/hy4-flash": "hunyuan-hy4",
             "moonshot/kimi-k3": "kimi-k3",
             "moonshot/kimi-k2.7-code": "kimi-k2-always-on",
             "minimax/minimax-m3": "minimax-m3",

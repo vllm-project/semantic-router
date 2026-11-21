@@ -40,6 +40,95 @@
   - long_context
   - preview
   released_at: '2026-08-28'
+- id: tencent/hy4
+  display_name: Tencent Hy4
+  description: Open-weight Tencent Hy flagship MoE model with text, image, and video understanding and a one-million-token context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy4/tree/c10c0de5b6f850703fb0a90e65d1c32b558b9167
+    license: Tencent-Hy-License-1.0
+  family: hy4
+  parameter_size: 770B (49B active)
+  reasoning_family: hunyuan-hy4
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Tencent Hy Team
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/README.md
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - multimodal
+  - agentic
+  released_at: '2026-11-04'
+- id: tencent/hy4-flash
+  display_name: Tencent Hy4 Flash
+  description: Cost-efficient open-weight Tencent Hy MoE model with text and image input and a one-million-token context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy4-flash/tree/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f
+    license: Tencent-Hy-License-1.0
+  family: hy4
+  parameter_size: 220B (12B active)
+  reasoning_family: hunyuan-hy4
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Tencent Hy Team
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/README.md
+  tags:
+  - open_weights
+  - efficient
+  - moe
+  - multimodal
+  released_at: '2026-11-16'
 - id: tencent/hy3
   display_name: Tencent Hy3
   description: Open-weight Tencent Hy flagship MoE model for reasoning, coding, and productivity agents.
