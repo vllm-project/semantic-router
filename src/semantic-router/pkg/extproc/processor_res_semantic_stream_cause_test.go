@@ -63,3 +63,33 @@ func TestSemanticStreamFailureLogsNoUpstreamMessage(t *testing.T) {
 		require.NotContains(t, fmt.Sprint(value), "account 42", key)
 	}
 }
+
+// A provider's error type reaches the log only when the provider documents
+// it. Any other type is the provider's own text, so it logs as
+// upstream_stream_error.
+func TestSemanticStreamFailureLogsOnlyDocumentedUpstreamCodes(t *testing.T) {
+	for errorType, want := range map[string]struct{ logged, client string }{
+		"overloaded_error": {"overloaded_error", "overloaded_error"},
+		"vendor_error_v2":  {"upstream_stream_error", "api_error"},
+	} {
+		core, logs := observer.New(zapcore.DebugLevel)
+		restore := zap.ReplaceGlobals(zap.New(core))
+		ctx := &RequestContext{
+			SourceFormat: llmprotocol.AnthropicMessagesV1, TargetFormat: llmprotocol.AnthropicMessagesV1,
+			RequestModel: "public", TraceContext: t.Context(),
+			SemanticRequest: &llmprotocol.Request{Generation: 1, Model: "public", Stream: true},
+		}
+		body := "event: message_start\ndata: " + `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"m","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}` + "\n\n" +
+			"event: error\ndata: " + `{"type":"error","error":{"type":"` + errorType + `","message":"upstream detail"}}` + "\n\n"
+
+		response := (&OpenAIRouter{}).handleSemanticStreamingResponseBody([]byte(body), true, ctx)
+		restore()
+		// What the client reads is the encoder's, not the log's.
+		require.Contains(t, string(response.GetResponseBody().GetResponse().GetBodyMutation().GetBody()),
+			`"type":"`+want.client+`"`, errorType)
+
+		entries := logs.FilterMessage("neutral_stream_reconstruction_skipped").All()
+		require.Len(t, entries, 1, errorType)
+		require.Equal(t, want.logged, entries[0].ContextMap()["error_code"], errorType)
+	}
+}

@@ -635,9 +635,11 @@ func (r *OpenAIRouter) completeSemanticStreamWith(
 	if responseErr != nil {
 		observeStreamedApprovalReviewFailure(ctx)
 		fields := map[string]interface{}{"request_id": ctx.RequestID}
-		addStreamFailureReason(fields, "error", responseErr)
+		// The stream's own failure event carries the provider's code.
+		upstream := ctx.SemanticStreamState != nil && ctx.SemanticStreamState.failed != nil
+		addStreamFailureReason(fields, "error", responseErr, upstream)
 		if streamErr != nil {
-			addStreamFailureReason(fields, "cause", streamErr)
+			addStreamFailureReason(fields, "cause", streamErr, false)
 		}
 		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", fields)
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
@@ -647,12 +649,18 @@ func (r *OpenAIRouter) completeSemanticStreamWith(
 }
 
 // addStreamFailureReason logs a protocol failure by its category and code
-// only: the message can quote the upstream provider's own error text.
-func addStreamFailureReason(fields map[string]interface{}, key string, err error) {
+// only: the message can quote the upstream provider's own error text, and so
+// can an upstream code no provider documents, which logs as
+// upstream_stream_error.
+func addStreamFailureReason(fields map[string]interface{}, key string, err error, upstream bool) {
 	var protocolErr *llmprotocol.ProtocolError
 	if errors.As(err, &protocolErr) {
+		code := protocolErr.Code
+		if upstream && !protocolcodec.DocumentedProviderErrorCode(code) {
+			code = "upstream_stream_error"
+		}
 		fields[key+"_category"] = string(protocolErr.Category)
-		fields[key+"_code"] = protocolErr.Code
+		fields[key+"_code"] = code
 		return
 	}
 	fields[key] = err.Error()
