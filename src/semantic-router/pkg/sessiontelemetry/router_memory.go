@@ -103,7 +103,11 @@ type SessionUsageParams struct {
 	CacheAccountingSource       string
 	// CacheReported is true when the backend reported cache reads or writes.
 	CacheReported bool
-	Timestamp     time.Time
+	// Apart marks the usage of a request held under a key of its own in the
+	// session, a subagent's or a side request's. It counts in the session's
+	// usage but neither sets the session's model nor replaces its receipt.
+	Apart     bool
+	Timestamp time.Time
 }
 
 type routerSessionState struct {
@@ -243,7 +247,7 @@ func RecordSessionUsage(p SessionUsageParams) {
 	}
 	s.evictExpiredLocked(now)
 	st := s.sessionLocked(p.SessionID, now)
-	if st.turnCount == 0 {
+	if st.turnCount == 0 && !p.Apart {
 		st.currentModel = p.Model
 	}
 	st.lastSeen = now
@@ -268,7 +272,7 @@ func RecordSessionUsage(p SessionUsageParams) {
 		st.lastCacheAccountingSource = p.CacheAccountingSource
 	}
 	// Responses can complete out of order; the latest one describes the cache.
-	if st.lastCacheReceipt == nil || !now.Before(st.lastCacheReceipt.At) {
+	if !p.Apart && (st.lastCacheReceipt == nil || !now.Before(st.lastCacheReceipt.At)) {
 		st.lastCacheReceipt = &modelpricing.Receipt{
 			Model: p.Model,
 			Usage: modelpricing.Usage{
