@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -67,13 +67,15 @@ import {
 import { HarnessLogo, HarnessName } from './InsightsHarness'
 import { DEFAULT_PAGE_SIZE, pageHolding } from './insightsListData'
 import { InsightsDataProviders, modelLabel, useModelLabels } from './insightsModelLabelSupport'
-import {
-  InsightsRequestError,
-  insightsUnavailableReason,
-  type InsightsUnavailableReason,
-} from './insightsPageApi'
 import { getReviewsPath, getSessionRequestsPath } from './insightsReviewSupport'
 import { loadRun } from './insightsRunCache'
+import {
+  beginRunRead,
+  initialRunReads,
+  settleRunRead,
+  shownRunReads,
+  type RunReadState,
+} from './insightsRunReads'
 import { RunDiagram, RunLegend, RunSegmentPanel } from './InsightsRunDiagram'
 import { RunAgentsPanel, RunCallsPanel, RunOutcomesPanel } from './InsightsRunPanels'
 import { RunEvents, RunStatus } from './InsightsRunsView'
@@ -93,20 +95,15 @@ import {
   TIMELINE_SIZES,
   type TimelineBlock,
 } from './insightsRunTimeline'
-import type { RunCall, RunResponse } from './insightsRunTypes'
+import type { RunCall } from './insightsRunTypes'
 import { SessionChoice } from './InsightsSessionChoice'
 import { useSessionScope } from './insightsSessionScope'
 
 const RUNS_TAB = '/observe/requests?tab=runs'
 
 function useRun(sessionId: string, pending = false) {
-  const [state, setState] = useState<{
-    response: RunResponse | null
-    error: string | null
-    unavailable?: InsightsUnavailableReason
-    notFound: boolean
-    loading: boolean
-  }>({ response: null, error: null, notFound: false, loading: true })
+  const [state, setState] = useState<RunReadState>(() => initialRunReads(sessionId))
+  const reads = useRef(0)
   // The first read may be the one the Sessions view just made; Refresh reads anew.
   const load = useCallback(
     async (fresh = false) => {
@@ -115,24 +112,16 @@ function useRun(sessionId: string, pending = false) {
         return
       }
       if (!sessionId) {
-        setState({ response: null, error: null, notFound: true, loading: false })
+        setState(initialRunReads(''))
         return
       }
-      setState((current) => ({ ...current, loading: true }))
+      const read = { sessionId, number: (reads.current += 1) }
+      setState((previous) => beginRunRead(previous, read))
       try {
         const response = await loadRun(sessionId, { fresh })
-        setState({ response, error: null, notFound: false, loading: false })
+        setState((previous) => settleRunRead(previous, read, { response }))
       } catch (error) {
-        const reason = insightsUnavailableReason(error)
-        const notFound = error instanceof InsightsRequestError && error.status === 404
-        setState((current) => ({
-          // a failed refresh keeps the run on screen under its error
-          response: notFound ? null : current.response,
-          error: reason ? null : error instanceof Error ? error.message : 'Unknown error',
-          unavailable: notFound ? undefined : reason,
-          notFound,
-          loading: false,
-        }))
+        setState((previous) => settleRunRead(previous, read, { error }))
       }
     },
     [pending, sessionId],
@@ -140,7 +129,7 @@ function useRun(sessionId: string, pending = false) {
   useEffect(() => {
     void load()
   }, [load])
-  return { ...state, load }
+  return { ...shownRunReads(state, sessionId), load }
 }
 
 // One agent run, its models read by their labels.

@@ -210,6 +210,9 @@ func systemOneInputValue(input config.SystemOneInput) map[string]interface{} {
 	if input.PreviousTurns > 0 {
 		value["previous_turns"] = input.PreviousTurns
 	}
+	if input.MaxStateBytes > 0 {
+		value["max_state_bytes"] = input.MaxStateBytes
+	}
 	if !input.ReadsRequest() {
 		value["request"] = false
 	}
