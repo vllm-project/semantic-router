@@ -248,10 +248,10 @@ func dispatchReplayFixture(t *testing.T, explicit bool, handler http.HandlerFunc
 	if explicit {
 		ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
 	}
-	captureRequestDemand(ctx, requestDemandStageOriginal, ctx.SemanticRequest, "vllm-sr/auto")
+	r.captureRequestDemand(ctx, requestDemandStageOriginal, ctx.SemanticRequest, "vllm-sr/auto")
 	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "vllm-sr/auto"))
-	captureRequestDemand(ctx, requestDemandStagePostContext, ctx.SemanticRequest, "vllm-sr/auto")
-	captureRequestDemand(ctx, requestDemandStagePostToolPolicy, ctx.SemanticRequest, "vllm-sr/auto")
+	r.captureRequestDemand(ctx, requestDemandStagePostContext, ctx.SemanticRequest, "vllm-sr/auto")
+	r.captureRequestDemand(ctx, requestDemandStagePostToolPolicy, ctx.SemanticRequest, "vllm-sr/auto")
 	return r, ctx, model
 }
 

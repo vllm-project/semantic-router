@@ -395,7 +395,7 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if refusal := r.reserveDispatchSpend(ctx, dispatch.logicalModel, ctx.SemanticRequest); refusal != nil {
 		return r.respondBudgetRefused(ctx, dispatch.logicalModel, refusal), nil
 	}
-	captureRequestDemand(
+	r.captureRequestDemand(
 		ctx,
 		requestDemandStageProviderBound,
 		ctx.SemanticRequest,
