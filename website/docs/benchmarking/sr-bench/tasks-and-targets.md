@@ -228,6 +228,20 @@ Record the pricing basis, and use exactly the same rates in paired runs.
   `max_tokens`; lowering the cap doesn't rewrite that profile. Choose another
   operator-registered profile when different native settings are needed.
 
+The `agent-session-replay` extension benchmark replays the recorded coding-agent
+session fixture turn by turn: one case is one replay, resending the cumulative
+recorded messages and tool catalog on every turn. It requires
+`session_mode: session_aware` on every target, so each replay carries exactly
+one session identity, and it reports as an extension diagnostic outside the
+published sr-bench score. Prepare its dataset locally from the repository
+fixture, and run with the same profile the dataset was prepared with:
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark agent-session-replay \
+  --source-path bench/data/coding_agent_session.v1.json
+```
+
 ## Judges, simulators and harnesses
 
 - **Judged benchmarks** need a fixed single-model judge and

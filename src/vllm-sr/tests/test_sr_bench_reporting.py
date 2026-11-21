@@ -569,6 +569,19 @@ def test_continuity_counts_switches_by_resulting_request_phase() -> None:
     assert block["model_switches_by_phase"] == {"tool_loop": 2}
 
 
+def test_continuity_prefers_recorded_fixture_phase() -> None:
+    """A replayed fixture's turn label must outrank the observed request phase."""
+    calls = [
+        _request("task", "small", phase="user_turn", fixture_phase="user_turn"),
+        _request("task", "large", phase="tool_loop", fixture_phase="tool_loop"),
+        # A follow-up user turn looks like user_turn on the wire.
+        _request("task", "small", phase="user_turn", fixture_phase="follow_up"),
+    ]
+    block = metric("mom", [], calls, 1)["continuity"]
+    assert block["model_switches"] == 2
+    assert block["model_switches_by_phase"] == {"follow_up": 1, "tool_loop": 1}
+
+
 def test_legacy_calls_keep_unknown_phase_and_cache_observation() -> None:
     calls = [_request("task", "small"), _request("task", "large")]
     result = metric("mom", [], calls, 1)
