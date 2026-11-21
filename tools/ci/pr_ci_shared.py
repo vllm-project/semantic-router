@@ -7,17 +7,19 @@ import json
 import re
 from urllib.parse import urlencode
 
+import manual_ci as _manual_ci
 from manual_ci import (
     MERGE_EVIDENCE_UNAVAILABLE,
-    MAX_PAGES as MAX_PAGES,
-    PUBLISHER_FILES as CAPABILITIES,
     ManualCIError,
     merge_revision_matches,
-    latest_run as latest_run,
-    pages as pages,
     read_artifact,
-    status_publisher_available as publisher_ready,
 )
+
+CAPABILITIES = _manual_ci.PUBLISHER_FILES
+MAX_PAGES = _manual_ci.MAX_PAGES
+latest_run = _manual_ci.latest_run
+pages = _manual_ci.pages
+publisher_ready = _manual_ci.status_publisher_available
 
 CHECK = "PR Gate"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"

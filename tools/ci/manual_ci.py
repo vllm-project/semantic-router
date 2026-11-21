@@ -726,7 +726,7 @@ def status_publisher_available(client, repo: str, base: str) -> bool:
     paths = {
         item.get("path") for item in tree.get("tree", []) if item.get("type") == "blob"
     }
-    return PUBLISHER_FILES <= paths
+    return paths >= PUBLISHER_FILES
 
 
 def qualification_status_url(repo: str, run_id: int, attempt: int) -> str:
