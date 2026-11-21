@@ -1009,9 +1009,17 @@ tools or error translation.
 - When the output limit ends a streamed tool call inside its arguments, or
   right after its name with none, the Router passes the partial call on with
   the limit stop, as the providers do: `max_tokens` for Messages, `length` for
-  Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
-  not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
-  response is not cached, stored, or kept as the replay response body.
+  Chat, and `incomplete` with `max_output_tokens` for Responses. For
+  Chat-to-Responses streaming only, a function call confirmed to have finished
+  normally with omitted, empty, or whitespace-only arguments is normalized to
+  `{}`. The joined argument deltas, arguments-done event, completed item, and
+  terminal output agree; whitespace-only argument prefixes are held until an
+  object follows or the call finishes. This is a wire-level guarantee, not tool
+  schema validation: required-field validation remains with the tool consumer.
+  Explicit `null`, arrays, other non-objects, and malformed non-empty JSON still
+  end the stream with `invalid_stream_tool_arguments`; other translation
+  directions retain their existing validation. A cut response is not cached,
+  stored, or kept as the replay response body.
 - A Responses reasoning item can carry different non-empty `encrypted_content`
   strings in `response.output_item.done` and the corresponding output item in
   `response.completed` or `response.incomplete`. The Router accepts this

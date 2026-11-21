@@ -12,18 +12,19 @@ import (
 
 type chatStreamDecoder struct {
 	streamState
-	framer               sseFramer
-	contentIndexes       map[chatContentKey]int
-	nextContentIndexes   map[int]int
-	lastWasReasoning     bool                 // choice 0's last text was reasoning; decodeChoice rejects other choices
-	heldChoice           *chatChunkChoiceWire // a first delta with an answer and reasoning, held until their order is chosen
-	answerFirst          bool                 // the delta after heldChoice had reasoning and no answer text
-	toolKinds            map[int]llmprotocol.ToolKind
-	providerReported     bool
-	nativeReasonReported bool
-	reportedOmissions    map[string]bool
-	stopSequence         string
-	reasoningDetails     *chatReasoningDetailState
+	framer                 sseFramer
+	contentIndexes         map[chatContentKey]int
+	nextContentIndexes     map[int]int
+	lastWasReasoning       bool                 // choice 0's last text was reasoning; decodeChoice rejects other choices
+	heldChoice             *chatChunkChoiceWire // a first delta with an answer and reasoning, held until their order is chosen
+	answerFirst            bool                 // the delta after heldChoice had reasoning and no answer text
+	toolKinds              map[int]llmprotocol.ToolKind
+	providerReported       bool
+	nativeReasonReported   bool
+	reportedOmissions      map[string]bool
+	stopSequence           string
+	deferredToolCompletion bool // empty calls wait for trailing output-limit usage
+	reasoningDetails       *chatReasoningDetailState
 }
 
 type chatContentKey struct {
@@ -242,8 +243,19 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		if decoder.terminal {
 			return nil, nil, nil
 		}
+		var completed []llmprotocol.Event
+		if decoder.deferredToolCompletion {
+			if llmprotocol.ToolCallStopAtOutputLimit(decoder.stop, decoder.usage, decoder.policy.RequestOutputLimit) {
+				decoder.stop = llmprotocol.StopMaxTokens
+			}
+			completed, err = decoder.completeActiveChatItems()
+			if err != nil {
+				return completed, nil, err
+			}
+			decoder.deferredToolCompletion = false
+		}
 		events, doneErr := decoder.nextAfterHeld(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage})
-		return events, nil, doneErr
+		return append(completed, events...), nil, doneErr
 	}
 	if decoder.terminal {
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
@@ -252,6 +264,11 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	_, unknownFields, err := decodeChatProviderWire(parsed.Data, &chunk, decoder.policy)
 	if err != nil {
 		return nil, nil, err
+	}
+	if decoder.context.Target == llmprotocol.OpenAIResponsesV1 && len(chunk.Choices) == 1 && len(chunk.Choices[0].Delta.ToolCalls) > 0 {
+		if err := rejectNullChatStreamArguments(parsed.Data); err != nil {
+			return nil, nil, err
+		}
 	}
 	if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
 		return nil, nil, reservedErr
@@ -594,6 +611,33 @@ func validateChatChunkToolIndexes(calls []chatChunkToolCallWire) error {
 	return nil
 }
 
+// Go decodes JSON null into a string's zero value. Keep explicit null distinct
+// from omitted/empty wire arguments before the Chat-to-Responses empty policy.
+func rejectNullChatStreamArguments(data []byte) error {
+	var chunk struct {
+		Choices []struct {
+			Delta struct {
+				ToolCalls []struct {
+					Function struct {
+						Arguments json.RawMessage `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"delta"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(data, &chunk); err != nil {
+		return err // the provider wire parser has already validated this JSON
+	}
+	for _, choice := range chunk.Choices {
+		for _, call := range choice.Delta.ToolCalls {
+			if bytes.Equal(bytes.TrimSpace(call.Function.Arguments), []byte("null")) {
+				return nonObjectToolArgumentsError()
+			}
+		}
+	}
+	return nil
+}
+
 func conflictingIdentity(earlier, current string) bool {
 	return earlier != "" && current != "" && earlier != current
 }
@@ -657,6 +701,9 @@ func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmp
 func (decoder *chatStreamDecoder) decodeChoice(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
 	if choice.Index != 0 {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "stream_multiple_choices", "streaming multiple choices is unsupported", nil)
+	}
+	if decoder.deferredToolCompletion && (chatChoiceNeedsItem(choice) || len(choice.Delta.ToolCalls) > 0) {
+		return nil, invalidProviderResponse("invalid_item_lifecycle", "Chat stream emitted output after its finish reason")
 	}
 	events, err := decoder.decodeChoiceTextEvents(choice)
 	if err != nil {
@@ -890,7 +937,31 @@ func (decoder *chatStreamDecoder) completeChoice(reason *string, detail *chatSto
 		}
 		return nil, nil
 	}
+	if decoder.deferredToolCompletion && (decoder.stop != stop || decoder.stopSequence != matched) {
+		return nil, invalidProviderResponse("stream_finish_reason_changed", "Chat stream changed its finish reason")
+	}
 	decoder.stop, decoder.stopSequence = stop, matched
+	if decoder.context.Target == llmprotocol.OpenAIResponsesV1 && stop == llmprotocol.StopToolCall && decoder.policy.RequestOutputLimit > 0 {
+		for _, index := range active {
+			if decoder.itemKinds[index] == llmprotocol.ContentToolCall && decoder.toolCalls[index].Kind == "" &&
+				len(bytes.TrimSpace(decoder.toolArguments[index])) == 0 {
+				// Usage can arrive after finish_reason; wait before deciding that
+				// omitted arguments belong to a normally finished call.
+				decoder.deferredToolCompletion = true
+				return nil, nil
+			}
+		}
+	}
+	return decoder.completeActiveChatItems()
+}
+
+func (decoder *chatStreamDecoder) completeActiveChatItems() ([]llmprotocol.Event, error) {
+	active := make([]int, 0, len(decoder.items))
+	for index := range decoder.items {
+		if !decoder.completedItems[index] {
+			active = append(active, index)
+		}
+	}
 	sort.Ints(active)
 	events := make([]llmprotocol.Event, 0, len(active))
 	for _, itemIndex := range active {
@@ -913,6 +984,13 @@ func (decoder *chatStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, l
 	}
 	if frameErr != nil {
 		return events, diagnostics, frameErr
+	}
+	if decoder.deferredToolCompletion {
+		// A finish reason without the terminal sentinel is not confirmation
+		// that the response completed; do not repair a held empty call.
+		failure := streamFinalizationError(reason, "upstream stream ended before completion")
+		failed, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseFailed, Error: failure, StopReason: llmprotocol.StopError})
+		return append(events, failed), diagnostics, err
 	}
 	terminalEvents, finalizeDiagnostics, err := decoder.finalize(reason)
 	events = append(events, terminalEvents...)
