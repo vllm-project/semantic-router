@@ -1,7 +1,7 @@
 ---
 title: "vela3-mini"
 sidebar_label: "vela3-mini"
-sidebar_position: 4
+sidebar_position: 5
 description: "Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions still on trained adapters and spans."
 custom_edit_url: null
 ---
@@ -59,9 +59,6 @@ answers recorded for its revision. They are recorded for:
 
 - NVIDIA Ada (sm_89) (`cuda:sm_89`)
 - AMD GPU (ROCm) (`rocm`)
-
-Where a hardware reference and its device class's are both recorded, the
-hardware one is checked.
 
 On a CPU no reference is recorded, so the model serves
 there with its self-check reported as `unverified`.

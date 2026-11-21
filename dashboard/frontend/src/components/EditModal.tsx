@@ -1,10 +1,34 @@
-import React, { useEffect, useId, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 
-import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Label,
+  StatusDot,
+  Switch,
+  Textarea,
+  cn,
+  useRetainedValue,
+} from '../ui'
 import ConfirmDialog from './ConfirmDialog'
-import ProductCheckbox from './ProductCheckbox'
-import ProductIcon from './ProductIcon'
-import styles from './EditModal.module.css'
+import NativeSelect from './NativeSelect'
+import { focusFirstFormControl, keepOpenForToastInteraction } from './dialogFocusSupport'
+import {
+  FULL_WIDTH_FIELD_TYPES,
+  convertPercentageFields,
+  editDialogSize,
+  selectFieldOptions,
+  visibleFieldSections,
+} from './editModalSupport'
 
 export type EditFormData = Record<string, unknown>
 type BivariantCallback<T extends (...args: never[]) => unknown> = {
@@ -48,20 +72,6 @@ export interface FieldConfig<TForm extends object = EditFormData> {
   >
 }
 
-const DEFAULT_FULL_WIDTH_TYPES = new Set<FieldConfig['type']>(['custom', 'multiselect', 'textarea'])
-
-function visibleFieldSections(fields: FieldConfig[], formData: EditFormData) {
-  const sections = new Map<string, FieldConfig[]>()
-  for (const field of fields) {
-    if (field.shouldHide?.(formData)) continue
-    const section = field.section?.trim() || ''
-    const entries = sections.get(section) ?? []
-    entries.push(field)
-    sections.set(section, entries)
-  }
-  return [...sections.entries()]
-}
-
 const EditModal: React.FC<EditModalProps> = ({
   isOpen,
   onClose,
@@ -76,8 +86,13 @@ const EditModal: React.FC<EditModalProps> = ({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showDiscardConfirmation, setShowDiscardConfirmation] = useState(false)
-  const titleId = useId()
+  const formId = useId()
+  const contentRef = useRef<HTMLDivElement>(null)
   const isDirty = JSON.stringify(formData) !== JSON.stringify(initialFormData)
+  // Callers clear title and fields on close; keep them while the dialog animates out.
+  const shownTitle = useRetainedValue(isOpen ? title : null) ?? title
+  const shownFields = useRetainedValue(isOpen ? fields : null) ?? fields
+  const size = editDialogSize(shownFields)
 
   const requestClose = () => {
     if (saving) return
@@ -88,12 +103,6 @@ const EditModal: React.FC<EditModalProps> = ({
     onClose()
   }
 
-  const dialogRef = useAccessibleDialog<HTMLDivElement>({
-    isOpen,
-    onClose: requestClose,
-    dismissible: !saving,
-  })
-
   const readField = (fieldName: string): unknown => formData[fieldName]
   const readString = (fieldName: string): string => {
     const value = readField(fieldName)
@@ -101,7 +110,8 @@ const EditModal: React.FC<EditModalProps> = ({
   }
   const readNumberInput = (fieldName: string): string | number => {
     const value = readField(fieldName)
-    return typeof value === 'number' || typeof value === 'string' ? value : ''
+    if (typeof value === 'number') return Number.isNaN(value) ? '' : value
+    return typeof value === 'string' ? value : ''
   }
   const readBoolean = (fieldName: string): boolean => readField(fieldName) === true
   const readStringArray = (fieldName: string): string[] => {
@@ -113,23 +123,7 @@ const EditModal: React.FC<EditModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      // Convert percentage fields from 0-1 to 0-100 for display
-      const convertedData: EditFormData = { ...(data || {}) }
-      fields.forEach((field) => {
-        if (field.type !== 'percentage') {
-          return
-        }
-        const rawValue = convertedData[field.name]
-        const numericValue =
-          typeof rawValue === 'number'
-            ? rawValue
-            : typeof rawValue === 'string' && rawValue.trim() !== ''
-              ? Number(rawValue)
-              : NaN
-        if (Number.isFinite(numericValue)) {
-          convertedData[field.name] = Math.round(numericValue * 100)
-        }
-      })
+      const convertedData = convertPercentageFields(data || {}, fields, 'toDisplay')
       setFormData(convertedData)
       setInitialFormData(convertedData)
       setError(null)
@@ -150,24 +144,7 @@ const EditModal: React.FC<EditModalProps> = ({
     setError(null)
 
     try {
-      // Convert percentage fields from 0-100 back to 0-1 before saving
-      const convertedData: EditFormData = { ...formData }
-      fields.forEach((field) => {
-        if (field.type !== 'percentage') {
-          return
-        }
-        const rawValue = convertedData[field.name]
-        const numericValue =
-          typeof rawValue === 'number'
-            ? rawValue
-            : typeof rawValue === 'string' && rawValue.trim() !== ''
-              ? Number(rawValue)
-              : NaN
-        if (Number.isFinite(numericValue)) {
-          convertedData[field.name] = numericValue / 100
-        }
-      })
-      await onSave(convertedData)
+      await onSave(convertPercentageFields(formData, fields, 'toStored'))
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
@@ -176,267 +153,313 @@ const EditModal: React.FC<EditModalProps> = ({
     }
   }
 
-  if (!isOpen) return null
+  const renderControl = (field: FieldConfig, fieldId: string, describedBy: string | undefined) => {
+    switch (field.type) {
+      case 'text':
+        return (
+          <Input
+            id={fieldId}
+            value={readString(field.name)}
+            onChange={(e) => handleChange(field.name, e.target.value)}
+            placeholder={field.placeholder}
+            required={field.required}
+            aria-describedby={describedBy}
+          />
+        )
+      case 'number':
+        return (
+          <Input
+            id={fieldId}
+            type="number"
+            inputMode="decimal"
+            step={field.step !== undefined ? field.step : 'any'}
+            min={field.min}
+            max={field.max}
+            className="tabular"
+            value={readNumberInput(field.name)}
+            onChange={(e) => handleChange(field.name, parseFloat(e.target.value))}
+            placeholder={field.placeholder}
+            required={field.required}
+            aria-describedby={describedBy}
+          />
+        )
+      case 'percentage':
+        return (
+          <div className="relative">
+            <Input
+              id={fieldId}
+              type="number"
+              inputMode="decimal"
+              step={field.step !== undefined ? field.step : 1}
+              min={0}
+              max={100}
+              className="tabular pr-8"
+              value={readField(field.name) !== undefined ? readNumberInput(field.name) : ''}
+              onChange={(e) => {
+                const val = e.target.value
+                handleChange(field.name, val === '' ? '' : parseFloat(val))
+              }}
+              placeholder={field.placeholder}
+              required={field.required}
+              aria-describedby={describedBy}
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-subtle-foreground"
+            >
+              %
+            </span>
+          </div>
+        )
+      case 'boolean':
+        return (
+          <div className="flex h-9 items-center gap-2.5">
+            <Switch
+              id={fieldId}
+              checked={readBoolean(field.name)}
+              onCheckedChange={(checked) => handleChange(field.name, checked)}
+              aria-describedby={describedBy}
+            />
+            <span className="text-[13px] text-muted-foreground" aria-hidden="true">
+              {readBoolean(field.name) ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+        )
+      case 'select': {
+        const current = readString(field.name)
+        const options = selectFieldOptions(field.options, current)
+        return (
+          <NativeSelect
+            id={fieldId}
+            value={current}
+            onChange={(e) => handleChange(field.name, e.target.value)}
+            required={field.required}
+            aria-describedby={describedBy}
+          >
+            {options.includes('') ? null : (
+              <option value="" disabled>
+                {field.placeholder ?? 'Select an option'}
+              </option>
+            )}
+            {options.map((option) => (
+              <option key={option} value={option}>
+                {option || '(None)'}
+              </option>
+            ))}
+          </NativeSelect>
+        )
+      }
+      case 'multiselect': {
+        const selected = readStringArray(field.name)
+        return (
+          <div
+            role="group"
+            aria-labelledby={`${fieldId}-label`}
+            aria-describedby={describedBy}
+            className="grid max-h-72 grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3"
+          >
+            {field.options?.map((option) => {
+              const checked = selected.includes(option)
+              return (
+                <label
+                  key={option}
+                  className={cn(
+                    'flex min-w-0 cursor-pointer items-center gap-2.5 rounded-md border px-2.5 py-2 text-[13px] transition-colors',
+                    checked
+                      ? 'border-primary/35 bg-primary-soft text-foreground'
+                      : 'border-border bg-surface text-foreground/90 hover:border-border-strong hover:bg-surface-subtle',
+                  )}
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(next) => {
+                      const currentValues = readStringArray(field.name)
+                      const newValues =
+                        next === true
+                          ? [...currentValues, option]
+                          : currentValues.filter((v: string) => v !== option)
+                      handleChange(field.name, newValues)
+                    }}
+                  />
+                  <span className="min-w-0 truncate" title={option}>
+                    {option}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        )
+      }
+      case 'textarea':
+        return (
+          <Textarea
+            id={fieldId}
+            value={readString(field.name)}
+            onChange={(e) => handleChange(field.name, e.target.value)}
+            placeholder={field.placeholder}
+            required={field.required}
+            rows={4}
+            aria-describedby={describedBy}
+          />
+        )
+      case 'custom':
+        return field.customRender ? (
+          <div role="group" aria-labelledby={`${fieldId}-label`} aria-describedby={describedBy}>
+            {field.customRender(
+              readField(field.name),
+              (value) => handleChange(field.name, value),
+              formData,
+            )}
+          </div>
+        ) : null
+      default:
+        return null
+    }
+  }
+
+  const sections = visibleFieldSections(shownFields, formData)
 
   return (
     <>
-      <div
-        className={styles.overlay}
-        role="presentation"
-        onMouseDown={saving ? undefined : requestClose}
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (!open) requestClose()
+        }}
       >
-        <div
-          ref={dialogRef}
-          className={styles.modal}
-          role="dialog"
+        <DialogContent
+          ref={contentRef}
+          size={size}
+          hideClose
           aria-modal="true"
-          aria-labelledby={titleId}
+          aria-describedby={undefined}
           aria-busy={saving}
-          tabIndex={-1}
-          onMouseDown={(event) => event.stopPropagation()}
+          className="flex flex-col"
+          onOpenAutoFocus={(event) => focusFirstFormControl(event, contentRef.current)}
+          onInteractOutside={keepOpenForToastInteraction}
         >
-          <div className={styles.header}>
-            <div className={styles.headerIdentity}>
-              <img className={styles.headerLogo} src="/vllm.png" alt="" aria-hidden="true" />
-              <div className={styles.headerCopy}>
-                <span className={styles.eyebrow}>{mode === 'add' ? 'Create' : 'Edit'}</span>
-                <h2 id={titleId} className={styles.title}>
-                  {title}
-                </h2>
-              </div>
-            </div>
-            <button
-              className={styles.closeButton}
+          <DialogHeader className="flex-row items-start justify-between gap-4 border-b border-border pb-4">
+            <DialogTitle className="min-w-0 pt-0.5 leading-6 [overflow-wrap:anywhere]">
+              {shownTitle}
+            </DialogTitle>
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="-mr-2 shrink-0"
               aria-label="Close editor"
               onClick={requestClose}
               disabled={saving}
             >
-              <ProductIcon name="close" />
-            </button>
-          </div>
+              <X />
+            </Button>
+          </DialogHeader>
 
-          <form onSubmit={handleSubmit} className={styles.form}>
-            {error && (
-              <div className={styles.error} role="alert">
-                {error}
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+            {error ? (
+              <div role="alert" className="px-6 pt-4">
+                <Alert tone="danger" title="Changes were not saved">
+                  {error}
+                </Alert>
               </div>
-            )}
+            ) : null}
 
-            <div className={styles.fields}>
-              {visibleFieldSections(fields, formData).map(([sectionTitle, sectionFields]) => (
-                <section className={styles.fieldSection} key={sectionTitle || 'fields'}>
-                  {sectionTitle ? <h3 className={styles.sectionTitle}>{sectionTitle}</h3> : null}
-                  <div className={styles.fieldGrid}>
+            <DialogBody className="flex min-h-0 flex-1 flex-col gap-6 py-5">
+              {sections.map(([sectionTitle, sectionFields]) => (
+                <section
+                  key={sectionTitle || 'fields'}
+                  className="flex flex-col gap-4 border-t border-border pt-5 first:border-t-0 first:pt-0"
+                >
+                  {sectionTitle ? (
+                    <h3 className="text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground">
+                      {sectionTitle}
+                    </h3>
+                  ) : null}
+                  <div
+                    className={cn(
+                      'grid grid-cols-1 gap-x-4 gap-y-5',
+                      size !== 'md' && 'sm:grid-cols-2',
+                    )}
+                  >
                     {sectionFields.map((field) => {
-                      const fieldId = `${titleId}-${field.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+                      const fieldId = `${formId}-${field.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`
                       const descriptionId = `${fieldId}-description`
                       const isGroupedField = field.type === 'multiselect' || field.type === 'custom'
-                      const fullWidth = field.fullWidth ?? DEFAULT_FULL_WIDTH_TYPES.has(field.type)
+                      const fullWidth = field.fullWidth ?? FULL_WIDTH_FIELD_TYPES.has(field.type)
+                      const describedBy = field.description ? descriptionId : undefined
+                      const description = field.description ? (
+                        <p
+                          id={descriptionId}
+                          className={cn(
+                            'text-xs leading-relaxed text-muted-foreground',
+                            fullWidth ? '-mt-1' : 'order-last',
+                          )}
+                        >
+                          {field.description}
+                        </p>
+                      ) : null
 
                       return (
                         <div
                           key={field.name}
-                          className={`${styles.field} ${fullWidth ? styles.fieldFull : ''}`}
-                        >
-                          <label
-                            id={`${fieldId}-label`}
-                            className={styles.label}
-                            htmlFor={isGroupedField ? undefined : fieldId}
-                          >
-                            {field.label}
-                            {field.required && <span className={styles.required}>*</span>}
-                          </label>
-                          {field.description && (
-                            <p id={descriptionId} className={styles.description}>
-                              {field.description}
-                            </p>
+                          className={cn(
+                            'flex min-w-0 flex-col gap-2',
+                            fullWidth && 'sm:col-span-full',
                           )}
-
-                          <div className={styles.control}>
-                            {field.type === 'text' && (
-                              <input
-                                id={fieldId}
-                                type="text"
-                                className={styles.input}
-                                value={readString(field.name)}
-                                onChange={(e) => handleChange(field.name, e.target.value)}
-                                placeholder={field.placeholder}
-                                required={field.required}
-                                aria-describedby={field.description ? descriptionId : undefined}
-                              />
-                            )}
-
-                            {field.type === 'number' && (
-                              <input
-                                id={fieldId}
-                                type="number"
-                                step={field.step !== undefined ? field.step : 'any'}
-                                min={field.min}
-                                max={field.max}
-                                className={styles.input}
-                                value={readNumberInput(field.name)}
-                                onChange={(e) =>
-                                  handleChange(field.name, parseFloat(e.target.value))
-                                }
-                                placeholder={field.placeholder}
-                                required={field.required}
-                                aria-describedby={field.description ? descriptionId : undefined}
-                              />
-                            )}
-
-                            {field.type === 'percentage' && (
-                              <div style={{ position: 'relative' }}>
-                                <input
-                                  id={fieldId}
-                                  type="number"
-                                  step={field.step !== undefined ? field.step : 1}
-                                  min={0}
-                                  max={100}
-                                  className={styles.input}
-                                  value={
-                                    readField(field.name) !== undefined
-                                      ? readNumberInput(field.name)
-                                      : ''
-                                  }
-                                  onChange={(e) => {
-                                    const val = e.target.value
-                                    handleChange(field.name, val === '' ? '' : parseFloat(val))
-                                  }}
-                                  placeholder={field.placeholder}
-                                  required={field.required}
-                                  aria-describedby={field.description ? descriptionId : undefined}
-                                  style={{ paddingRight: '2.5rem' }}
-                                />
-                                <span
-                                  style={{
-                                    position: 'absolute',
-                                    right: '0.75rem',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    color: 'var(--color-text-secondary)',
-                                    fontSize: '0.875rem',
-                                    pointerEvents: 'none',
-                                  }}
-                                >
-                                  %
+                        >
+                          <div className="flex min-h-5 items-baseline justify-between gap-3">
+                            <Label
+                              id={`${fieldId}-label`}
+                              htmlFor={isGroupedField ? undefined : fieldId}
+                              className="gap-1 leading-5"
+                            >
+                              {field.label}
+                              {field.required ? (
+                                <span className="text-destructive-foreground" aria-hidden="true">
+                                  *
                                 </span>
-                              </div>
-                            )}
-
-                            {field.type === 'boolean' && (
-                              <label className={styles.checkbox}>
-                                <ProductCheckbox
-                                  id={fieldId}
-                                  checked={readBoolean(field.name)}
-                                  onChange={(e) => handleChange(field.name, e.target.checked)}
-                                />
-                                <span>{readBoolean(field.name) ? 'Enabled' : 'Disabled'}</span>
-                              </label>
-                            )}
-
-                            {field.type === 'select' && (
-                              <select
-                                id={fieldId}
-                                className={styles.select}
-                                value={readString(field.name)}
-                                onChange={(e) => handleChange(field.name, e.target.value)}
-                                required={field.required}
-                                aria-describedby={field.description ? descriptionId : undefined}
-                              >
-                                {field.options?.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option || '(None)'}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-
-                            {field.type === 'multiselect' && (
-                              <div
-                                className={styles.multiselect}
-                                role="group"
-                                aria-labelledby={`${fieldId}-label`}
-                                aria-describedby={field.description ? descriptionId : undefined}
-                              >
-                                {field.options?.map((option) => (
-                                  <label key={option} className={styles.multiselectOption}>
-                                    <ProductCheckbox
-                                      checked={readStringArray(field.name).includes(option)}
-                                      onChange={(e) => {
-                                        const currentValues = readStringArray(field.name)
-                                        const newValues = e.target.checked
-                                          ? [...currentValues, option]
-                                          : currentValues.filter((v: string) => v !== option)
-                                        handleChange(field.name, newValues)
-                                      }}
-                                    />
-                                    <span>{option}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            )}
-
-                            {field.type === 'textarea' && (
-                              <textarea
-                                id={fieldId}
-                                className={styles.textarea}
-                                value={readString(field.name)}
-                                onChange={(e) => handleChange(field.name, e.target.value)}
-                                placeholder={field.placeholder}
-                                required={field.required}
-                                rows={4}
-                                aria-describedby={field.description ? descriptionId : undefined}
-                              />
-                            )}
-
-                            {field.type === 'custom' && field.customRender && (
-                              <div
-                                role="group"
-                                aria-labelledby={`${fieldId}-label`}
-                                aria-describedby={field.description ? descriptionId : undefined}
-                              >
-                                {field.customRender(
-                                  readField(field.name),
-                                  (value) => handleChange(field.name, value),
-                                  formData,
-                                )}
-                              </div>
-                            )}
+                              ) : null}
+                            </Label>
+                            {field.type === 'multiselect' && field.options?.length ? (
+                              <span className="shrink-0 text-xs tabular text-subtle-foreground">
+                                {readStringArray(field.name).length} of {field.options.length}
+                              </span>
+                            ) : null}
                           </div>
+                          {description}
+                          {renderControl(field, fieldId, describedBy)}
                         </div>
                       )
                     })}
                   </div>
                 </section>
               ))}
-            </div>
+            </DialogBody>
 
-            <div className={styles.actions}>
-              <button
-                type="button"
-                className={styles.cancelButton}
-                onClick={requestClose}
-                disabled={saving}
-              >
-                <ProductIcon name="close" aria-hidden="true" />
+            <DialogFooter>
+              {isDirty ? (
+                <span className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">
+                  <StatusDot tone="warning" />
+                  Unsaved changes
+                </span>
+              ) : null}
+              <Button type="button" variant="ghost" onClick={requestClose} disabled={saving}>
                 Cancel
-              </button>
-              <button type="submit" className={styles.saveButton} disabled={saving}>
-                <ProductIcon name="check" aria-hidden="true" />
-                {saving ? 'Saving...' : mode === 'add' ? 'Add' : 'Save'}
-              </button>
-            </div>
+              </Button>
+              <Button type="submit" loading={saving}>
+                {saving ? 'Saving…' : mode === 'add' ? 'Add' : 'Save'}
+              </Button>
+            </DialogFooter>
           </form>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         isOpen={showDiscardConfirmation}
         title="Discard unsaved changes?"
         description="Your edits have not been saved. Closing the editor will lose them."
-        eyebrow="Unsaved changes"
         confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
         tone="warning"
         onCancel={() => setShowDiscardConfirmation(false)}
         onConfirm={() => {

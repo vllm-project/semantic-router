@@ -448,18 +448,21 @@ func TestChatStreamCerebrasTimeInfoStaysStrict(t *testing.T) {
 	})
 }
 
-// A same-format Chat response replays the original bytes, so the omission the
-// diagnostic reports describes the neutral representation only: the client
-// still receives time_info verbatim. Both facts are pinned here so neither
-// side can drift silently.
+// A same-format Chat response replays the original members, so the omission
+// the diagnostic reports describes the neutral representation only: the
+// client still receives time_info unchanged, though not the server's
+// system_fingerprint. Both facts are pinned here so neither side can drift
+// silently.
 func TestOpenAIChatResponseSameFormatReplayForwardsTimeInfo(t *testing.T) {
 	engine := NewBuiltinEngine()
 	translated, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, []byte(cerebrasChatResponseFixture), nil)
 	if err != nil {
 		t.Fatalf("TranslateResponse() error = %v", err)
 	}
-	if string(translated.Body) != cerebrasChatResponseFixture {
-		t.Fatal("same-format response was not replayed byte-for-byte; time_info must reach the client unchanged")
+	want := strings.Replace(cerebrasChatResponseFixture, `,
+  "system_fingerprint":"fp_1"`, "", 1)
+	if !jsonEquivalent([]byte(want), translated.Body) {
+		t.Fatalf("same-format response = %s; time_info must reach the client unchanged", translated.Body)
 	}
 	assertDiagnosticFields(t, translated.Diagnostics, "time_info")
 }

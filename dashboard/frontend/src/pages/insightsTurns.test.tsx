@@ -2,19 +2,19 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
-import { InsightsTurnFilter } from './InsightsPage'
 import InsightsRecordSection from './InsightsRecordSection'
 import InsightsSessionRoutes from './InsightsSessionRoutes'
 import { buildReplayQueryString } from './insightsPageFilters'
 import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
 import { buildInsightsRecordSections } from './insightsPageSupport'
+import { readRequestFilters, serverQuery, writeRequestFilters } from './insightsRequestsData'
 import type { InsightsRecord, InsightsTrajectory } from './insightsPageTypes'
 import { assignReviewsToRoutes } from './insightsReviewSupport'
 
 const TURN = '0199a1b2-0000-4000-8000-00000000000a'
 const NEXT_TURN = '0199a1b2-0000-4000-8000-00000000000b'
 
-const render = (node: React.ReactNode, entry = '/insights') =>
+const render = (node: React.ReactNode, entry = '/observe/requests') =>
   renderToStaticMarkup(<MemoryRouter initialEntries={[entry]}>{node}</MemoryRouter>)
 
 function record(fields: Partial<InsightsRecord>): InsightsRecord {
@@ -53,7 +53,9 @@ function sessionRouting(value: InsightsRecord) {
   const index = sections.findIndex((section) => section.title === 'Session Routing')
   return index < 0
     ? ''
-    : render(<InsightsRecordSection section={sections[index]} sectionIndex={index} />)
+    : render(
+        <InsightsRecordSection section={sections[index]} sectionIndex={index} initiallyExpanded />,
+      )
 }
 
 // A main call and a subagent call of one turn, then the next turn.
@@ -91,10 +93,12 @@ describe('Codex turns in Insights', () => {
     )
     expect(html).toContain('Codex thread</span><div>reviewer-thread')
     expect(html).toMatch(
-      /Codex turn<\/span><div><a href="\/insights\?turn=reviewer-turn"[^>]*>reviewer-turn</,
+      /Codex turn<\/span><div><a [^>]*href="\/observe\/requests\?turn=reviewer-turn"[^>]*>reviewer-turn</,
     )
     expect(html).toMatch(
-      new RegExp(`Parent turn</span><div><a href="/insights\\?turn=${TURN}"[^>]*>${TURN}<`),
+      new RegExp(
+        `Parent turn</span><div><a [^>]*href="/observe/requests\\?turn=${TURN}"[^>]*>${TURN}<`,
+      ),
     )
 
     const plain = sessionRouting(record({}))
@@ -104,12 +108,14 @@ describe('Codex turns in Insights', () => {
     expect(sessionRouting(record({ session_id: undefined, turn_id: TURN }))).toContain('Codex turn')
   })
 
-  it('reads the turn from the URL and shows it as a filter that can be cleared', () => {
-    const html = render(<InsightsTurnFilter />, `/insights?turn=${TURN}`)
-    expect(html).toContain(`title="${TURN}"`)
-    expect(html).toContain('Codex turn 0199a1b2…0000000a')
-    expect(html).toContain('aria-label="Clear turn filter"')
-    expect(render(<InsightsTurnFilter />)).toBe('')
+  it('reads the turn from the URL, asks the API for it, and clears it with the page', () => {
+    const params = new URLSearchParams(`turn=${TURN}&page=3`)
+    const filters = readRequestFilters(params)
+    expect(filters.turn).toBe(TURN)
+    expect(new URLSearchParams(serverQuery(filters, undefined)).get('turn_id')).toBe(TURN)
+    const cleared = writeRequestFilters(params, { turn: '' })
+    expect(cleared.has('turn')).toBe(false)
+    expect(cleared.has('page')).toBe(false)
   })
 
   it('asks the replay API for the turn', () => {
@@ -150,12 +156,12 @@ describe('Codex turns in Insights', () => {
 
   it("groups a session's calls by Codex turn, subagents with the turn that spawned them", () => {
     const html = render(<InsightsSessionRoutes trajectory={trajectory} reviews={[review]} />)
-    expect(html.match(new RegExp(`href="/insights\\?turn=${TURN}"`, 'g'))).toHaveLength(1)
+    expect(html.match(new RegExp(`href="/observe/requests\\?turn=${TURN}"`, 'g'))).toHaveLength(1)
     expect(html).toContain('Codex turn 0199a1b2…0000000a</a> · 2 calls')
     expect(html).toContain('Codex turn 0199a1b2…0000000b</a> · 1 call')
     // The subagent's call and the review sit under the first turn, before the next one opens.
-    const nextTurn = html.indexOf(`href="/insights?turn=${NEXT_TURN}"`)
-    for (const mark of ['data-record-id="subagent-a"', 'href="/insights/review"']) {
+    const nextTurn = html.indexOf(`href="/observe/requests?turn=${NEXT_TURN}"`)
+    for (const mark of ['data-record-id="subagent-a"', 'href="/observe/requests/review"']) {
       expect(html.indexOf(mark)).toBeGreaterThan(-1)
       expect(html.indexOf(mark)).toBeLessThan(nextTurn)
     }
@@ -167,5 +173,26 @@ describe('Codex turns in Insights', () => {
       ),
     }
     expect(render(<InsightsSessionRoutes trajectory={legacy} />)).not.toContain('Codex turn')
+  })
+
+  it("pages a long session's history from the page that holds the request on screen", () => {
+    const long: InsightsTrajectory = {
+      ...trajectory,
+      routes: Array.from({ length: 60 }, (_, index) =>
+        route(`call-${index + 1}`, new Date(Date.UTC(2026, 10, 15, 9, index)).toISOString(), {
+          turn_id: index < 30 ? TURN : NEXT_TURN,
+          turn_index: index,
+        }),
+      ),
+    }
+    const html = render(<InsightsSessionRoutes trajectory={long} current="call-40" />)
+    expect(html).toContain('26–50 of 60 requests')
+    expect(html).toContain('data-current="true"')
+    expect(html).not.toContain('data-record-id="call-25"')
+    expect(html).toContain('data-record-id="call-26"')
+    // the page opens under the turn its first row belongs to, with the turn's whole count
+    expect(html).toContain('Codex turn 0199a1b2…0000000a</a> · 30 calls')
+    expect(html).toMatch(/href="\/observe\/requests\/call-26"[^>]*>26</)
+    expect(render(<InsightsSessionRoutes trajectory={long} />)).toContain('1–25 of 60 requests')
   })
 })

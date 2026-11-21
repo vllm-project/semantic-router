@@ -751,7 +751,8 @@ func TestAnthropicChatReasoningStreamKeepsItsThinkingBlock(t *testing.T) {
 	}
 	public = append(public, bytes.Join(frames, nil)...)
 	for _, want := range []string{
-		`"content_block":{"thinking":"","type":"thinking"}`, `"thinking":"private thinking"`,
+		`"content_block":{"signature":"","thinking":"","type":"thinking"}`, `"thinking":"private thinking"`,
+		`"delta":{"type":"signature_delta","signature":""}`,
 		`"content_block":{"text":"","type":"text"}`, `"text":"ok"`,
 	} {
 		if !bytes.Contains(public, []byte(want)) {

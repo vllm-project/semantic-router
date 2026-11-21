@@ -50,6 +50,20 @@ async function choose(page: Page, label: string, value: string) {
   await page.getByRole('combobox', { name: label, exact: true }).click()
   await page.getByRole('listbox').locator(`[data-value="${value}"]`).click()
 }
+const experimentChip = (page: Page) => page.getByRole('button', { name: /^Experiment/ })
+async function newExperiment(page: Page, name: string) {
+  await experimentChip(page).click()
+  await page.getByRole('button', { name: 'New experiment…', exact: true }).click()
+  await page.getByLabel('Experiment name', { exact: true }).fill(name)
+  await page.getByRole('button', { name: 'Create experiment', exact: true }).click()
+}
+async function selectExperiment(page: Page, name: RegExp) {
+  await experimentChip(page).click()
+  await page.getByRole('menuitemradio', { name }).click()
+}
+const sequence = (page: Page) =>
+  page.getByRole('region', { name: 'Evaluation runs', exact: true }).locator('tbody tr')
+const row = (page: Page, label: string) => sequence(page).filter({ hasText: label })
 
 test('makes an empty experiment actionable without exposing an empty linking form', async ({
   page,
@@ -66,7 +80,7 @@ test('makes an empty experiment actionable without exposing an empty linking for
       },
     })
   })
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
   await expect(
     page.getByRole('heading', { name: 'Start with your single models', exact: true }),
   ).toBeVisible()
@@ -81,7 +95,7 @@ test('makes an empty experiment actionable without exposing an empty linking for
   await expect(
     page.getByText('Reuse a run you already have. Adding it here does not rerun the evaluation.'),
   ).toBeVisible()
-  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.getByRole('combobox', { name: 'Saved run', exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Run single models', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`view=new&experiment=${id}&role=baseline`))
@@ -137,7 +151,7 @@ test('groups recipe versions and keeps supporting checks and saved-run tools col
     }),
   )
   await page.setViewportSize({ width: 1600, height: 1000 })
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
   await expect(
     page.getByRole('heading', { name: 'Review your recipe versions', exact: true }),
   ).toBeVisible()
@@ -152,32 +166,30 @@ test('groups recipe versions and keeps supporting checks and saved-run tools col
   await expect(
     page.getByRole('button', { name: 'Evaluate starting recipe', exact: true }),
   ).toHaveCount(0)
-  await expect(
-    page.getByRole('region', { name: 'Single-model reference', exact: true }),
-  ).toContainText('41 / 42 attempts completed')
-  await expect(page.getByRole('region', { name: 'Starting recipe', exact: true })).toContainText(
-    'Starting Balance',
-  )
-  const versions = page.getByRole('region', { name: 'Recipe versions', exact: true })
-  await expect(versions.locator('li')).toHaveCount(2)
-  await expect(versions.getByText('Recipe version', { exact: true })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'Saved results', exact: true })).toHaveCount(1)
+  await expect(row(page, 'Reference')).toContainText('Single-model reference run')
+  await expect(row(page, 'Reference')).toContainText('Failed')
+  await expect(row(page, 'Starting recipe')).toContainText('Starting Balance')
+  await expect(sequence(page).filter({ hasText: /Version \d/ })).toHaveCount(2)
+  await expect(sequence(page).nth(2)).toContainText('Version 1')
+  await expect(sequence(page).nth(2)).toContainText('Cost-priority recipe')
+  await expect(sequence(page).nth(3)).toContainText('Version 2')
+  await expect(sequence(page).getByText('Recipe version', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Routing check', exact: true })).toBeHidden()
   await expect(page.getByRole('combobox', { name: 'Saved run', exact: true })).toHaveCount(0)
   await page.screenshot({ path: testInfo.outputPath('experiment-grouped-desktop.png') })
-  await page
-    .getByRole('heading', { name: 'Saved results', exact: true })
+  await sequence(page)
+    .first()
     .evaluate((element) => element.scrollIntoView({ block: 'start' }))
   await page.screenshot({ path: testInfo.outputPath('experiment-results-desktop.png') })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.evaluate(() => scrollTo(0, 0))
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('experiment-grouped-mobile.png') })
-  await page
-    .getByRole('heading', { name: 'Recipe versions', exact: true })
+  await sequence(page)
+    .first()
     .evaluate((element) => element.scrollIntoView({ block: 'start' }))
   await page.screenshot({ path: testInfo.outputPath('experiment-results-mobile.png') })
-  await page.getByText('Supporting checks', { exact: true }).click()
+  await page.getByRole('button', { name: /supporting checks/ }).click()
   await expect(page.getByRole('button', { name: 'Routing check', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Test another recipe', exact: true }).click()
   await expect(page).toHaveURL(
@@ -208,7 +220,7 @@ test('waits for complete membership before offering the next recipe, including a
       },
     })
   })
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
   await expect(page.getByRole('alert')).toContainText('Could not load all runs in this experiment.')
   for (const action of [
     'Evaluate starting recipe',
@@ -223,9 +235,7 @@ test('waits for complete membership before offering the next recipe, including a
   await expect(
     page.getByRole('button', { name: 'Evaluate starting recipe', exact: true }),
   ).toHaveCount(0)
-  await expect(
-    page.getByRole('region', { name: 'Single-model reference', exact: true }),
-  ).toHaveCount(0)
+  await expect(row(page, 'Reference')).toContainText('Recipe 0')
   await page.getByRole('button', { name: 'Add saved results', exact: true }).click()
   await page.getByRole('combobox', { name: 'Saved run', exact: true }).click()
   await expect(page.getByRole('listbox').locator('[data-value="run-0"]')).toHaveCount(0)
@@ -261,11 +271,9 @@ test('offers candidate protocol reuse for a failed baseline while preserving its
       },
     }),
   )
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
-  const reference = page.getByRole('region', { name: 'Single-model reference', exact: true })
-  await expect(reference.getByText('failed', { exact: true })).toBeVisible()
-  await expect(reference).toContainText('41 / 42 attempts completed')
-  await expect(reference).toContainText('1 failed')
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
+  const reference = row(page, 'Reference')
+  await expect(reference.getByText('Failed', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Check routing first', exact: true })).toBeEnabled()
   await expect(
     page.getByRole('button', { name: 'Evaluate starting recipe', exact: true }),
@@ -273,9 +281,9 @@ test('offers candidate protocol reuse for a failed baseline while preserving its
   await page.getByRole('button', { name: 'Evaluate starting recipe', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`view=new&baseline=run-0&experiment=${id}&role=initial`))
   active = true
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
-  await expect(reference.getByText('running', { exact: true })).toBeVisible()
-  await expect(reference).toContainText('41 / 42 attempts completed')
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
+  await expect(reference.getByText('Running', { exact: true })).toBeVisible()
+  await expect(reference).toContainText('100%')
   await expect(page.getByRole('button', { name: 'Check routing first', exact: true })).toHaveCount(
     0,
   )
@@ -301,18 +309,21 @@ test('creates only metadata and reconciles a lost response using the same durabl
         : { experiments: [], next_cursor: null, has_more: false },
     })
   })
-  await page.goto('/evaluation?view=experiments')
-  await page.getByLabel('Experiment name', { exact: true }).fill(experiment.name)
-  await page.getByRole('button', { name: 'Create experiment', exact: true }).click()
+  await page.goto('/observe/evaluations?view=experiments')
+  await newExperiment(page, experiment.name)
   await expect(
     page.getByRole('button', { name: 'Check creation request', exact: true }),
   ).toBeEnabled()
   await page.reload()
+  await page.getByRole('button', { name: 'Check creation request', exact: true }).click()
   await expect(
     page.getByText('Check your previous creation request', { exact: true }),
   ).toBeVisible()
   await expect(page.getByLabel('Experiment name', { exact: true })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Check creation request', exact: true }).click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Check creation request', exact: true })
+    .click()
   await expect(page.getByRole('heading', { name: experiment.name, exact: true })).toBeVisible()
   expect(bodies).toHaveLength(2)
   expect(bodies[1]).toEqual(bodies[0])
@@ -346,14 +357,17 @@ test('clears only a confirmed deleted create submission and waits for an explici
         : { experiments: [], next_cursor: null, has_more: false },
     })
   })
-  await page.goto('/evaluation?view=experiments')
-  await page.getByLabel('Experiment name', { exact: true }).fill('Deleted study')
-  await page.getByRole('button', { name: 'Create experiment', exact: true }).click()
+  await page.goto('/observe/evaluations?view=experiments')
+  await newExperiment(page, 'Deleted study')
   await expect(
     page.getByRole('button', { name: 'Check creation request', exact: true }),
   ).toBeEnabled()
   await page.reload()
   await page.getByRole('button', { name: 'Check creation request', exact: true }).click()
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Check creation request', exact: true })
+    .click()
   await expect(
     page.getByRole('status').filter({ hasText: 'That experiment was deleted.' }),
   ).toBeVisible()
@@ -412,37 +426,25 @@ test('paginates experiments and members and uses only authoritative run roles', 
       },
     })
   })
-  await page.goto('/evaluation?view=experiments')
-  await page
-    .getByRole('navigation', { name: 'Experiment pages' })
-    .getByRole('button', { name: 'Next', exact: true })
-    .click()
-  await expect(page.getByRole('button', { name: /Second page/ })).toBeVisible()
-  await page
-    .getByRole('navigation', { name: 'Experiment pages' })
-    .getByRole('button', { name: 'Previous', exact: true })
-    .click()
-  await page.getByRole('button', { name: /Balance recipe study/ }).click()
-  await expect(
-    page.getByRole('region', { name: 'Saved runs', exact: true }).locator('ul > li'),
-  ).toHaveCount(20)
+  await page.goto('/observe/evaluations?view=experiments')
+  await experimentChip(page).click()
+  await expect(page.getByRole('menuitemradio')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Show more experiments', exact: true }).click()
+  await expect(page.getByRole('menuitemradio', { name: /Second page/ })).toBeVisible()
+  await page.getByRole('menuitemradio', { name: /Balance recipe study/ }).click()
+  await expect(sequence(page)).toHaveCount(20)
   await page.getByRole('button', { name: 'Compare results', exact: true }).last().click()
-  await expect(page).toHaveURL(/view=compare&baseline=run-0/)
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
-  await page
-    .getByRole('navigation', { name: 'Experiment pages' })
-    .getByRole('button', { name: 'Next', exact: true })
-    .click()
-  await expect(
-    page.getByRole('region', { name: 'Saved runs', exact: true }).locator('ul > li'),
-  ).toHaveCount(1)
-  await page.getByText('Supporting checks', { exact: true }).click()
-  await expect(
-    page.getByRole('region', { name: 'Saved runs', exact: true }).locator('ul > li'),
-  ).toContainText('Recipe 20')
-  await expect(
-    page.getByRole('region', { name: 'Saved runs', exact: true }).locator('ul > li'),
-  ).toContainText('Recovery attempt')
+  await expect
+    .poll(() => {
+      const search = new URL(page.url()).searchParams
+      return [search.get('view'), search.get('baseline'), search.get('experiment')]
+    })
+    .toEqual(['compare', 'run-0', id])
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
+  await expect(sequence(page)).toHaveCount(20)
+  await page.getByRole('button', { name: /supporting checks/ }).click()
+  await expect(sequence(page)).toHaveCount(21)
+  await expect(row(page, 'Recovery attempt')).toContainText('Recipe 20')
   await page.getByRole('button', { name: 'Add saved results', exact: true }).click()
   await page.getByRole('combobox', { name: 'Saved run', exact: true }).click()
   await expect(page.getByRole('listbox').locator('[data-value="run-99"]')).toHaveCount(0)
@@ -462,9 +464,6 @@ test('paginates experiments and members and uses only authoritative run roles', 
     .evaluate((element) => element.scrollIntoView({ block: 'start' }))
   for (const button of [
     page.getByRole('button', { name: 'Evaluate starting recipe', exact: true }),
-    page
-      .getByRole('navigation', { name: 'Experiment pages' })
-      .getByRole('button', { name: 'Previous', exact: true }),
     page.getByRole('button', { name: 'Add saved results', exact: true }),
   ]) {
     expect((await button.locator('svg').boundingBox())!.width).toBeLessThanOrEqual(20)
@@ -519,9 +518,8 @@ test('permits experiment metadata writes without generation permission and hides
       },
     }),
   )
-  await page.goto('/evaluation?view=experiments')
-  await page.getByLabel('Experiment name', { exact: true }).fill('Metadata only')
-  await page.getByRole('button', { name: 'Create experiment', exact: true }).click()
+  await page.goto('/observe/evaluations?view=experiments')
+  await newExperiment(page, 'Metadata only')
   await expect(page.getByRole('heading', { name: experiment.name, exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Use saved results', exact: true }).click()
   await choose(page, 'Saved run', 'run-0')
@@ -531,7 +529,7 @@ test('permits experiment metadata writes without generation permission and hides
   expect(bodies[1]).toEqual({ run_id: 'run-0', role: 'baseline', hypothesis: '' })
   await expect(
     page
-      .getByRole('region', { name: 'Evaluation experiments', exact: true })
+      .getByRole('region', { name: 'Experiment', exact: true })
       .getByRole('button', { name: 'Compare results', exact: true }),
   ).toBeVisible()
   for (const action of [
@@ -543,19 +541,20 @@ test('permits experiment metadata writes without generation permission and hides
     await expect(page.getByRole('button', { name: action, exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Delete experiment', exact: true })).toBeEnabled()
   permissions = ['evaluation.read']
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
   await expect(page.getByRole('heading', { name: experiment.name, exact: true })).toBeVisible()
   await expect(
     page
-      .getByRole('region', { name: 'Evaluation experiments', exact: true })
+      .getByRole('region', { name: 'Experiment', exact: true })
       .getByRole('button', { name: 'Compare results', exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add run', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Delete experiment', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Run single models', exact: true })).toHaveCount(0)
-  await page.goto('/evaluation?view=experiments')
-  await expect(page.getByRole('heading', { name: 'Experiments', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Create experiment', exact: true })).toHaveCount(0)
+  await page.goto('/observe/evaluations?view=experiments')
+  await experimentChip(page).click()
+  await expect(page.getByRole('menu', { name: 'Experiments' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'New experiment…', exact: true })).toHaveCount(0)
   expect(bodies).toHaveLength(2)
 })
 
@@ -596,12 +595,14 @@ test('confirms group-only deletion, blocks duplicate clicks and preserves saved 
         : { experiments: deleted ? [] : [experiment], next_cursor: null, has_more: false },
     })
   })
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
   const trigger = page.getByRole('button', { name: 'Delete experiment', exact: true })
   await trigger.click()
   const dialog = page.getByRole('alertdialog', { name: 'Delete experiment?' })
   await expect(dialog).toContainText('Saved runs, results, costs and artifacts will be kept.')
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  // The closing dialog keeps the page aria-hidden until its exit animation ends.
+  await expect(dialog).toHaveCount(0)
   expect(mutations).toEqual([])
   await trigger.click()
   await page.screenshot({ path: testInfo.outputPath('delete-experiment-desktop.png') })
@@ -613,15 +614,12 @@ test('confirms group-only deletion, blocks duplicate clicks and preserves saved 
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled()
   await expect.poll(() => mutations.length).toBe(1)
   release!()
-  await expect(page).toHaveURL(/view=experiments$/)
-  await expect(page.getByRole('heading', { name: 'Experiments', exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/view=runs$/)
+  await expect(page.getByRole('region', { name: 'Experiment', exact: true })).toHaveCount(0)
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Experiments', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Balance recipe study/ })).toHaveCount(0)
-  await page
-    .getByRole('navigation', { name: 'Evaluation views' })
-    .getByRole('button', { name: /^Runs/ })
-    .click()
+  await experimentChip(page).click()
+  await expect(page.getByRole('menuitemradio', { name: /Balance recipe study/ })).toHaveCount(0)
+  await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Recipe 0', exact: true })).toBeVisible()
   expect(mutations).toEqual([`DELETE /api/sr-bench/v1/experiments/${id}`])
 })
@@ -645,7 +643,7 @@ test('retains a lost deletion response and reconciles only the same experiment a
         : { experiments: [], next_cursor: null, has_more: false },
     })
   })
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
   await page.getByRole('button', { name: 'Delete experiment', exact: true }).click()
   const dialog = page.getByRole('alertdialog')
   await dialog.getByRole('button', { name: 'Delete experiment', exact: true }).click()
@@ -653,7 +651,7 @@ test('retains a lost deletion response and reconciles only the same experiment a
   expect(deletedIDs).toHaveLength(1)
   await expect(page).toHaveURL(new RegExp(`experiment=${id}`))
   await dialog.getByRole('button', { name: 'Retry deletion', exact: true }).click()
-  await expect(page).toHaveURL(/view=experiments$/)
+  await expect(page).toHaveURL(/view=runs$/)
   expect(deletedIDs).toEqual(Array(2).fill(`/api/sr-bench/v1/experiments/${id}`))
 })
 
@@ -684,7 +682,7 @@ test('refreshes an active-run rejection without repeating deletion and disables 
       },
     })
   })
-  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${id}`)
   await page.getByRole('button', { name: 'Delete experiment', exact: true }).click()
   const dialog = page.getByRole('alertdialog')
   await dialog.getByRole('button', { name: 'Delete experiment', exact: true }).click()
@@ -728,8 +726,8 @@ test('ignores a late deletion response after navigating to a different experimen
         : { experiments: [experiment, second], next_cursor: null, has_more: false },
     })
   })
-  await page.goto('/evaluation?view=experiments')
-  await page.getByRole('button', { name: /Balance recipe study/ }).click()
+  await page.goto('/observe/evaluations?view=experiments')
+  await selectExperiment(page, /Balance recipe study/)
   await page.getByRole('button', { name: 'Delete experiment', exact: true }).click()
   await page
     .getByRole('alertdialog')
@@ -737,7 +735,7 @@ test('ignores a late deletion response after navigating to a different experimen
     .click()
   await expect.poll(() => Boolean(release)).toBe(true)
   await page.goBack()
-  await page.getByRole('button', { name: /Other study/ }).click()
+  await selectExperiment(page, /Other study/)
   release!()
   await expect.poll(() => responded).toBe(true)
   await expect(page).toHaveURL(new RegExp(`experiment=${second.id}`))
