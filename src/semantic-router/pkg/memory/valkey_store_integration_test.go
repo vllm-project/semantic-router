@@ -459,11 +459,17 @@ func TestValkeyStoreInteg_UpdateNotFound(t *testing.T) {
 	store, _ := setupValkeyMemoryIntegration(t)
 	ctx := context.Background()
 
-	err := store.Update(ctx, "nonexistent_update_id", &Memory{
-		Content: "will not work", UserID: "u1",
+	id := "nonexistent_update_id"
+	err := store.Update(ctx, id, &Memory{
+		Content:   "will not work",
+		UserID:    "u1",
+		Type:      MemoryTypeSemantic,
+		CreatedAt: time.Unix(1704067200, 0),
+		Embedding: memoryUpdateTestVector(1),
 	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "memory not found")
+	assert.ErrorContains(t, err, "memory not found")
+	_, err = store.Get(ctx, id)
+	assert.ErrorContains(t, err, "memory not found")
 }
 
 // ---------------------------------------------------------------------------

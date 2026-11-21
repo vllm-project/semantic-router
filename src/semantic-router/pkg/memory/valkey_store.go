@@ -520,23 +520,18 @@ func (v *ValkeyStore) Update(ctx context.Context, id string, memory *Memory) err
 		return fmt.Errorf("memory ID is required")
 	}
 
-	logging.Debugf("ValkeyStore.Update: upserting memory id=%s", id)
+	logging.Debugf("ValkeyStore.Update: updating memory id=%s", id)
 
+	// HSET would also create a missing hash, even when all fields are supplied.
+	existing, err := v.Get(ctx, id)
+	if err != nil {
+		status = "error"
+		return err
+	}
 	memory.ID = id
 	memory.UpdatedAt = time.Now()
-
-	// If CreatedAt or Embedding are missing, fetch from the existing row so we don't lose data
-	var existing *Memory
-	if memory.CreatedAt.IsZero() || len(memory.Embedding) == 0 {
-		var err error
-		existing, err = v.Get(ctx, id)
-		if err != nil {
-			status = "error"
-			return fmt.Errorf("memory not found: %s", id)
-		}
-		if memory.CreatedAt.IsZero() {
-			memory.CreatedAt = existing.CreatedAt
-		}
+	if memory.CreatedAt.IsZero() {
+		memory.CreatedAt = existing.CreatedAt
 	}
 	embedding, err := memoryUpdateEmbedding(ctx, memory, existing, v.embeddingConfig)
 	if err != nil {
