@@ -653,6 +653,7 @@ type routerConfigHash struct {
 type routerConfigAttempt struct {
 	DocumentHash string               `json:"document_hash"`
 	Status       string               `json:"status"`
+	StartedAt    time.Time            `json:"started_at"`
 	Reasons      []routerConfigReason `json:"reasons"`
 }
 
@@ -691,8 +692,9 @@ func newRouterActivationVerifier(routerAPIURL string, client *http.Client, crede
 				if response.ActivationStatus == "active" && response.GeneratedRuntimeHash == expected && response.ActiveRuntimeHash == expected {
 					return nil
 				}
-				if detail, done, restart := judgeRouterAttempt(response, expected); done && restart {
-					return &restartNeededError{detail: detail}
+				_, verdict := judgeRouterAttempt(response, expected)
+				if _, restart := asRestartNeeded(verdict); restart {
+					return verdict
 				}
 			}
 			select {
