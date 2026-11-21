@@ -3867,6 +3867,16 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/thinkingmachines/Inkling-Small
+  - catalog: thinking-machines/inkling-2-small
+    relationship: self_hosted
+    id: thinkingmachines/Inkling-2-Small
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-11-20'
+      source: https://recipes.vllm.ai/thinkingmachines/Inkling-2-Small
   - catalog: meta/muse-glimmer-30b
     relationship: self_hosted
     id: meta-models/Muse-Glimmer-30B
@@ -9393,6 +9403,47 @@ models:
   - moe
   - agentic
   - efficient
+- id: thinking-machines/inkling-2-small
+  display_name: Inkling 2 Small
+  description: Multimodal mixture-of-experts model with a native NVFP4 checkpoint and an alternative MXFP8 release.
+  kind: physical
+  publisher: Thinking Machines Lab
+  presentation:
+    logo: monogram
+    monogram: TM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/thinkingmachines/Inkling-2-Small
+    license: Apache-2.0
+  family: inkling
+  generation: 2
+  parameter_size: 594B (17B active)
+  released_at: '2026-11-05'
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Thinking Machines Lab
+    status: claimed
+    verified_at: '2026-11-20'
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/
+  tags:
+  - open_weights
+  - multimodal
+  - moe
 - id: tii/falcon-h1r-7b
   display_name: Falcon-H1R 7B
   description: TII's 7B hybrid Falcon model designed for efficient test time scaling and advanced reasoning.
@@ -38643,6 +38694,94 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-thinkingmachines-inkling-small
     redistributable: true
+- id: thinking-machines/inkling-2-small-deep-swe@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: mini-swe-agent v2.4.6
+  metrics:
+    resolved: 0.721
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: terminus v2
+  metrics:
+    resolved: 0.813
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-terminal-bench-4-0@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: mini-swe-agent v2.4.6
+  metrics:
+    resolved: 0.131
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-gpqa-diamond@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.93
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-hmmt-feb-2026@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: matharena/hmmt-feb@2026.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.958
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
 - id: tii/falcon-h1r-7b-aime-2025@1.0.0
   model: tii/falcon-h1r-7b
   benchmark: matharena/aime@2025.0.0
@@ -52645,6 +52784,28 @@ index_results:
   - thinking-machines/inkling-small-model-card-terminal-bench@1.0.0
   domains:
     agentic_systems: 64.7
+- model: thinking-machines/inkling-2-small
+  reasoning_effort: unspecified
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 81.3
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.813
+    normalized: 0.813
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0
+    benchmark_profile: published-agent
+  provenance:
+  - thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0
+  domains:
+    agentic_systems: 81.3
 - model: tii/falcon-h1-0.5b-instruct
   reasoning_effort: unspecified
   index: vllm-sr/general@1.0.0
