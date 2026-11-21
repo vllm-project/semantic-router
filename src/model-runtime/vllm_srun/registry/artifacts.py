@@ -181,7 +181,15 @@ def safetensors_header(path: Path) -> dict[str, Any]:
         data = stream.read(size)
         if len(data) != size:
             raise PackageError(f"truncated safetensors header: {path.name}")
-    header = json.loads(data)
+    try:
+        header = json.loads(data)
+    except ValueError as exc:
+        # Undecodable bytes and invalid JSON are both permanent package-format
+        # failures, not transient load errors: report them as such so the
+        # runtime does not retry a header that can never parse.
+        raise PackageError(
+            f"invalid safetensors header: {path.name}: {str(exc).splitlines()[0]}"
+        ) from exc
     if not isinstance(header, dict):
         raise PackageError(f"invalid safetensors header: {path.name}")
     return header
