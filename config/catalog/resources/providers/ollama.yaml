@@ -19,4 +19,5 @@ presentation:
   monochrome: true
   featured: true
 conformance:
-  status: unverified
+  status: live_verified
+  verified_at: 2026-11-21

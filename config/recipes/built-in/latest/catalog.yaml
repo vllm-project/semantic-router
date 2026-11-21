@@ -1807,7 +1807,8 @@ providers:
     monochrome: true
     featured: true
   conformance:
-    status: unverified
+    status: live_verified
+    verified_at: '2026-11-21'
 - id: openai-compatible
   display_name: OpenAI Compatible
   description: Connect any compatible private endpoint.
