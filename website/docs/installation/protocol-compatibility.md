@@ -291,6 +291,19 @@ rule. Its other top-level fields the Router can't carry, `background`,
 `prompt`, `prompt_cache_options`, `prompt_cache_retention` and
 `top_logprobs`, fail with `unsupported_<field>`.
 
+### The answer after reasoning
+
+A reasoning parser, such as vLLM's `qwen3` parser, splits a model's output at
+the closing think tag and keeps the blank line the model writes after it at the
+start of the answer. The Router drops the whitespace in front of the first
+answer text of a reply that carries reasoning, so a Chat Completions,
+Responses, or Messages client reads `Red` and not a blank line and `Red`,
+buffered or streamed. A reply without reasoning keeps its text, leading
+whitespace included, and the reasoning and tool calls are never changed.
+
+A Messages client of an `anthropic` backend that streams reasoning still gets
+the backend's frames as sent, so a separator in front of its answer stays.
+
 ### Anthropic Messages clients on other backends
 
 For an Anthropic Messages client using a Chat Completions or Responses

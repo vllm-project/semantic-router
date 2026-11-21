@@ -51,10 +51,10 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	decodedDiagnosticsEnd := len(ctx.ProtocolDiagnostics)
 	clientBody := responseBody
 	// Same-format Chat usually forwards upstream bytes. When codec translation
-	// changed those bytes (for example, by dropping provider decorations), or a
-	// second call answered in their place, send the translated response instead.
-	rewriteClientBody := second != nil || requiresClientResponseRewrite(ctx) ||
-		ctx.SourceFormat == llmprotocol.OpenAIChatV1 && ctx.ResponseBodyNeedsRewrite
+	// changed those bytes (for example, by dropping provider decorations or the
+	// separator after reasoning), or a second call answered in their place, send
+	// the translated response instead.
+	rewriteClientBody := second != nil || requiresClientResponseRewrite(ctx) || ctx.ResponseBodyNeedsRewrite
 	if rewriteClientBody {
 		clientBody, err = r.encodeClientResponse(*semanticResponse, ctx)
 		if err != nil {
@@ -395,13 +395,18 @@ func isResponseAPIRequest(ctx *RequestContext) bool {
 // Re-encoding from the neutral response yields the canonical equivalent. When
 // that encode fails, nothing is cached: a miss is recoverable, a wrong entry
 // is not.
+//
+// A rewrite that replayed the envelope's bytes, such as the answer separator's
+// in-place trim, carries the same risk as a verbatim forward: it still
+// preserves whatever the upstream wrote outside the wire contract, so it needs
+// the same canonical re-encode rather than the trust a fresh render earns.
 func (r *OpenAIRouter) cacheableClientResponse(
 	clientBody []byte,
 	rewritten bool,
 	response llmprotocol.Response,
 	ctx *RequestContext,
 ) []byte {
-	if rewritten || ctx == nil || !ctx.ResponseUnknownFields {
+	if ctx == nil || !ctx.ResponseUnknownFields || (rewritten && !ctx.ResponseClientBodyReplayed) {
 		return clientBody
 	}
 	canonical, err := r.encodeCanonicalClientResponse(response, ctx)

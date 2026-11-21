@@ -19,7 +19,7 @@ const vllmReasoningOrderMarker = "__mock_vllm_reasoning_order__"
 
 func init() {
 	pkgtestcases.Register("protocol-codec-vllm-reasoning-order", pkgtestcases.TestCase{
-		Description: "vLLM's delta that ends the reasoning and starts the answer reaches Messages and Responses clients reasoning first and Chat clients unchanged",
+		Description: "vLLM's delta that ends the reasoning and starts the answer reaches Messages and Responses clients reasoning first and Chat clients in vLLM's order, and no client gets the blank line vLLM leaves in front of the answer",
 		Tags:        []string{"protocol-codec", "vllm", "anthropic", "response-api", "reasoning", "streaming"},
 		Fn:          testProtocolCodecVLLMReasoningOrder,
 	})
@@ -27,7 +27,8 @@ func init() {
 
 // vllmReasoningOrderCase is one client's wants: parts in order, the last data
 // frame, and the Messages block or Responses item types the reply opens, in
-// order. The fixture's mixed delta is {"content":"\n\nHello","reasoning":".\n"}.
+// order. The fixture's mixed delta is {"content":"\n\nHello","reasoning":".\n"},
+// and every client gets the answer as "Hello".
 type vllmReasoningOrderCase struct {
 	path   string
 	stream bool
@@ -37,10 +38,10 @@ type vllmReasoningOrderCase struct {
 }
 
 var vllmReasoningOrderCases = []vllmReasoningOrderCase{
-	{"/v1/messages", true, []string{`"thinking":".\n"`, `"text":"\n\nHello"`}, `"type":"message_stop"`, []string{"thinking", "text"}},
-	{"/v1/responses", true, []string{`"delta":".\n"`, `"delta":"\n\nHello"`}, `"type":"response.completed"`, []string{"reasoning", "message"}},
-	// A Chat client gets vLLM's own frames.
-	{"/v1/chat/completions", true, []string{`"content":"\n\nHello","reasoning":".\n"`}, "[DONE]", nil},
+	{"/v1/messages", true, []string{`"thinking":".\n"`, `"text":"Hello"`}, `"type":"message_stop"`, []string{"thinking", "text"}},
+	{"/v1/responses", true, []string{`"delta":".\n"`, `"delta":"Hello"`}, `"type":"response.completed"`, []string{"reasoning", "message"}},
+	// A Chat client gets vLLM's own frames, less the blank line.
+	{"/v1/chat/completions", true, []string{`"content":"Hello","reasoning":".\n"`}, "[DONE]", nil},
 	{"/v1/messages", false, nil, "", []string{"thinking", "text"}},
 	{"/v1/responses", false, nil, "", []string{"reasoning", "message"}},
 }
@@ -83,6 +84,9 @@ func assertVLLMReasoningOrderReply(result protocolMatrixHTTPResult, tc vllmReaso
 	body := string(result.Body)
 	if result.StatusCode != http.StatusOK || strings.Contains(body, "event: error") {
 		return fmt.Errorf("want HTTP 200 with no error event, got HTTP %d: %s", result.StatusCode, truncateString(body, 900))
+	}
+	if strings.Contains(body, `\n\nHello`) {
+		return fmt.Errorf("reply keeps the blank line in front of the answer: %s", truncateString(body, 900))
 	}
 	if err := validateOrderedStreamMarkers(body, tc.order); err != nil {
 		return err

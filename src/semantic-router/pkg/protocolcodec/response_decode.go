@@ -39,6 +39,7 @@ func (engine *Engine) DecodeResponse(
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
 	diagnostics = appendDiagnostics(diagnostics, engine.stopAtRequestOutputLimit(format, &response, &envelope), engine.policy.Limits.Diagnostics)
+	trimDecodedAnswerSeparator(pair.buffered, false, &response, &envelope)
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return response, envelope, diagnostics, err
 	}

@@ -426,6 +426,12 @@ func (r *OpenAIRouter) encodeClientResponseWithReplay(
 	if ctx != nil {
 		ctx.SemanticResponse = &encoded.Response
 		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
+		// Encoding replayed the envelope's upstream bytes rather than
+		// rendering them fresh from the neutral response when the body
+		// matches what went in: a pristine forward, or an in-place patch such
+		// as the answer separator trim, either of which can still carry
+		// members the wire contract does not declare.
+		ctx.ResponseClientBodyReplayed = replay && len(envelope.Response) > 0 && bytes.Equal(encoded.Body, envelope.Response)
 	}
 	return encoded.Body, nil
 }

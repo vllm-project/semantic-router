@@ -10,11 +10,12 @@ import (
 
 // ChatUsageStreamFilter frames a same-format Chat stream before exposing it to
 // the client. It removes Router-requested accounting evidence when the client
-// did not opt into usage, and provider decorations that the neutral codec
-// reports as dropped. When the client opted into usage, a chunk without usage
-// gains "usage": null and keeps its other bytes; other undecorated frames
-// retain their original bytes. A provider error event ends the public stream:
-// the filter drops it and every later frame, and UpstreamFailed reports it.
+// did not opt into usage, provider decorations that the neutral codec reports
+// as dropped, and the whitespace a reasoning parser leaves in front of the
+// answer. When the client opted into usage, a chunk without usage gains
+// "usage": null and keeps its other bytes; other undecorated frames retain
+// their original bytes. A provider error event ends the public stream: the
+// filter drops it and every later frame, and UpstreamFailed reports it.
 // Tool-call argument fragments are additionally held until their call
 // finishes, so an upstream that dies mid-call cannot feed the client an
 // arguments string no JSON decoder can read.
@@ -22,6 +23,7 @@ type ChatUsageStreamFilter struct {
 	framer          sseFramer
 	stripUsage      bool
 	seenFinish      map[int]bool
+	answer          answerSeparator
 	frames          int
 	pendingTerminal []byte
 	failure         error
@@ -181,7 +183,7 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 			evidence = &chatFrameEvidence{}
 		}
 		filtered, keep, hasData, terminal, choices, err := filterChatUsageFrame(
-			frame, filter.framer.limit, first, filter.stripUsage, filter.seenFinish, evidence,
+			frame, filter.framer.limit, first, filter.stripUsage, filter.seenFinish, evidence, &filter.answer,
 		)
 		filter.frames++
 		if errors.Is(err, errChatUpstreamErrorFrame) {
@@ -579,7 +581,7 @@ func chatUsageCompletionTokens(raw json.RawMessage) *int64 {
 }
 
 func filterChatUsageFrame(
-	frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool, evidence *chatFrameEvidence,
+	frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool, evidence *chatFrameEvidence, answer *answerSeparator,
 ) ([]byte, bool, bool, bool, []json.RawMessage, error) {
 	parsed, err := parseSSEFrameAtPosition(frame, limit, first)
 	if err != nil {
@@ -619,6 +621,10 @@ func filterChatUsageFrame(
 		}
 		if removed {
 			choices[index] = choice
+			changed = true
+		}
+		if trimmed := answer.trimChatChoice(choices[index]); trimmed != nil {
+			choices[index] = trimmed
 			changed = true
 		}
 	}
