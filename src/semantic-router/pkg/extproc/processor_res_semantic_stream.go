@@ -34,6 +34,8 @@ type semanticResponseStreamState struct {
 	order      []int
 	terminal   bool
 	failed     *llmprotocol.ProtocolError
+	// decoded reports that the stream decoder read at least one event.
+	decoded bool
 }
 
 type semanticStreamItem struct {
@@ -66,6 +68,10 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	buffers := semanticStreamBuffers{}
 	responseBody, endOfStream = r.bridgeBufferedBody(&buffers, responseBody, endOfStream, ctx)
 	buffers.push(responseBody, ctx)
+	if endOfStream && buffers.unread(ctx) {
+		// The client gets what a buffered client gets for such a body.
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
@@ -131,6 +137,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 		observeProtocolStream(ctx, events, diagnostics)
 		buffers.recordError(ctx, err, true)
 	}
+}
+
+// unread reports a body the provider answered whole, which its client has not
+// seen yet, that neither the bridge nor the stream decoder could read
+// anything from.
+func (buffers *semanticStreamBuffers) unread(ctx *RequestContext) bool {
+	state := ctx.SemanticStreamState
+	return !ctx.UpstreamBodyStreamed && !buffers.bridged && ctx.ProtocolResponseStream != nil && state != nil && !state.decoded
 }
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
@@ -382,6 +396,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	if state == nil {
 		return
 	}
+	state.decoded = state.decoded || len(events) > 0
 	for _, event := range events {
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
@@ -575,6 +590,9 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
 	clean := streamErr == nil && !ctx.StreamingAborted
 	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
+		if !ctx.StreamingAborted {
+			r.finishNativeFallbackResponse(ctx, "")
+		}
 		r.commitStreamedAnswer(ctx, semanticResponse)
 	}
 	r.endStreamRouterReplay(ctx, clean)
@@ -726,6 +744,10 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
+		if r.recordInterruptedStreamUsage(ctx) {
+			// Request finalization settles the partial charge.
+			return
+		}
 		// The stream carried no usable usage, so the request is settled with
 		// what it knows, as the buffered path does: skipping the report would
 		// leave its output tokens out of a token budget. What it knows is an
