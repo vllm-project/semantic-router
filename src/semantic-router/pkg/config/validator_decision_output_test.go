@@ -29,6 +29,14 @@ providers:
     - name: chat-painter
       backend_refs: [{name: chat-painter, endpoint: "127.0.0.1:8003", protocol: http, weight: 1}]
       capabilities: [image_generation]
+    - name: video-maker
+      api_format: videos
+      backend_refs: [{name: videos, endpoint: "127.0.0.1:8004", protocol: http, weight: 1}]
+      capabilities: [video_generation]
+      modalities: {input: [text], output: [video]}
+    - name: chat-video
+      backend_refs: [{name: chat-video, endpoint: "127.0.0.1:8005", protocol: http, weight: 1}]
+      capabilities: [video_generation]
 recipes:
   - name: default
     decisions:
@@ -56,6 +64,7 @@ func TestOutputContractsThisReleaseExecutesLoad(t *testing.T) {
 		{"output: {kind: image, action: generate}", "painter"},
 		{"output: {kind: image}", "omni"},
 		{"output: {kind: [text, image], action: generate}", "omni"},
+		{"output: {kind: video}", "video-maker"},
 	} {
 		if err := loadOutputContract(t, tc.output, tc.model); err != nil {
 			t.Errorf("%q on %s: %v", tc.output, tc.model, err)
@@ -86,7 +95,6 @@ func TestLaterPhaseOutputsAreNotExecutable(t *testing.T) {
 		{"output: {kind: [text, image], action: edit}", "the image edit codec"},
 		{"output: {kind: audio}", "the audio output codec"},
 		{"output: {kind: [text, audio]}", "the audio output codec"},
-		{"output: {kind: video}", "the video codec"},
 		{"output: {kind: video, action: edit}", "the video codec"},
 	} {
 		err := loadOutputContract(t, tc.output, "omni")
@@ -101,6 +109,7 @@ func TestLaterPhaseOutputsAreNotExecutable(t *testing.T) {
 func TestOutputContractNeedsAnAPIThatCarriesIt(t *testing.T) {
 	for _, tc := range []struct{ output, model, want string }{
 		{"output: {kind: image}", "chat-painter", `model "chat-painter" answers on the chat_completions API, which cannot carry a generated image; reach it with api_format: images or responses`},
+		{"output: {kind: video}", "chat-video", `model "chat-video" answers on an API that cannot carry a generated video; reach it with api_format: videos`},
 	} {
 		err := loadOutputContract(t, tc.output, tc.model)
 		if err == nil || !strings.Contains(err.Error(), "output_not_executable: "+tc.want) {

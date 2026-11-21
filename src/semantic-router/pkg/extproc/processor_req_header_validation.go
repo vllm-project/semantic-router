@@ -23,6 +23,8 @@ func (r *OpenAIRouter) classifyRequestHeaders(method string, path string) (*ext_
 		return validateInferenceMethod(r, method)
 	case imagesGenerationsPath:
 		return validateInferenceMethod(r, method)
+	case videosCollectionPath:
+		return validateInferenceMethod(r, method)
 	case "/v1/models":
 		return validateAllowedMethod(r, method, "GET"), false
 	case "/v1/responses", azureResponsesPath, azureV1ResponsesPath:
@@ -35,6 +37,15 @@ func (r *OpenAIRouter) classifyRequestHeaders(method string, path string) (*ext_
 
 	if extractResponseIDFromPath(normalizedPath) != "" {
 		return r.validateResponseAPIItemMethod(method), false
+	}
+	if _, content, ok := parseVideosObjectPath(normalizedPath); ok {
+		if content {
+			return validateAllowedMethod(r, method, "GET"), false
+		}
+		if method != "GET" && method != "DELETE" {
+			return r.createErrorResponse(405, "method not allowed"), false
+		}
+		return nil, false
 	}
 
 	if _, ok := azureChatDeployment(normalizedPath); ok {

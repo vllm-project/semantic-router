@@ -303,18 +303,20 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.OpenAIResponsesV1, nil
 	case config.APIFormatImages, "openai.images", string(llmprotocol.OpenAIImagesV1):
 		return llmprotocol.OpenAIImagesV1, nil
+	case config.APIFormatVideos, "openai.videos", string(llmprotocol.OpenAIVideosV1):
+		return llmprotocol.OpenAIVideosV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
 	}
 }
 
-func (r *OpenAIRouter) buildProviderDispatchResponse(
+// providerDispatchHeaderState assembles the headers every provider call
+// carries. The state it returns is applied by the stage that owns the request;
+// a non-nil response is the refusal to return instead.
+func (r *OpenAIRouter) providerDispatchHeaderState(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
-) *ext_proc.ProcessingResponse {
-	if dispatch == nil {
-		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
-	}
+) (*routeHeaderState, *ext_proc.ProcessingResponse) {
 	state := &routeHeaderState{
 		setHeaders:    r.startUpstreamSpanAndInjectHeaders(dispatch, ctx),
 		removeHeaders: []string{"content-length"},
@@ -329,7 +331,7 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	if errorResponse := r.appendProviderCredential(
 		state, dispatch.effectiveBackendModel(), dispatch.backendName, ctx,
 	); errorResponse != nil {
-		return errorResponse
+		return nil, errorResponse
 	}
 	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
@@ -337,6 +339,20 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	// Removals apply before every set, so an operator deletion wins only once
 	// the negotiated value yields to it.
 	yieldNegotiatedEncoding(state, negotiated)
+	return state, nil
+}
+
+func (r *OpenAIRouter) buildProviderDispatchResponse(
+	dispatch *providerDispatch,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	if dispatch == nil {
+		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	state, errorResponse := r.providerDispatchHeaderState(dispatch, ctx)
+	if errorResponse != nil {
+		return errorResponse
+	}
 	// Body-stage model and path mutations can change the Envoy route selected
 	// during headers. Apply the same cache policy to every provider dispatch,
 	// including internal multi-model calls and unchanged logical model names.

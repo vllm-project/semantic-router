@@ -23,7 +23,8 @@ func requiresClientResponseRewrite(ctx *RequestContext) bool {
 		return false
 	}
 	return ctx.TargetFormat != "" && ctx.TargetFormat != ctx.SourceFormat ||
-		responseObjectPublicID(ctx) != ""
+		responseObjectPublicID(ctx) != "" ||
+		ctx.SourceFormat == llmprotocol.OpenAIVideosV1
 }
 
 func responseObjectPreviousID(ctx *RequestContext) string {

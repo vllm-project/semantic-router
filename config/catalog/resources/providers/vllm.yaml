@@ -11,6 +11,7 @@ protocols:
 - openai/chat-completions@1
 - openai/responses@1
 - openai/images@1
+- openai/videos@1
 - anthropic/messages@1
 default_protocol: openai/chat-completions@1
 supported_operations:
@@ -20,6 +21,8 @@ supported_operations:
 - openai/responses@1#list_models
 - openai/images@1#create
 - openai/images@1#list_models
+- openai/videos@1#create
+- openai/videos@1#list_models
 - anthropic/messages@1#create
 - anthropic/messages@1#list_models
 auth:

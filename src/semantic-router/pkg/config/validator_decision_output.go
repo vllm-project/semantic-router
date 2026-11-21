@@ -89,11 +89,17 @@ func modelOutputsText(params ModelParams) bool {
 }
 
 // outputWireMismatch explains why the API a model answers on cannot carry a
-// contract's output, or "" when it can. The images API carries a generated
-// image and nothing else; the Responses API carries text with it.
+// contract's output, or "" when it can. A generated video needs the Videos
+// API; the images API carries a generated image and nothing else.
 func outputWireMismatch(output *DecisionOutput, apiFormat string) string {
-	if !output.GeneratesImages() {
+	if !output.GeneratesImages() && !output.GeneratesVideos() {
 		return ""
+	}
+	if output.GeneratesVideos() {
+		if CanonicalAPIFormat(strings.ToLower(strings.TrimSpace(apiFormat))) == APIFormatVideos {
+			return ""
+		}
+		return "answers on an API that cannot carry a generated video; reach it with api_format: videos"
 	}
 	switch format := CanonicalAPIFormat(strings.ToLower(strings.TrimSpace(apiFormat))); {
 	case format == APIFormatResponses:

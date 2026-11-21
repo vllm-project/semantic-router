@@ -267,7 +267,7 @@ func requestTraceRoute(raw string) (route, kind string) {
 		return "/{unmatched}", "other"
 	}
 	switch path := parsed.Path; path {
-	case "/v1/chat/completions", "/v1/completions", "/v1/responses", "/v1/messages", imagesGenerationsPath,
+	case "/v1/chat/completions", "/v1/completions", "/v1/responses", "/v1/messages", imagesGenerationsPath, videosCollectionPath,
 		azureV1ChatPath, azureResponsesPath, azureV1ResponsesPath:
 		return path, "inference"
 	case "/v1/models":
@@ -280,6 +280,12 @@ func requestTraceRoute(raw string) (route, kind string) {
 				return "/v1/responses/{response_id}/input_items", "response_object"
 			}
 			return "/v1/responses/{response_id}", "response_object"
+		}
+		if _, content, ok := parseVideosObjectPath(path); ok {
+			if content {
+				return "/v1/videos/{video_id}/content", "video_object"
+			}
+			return "/v1/videos/{video_id}", "video_object"
 		}
 		if strings.HasPrefix(path, "/v1/models/") {
 			return "/v1/models/{model}", "catalog"

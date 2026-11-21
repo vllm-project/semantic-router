@@ -107926,6 +107926,27 @@ const builtInCatalogJSON = `{
     },
     {
       "capabilities": [
+        "video_generation"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "OpenAI Videos",
+      "id": "openai/videos@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/videos"
+        },
+        {
+          "id": "list_models",
+          "method": "GET",
+          "path": "/v1/models"
+        }
+      ],
+      "wire_format": "openai.videos.v1"
+    },
+    {
+      "capabilities": [
         "chat",
         "streaming",
         "tools",
@@ -110243,7 +110264,8 @@ const builtInCatalogJSON = `{
       "protocols": [
         "openai/chat-completions@1",
         "openai/responses@1",
-        "openai/images@1"
+        "openai/images@1",
+        "openai/videos@1"
       ],
       "support_tier": "compatible",
       "supported_operations": [
@@ -110252,7 +110274,9 @@ const builtInCatalogJSON = `{
         "openai/responses@1#create",
         "openai/responses@1#list_models",
         "openai/images@1#create",
-        "openai/images@1#list_models"
+        "openai/images@1#list_models",
+        "openai/videos@1#create",
+        "openai/videos@1#list_models"
       ]
     },
     {
@@ -110585,7 +110609,8 @@ const builtInCatalogJSON = `{
       "protocols": [
         "openai/chat-completions@1",
         "openai/responses@1",
-        "openai/images@1"
+        "openai/images@1",
+        "openai/videos@1"
       ],
       "reasoning_transport": "top_level_effort",
       "support_tier": "native",
@@ -110595,7 +110620,9 @@ const builtInCatalogJSON = `{
         "openai/responses@1#create",
         "openai/responses@1#list_models",
         "openai/images@1#create",
-        "openai/images@1#list_models"
+        "openai/images@1#list_models",
+        "openai/videos@1#create",
+        "openai/videos@1#list_models"
       ]
     },
     {
@@ -113380,6 +113407,7 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1",
         "openai/responses@1",
         "openai/images@1",
+        "openai/videos@1",
         "anthropic/messages@1"
       ],
       "support_tier": "runtime",
@@ -113390,6 +113418,8 @@ const builtInCatalogJSON = `{
         "openai/responses@1#list_models",
         "openai/images@1#create",
         "openai/images@1#list_models",
+        "openai/videos@1#create",
+        "openai/videos@1#list_models",
         "anthropic/messages@1#create",
         "anthropic/messages@1#list_models"
       ]

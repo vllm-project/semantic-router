@@ -54,6 +54,10 @@ var (
 		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
 		code: "image_route_required", message: "the Images API needs a route that answers with a generated image",
 	}
+	routingFailureVideoRouteRequired = routingFailure{
+		status: http.StatusBadRequest, category: llmprotocol.ErrorUnsupportedFeature,
+		code: "unsupported_capability", message: "the Videos API needs a decision that answers with a generated video",
+	}
 )
 
 // modelNotFoundFailure answers a model the Router does not serve as OpenAI

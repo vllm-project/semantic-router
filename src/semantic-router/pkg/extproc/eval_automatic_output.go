@@ -95,7 +95,8 @@ func automaticEvalRequestLimitation(request *llmprotocol.Request, decision *conf
 	for _, capability := range []llmprotocol.Capability{
 		llmprotocol.CapabilityImageInput, llmprotocol.CapabilityAudioInput,
 		llmprotocol.CapabilityVideoInput, llmprotocol.CapabilityFileInput,
-		llmprotocol.CapabilityImageGeneration, llmprotocol.CapabilityConversationState,
+		llmprotocol.CapabilityImageGeneration, llmprotocol.CapabilityVideoGeneration,
+		llmprotocol.CapabilityConversationState,
 		llmprotocol.CapabilityReasoningSignature,
 	} {
 		if required.Supports(capability) {

@@ -31,6 +31,7 @@ SUPPORTED_PROTOCOLS = frozenset(
         "openai/chat-completions@1",
         "openai/responses@1",
         "openai/images@1",
+        "openai/videos@1",
         "anthropic/messages@1",
         "vllm-sr/systemone@1",
     }

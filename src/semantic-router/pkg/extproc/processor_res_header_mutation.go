@@ -202,6 +202,8 @@ func normalizeProtocol(value string) string {
 		return "responses"
 	case llmprotocol.OpenAIImagesV1:
 		return "images"
+	case llmprotocol.OpenAIVideosV1:
+		return "videos"
 	case llmprotocol.OpenAIChatV1, "":
 		return protocolDefault
 	default:
