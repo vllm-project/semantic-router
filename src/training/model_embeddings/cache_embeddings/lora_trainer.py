@@ -114,7 +114,9 @@ try:
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
     logger.warning(
-        "transformers and peft not available. " "Install: pip install transformers peft"
+        "transformers and peft not available. "
+        "Install: uv sync --project "
+        "src/training/model_embeddings/cache_embeddings --locked"
     )
 
 
@@ -440,7 +442,10 @@ def main():
     # Check dependencies
     if not TRANSFORMERS_AVAILABLE:
         print("❌ Error: transformers and peft required")
-        print("Install: pip install transformers peft")
+        print(
+            "Install: uv sync --project "
+            "src/training/model_embeddings/cache_embeddings --locked"
+        )
         return 1
 
     # Setup

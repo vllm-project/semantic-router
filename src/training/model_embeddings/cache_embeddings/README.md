@@ -8,6 +8,32 @@ This directory produces training and evaluation artifacts. Loading a LoRA
 adapter in the router is a separate runtime capability; do not assume a trained
 adapter is active because it appears in a config file.
 
+## Setup
+
+Create the locked environment with uv. `pyproject.toml` bounds the
+dependencies and `uv.lock` pins them:
+
+```bash
+uv sync --project src/training/model_embeddings/cache_embeddings --locked
+```
+
+Run the commands below from the repository root through
+`uv run --project src/training/model_embeddings/cache_embeddings`, for
+example:
+
+```bash
+uv run --project src/training/model_embeddings/cache_embeddings \
+  python src/training/model_embeddings/cache_embeddings/lora_trainer.py --help
+```
+
+`generate_training_data.py` also needs a local vLLM installation. It is an
+optional dependency so the base environment stays small:
+
+```bash
+uv sync --project src/training/model_embeddings/cache_embeddings \
+  --locked --extra generation
+```
+
 ## Data Contract
 
 Training data is JSONL with one triplet per line:
