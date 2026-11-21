@@ -92,19 +92,38 @@ type responsesErrorWire struct {
 	Message string `json:"message"`
 }
 
+// The error codes a Responses failure names.
+const (
+	responsesRateLimitExceeded = "rate_limit_exceeded"
+	responsesInvalidPrompt     = "invalid_prompt"
+	responsesServerError       = "server_error"
+)
+
 func responsesErrorCode(protocolError *llmprotocol.ProtocolError) string {
 	if protocolError.Code != "" {
 		return protocolError.Code
 	}
 	switch protocolError.Category {
 	case llmprotocol.ErrorRateLimited:
-		return "rate_limit_exceeded"
+		return responsesRateLimitExceeded
 	case llmprotocol.ErrorInvalidRequest, llmprotocol.ErrorNotFound,
 		llmprotocol.ErrorConflict, llmprotocol.ErrorUnsupportedFeature:
-		return "invalid_prompt"
+		return responsesInvalidPrompt
 	default:
-		return "server_error"
+		return responsesServerError
 	}
+}
+
+// DocumentedProviderErrorCode reports whether code is an error code a
+// provider documents, an Anthropic error type or a Responses error code,
+// rather than text a provider chose.
+func DocumentedProviderErrorCode(code string) bool {
+	switch code {
+	case responsesRateLimitExceeded, responsesInvalidPrompt, responsesServerError:
+		return true
+	}
+	_, ok := anthropicErrorTypes[code]
+	return ok
 }
 
 func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {

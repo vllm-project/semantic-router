@@ -497,21 +497,24 @@ func canonicalAnthropicErrorType(protocolError *llmprotocol.ProtocolError) strin
 	}
 }
 
+// anthropicErrorTypes are the error types Anthropic documents, each with the
+// categories it can stand for.
+var anthropicErrorTypes = map[string][]llmprotocol.ErrorCategory{
+	"invalid_request_error": {llmprotocol.ErrorInvalidRequest, llmprotocol.ErrorUnsupportedFeature},
+	"request_too_large":     {llmprotocol.ErrorInvalidRequest, llmprotocol.ErrorUnsupportedFeature},
+	"authentication_error":  {llmprotocol.ErrorAuthentication},
+	"billing_error":         {llmprotocol.ErrorUpstreamUnavailable},
+	"permission_error":      {llmprotocol.ErrorPermission},
+	"not_found_error":       {llmprotocol.ErrorNotFound},
+	"conflict_error":        {llmprotocol.ErrorConflict},
+	"rate_limit_error":      {llmprotocol.ErrorRateLimited},
+	"timeout_error":         {llmprotocol.ErrorUpstreamTimeout},
+	"api_error":             {llmprotocol.ErrorUpstreamUnavailable, llmprotocol.ErrorInternal},
+	"overloaded_error":      {llmprotocol.ErrorUpstreamUnavailable, llmprotocol.ErrorInternal},
+}
+
 func canonicalAnthropicErrorTypeMatchesCategory(code string, category llmprotocol.ErrorCategory) bool {
-	categories := map[string][]llmprotocol.ErrorCategory{
-		"invalid_request_error": {llmprotocol.ErrorInvalidRequest, llmprotocol.ErrorUnsupportedFeature},
-		"request_too_large":     {llmprotocol.ErrorInvalidRequest, llmprotocol.ErrorUnsupportedFeature},
-		"authentication_error":  {llmprotocol.ErrorAuthentication},
-		"billing_error":         {llmprotocol.ErrorUpstreamUnavailable},
-		"permission_error":      {llmprotocol.ErrorPermission},
-		"not_found_error":       {llmprotocol.ErrorNotFound},
-		"conflict_error":        {llmprotocol.ErrorConflict},
-		"rate_limit_error":      {llmprotocol.ErrorRateLimited},
-		"timeout_error":         {llmprotocol.ErrorUpstreamTimeout},
-		"api_error":             {llmprotocol.ErrorUpstreamUnavailable, llmprotocol.ErrorInternal},
-		"overloaded_error":      {llmprotocol.ErrorUpstreamUnavailable, llmprotocol.ErrorInternal},
-	}
-	for _, allowed := range categories[code] {
+	for _, allowed := range anthropicErrorTypes[code] {
 		if allowed == category {
 			return true
 		}

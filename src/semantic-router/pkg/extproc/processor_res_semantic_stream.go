@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -505,6 +506,9 @@ func (state *semanticResponseStreamState) delivered() bool {
 
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
+	if state != nil && state.failed != nil {
+		return nil, fmt.Errorf("semantic stream did not complete successfully: %w", state.failed)
+	}
 	if !state.delivered() {
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
@@ -638,14 +642,36 @@ func (r *OpenAIRouter) completeSemanticStreamWith(
 
 	if responseErr != nil {
 		observeStreamedApprovalReviewFailure(ctx)
-		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"error":      responseErr.Error(),
-		})
+		fields := map[string]interface{}{"request_id": ctx.RequestID}
+		// The stream's own failure event carries the provider's code.
+		upstream := ctx.SemanticStreamState != nil && ctx.SemanticStreamState.failed != nil
+		addStreamFailureReason(fields, "error", responseErr, upstream)
+		if streamErr != nil {
+			addStreamFailureReason(fields, "cause", streamErr, false)
+		}
+		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", fields)
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return nil
 	}
 	return semanticResponse
+}
+
+// addStreamFailureReason logs a protocol failure by its category and code
+// only: the message can quote the upstream provider's own error text, and so
+// can an upstream code no provider documents, which logs as
+// upstream_stream_error.
+func addStreamFailureReason(fields map[string]interface{}, key string, err error, upstream bool) {
+	var protocolErr *llmprotocol.ProtocolError
+	if errors.As(err, &protocolErr) {
+		code := protocolErr.Code
+		if upstream && !protocolcodec.DocumentedProviderErrorCode(code) {
+			code = "upstream_stream_error"
+		}
+		fields[key+"_category"] = string(protocolErr.Category)
+		fields[key+"_code"] = code
+		return
+	}
+	fields[key] = err.Error()
 }
 
 // commitStreamedAnswer keeps an answer the client received as it streamed:
