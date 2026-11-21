@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"slices"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -41,15 +42,40 @@ func (r *OpenAIRouter) applySemanticReasoningMode(
 		mode != llmprotocol.ReasoningModeEnabled && mode != llmprotocol.ReasoningModeAdaptive {
 		display = ""
 	}
+	droppedEfforts := targetFormat == llmprotocol.AnthropicMessagesV1 &&
+		mode == llmprotocol.ReasoningModeDisabled && dropPerMessageEfforts(request)
 	if request.ReasoningEffort == effort && request.ReasoningMode == mode &&
 		request.ReasoningBudgetTokens == budget && request.ReasoningDisplay == display {
-		return false
+		return droppedEfforts
 	}
 	request.ReasoningMode = mode
 	request.ReasoningEffort = effort
 	request.ReasoningBudgetTokens = budget
 	request.ReasoningDisplay = display
 	logging.Infof("Applied reasoning controls to model %q", model)
+	return true
+}
+
+// dropPerMessageEfforts removes the effort changes a Messages client put in
+// its conversation. A decision that turns thinking off sends no effort, and a
+// backend with thinking off takes one level for the whole request: Claude
+// Haiku 5.5 answers 400 to a message that names another. A message that held
+// only an effort goes with it, since Messages has no empty message.
+func dropPerMessageEfforts(request *llmprotocol.Request) bool {
+	carriesEffort := func(message llmprotocol.Message) bool { return message.ReasoningEffort != "" }
+	if !slices.ContainsFunc(request.Messages, carriesEffort) {
+		return false
+	}
+	// A new slice: a clone of this request may share the client's messages.
+	kept := make([]llmprotocol.Message, 0, len(request.Messages))
+	for _, message := range request.Messages {
+		if carriesEffort(message) && len(message.Content) == 0 {
+			continue
+		}
+		message.ReasoningEffort = ""
+		kept = append(kept, message)
+	}
+	request.Messages = kept
 	return true
 }
 

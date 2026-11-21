@@ -136,6 +136,69 @@ func TestClaudeHaiku55ProviderDispatch(t *testing.T) {
 	assert.Equal(t, unmarshalReasoningRequest(t, input)["messages"], wire["messages"])
 }
 
+// A decision replaces the client's effort, the per-message changes included.
+// With thinking off it sends none: Claude Haiku 5.5 takes disabled thinking
+// only at high effort or below, and answers 400 to a per-message effort change.
+// With adaptive thinking the client's per-message change reaches the backend.
+func TestClaudeHaiku55ClientEffortFollowsThinking(t *testing.T) {
+	const (
+		planning = `{"role":"user","content":[{"type":"text","text":"Plan the migration."}]},` +
+			`{"role":"assistant","content":[{"type":"text","text":"Export, create the schema, import."}]}`
+		effortChange = `{"role":"system","content":[],"output_config":{"effort":"max"}}`
+		followUp     = `{"role":"user","content":[{"type":"text","text":"Write the export step."}]}`
+	)
+	body := func(messages ...string) []byte {
+		return []byte(`{"model":"haiku","max_tokens":1024,"output_config":{"effort":"max"},"messages":[` +
+			strings.Join(messages, ",") + `]}`)
+	}
+	input := body(planning, effortChange, followUp)
+	thinkingOff := map[string]interface{}{"thinking": map[string]interface{}{"type": "disabled"}}
+	for _, test := range []struct {
+		name         string
+		control      string
+		wantControls map[string]interface{}
+		wantMessages []byte
+	}{
+		{"use_reasoning omitted", "", thinkingOff, body(planning, followUp)},
+		{"use_reasoning false", "use_reasoning: false", thinkingOff, body(planning, followUp)},
+		{"adaptive thinking", "use_reasoning: true", map[string]interface{}{
+			"thinking":      map[string]interface{}{"type": "adaptive"},
+			"output_config": map[string]interface{}{"effort": "medium"},
+		}, input},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			wire := routeClaudeHaiku55Messages(t, test.control, input)
+			assert.Equal(t, test.wantControls, providerReasoningControls(wire))
+			assert.Equal(t, unmarshalReasoningRequest(t, test.wantMessages)["messages"], wire["messages"])
+		})
+	}
+}
+
+// routeClaudeHaiku55Messages returns the Messages body a decision with the
+// given reasoning control sends to the backend.
+func routeClaudeHaiku55Messages(t *testing.T, control string, input []byte) map[string]interface{} {
+	t.Helper()
+	cfg, err := config.ParseYAMLBytes(claudeHaiku55Config("https://api.anthropic.com", control))
+	require.NoError(t, err)
+	decision := cfg.GetDecisionByName("haiku_default")
+	require.NotNil(t, decision)
+	router := &OpenAIRouter{
+		Config:             cfg,
+		CredentialResolver: authz.NewCredentialResolver(authz.NewStaticConfigProvider(cfg)),
+	}
+	ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, nil)
+	ctx.VSRSelectedDecision = decision
+	request, immediate := router.prepareProtocolRequest(input, ctx)
+	require.Nil(t, immediate)
+	reasoning := applyReasoningModeFromSelectedModel(&decision.ModelRefs[0], decision.Name, 1, ctx)
+	response, err := router.handleEntrypointModelRouting(request, "haiku", decision.Name, reasoning, "haiku", ctx)
+	require.NoError(t, err)
+	require.Nil(t, response.GetImmediateResponse())
+	common := response.GetRequestBody().GetResponse()
+	require.NotNil(t, common)
+	return unmarshalReasoningRequest(t, common.GetBodyMutation().GetBody())
+}
+
 func claudeHaiku55Config(endpoint, control string) []byte {
 	return []byte(fmt.Sprintf(`version: v0.5
 providers:
