@@ -36,6 +36,7 @@ const sidebars: SidebarsConfig = {
         'installation/installation',
         'installation/agent-harness',
         'installation/agent',
+        'installation/agent-skills',
         'installation/shell-completion',
         {
           type: 'category',
