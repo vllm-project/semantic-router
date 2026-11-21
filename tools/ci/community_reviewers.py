@@ -32,7 +32,7 @@ WORKGROUP_REVIEWERS: dict[str, tuple[str, ...]] = {
         "Xunzhuo",
         "yaojiejia",
     ),
-    "wg/data-plane-networking": ("1fanwang", "abhinav-m22", "Bevisy"),
+    "wg/data-plane-networking": ("1fanwang", "abhinav-m22", "Bevisy", "drivebyer"),
     "wg/enterprise-environment": ("AayushSaini101",),
     "wg/agentic-context": (
         "1fanwang",
