@@ -262,9 +262,14 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 	s := globalRouterSessionMemory
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if st := s.sessions[snapshot.SessionID]; st != nil &&
-		(st.outcomeWindowSize > 0 || snapshot.OutcomeWindowSize > 0) {
-		return
+	var reservations map[uint64]int64
+	var reservedTokens int64
+	if st := s.sessions[snapshot.SessionID]; st != nil {
+		if st.outcomeWindowSize > 0 || snapshot.OutcomeWindowSize > 0 {
+			return
+		}
+		// Open reservations are local only, so no snapshot carries them.
+		reservations, reservedTokens = st.reservations, st.reservedTokens
 	}
 	modelTurns := cloneIntMap(snapshot.ModelTurns)
 	if modelTurns == nil {
@@ -299,6 +304,8 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 		lastPolicy:                      clonePolicyMap(snapshot.LastPolicy),
 		recentOutcomes:                  cloneTurnOutcomes(snapshot.RecentOutcomes),
 		lastCacheReceipt:                cloneCacheReceipt(snapshot.LastCacheReceipt),
+		reservations:                    reservations,
+		reservedTokens:                  reservedTokens,
 	}
 }
 
