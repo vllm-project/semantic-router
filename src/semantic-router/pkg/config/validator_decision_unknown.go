@@ -6,31 +6,48 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func warnUnguardedSystemOneConditions(decision Decision) {
+func warnUnguardedConditions(cfg *RouterConfig, decision Decision) {
 	if decision.Rules.OnUnknown != "" {
 		return
 	}
-	for _, name := range unguardedSystemOneConditions(&decision.Rules) {
+	for _, node := range unguardedConditions(cfg, &decision.Rules) {
+		fix := "set rules.on_unknown or the condition's on_error"
+		if !conditionAcceptsOnError(node) {
+			fix = "set rules.on_unknown"
+		}
 		logging.Warnf(
-			"decision '%s': condition %q evaluates as unknown when its model backend fails; set rules.on_unknown or the condition's on_error",
-			decision.Name, name,
+			"decision '%s': condition %q evaluates as unknown when its model backend fails; %s",
+			decision.Name, node.Name, fix,
 		)
 	}
 }
 
-func unguardedSystemOneConditions(node *RuleNode) []string {
+func unguardedConditions(cfg *RouterConfig, node *RuleNode) []*RuleNode {
 	if node == nil {
 		return nil
 	}
 	if node.IsLeaf() {
-		if strings.EqualFold(node.Type, SignalTypeSystemOne) && node.OnError == "" {
-			return []string{node.Name}
+		if node.OnError == "" && (conditionAcceptsOnError(node) || remoteConditionCanBeUnknown(cfg, node)) {
+			return []*RuleNode{node}
 		}
 		return nil
 	}
-	var names []string
+	var nodes []*RuleNode
 	for i := range node.Conditions {
-		names = append(names, unguardedSystemOneConditions(&node.Conditions[i])...)
+		nodes = append(nodes, unguardedConditions(cfg, &node.Conditions[i])...)
 	}
-	return names
+	return nodes
+}
+
+func conditionAcceptsOnError(node *RuleNode) bool {
+	return strings.EqualFold(node.Type, SignalTypeSystemOne)
+}
+
+func remoteConditionCanBeUnknown(cfg *RouterConfig, node *RuleNode) bool {
+	signalType := strings.ToLower(strings.TrimSpace(node.Type))
+	if signalType == SignalTypeJailbreak || signalType == SignalTypePII {
+		return false
+	}
+	rule, ok := cfg.ApplicationRuleByName(signalType, node.Name)
+	return ok && cfg.ModelDeployments[cfg.SystemOneRuleDeployment(rule.Rule)].IsRemote()
 }

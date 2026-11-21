@@ -85,6 +85,10 @@ that:
 | `on_error` on a `systemone` condition | Resolves that one condition to `match` or `no_match`. It can't be combined with `rules.on_unknown`. |
 
 - The Router warns at startup about a `systemone` condition that sets neither.
+- It also warns about a `domain`, `complexity`, `safety` or other application
+  signal condition that a remote deployment answers. Such a condition can't set
+  `on_error`, so only `rules.on_unknown` covers it. `jailbreak` and `pii` rules
+  are left out: their own `on_unknown` decides them.
 - Applied policies appear in the `on_unknown` member of `x-vsr-trace` and in
   the `llm_decision_unknown_total{decision, policy}` metric.
 - `fail_request` returns a 503 with the code
