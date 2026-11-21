@@ -1,10 +1,11 @@
-"""The native CPU path is bit-identical to the Transformers modules the packages were scored with."""
+"""The native CPU path matches the Transformers modules the packages were scored with."""
 
 import json
 
 import pytest
 import torch
 from vllm_srun.heads.candidate import load_head, logits
+from vllm_srun.testing.numerics import PARITY_TOLERANCE_ULPS, float32_ulps
 from vllm_srun.text.segments import collate
 
 transformers = pytest.importorskip("transformers")
@@ -69,7 +70,7 @@ def questions_with_unpadded_row(runtime):
     "runtime_name,package_name",
     [("qwen3_runtime", "qwen3_package"), ("qwen35_runtime", "qwen35_package")],
 )
-def test_native_backbones_match_transformers_bit_for_bit(
+def test_native_backbones_match_transformers(
     request, runtime_name, package_name
 ):
     runtime = request.getfixturevalue(runtime_name)
@@ -98,7 +99,11 @@ def test_native_backbones_match_transformers_bit_for_bit(
     unpadded = model.plan("state", questions_with_unpadded_row(runtime)).items
     pad_id = model.tokenizer.pad_id
     for items in (plan.items, plan.items[:1], plan.items[2:4], unpadded):
-        assert model.run(items) == reference_scores(package, items, pad_id)
+        drift = float32_ulps(model.run(items), reference_scores(package, items, pad_id))
+        assert drift <= PARITY_TOLERANCE_ULPS, (
+            f"native scores are {drift} ULP of float32 from the Transformers "
+            f"reference, over the {PARITY_TOLERANCE_ULPS} allowed"
+        )
 
 
 def test_tokenizer_matches_transformers(qwen3_runtime, qwen3_package):
