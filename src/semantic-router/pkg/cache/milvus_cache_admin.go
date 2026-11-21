@@ -13,6 +13,7 @@ import (
 
 // Close releases all resources held by the cache
 func (c *MilvusCache) Close() error {
+	c.expiredRowSweeper.stop()
 	if c.client != nil {
 		return c.client.Close()
 	}
