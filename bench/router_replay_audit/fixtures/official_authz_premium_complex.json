@@ -1,0 +1,80 @@
+{
+  "fixture_version": "0.1",
+  "evidence_class": "official-profile-derived",
+  "provenance": {
+    "repository": "vllm-project/semantic-router",
+    "commit": "8d84987b04c63cd35be211a7aa337336b071ae20",
+    "policy_file": "e2e/profiles/authz-rbac/values.yaml",
+    "testcase_file": "e2e/testcases/authz_rbac_routing.go",
+    "note": "Replay-shaped fixture derived from public E2E policy/test; not a captured production Replay record."
+  },
+  "replay": {
+    "id": "poc-authz-premium-complex",
+    "session_id": "poc-session-authz",
+    "turn_index": 1,
+    "decision": "premium_complex",
+    "decision_priority": 250,
+    "selected_model": "Qwen/Qwen2.5-14B-Instruct",
+    "signals": {
+      "authz": [
+        "premium_user"
+      ],
+      "keyword": [
+        "complex_analysis"
+      ]
+    },
+    "signal_values": {
+      "authz:premium_user": 1.0,
+      "keyword:complex_analysis": 1.0
+    },
+    "route_diagnostics": {
+      "decision": "premium_complex",
+      "selected_model": "Qwen/Qwen2.5-14B-Instruct",
+      "decision_priority": 250
+    }
+  },
+  "policy": {
+    "default_decision": "default",
+    "default_model": "Qwen/Qwen2.5-7B-Instruct",
+    "decisions": [
+      {
+        "name": "premium_complex",
+        "priority": 250,
+        "operator": "AND",
+        "conditions": [
+          {
+            "type": "signal_contains",
+            "family": "authz",
+            "name": "premium_user"
+          },
+          {
+            "type": "signal_contains",
+            "family": "keyword",
+            "name": "complex_analysis"
+          }
+        ],
+        "selected_model": "Qwen/Qwen2.5-14B-Instruct"
+      },
+      {
+        "name": "premium_default",
+        "priority": 150,
+        "operator": "AND",
+        "conditions": [
+          {
+            "type": "signal_contains",
+            "family": "authz",
+            "name": "premium_user"
+          }
+        ],
+        "selected_model": "Qwen/Qwen2.5-7B-Instruct"
+      }
+    ]
+  },
+  "counterfactual_scope": [
+    {
+      "family": "keyword",
+      "name": "complex_analysis",
+      "reason": "Hold premium identity fixed and perturb the query-side routing signal only."
+    }
+  ]
+}
