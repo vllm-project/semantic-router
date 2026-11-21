@@ -1,5 +1,5 @@
 import { formatInsightsCost } from '../utils/insightsCost'
-import { modelText, type ModelLabels } from './insightsModelLabelSupport'
+import { modelLabel, modelText, type ModelLabels } from './insightsModelLabelSupport'
 import type {
   InsightsAggregateCostCoverage,
   InsightsCostAccounting,
@@ -18,9 +18,111 @@ const UNPRICED_REASONS: Record<string, string> = {
 
 const BASELINE_SOURCES: Record<string, string> = {
   configured_model: 'the configured baseline model',
-  recipe_most_expensive: 'the recipe pool’s most expensive model',
+  recipe_most_expensive: 'the priciest model in its pool',
   selected_model: 'the selected model (direct request)',
   unrecorded: 'an unrecorded rule (older records)',
+}
+
+const PRICE_TABLE =
+  'at this deployment’s own price table (catalog list prices when the pricing source says so); not a quality comparison.'
+
+/** What a range's saving is measured against, read from the rules its compared requests used. */
+export interface SavingsReference {
+  /** The figure's label: "Saved vs priciest model", "Saved vs <model>", or "Saved vs reference" when they differ. */
+  label: string
+  /** The reference in a word or two, beside the actual cost. */
+  short: string
+  /** The reference in a sentence: "the priciest model", a model's name, or "the reference". */
+  noun: string
+  /** How each request is priced for the comparison. */
+  hint: string
+  /** How many requests each rule compared, when they differ. */
+  mixed?: string
+}
+
+/**
+ * The reference of a range's saving. Direct requests, compared with their own
+ * model, never decide it; a range that compared nothing reads by the
+ * configuration.
+ */
+export function savingsReference(
+  coverage: Pick<InsightsAggregateCostCoverage, 'baseline_sources'> | undefined,
+  configuredModel?: string,
+  labels: ModelLabels = {},
+): SavingsReference {
+  const counts = { ...(coverage?.baseline_sources ?? {}) }
+  delete counts.selected_model
+  const pool = counts.recipe_most_expensive ?? 0
+  const configured = counts.configured_model ?? 0
+  const other = Object.entries(counts)
+    .filter(([source]) => source !== 'recipe_most_expensive' && source !== 'configured_model')
+    .reduce((sum, [, count]) => sum + count, 0)
+  const model = configuredModel ? modelLabel(labels, configuredModel) : undefined
+  const configuredRule = configured > 0 || (pool + other === 0 && model !== undefined)
+  if (pool === 0 && other === 0 && configuredRule) {
+    return {
+      label: `Saved vs ${model ?? 'configured model'}`,
+      short: model ?? 'Configured model',
+      noun: model ?? 'the configured model',
+      hint: `Cost only: each request priced at ${model ?? 'the configured model'} for the same tokens, ${PRICE_TABLE}`,
+    }
+  }
+  if (configured === 0 && other === 0) {
+    return {
+      label: 'Saved vs priciest model',
+      short: 'Priciest model',
+      noun: 'the priciest model',
+      hint: `Cost only: each request priced at the most expensive model in its pool for the same tokens, ${PRICE_TABLE}`,
+    }
+  }
+  const parts = [
+    pool ? `${plural(pool, 'request')} vs the priciest model in its pool` : '',
+    configured ? `${plural(configured, 'request')} vs ${model ?? 'the configured model'}` : '',
+    other ? `${plural(other, 'request')} vs an unrecorded rule (older records)` : '',
+  ].filter(Boolean)
+  return {
+    label: 'Saved vs reference',
+    short: 'Reference',
+    noun: 'the reference',
+    hint: `Cost only: each request priced at its reference model for the same tokens, ${PRICE_TABLE}`,
+    mixed: parts.length > 1 ? `References differ in this range: ${parts.join(', ')}.` : undefined,
+  }
+}
+
+/** A range's saving as a figure: plain where it saved, with a minus sign where the requests cost more. */
+export function formatSaving(value: number, currency?: string): string {
+  const amount = formatInsightsCost(Math.abs(value), currency, { total: true })
+  return value < 0 && amount !== '—' ? `−${amount}` : amount
+}
+
+/** What a record's saving compares with, in a few words under the figure. */
+export function savingVersus(record: InsightsRecord, labels: ModelLabels = {}): string {
+  if (!record.baseline_model) return 'No baseline recorded'
+  const model = modelLabel(labels, record.baseline_model)
+  switch (record.cost_accounting?.baseline_source) {
+    case 'recipe_most_expensive':
+      return `vs. ${model}, the priciest in its pool`
+    case 'selected_model':
+      return 'vs. its own model (a direct request)'
+    default:
+      return `vs. ${model}`
+  }
+}
+
+/** A record's saving in words, against the model it was compared with. */
+export function describeRecordSaving(record: InsightsRecord, labels: ModelLabels = {}): string {
+  const value = record.cost_savings ?? 0
+  const amount = formatInsightsCost(Math.abs(value), record.currency)
+  const compared = value < 0 ? `Cost ${amount} more than` : `Saved ${amount} vs`
+  const model = modelText(labels, record.baseline_model ?? '')
+  switch (record.cost_accounting?.baseline_source) {
+    case 'recipe_most_expensive':
+      return `${compared} ${model}, the priciest model in its pool for these tokens (cost only)`
+    case 'selected_model':
+      return `A direct request, compared with its own model, ${model} (cost only)`
+    default:
+      return `${compared} ${model} (cost only)`
+  }
 }
 
 const ROUTER_CALL_LABELS: Record<string, string> = {
@@ -103,10 +205,14 @@ export function describeBudget(accounting?: InsightsCostAccounting): string | un
   }
   const cost = (value?: number) => formatInsightsCost(value, budget.currency)
   const left = `${budget.scope}: ${cost(budget.remaining)} of ${cost(budget.limit)} left`
-  const unpriced = budget.unpriced_calls ? `; ${plural(budget.unpriced_calls, 'unpriced call')}` : ''
+  const unpriced = budget.unpriced_calls
+    ? `; ${plural(budget.unpriced_calls, 'unpriced call')}`
+    : ''
   if (!budget.settlement) {
     const refused =
-      budget.remaining > 0 ? `the call was estimated at ${cost(budget.estimate)}` : 'nothing was left'
+      budget.remaining > 0
+        ? `the call was estimated at ${cost(budget.estimate)}`
+        : 'nothing was left'
     return `${left}; refused: ${refused}${unpriced}`
   }
   const settled = BUDGET_SETTLEMENTS[budget.settlement] ?? budget.settlement
@@ -153,13 +259,13 @@ function formatReasonCounts(counts?: Record<string, number>): string {
     .join(', ')
 }
 
-/** Which Router calls the savings are net of, and the requests a missing price leaves out. */
+/** The Router's own calls of the compared requests, counted apart, and the requests a missing price leaves out. */
 function buildNetSavingsLines(coverage: InsightsAggregateCostCoverage): string[] {
   const lines: string[] = []
   const netted = sortedCounts(coverage.netted_router_calls)
   if (netted.length > 0) {
     lines.push(
-      `Savings are net of the Router’s own calls for these requests: ${netted
+      `The Router’s own calls for these requests are counted apart from the saving: ${netted
         .map(([kind, count]) => plural(count, `${ROUTER_CALL_LABELS[kind] ?? kind} call`))
         .join(', ')}.`,
     )
@@ -205,7 +311,7 @@ export function buildCostCoverageLines(
   const baselines = Object.entries(coverage.baseline_sources ?? {})
   if (baselines.length > 0) {
     lines.push(
-      `Savings compare ${plural(costRecordCount, 'request')} with ${baselines
+      `Differences compare ${plural(costRecordCount, 'request')} with ${baselines
         .map(([source, count]) => `${describeBaselineRule(source)} (${count})`)
         .join(', ')}.`,
     )
@@ -227,6 +333,33 @@ export function buildCostCoverageLines(
     )
   }
   return lines
+}
+
+/** How the cost-only estimate is made and what it leaves out, for one tooltip. */
+export function describeEstimateMethod(
+  summary: { coverage?: InsightsAggregateCostCoverage; excluded_record_count: number },
+  recordCount: number,
+  reference: SavingsReference = savingsReference(summary.coverage),
+): string {
+  const coverage = summary.coverage
+  const parts = [
+    reference.hint,
+    'The saving is that reference cost less the cost of the model that answered; the Router’s own calls are shown on their own line and not taken off. Nothing here is a GPU bill or an invoice.',
+  ]
+  if (reference.mixed) parts.push(reference.mixed)
+  if (coverage) {
+    parts.push(
+      `Priced: ${coverage.priced_records.toLocaleString('en-US')} of ${recordCount.toLocaleString('en-US')} requests` +
+        (coverage.partly_priced_records
+          ? `, ${coverage.partly_priced_records.toLocaleString('en-US')} partly`
+          : '') +
+        '.',
+    )
+  }
+  if (summary.excluded_record_count > 0) {
+    parts.push(`${plural(summary.excluded_record_count, 'request')} left out of the comparison.`)
+  }
+  return parts.join(' ')
 }
 
 /** Why no cost shows at all, when every request is unpriced, and how to set it. */

@@ -219,8 +219,8 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
 
   try {
     await authenticateAcceptance(page, approved)
-    await page.goto(`${approved.base_url}/evaluation?view=new`)
-    await expect(page.getByRole('heading', { name: 'Create evaluation' })).toBeVisible()
+    await page.goto(`${approved.base_url}/observe/evaluations?view=new`)
+    await expect(page.getByRole('dialog', { name: 'New evaluation' })).toBeVisible()
     const existing = await read<{ runs: Run[] }>(page, '/runs')
     expect(
       existing.runs.every(terminal),
@@ -234,13 +234,19 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
       ),
       'This dataset must have no previous evaluation attempt',
     ).toBe(false)
-    await page.getByLabel('Run name', { exact: true }).fill(approved.run_name)
+    const step = (name: string) =>
+      page
+        .getByRole('navigation', { name: 'Steps' })
+        .getByRole('button', { name: new RegExp(`${name}$`) })
+        .click()
     await page.getByRole('radio', { name: new RegExp(`^${approved.profile}`, 'i') }).check()
-    await page.getByText('Prepared source collection', { exact: true }).click()
-    await page.getByRole('combobox', { name: 'Prepared dataset', exact: true }).click()
+    await page.getByRole('button', { name: 'Use a specific dataset', exact: true }).click()
+    await page.getByRole('combobox', { name: 'Specific dataset', exact: true }).click()
     await page.locator(`[role="option"][data-value=${JSON.stringify(approved.dataset_id)}]`).click()
-    await page.getByRole('combobox', { name: 'Add configured target', exact: true }).click()
-    await page.locator(`[role="option"][data-value=${JSON.stringify(approved.target_id)}]`).click()
+    await step('What to compare')
+    await page.locator(`[data-target-id=${JSON.stringify(approved.target_id)}]`).click()
+    await step('Limits')
+    await page.getByLabel('Run name', { exact: true }).fill(approved.run_name)
     await page.getByText('Sampling and advanced limits', { exact: true }).click()
     for (const [label, value] of [
       ['Budget (USD)', approved.limits.max_cost_usd],
@@ -326,11 +332,11 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
     else expect(parentReport.summary.total_spend_usd).toBeNull()
     evidence.parent_dispatched_cells = [...dispatched]
     save()
-    await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click()
+    await page.getByRole('button', { name: 'More run actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Reload evidence', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Recover unfinished work' })).toBeVisible()
-    await page
-      .getByRole('combobox', { name: 'Recovery scope', exact: true })
-      .selectOption('undispatched')
+    await page.getByRole('combobox', { name: 'Recovery scope', exact: true }).click()
+    await page.getByRole('listbox').locator('[data-value="undispatched"]').click()
     const recoveryPlanResponse = page.waitForResponse(responseFor(`/runs/${parentID}/recover-plan`))
     await page.getByRole('button', { name: 'Review recovery plan', exact: true }).click()
     const recoveryPlanHTTP = await recoveryPlanResponse
@@ -407,8 +413,9 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
       child_spend_equals_own_receipts: true,
       parent_snapshot_spend_complete: recovery.parent.spend_complete,
     }
-    await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click()
-    await page.getByRole('tab', { name: 'Evidence', exact: true }).click()
+    await page.getByRole('button', { name: 'More run actions', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Reload evidence', exact: true }).click()
+    await page.getByRole('tab', { name: 'Activity', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Recovery lineage', exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Open parent run', exact: true })).toHaveAttribute(
       'href',
@@ -419,7 +426,7 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
     await expect
       .poll(() =>
         page
-          .getByRole('region', { name: 'sr-bench workspace' })
+          .locator('section[aria-label="sr-bench workspace"]')
           .evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth),
       )
       .toBe(true)

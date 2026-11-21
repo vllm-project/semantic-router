@@ -14,7 +14,8 @@
         ],
         "id": "response_split_1",
         "model": "public-model",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {
@@ -40,7 +41,8 @@
         ],
         "id": "response_split_1",
         "model": "public-model",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {
@@ -64,7 +66,8 @@
         ],
         "id": "response_split_1",
         "model": "public-model",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {
@@ -88,7 +91,8 @@
         ],
         "id": "response_split_1",
         "model": "public-model",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {
@@ -112,7 +116,8 @@
         ],
         "id": "response_split_1",
         "model": "public-model",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {
@@ -127,7 +132,8 @@
         ],
         "id": "response_split_1",
         "model": "public-model",
-        "object": "chat.completion.chunk"
+        "object": "chat.completion.chunk",
+        "usage": null
       }
     },
     {

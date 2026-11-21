@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
@@ -235,6 +236,7 @@ type RouteDiagnostics struct {
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies         map[string]string                    `json:"applied_unknown_policies,omitempty"`
 	DecisionRanking                *DecisionRanking                     `json:"decision_ranking,omitempty"`
+	Retention                      *retention.Outcome                   `json:"retention,omitempty"`
 }
 
 // DecisionRanking records how selection ordered the matched decisions,
@@ -324,6 +326,14 @@ type Record struct {
 	// ParentRequestID the client request a Looper hop was made for.
 	Agent           *AgentIdentity `json:"agent,omitempty"`
 	ParentRequestID string         `json:"parent_request_id,omitempty"`
+	// ImageCount is the images in the request's newest turn, after its last
+	// assistant message, and HistoryImageCount the images before it.
+	ImageCount        int `json:"image_count,omitempty"`
+	HistoryImageCount int `json:"history_image_count,omitempty"`
+
+	// RequestedModel is the model the client named when its listener's
+	// unserved_models routed the request as OriginalModel.
+	RequestedModel string `json:"requested_model,omitempty"`
 
 	// Guardrails
 	GuardrailsEnabled bool `json:"guardrails_enabled,omitempty"`
@@ -685,6 +695,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
+	cloned.Retention = value.Retention.Clone()
 	if value.DecisionRanking != nil {
 		ranking := *value.DecisionRanking
 		cloned.DecisionRanking = &ranking

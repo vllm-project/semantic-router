@@ -43,6 +43,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request, svc *Service) 
 	limit := positiveQueryInt(r, "limit", 100, 200)
 	options := UserListOptions{
 		Status: r.URL.Query().Get("status"),
+		Role:   r.URL.Query().Get("role"),
 		Query:  r.URL.Query().Get("q"),
 		Sort:   r.URL.Query().Get("sort"),
 		Order:  r.URL.Query().Get("order"),

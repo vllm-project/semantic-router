@@ -1,0 +1,6 @@
+paths:
+  .github/workflows/ci-status.yml:
+    ignore:
+      # actionlint 1.7.12 lacks queue support (rhysd/actionlint#657).
+      # The workflow policy requires queue: max for this job.
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'

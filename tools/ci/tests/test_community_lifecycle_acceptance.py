@@ -574,6 +574,27 @@ class GitHubClientTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(client.rate_limit_remaining, 3)
 
+    def test_a_refused_write_is_ignored_only_when_asked(self) -> None:
+        client = community_lifecycle_github.GitHubClient()
+        refused = subprocess.CompletedProcess(
+            [],
+            1,
+            "HTTP/2.0 422 Unprocessable Entity\n\n{}",
+            "gh: Reviews may only be requested from collaborators. (HTTP 422)",
+        )
+        endpoint = "repos/acme/router/pulls/7/requested_reviewers"
+        payload = {"reviewers": ["invited"]}
+        with mock.patch.object(
+            community_lifecycle_github.subprocess, "run", return_value=refused
+        ), contextlib.redirect_stderr(io.StringIO()):
+            self.assertIsNone(
+                client.request(
+                    endpoint, method="POST", payload=payload, ignore_unprocessable=True
+                )
+            )
+            with self.assertRaises(SystemExit):
+                client.request(endpoint, method="POST", payload=payload)
+
     def test_only_the_rest_budget_is_recorded(self) -> None:
         client = community_lifecycle_github.GitHubClient()
         recorded = []
