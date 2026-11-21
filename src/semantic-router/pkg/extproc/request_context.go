@@ -464,6 +464,12 @@ type RequestContext struct {
 	// only, like ApprovalReview.
 	SessionTitleRequest bool
 	sessionName         string
+	// cancelAbandonedWork stops request-scoped background work if the response
+	// ends early. Completed responses allow that work to finish on its own.
+	cancelAbandonedWork      context.CancelFunc
+	responseComplete         bool
+	bufferedResponseComplete bool
+
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process

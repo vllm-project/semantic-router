@@ -618,7 +618,7 @@ func TestStreamKeepsCitationsInRange(t *testing.T) {
 
 func filterSeparatorStream(t *testing.T, frames ...string) string {
 	t.Helper()
-	filter := NewChatPublicStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, true)
+	filter := NewChatPublicStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, true, llmprotocol.DefaultPolicy().Limits.JSONDepth)
 	var out []byte
 	for _, frame := range frames {
 		filtered, err := filter.Push([]byte(frame))

@@ -83,6 +83,7 @@ COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
 COPY src/semantic-router/pkg/admission/ /app/src/semantic-router/pkg/admission/
 COPY src/semantic-router/pkg/apiregistry/ /app/src/semantic-router/pkg/apiregistry/
 COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
+COPY src/semantic-router/pkg/clientauth/ /app/src/semantic-router/pkg/clientauth/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
 COPY src/semantic-router/pkg/consts/ /app/src/semantic-router/pkg/consts/

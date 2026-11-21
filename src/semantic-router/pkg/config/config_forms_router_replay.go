@@ -156,16 +156,30 @@ func migrateDataPolicy(m *Migration, at FormMatch) error {
 // sent nothing.
 func migrateShadowDispatchPlugin(m *Migration, at FormMatch) error {
 	plugins := at.Parent
-	dispatch := mappingValue(at.Node, "configuration")
+	dispatch := resolveAlias(mappingValue(at.Node, "configuration"))
+	for i := 0; dispatch != nil && i+1 < len(dispatch.Content); i += 2 {
+		if dispatch.Content[i].ShortTag() != "!!merge" {
+			continue
+		}
+		// Decode the effective mapping before reading enabled or migrating
+		// fields: YAML merge keys and aliases also supplied legacy settings.
+		var settings map[string]interface{}
+		if err := dispatch.Decode(&settings); err != nil {
+			return err
+		}
+		dispatch = &yaml.Node{}
+		if err := dispatch.Encode(settings); err != nil {
+			return err
+		}
+		break
+	}
 	if !yamlTrue(mappingValue(dispatch, "enabled")) {
 		removeItem(plugins, at.Node)
 		return nil
 	}
-	shadow := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-	for i := 0; i+1 < len(dispatch.Content); i += 2 {
-		if key := dispatch.Content[i].Value; key != "enabled" {
-			m.Set(shadow, key, dispatch.Content[i+1])
-		}
+	shadow, err := migrateShadowSettings(m, at, dispatch)
+	if err != nil {
+		return err
 	}
 	for _, item := range plugins.Content {
 		if scalarAt(item, "type") != DecisionPluginRouterReplay {
@@ -195,4 +209,70 @@ func migrateShadowDispatchPlugin(m *Migration, at FormMatch) error {
 	m.Set(at.Node, "configuration", replay)
 	m.Changed(at.Path, "router_replay now records this decision, so that the replay record keeps the shadow's outcome")
 	return nil
+}
+
+// migrateShadowSettings rewrites the released single-model configuration.
+func migrateShadowSettings(m *Migration, at FormMatch, dispatch *yaml.Node) (*yaml.Node, error) {
+	shadow := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	for i := 0; i+1 < len(dispatch.Content); i += 2 {
+		key, value := dispatch.Content[i].Value, dispatch.Content[i+1]
+		switch key {
+		case "enabled":
+		case "model":
+			m.Set(shadow, "models", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{value}})
+		case "sample_rate":
+			m.Set(shadow, key, value)
+		case "capture_response_body":
+			m.Set(ensureMapping(shadow, "capture"), "enabled", value)
+		case "max_concurrency", "max_queue_depth", "timeout_seconds", "max_response_bytes", "max_capture_bytes":
+			var raw interface{}
+			if err := value.Decode(&raw); err != nil {
+				return nil, err
+			}
+			// Like an omitted or zero limit, null selected the old default.
+			if raw == nil {
+				continue
+			}
+			payload, err := NewStructuredPayload(raw)
+			var bound int
+			if err != nil || payload == nil || payload.DecodeInto(&bound) != nil || bound < 0 {
+				return nil, fmt.Errorf("%s: %s must be a non-negative integer", at.Path, key)
+			}
+			// A zero in the old configuration selected the default.
+			if bound == 0 {
+				continue
+			}
+			if key == "timeout_seconds" && bound > int(maxShadowTimeout.Seconds()) {
+				bound = int(maxShadowTimeout.Seconds())
+				m.Note(at.Path, "timeout_seconds is limited to 300s by the shadow execution deadline")
+			}
+			if key == "max_response_bytes" && bound < 2 {
+				bound = 2
+				m.Note(at.Path, "max_response_bytes is raised to 2 to allow an overflow probe")
+			}
+			value = &yaml.Node{}
+			if err := value.Encode(bound); err != nil {
+				return nil, err
+			}
+			switch key {
+			case "max_concurrency":
+				m.Set(ensureMapping(shadow, "execution"), "max_concurrency", value)
+			case "max_queue_depth":
+				m.Set(ensureMapping(shadow, "execution"), "max_queue_size", value)
+			case "timeout_seconds":
+				m.Set(ensureMapping(shadow, "execution"), "timeout", Scalar(fmt.Sprintf("%ds", bound)))
+			case "max_response_bytes":
+				m.Set(ensureMapping(shadow, "budget"), "max_response_bytes", value)
+			case "max_capture_bytes":
+				m.Set(ensureMapping(shadow, "capture"), "max_bytes", value)
+			}
+		case "forward_headers":
+			m.Set(shadow, key, value)
+		case "max_retries", "tls_skip_verify":
+			m.Note(at.Path, key+" is removed: shadow candidates use one attempt, verified TLS and their own provider credentials and headers")
+		default:
+			return nil, fmt.Errorf("%s: unknown shadow field %q", at.Path, key)
+		}
+	}
+	return shadow, nil
 }
