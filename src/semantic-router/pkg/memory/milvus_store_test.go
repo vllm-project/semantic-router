@@ -359,6 +359,7 @@ func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()
+	createdAt := time.Date(2026, time.September, 30, 12, 0, 0, 0, time.UTC)
 
 	mockResults := []client.SearchResult{
 		{
@@ -369,11 +370,13 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 				entity.NewColumnVarChar("content", []string{"The budget is $50k"}),
 				entity.NewColumnVarChar("memory_type", []string{"semantic"}),
 				entity.NewColumnVarChar("metadata", []string{`{"source":"slack","importance":"high","created_by_user_id":"user-origin","conversation_id":"conversation-123","created_via":"llm_extraction"}`}),
+				entity.NewColumnInt64("created_at", []int64{createdAt.Unix()}),
 			},
 		},
 	}
 
 	mockClient.SearchFunc = func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		assert.Contains(t, out, "created_at")
 		// Verify TopK floor of 20 (default limit 5 * 4 = 20, or minimum 20)
 		assert.GreaterOrEqual(t, topK, 20, "Expected topK to be at least 20, got %d", topK)
 		return mockResults, nil
@@ -389,6 +392,7 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 	assert.Equal(t, "The budget is $50k", results[0].Memory.Content)
 	assert.Equal(t, MemoryTypeSemantic, results[0].Memory.Type)
 	assert.Equal(t, "slack", results[0].Memory.Source)
+	assert.Equal(t, time.Unix(createdAt.Unix(), 0), results[0].Memory.CreatedAt)
 	assert.Equal(t, "user-origin", results[0].Memory.CreatedByUserID)
 	assert.Equal(t, "conversation-123", results[0].Memory.ConversationID)
 	assert.Equal(t, "llm_extraction", results[0].Memory.CreatedVia)
