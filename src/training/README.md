@@ -23,6 +23,61 @@ machine-readable configuration, explicit data/output paths, train and export
 entrypoints, and lightweight contract tests. Model weights, datasets, caches,
 checkpoints, and run logs stay outside Git.
 
+## Legacy classifier launchers
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) before
+running the legacy classifier shell scripts or the `train-mmbert32k-feedback`,
+`train-mmbert32k-intent`, `train-mmbert32k-factcheck`, and
+`train-mmbert32k-pii*` Make targets. These
+launchers use each task's existing project with `uv run --locked --project`;
+uv prepares its environment from the committed lockfile without a manual pip
+install or virtual environment activation. Model and dataset downloads still
+require network access, and GPU training requires a compatible driver.
+
+From the repository root, run all four legacy classifier tasks on a smaller
+sample with their existing model and LoRA settings:
+
+```bash
+TRAINING_WORK_DIR="$PWD/.cache/training-smoke" \
+  EPOCHS=1 BATCH_SIZE=2 MAX_SAMPLES=200 \
+  bash src/training/model_classifier/train_mmbert_gpu.sh
+```
+
+The default settings remain 10 epochs, batch size 64, and 10,000 samples.
+`TRAINING_WORK_DIR` controls intermediate outputs; `MODEL_OUTPUT_DIR` defaults
+to its `models` subdirectory. The modality-only launcher also uses its own
+locked project for the GPU diagnostic, training, and inference demo:
+
+```bash
+EPOCHS=1 BATCH_SIZE=2 MAX_SAMPLES=200 \
+  bash src/training/model_classifier/modality_routing_classifier/run_training.sh
+```
+
+The feedback target accepts local model and data directories, or remote inputs
+at fixed revisions. For local inputs, the data directory must contain explicit,
+isolated `train.jsonl` and `validation.jsonl` splits in the
+[feedback trainer's format](model_classifier/user_feedback_classifier/README.md):
+
+```bash
+make train-mmbert32k-feedback \
+  FEEDBACK_MODEL_NAME="/artifacts/feedback-base" \
+  FEEDBACK_DATA_SOURCE="/artifacts/feedback-data" \
+  FEEDBACK_EPOCHS=1 TRAIN_BATCH_SIZE=2 FEEDBACK_MAX_SAMPLES=200
+```
+
+For the default remote model (`vllm-sr/mmbert-32k-yarn`) and dataset
+(`vllm-sr/feedback-detector-dataset`), supply `FEEDBACK_MODEL_REVISION` and
+`FEEDBACK_DATASET_REVISION` as immutable commit IDs. Override
+`FEEDBACK_MODEL_NAME` or `FEEDBACK_DATA_SOURCE` to use other reviewed inputs.
+Missing remote revisions fail before creating outputs or preparing an
+environment. `FEEDBACK_MAX_SAMPLES` is optional and limits each split; leaving
+it unset preserves the trainer's full-data default. The existing defaults remain
+10 epochs, LoRA rank 64, and alpha 128, with outputs under
+`models/mmbert32k-feedback-detector*`.
+
+`make train-mmbert32k-all` starts with feedback and forwards these same Make
+overrides to its recursive targets. It stops if any trainer fails.
+
 Start with the public [model training guide](../../website/docs/training/training-overview.md)
 to choose a model family. Use the README beside a trainer for its environment,
 data preparation, commands, evaluation, and artifact format.

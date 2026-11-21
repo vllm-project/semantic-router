@@ -14,6 +14,12 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! command -v uv >/dev/null 2>&1; then
+    echo "Error: uv is required. Install it: https://docs.astral.sh/uv/getting-started/installation/" >&2
+    exit 1
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -63,13 +69,9 @@ else
 fi
 echo ""
 
-# Install dependencies
-echo -e "${YELLOW}Installing dependencies...${NC}"
-pip install -q peft accelerate datasets transformers scikit-learn tqdm requests
-
 # Verify GPU
 echo -e "${YELLOW}Checking GPU...${NC}"
-python3 -c "
+uv run --locked --project "$SCRIPT_DIR" python -c "
 import torch
 print(f'PyTorch: {torch.__version__}')
 if torch.cuda.is_available():
@@ -80,7 +82,6 @@ else:
 "
 
 # Navigate to script directory
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo -e "${BLUE}============================================${NC}"
@@ -90,32 +91,32 @@ echo -e "${BLUE}============================================${NC}"
 start_time=$(date +%s)
 
 # Build command
-CMD="python modality_routing_bert_finetuning_lora.py \
-    --mode train \
-    --model $MODEL \
-    --epochs $EPOCHS \
-    --batch-size $BATCH_SIZE \
-    --max-samples $MAX_SAMPLES \
-    --learning-rate $LEARNING_RATE"
+CMD=(uv run --locked --project "$SCRIPT_DIR" python "$SCRIPT_DIR/modality_routing_bert_finetuning_lora.py"
+    --mode train
+    --model "$MODEL"
+    --epochs "$EPOCHS"
+    --batch-size "$BATCH_SIZE"
+    --max-samples "$MAX_SAMPLES"
+    --learning-rate "$LEARNING_RATE")
 
 # Add LoRA rank/alpha only if explicitly set (otherwise auto-scales)
 if [ -n "$LORA_RANK" ]; then
-    CMD="$CMD --lora-rank $LORA_RANK"
+    CMD+=(--lora-rank "$LORA_RANK")
 fi
 if [ -n "$LORA_ALPHA" ]; then
-    CMD="$CMD --lora-alpha $LORA_ALPHA"
+    CMD+=(--lora-alpha "$LORA_ALPHA")
 fi
 
 # Add vLLM options if configured
 if [ -n "$VLLM_ENDPOINT" ]; then
-    CMD="$CMD --vllm-endpoint $VLLM_ENDPOINT --synthesize-both $SYNTHESIZE_BOTH"
+    CMD+=(--vllm-endpoint "$VLLM_ENDPOINT" --synthesize-both "$SYNTHESIZE_BOTH")
     if [ -n "$VLLM_MODEL" ]; then
-        CMD="$CMD --vllm-model $VLLM_MODEL"
+        CMD+=(--vllm-model "$VLLM_MODEL")
     fi
 fi
 
 # Run training
-eval "$CMD"
+"${CMD[@]}"
 
 end_time=$(date +%s)
 duration=$((end_time - start_time))
@@ -131,7 +132,7 @@ echo -e "${BLUE}============================================${NC}"
 MODEL_PATH=$(ls -d lora_modality_router_"${MODEL}"_r*_model 2>/dev/null | head -1)
 if [ -n "$MODEL_PATH" ] && [ -d "$MODEL_PATH" ]; then
     echo -e "${GREEN}Found model at: $MODEL_PATH${NC}"
-    python modality_routing_bert_finetuning_lora.py \
+    uv run --locked --project "$SCRIPT_DIR" python "$SCRIPT_DIR/modality_routing_bert_finetuning_lora.py" \
         --mode test \
         --model "$MODEL" \
         --model-path "$MODEL_PATH"
