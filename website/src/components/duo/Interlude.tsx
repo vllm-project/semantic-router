@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import clsx from 'clsx'
 import Translate, { translate } from '@docusaurus/Translate'
 import { testimonials } from '@site/src/data/testimonials'
-import { type InterludeKind, mountInterlude } from './interlude'
+import { type InterludeKind, mountInterlude } from './interlude-engine'
 import styles from './Interlude.module.css'
 
 function Band({ kind, seed, children }: {
