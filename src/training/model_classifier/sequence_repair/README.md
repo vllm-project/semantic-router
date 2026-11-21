@@ -10,6 +10,30 @@ The Vela family name uses the shared encoder scale, **307M**. Export receipts al
 record the actual unique parameter count including each task head. A configured
 32,768-position capacity is a limit, not evidence of long-document accuracy.
 
+## Setup
+
+Create the locked environment with uv. `pyproject.toml` bounds the
+dependencies and `uv.lock` pins them:
+
+```bash
+uv sync --project src/training/model_classifier/sequence_repair --locked
+```
+
+Run the module entrypoints documented below from the repository root through
+`uv run --project src/training/model_classifier/sequence_repair`, for example:
+
+```bash
+uv run --project src/training/model_classifier/sequence_repair \
+  python -m src.training.model_classifier.sequence_repair.initialize --help
+```
+
+The unit tests run the same way:
+
+```bash
+uv run --project src/training/model_classifier/sequence_repair \
+  python -m unittest discover -s src/training/model_classifier/sequence_repair/tests -p 'test_*.py'
+```
+
 ## Data and provenance
 
 The [source manifest](data/source-files.json) pins public dataset revisions,
