@@ -96,7 +96,7 @@ func (u *intentMessageImageURL) UnmarshalJSON(data []byte) error {
 
 type intentMessageContentPart struct {
 	Type     string                 `json:"type"`
-	Text     string                 `json:"text"`
+	Text     string                 `json:"text,omitempty"`
 	ImageURL *intentMessageImageURL `json:"image_url,omitempty"`
 }
 
@@ -108,6 +108,13 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 // resolveSignalInputWith applies routing_input through selector exactly as the
 // data plane does, so a preview scores the same text as live routing.
 func (req IntentRequest) resolveSignalInputWith(selector *routinginput.Selector) (intentSignalInput, error) {
+	if req.Input != nil {
+		normalized, err := req.withClassificationInput()
+		if err != nil {
+			return intentSignalInput{}, err
+		}
+		req = normalized
+	}
 	if req.PreviewContext != nil {
 		for _, identity := range []string{req.PreviewContext.SessionID, req.PreviewContext.ConversationID} {
 			if len(identity) > 1024 || strings.ContainsAny(identity, "\r\n\x00") {

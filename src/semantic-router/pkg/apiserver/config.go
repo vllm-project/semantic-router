@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -91,18 +92,23 @@ type (
 
 // BatchClassificationRequest represents a batch classification request
 type BatchClassificationRequest struct {
-	Recipe   string                 `json:"recipe,omitempty"`
-	Texts    []string               `json:"texts"`
-	TaskType string                 `json:"task_type,omitempty"` // "intent" (default), "pii", "security", or "all" (intent fields plus pii and security objects)
-	Options  *ClassificationOptions `json:"options,omitempty"`
+	Recipe   string                         `json:"recipe,omitempty"`
+	Texts    []string                       `json:"texts,omitempty"`
+	Inputs   []services.ClassificationInput `json:"inputs,omitempty"`
+	TaskType string                         `json:"task_type,omitempty"` // "intent" (default), "pii", "security", or "all" (intent fields plus pii and security objects)
+	Options  *ClassificationOptions         `json:"options,omitempty"`
 }
 
 // BatchClassificationResult represents a single classification result with optional probabilities
 type BatchClassificationResult struct {
-	Category         string             `json:"category"`
-	Confidence       float64            `json:"confidence"`
-	ProcessingTimeMs int64              `json:"processing_time_ms"`
-	Probabilities    map[string]float64 `json:"probabilities,omitempty"`
+	Index               *int                              `json:"index,omitempty"`
+	Error               *services.ClassificationItemError `json:"error,omitempty"`
+	MatchedSignals      *services.MatchedSignals          `json:"matched_signals,omitempty"`
+	ConfidenceAvailable *bool                             `json:"confidence_available,omitempty"`
+	Category            string                            `json:"category"`
+	Confidence          float64                           `json:"confidence"`
+	ProcessingTimeMs    int64                             `json:"processing_time_ms"`
+	Probabilities       map[string]float64                `json:"probabilities,omitempty"`
 	// PII and Security are only set for task_type "all".
 	PII      *BatchPIIResult      `json:"pii,omitempty"`
 	Security *BatchSecurityResult `json:"security,omitempty"`
