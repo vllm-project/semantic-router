@@ -227,10 +227,11 @@ func routerUsesGRPCTLS(args []string) bool {
 func (r *SemanticRouterReconciler) applySemanticRouterProbes(container *corev1.Container, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) {
 	if sr.Spec.StartupProbe != nil && (sr.Spec.StartupProbe.Enabled == nil || *sr.Spec.StartupProbe.Enabled) {
 		container.StartupProbe = &corev1.Probe{
-			ProbeHandler:     routerProbeHandler(gatewayMode, "/ready", sr.Spec.Args),
-			PeriodSeconds:    r.getInt32OrDefault(sr.Spec.StartupProbe.PeriodSeconds, DefaultStartupProbePeriod),
-			TimeoutSeconds:   r.getInt32OrDefault(sr.Spec.StartupProbe.TimeoutSeconds, DefaultStartupProbeTimeout),
-			FailureThreshold: r.getInt32OrDefault(sr.Spec.StartupProbe.FailureThreshold, DefaultStartupProbeFailureThreshold),
+			ProbeHandler:        routerProbeHandler(gatewayMode, "/ready", sr.Spec.Args),
+			InitialDelaySeconds: r.getInt32OrDefault(sr.Spec.StartupProbe.InitialDelaySeconds, 0),
+			PeriodSeconds:       r.getInt32OrDefault(sr.Spec.StartupProbe.PeriodSeconds, DefaultStartupProbePeriod),
+			TimeoutSeconds:      r.getInt32OrDefault(sr.Spec.StartupProbe.TimeoutSeconds, DefaultStartupProbeTimeout),
+			FailureThreshold:    r.getInt32OrDefault(sr.Spec.StartupProbe.FailureThreshold, DefaultStartupProbeFailureThreshold),
 		}
 	}
 

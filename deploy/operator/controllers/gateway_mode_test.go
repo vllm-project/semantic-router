@@ -195,6 +195,10 @@ func TestRouterProbeSettingsArePreserved(t *testing.T) {
 				t.Fatal("omitted probes must remain unset")
 			}
 			sr = probedRouter()
+			container = r.generateContainers(sr, mode)[0]
+			if container.StartupProbe.InitialDelaySeconds != 0 {
+				t.Fatalf("omitted startup initialDelaySeconds = %d, want 0", container.StartupProbe.InitialDelaySeconds)
+			}
 			disabled := false
 			sr.Spec.StartupProbe.Enabled = &disabled
 			sr.Spec.ReadinessProbe.Enabled = &disabled
@@ -215,8 +219,12 @@ func TestRouterProbeSettingsArePreserved(t *testing.T) {
 					t.Fatalf("custom probe timing changed: %+v", probe)
 				}
 			}
-			if container.ReadinessProbe.InitialDelaySeconds != delay || container.LivenessProbe.InitialDelaySeconds != delay {
-				t.Fatal("custom initial delay changed")
+			for name, probe := range map[string]*corev1.Probe{
+				"startup": container.StartupProbe, "readiness": container.ReadinessProbe, "liveness": container.LivenessProbe,
+			} {
+				if probe.InitialDelaySeconds != delay {
+					t.Errorf("%s probe initialDelaySeconds = %d, want %d", name, probe.InitialDelaySeconds, delay)
+				}
 			}
 		})
 	}
