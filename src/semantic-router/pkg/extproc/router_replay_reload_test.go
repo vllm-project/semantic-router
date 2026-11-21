@@ -36,10 +36,10 @@ func TestReplayRetentionFollowsActivatedReload(t *testing.T) {
 			t.Cleanup(func() { _ = saved.Close() })
 			now := time.Now()
 			for i, id := range []string{"1", "2", "3", "4", "5"} {
-				_, err := saved.Add(t.Context(), store.Record{
+				_, addErr := saved.Add(t.Context(), store.Record{
 					ID: id, Timestamp: now.Add(time.Duration(i) * time.Millisecond), LifecycleState: store.LifecycleCompleted,
 				})
-				require.NoError(t, err)
+				require.NoError(t, addErr)
 			}
 			require.NoError(t, saved.Close())
 
@@ -52,8 +52,8 @@ func TestReplayRetentionFollowsActivatedReload(t *testing.T) {
 				}))
 			}
 			makeRouter := func(cfg *config.RouterConfig) *OpenAIRouter {
-				recorders, fallback, shared, err := createReplayRuntime(cfg)
-				require.NoError(t, err)
+				recorders, fallback, shared, runtimeErr := createReplayRuntime(cfg)
+				require.NoError(t, runtimeErr)
 				require.NotNil(t, fallback)
 				resources := newResourceScope()
 				resources.add(func() error { return closeReplayRecorders(fallback, recorders, shared) })
