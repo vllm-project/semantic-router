@@ -10,6 +10,8 @@ interface Props {
   existingModelNames: string[]
   reasoningFamilies: string[]
   catalog: BuiltInModelCatalog
+  /** A catalog model proposed from the Model Hub; its providers are offered first. */
+  catalogModel?: string
   onClose: () => void
   onImport: (input: ConnectedModelInput) => Promise<void>
   onManualSetup: () => void
@@ -20,6 +22,7 @@ export default function ConfigPageConnectModelsDialog({
   existingModelNames,
   reasoningFamilies,
   catalog,
+  catalogModel,
   onClose,
   onImport,
   onManualSetup,
@@ -30,10 +33,11 @@ export default function ConfigPageConnectModelsDialog({
     catalog,
     onClose,
     onImport,
+    catalogModel,
   )
-  if (!isOpen) return null
   return (
     <ConfigPageConnectModelsDialogView
+      isOpen={isOpen}
       controller={controller}
       reasoningFamilies={reasoningFamilies}
       onClose={onClose}

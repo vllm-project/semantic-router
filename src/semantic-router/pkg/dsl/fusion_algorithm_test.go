@@ -32,8 +32,7 @@ ROUTE fusion_reasoning {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	fusion := cfg.Decisions[0].Algorithm.Fusion
-	assertFusionAlgorithmConfig(t, fusion)
+	assertFusionAlgorithmConfig(t, cfg.Decisions[0].Algorithm)
 }
 
 func TestDecompileFusionAlgorithmRoundTrip(t *testing.T) {
@@ -52,7 +51,8 @@ func TestDecompileFusionAlgorithmRoundTrip(t *testing.T) {
 						{Model: "panel-b"},
 					},
 					Algorithm: &config.AlgorithmConfig{
-						Type: "fusion",
+						Type:    "fusion",
+						OnError: "skip",
 						Fusion: &config.FusionAlgorithmConfig{
 							Model:                        "judge-model",
 							AnalysisModels:               []string{"panel-a", "panel-b"},
@@ -64,7 +64,6 @@ func TestDecompileFusionAlgorithmRoundTrip(t *testing.T) {
 							AnalysisMode:                 config.FusionAnalysisModeOneCall,
 							IncludeAnalysis:              &includeAnalysis,
 							IncludeIntermediateResponses: &includeResponses,
-							OnError:                      "skip",
 							JudgePromptVersion:           "fusion-v1",
 						},
 					},
@@ -94,7 +93,7 @@ func TestDecompileFusionAlgorithmRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("round-trip compile errors: %v\n%s", errs, dslText)
 	}
-	assertFusionAlgorithmConfig(t, roundTripped.Decisions[0].Algorithm.Fusion)
+	assertFusionAlgorithmConfig(t, roundTripped.Decisions[0].Algorithm)
 }
 
 func TestFusionAnalysisModeRoundTrip(t *testing.T) {
@@ -133,15 +132,18 @@ ROUTE fusion_mode {
 	}
 }
 
-func assertFusionAlgorithmConfig(t *testing.T, fusion *config.FusionAlgorithmConfig) {
+func assertFusionAlgorithmConfig(t *testing.T, algorithm *config.AlgorithmConfig) {
 	t.Helper()
+	fusion := algorithm.Fusion
 	if fusion == nil {
 		t.Fatal("expected fusion config")
 	}
 	assertFusionModels(t, fusion)
 	assertFusionLimits(t, fusion)
 	assertFusionControls(t, fusion)
-	assertFusionPolicy(t, fusion)
+	if algorithm.OnError != "skip" || fusion.JudgePromptVersion != "fusion-v1" {
+		t.Fatalf("unexpected policy fields: on_error %q, %#v", algorithm.OnError, fusion)
+	}
 }
 
 func assertFusionModels(t *testing.T, fusion *config.FusionAlgorithmConfig) {
@@ -177,13 +179,6 @@ func assertFusionControls(t *testing.T, fusion *config.FusionAlgorithmConfig) {
 	}
 	if fusion.IncludeIntermediateResponses == nil || !*fusion.IncludeIntermediateResponses {
 		t.Fatalf("include responses = %#v", fusion.IncludeIntermediateResponses)
-	}
-}
-
-func assertFusionPolicy(t *testing.T, fusion *config.FusionAlgorithmConfig) {
-	t.Helper()
-	if fusion.OnError != "skip" || fusion.JudgePromptVersion != "fusion-v1" {
-		t.Fatalf("unexpected policy fields: %#v", fusion)
 	}
 }
 

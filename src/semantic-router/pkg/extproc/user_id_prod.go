@@ -3,13 +3,13 @@
 package extproc
 
 import (
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // extractUserID extracts user ID from the trusted auth header only.
 //
-// PRODUCTION BUILD: This version ONLY uses the auth header (x-authz-user-id)
+// PRODUCTION BUILD: This version ONLY uses the auth header (the configured
+// global.services.authz.identity.user_id_header, x-authz-user-id by default)
 // injected by the external auth service. There is NO fallback to metadata["user_id"]
 // to prevent bypassing the authorization gate.
 //
@@ -17,11 +17,11 @@ import (
 // oauth2-proxy, etc.) and is the only trusted source for user identity.
 func extractUserID(ctx *RequestContext) string {
 	// Check auth header (trusted source, injected by auth backend)
-	if userID, ok := ctx.Headers[headers.AuthzUserID]; ok && userID != "" {
+	if userID := authHeaderUserID(ctx); userID != "" {
 		logging.ComponentDebugEvent("extproc", "memory_user_id_resolved", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"source":     "auth_header",
-			"header":     headers.AuthzUserID,
+			"header":     ctx.identity.GetUserIDHeader(),
 		})
 		return userID
 	}

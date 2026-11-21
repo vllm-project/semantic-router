@@ -141,7 +141,7 @@ func TestEvalCancellationAfterSelectionCannotReturnLateSuccess(t *testing.T) {
 		Signals:   config.Signals{ContextRules: []config.ContextRule{{Name: "short", MinTokens: "0", MaxTokens: "10K"}}},
 		Decisions: []config.Decision{{Name: "short", Rules: config.RuleNode{Type: config.SignalTypeContext, Name: "short"}, ModelRefs: []config.ModelRef{{Model: "late-model"}}}},
 	}}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

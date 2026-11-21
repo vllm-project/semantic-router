@@ -28,6 +28,7 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityReasoningBudget, llmprotocol.CapabilitySamplingSeed,
 		llmprotocol.CapabilitySamplingPenalties, llmprotocol.CapabilityStopSequences,
 		llmprotocol.CapabilitySamplingTopK, llmprotocol.CapabilitySamplingMinP,
+		llmprotocol.CapabilitySamplingLogitBias,
 		llmprotocol.CapabilityRepetitionPenalty, llmprotocol.CapabilityCacheIsolation,
 		llmprotocol.CapabilityRequestMetadata, llmprotocol.CapabilityRequestStorage,
 		llmprotocol.CapabilityTextVerbosity,
@@ -64,7 +65,7 @@ type chatRequestWire struct {
 	Audio                json.RawMessage        `json:"audio,omitempty"`
 	FunctionCall         json.RawMessage        `json:"function_call,omitempty"`
 	Functions            json.RawMessage        `json:"functions,omitempty"`
-	LogitBias            json.RawMessage        `json:"logit_bias,omitempty"`
+	LogitBias            map[string]float64     `json:"logit_bias,omitempty"`
 	Logprobs             json.RawMessage        `json:"logprobs,omitempty"`
 	Modalities           json.RawMessage        `json:"modalities,omitempty"`
 	Moderation           json.RawMessage        `json:"moderation,omitempty"`
@@ -97,8 +98,9 @@ type chatMessageWire struct {
 	LegacyFunctionCall *chatLegacyCallWire       `json:"function_call,omitempty"`
 	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
 	// provider_specific_fields on response messages. The content is opaque
-	// provider metadata and is not replayed to the client. Client requests
-	// that carry the field are rejected in decodeChatRequestMessage.
+	// provider metadata and is not replayed to the client. A client that
+	// replays a message as LiteLLM parsed it sends the field back, and the
+	// request decode drops it as client metadata (chatClientMetadata).
 	ProviderSpecificFields json.RawMessage      `json:"provider_specific_fields,omitempty"`
 	ToolCalls              []chatToolCallWire   `json:"tool_calls,omitempty"`
 	ToolCallID             string               `json:"tool_call_id,omitempty"`
@@ -167,7 +169,7 @@ type chatToolCallWire struct {
 }
 
 type chatFunctionCallWire struct {
-	Name               string    `json:"name"`
+	Name               string    `json:"name,omitempty"`
 	Arguments          string    `json:"arguments,omitempty"`
 	TokenizedArguments *[]string `json:"TokenizedArguments,omitempty"`
 }
@@ -192,10 +194,17 @@ type chatOutputWire struct {
 }
 
 func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
-	var wire chatRequestWire
-	if err := decodeWire(body, &wire, policy); err != nil {
+	metadata, err := withoutChatParseResults(body, policy)
+	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
+	var wire chatRequestWire
+	if err := decodeWire(metadata.body, &wire, policy); err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	dropped := dropNoOpRequestFields(map[string]*json.RawMessage{
+		"service_tier": &wire.ServiceTier, "modalities": &wire.Modalities, "safety_identifier": &wire.SafetyIdentifier,
+	})
 	if err := validateChatRequestWire(wire); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
@@ -213,12 +222,22 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
-	// Decoding drops the text alias beside typed reasoning blocks, so the source
+	switch {
+	case wire.MaxCompletionTokens != nil:
+		envelope.OutputLimitField = "max_completion_tokens"
+	case wire.MaxTokens != nil:
+		envelope.OutputLimitField = "max_tokens"
+	}
+	metadata.noteProviderSpecificFields(wire.Messages)
+	// Decoding drops client metadata, no-op values and the text alias beside
+	// typed reasoning blocks and replaces null tool schemas, so the source
 	// bytes no longer describe the request and must not be replayed upstream.
-	if chatMessagesDropReasoningAlias(wire.Messages) {
+	if metadata.removed || len(dropped) > 0 || chatMessagesDropReasoningAlias(wire.Messages) || chatToolsHaveNullSchema(wire.Tools) {
 		envelope.Request = nil
 	}
-	return request, envelope, nil, nil
+	diagnostics := metadata.diagnostics(policy)
+	appendNoOpFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, dropped)
+	return request, envelope, diagnostics, nil
 }
 
 func chatMessagesDropReasoningAlias(messages []chatMessageWire) bool {
@@ -230,12 +249,25 @@ func chatMessagesDropReasoningAlias(messages []chatMessageWire) bool {
 	return false
 }
 
+func chatToolsHaveNullSchema(tools []chatToolWire) bool {
+	for _, tool := range tools {
+		if len(tool.Function.Parameters) != 0 && !jsonFieldPresent(tool.Function.Parameters) {
+			return true
+		}
+	}
+	return false
+}
+
 func validateChatRequestWire(wire chatRequestWire) error {
+	logprobs := wire.Logprobs
+	if bytes.Equal(bytes.TrimSpace(logprobs), []byte("false")) {
+		logprobs = nil // false asks for the default: no log probabilities
+	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"prompt_cache_retention": wire.PromptCacheRetention,
 		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
 		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
-		"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
+		"logprobs": logprobs, "modalities": wire.Modalities,
 		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
 		"top_logprobs":       wire.TopLogprobs,
 		"web_search_options": wire.WebSearchOptions,
@@ -278,7 +310,7 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 		ReasoningEffort: wire.ReasoningEffort, ReasoningBudgetTokens: wire.ReasoningBudget,
 		Sampling: llmprotocol.Sampling{
 			Temperature: wire.Temperature, TopP: wire.TopP, Seed: wire.Seed,
-			TopK: wire.TopK, MinP: wire.MinP, RepetitionPenalty: wire.RepetitionPenalty,
+			TopK: wire.TopK, MinP: wire.MinP, LogitBias: wire.LogitBias, RepetitionPenalty: wire.RepetitionPenalty,
 			FrequencyPenalty: wire.FrequencyPenalty, PresencePenalty: wire.PresencePenalty,
 		},
 		Trusted:            llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
@@ -307,7 +339,7 @@ func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request
 		}
 		if message.Role == llmprotocol.RoleSystem || message.Role == llmprotocol.RoleDeveloper {
 			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{
-				Role: message.Role, Content: message.Content, Name: message.Name,
+				Role: message.Role, Content: message.Content, Name: message.Name, Position: len(request.Messages),
 			})
 		} else {
 			request.Messages = append(request.Messages, message)
@@ -329,8 +361,9 @@ func decodeChatTools(tools []chatToolWire, request *llmprotocol.Request) error {
 		if toolWire.Type != "function" || toolWire.Custom != nil || strings.TrimSpace(toolWire.Function.Name) == "" {
 			return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_tool", "only function and custom tools are supported", nil)
 		}
+		// Typed clients send null for a function without arguments.
 		schema := toolWire.Function.Parameters
-		if len(schema) == 0 {
+		if !jsonFieldPresent(schema) {
 			schema = json.RawMessage(`{"type":"object"}`)
 		}
 		request.Tools = append(request.Tools, llmprotocol.Tool{
@@ -370,11 +403,6 @@ func decodeChatRequestOptions(wire chatRequestWire, request *llmprotocol.Request
 }
 
 func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
-	// Response-only LiteLLM metadata. The shared message wire accepts the
-	// field so upstream replies decode; a client request must not.
-	if err := rejectUnsupportedRequestField("messages.provider_specific_fields", wire.ProviderSpecificFields); err != nil {
-		return llmprotocol.Message{}, err
-	}
 	for _, call := range wire.ToolCalls {
 		if call.Function.TokenizedArguments != nil {
 			return llmprotocol.Message{}, llmprotocol.NewError(
@@ -796,7 +824,7 @@ func decodeChatToolChoice(raw json.RawMessage, policy llmprotocol.Policy) (llmpr
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_tool_choice",
-			"Chat Completions tool choice cannot be represented by the neutral protocol",
+			"the Router does not support the allowed_tools tool choice",
 			nil,
 		)
 	}

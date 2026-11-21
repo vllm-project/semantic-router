@@ -39,6 +39,8 @@ func TestValidateProtectionReleaseConfig(t *testing.T) {
 		{name: "session_header", release: RouterLearningProtectionReleaseConfig{Header: str("X-Session-Id")}, wantErr: "must differ from identity"},
 		{name: "conversation_header", release: RouterLearningProtectionReleaseConfig{Header: str("x-conversation-id")}, wantErr: "must differ from identity"},
 		{name: "agent_header", release: RouterLearningProtectionReleaseConfig{Header: str("x-agent")}, agent: str("x-agent"), wantErr: "must differ from identity"},
+		{name: "default_agent_header", release: RouterLearningProtectionReleaseConfig{Header: str("X-Claude-Code-Agent-Id")}, wantErr: "must differ from identity"},
+		{name: "default_agent_header_replaced", release: RouterLearningProtectionReleaseConfig{Header: str("x-claude-code-agent-id")}, agent: str("x-agent")},
 		{name: "authorization_header", release: RouterLearningProtectionReleaseConfig{Header: str("Authorization")}, wantErr: "is reserved"},
 		{name: "api_key_header", release: RouterLearningProtectionReleaseConfig{Header: str("x-api-key")}, wantErr: "is reserved"},
 		{name: "non_x_header", release: RouterLearningProtectionReleaseConfig{Header: str("anthropic-beta")}, wantErr: "is reserved"},
@@ -58,7 +60,7 @@ func TestValidateProtectionReleaseConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := RouterLearningProtectionConfig{Release: tc.release}
 			cfg.Identity.Headers.Agent = tc.agent
-			err := validateRouterLearningProtectionConfig(cfg)
+			err := validateRouterLearningProtectionConfig(cfg, RouterHeadersConfig{}.SessionIDHeaderNames())
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -73,7 +75,7 @@ func TestValidateProtectionReleaseConfig(t *testing.T) {
 }
 
 const protectionReleaseYAMLPrefix = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -86,9 +88,8 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: cheap
+recipes:
+  - name: default
 global:
   router:
     learning:

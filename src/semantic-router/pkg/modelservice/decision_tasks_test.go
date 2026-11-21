@@ -70,7 +70,7 @@ func TestComposedDecisionTaskBatchesLabelsAndRetainsUnknown(t *testing.T) {
 }
 
 func TestComposedDecisionTaskDeadlineAndDuplicateIDs(t *testing.T) {
-	definition, _ := BuiltinTask("reask")
+	definition, _ := BuiltinTask("turn_relation")
 	plan, _ := CompileTask(definition, definition.Question, ModelCard{Surfaces: []string{"decisions"}})
 	decider := taskDeciderFunc(func(context.Context, string, Request) (Response, error) { return Response{}, context.DeadlineExceeded })
 	_, results, err := ExecuteTaskPlans(context.Background(), decider, "selected", Request{State: "request"}, []TaskPlan{plan})
@@ -83,17 +83,9 @@ func TestComposedDecisionTaskDeadlineAndDuplicateIDs(t *testing.T) {
 	}
 }
 
-func TestTaskOrdinalScoreAndUnknownValues(t *testing.T) {
-	definition, _ := BuiltinTask("complexity")
+func TestTaskUnknownValues(t *testing.T) {
+	definition, _ := BuiltinTask("pii_presence")
 	plan, _ := CompileTask(definition, definition.Question, ModelCard{Surfaces: []string{"decisions"}})
-	for _, value := range []float64{0, 1.5, 2} {
-		response := Response{Answers: map[string]Answer{plan.Question.ID: {Type: "score", Score: value}}}
-		if got := reduceTaskAnswer(plan, response); got.Error != "" || got.Score != value {
-			t.Fatalf("valid ordinal %v rejected: %+v", value, got)
-		}
-	}
-	definition, _ = BuiltinTask("pii_presence")
-	plan, _ = CompileTask(definition, definition.Question, ModelCard{Surfaces: []string{"decisions"}})
 	for _, code := range []string{"unknown", "missing_answer_value", "max_length_exceeded"} {
 		decider := taskDeciderFunc(func(context.Context, string, Request) (Response, error) {
 			return Response{Answers: map[string]Answer{plan.Question.ID: {Type: "noul", Error: code}}}, nil
@@ -106,7 +98,7 @@ func TestTaskOrdinalScoreAndUnknownValues(t *testing.T) {
 }
 
 func TestChoiceTaskRejectsMalformedDistributionBeforeSuccessMetrics(t *testing.T) {
-	definition, _ := BuiltinTask("preference")
+	definition, _ := BuiltinTask("jailbreak")
 	plan, err := CompileTask(definition, definition.Question, ModelCard{Surfaces: []string{"decisions"}})
 	if err != nil {
 		t.Fatal(err)
@@ -116,32 +108,32 @@ func TestChoiceTaskRejectsMalformedDistributionBeforeSuccessMetrics(t *testing.T
 		probabilities map[string]float64
 	}{
 		{"missing", nil},
-		{"partial", map[string]float64{"concise": 1}},
-		{"unknown key", map[string]float64{"concise": .8, "invented": .2}},
-		{"nan", map[string]float64{"concise": math.NaN(), "detailed": .2}},
-		{"infinite", map[string]float64{"concise": math.Inf(1), "detailed": .2}},
-		{"negative", map[string]float64{"concise": 1.1, "detailed": -.1}},
-		{"unnormalized", map[string]float64{"concise": .8, "detailed": .4}},
+		{"partial", map[string]float64{"benign": 1}},
+		{"unknown key", map[string]float64{"benign": .8, "invented": .2}},
+		{"nan", map[string]float64{"benign": math.NaN(), "jailbreak": .2}},
+		{"infinite", map[string]float64{"benign": math.Inf(1), "jailbreak": .2}},
+		{"negative", map[string]float64{"benign": 1.1, "jailbreak": -.1}},
+		{"unnormalized", map[string]float64{"benign": .8, "jailbreak": .4}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			deployment := "malformed-choice-" + tc.name
 			decider := taskDeciderFunc(func(context.Context, string, Request) (Response, error) {
-				return Response{Answers: map[string]Answer{plan.Question.ID: {Type: "choice", Choice: "concise", Probabilities: tc.probabilities}}}, nil
+				return Response{Answers: map[string]Answer{plan.Question.ID: {Type: "choice", Choice: "benign", Probabilities: tc.probabilities}}}, nil
 			})
 			_, results, err := ExecuteTaskPlans(t.Context(), decider, deployment, Request{State: "Be brief"}, []TaskPlan{plan})
 			if err != nil || results[plan.Question.ID].Status != "error" || results[plan.Question.ID].Coverage != "unknown" {
 				t.Fatalf("malformed distribution certified: %+v %v", results, err)
 			}
-			if got := testutil.ToFloat64(taskCalls.WithLabelValues(deployment, "preference", "request", "native", "error")); got != 1 {
+			if got := testutil.ToFloat64(taskCalls.WithLabelValues(deployment, "jailbreak", "request", "native", "error")); got != 1 {
 				t.Fatalf("failed task count = %v", got)
 			}
-			if got := testutil.ToFloat64(taskResults.WithLabelValues(deployment, "preference", "request", "native", "choice:concise")); got != 0 {
+			if got := testutil.ToFloat64(taskResults.WithLabelValues(deployment, "jailbreak", "request", "native", "choice:benign")); got != 0 {
 				t.Fatalf("malformed answer recorded as successful result = %v", got)
 			}
 		})
 	}
-	for _, probabilities := range []map[string]float64{{"concise": .8, "detailed": .2}, {"concise": .8, "detailed": .20001}} {
-		if code := validateTaskAnswer(plan.Question, Answer{Type: "choice", Choice: "concise", Probabilities: probabilities}); code != "" {
+	for _, probabilities := range []map[string]float64{{"benign": .8, "jailbreak": .2}, {"benign": .8, "jailbreak": .20001}} {
+		if code := validateTaskAnswer(plan.Question, Answer{Type: "choice", Choice: "benign", Probabilities: probabilities}); code != "" {
 			t.Fatalf("native floating-point distribution rejected: %s", code)
 		}
 	}

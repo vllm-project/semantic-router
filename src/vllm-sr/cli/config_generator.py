@@ -1,16 +1,24 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
+import json
 import os
 import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from cli.api_registry import served_path_regex
 from cli.catalog_provider_projection import project_provider_models_for_envoy
+from cli.config_contract import iter_routing_profiles
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.durations import envoy_duration
-from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
-from cli.models import Model, UserConfig
+from cli.envoy_backend_pool import (
+    default_backend_ca_file,
+    is_ip_address,
+    project_envoy_backend_group,
+)
+from cli.models import Model, ProviderReliability, UserConfig
+from cli.runtime_env_names import expand_router_references
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -48,13 +56,15 @@ _RELIABILITY_DURATIONS = (
 def _envoy_reliability(model: Model) -> dict:
     """Project a model's reliability block onto the template's inputs.
 
-    Durations take the seconds form Envoy requires. A field only the native
-    gateway can honor fails the render instead of being dropped silently.
+    Durations take the seconds form Envoy requires, and the retries are the
+    ones the Router applies, the default ones included. A field only the
+    native gateway can honor fails the render instead of being dropped
+    silently.
     """
 
-    if model.reliability is None:
-        return {}
-    reliability = model.reliability.model_dump()
+    block = model.reliability or ProviderReliability()
+    reliability = block.model_dump()
+    reliability["retry_count"] = block.retries()
     if reliability.get("first_byte_timeout"):
         raise ValueError(
             f"providers.models[{model.name!r}].reliability.first_byte_timeout is "
@@ -76,9 +86,9 @@ def _check_decision_reliability(user_config: UserConfig) -> None:
     headers, which the template's ext_proc filter always allows.
     """
 
-    scopes = [("routing", user_config.routing.decisions)] + [
-        (f"recipes[{recipe.name!r}].routing", recipe.routing.decisions)
-        for recipe in user_config.recipes
+    scopes = [
+        (f"recipes[{name!r}]", recipe.decisions)
+        for name, recipe in iter_routing_profiles(user_config)
     ]
     for scope, decisions in scopes:
         for decision in decisions:
@@ -157,6 +167,65 @@ def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
     return [{"key": key, "value": value} for key, value in sorted(headers.items())]
 
 
+DEFAULT_DELEGATED_CREDENTIAL_HEADER = "x-vsr-delegated-credential"
+
+
+def _delegated_credential_headers(user_config: UserConfig) -> list[str]:
+    """Name the delegated credential headers Envoy strips ahead of ext_proc.
+
+    The credential is an authenticator output, never a client input. The
+    default name is always stripped; a configured
+    global.services.authz.delegated_credential.header is stripped too.
+    """
+    configured = None
+    services = (user_config.global_ or {}).get("services")
+    authz = services.get("authz") if isinstance(services, dict) else None
+    credential = authz.get("delegated_credential") if isinstance(authz, dict) else None
+    if isinstance(credential, dict):
+        configured = credential.get("header")
+    names = [DEFAULT_DELEGATED_CREDENTIAL_HEADER]
+    if isinstance(configured, str) and configured.strip():
+        header = configured.strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", header):
+            raise ValueError(
+                "global.services.authz.delegated_credential.header must be a "
+                f"plain header name, got {configured!r}"
+            )
+        if header not in names:
+            names.append(header)
+    return names
+
+
+def _envoy_listener_keys(listener) -> list[str]:
+    """The keys Envoy's listener accepts. Envoy expands no reference, so each
+    key is read here as the Router reads it; a key that reads the environment
+    and expands to nothing stops the render."""
+
+    if listener.api_key_files:
+        raise ValueError(
+            f"listener '{listener.name}': api_key_files is read in standalone "
+            "mode, and the --gateway extproc Envoy listener holds its keys in its "
+            'own configuration; write them in api_keys, as "${NAME}" references '
+            "to the environment"
+        )
+    keys = []
+    for index, key in enumerate(listener.api_keys or []):
+        names: list[str] = []
+
+        def lookup(name: str, names=names) -> str | None:
+            names.append(name)
+            return os.environ.get(name)
+
+        value = expand_router_references(key, lookup)
+        if names and not value:
+            raise ValueError(
+                f"listener '{listener.name}': api_keys[{index}] reads "
+                f"{', '.join(names)} and expands to an empty key"
+            )
+        keys.append(value)
+    return keys
+
+
 def generate_envoy_config_from_user_config(
     user_config: UserConfig,
     output_file: str,
@@ -201,28 +270,47 @@ def generate_envoy_config_from_user_config(
                     "mode, and --gateway extproc does not terminate TLS; serve "
                     "with --gateway standalone or remove tls from the listener"
                 )
-            if getattr(listener, "models", None):
+            restricted = [
+                name
+                for name, entry in (listener.apis or {}).items()
+                if name != "systemone" and entry.models is not None
+            ]
+            if restricted:
                 raise ValueError(
-                    f"listener '{listener.name}': models is enforced in "
-                    "standalone mode, and the --gateway extproc Envoy listener "
-                    "does not enforce it; serve with --gateway standalone or "
-                    "remove models from the listener"
+                    f"listener '{listener.name}': apis.{restricted[0]}.models is "
+                    "enforced in standalone mode, and the --gateway extproc Envoy "
+                    "listener does not enforce it; serve with --gateway standalone "
+                    "or remove models from the listener's apis"
                 )
+            if "systemone" in (listener.apis or {}):
+                raise ValueError(
+                    f"listener '{listener.name}': apis.systemone is served in "
+                    "standalone mode, and the --gateway extproc Envoy listener "
+                    "does not serve the System One API; serve with --gateway "
+                    "standalone or remove systemone from the listener's apis"
+                )
+            gate = {}
+            if listener.apis is not None:
+                served = listener.served_apis()
+                gate = {
+                    "served_path_regex": served_path_regex(served),
+                    "unserved_body": json.dumps(
+                        {
+                            "detail": f"listener {json.dumps(listener.name)} does not serve "
+                            f"this path; it serves {', '.join(served)}"
+                        }
+                    ),
+                }
             listeners.append(
                 {
+                    **gate,
                     "name": listener.name,
                     "address": os.getenv(
                         ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, listener.address
                     ),
                     "port": listener.port,
-                    "timeout": (
-                        listener.timeout if hasattr(listener, "timeout") else "300s"
-                    ),
-                    "api_keys": (
-                        list(listener.api_keys)
-                        if getattr(listener, "api_keys", None)
-                        else []
-                    ),
+                    "timeout": envoy_duration(listener.timeout or "300s"),
+                    "api_keys": _envoy_listener_keys(listener),
                     "trust_identity_headers": _trusts_identity_headers(listener),
                 }
             )
@@ -242,8 +330,9 @@ def generate_envoy_config_from_user_config(
     # Extract models and their endpoints
     # Group endpoints by model for cluster creation
     models = []
+    default_ca_file = default_backend_ca_file(user_config)
     for model in project_provider_models_for_envoy(user_config):
-        backend_group = project_envoy_backend_group(model)
+        backend_group = project_envoy_backend_group(model, default_ca_file)
         endpoints = list(backend_group.endpoints)
         has_https = backend_group.has_https
         uses_dns = backend_group.uses_dns
@@ -281,6 +370,7 @@ def generate_envoy_config_from_user_config(
                 "endpoints": endpoints,
                 "cluster_type": cluster_type,
                 "has_https": has_https,
+                "tls": backend_group.tls,
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
                 "auto_host_rewrite": auto_host_rewrite,
@@ -308,6 +398,7 @@ def generate_envoy_config_from_user_config(
         ),
         "router_api_host_is_domain": router_api_host_is_domain,
         "models": models,
+        "delegated_credential_headers": _delegated_credential_headers(user_config),
         "use_original_dst": False,  # Use static clusters for now
     }
     _check_decision_reliability(user_config)

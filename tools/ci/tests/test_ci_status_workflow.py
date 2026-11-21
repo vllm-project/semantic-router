@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import copy
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,6 +17,12 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 
 import workflow_policy_validation  # noqa: E402
+from pr_ci_events import resolve_event  # noqa: E402
+from pr_ci_pending import recover_pending  # noqa: E402
+from pr_ci_pending_fixtures import PendingClient  # noqa: E402
+from pr_ci_status import reconcile  # noqa: E402
+from test_pr_ci_pending import invoke  # noqa: E402
+from test_pr_ci_status import REPO  # noqa: E402
 from validate_workflows import load_workflows  # noqa: E402
 from workflow_policy_validation import (  # noqa: E402
     validate_gate_transport,
@@ -31,6 +39,172 @@ class CIStatusWorkflowTests(unittest.TestCase):
         self.workflows = load_workflows(errors)
         self.assertEqual(errors, [])
         self.publisher = self.workflows["ci-status.yml"]
+
+    def test_event_resolution_precedes_one_shared_qualification_lock(self):
+
+        client = PendingClient()
+        sibling = invoke(client, resolve=True)
+        normal = invoke(
+            client,
+            {"action": "completed", "workflow_run": copy.deepcopy(client.run)},
+            resolve=True,
+        )
+        lock = (
+            self.publisher.jobs["publish"]
+            .get("concurrency", self.publisher.data.get("concurrency", {}))
+            .get("group", "")
+        )
+        keys = []
+        for event_id, resolved in [(202, sibling), (101, normal)]:
+            keys.append(
+                lock.replace(
+                    "${{ needs.resolve.outputs.run_id }}", str(resolved.get("run_id"))
+                ).replace(
+                    "${{ github.event.workflow_run.id || inputs.run_id }}",
+                    str(event_id),
+                )
+            )
+        self.assertEqual(keys, ["ci-status-101", "ci-status-101"])
+
+    def test_resolver_has_no_write_permission(self):
+        job = self.publisher.jobs.get("resolve")
+        self.assertIsNotNone(job)
+        self.assertEqual(set(job["permissions"].values()), {"read"})
+
+    def test_resolver_cannot_admit_every_community_event(self):
+        self.publisher.jobs["resolve"]["if"] = (
+            "github.event_name == 'workflow_run' || (github.event_name == "
+            "'workflow_dispatch' && github.ref == 'refs/heads/main')"
+        )
+
+        errors = []
+        validate_status_publisher(self.workflows, errors)
+        self.assertTrue(
+            any("resolve must enforce" in error for error in errors), errors
+        )
+
+    def test_trigger_run_lock_cannot_replace_qualification_lock(self):
+        job = self.publisher.jobs["publish"]
+        job["concurrency"] = {
+            "group": "ci-status-${{ github.event.workflow_run.id }}",
+            "cancel-in-progress": False,
+            "queue": "max",
+        }
+        errors = []
+        validate_status_publisher(self.workflows, errors)
+        self.assertTrue(any("serialize" in error for error in errors), errors)
+
+    def test_resolver_cannot_gain_a_write_token(self):
+        job = self.publisher.jobs.setdefault("resolve", {})
+        job["permissions"] = {"contents": "read", "checks": "write"}
+        errors = []
+        validate_status_publisher(self.workflows, errors)
+        self.assertTrue(any("resolver" in error for error in errors), errors)
+
+    def test_normal_and_community_publication_share_serialized_pending_state(self):
+
+        client = PendingClient()
+        sibling = client.event()
+        normal = {"action": "completed", "workflow_run": copy.deepcopy(client.run)}
+        identities = [resolve_event(client, REPO, event) for event in (sibling, normal)]
+        template = self.publisher.jobs["publish"]["concurrency"]["group"]
+        keys = [
+            template.replace("${{ needs.resolve.outputs.run_id }}", str(i["run_id"]))
+            for i in identities
+        ]
+        self.assertEqual(keys, ["ci-status-101", "ci-status-101"])
+        locks = {key: threading.Lock() for key in keys}
+        start = threading.Barrier(2)
+
+        def execute(index):
+            start.wait(timeout=5)
+            with locks[keys[index]]:
+                if index == 0:
+                    return recover_pending(client, REPO, sibling, 101)
+                return reconcile(client, REPO, 101)
+
+        with (
+            mock.patch("subprocess.run", side_effect=AssertionError("unmocked CLI")),
+            concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            results = list(pool.map(execute, (0, 1)))
+        self.assertEqual(len(results), 2)
+        self.assertEqual(client.post_attempts, 1)
+        self.assertEqual(
+            len([c for c in client.checks if c["status"] == "in_progress"]), 1
+        )
+        self.assertFalse(any(c.get("conclusion") == "success" for c in client.checks))
+
+    def test_community_waiter_does_not_displace_terminal_publication(self):
+        concurrency = self.publisher.jobs["publish"]["concurrency"]
+        for verdict in ("success", "failure"):
+            with self.subTest(verdict=verdict):
+                client = PendingClient()
+                client.visible = {80}
+                client.write = super(PendingClient, client).write
+                client.run.update(status="in_progress", conclusion=None)
+                started = {
+                    "action": "in_progress",
+                    "workflow_run": copy.deepcopy(client.run),
+                }
+                running_job = invoke(client, started, resolve=True)
+                self.assertEqual(invoke(client, started).get("state"), "running")
+
+                client.run.update(status="completed", conclusion=verdict)
+                if verdict == "success":
+                    client.plan["deferred_verifications"] = []
+                    client.plan["required_verification_ids"] = client.plan[
+                        "expected_verification_ids"
+                    ]
+                    client.refresh_report()
+                terminal = {
+                    "action": "completed",
+                    "workflow_run": copy.deepcopy(client.run),
+                }
+                community = client.event()
+                jobs = [
+                    running_job,
+                    invoke(client, terminal, resolve=True),
+                    invoke(client, community, resolve=True),
+                ]
+                self.assertEqual(
+                    [job["mode"] for job in jobs], ["publish", "publish", "pending"]
+                )
+                groups = [
+                    concurrency["group"].replace(
+                        "${{ needs.resolve.outputs.run_id }}", str(job["run_id"])
+                    )
+                    for job in jobs
+                ]
+                self.assertEqual(groups, ["ci-status-101"] * 3)
+
+                # While the first publisher owns the group, the default
+                # Actions queue replaces its prior waiter with the new job.
+                waiting = [terminal, community]
+                if concurrency.get("queue", "single") == "single":
+                    waiting = waiting[-1:]
+                results = [invoke(client, event) for event in waiting]
+
+                self.assertEqual(
+                    [check["conclusion"] for check in client.checks],
+                    [verdict],
+                    "Community recovery displaced the terminal publisher",
+                )
+                self.assertEqual(results[0].get("state"), verdict)
+                self.assertIn("ignored", results[1])
+
+    def test_status_publisher_rejects_replacing_waiting_jobs(self):
+        for queue in (None, "single"):
+            with self.subTest(queue=queue):
+                workflows = copy.deepcopy(self.workflows)
+                concurrency = workflows["ci-status.yml"].jobs["publish"]["concurrency"]
+                if queue is None:
+                    concurrency.pop("queue", None)
+                else:
+                    concurrency["queue"] = queue
+                errors = []
+                validate_status_publisher(workflows, errors)
+                self.assertTrue(any("keep queued" in error for error in errors), errors)
 
     def test_current_workflows_preserve_the_pr_gate_contract(self) -> None:
         errors: list[str] = []
@@ -52,6 +226,26 @@ class CIStatusWorkflowTests(unittest.TestCase):
                             in error
                             for error in errors
                         ),
+                        errors,
+                    )
+
+    def test_shared_image_producer_uses_no_layer_cache(self) -> None:
+        for key in ("cache-from", "cache-to"):
+            for value in ("type=gha,scope=vllm-sr-candidate", "${{ env.LAYER_CACHE }}"):
+                with self.subTest(key=key, value=value):
+                    workflows = copy.deepcopy(self.workflows)
+                    build = next(
+                        step
+                        for step in workflows["build-artifacts.yml"].jobs["image"][
+                            "steps"
+                        ]
+                        if "docker/build-push-action" in step.get("uses", "")
+                    )
+                    build["with"][key] = value
+                    errors: list[str] = []
+                    validate_pr_contract(workflows, errors)
+                    self.assertIn(
+                        "shared image producer must not import or export a layer cache",
                         errors,
                     )
 

@@ -39,39 +39,84 @@ func redactPayload(payload any) bool {
 	case map[string]any:
 		return redactObjectPayload(typed)
 	case []any:
-		return redactRecordItems(typed)
+		return redactEach(typed, redactRecordMap)
 	default:
 		return false
 	}
 }
 
+// redactObjectPayload redacts a record, a list's records or runs, a
+// trajectory's messages and routes, and a run's summary and calls. A
+// trajectory route repeats a record's route diagnostics and the agent hash
+// from its session policy, and a run what its records hold, so they are
+// redacted the same way.
 func redactObjectPayload(payload map[string]any) bool {
 	changed := redactRecordMap(payload)
-	if messages, ok := payload["messages"].([]any); ok && redactTrajectoryMessages(messages) {
-		changed = true
-	}
-	if data, ok := payload["data"].([]any); ok && redactRecordItems(data) {
-		changed = true
-	}
-	return changed
-}
-
-func redactTrajectoryMessages(messages []any) bool {
-	changed := false
-	for _, item := range messages {
-		message, ok := item.(map[string]any)
-		if ok && redactTrajectoryMessageMap(message) {
+	for _, list := range []struct {
+		field  string
+		redact func(map[string]any) bool
+	}{
+		{"messages", redactTrajectoryMessageMap},
+		{"data", redactRecordOrRunMap},
+		{"routes", redactRouteDiagnosticsMap},
+		{"calls", redactRunCallMap},
+	} {
+		if items, ok := payload[list.field].([]any); ok && redactEach(items, list.redact) {
 			changed = true
 		}
 	}
+	if redactNestedMap(payload, "run", redactRecordOrRunMap) {
+		changed = true
+	}
 	return changed
 }
 
-func redactRecordItems(items []any) bool {
+func redactRecordOrRunMap(item map[string]any) bool {
+	changed := redactRecordMap(item)
+	return redactRunSummaryMap(item) || changed
+}
+
+// redactRunSummaryMap clears a run's agent hashes and the text of the
+// outcomes reported for it, keeping its tree, labels and counts. Its prompt
+// and session name are cleared with a record's fields.
+func redactRunSummaryMap(run map[string]any) bool {
+	changed := false
+	if agents, ok := run["agents"].([]any); ok && redactEach(agents, redactAgentIdentityMap) {
+		changed = true
+	}
+	outcome, _ := run["outcome"].(map[string]any)
+	if reported, ok := outcome["reported"].([]any); ok && redactEach(reported, func(item map[string]any) bool {
+		return redactOutcomes([]any{item["outcome"]})
+	}) {
+		changed = true
+	}
+	return changed
+}
+
+// redactRunCallMap clears a run call's protection and Looper reason and its
+// reported outcomes' text, and its Looper hops' too.
+func redactRunCallMap(call map[string]any) bool {
+	changed := clearStringField(call, "reason")
+	if redactOutcomes(call["outcomes"]) {
+		changed = true
+	}
+	if hops, ok := call["hops"].([]any); ok && redactEach(hops, redactRunCallMap) {
+		changed = true
+	}
+	return changed
+}
+
+// redactAgentIdentityMap clears the hashes of the agent ids a harness sent.
+func redactAgentIdentityMap(agent map[string]any) bool {
+	changed := clearStringField(agent, "id")
+	return clearStringField(agent, "parent_id") || changed
+}
+
+func redactEach(items []any, redact func(map[string]any) bool) bool {
 	changed := false
 	for _, item := range items {
-		record, ok := item.(map[string]any)
-		if ok && redactRecordMap(record) {
+		object, ok := item.(map[string]any)
+		if ok && redact(object) {
 			changed = true
 		}
 	}
@@ -125,6 +170,9 @@ func redactRecordMap(record map[string]any) bool {
 	if clearObjectField(record, "session_policy") {
 		changed = true
 	}
+	if redactNestedMap(record, "agent", redactAgentIdentityMap) {
+		changed = true
+	}
 	if redactNestedMap(record, "route_diagnostics", redactRouteDiagnosticsMap) {
 		changed = true
 	}
@@ -134,12 +182,36 @@ func redactRecordMap(record map[string]any) bool {
 	if redactNestedMap(record, "tool_trace", redactToolTraceMap) {
 		changed = true
 	}
+	if redactNestedMap(record, "review", redactReviewMap) {
+		changed = true
+	}
+	return changed
+}
+
+// redactReviewMap keeps an approval review's status and verdict enums and
+// the reviewed tool's name, and clears the reviewer's rationale and the
+// planned action's command, directory and arguments.
+func redactReviewMap(review map[string]any) bool {
+	changed := false
+	if assessment, ok := review["assessment"].(map[string]any); ok && clearStringField(assessment, "rationale") {
+		changed = true
+	}
+	if action, ok := review["action"].(map[string]any); ok {
+		for _, field := range []string{"summary", "cwd", "arguments"} {
+			if clearStringField(action, field) {
+				changed = true
+			}
+		}
+	}
+	if changed {
+		review["content_redacted"] = true
+	}
 	return changed
 }
 
 func clearRecordPayloadFields(record map[string]any) bool {
 	changed := false
-	for _, field := range []string{"request_body", "response_body", "prompt", "tool_definitions"} {
+	for _, field := range []string{"request_body", "response_body", "prompt", "prompt_original_sha256", "tool_definitions", "session_name"} {
 		if clearStringField(record, field) {
 			changed = true
 		}
@@ -209,6 +281,7 @@ func redactNestedMap(record map[string]any, field string, redact func(map[string
 func redactRouteDiagnosticsMap(diagnostics map[string]any) bool {
 	changed := false
 	for _, field := range []string{
+		"agent",
 		"selection_reasoning",
 		"session_reason",
 		"hard_lock_reason",

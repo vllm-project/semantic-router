@@ -2,10 +2,7 @@ package embedding
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
@@ -23,12 +20,6 @@ type TextRequest struct {
 type ConfigurableProvider interface {
 	Provider
 	EmbedWithOptions(context.Context, string, Options) ([]float32, error)
-}
-type ImageProvider interface {
-	EmbedImage(context.Context, []byte, int) ([]float32, error)
-}
-type AudioProvider interface {
-	EmbedAudio(context.Context, AudioRequest) ([]float32, error)
 }
 
 // InputChecker reports whether the model reads text whole: false when it
@@ -102,27 +93,6 @@ func EmbedFullInput(ctx context.Context, provider Provider, text string, options
 	return Embed(ctx, provider, text, options)
 }
 
-func Image(ctx context.Context, provider Provider, imageRef string, dimension int) ([]float32, error) {
-	p, ok := provider.(ImageProvider)
-	if !ok {
-		return nil, fmt.Errorf("%w: embedding provider does not support images", binding.ErrCapability)
-	}
-	var payload []byte
-	var err error
-	if strings.HasPrefix(imageRef, "/") || strings.HasPrefix(imageRef, "./") {
-		payload, err = os.ReadFile(imageRef)
-	} else {
-		if index := strings.Index(imageRef, ";base64,"); index >= 0 {
-			imageRef = imageRef[index+8:]
-		}
-		payload, err = base64.StdEncoding.DecodeString(imageRef)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("%w: decode embedding image: %w", binding.ErrInvalidInput, err)
-	}
-	return p.EmbedImage(ctx, payload, dimension)
-}
-
 type providerView struct {
 	Provider
 	options Options
@@ -179,22 +149,6 @@ func (p *providerView) EmbedBatch(ctx context.Context, texts []string) ([][]floa
 		result[i] = value
 	}
 	return result, nil
-}
-
-func (p *providerView) EmbedImage(ctx context.Context, data []byte, dim int) ([]float32, error) {
-	q, ok := p.Provider.(ImageProvider)
-	if !ok {
-		return nil, fmt.Errorf("%w: embedding provider does not support images", binding.ErrCapability)
-	}
-	return q.EmbedImage(ctx, data, dim)
-}
-
-func (p *providerView) EmbedAudio(ctx context.Context, request AudioRequest) ([]float32, error) {
-	q, ok := p.Provider.(AudioProvider)
-	if !ok {
-		return nil, fmt.Errorf("%w: embedding provider does not support audio", binding.ErrCapability)
-	}
-	return q.EmbedAudio(ctx, request)
 }
 
 // FitsInput asks at the view's options, so the answer shares the call that

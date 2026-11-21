@@ -32,7 +32,7 @@ func TestProcessRequestBodyPreservesDecisionContextErrors(t *testing.T) {
 				router.Config.Decisions = []config.Decision{{
 					Name: "default", ModelRefs: []config.ModelRef{{Model: "worker"}},
 				}}
-				classifier, err := classification.NewClassifier(router.Config, nil, nil, nil)
+				classifier, err := classification.NewClassifier(router.Config)
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = classifier.Close() })
 				router.Classifier = classifier

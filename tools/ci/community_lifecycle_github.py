@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -19,6 +21,8 @@ from community_lifecycle_policy import (
     PR_STATE_LABELS,
     RELEASE_BLOCKER,
     WORKGROUP_LABELS,
+    WORKGROUP_OPTIONS,
+    PullRequestEvaluation,
     evaluate_issue_acceptance,
     evaluate_pull_request,
     extract_related_issue_numbers,
@@ -27,14 +31,37 @@ from community_lifecycle_policy import (
     plan_issue_kind,
     title_format_error,
 )
+from community_reviewers import (
+    DEFAULT_REVIEWERS,
+    desired_workgroup_reviewer,
+    workgroup_reviewers,
+)
+
+# gh prints "message (HTTP 502)" for a JSON error and a bare "HTTP 502" otherwise.
+SERVER_ERROR = re.compile(
+    r"(?:\(HTTP |^gh: HTTP )(5[0-9]{2})\)?\s*\Z", flags=re.MULTILINE
+)
+RETRY_DELAYS_SECONDS: tuple[int, ...] = (5, 15, 45)
+RETRY_BUDGET_SECONDS = 120
 
 # Requests the acceptance sweep leaves to every other workflow sharing the
 # repository's Actions token, whose hourly budget is about a thousand.
 API_RESERVE_REQUESTS = 300
 
 
+def is_read(method: str, endpoint: str, payload: dict[str, Any] | None) -> bool:
+    """A GET, or a GraphQL query, which travels as a POST but only reads."""
+
+    if method == "GET":
+        return True
+    query = (payload or {}).get("query") or ""
+    return endpoint == "graphql" and query.lstrip().startswith("query")
+
+
 class GitHubClient:
     """Call ``gh api`` and remember the token's remaining REST budget."""
+
+    retry_budget_seconds = RETRY_BUDGET_SECONDS
 
     def __init__(self) -> None:
         self.rate_limit_remaining: int | None = None
@@ -46,27 +73,53 @@ class GitHubClient:
         method: str = "GET",
         payload: dict[str, Any] | None = None,
         ignore_not_found: bool = False,
+        ignore_unprocessable: bool = False,
     ) -> Any:
         command = ["gh", "api", endpoint, "--method", method, "--include"]
         if payload is not None:
             command.extend(["--input", "-"])
-        result = subprocess.run(
-            command,
-            input=json.dumps(payload) if payload is not None else None,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        headers, body = split_http_response(result.stdout)
-        remaining = headers.get("x-ratelimit-remaining", "")
-        if remaining.isdigit():
-            self.rate_limit_remaining = int(remaining)
-        if result.returncode != 0:
+        read = is_read(method, endpoint, payload)
+        delays = iter(RETRY_DELAYS_SECONDS)
+        while True:
+            result = subprocess.run(
+                command,
+                input=json.dumps(payload) if payload is not None else None,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            headers, body = split_http_response(result.stdout)
+            remaining = headers.get("x-ratelimit-remaining", "")
+            # GraphQL's separate pool must not replace the REST reserve.
+            if (
+                remaining.isdigit()
+                and headers.get("x-ratelimit-resource", "core") == "core"
+            ):
+                self.rate_limit_remaining = int(remaining)
+            if result.returncode == 0:
+                return json.loads(body) if body.strip() else None
             if ignore_not_found and "HTTP 404" in result.stderr:
                 return None
-            sys.stderr.write(result.stderr)
-            raise SystemExit(result.returncode)
-        return json.loads(body) if body.strip() else None
+            if ignore_unprocessable and "HTTP 422" in result.stderr:
+                sys.stderr.write(result.stderr)
+                return None
+            server_error = SERVER_ERROR.search(result.stderr[-256:])
+            delay = next(delays, None)
+            # A write that failed with a 5xx may already have landed, so only reads wait.
+            if (
+                not read
+                or server_error is None
+                or delay is None
+                or delay > self.retry_budget_seconds
+            ):
+                sys.stderr.write(result.stderr)
+                raise SystemExit(result.returncode)
+            print(
+                f"::warning::GitHub returned HTTP {server_error[1]} for a read;"
+                f" retrying in {delay} seconds."
+            )
+            self.retry_budget_seconds -= delay
+            time.sleep(delay)
 
 
 def split_http_response(output: str) -> tuple[dict[str, str], str]:
@@ -419,33 +472,87 @@ def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
         raise SystemExit(1)
 
 
+ACCEPTANCE_QUEUE_QUERY = """
+  query ($owner: String!, $repo: String!, $label: String!, $since: DateTime,
+         $cursor: String) {
+    repository(owner: $owner, name: $repo) {
+      issues(
+        first: 50
+        after: $cursor
+        states: OPEN
+        labels: [$label]
+        filterBy: {since: $since}
+        orderBy: {field: UPDATED_AT, direction: DESC}
+      ) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          number
+          comments(last: 100) {
+            totalCount
+            nodes { body author { __typename login } }
+          }
+        }
+      }
+    }
+  }
+"""
+
+
+def accept_actors(comments: list[dict[str, Any]]) -> set[str]:
+    """Return the REST logins of the authors of exact ``/accept`` comments."""
+
+    actors: set[str] = set()
+    for comment in comments:
+        author = comment.get("author") or {}
+        login = author.get("login")
+        if comment.get("body") == "/accept" and login:
+            # GraphQL drops the "[bot]" suffix that REST keeps on app logins.
+            actors.add(f"{login}[bot]" if author.get("__typename") == "Bot" else login)
+    return actors
+
+
 def acceptance_sweep_candidates(
     client: GitHubClient, repo: str, since: str | None
-) -> list[int]:
-    """List open ``needs-acceptance`` issues with comments, newest activity first.
+) -> list[tuple[int, set[str] | None]]:
+    """List open ``needs-acceptance`` issues with their ``/accept`` actors.
 
-    The numbers are collected before any write because accepting an issue
-    removes it from the listing being paged.
+    Newest activity comes first. Each request returns fifty issues with their
+    latest hundred comments; ``None`` marks a longer thread, whose comments the
+    sweep reads separately. The list is complete before any write because
+    accepting an issue removes it from the queue being paged.
     """
 
-    query = (
-        f"repos/{repo}/issues?state=open&labels={quote(NEEDS_ACCEPTANCE, safe='')}"
-        f"&sort=updated&direction=desc&per_page={API_PAGE_SIZE}"
-    )
-    if since:
-        query += f"&since={quote(since, safe='')}"
-    numbers: list[int] = []
-    page = 1
+    owner, name = repo.split("/", 1)
+    candidates: list[tuple[int, set[str] | None]] = []
+    cursor: str | None = None
     while True:
-        issues = client.request(f"{query}&page={page}") or []
-        numbers.extend(
-            int(issue["number"])
-            for issue in issues
-            if "pull_request" not in issue and issue.get("comments")
+        result = client.request(
+            "graphql",
+            method="POST",
+            payload={
+                "query": ACCEPTANCE_QUEUE_QUERY,
+                "variables": {
+                    "owner": owner,
+                    "repo": name,
+                    "label": NEEDS_ACCEPTANCE,
+                    "since": since,
+                    "cursor": cursor,
+                },
+            },
         )
-        if len(issues) < API_PAGE_SIZE:
-            return numbers
-        page += 1
+        issues = result["data"]["repository"]["issues"]
+        for issue in issues["nodes"]:
+            thread = issue["comments"]
+            complete = thread["totalCount"] <= len(thread["nodes"])
+            candidates.append(
+                (
+                    int(issue["number"]),
+                    accept_actors(thread["nodes"]) if complete else None,
+                )
+            )
+        if not issues["pageInfo"]["hasNextPage"]:
+            return candidates
+        cursor = issues["pageInfo"]["endCursor"]
 
 
 def sweep_issue_acceptance(
@@ -457,8 +564,9 @@ def sweep_issue_acceptance(
 ) -> None:
     """Backfill missed ``/accept`` decisions without spending the API budget.
 
-    Each candidate costs a few requests, so the sweep stops before one once
-    the token's remaining budget reaches ``reserve``. Accepted issues leave
+    The queue is read through GraphQL, so only an issue with an ``/accept``
+    costs REST requests, a few each. The sweep stops before one once the
+    token's remaining REST budget reaches ``reserve``. Accepted issues leave
     ``needs-acceptance``, so the next run resumes with the rest.
     """
 
@@ -468,7 +576,7 @@ def sweep_issue_acceptance(
     failures = 0
     window = f"updated since {since}" if since else "open"
     print(f"::notice::Found {len(candidates)} {window} issue(s) awaiting acceptance.")
-    for index, number in enumerate(candidates):
+    for index, (number, queued_actors) in enumerate(candidates):
         remaining = client.rate_limit_remaining
         if remaining is not None and remaining <= reserve:
             print(
@@ -478,7 +586,11 @@ def sweep_issue_acceptance(
             )
             break
         try:
-            actors = issue_acceptance_actors(client, repo, number)
+            actors = (
+                issue_acceptance_actors(client, repo, number)
+                if queued_actors is None
+                else queued_actors
+            )
             if not actors:
                 results["uncommanded"] += 1
                 continue
@@ -526,20 +638,34 @@ def accept_issue_queue(client: GitHubClient, event: dict[str, Any]) -> None:
     )
 
 
-PULL_REQUEST_QUERY = """
-  query ($owner: String!, $repo: String!, $number: Int!) {
-    repository(owner: $owner, name: $repo) {
-      pullRequest(number: $number) {
+PULL_REQUEST_GRAPH_FIELDS = """
         reviewDecision
         mergeStateStatus
+        reviewRequests(first: 100) {
+          nodes { requestedReviewer { ... on User { login } } }
+        }
+        latestReviews(first: 100) { nodes { author { login } } }
         closingIssuesReferences(first: 20) { nodes { number } }
         commits(last: 1) {
           nodes { commit { statusCheckRollup { state } } }
         }
+"""
+
+PULL_REQUEST_QUERY = (
+    """
+  query ($owner: String!, $repo: String!, $number: Int!) {
+    repository(owner: $owner, name: $repo) {
+      pullRequest(number: $number) {
+"""
+    + PULL_REQUEST_GRAPH_FIELDS
+    + """
       }
     }
   }
 """
+)
+
+PR_SWEEP_BATCH_SIZE = 5
 
 
 def pull_request_graph(client: GitHubClient, repo: str, number: int) -> dict[str, Any]:
@@ -558,11 +684,37 @@ def pull_request_graph(client: GitHubClient, repo: str, number: int) -> dict[str
     return repository.get("pullRequest") or {}
 
 
+def pull_request_graph_batch(
+    client: GitHubClient, repo: str, numbers: list[int]
+) -> dict[str, Any]:
+    """Load sweep signals and fields that detect stale REST list data."""
+    owner, name = repo.split("/", 1)
+    fields = "\n".join(
+        f"pr{number}: pullRequest(number: {number}) {{"
+        f" state isDraft updatedAt headRefOid {PULL_REQUEST_GRAPH_FIELDS} }}"
+        for number in numbers
+    )
+    result = client.request(
+        "graphql",
+        method="POST",
+        payload={
+            "query": "query ($owner: String!, $repo: String!) {"
+            " repository(owner: $owner, name: $repo) {\n" + fields + "\n} }",
+            "variables": {"owner": owner, "repo": name},
+        },
+    )
+    if not result or result.get("errors"):
+        return {}
+    return (result.get("data") or {}).get("repository") or {}
+
+
 def linked_issues_for_pull_request(
     client: GitHubClient,
     repo: str,
     pull_request: dict[str, Any],
     graph: dict[str, Any] | None = None,
+    *,
+    issue_cache: dict[int, dict[str, Any] | None] | None = None,
 ) -> list[dict[str, Any]]:
     if graph is None:
         graph = pull_request_graph(client, repo, int(pull_request["number"]))
@@ -576,12 +728,16 @@ def linked_issues_for_pull_request(
             repository=repo,
         )
     )
+    if issue_cache is None:
+        issue_cache = {}
     issues = []
     for issue_number in sorted(issue_numbers):
-        issue = client.request(
-            f"repos/{repo}/issues/{issue_number}",
-            ignore_not_found=True,
-        )
+        if issue_number not in issue_cache:
+            issue_cache[issue_number] = client.request(
+                f"repos/{repo}/issues/{issue_number}",
+                ignore_not_found=True,
+            )
+        issue = issue_cache[issue_number]
         if issue and not issue.get("pull_request"):
             issues.append(issue)
     return issues
@@ -620,12 +776,15 @@ def sync_pull_request(
     number: int,
     *,
     validation_succeeded: bool = True,
+    issue_cache: dict[int, dict[str, Any] | None] | None = None,
 ) -> None:
     pull_request = client.request(f"repos/{repo}/pulls/{number}", ignore_not_found=True)
     if not pull_request:
         return
     graph = pull_request_graph(client, repo, number)
-    linked = linked_issues_for_pull_request(client, repo, pull_request, graph)
+    linked = linked_issues_for_pull_request(
+        client, repo, pull_request, graph, issue_cache=issue_cache
+    )
     signals = pull_request_signals(graph)
     evaluation = evaluate_pull_request(
         pull_request,
@@ -633,7 +792,17 @@ def sync_pull_request(
         validation_succeeded=validation_succeeded,
         **signals,
     )
+    apply_pull_request_evaluation(client, repo, number, pull_request, graph, evaluation)
 
+
+def apply_pull_request_evaluation(
+    client: GitHubClient,
+    repo: str,
+    number: int,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any],
+    evaluation: PullRequestEvaluation,
+) -> None:
     current_labels = label_names(pull_request)
     desired_state = (
         {evaluation.state_label} if pull_request.get("state") == "open" else set()
@@ -661,6 +830,144 @@ def sync_pull_request(
             payload={"milestone": evaluation.milestone_number},
         )
 
+    if (
+        pull_request.get("state") == "open"
+        and not pull_request.get("draft")
+        and evaluation.valid
+    ):
+        request_workgroup_review(
+            client,
+            repo,
+            pull_request,
+            graph,
+            evaluation.owner_label,
+            current_workgroups,
+        )
+
+
+WORKGROUP_REVIEW_MARKER = "<!-- community-lifecycle:workgroup-review -->"
+WORKGROUP_NAMES = {label: name for name, label in WORKGROUP_OPTIONS.items()}
+
+
+def workgroup_review_comment(
+    owner_label: str, reviewer: str, alternates: list[str]
+) -> str:
+    """Name the requested Lead; code spans keep the alternates un-notified."""
+
+    advice = "To speed up the review, mention them in a reply."
+    if alternates:
+        handles = " or ".join(f"`@{login}`" for login in alternates)
+        advice += f" No response? Ask another Lead: {handles}."
+    return (
+        f"{WORKGROUP_REVIEW_MARKER}\n"
+        f"**Reviewer:** @{reviewer}, {WORKGROUP_NAMES[owner_label]} Lead\n\n"
+        f"{advice}"
+    )
+
+
+def announce_workgroup_review(
+    client: GitHubClient, repo: str, number: int, body: str
+) -> None:
+    """Keep one review comment per PR, editing it when the Lead changes."""
+
+    comments = (
+        client.request(f"repos/{repo}/issues/{number}/comments?per_page=100") or []
+    )
+    existing = next(
+        (
+            comment
+            for comment in comments
+            if WORKGROUP_REVIEW_MARKER in (comment.get("body") or "")
+        ),
+        None,
+    )
+    if existing is None:
+        client.request(
+            f"repos/{repo}/issues/{number}/comments",
+            method="POST",
+            payload={"body": body},
+        )
+    elif existing.get("body") != body:
+        client.request(
+            f"repos/{repo}/issues/comments/{existing['id']}",
+            method="PATCH",
+            payload={"body": body},
+        )
+
+
+def request_workgroup_review(
+    client: GitHubClient,
+    repo: str,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any],
+    owner_label: str | None,
+    previous_workgroups: set[str],
+) -> None:
+    """Request one Lead of the owning group unless one is already engaged."""
+
+    number = int(pull_request["number"])
+    author = (pull_request.get("user") or {}).get("login") or ""
+    reviewers = workgroup_reviewers(owner_label, author)
+    leads = {login.casefold() for login in reviewers}
+    keep = leads | {login.casefold() for login in DEFAULT_REVIEWERS}
+    requested_logins = {
+        requested_user["login"].casefold()
+        for node in (graph.get("reviewRequests") or {}).get("nodes") or []
+        if (requested_user := node.get("requestedReviewer"))
+        and requested_user.get("login")
+    }
+    for previous_owner in previous_workgroups - {owner_label}:
+        previous_reviewer = desired_workgroup_reviewer(previous_owner, number, author)
+        if (
+            previous_reviewer
+            and previous_reviewer.casefold() in requested_logins
+            and previous_reviewer.casefold() not in keep
+        ):
+            client.request(
+                f"repos/{repo}/pulls/{number}/requested_reviewers",
+                method="DELETE",
+                payload={"reviewers": [previous_reviewer]},
+            )
+
+    reviewed_logins = {
+        review_author["login"].casefold()
+        for node in (graph.get("latestReviews") or {}).get("nodes") or []
+        if (review_author := node.get("author")) and review_author.get("login")
+    }
+    if not reviewers or leads & (requested_logins | reviewed_logins):
+        return
+
+    # GitHub refuses a Lead who is not yet a collaborator, such as one with a
+    # pending invitation; the next Lead in the rotation takes the request.
+    start = number % len(reviewers)
+    ordered = reviewers[start:] + reviewers[:start]
+    for index, reviewer in enumerate(ordered):
+        if (
+            client.request(
+                f"repos/{repo}/pulls/{number}/requested_reviewers",
+                method="POST",
+                payload={"reviewers": [reviewer]},
+                ignore_unprocessable=True,
+            )
+            is not None
+        ):
+            print(
+                f"::notice title=Review requested on #{number}::"
+                f"Requested {reviewer} for {owner_label}."
+            )
+            alternates = list(ordered[index + 1 : index + 3])
+            announce_workgroup_review(
+                client,
+                repo,
+                number,
+                workgroup_review_comment(owner_label, reviewer, alternates),
+            )
+            return
+    print(
+        f"::warning title=No review requested on #{number}::"
+        f"GitHub refused every {owner_label} Lead."
+    )
+
 
 def sync_pull_request_event(client: GitHubClient, event: dict[str, Any]) -> None:
     run = event.get("workflow_run") or {}
@@ -683,6 +990,44 @@ def sync_pull_request_event(client: GitHubClient, event: dict[str, Any]) -> None
     )
 
 
+def sync_listed_pull_request(
+    client: GitHubClient,
+    repo: str,
+    pull_request: dict[str, Any],
+    graph: dict[str, Any] | None,
+) -> None:
+    number = int(pull_request["number"])
+    if (
+        pull_request.get("state") != "open"
+        or not graph
+        or graph.get("state") != "OPEN"
+        or graph.get("isDraft") != pull_request.get("draft")
+        or graph.get("updatedAt") != pull_request.get("updated_at")
+        or graph.get("headRefOid") != (pull_request.get("head") or {}).get("sha")
+    ):
+        sync_pull_request(client, repo, number)
+        return
+
+    issue_cache: dict[int, dict[str, Any] | None] = {}
+    linked = linked_issues_for_pull_request(
+        client, repo, pull_request, graph, issue_cache=issue_cache
+    )
+    signals = pull_request_signals(graph)
+    evaluation = evaluate_pull_request(pull_request, linked, **signals)
+    # The current label can agree with a stale batch result (#3786). Confirm
+    # whenever DIRTY, CLEAN, or an unknown merge state could change the decision.
+    if any(
+        evaluate_pull_request(
+            pull_request, linked, **{**signals, "merge_state": merge_state}
+        ).state_label
+        != evaluation.state_label
+        for merge_state in ("DIRTY", "CLEAN", None)
+    ):
+        sync_pull_request(client, repo, number, issue_cache=issue_cache)
+        return
+    apply_pull_request_evaluation(client, repo, number, pull_request, graph, evaluation)
+
+
 def sync_open_pull_requests(client: GitHubClient, repo: str) -> None:
     page = 1
     while True:
@@ -692,8 +1037,18 @@ def sync_open_pull_requests(client: GitHubClient, repo: str) -> None:
             )
             or []
         )
-        for pull_request in pull_requests:
-            sync_pull_request(client, repo, int(pull_request["number"]))
+        for start in range(0, len(pull_requests), PR_SWEEP_BATCH_SIZE):
+            batch = pull_requests[start : start + PR_SWEEP_BATCH_SIZE]
+            graphs = pull_request_graph_batch(
+                client, repo, [int(pr["number"]) for pr in batch]
+            )
+            for pull_request in batch:
+                sync_listed_pull_request(
+                    client,
+                    repo,
+                    pull_request,
+                    graphs.get(f"pr{pull_request['number']}"),
+                )
         if len(pull_requests) < API_PAGE_SIZE:
             return
         page += 1

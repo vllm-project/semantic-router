@@ -77,6 +77,6 @@ API 密钥必须来自密钥源，不得提交到配置中。vector store 访问
 
 ## 参考资料 {#references}
 
-- [当前 RAG 插件指南](../tutorials/plugin/rag)
+- [当前 RAG 源指南](../tutorials/plugin/context#rag-sources)
 - [OpenAI vector-store search API](https://developers.openai.com/api/reference/resources/vector_stores/methods/search)
 - [OpenAI File Search guide](https://developers.openai.com/api/docs/guides/tools-file-search)

@@ -19,22 +19,22 @@ func TestValidateDecisionSignalReferences_WhitespaceRejected(t *testing.T) {
 		{
 			name:      "leading whitespace on keyword name",
 			node:      RuleNode{Type: SignalTypeKeyword, Name: " billing"},
-			wantError: `routing.decisions["test-decision"]: signal keyword reference " billing" has surrounding whitespace; expected "billing" without padding`,
+			wantError: `recipes[test-recipe].decisions["test-decision"]: signal keyword reference " billing" has surrounding whitespace; expected "billing" without padding`,
 		},
 		{
 			name:      "trailing whitespace on keyword name",
 			node:      RuleNode{Type: SignalTypeKeyword, Name: "billing "},
-			wantError: `routing.decisions["test-decision"]: signal keyword reference "billing " has surrounding whitespace; expected "billing" without padding`,
+			wantError: `recipes[test-recipe].decisions["test-decision"]: signal keyword reference "billing " has surrounding whitespace; expected "billing" without padding`,
 		},
 		{
 			name:      "both sides whitespace on keyword name",
 			node:      RuleNode{Type: SignalTypeKeyword, Name: " billing "},
-			wantError: `routing.decisions["test-decision"]: signal keyword reference " billing " has surrounding whitespace; expected "billing" without padding`,
+			wantError: `recipes[test-recipe].decisions["test-decision"]: signal keyword reference " billing " has surrounding whitespace; expected "billing" without padding`,
 		},
 		{
 			name:      "tab character on domain name",
 			node:      RuleNode{Type: SignalTypeDomain, Name: "\tucla"},
-			wantError: `routing.decisions["test-decision"]: signal domain reference "\tucla" has surrounding whitespace; expected "ucla" without padding`,
+			wantError: `recipes[test-recipe].decisions["test-decision"]: signal domain reference "\tucla" has surrounding whitespace; expected "ucla" without padding`,
 		},
 	}
 
@@ -100,7 +100,7 @@ func TestValidateDecisionSignalReferences_AuthzNamesTheRole(t *testing.T) {
 		{
 			name:      "binding name",
 			reference: "admins",
-			wantError: `routing.decisions["admin-route"]: signal authz("admins") is not declared in this recipe`,
+			wantError: `recipes[test-recipe].decisions["admin-route"]: signal authz("admins") is not declared in this recipe`,
 		},
 	}
 

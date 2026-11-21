@@ -43,7 +43,7 @@ kubectl explain semanticrouter.spec --recursive
 | `service` | Service 类型以及 API、gRPC 和指标端口。 |
 | `resources` | 容器 CPU、内存及其他资源请求/限制。 |
 | `persistence` | 模型存储 PVC 设置或已有 claim。 |
-| `config` | Operator 配置适配器以及规范 `routing` 对象。 |
+| `config` | Operator 配置适配器以及规范的 `recipes`、`entrypoints`、`plugins` 和 `models`。 |
 | `toolsDb` | 为 Router 工具选择物化的函数工具记录。 |
 | `vllmEndpoints` | 作为规范 provider 和 Model Card 发现的模型服务。 |
 | `autoscaling` | HPA 启用以及 CPU/内存目标。 |
@@ -80,10 +80,10 @@ spec:
 
 ## `config` {#config}
 
-Operator 始终渲染规范的 v0.3 Router 文档。其配置表面分为两部分：
+Operator 始终渲染规范的 v0.5 Router 文档。其配置表面分为两部分：
 
-- `config.routing` 透传规范 routing 对象，包括 Model Card、信号、投影、决策、算法和路由插件；
-- 类型化适配器字段如 `response_cache`、`tools`、`prompt_guard`、`classifier`、`complexity_rules`、`reasoning_effort`、`api` 和 `observability` 会被转换到规范的 provider 或 `global` 位置。
+- `config.recipes`、`config.entrypoints`、`config.plugins` 和 `config.models` 透传规范的配方、入口点、`global.plugins` 和提供商模型的事实；`config.routing` 已移除并会被拒绝；
+- 类型化适配器字段如 `response_cache`、`complexity_rules`、`reasoning_effort`、`api`、`observability` 和 `streamed_body` 会被转换到规范的 provider 或 `global` 位置。
 
 不要假设本地 `config.yaml` 中的任意键可以直接放在 `spec.config` 下。在本地 YAML 与 Operator 之间迁移时，使用 CRD schema 和[配置工作流](../installation/configuration-workflows)。
 
@@ -107,6 +107,7 @@ spec:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: SYSTEMONE_KEY}
         timeout_ms: 1500
       local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}

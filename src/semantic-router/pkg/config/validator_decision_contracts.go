@@ -38,7 +38,7 @@ func validateDecisionReferences(cfg *RouterConfig, decision Decision) error {
 	if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
 		return err
 	}
-	warnUnguardedClassifierConditions(decision)
+	warnUnguardedSystemOneConditions(decision)
 	if err := validateDecisionAnnotations(decision); err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ func validateDecisionExecution(cfg *RouterConfig, decision Decision) error {
 	if err := validateDecisionAutomaticOutput(decision); err != nil {
 		return err
 	}
-	if err := validateDecisionPromptModel(cfg, decision); err != nil {
+	if err := validateDecisionAutomaticOutputCandidates(cfg, decision); err != nil {
 		return err
 	}
 	if err := validateDecisionFusionFallbackTarget(cfg, decision); err != nil {

@@ -127,14 +127,14 @@ func TestHopClientBoundsEachCallByTheLooperTimeout(t *testing.T) {
 }
 
 func TestTemplateRunsTheAlgorithmAsOneStep(t *testing.T) {
-	program, err := Template(&config.LooperConfig{}, config.DecisionAlgorithmRatings, nil)
+	program, err := Template(&config.LooperConfig{}, config.DecisionAlgorithmRatings, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(program.Steps) != 2 || program.Steps[0].Type != StepType || program.Steps[1].Type != graph.TypeRespond {
 		t.Fatalf("steps %+v", program.Steps)
 	}
-	if _, unsupported := Template(&config.LooperConfig{}, "static", nil); unsupported == nil {
+	if _, unsupported := Template(&config.LooperConfig{}, "static", nil, nil); unsupported == nil {
 		t.Fatal("a selection algorithm has no Looper template")
 	}
 	_, err = graph.Run(context.Background(), program, graph.Input{}, graph.Options{Caller: &hopCaller{}})

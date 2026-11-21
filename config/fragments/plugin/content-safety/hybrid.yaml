@@ -9,8 +9,10 @@ plugins:
       add:
         - name: X-Safety-Profile
           value: standard
-  - type: response_jailbreak
+  - type: response_guard
     configuration:
-      enabled: true
-      threshold: 0.8
-      action: header
+      rules:
+        - when:
+            type: jailbreak
+            name: unsafe_completion
+          action: annotate

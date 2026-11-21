@@ -23,6 +23,8 @@ interface DSLState {
   /** Parsed AST from last successful parse (for Visual Builder) */
   ast: ASTProgram | null
   baseConfigYaml: string
+  /** Set when baseConfigYaml was loaded from the Router rather than imported. */
+  baseConfigFromRouter: boolean
 
   // --- Runtime ---
   compilerReady: boolean
@@ -88,7 +90,7 @@ interface DSLActions {
   loadDsl(source: string): void
 
   /** Load YAML and decompile its complete DSL-owned surface. */
-  importYaml(yaml: string): Promise<void>
+  importYaml(yaml: string, fromRouter?: boolean): Promise<void>
 
   /** Fetch current router YAML and decompile its complete DSL-owned surface. */
   loadFromRouter(): Promise<void>

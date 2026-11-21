@@ -1,0 +1,24 @@
+# strip_unknown is removed wherever a request_params plugin is written:
+# global.plugins and a recipe's plugins as well as a decision's.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+global:
+  plugins:
+    - type: request_params
+      configuration:
+        max_n: 2
+recipes:
+  - name: default
+    plugins:
+      - type: request_params
+        configuration:
+          max_tokens_limit: 4096
+    decisions:
+      - name: bounded
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]

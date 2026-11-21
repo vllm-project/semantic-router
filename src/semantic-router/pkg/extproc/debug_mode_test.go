@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -110,10 +111,10 @@ func TestDebugHeadersFollowTheOperatorPolicy(t *testing.T) {
 			}
 			ctx.VSRSelectedDecisionName = "guarded"
 			ctx.VSRMatchedJailbreak = []string{"prompt_injection"}
-			mutation := buildResponseHeaderMutation(ctx, true)
+			mutation := buildResponseHeaderMutation(ctx)
 
-			if got := debugGateHeader(mutation, headers.VSRMatchedJailbreak) != ""; got != tt.want {
-				t.Fatalf("%s present = %v, want %v", headers.VSRMatchedJailbreak, got, tt.want)
+			if got := strings.Contains(debugGateHeader(mutation, headers.VSRTrace), `"jailbreak:prompt_injection"`); got != tt.want {
+				t.Fatalf("%s names the matched jailbreak rule = %v, want %v", headers.VSRTrace, got, tt.want)
 			}
 			if got := debugGateHeader(mutation, headers.VSRSelectedDecision); got != "guarded" {
 				t.Fatalf("%s = %q, want the default surface unchanged", headers.VSRSelectedDecision, got)

@@ -13,15 +13,22 @@ export interface DecisionRuntimeConsumer {
   name: string
   kind: 'question' | 'selector'
   questionType: string
+  /** The deployment it names; empty when it asks the default decision model. */
   deployment: string
 }
 
 export interface DecisionRuntimeDeploymentRequest {
-  entry: DecisionRuntimeCatalogEntry
   name: string
-  device: string
-  consumerId: string
+  /** Declares the catalog release under name; omitted to bind an existing deployment as it is. */
+  entry?: DecisionRuntimeCatalogEntry
+  device?: string
+  /** Managed workers for a new declaration; one keeps a single device. */
+  replicas?: number
   existingName?: string
+  /** What the deployment answers when no entry says; the shared System One kinds otherwise. */
+  questionTypes?: readonly string[]
+  consumerIds?: readonly string[]
+  makeDefault?: boolean
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -42,7 +49,7 @@ export function decisionRuntimeConsumers(config: RouterConfig | null): DecisionR
     ...(config?.recipes ?? []).map((recipe) => ({ recipe: recipe.name, routing: recipe.routing })),
   ]
   return scopes.flatMap(({ recipe, routing }) => [
-    ...(routing?.signals?.decision ?? []).flatMap((signal): DecisionRuntimeConsumer[] =>
+    ...(routing?.signals?.systemone ?? []).flatMap((signal): DecisionRuntimeConsumer[] =>
       signal.name
         ? [
             {
@@ -58,7 +65,7 @@ export function decisionRuntimeConsumers(config: RouterConfig | null): DecisionR
     ),
     ...(routing?.decisions ?? []).flatMap((decision): DecisionRuntimeConsumer[] => {
       const algorithm = record(decision.algorithm)
-      if (!decision.name || algorithm.type !== 'decision' || !algorithm.decision) return []
+      if (!decision.name || algorithm.type !== 'systemone' || !algorithm.systemone) return []
       return [
         {
           id: JSON.stringify([recipe, 'selector', decision.name]),
@@ -66,7 +73,7 @@ export function decisionRuntimeConsumers(config: RouterConfig | null): DecisionR
           name: decision.name,
           kind: 'selector',
           questionType: 'choice',
-          deployment: String(record(algorithm.decision).deployment ?? ''),
+          deployment: String(record(algorithm.systemone).deployment ?? ''),
         },
       ]
     }),
@@ -93,14 +100,18 @@ export function configuredDecisionRuntimes(
   )
 }
 
-export function compatibleRuntimeConsumers(config: RouterConfig | null): DecisionRuntimeConsumer[] {
+export function compatibleRuntimeConsumers(
+  config: RouterConfig | null,
+  questionTypes: readonly string[] = DECISION_RUNTIME_CAPABILITIES,
+): DecisionRuntimeConsumer[] {
   return decisionRuntimeConsumers(config).filter((consumer) =>
-    DECISION_RUNTIME_CAPABILITIES.some((kind) => kind === consumer.questionType),
+    questionTypes.includes(consumer.questionType),
   )
 }
 
 // Update a fresh canonical snapshot in one transaction. Unselected consumers,
-// recipes, provider credentials, admission policies and the Vela default survive.
+// recipes, provider credentials, admission policies and the default survive
+// unless the request makes this deployment the default.
 export function withDecisionRuntimeDeployment(
   config: RouterConfig,
   request: DecisionRuntimeDeploymentRequest,
@@ -108,10 +119,13 @@ export function withDecisionRuntimeDeployment(
   const name = request.name.trim()
   if (!name || name.startsWith('@'))
     throw new Error('Choose a nonempty deployment name without the reserved @ prefix.')
-  if (!/^(auto|cpu|cuda(?::\d+)?|rocm(?::\d+)?)$/.test(request.device))
-    throw new Error('Choose an automatic, CPU, CUDA or ROCm device.')
   const existing = decisionRuntimeDeclarations(config)[name]
+  if (request.existingName && !existing)
+    throw new Error('This deployment was removed. Refresh the catalog before trying again.')
+  if (!request.entry && request.existingName !== name)
+    throw new Error('Choose a deployment from the catalog to bind.')
   if (
+    request.entry &&
     existing &&
     (request.existingName !== name ||
       existing.provider !== 'model_runtime' ||
@@ -122,49 +136,68 @@ export function withDecisionRuntimeDeployment(
       'This deployment name is already in use. Choose another name or manage its existing configuration.',
     )
   }
-  if (request.existingName && !existing)
-    throw new Error('This deployment was removed. Refresh the catalog before trying again.')
-  const consumer = request.consumerId
-    ? compatibleRuntimeConsumers(config).find((value) => value.id === request.consumerId)
-    : undefined
-  if (request.consumerId && !consumer)
-    throw new Error(
-      'The selected consumer is no longer compatible. Refresh and select a choice, score or noul question, or a decision selector.',
-    )
+  const device = request.device ?? 'auto'
+  if (request.entry && !/^(auto|cpu|cuda(?::\d+)?|rocm(?::\d+)?)$/.test(device))
+    throw new Error('Choose an automatic, CPU, CUDA or ROCm device.')
+  const replicas = Math.floor(request.replicas ?? 1)
+  if (replicas < 1 || replicas > 64) throw new Error('Choose between 1 and 64 replicas.')
+  const compatible = compatibleRuntimeConsumers(
+    config,
+    request.entry?.questionTypes ?? request.questionTypes,
+  )
+  const consumers = (request.consumerIds ?? []).map((id) => {
+    const consumer = compatible.find((value) => value.id === id)
+    if (!consumer)
+      throw new Error(
+        'A selected consumer is no longer compatible. Refresh and select questions this model answers, or a System One selector.',
+      )
+    return consumer
+  })
   const next = structuredClone(config)
   const global = (next.global ?? {}) as CanonicalGlobalConfig
+  const placement: Partial<CanonicalModelDeployment> =
+    replicas > 1 && !existing
+      ? { replicas: Array.from({ length: replicas }, () => ({ device })) }
+      : { device }
   next.global = {
     ...global,
     model_catalog: {
       ...global.model_catalog,
-      deployments: {
-        ...global.model_catalog?.deployments,
-        [name]: {
-          ...existing,
-          provider: 'model_runtime',
-          artifact: request.entry.id,
-          ...(existing ? {} : { revision: request.entry.revision }),
-          ...(existing?.replicas?.length ? {} : { device: request.device }),
-        },
-      },
+      deployments: request.entry
+        ? {
+            ...global.model_catalog?.deployments,
+            [name]: {
+              ...existing,
+              provider: 'model_runtime',
+              artifact: request.entry.id,
+              ...(existing ? {} : { revision: request.entry.revision }),
+              ...(existing?.replicas?.length ? {} : placement),
+            },
+          }
+        : global.model_catalog?.deployments,
+      ...(request.makeDefault
+        ? {
+            system: { ...global.model_catalog?.system, decision_model: { deployment: name } },
+          }
+        : {}),
     },
   }
-  if (consumer) {
+  for (const consumer of consumers) {
     const routing =
       consumer.recipe === null
         ? next.routing
         : next.recipes?.find((recipe) => recipe.name === consumer.recipe)?.routing
     if (consumer.kind === 'question') {
-      const signal = routing?.signals?.decision?.find((value) => value.name === consumer.name)
+      const signal = routing?.signals?.systemone?.find((value) => value.name === consumer.name)
       if (!signal) throw new Error('The selected question is no longer available.')
       signal.deployment = name
     } else {
       const decision = routing?.decisions?.find((value) => value.name === consumer.name)
-      if (!decision) throw new Error('The selected decision selector is no longer available.')
+      if (!decision) throw new Error('The selected System One selector is no longer available.')
       const algorithm = record(decision.algorithm)
       decision.algorithm = {
         ...algorithm,
-        decision: { ...record(algorithm.decision), deployment: name },
+        systemone: { ...record(algorithm.systemone), deployment: name },
       }
     }
   }

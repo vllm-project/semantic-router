@@ -5,31 +5,32 @@ import (
 	"strings"
 )
 
-func validateMetadataContracts(cfg *RouterConfig) error {
+func validateMetadataContracts(cfg *RouterConfig) (err error) {
+	defer func() { err = cfg.inRecipe(err) }()
 	seen := make(map[string]struct{}, len(cfg.MetadataRules))
 	for i, rule := range cfg.MetadataRules {
 		trimmedName := strings.TrimSpace(rule.Name)
 		if trimmedName == "" {
-			return fmt.Errorf("routing.signals.metadata[%d]: name is required", i)
+			return fmt.Errorf("signals.metadata[%d]: name is required", i)
 		}
 		if trimmedName != rule.Name {
 			return fmt.Errorf(
-				"routing.signals.metadata[%d]: name must not contain surrounding whitespace",
+				"signals.metadata[%d]: name must not contain surrounding whitespace",
 				i,
 			)
 		}
 		normalizedName := strings.ToLower(rule.Name)
 		if _, exists := seen[normalizedName]; exists {
-			return fmt.Errorf("routing.signals.metadata[%d]: duplicate name %q", i, rule.Name)
+			return fmt.Errorf("signals.metadata[%d]: duplicate name %q", i, rule.Name)
 		}
 		seen[normalizedName] = struct{}{}
 		trimmedKey := strings.TrimSpace(rule.Key)
 		if trimmedKey == "" {
-			return fmt.Errorf("routing.signals.metadata[%q]: key is required", rule.Name)
+			return fmt.Errorf("signals.metadata[%q]: key is required", rule.Name)
 		}
 		if trimmedKey != rule.Key {
 			return fmt.Errorf(
-				"routing.signals.metadata[%q]: key must not contain surrounding whitespace",
+				"signals.metadata[%q]: key must not contain surrounding whitespace",
 				rule.Name,
 			)
 		}
@@ -45,7 +46,7 @@ func validateMetadataContracts(cfg *RouterConfig) error {
 		}
 		if comparators != 1 {
 			return fmt.Errorf(
-				"routing.signals.metadata[%q]: predicate must set exactly one of equals, in, or exists",
+				"signals.metadata[%q]: predicate must set exactly one of equals, in, or exists",
 				rule.Name,
 			)
 		}

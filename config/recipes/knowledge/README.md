@@ -98,8 +98,9 @@ matrix question as physics.
 
 ## Data handling and safety
 
-The checked-in recipe does not enable Router Replay or response caching. The
-decision model reads each question to name its subject, then the request goes
+The checked-in recipe sets no `router_replay` plugin, so Router Replay keeps
+only its default record of each request's routing data, with no request or
+response text, and it does not enable response caching. The decision model reads each question to name its subject, then the request goes
 to one selected provider.
 
 Provider-side logging and retention still apply. Run the decision model where

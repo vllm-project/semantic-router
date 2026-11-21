@@ -22,7 +22,7 @@ integration such as [Istio](istio) instead.
 client
   -> Gateway
   -> Semantic Router ExtProc
-  -> HTTPRoute chosen by x-selected-model
+  -> HTTPRoute chosen by x-vsr-route-model
   -> InferencePool
   -> endpoint picker
   -> model replica
@@ -85,7 +85,7 @@ spec:
     - matches:
         - headers:
             - type: Exact
-              name: x-selected-model
+              name: x-vsr-route-model
               value: local/general
       backendRefs:
         - group: inference.networking.k8s.io
@@ -94,7 +94,7 @@ spec:
           port: 8000
 ```
 
-The Router writes `x-selected-model` on the request. It exposes the logical
+The Router writes `x-vsr-route-model` on the request. It exposes the logical
 selection to clients as `x-vsr-selected-model` on the response. GAIE owns the
 later endpoint choice inside `general-pool`.
 
@@ -114,7 +114,7 @@ Kubernetes-owned rewrites.
 ## Re-evaluate the route after ExtProc
 
 The gateway must call Semantic Router in the downstream request path and then
-re-evaluate the route after `x-selected-model` is written. Keep this Router
+re-evaluate the route after `x-vsr-route-model` is written. Keep this Router
 setting enabled in the canonical config:
 
 ```yaml
@@ -164,7 +164,7 @@ kubectl get httproute general-pool -n inference \
 ```
 
 The response's `x-vsr-selected-model` should match the route's
-`x-selected-model` value, and the endpoint picker should report a ready endpoint
+`x-vsr-route-model` value, and the endpoint picker should report a ready endpoint
 from that pool. An HTTP 200 alone does not prove that semantic selection and
 endpoint selection both ran.
 

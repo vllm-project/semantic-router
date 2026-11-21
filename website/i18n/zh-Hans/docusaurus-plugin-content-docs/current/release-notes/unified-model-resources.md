@@ -8,6 +8,10 @@ translation:
 
 # 发布说明：Router 询问的模型统一在一个目录中 {#release-note-one-catalog-for-the-models-the-router-asks}
 
+:::note
+本说明记录的是一个较早的版本。自 v0.5 起，由决策模型回答每个信号，嵌入只用于召回，`classify` 和 `rerank` 提供方已移除，`openai_chat` 只用于记忆查询改写；见[迁移到 v0.5](../installation/migrate-to-v0-5)。
+:::
+
 Router 询问的每个模型（其信号、embedding 和重排序背后的模型）现在都在 `global.model_catalog.deployments` 下按名称声明一次。用到模型的地方都只写这个名称。`provider` 指明 Router 与每个部署通信所用的 API：`model_runtime`、`systemone`、`classify`、`openai_chat`、`openai_embeddings` 或 `rerank`。
 
 ```yaml
@@ -38,11 +42,11 @@ global:
 
 ## 行为变化 {#behavior-changes}
 
-- `systemone` 决策模型现在也回答内置信号。以前这些信号在本地的 `vela3-fast` 上运行。除非配置写出阈值，它们的阈值为 0.5，加载时警告 `uncalibrated_threshold`。
+- `systemone` 决策模型现在也回答内置信号。以前这些信号在本地的 `vela3-fast` 上运行。除非配置写出阈值，它们的阈值为 0.5，加载时警告 `uncalibrated_preset`。
 - 安全规则的 hazard 部分没有自己的模型时，在任何决策模型下都使用预先声明的 `hazard` 部署（Vela 1.0 Hazard）。以前，含有这种 hazard 部分的配置在 `systemone` 决策模型下无法加载。
 
 其他一切都解析到与之前相同的模型。
 
 ## 早期配置 {#earlier-configurations}
 
-用早期形式写的配置仍可加载，并使用相同的模型。Router 为每个早期字段报告一条 `deprecated_model_field` 警告，`vllm-sr config validate --config config.yaml` 会列出它们，`vllm-sr config migrate --config config.yaml` 会把它们改写为新形式。[迁移模型资源](../installation/model-resource-migration.md)将每种早期形式与取代它的形式并列展示。
+Router 拒绝用早期形式写的配置，并为每个早期字段给出一行错误，指明取代它的写法。`vllm-sr config validate --config config.yaml` 会列出它们，`vllm-sr config migrate --config config.yaml` 会把它们改写为新形式。[迁移模型资源](../installation/model-resource-migration.md)将每种早期形式与取代它的形式并列展示。

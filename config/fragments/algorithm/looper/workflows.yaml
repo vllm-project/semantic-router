@@ -1,6 +1,7 @@
 algorithm:
   type: workflows
   minimum_candidates: 2
+  on_error: skip
   workflows:
     mode: dynamic
     planner:
@@ -11,4 +12,3 @@ algorithm:
     round_timeout_seconds: 90
     min_successful_responses: 2
     include_intermediate_responses: true
-    on_error: skip

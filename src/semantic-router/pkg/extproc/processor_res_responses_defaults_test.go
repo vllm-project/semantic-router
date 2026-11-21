@@ -19,7 +19,7 @@ func TestExtProcResponsesProviderDefaults(t *testing.T) {
 		router := &OpenAIRouter{}
 		ctx := newContext()
 		body := extProcResponsesDefaults(t, extProcResponseFixture(llmprotocol.OpenAIResponsesV1))
-		reply := router.handleNonStreamingResponseBody(body, ctx, 0)
+		reply := router.handleNonStreamingResponseBody(body, ctx, 0, false)
 		if reply.GetImmediateResponse() != nil || reply.GetResponseBody() == nil {
 			t.Fatalf("response rejected: %+v", reply)
 		}

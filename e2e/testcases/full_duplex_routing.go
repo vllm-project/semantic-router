@@ -20,7 +20,7 @@ import (
 )
 
 // The streaming profile's full-duplex gateway sends a request to the full-duplex-selected
-// backend only when it carries the x-selected-model header that the Router sets
+// backend only when it carries the x-vsr-route-model header that the Router sets
 // once the body is routed, and every other request to full-duplex-default. The
 // Router gives full-duplex-provider a provider chat path and credential that
 // differ from the client's. Both backends are provider-mocker instances that
@@ -44,7 +44,7 @@ type fullDuplexGateway struct {
 
 func init() {
 	pkgtestcases.Register("envoy-full-duplex-routing", pkgtestcases.TestCase{
-		Description: "Verify raw Envoy FULL_DUPLEX_STREAMED requests reach the backend x-selected-model names with the provider path and credential, and an end-of-stream rejection reaches no backend",
+		Description: "Verify raw Envoy FULL_DUPLEX_STREAMED requests reach the backend x-vsr-route-model names with the provider path and credential, and an end-of-stream rejection reaches no backend",
 		Tags:        []string{"streaming", "gateway", "routing"},
 		Fn: fullDuplexRoutingTest(fullDuplexGateway{
 			service: pkgtestcases.ServiceConfig{
@@ -154,10 +154,10 @@ func checkFullDuplexRequest(
 	}
 
 	if request.reject {
-		// The mocker would accept this body, so a 400 carrying the Router's
+		// The mocker would accept this body, so a 404 carrying the Router's
 		// error envelope is the Router's immediate response.
-		if status != http.StatusBadRequest || !strings.Contains(responseBody, `"code":"model_not_found"`) {
-			return fmt.Errorf("expected the Router's HTTP 400 with code model_not_found, got %d: %s", status, responseBody)
+		if status != http.StatusNotFound || !strings.Contains(responseBody, `"code":"model_not_found"`) {
+			return fmt.Errorf("expected the Router's HTTP 404 with code model_not_found, got %d: %s", status, responseBody)
 		}
 		if selected != nil || unrouted != nil {
 			return fmt.Errorf("a rejected request reached a backend (%s %v, %s %v)",

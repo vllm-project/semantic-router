@@ -13,13 +13,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
 func TestBoolFlagOverrideOnlyWhenExplicitlySet(t *testing.T) {
@@ -185,6 +189,48 @@ func nonEphemeralPorts() (low, high int) {
 	return 32768, 49151
 }
 
+func TestInitializeRuntimeDependenciesReportsInitializedOnlyAfterSuccess(t *testing.T) {
+	previous := modelservice.DefaultManager()
+	t.Cleanup(func() { modelservice.SetDefault(previous) })
+	const initialized = "Runtime dependencies initialized. Starting router services..."
+
+	for _, tc := range []struct {
+		name        string
+		vectorStore *config.VectorStoreConfig
+		wantErr     bool
+	}{
+		{name: "success"},
+		{name: "vector store failure", vectorStore: &config.VectorStoreConfig{Enabled: true}, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.RouterConfig{VectorStore: tc.vectorStore}
+			hooks := make([]func(context.Context) error, 0)
+			t.Cleanup(func() {
+				if err := runShutdownHooks(context.Background(), &hooks); err != nil {
+					t.Errorf("shutdown runtime dependencies: %v", err)
+				}
+			})
+			log := &stateLog{}
+
+			err := initializeRuntimeDependencies(cfg, log, &hooks, routerruntime.NewRegistry(cfg))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("initializeRuntimeDependencies() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			states := log.snapshot()
+			if len(states) == 0 {
+				t.Fatal("no startup state written")
+			}
+			reported := slices.ContainsFunc(states, func(state startupstatus.State) bool { return state.Message == initialized })
+			if reported == tc.wantErr {
+				t.Fatalf("initialized status reported = %v with error %v: %+v", reported, err, states)
+			}
+			if !tc.wantErr && states[len(states)-1].Message != initialized {
+				t.Fatalf("last state = %+v, want the initialized status", states[len(states)-1])
+			}
+		})
+	}
+}
+
 func TestRunShutdownHooksCompletesInRegistrationOrder(t *testing.T) {
 	completed := make([]string, 0, 2)
 	hooks := []func(context.Context) error{
@@ -226,14 +272,14 @@ func TestStartupRejectsInvalidKubernetesGlobals(t *testing.T) {
 		global string
 		want   string
 	}{
-		{"cache", "  stores: {response_cache: {enabled: true, similarity_threshold: 1.5}}", "similarity_threshold"},
+		{"cache", "  plugins: [{type: response_cache, configuration: {enabled: true, semantic: {match: {recall: {top_k: 1, min_similarity: 1.5}}}}}]", "min_similarity"},
 		{"memory", "  stores: {memory: {default_similarity_threshold: 1.5}}", "default_similarity_threshold"},
-		{"admission", "  model_catalog: {admission: {prompt_guard: {max_concurrency: 1, max_queue: -1}}}", "max_queue"},
+		{"admission", "  model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}", "max_queue"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")
-			raw := "version: v0.3\nglobal:\n  router: {config_source: kubernetes}\n" + tc.global + "\n"
+			raw := "version: v0.5\nglobal:\n  router: {config_source: kubernetes}\n" + tc.global + "\n"
 			if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 				t.Fatal(err)
 			}

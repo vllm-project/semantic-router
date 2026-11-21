@@ -99,7 +99,7 @@ func (r *OpenAIRouter) decodeUpstreamResponseBody(
 		return nil, true, nil
 	}
 	metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-	return nil, false, r.createErrorResponse(502, "The selected model returned an invalid response")
+	return nil, false, r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 }
 
 // gunzipBounded decodes body into at most limit bytes once a decode slot is

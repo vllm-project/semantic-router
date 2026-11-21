@@ -46,7 +46,7 @@ func testModelRuntimeFailOpen(ctx context.Context, client *kubernetes.Clientset,
 		if decision := response.Headers.Get("x-vsr-selected-decision"); decision == "offline_route" {
 			return fmt.Errorf("offline_route matched: an unanswered decision signal must not match")
 		}
-		if headerItems(response.Headers, "x-vsr-matched-decision-model")["offline"] {
+		if signalItems(response.Headers, "systemone")["offline"] {
 			return fmt.Errorf("the offline deployment's signal matched")
 		}
 	}

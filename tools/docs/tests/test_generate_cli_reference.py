@@ -100,7 +100,7 @@ class CLIReferenceTests(unittest.TestCase):
                 root / "src/vllm-sr/cli",
                 ignore=shutil.ignore_patterns("__pycache__"),
             )
-            schema_name = "router-config-v0.3.schema.json"
+            schema_name = "router-config-v0.5.schema.json"
             shutil.copyfile(
                 reference.ROOT / "src/semantic-router/pkg/configschema" / schema_name,
                 root / "src/vllm-sr/cli/config_schema" / schema_name,

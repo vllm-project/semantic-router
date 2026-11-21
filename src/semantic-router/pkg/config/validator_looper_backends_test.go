@@ -39,7 +39,8 @@ func looperDecision(algorithm *AlgorithmConfig, models ...string) Decision {
 func TestDecisionCallsNeedABackend(t *testing.T) {
 	ratings := &AlgorithmConfig{Type: "ratings"}
 	fusion := &AlgorithmConfig{Type: "fusion", Fusion: &FusionAlgorithmConfig{Model: "judge", AnalysisModels: []string{"panel"}}}
-	prompt := &AlgorithmConfig{Type: "prompt", Prompt: &PromptSelectionConfig{Model: "helper"}}
+	escalate := &AlgorithmConfig{Type: "escalate", Escalate: &EscalateAlgorithmConfig{Order: EscalateOrderSize}}
+	stages := &AlgorithmConfig{Type: "escalate", Escalate: &EscalateAlgorithmConfig{Stages: []EscalateStage{{Model: "a"}, {Model: "b"}}}}
 	flow := &AlgorithmConfig{Type: "workflows", Workflows: &WorkflowsAlgorithmConfig{
 		Mode: "dynamic", Planner: WorkflowPlannerConfig{Model: "planner"},
 	}}
@@ -52,7 +53,8 @@ func TestDecisionCallsNeedABackend(t *testing.T) {
 		{"every candidate of a Looper", looperDecision(ratings, "a", "b"), []string{"a"}, "b"},
 		{"the Fusion judge", looperDecision(fusion, "a"), []string{"a", "panel"}, "judge"},
 		{"the Fusion panel", looperDecision(fusion, "a"), []string{"a", "judge"}, "panel"},
-		{"the prompt helper", looperDecision(prompt, "a", "b"), []string{"a", "b"}, "helper"},
+		{"every candidate of a Chat escalate", looperDecision(escalate, "a", "b"), []string{"a"}, "b"},
+		{"a System One escalate", looperDecision(stages, "a", "b"), nil, ""},
 		{"the Flow planner", looperDecision(flow, "a"), []string{"a"}, "planner"},
 		{"a served Looper", looperDecision(ratings, "a", "b"), []string{"a", "b"}, ""},
 		{"a static decision", looperDecision(&AlgorithmConfig{Type: "static"}, "a", "b"), nil, ""},
@@ -86,7 +88,7 @@ func TestARoutingFragmentNeedsNoBackends(t *testing.T) {
 }
 
 func TestALooperModelWithoutBackendRefsFailsTheDocument(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`version: v0.3
+	_, err := ParseYAMLBytes([]byte(`version: v0.5
 listeners: []
 providers:
   defaults:
@@ -97,21 +99,19 @@ providers:
         - endpoint: 127.0.0.1:8000
     - name: b
       provider_model_id: b
-routing:
-  modelCards:
-    - name: a
-    - name: b
-  decisions:
-    - name: rate
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: a
-        - model: b
-      algorithm:
-        type: ratings
+recipes:
+  - name: default
+    decisions:
+      - name: rate
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: a
+          - model: b
+        algorithm:
+          type: ratings
 `))
 	if err == nil || !strings.Contains(err.Error(), `decision "rate": the Router calls model "b" in process, but it has no backend`) {
 		t.Fatalf("parse = %v, want model b refused for its missing backend", err)

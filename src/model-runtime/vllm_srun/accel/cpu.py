@@ -3,7 +3,9 @@
 For models that name them it registers the ``geglu`` slot's ``contiguous``
 variant and, on x86, the ``linear`` slot's ``float32-packed`` one
 (``onednn.py``): together they make an encoder's forward batch-invariant where
-the packed products measure so at load (``onednn.invariant``).
+the packed products measure so at load (``onednn.invariant``). Opted in on a
+measured CPU it also registers zentorch's FP32 linear (``zentorch.py``), an
+approximate kernel for families that consent on CPUs.
 
 All CPU device work of a process runs on one thread (``execute``). PyTorch's
 OpenMP backend keeps one thread team per calling thread; as soon as two teams
@@ -25,7 +27,7 @@ from typing import Any, TypeVar
 import torch
 
 from ..plugins.base import Accelerator, DeviceInfo
-from . import onednn
+from . import onednn, zentorch
 from .kernels import (
     CONTIGUOUS,
     Kernel,
@@ -79,8 +81,26 @@ def cap_threads(configured: int | None) -> dict[str, int] | None:
     return {"from": current, "to": limit}
 
 
+# oneDNN instruction sets without BF16 dot products: capped to one of these
+# (ONEDNN_MAX_CPU_ISA), oneDNN converts BF16 to FP32 as on a CPU without them.
+EMULATED_BF16_ISAS = frozenset(
+    {
+        "SSE41",
+        "AVX",
+        "AVX2",
+        "AVX2_VNNI",
+        "AVX2_VNNI_2",
+        "AVX512_CORE",
+        "AVX512_CORE_VNNI",
+    }
+)
+
+
 def native_bf16() -> bool:
-    """Whether the CPU computes BF16 natively (AVX-512 BF16 or AMX)."""
+    """Whether the CPU kernels compute BF16 natively: AVX-512 BF16 or AMX, and oneDNN not capped below them."""
+    cap = os.environ.get("ONEDNN_MAX_CPU_ISA") or os.environ.get("DNNL_MAX_CPU_ISA")
+    if cap and cap.upper() in EMULATED_BF16_ISAS:
+        return False
     probes = ("_is_avx512_bf16_supported", "_is_amx_tile_supported")
     return any(getattr(torch.cpu, probe, lambda: False)() for probe in probes)
 
@@ -158,6 +178,15 @@ class CPUAccelerator(Accelerator):
                     variant=onednn.PACKED,
                 )
             )
+        # zentorch's kernels: approximate, so each runs only for a family that
+        # consents to its slot on CPUs, and only opted in on a measured CPU (zentorch.py).
+        zentorch_slots = zentorch.enabled()
+        if "linear" in zentorch_slots:
+            kernels.register(
+                Kernel("linear", zentorch.lay_out, "zentorch", exact=False)
+            )
+        if "sdpa" in zentorch_slots:
+            kernels.register(Kernel("sdpa", zentorch.sdpa, "zentorch", exact=False))
         return kernels
 
     def capabilities(self, device: DeviceInfo) -> dict[str, bool]:

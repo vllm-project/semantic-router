@@ -1,0 +1,27 @@
+# A v0.3 document whose entrypoint names a name v0.4 served by default, here
+# MoM, could not load on v0.4, which refused it as an entrypoint name. It was
+# written for main between v0.4 and v0.5, which served only its entrypoints
+# and vllm-sr/auto, and migrate adds no name.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  decisions:
+    - name: chat
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: general}]
+entrypoints:
+  - model_names: [MoM]
+    recipe: private
+recipes:
+  - name: private
+    routing:
+      decisions:
+        - name: local
+          priority: 100
+          rules: {operator: AND, conditions: []}
+          modelRefs: [{model: general}]

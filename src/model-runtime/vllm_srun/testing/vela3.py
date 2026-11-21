@@ -277,6 +277,7 @@ def write_encoder_package(
     max_len: int = 1024,
     window: int = 256,
     evidence_window: int = 512,
+    render31: bool = False,
 ) -> Path:
     """A vela3-fast-style package: a tiny UltraBERT, its readout and nine adapters."""
     root = Path(output)
@@ -325,6 +326,11 @@ def write_encoder_package(
         'raise RuntimeError("vllm_srun must never import package code")\n',
         encoding="utf-8",
     )
+    if render31:
+        # Opaque bytes from vllm-sr/vela3.1-fast@0ed6ed301fbbf0c312f11a13ad17e3a6f8887262;
+        # copied as data, never imported or executed.
+        renderer = Path(__file__).with_name("data") / "vela31-render31.txt"
+        (root / "render31.py").write_bytes(renderer.read_bytes())
     names = sorted(path.name for path in root.iterdir() if path.is_file())
     (root / "SHA256SUMS").write_text(
         "".join(f"{sha256_file(root / name)}  {name}\n" for name in names),
@@ -333,9 +339,9 @@ def write_encoder_package(
     return root
 
 
-VARIANTS = ("encoder",)
+VARIANTS = ("encoder", "encoder31")
 
 
 def write_fixture(output: str | Path, variant: str | None, seed: int) -> Path:
-    """The fixture command's writer: the vela3-fast-style encoder."""
-    return write_encoder_package(output, seed=seed)
+    """The fixture command's writer: the legacy encoder or described-Noul 3.1 encoder."""
+    return write_encoder_package(output, seed=seed, render31=variant == "encoder31")

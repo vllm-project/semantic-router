@@ -36,10 +36,15 @@ func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
 		return CandidateDemand{}
 	}
 	required := llmprotocol.RequiredCapabilities(*request)
-	modelMask := llmprotocol.Capabilities(
-		llmprotocol.CapabilityText, llmprotocol.CapabilityTools,
-		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema,
-	)
+	masked := []llmprotocol.Capability{
+		llmprotocol.CapabilityText, llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema,
+	}
+	// A forced hosted image_generation operation is framed as a tool choice,
+	// but it asks the model for an image, not for tool calls.
+	if len(request.Tools) > 0 || request.ToolChoice.Mode != llmprotocol.ToolChoiceImageGeneration {
+		masked = append(masked, llmprotocol.CapabilityTools)
+	}
+	modelMask := llmprotocol.Capabilities(masked...)
 	modelRequired := required.TaskCapabilities()
 	// Model declarations and transport fidelity have different semantics:
 	// parallel tool framing, for example, does not require a separate model tag.

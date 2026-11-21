@@ -15,7 +15,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("protocol-codec-anthropic-cache-tool-loop-chat", pkgtestcases.TestCase{
-		Description: "Anthropic tool loops preserve cache boundaries through a Chat backend",
+		Description: "Anthropic tool loops keep Chat's cache boundaries and drop a tool_use one with a warning through a Chat backend",
 		Tags:        []string{"protocol-codec", "anthropic", "cache", "agents", "tools", "streaming"},
 		Fn:          anthropicCacheToolLoopTest(chatBackendModel, "openai.chat.v1"),
 	})
@@ -73,8 +73,10 @@ func anthropicCacheToolLoopTest(model, backendFormat string) func(context.Contex
 				"model": model, "max_tokens": 64, "stream": stream,
 				"messages": []any{
 					map[string]any{"role": "user", "content": "__mock_tool_call__"},
+					// Claude Code marks the tool_use block when it compacts a conversation.
 					map[string]any{"role": "assistant", "content": []any{map[string]any{
 						"type": "tool_use", "id": call.CallID, "name": call.Name, "input": input,
+						"cache_control": map[string]any{"type": "ephemeral"},
 					}}},
 					map[string]any{"role": "user", "content": []any{map[string]any{
 						"type": "tool_result", "tool_use_id": call.CallID, "content": "sunny",
@@ -122,7 +124,7 @@ func sendAnthropicCacheToolTurn(
 		return result, err
 	}
 	if backendFormat == "openai.responses.v1" {
-		if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "cache_control") {
+		if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "cache_control") {
 			return result, fmt.Errorf("%s omitted the cache drop warning: %q", sessionID, warnings)
 		}
 		if bytes.Contains(upstream, []byte("cache_control")) {
@@ -132,6 +134,9 @@ func sendAnthropicCacheToolTurn(
 		return result, fmt.Errorf("%s lost a Chat backend cache boundary: %s", sessionID, truncateString(string(upstream), 800))
 	}
 	if turn == "result" && backendFormat == "openai.chat.v1" {
+		if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "cache_control") {
+			return result, fmt.Errorf("%s omitted the tool_use cache drop warning: %q", sessionID, warnings)
+		}
 		if err := assertChatToolResultCacheBoundary(upstream); err != nil {
 			return result, fmt.Errorf("%s: %w", sessionID, err)
 		}

@@ -213,12 +213,6 @@ func (r routerRuntime) Warm(ctx context.Context, c *configsnapshot.Candidate) (c
 		return nil, configsnapshot.Reject(configsnapshot.StageWarm, configsnapshot.CodeBuildFailed, err)
 	}
 	attachRuntimeRegistry(router, s.runtime)
-	c.Step("warmup")
-	if err := warmupReloadRouter(router); err != nil {
-		_ = router.Close()
-		return nil, configsnapshot.Reject(configsnapshot.StageWarm, configsnapshot.CodeWarmupFailed,
-			fmt.Errorf("runtime warmup failed: %w", err))
-	}
 	if err := ctx.Err(); err != nil {
 		_ = router.Close()
 		return nil, err
@@ -308,7 +302,7 @@ func (w *warmedRouter) Activate(context.Context) error {
 		if router != nil {
 			router.WorkflowStateService.CommitStorePolicy()
 		}
-		publishSnapshotState(candidate, snapshot, router, s.runtime, acquire)
+		publishSnapshotState(candidate, snapshot, router, s.runtime, acquire, s.service)
 	})
 	if err != nil {
 		return configsnapshot.Reject(configsnapshot.StageActivate, configsnapshot.CodeShuttingDown, err)

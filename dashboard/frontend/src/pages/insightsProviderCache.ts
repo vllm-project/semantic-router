@@ -49,7 +49,7 @@ export function buildProviderCacheSection(record: InsightsRecord): ViewSection {
       value: formatInsightsCost(settled ? accounting.cache_savings : undefined, record.currency),
     },
     {
-      label: 'Model-routing savings',
+      label: 'Difference vs reference model',
       value: formatInsightsCost(
         record.lifecycle_state === 'completed' ? record.cost_savings : undefined,
         record.currency,
@@ -58,7 +58,7 @@ export function buildProviderCacheSection(record: InsightsRecord): ViewSection {
     {
       label: 'Savings basis',
       value:
-        'Provider cache savings compare this model with all input priced at its standard input rate. Negative savings include cache-write premiums. Model-routing savings compare model choices using the observed cache usage; the two values are separate comparisons.',
+        'Provider cache savings compare this model with all input priced at its standard input rate. Negative savings include cache-write premiums. The difference vs the reference model compares this model with the reference model’s list price using the observed cache usage, cost only; the two values are separate comparisons.',
     },
   )
   return { title: 'Provider Prompt Cache', fields }

@@ -21,6 +21,8 @@ func (r *OpenAIRouter) classifyRequestHeaders(method string, path string) (*ext_
 		return validateInferenceMethod(r, method)
 	case "/v1/messages", messagesCountPath:
 		return validateInferenceMethod(r, method)
+	case imagesGenerationsPath:
+		return validateInferenceMethod(r, method)
 	case "/v1/models":
 		return validateAllowedMethod(r, method, "GET"), false
 	case "/v1/responses", azureResponsesPath, azureV1ResponsesPath:

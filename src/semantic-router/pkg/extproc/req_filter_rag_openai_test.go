@@ -40,8 +40,8 @@ func TestRetrieveFromOpenAIResponseLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ragConfig := &config.RAGPluginConfig{
-				Enabled: true,
+			ragConfig := &config.ContextSource{
+				Type:    config.ContextSourceRAG,
 				Backend: "openai",
 				BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
 					VectorStoreID:    "vs_123",
@@ -51,19 +51,16 @@ func TestRetrieveFromOpenAIResponseLimit(t *testing.T) {
 				}),
 			}
 
-			contextText, err := (&OpenAIRouter{}).retrieveFromOpenAI(
-				context.Background(),
-				&RequestContext{UserContent: "hello"},
-				ragConfig,
-			)
+			documents, err := (&OpenAIRouter{}).recallFromOpenAI(context.Background(), ragConfig, "hello", config.MatchRecall{TopK: 5})
+			contextText := recalledTexts(documents)
 			if tt.wantErr {
 				if err == nil || !strings.Contains(err.Error(), "response body exceeds limit") {
-					t.Fatalf("retrieveFromOpenAI() error = %v, want response limit error", err)
+					t.Fatalf("recallFromOpenAI() error = %v, want response limit error", err)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("retrieveFromOpenAI() error = %v", err)
+				t.Fatalf("recallFromOpenAI() error = %v", err)
 			}
 			if contextText != "retrieved context" {
 				t.Fatalf("context = %q, want retrieved context", contextText)
@@ -82,7 +79,8 @@ func TestOpenAIRAGConfigurationModes(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ragConfig := &config.RAGPluginConfig{
+			ragConfig := &config.ContextSource{
+				Type:    config.ContextSourceRAG,
 				Backend: "openai",
 				BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
 					VectorStoreID: "vs_test123",
@@ -103,7 +101,7 @@ func TestOpenAIRAGConfigurationModes(t *testing.T) {
 
 func TestServerHostedFileSearchIsExplicitlyUnsupported(t *testing.T) {
 	ctx := &RequestContext{SemanticRequest: testNeutralRequest("model", "find a file")}
-	err := (&OpenAIRouter{}).addFileSearchToolToRequest(ctx, &config.OpenAIRAGConfig{VectorStoreID: "vs_test123"})
+	err := (&OpenAIRouter{}).addFileSearchToolToRequest(&config.OpenAIRAGConfig{VectorStoreID: "vs_test123"})
 	if err == nil {
 		t.Fatal("server-hosted tool was accepted without a representable neutral contract")
 	}
@@ -120,9 +118,9 @@ func TestServerHostedFileSearchIsExplicitlyUnsupported(t *testing.T) {
 func TestRAGToolRoleInjectionMutatesNeutralRequest(t *testing.T) {
 	request := testNeutralRequest("model", "test query")
 	ctx := &RequestContext{RequestID: "request-1", SemanticRequest: request}
-	ragConfig := &config.RAGPluginConfig{InjectionMode: "tool_role"}
+	plugin := &config.ContextPluginConfig{Enabled: true}
 
-	if err := (&OpenAIRouter{}).injectRAGContext(ctx, "grounded context", ragConfig); err != nil {
+	if err := (&OpenAIRouter{}).injectContext(ctx, plugin, config.ContextSourceRAG, "grounded context"); err != nil {
 		t.Fatalf("inject RAG context: %v", err)
 	}
 	if len(request.Messages) != 3 || request.Messages[1].Role != llmprotocol.RoleAssistant || request.Messages[2].Role != llmprotocol.RoleTool {
@@ -148,8 +146,9 @@ func TestRAGSystemInstructionPreservesAuthority(t *testing.T) {
 		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "developer instruction"}},
 	}}
 	ctx := &RequestContext{SemanticRequest: request}
+	plugin := &config.ContextPluginConfig{Enabled: true, Injection: &config.ContextInjectionConfig{Mode: config.ContextInjectionSystemPrompt}}
 
-	if err := (&OpenAIRouter{}).injectRAGContext(ctx, "grounded context", &config.RAGPluginConfig{InjectionMode: "system_prompt"}); err != nil {
+	if err := (&OpenAIRouter{}).injectContext(ctx, plugin, config.ContextSourceRAG, "grounded context"); err != nil {
 		t.Fatalf("inject RAG system context: %v", err)
 	}
 	if len(request.Instructions) != 2 || request.Instructions[0].Role != llmprotocol.RoleSystem || request.Instructions[1].Role != llmprotocol.RoleDeveloper {
@@ -160,30 +159,21 @@ func TestRAGSystemInstructionPreservesAuthority(t *testing.T) {
 	}
 }
 
-func TestInjectRAGContextRejectsNegativeMaxContextLength(t *testing.T) {
-	request := testNeutralRequest("model", "test query")
-	ctx := &RequestContext{SemanticRequest: request}
-	negative := -1
-	err := (&OpenAIRouter{}).injectRAGContext(ctx, "grounded context", &config.RAGPluginConfig{
-		MaxContextLength: &negative,
-	})
-	if err == nil || !strings.Contains(err.Error(), "max_context_length") {
-		t.Fatalf("negative max_context_length: %v", err)
-	}
-	if len(request.Messages) != 1 {
-		t.Fatalf("invalid config mutated the request: %#v", request.Messages)
-	}
-}
-
-func TestInjectRAGContextZeroMaxContextLengthDoesNotError(t *testing.T) {
-	request := testNeutralRequest("model", "test query")
-	ctx := &RequestContext{SemanticRequest: request}
-	zero := 0
-	err := (&OpenAIRouter{}).injectRAGContext(ctx, "grounded context", &config.RAGPluginConfig{
-		MaxContextLength: &zero,
-	})
-	if err != nil {
-		t.Fatalf("zero max_context_length should not error, got: %v", err)
+// A rag source injects at most max_context_length characters; zero keeps
+// only the ellipsis marker.
+func TestRAGContextKeepsMaxContextLength(t *testing.T) {
+	zero, four := 0, 4
+	for _, test := range []struct {
+		limit *int
+		want  string
+	}{
+		{&zero, "..."},
+		{&four, "grou..."},
+		{nil, "grounded context"},
+	} {
+		if got := truncateRAGContext("grounded context", &config.ContextSource{MaxContextLength: test.limit}); got != test.want {
+			t.Fatalf("max_context_length %v kept %q, want %q", test.limit, got, test.want)
+		}
 	}
 }
 
@@ -197,8 +187,8 @@ func TestRetrieveFromOpenAISearchContract(t *testing.T) {
 		status                    int
 	}{
 		{name: "retrieved document", response: `{"data":[{"content":"document-only fact","score":0.9}]}`},
-		{name: "empty store", response: `{"data":[]}`, wantError: "no results"},
-		{name: "empty document", response: `{"data":[{"content":""}]}`, wantError: "no content"},
+		{name: "empty store", response: `{"data":[]}`},
+		{name: "empty document", response: `{"data":[{"content":""}]}`},
 		{name: "provider error", response: "unavailable", status: http.StatusServiceUnavailable, wantError: "search failed"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -224,14 +214,15 @@ func TestRetrieveFromOpenAISearchContract(t *testing.T) {
 				_, _ = w.Write([]byte(test.response))
 			}))
 			defer endpoint.Close()
-			ctx := &RequestContext{UserContent: "find the document-only fact"}
-			contextText, err := (&OpenAIRouter{}).retrieveFromOpenAI(context.Background(), ctx, &config.RAGPluginConfig{
+			documents, err := (&OpenAIRouter{}).recallFromOpenAI(context.Background(), &config.ContextSource{
+				Type:    config.ContextSourceRAG,
 				Backend: "openai",
 				BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
 					VectorStoreID: "vs_fixture", BaseURL: endpoint.URL,
 					APIKey: "fixture-key", MaxNumResults: intPtr(2),
 				}),
-			})
+			}, "find the document-only fact", config.MatchRecall{TopK: 5})
+			contextText := recalledTexts(documents)
 			select {
 			case <-requests:
 			default:
@@ -243,8 +234,14 @@ func TestRetrieveFromOpenAISearchContract(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || contextText != "document-only fact" || ctx.RAGSimilarityScore != float32(0.9) {
-				t.Fatalf("retrieved context=%q, score=%v, error=%v", contextText, ctx.RAGSimilarityScore, err)
+			if test.name != "retrieved document" {
+				if err != nil || len(documents) != 0 {
+					t.Fatalf("an empty search recalled %v, error=%v", documents, err)
+				}
+				return
+			}
+			if err != nil || contextText != "document-only fact" || documents[0].Similarity != 0.9 {
+				t.Fatalf("retrieved context=%q, documents=%v, error=%v", contextText, documents, err)
 			}
 		})
 	}

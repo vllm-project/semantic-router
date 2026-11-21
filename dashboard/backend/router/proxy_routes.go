@@ -11,6 +11,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
@@ -181,7 +182,9 @@ func serveRouterAPIProxy(
 	}
 	if strings.HasPrefix(r.URL.Path, "/api/router/api/v1/observability/replays") {
 		// Let the proxy transport negotiate decompression so replay JSON can
-		// be redacted safely for read-only Dashboard principals.
+		// be redacted safely for read-only Dashboard principals; the answer
+		// is compressed again for the browser once redacted.
+		r = withReplayGzip(r)
 		r.Header.Del("Accept-Encoding")
 	}
 	if err := routerauth.RewriteAuthorization(r, credentialProvider); err != nil {
@@ -312,6 +315,11 @@ func registerJaegerRoutes(
 	mux routeRegistrar,
 	cfg *config.Config,
 ) (*httputil.ReverseProxy, *httputil.ReverseProxy) {
+	registerRouteFunc(mux,
+		auth.ProtectedRoute(observability.TraceSummariesPath, auth.PermLogsRead, auth.SensitivitySensitive, auth.ResourceOwnerObservability, http.MethodGet).
+			Describe(http.MethodGet, traceSummariesOperation),
+		handlers.TraceSummariesHandler(cfg.JaegerURL),
+	)
 	if cfg.JaegerURL == "" {
 		registerRouteFunc(mux,
 			auth.ProtectedRoute("/embedded/jaeger/", auth.PermLogsRead, auth.SensitivitySensitive, auth.ResourceOwnerObservability, http.MethodGet),

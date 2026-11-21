@@ -20,7 +20,7 @@ func TestRouterDefaultsHandlerUsesExactConfiguredPath(t *testing.T) {
 
 	customPath := filepath.Join(tempDir, "custom-global.yaml")
 	customConfig := `
-version: v0.3
+version: v0.5
 global:
   services:
     response_api:

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 )
 
 func TestHybridRetrievalLatencyKeepsWinnerDuration(t *testing.T) {
@@ -27,17 +28,12 @@ func TestHybridRetrievalLatencyKeepsWinnerDuration(t *testing.T) {
 }
 
 func TestMeasureParallelRAGLookupUsesEndToEndDuration(t *testing.T) {
-	ctx := &RequestContext{
-		RAGSimilarityScore:  0.9,
-		RAGRetrievalLatency: 0.001, // A backend's partial HTTP timing.
-	}
-
-	result := measureParallelRAGLookup(ctx, func() (string, error) {
+	result := measureParallelRAGLookup(func() ([]match.Scored, error) {
 		time.Sleep(20 * time.Millisecond)
-		return "fallback context", nil
+		return scoredDocuments([]string{"fallback context"}, []float64{0.9}), nil
 	})
 
-	if result.context != "fallback context" || result.score != 0.9 {
+	if recalledTexts(result.documents) != "fallback context" || result.documents[0].Similarity != 0.9 {
 		t.Fatalf("unexpected result: %#v", result)
 	}
 	if result.latency < 15*time.Millisecond.Seconds() {
@@ -62,7 +58,8 @@ func TestRetrieveParallelRecordsSelectedChildEndToEndLatency(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ragConfig := &config.RAGPluginConfig{
+	ragConfig := &config.ContextSource{
+		Type:    config.ContextSourceRAG,
 		Backend: "hybrid",
 		BackendConfig: config.MustStructuredPayload(&config.HybridRAGConfig{
 			Primary:  "external_api",
@@ -83,12 +80,12 @@ func TestRetrieveParallelRecordsSelectedChildEndToEndLatency(t *testing.T) {
 	ctx := &RequestContext{UserContent: "where is the fallback?"}
 
 	started := time.Now()
-	got, err := (&OpenAIRouter{}).retrieveFromHybrid(context.Background(), ctx, ragConfig)
+	documents, err := (&OpenAIRouter{}).recallFromHybrid(context.Background(), ctx, ragConfig, ctx.UserContent, config.MatchRecall{TopK: 5})
 	wrapperElapsed := time.Since(started)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "fallback context" {
+	if got := recalledTexts(documents); got != "fallback context" {
 		t.Fatalf("context = %q", got)
 	}
 	if ctx.RAGRetrievalLatency <= 0 {
@@ -100,7 +97,8 @@ func TestRetrieveParallelRecordsSelectedChildEndToEndLatency(t *testing.T) {
 }
 
 func TestSequentialHybridKeepsWrapperLatency(t *testing.T) {
-	sequential := &config.RAGPluginConfig{
+	sequential := &config.ContextSource{
+		Type:    config.ContextSourceRAG,
 		Backend: "hybrid",
 		BackendConfig: config.MustStructuredPayload(&config.HybridRAGConfig{
 			Primary:  "milvus",
@@ -111,7 +109,8 @@ func TestSequentialHybridKeepsWrapperLatency(t *testing.T) {
 		t.Fatalf("sequential config latency = %v", got)
 	}
 
-	parallel := &config.RAGPluginConfig{
+	parallel := &config.ContextSource{
+		Type:    config.ContextSourceRAG,
 		Backend: "hybrid",
 		BackendConfig: config.MustStructuredPayload(&config.HybridRAGConfig{
 			Primary:  "milvus",
@@ -127,12 +126,12 @@ func TestSequentialHybridKeepsWrapperLatency(t *testing.T) {
 func TestSelectParallelRAG_PrimaryDoesNotWaitForFallback(t *testing.T) {
 	primary := make(chan parallelRAGResult, 1)
 	fallback := make(chan parallelRAGResult, 1)
-	primary <- parallelRAGResult{context: "primary", score: 0.9}
+	primary <- parallelRAGResult{documents: scoredDocuments([]string{"primary"}, []float64{0.9})}
 	started := time.Now()
 	lateSend := make(chan struct{})
 	go func() {
 		time.Sleep(200 * time.Millisecond)
-		fallback <- parallelRAGResult{context: "fallback"}
+		fallback <- parallelRAGResult{documents: scoredDocuments([]string{"fallback"}, nil)}
 		close(lateSend)
 	}()
 
@@ -140,7 +139,7 @@ func TestSelectParallelRAG_PrimaryDoesNotWaitForFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.context != "primary" || got.score != 0.9 {
+	if recalledTexts(got.documents) != "primary" || got.documents[0].Similarity != 0.9 {
 		t.Fatalf("got %#v", got)
 	}
 	if time.Since(started) > 100*time.Millisecond {
@@ -157,13 +156,13 @@ func TestSelectParallelRAG_FallbackUsedWhenPrimaryFails(t *testing.T) {
 	primary := make(chan parallelRAGResult, 1)
 	fallback := make(chan parallelRAGResult, 1)
 	primary <- parallelRAGResult{err: errors.New("primary down")}
-	fallback <- parallelRAGResult{context: "fallback", score: 0.4}
+	fallback <- parallelRAGResult{documents: scoredDocuments([]string{"fallback"}, []float64{0.4})}
 
 	got, err := selectParallelRAG(primary, true, fallback)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.context != "fallback" || got.score != 0.4 {
+	if recalledTexts(got.documents) != "fallback" || got.documents[0].Similarity != 0.4 {
 		t.Fatalf("got %#v", got)
 	}
 }
@@ -172,13 +171,13 @@ func TestSelectParallelRAG_EmptyPrimaryUsesFallback(t *testing.T) {
 	primary := make(chan parallelRAGResult, 1)
 	fallback := make(chan parallelRAGResult, 1)
 	primary <- parallelRAGResult{}
-	fallback <- parallelRAGResult{context: "fallback"}
+	fallback <- parallelRAGResult{documents: scoredDocuments([]string{"fallback"}, nil)}
 
 	got, err := selectParallelRAG(primary, true, fallback)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.context != "fallback" {
+	if recalledTexts(got.documents) != "fallback" {
 		t.Fatalf("got %#v", got)
 	}
 }
@@ -186,17 +185,17 @@ func TestSelectParallelRAG_EmptyPrimaryUsesFallback(t *testing.T) {
 func TestSelectParallelRAG_PrimaryWinsWhenFallbackFinishesFirst(t *testing.T) {
 	primary := make(chan parallelRAGResult, 1)
 	fallback := make(chan parallelRAGResult, 1)
-	fallback <- parallelRAGResult{context: "fallback"}
+	fallback <- parallelRAGResult{documents: scoredDocuments([]string{"fallback"}, nil)}
 	go func() {
 		time.Sleep(40 * time.Millisecond)
-		primary <- parallelRAGResult{context: "primary"}
+		primary <- parallelRAGResult{documents: scoredDocuments([]string{"primary"}, nil)}
 	}()
 
 	got, err := selectParallelRAG(primary, true, fallback)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.context != "primary" {
+	if recalledTexts(got.documents) != "primary" {
 		t.Fatalf("got %#v", got)
 	}
 }

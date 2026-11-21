@@ -148,8 +148,7 @@ var _ = Describe("VectorStoreConfig ApplyDefaults", func() {
 
 		Expect(cfg.FileStorageDir).To(Equal("/var/lib/vsr/data"))
 		Expect(cfg.MaxFileSizeMB).To(Equal(50))
-		Expect(cfg.EmbeddingModel).To(Equal(config.DefaultEmbeddingModel))
-		Expect(cfg.EmbeddingDimension).To(Equal(0))
+		Expect(cfg.Embedding).To(BeNil())
 		Expect(cfg.IngestionWorkers).To(Equal(2))
 		Expect(cfg.SupportedFormats).To(ContainElements(".txt", ".md", ".json", ".csv", ".html"))
 	})
@@ -158,15 +157,14 @@ var _ = Describe("VectorStoreConfig ApplyDefaults", func() {
 		cfg := &config.VectorStoreConfig{
 			Enabled: true, BackendType: "memory",
 			FileStorageDir: "/custom/path", MaxFileSizeMB: 100,
-			EmbeddingModel: "qwen3", EmbeddingDimension: 1024,
+			Embedding:        &config.EmbeddingBinding{Deployment: "qwen3-embedding", Dimension: 1024},
 			IngestionWorkers: 4, SupportedFormats: []string{".txt"},
 		}
 		cfg.ApplyDefaults()
 
 		Expect(cfg.FileStorageDir).To(Equal("/custom/path"))
 		Expect(cfg.MaxFileSizeMB).To(Equal(100))
-		Expect(cfg.EmbeddingModel).To(Equal("qwen3"))
-		Expect(cfg.EmbeddingDimension).To(Equal(1024))
+		Expect(*cfg.Embedding).To(Equal(config.EmbeddingBinding{Deployment: "qwen3-embedding", Dimension: 1024}))
 		Expect(cfg.IngestionWorkers).To(Equal(4))
 		Expect(cfg.SupportedFormats).To(Equal([]string{".txt"}))
 	})

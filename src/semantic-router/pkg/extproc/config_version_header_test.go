@@ -23,15 +23,15 @@ func headerValue(options []*core.HeaderValueOption, name string) (string, bool) 
 }
 
 func TestRoutedResponsesNameTheServingConfigVersion(t *testing.T) {
-	mutation := buildResponseHeaderMutation(&RequestContext{ConfigVersion: 7}, true)
+	mutation := buildResponseHeaderMutation(&RequestContext{ConfigVersion: 7})
 	if got, ok := headerValue(mutation.GetSetHeaders(), headers.VSRConfigVersion); !ok || got != "7" {
 		t.Fatalf("%s = %q, %v", headers.VSRConfigVersion, got, ok)
 	}
-	failed := buildResponseHeaderMutation(&RequestContext{ConfigVersion: 7}, false)
+	failed := buildResponseHeaderMutation(&RequestContext{ConfigVersion: 7})
 	if got, ok := headerValue(failed.GetSetHeaders(), headers.VSRConfigVersion); !ok || got != "7" {
 		t.Fatalf("an upstream error lacks %s: %q, %v", headers.VSRConfigVersion, got, ok)
 	}
-	unversioned := buildResponseHeaderMutation(&RequestContext{}, true)
+	unversioned := buildResponseHeaderMutation(&RequestContext{})
 	if _, ok := headerValue(unversioned.GetSetHeaders(), headers.VSRConfigVersion); ok {
 		t.Fatal("a router without a snapshot named a version")
 	}

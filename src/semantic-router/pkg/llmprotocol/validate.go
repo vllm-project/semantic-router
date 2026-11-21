@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -49,6 +50,12 @@ func ValidateRequest(request Request, limits Limits) error {
 		}
 		if limits.MetadataBytes > 0 && len(value) > limits.MetadataBytes {
 			return NewError(ErrorInvalidRequest, "context_management_limit", "context management exceeds the configured limit", nil)
+		}
+	}
+	if len(request.Safeguards) > 0 {
+		value := bytes.TrimSpace(request.Safeguards)
+		if !json.Valid(value) || len(value) == 0 || value[0] != '[' {
+			return NewError(ErrorInvalidRequest, "invalid_safeguards", "safeguards must be a JSON array", nil)
 		}
 	}
 	return validateReasoning(request, limits)
@@ -237,7 +244,7 @@ func validateRequestInstructions(instructions []InstructionBlock, limits Limits,
 			return NewError(ErrorInvalidRequest, "message_name_limit", "message name exceeds the configured limit", nil)
 		}
 		for _, content := range instruction.Content {
-			if content.Kind == ContentToolCall || content.Kind == ContentToolResult {
+			if content.Kind == ContentToolCall || content.Kind == ContentToolResult || content.Kind == ContentServerTool {
 				return NewError(ErrorInvalidRequest, "invalid_instruction_content", "instructions cannot contain tool control blocks", nil)
 			}
 			if err := validateContent(content, blocks, limits, 0); err != nil {
@@ -271,10 +278,16 @@ func validateRequestTools(tools []Tool, limits Limits) (map[string]struct{}, int
 }
 
 func validateRequestTool(tool Tool, limits Limits) error {
+	if exceeds(tool.Namespace, limits.ToolNameBytes) || exceeds(tool.LocalName, limits.ToolNameBytes) {
+		return NewError(ErrorInvalidRequest, "tool_text_limit", "tool namespace or name exceeds the configured limit", nil)
+	}
 	if tool.Kind == ToolKindCustom {
 		return validateCustomTool(tool, limits)
 	}
-	if tool.Kind != "" || tool.CustomFormat != nil {
+	if tool.Kind == ToolKindServer {
+		return validateServerTool(tool, limits)
+	}
+	if tool.Kind != "" || tool.CustomFormat != nil || len(tool.Raw) != 0 {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "tool kind is unsupported", nil)
 	}
 	if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) == 0 || !json.Valid(tool.InputSchema) {
@@ -403,6 +416,9 @@ func validateSchemaObject(schema json.RawMessage, label string, limits Limits) e
 
 func validateSampling(sampling Sampling, limits Limits) error {
 	if err := validateSamplingScalars(sampling); err != nil {
+		return err
+	}
+	if err := validateLogitBias(sampling.LogitBias, limits); err != nil {
 		return err
 	}
 	return validateStopSequences(sampling.Stop, limits)
@@ -607,10 +623,74 @@ func MarkDeferredToolLinks(request *Request) {
 	}
 }
 
+// RefuseUnansweredToolCalls refuses a request whose history holds a tool call
+// that no later tool result answers, in the words the client's API uses for
+// it, naming the unanswered calls of the first assistant message that holds
+// one. Retained history alone may end with calls that the request continuing
+// it answers, so only a complete conversation is judged. It returns nil for a
+// request without one.
+func RefuseUnansweredToolCalls(request Request) error {
+	answered := make(map[string]bool)
+	for _, message := range request.Messages {
+		for _, content := range message.Content {
+			switch {
+			case content.Kind == ContentToolCall && content.ToolCall != nil:
+				answered[content.ToolCall.ID] = false
+			case content.Kind == ContentToolResult && content.ToolResult != nil:
+				if _, called := answered[content.ToolResult.CallID]; called {
+					answered[content.ToolResult.CallID] = true
+				}
+			}
+		}
+	}
+	for _, message := range request.Messages {
+		var unanswered []*ToolCall
+		for _, content := range message.Content {
+			if content.Kind == ContentToolCall && content.ToolCall != nil && !answered[content.ToolCall.ID] {
+				unanswered = append(unanswered, content.ToolCall)
+			}
+		}
+		if len(unanswered) > 0 {
+			return unansweredToolCallError(request.Trusted.SourceFormat, message.SourcePosition, unanswered)
+		}
+	}
+	return nil
+}
+
+// unansweredToolCallError words the refusal as the client's API words its own.
+// Anthropic names the assistant message by its index in the client's request.
+func unansweredToolCallError(format WireFormat, position int, calls []*ToolCall) error {
+	ids := make([]string, len(calls))
+	for index, call := range calls {
+		ids[index] = call.ID
+	}
+	message, parameter := "tool calls have no later tool result: "+strings.Join(ids, ", "), ""
+	switch format {
+	case OpenAIChatV1:
+		message, parameter = "An assistant message with 'tool_calls' must be followed by tool messages responding to each "+
+			"'tool_call_id'. The following tool_call_ids did not have response messages: "+strings.Join(ids, ", "), "messages"
+	case OpenAIResponsesV1:
+		kind := "function call"
+		if calls[0].Kind == ToolKindCustom {
+			kind = "custom tool call"
+		}
+		message, parameter = "No tool output found for "+kind+" "+ids[0]+".", "input"
+	case AnthropicMessagesV1:
+		message = "`tool_use` ids were found without `tool_result` blocks immediately after: " + strings.Join(ids, ", ") +
+			". Each `tool_use` block must have a corresponding `tool_result` block in the next message."
+		if position > 0 {
+			message = fmt.Sprintf("messages.%d: %s", position-1, message)
+		}
+	}
+	protocolError := NewError(ErrorInvalidRequest, "unanswered_tool_call", message, nil)
+	protocolError.Parameter = parameter
+	return protocolError
+}
+
 func validateRoleContent(role Role, content Content) error {
 	switch role {
 	case RoleSystem, RoleDeveloper:
-		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentGeneratedImage) {
+		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentGeneratedImage, ContentServerTool) {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "system and developer messages cannot contain tool control blocks", nil)
 		}
 	case RoleAssistant:
@@ -622,7 +702,7 @@ func validateRoleContent(role Role, content Content) error {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "tool messages may contain only tool results", nil)
 		}
 	case RoleUser:
-		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentRefusal, ContentGeneratedImage) {
+		if contentKindIsOneOf(content.Kind, ContentToolCall, ContentToolResult, ContentRefusal, ContentGeneratedImage, ContentServerTool) {
 			return NewError(ErrorInvalidRequest, "invalid_role_content", "user messages contain assistant-only content", nil)
 		}
 	}
@@ -639,6 +719,12 @@ func contentKindIsOneOf(kind ContentKind, candidates ...ContentKind) bool {
 }
 
 func validateContent(content Content, blocks *int, limits Limits, depth int) error {
+	return validateContentBlock(content, blocks, limits, depth, false)
+}
+
+// validateContentBlock is validateContent; a truncatable tool call may be the
+// call an output limit cut short.
+func validateContentBlock(content Content, blocks *int, limits Limits, depth int, truncatable bool) error {
 	if limits.ToolResultDepth <= 0 || depth > limits.ToolResultDepth {
 		return NewError(ErrorInvalidRequest, "tool_result_depth", "nested tool result depth exceeded", nil)
 	}
@@ -651,13 +737,18 @@ func validateContent(content Content, blocks *int, limits Limits, depth int) err
 	if err := validateCacheDirective(content.Cache); err != nil {
 		return err
 	}
+	if err := validateRawContent(content, limits); err != nil {
+		return err
+	}
 	switch content.Kind {
+	case ContentServerTool:
+		return nil
 	case ContentText, ContentRefusal, ContentReasoning:
 		return validateTextContent(content, limits)
 	case ContentImage, ContentAudio, ContentVideo, ContentFile:
 		return validateMediaContent(content, limits)
 	case ContentToolCall:
-		return validateToolCallContent(content, limits)
+		return validateToolCallContent(content, limits, truncatable)
 	case ContentToolResult:
 		return validateToolResultContent(content, blocks, limits, depth)
 	case ContentGeneratedImage:
@@ -774,18 +865,22 @@ func validateMediaSource(content Content) error {
 	return nil
 }
 
-func validateToolCallContent(content Content, limits Limits) error {
+// validateToolCallContent checks a tool call. A truncatable call may be the
+// function call an output limit cut short, whose arguments are the start of a
+// JSON object rather than a whole one.
+func validateToolCallContent(content Content, limits Limits, truncatable bool) error {
 	call := content.ToolCall
 	if call == nil || strings.TrimSpace(call.ID) == "" ||
 		strings.TrimSpace(call.Name) == "" || call.Kind != "" && call.Kind != ToolKindCustom {
 		return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call requires an ID, name, and JSON arguments", nil)
 	}
 	if call.Kind == "" {
-		if err := ValidateJSONObject([]byte(call.Arguments), limits.JSONDepth); err != nil {
+		err := ValidateJSONObject([]byte(call.Arguments), limits.JSONDepth)
+		if err != nil && (!truncatable || !truncatedArguments(call.Arguments, limits.JSONDepth)) {
 			return NewError(ErrorInvalidRequest, "invalid_tool_call", "tool call arguments must be one strict JSON object", err)
 		}
 	}
-	if exceeds(call.ID, limits.IdentifierBytes) || exceeds(call.Name, limits.ToolNameBytes) {
+	if exceeds(call.ID, limits.IdentifierBytes) || exceeds(call.Name, limits.ToolNameBytes) || exceeds(call.Namespace, limits.ToolNameBytes) {
 		return NewError(ErrorInvalidRequest, "tool_call_limit", "tool call ID or name exceeds the configured limit", nil)
 	}
 	if limits.ToolArgumentsBytes > 0 && len(call.Arguments) > limits.ToolArgumentsBytes {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  configSchemaChildFields,
+  configSchemaExample,
   configSchemaFields,
   configSchemaStructure,
   filterConfigSchemaIndex,
@@ -23,6 +25,13 @@ const index: ConfigSchemaIndex = {
     signal: { count: 1, names: ['keyword'], href_template: '' },
   },
 }
+
+const withoutNodes = (fields: ReturnType<typeof configSchemaFields>) =>
+  fields.map((field) => {
+    const copy = { ...field }
+    delete copy.node
+    return copy
+  })
 
 describe('config schema reference support', () => {
   it('filters sections and surface names without losing catalog types', () => {
@@ -54,7 +63,7 @@ describe('config schema reference support', () => {
     }
 
     expect(focusedSchemaTitle(document)).toBe('Static selection')
-    expect(configSchemaFields(document)).toEqual([
+    expect(withoutNodes(configSchemaFields(document))).toEqual([
       {
         name: 'models',
         type: 'array<string>',
@@ -83,7 +92,7 @@ describe('config schema reference support', () => {
       fieldsLabel: 'Value',
       description: 'This section is a single configuration value.',
     })
-    expect(configSchemaFields(version)).toEqual([
+    expect(withoutNodes(configSchemaFields(version))).toEqual([
       {
         name: 'value',
         type: 'string',
@@ -118,6 +127,58 @@ describe('config schema reference support', () => {
         { name: 'name', required: true },
         { name: 'port', required: true },
       ],
+    )
+  })
+
+  it('walks nested fields and writes a YAML starting point', () => {
+    const section: ConfigSchemaNode = {
+      $ref: '#/$defs/Global',
+      $defs: {
+        Global: {
+          type: 'object',
+          required: ['router'],
+          properties: {
+            router: { $ref: '#/$defs/Router' },
+            stores: { type: 'object', properties: { cache: { type: 'boolean' } } },
+          },
+        },
+        Router: {
+          type: 'object',
+          properties: {
+            strategy: { type: 'string', enum: ['priority', 'confidence'] },
+            timeout_ms: { type: 'integer', default: 300 },
+          },
+        },
+      },
+      'x-vllm-sr-view': { view: 'section', path: 'global' },
+    }
+    const [router] = configSchemaFields(section)
+    expect(configSchemaChildFields(section, router.node).map((field) => field.name)).toEqual([
+      'strategy',
+      'timeout_ms',
+    ])
+    expect(configSchemaExample(section)).toBe(
+      ['global:', '  router:', '    strategy: priority', '    timeout_ms: 300'].join('\n'),
+    )
+  })
+
+  it('reads the compact section summary the bundled contract serves', () => {
+    const summary: ConfigSchemaNode = {
+      'x-vllm-sr-view': { view: 'section', path: 'global', detail: 'summary' },
+      shape: 'object',
+      title: 'Global',
+      fields: [
+        { name: 'router', path: 'global.router', type: 'object', required: false },
+        { name: 'plugins', path: 'global.plugins', type: 'array<object>', required: false },
+      ],
+    }
+    expect(configSchemaFields(summary).map((field) => [field.name, field.path])).toEqual([
+      ['router', 'global.router'],
+      ['plugins', 'global.plugins'],
+    ])
+    expect(configSchemaStructure(summary).type).toBe('object')
+    expect(configSchemaExample(summary)).toBe(
+      ['global:', '  router: {}', '  plugins: []'].join('\n'),
     )
   })
 })

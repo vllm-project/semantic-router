@@ -112,7 +112,7 @@ func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clie
 		statusCode:       resp.StatusCode,
 		contentType:      resp.Header.Get("Content-Type"),
 		body:             responseBody,
-		protocolWarnings: resp.Header.Get("x-vsr-protocol-warnings"),
+		protocolWarnings: resp.Header.Get(warningsHeader),
 	}, nil
 }
 

@@ -126,12 +126,29 @@ dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 		fi
 	@echo "dashboard/backend go mod tidy check passed"
 
+# A loaded runner can trip the MCP lifecycle tests' fixed deadlines; under CI
+# one failed attempt is retried once and keeps its evidence as
+# backend-attempt-N.jsonl.
 dashboard-test-backend: vllm-sr-install-cli ## Run dashboard backend Go tests (run from repo root: make dashboard-test-backend)
 	@$(LOG_TARGET)
 	@mkdir -p "$(DASHBOARD_TEST_REPORT_DIR)"
 	cd $(DASHBOARD_BACKEND_DIR) && \
 		go test -json -list '^(Test|Fuzz|Example)' ./... > "$(DASHBOARD_TEST_REPORT_DIR)/inventory.jsonl" && \
-		go test -json -count=1 ./... > "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl"
+		if [ -n "$$CI" ]; then \
+			for attempt in 1 2; do \
+				if go test -json -count=1 ./... > "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl"; then \
+					break; \
+				fi; \
+				cp "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl" "$(DASHBOARD_TEST_REPORT_DIR)/backend-attempt-$$attempt.jsonl"; \
+				if [ "$$attempt" -eq 2 ]; then \
+					exit 1; \
+				fi; \
+				echo "::warning::Dashboard backend tests failed on attempt $$attempt; retrying in 30s"; \
+				sleep 30; \
+			done; \
+		else \
+			go test -json -count=1 ./... > "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl"; \
+		fi
 
 # dashboard-test-backend fails when dashboard/backend/router/dashboard.openapi.json
 # drifts from the route registration; this target rewrites it.

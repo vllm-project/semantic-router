@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import pwd
 import sys
@@ -201,6 +202,15 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help="largest accepted request body in bytes (default: %(default)s)",
     )
     parser.add_argument(
+        "--systemone-schema",
+        choices=("vllm-sr/5.0", "vllm-sr/4.0"),
+        default=SERVE_DEFAULTS.systemone_schema,
+        help=(
+            "the System One schema /v1/systemone and /v1/systemone/batch speak: vllm-sr/5.0, or vllm-sr/4.0, "
+            "which also accepts the earlier contract's request forms (default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
         "--max-bundle-tasks",
         type=int,
         default=SERVE_DEFAULTS.max_bundle_tasks,
@@ -217,6 +227,26 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=SERVE_DEFAULTS.load_retry_seconds,
         help="wait before the first reload of a model that failed to load, doubling up to 300 s (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--forward-timeout-seconds",
+        type=float,
+        default=SERVE_DEFAULTS.forward_timeout_seconds,
+        help=(
+            "a forward running longer makes GET /health/live and GET /health answer 503 "
+            "until it returns, so a liveness probe restarts a hung worker; 0 turns this "
+            "watchdog off (default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
+        "--shutdown-grace-seconds",
+        type=float,
+        default=SERVE_DEFAULTS.shutdown_grace_seconds,
+        help=(
+            "on SIGTERM, how long the server waits for requests and forwards in flight; "
+            "it then exits even while a forward runs, logging what it abandoned "
+            "(default: %(default)s)"
+        ),
     )
     parser.add_argument(
         "--result-cache-entries",
@@ -317,6 +347,12 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
     models = _models(args, engine_args)
     if args.media_workers is not None and args.media_workers < 0:
         raise SystemExit("--media-workers must be a non-negative integer")
+    for flag in ("forward_timeout_seconds", "shutdown_grace_seconds"):
+        value = getattr(args, flag)
+        if not math.isfinite(value) or value < 0:
+            raise SystemExit(
+                f"--{flag.replace('_', '-')} must be a non-negative number of seconds"
+            )
     return ServeConfig(
         models=models,
         host=args.host,
@@ -332,6 +368,7 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         max_queued_tokens=args.max_queued_tokens,
         engine_args=engine_args,
         max_request_bytes=args.max_request_bytes,
+        systemone_schema=args.systemone_schema,
         cache_dir=args.cache_dir,
         offline=args.offline,
         base_path=args.base_path,
@@ -339,6 +376,8 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         log_level=args.log_level,
         autotune_cache=args.autotune_cache,
         media_workers=args.media_workers,
+        forward_timeout_seconds=args.forward_timeout_seconds,
+        shutdown_grace_seconds=args.shutdown_grace_seconds,
     )
 
 

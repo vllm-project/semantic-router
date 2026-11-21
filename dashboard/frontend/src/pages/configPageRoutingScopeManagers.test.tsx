@@ -1,6 +1,9 @@
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+
+import { TooltipProvider } from '../ui'
 
 import ConfigPageDecisionsSection from './ConfigPageDecisionsSection'
 import ConfigPageProjectionsSection from './ConfigPageProjectionsSection'
@@ -56,7 +59,7 @@ const config: ConfigData = {
           partitions: [],
         },
         signals: {
-          pii: [{ name: 'private-pii', threshold: 0.8 }],
+          pii: [{ name: 'private-pii', predicate: { gte: 0.8 } }],
         },
         decisions: [
           {
@@ -75,12 +78,20 @@ const config: ConfigData = {
   ],
 }
 
+const render = (element: ReactElement, path = '/') =>
+  renderToStaticMarkup(
+    createElement(
+      TooltipProvider,
+      null,
+      createElement(MemoryRouter, { initialEntries: [path] }, element),
+    ),
+  )
+
 describe('recipe-aware config managers', () => {
   it('shows the first reachable recipe signals instead of an empty default profile', () => {
-    const markup = renderToStaticMarkup(
+    const markup = render(
       createElement(ConfigPageSignalsSection, {
         config,
-        isPythonCLI: true,
         isReadonly: false,
         signalsSearch: '',
         onSignalsSearchChange: vi.fn(),
@@ -95,11 +106,10 @@ describe('recipe-aware config managers', () => {
     expect(markup).not.toContain('private-pii')
   })
 
-  it('shows recipe-owned decisions with an explicit routing profile selector', () => {
-    const markup = renderToStaticMarkup(
+  it('shows recipe-owned decisions with an explicit recipe selector', () => {
+    const markup = render(
       createElement(ConfigPageDecisionsSection, {
         config,
-        isPythonCLI: true,
         isReadonly: false,
         decisionsSearch: '',
         onDecisionsSearchChange: vi.fn(),
@@ -111,14 +121,14 @@ describe('recipe-aware config managers', () => {
       }),
     )
 
-    expect(markup).toContain('Routing profile')
+    expect(markup).toContain('aria-label="Recipe"')
     expect(markup).toContain('vllm-sr/balanced')
     expect(markup).toContain('balanced-route')
     expect(markup).not.toContain('private-route')
   })
 
-  it('shows recipe-owned projections through the same routing profile selector', () => {
-    const markup = renderToStaticMarkup(
+  it('shows recipe-owned projections through the same recipe selector', () => {
+    const markup = render(
       createElement(ConfigPageProjectionsSection, {
         config,
         isReadonly: false,
@@ -128,9 +138,39 @@ describe('recipe-aware config managers', () => {
       }),
     )
 
-    expect(markup).toContain('Routing profile')
+    expect(markup).toContain('aria-label="Recipe"')
     expect(markup).toContain('vllm-sr/balanced')
     expect(markup).toContain('balanced-score')
     expect(markup).not.toContain('private-score')
+  })
+})
+
+describe('recipe selection in the URL', () => {
+  it('opens the recipe named in ?recipe and its scores tab', () => {
+    const markup = render(
+      createElement(ConfigPageProjectionsSection, {
+        config,
+        isReadonly: false,
+        saveConfig: vi.fn(),
+      }),
+      '/routing/projections?recipe=privacy&tab=scores',
+    )
+    expect(markup).toContain('private-score')
+    expect(markup).not.toContain('balanced-score')
+  })
+
+  it('hides create actions in read-only mode', () => {
+    const markup = render(
+      createElement(ConfigPageDecisionsSection, {
+        config,
+        isReadonly: true,
+        decisionsSearch: '',
+        onDecisionsSearchChange: vi.fn(),
+        saveConfig: vi.fn(),
+        models: [],
+      }),
+    )
+    expect(markup).toContain('balanced-route')
+    expect(markup).not.toContain('New decision')
   })
 })

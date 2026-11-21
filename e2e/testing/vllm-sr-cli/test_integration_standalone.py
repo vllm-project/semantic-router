@@ -45,7 +45,7 @@ class TestStandaloneDocker(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         upstream = f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1"
         with self._running_serve(
             api_only=True,
-            base_url=upstream,
+            endpoint=upstream,
             provider="openai",
             env={
                 "DASHBOARD_ADMIN_EMAIL": TEST_ADMIN_EMAIL,

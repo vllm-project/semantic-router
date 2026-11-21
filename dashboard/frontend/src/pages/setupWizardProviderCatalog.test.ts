@@ -32,7 +32,15 @@ describe('setup wizard provider catalog', () => {
     expect(isSetupRuntimeProvider('ollama')).toBe(true)
     expect(getSetupProviderOption('ollama').initialBaseUrl).toBe(DEFAULT_SETUP_OLLAMA_BASE_URL)
     expect(isSetupRuntimeProvider('openai-compatible')).toBe(false)
-    expect(getSetupProviderOption('anthropic').apiFormat).toBe('anthropic')
+    expect(getSetupProviderOption('anthropic').apiFormat).toBe('messages')
     expect(getSetupProviderOption('anthropic').initialBaseUrl).toBe('https://api.anthropic.com')
+    expect(isSetupRuntimeProvider('deepseek')).toBe(false)
+    expect(getSetupProviderOption('deepseek').initialBaseUrl).toMatch(/^https:\/\//)
+  })
+
+  it('names a brand mark for every provider it offers', () => {
+    expect(getSetupProviderOption('dashscope').logo).toBe('qwen')
+    expect(getSetupProviderOption('openai-compatible').logo).toBe('openai')
+    expect(getSetupProviderOption('vllm').logo).toBe('vllm')
   })
 })

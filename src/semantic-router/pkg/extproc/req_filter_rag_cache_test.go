@@ -119,7 +119,8 @@ func TestRAGCache_EvictionOrder_WriteLRU(t *testing.T) {
 func TestRAGCache_TTLExpiry_MapAndListConsistency(t *testing.T) {
 	r := &OpenAIRouter{}
 	ttlSec := 1
-	cfg := &config.RAGPluginConfig{
+	cfg := &config.ContextSource{
+		Type:            config.ContextSourceRAG,
 		Backend:         "ttltest",
 		CacheResults:    true,
 		CacheTTLSeconds: &ttlSec,
@@ -218,7 +219,7 @@ func TestRAGCache_ConcurrentReadsDontDeadlock(t *testing.T) {
 // immediately when CacheResults is false, without touching the singleton.
 func TestGetRAGCache_CacheDisabled(t *testing.T) {
 	r := &OpenAIRouter{}
-	cfg := &config.RAGPluginConfig{CacheResults: false}
+	cfg := &config.ContextSource{Type: config.ContextSourceRAG, CacheResults: false}
 	ctx, ok := r.getRAGCache(config.DefaultRecipeName, "query", cfg)
 	if ok || ctx != "" {
 		t.Errorf("expected miss when CacheResults=false, got ok=%v ctx=%q", ok, ctx)

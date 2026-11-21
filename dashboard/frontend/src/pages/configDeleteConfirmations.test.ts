@@ -5,9 +5,9 @@ const readSource = (name: string) => readFileSync(new URL(name, import.meta.url)
 
 describe('configuration delete confirmation contracts', () => {
   it.each([
-    ['./ConfigPageDecisionsSection.tsx', 'decisionDeletePending', 'decisionDeleteError'],
-    ['./ConfigPageMoMRoutingPanel.tsx', 'entrypointPendingDelete', 'deleteError'],
-    ['./ConfigPageProjectionsSection.tsx', 'projectionDeletePending', 'projectionDeleteError'],
+    ['./ConfigPageDecisionsSection.tsx', 'pendingDelete', 'deleteError'],
+    ['./ConfigPageEntrypointsRecipesSection.tsx', 'entrypointPendingDelete', 'deleteError'],
+    ['./ConfigPageProjectionsSection.tsx', 'pendingDelete', 'deleteError'],
   ])('uses the shared confirmation flow in %s', (path, pendingState, errorState) => {
     const source = readSource(path)
 
@@ -27,25 +27,25 @@ describe('configuration delete confirmation contracts', () => {
     expect(source).not.toMatch(/\b(?:window\.)?confirm\s*\(/)
   })
 
-  it('covers every projection surface with the same stateful delete flow', () => {
+  it('deletes every projection kind through the one confirmed removal', () => {
     const source = readSource('./ConfigPageProjectionsSection.tsx')
 
-    expect(source).toContain("{ kind: 'partition', name: partition.name }")
-    expect(source).toContain("{ kind: 'score', name: score.name }")
-    expect(source).toContain("{ kind: 'mapping', name: mapping.name }")
-    expect(source).toContain('confirmDeleteProjection')
+    expect(source).toContain('const confirmDelete = async () =>')
+    expect(source).toContain(
+      'removeProjection(scopedConfig, pendingDelete.kind, pendingDelete.name)',
+    )
   })
 
-  it.each([
-    ['./ConfigPageSignalsSection.tsx', 'signalsPendingDelete', 'confirmDeleteSignals'],
-    ['./ConfigPageLegacyCategoriesSection.tsx', 'removeTarget', 'confirmRemoveModel'],
-  ])('removes native browser confirmation from %s', (path, targetState, confirmAction) => {
-    const source = readSource(path)
+  it.each([['./ConfigPageSignalsSection.tsx', 'pendingDelete', 'confirmDelete']])(
+    'removes native browser confirmation from %s',
+    (path, targetState, confirmAction) => {
+      const source = readSource(path)
 
-    expect(source).toContain('<ConfirmDialog')
-    expect(source).toContain(targetState)
-    expect(source).toContain(confirmAction)
-    expect(source).not.toMatch(/\b(?:window\.)?confirm\s*\(/)
-    expect(source).not.toMatch(/\b(?:window\.)?alert\s*\(/)
-  })
+      expect(source).toContain('<ConfirmDialog')
+      expect(source).toContain(targetState)
+      expect(source).toContain(confirmAction)
+      expect(source).not.toMatch(/\b(?:window\.)?confirm\s*\(/)
+      expect(source).not.toMatch(/\b(?:window\.)?alert\s*\(/)
+    },
+  )
 })
