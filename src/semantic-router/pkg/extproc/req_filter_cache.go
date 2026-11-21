@@ -173,6 +173,8 @@ func semanticCachePartition(ctx *RequestContext, model string) string {
 	return responseCacheIdentity(ctx, model).Partition.Key()
 }
 
+const responseGuardCacheVersion = "grounding-coverage-v1"
+
 func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentity {
 	protocol := strings.TrimSpace(string(ctx.SourceFormat))
 	if protocol == "" {
@@ -194,11 +196,11 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 			epoch = value
 		}
 	}
-	// An entry is served only under the response_guard that passed it:
-	// adding or changing the request's guard starts a new partition.
+	// A cached response belongs to the guard config and evaluation version
+	// that passed it. Bump the version when guard behavior changes.
 	if guard != nil {
 		if value, err := cache.FingerprintValue(guard); err == nil {
-			epoch = cache.CombineFingerprints(epoch, value)
+			epoch = cache.CombineFingerprints(epoch, value, responseGuardCacheVersion)
 		}
 	}
 	scope := responseCacheScope(ctx)

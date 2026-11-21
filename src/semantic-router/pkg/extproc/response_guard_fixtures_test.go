@@ -117,7 +117,7 @@ func newHallucinationDecider(spans []string, fail bool) (*responseStageDecider, 
 
 // responseStageClassifier is the recipe's classifier for cfg, answered by
 // decider.
-func responseStageClassifier(t *testing.T, cfg *config.RouterConfig, decider *responseStageDecider) *classification.Classifier {
+func responseStageClassifier(t *testing.T, cfg *config.RouterConfig, decider modelservice.Decider) *classification.Classifier {
 	t.Helper()
 	classifier, err := classification.NewClassifier(cfg)
 	if err != nil {

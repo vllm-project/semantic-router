@@ -222,23 +222,30 @@ func (c *Classifier) ReplayPromptEvidence(ctx context.Context, prompt string) Pr
 // EvaluateResponseSignals asks the response-stage rules include selects (the
 // systemone rules and the application rules with stage: response, by type and
 // name) about one answer, one call per deployment, as the request stage asks
-// its rules. A rule that reads a part the answer does not have, its text or
-// its grounding context, is unknown without a call.
+// its rules. A missing answer or grounding context is unknown without a
+// call. Entirely unreadable grounding resolves as on_unscanned when a rule
+// requires full coverage.
 func (c *Classifier) EvaluateResponseSignals(ctx context.Context, input ResponseInput, include func(signalType, name string) bool) *ResponseSignal {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	results := newResponseSignalResults()
 	var rules []askedRule
+	selectedTypes := map[string]struct{}{}
 	ask := func(asked askedRule) {
 		if !include(asked.signalType, asked.rule.Name) {
 			return
 		}
-		if part := missingResponsePart(asked.rule.Input, input); part != "" {
-			results.SignalErrors[signalConfidenceKey(asked.signalType, asked.rule.Name)] = systemOneSignalErrorPrefix + part + "_unavailable"
+		selectedTypes[asked.signalType] = struct{}{}
+		reason := missingResponseReason(asked.rule, input)
+		if reason == "" {
+			rules = append(rules, asked)
 			return
 		}
-		rules = append(rules, asked)
+		if reason == unreadToolResult && c.resolveUnread(results, asked, c.Config.SystemOneRuleDeployment(asked.rule), reason) {
+			return
+		}
+		results.SignalErrors[signalConfidenceKey(asked.signalType, asked.rule.Name)] = systemOneSignalErrorPrefix + reason
 	}
 	for _, rule := range c.Config.SystemOneRules {
 		if rule.EffectiveStage() == config.SystemOneStageResponse {
@@ -255,27 +262,29 @@ func (c *Classifier) EvaluateResponseSignals(ctx context.Context, input Response
 		Matched: map[string][]string{}, Reported: map[string][]string{}, Confidences: results.SignalConfidences,
 		Values: results.SignalValues, Errors: results.SignalErrors, Spans: results.SignalSpans,
 	}
-	for _, asked := range rules {
-		if matched := results.matchedRulesOf(asked.signalType); matched != nil && len(*matched) > 0 {
-			signal.Matched[asked.signalType] = slices.Clone(*matched)
+	for signalType := range selectedTypes {
+		if matched := results.matchedRulesOf(signalType); matched != nil && len(*matched) > 0 {
+			signal.Matched[signalType] = slices.Clone(*matched)
 		}
-		if reported := results.ReportedMatches(asked.signalType); len(reported) > 0 {
-			signal.Reported[asked.signalType] = reported
+		if reported := results.ReportedMatches(signalType); len(reported) > 0 {
+			signal.Reported[signalType] = reported
 		}
 	}
 	return signal
 }
 
-// missingResponsePart names the part of the answer a rule reads that it does
-// not have: "answer" for an answer without text, such as one made of tool
-// calls, and "context" for an answer with no grounding context to check it
-// against.
-func missingResponsePart(input config.SystemOneInput, response ResponseInput) string {
+// missingResponseReason explains why a rule cannot inspect an answer or its
+// grounding context. An answer made only of tool calls has no text to read.
+// A full-coverage rule distinguishes omitted tool content from absent context.
+func missingResponseReason(rule config.SystemOneRule, input ResponseInput) string {
 	switch {
-	case input.Answer && strings.TrimSpace(response.Answer) == "":
-		return "answer"
-	case input.Context && strings.TrimSpace(response.Context) == "":
-		return "context"
+	case rule.Input.Answer && strings.TrimSpace(input.Answer) == "":
+		return "answer_unavailable"
+	case rule.Input.Context && strings.TrimSpace(input.Context) == "":
+		if input.ContextIncomplete && rule.FullCoverage() {
+			return unreadToolResult
+		}
+		return "context_unavailable"
 	}
 	return ""
 }

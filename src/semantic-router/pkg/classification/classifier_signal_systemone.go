@@ -109,6 +109,7 @@ type systemOneReading struct {
 	imagesIncomplete      bool
 	answer                string
 	context               string
+	contextIncomplete     bool
 	images                []string
 	videos                []string
 	videosIncomplete      bool
@@ -247,6 +248,8 @@ func (r systemOneReading) unread(rule config.SystemOneRule) string {
 	case !rule.FullCoverage():
 		return ""
 	case r.toolResultsIncomplete && rule.Input.ToolResults:
+		return unreadToolResult
+	case r.contextIncomplete && rule.Input.Context:
 		return unreadToolResult
 	case r.imagesIncomplete && rule.Input.Image:
 		return unreadImage
@@ -409,9 +412,11 @@ func (c *Classifier) evaluateSystemOneSignals(
 // answered, the model's answer and its grounding context (retrieved
 // documents and tool results), and the conversation of the request.
 type ResponseInput struct {
-	Request           string
-	Answer            string
-	Context           string
+	Request string
+	Answer  string
+	Context string
+	// ContextIncomplete marks tool-result content omitted from Context.
+	ContextIncomplete bool
 	PriorUserMessages []string
 	Turns             []ConversationTurn
 	ToolResultTexts   []string
@@ -425,7 +430,8 @@ type ResponseInput struct {
 func (input ResponseInput) reading() systemOneReading {
 	return systemOneReading{
 		request: input.Request, history: input.PriorUserMessages, turns: input.Turns, toolResults: input.ToolResultTexts,
-		toolResultsIncomplete: input.ToolResultsIncomplete, answer: input.Answer, context: input.Context, images: input.Images, videos: input.Videos,
+		toolResultsIncomplete: input.ToolResultsIncomplete, answer: input.Answer, context: input.Context,
+		contextIncomplete: input.ContextIncomplete, images: input.Images, videos: input.Videos,
 	}
 }
 
