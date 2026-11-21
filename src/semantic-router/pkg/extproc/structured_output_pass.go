@@ -63,7 +63,7 @@ func planStructuredOutputPass(dispatch *providerDispatch, ctx *RequestContext) *
 // format kept. What the format loses toward the backend joins the request's
 // diagnostics; the tool_choice none the call asks with is the Router's.
 func (r *OpenAIRouter) encodeStructuredOutputRequest(dispatch *providerDispatch, ctx *RequestContext) ([]byte, error) {
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (r *OpenAIRouter) encodeStructuredOutputRequest(dispatch *providerDispatch,
 		return nil, policyErr
 	}
 	request, _ = llmprotocol.ProjectToolChoiceNone(request, format)
-	request, diagnostics, err := r.projectRequestForBackendWithDiagnostics(request, dispatch.effectiveBackendModel(), format)
+	request, diagnostics, err := r.projectRequestForBackendWithDiagnostics(ctx, request, dispatch.effectiveBackendModel(), format)
 	if err != nil {
 		return nil, err
 	}

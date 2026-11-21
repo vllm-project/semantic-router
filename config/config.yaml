@@ -356,6 +356,7 @@ entrypoints:
     default: true
     review_model: vllm-sr/exhaustive-privacy
     memory_model: vllm-sr/exhaustive-privacy
+    allow_lossy_translation: [tools.defer_loading]
   - model_names: ["vllm-sr/exhaustive-privacy"]
     recipe: privacy-first
   - api: systemone

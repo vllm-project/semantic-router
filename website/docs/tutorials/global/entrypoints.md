@@ -69,6 +69,12 @@ curl http://localhost:8899/v1/chat/completions \
 The entrypoint name never reaches a provider. After the recipe chooses a
 backend, the Router rewrites the request to that backend's model name.
 
+An entrypoint can also set `allow_lossy_translation`, the protocol losses the
+Router accepts for its requests. It replaces
+`global.router.allow_lossy_translation` for that entrypoint, and `[]` accepts
+none, so two agent harnesses can share one gateway with different losses. See
+[One gateway for Claude Code and Codex](../../installation/agent-harness#one-gateway-for-claude-code-and-codex).
+
 ## Request resolution
 
 | Requested model | Router behavior |

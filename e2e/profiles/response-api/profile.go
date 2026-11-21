@@ -129,6 +129,7 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-tool-result-error-opt-in",
 		"protocol-codec-unreadable-file-opt-in",
 		"protocol-codec-defer-loading-opt-in",
+		"protocol-codec-defer-loading-per-entrypoint",
 		"protocol-codec-anthropic-system-messages-opt-in",
 		"protocol-codec-anthropic-cache-tool-loop-responses",
 		"protocol-codec-anthropic-adaptive-responses",

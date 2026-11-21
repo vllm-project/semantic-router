@@ -31,7 +31,7 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if plugin == nil {
 		return responseBody, nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(requestCtx)
 	if err != nil {
 		return responseBody, err
 	}
@@ -184,7 +184,7 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if model == "" {
 		model = strings.TrimSpace(requestCtx.RequestModel)
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(requestCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	}
 	client := r.looperModelClient()
 	followup, err := client.CallModelWithOptions(
-		ctx,
+		withHopEntrypoint(ctx, requestCtx),
 		*openAIRequest,
 		looper.ModelTarget{
 			Name:      model,
@@ -369,7 +369,7 @@ func (r *OpenAIRouter) redactContextRecoveryToolCalls(responseBody []byte, ctx *
 	if ctx == nil {
 		return responseBody
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return responseBody
 	}

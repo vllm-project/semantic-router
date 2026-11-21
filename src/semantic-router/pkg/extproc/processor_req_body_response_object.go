@@ -25,7 +25,7 @@ func (r *OpenAIRouter) materializeResponseObjectContext(request *llmprotocol.Req
 		return false, nil
 	}
 
-	changed, err := r.prependStoredResponseHistory(request, state.ConversationHistory, state.Input)
+	changed, err := r.prependStoredResponseHistory(ctx, request, state.ConversationHistory, state.Input)
 	if err != nil {
 		return false, err
 	}
@@ -40,6 +40,7 @@ func (r *OpenAIRouter) materializeResponseObjectContext(request *llmprotocol.Req
 }
 
 func (r *OpenAIRouter) prependStoredResponseHistory(
+	ctx *RequestContext,
 	request *llmprotocol.Request,
 	stored []*responseapi.StoredResponse,
 	input []responseapi.InputItem,
@@ -47,7 +48,7 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	if len(stored) == 0 {
 		return false, nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return false, err
 	}

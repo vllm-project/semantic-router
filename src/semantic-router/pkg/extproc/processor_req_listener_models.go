@@ -51,13 +51,7 @@ const maxRequestedModelBytes = 256
 // is kept for the record and the trace only; no signal reads it. A System
 // One model keeps its own answer.
 func (r *OpenAIRouter) routeUnservedModel(model string, ctx *RequestContext) string {
-	if ctx == nil || ctx.UnservedModelRoute == "" || model == "" || model == ctx.UnservedModelRoute {
-		return model
-	}
-	if r.Config != nil && r.Config.IsSystemOneBackend(model) {
-		return model
-	}
-	if (ctx.ListenerModels == nil || ctx.ListenerModels.Allows(model)) && r.servesModel(model) {
+	if route := r.unservedModelRoute(model, ctx); route == model {
 		return model
 	}
 	ctx.RequestedModel = truncateShadowText(model, maxRequestedModelBytes)
@@ -68,6 +62,21 @@ func (r *OpenAIRouter) routeUnservedModel(model string, ctx *RequestContext) str
 		"request_id": ctx.RequestID,
 		"route_to":   ctx.UnservedModelRoute,
 	})
+	return ctx.UnservedModelRoute
+}
+
+// unservedModelRoute is the model routeUnservedModel routes a request naming
+// model as, without recording the route.
+func (r *OpenAIRouter) unservedModelRoute(model string, ctx *RequestContext) string {
+	if ctx == nil || ctx.UnservedModelRoute == "" || model == "" || model == ctx.UnservedModelRoute {
+		return model
+	}
+	if r.Config != nil && r.Config.IsSystemOneBackend(model) {
+		return model
+	}
+	if (ctx.ListenerModels == nil || ctx.ListenerModels.Allows(model)) && r.servesModel(model) {
+		return model
+	}
 	return ctx.UnservedModelRoute
 }
 

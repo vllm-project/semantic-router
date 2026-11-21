@@ -77,7 +77,7 @@ func (r *OpenAIRouter) judgeTaskTexts(
 // each client format in turn. A decoding that reads the wrong text is caught
 // downstream, because BuildJudgeTasks hashes it against the recorded digest.
 func (r *OpenAIRouter) storedAnswerText(body string) string {
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(nil)
 	if err != nil || body == "" {
 		return ""
 	}

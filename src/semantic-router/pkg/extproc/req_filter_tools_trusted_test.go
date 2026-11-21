@@ -419,7 +419,7 @@ func TestHandleToolSelectionTrustedFactsGatesHostedImageGeneration(t *testing.T)
 
 			router.applyToolsPlugin(req, &ext_proc.ProcessingResponse{}, ctx)
 
-			engine, err := router.protocolEngine()
+			engine, err := router.protocolEngine(nil)
 			require.NoError(t, err)
 			encoded, err := engine.EncodeRequest(llmprotocol.OpenAIResponsesV1, *ctx.SemanticRequest, ctx.ProtocolEnvelope)
 			require.NoError(t, err)

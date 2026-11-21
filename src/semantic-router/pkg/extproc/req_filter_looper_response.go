@@ -37,7 +37,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	if resp == nil || reqCtx == nil {
 		return nil, nil, nil, fmt.Errorf("looper response context is unavailable")
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(reqCtx)
 	if err != nil {
 		return nil, nil, nil, err
 	}

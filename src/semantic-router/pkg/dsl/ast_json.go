@@ -36,6 +36,10 @@ type EntrypointDeclJSON struct {
 	ModelNames  []string `json:"modelNames"`
 	Recipe      string   `json:"recipe"`
 	Pos         Position `json:"pos"`
+
+	// AllowLossyTranslation is absent when the entrypoint takes the global
+	// accepted losses.
+	AllowLossyTranslation *[]string `json:"allowLossyTranslation,omitempty"`
 }
 
 // RecipeDeclJSON is the JSON form of one isolated recipe program.
@@ -263,6 +267,8 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 			ReviewModel: entrypoint.ReviewModel,
 			MemoryModel: entrypoint.MemoryModel,
 			Pos:         entrypoint.Pos,
+
+			AllowLossyTranslation: cloneStringList(entrypoint.AllowLossyTranslation),
 		})
 	}
 	for _, recipe := range prog.Recipes {

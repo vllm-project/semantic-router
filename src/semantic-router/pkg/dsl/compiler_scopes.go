@@ -117,6 +117,16 @@ func emptyProfile(profile config.RoutingProfile) bool {
 	return reflect.ValueOf(profile.Signals).IsZero() && reflect.ValueOf(profile.Projections).IsZero()
 }
 
+// cloneStringList copies an optional list, keeping an empty list apart from
+// an unset one.
+func cloneStringList(list *[]string) *[]string {
+	if list == nil {
+		return nil
+	}
+	clone := append([]string{}, (*list)...)
+	return &clone
+}
+
 func (c *Compiler) compileEntrypoints(recipeNames map[config.RecipeName]struct{}) {
 	seenModels := make(map[config.InferenceAPI]map[string]struct{})
 	var marked *EntrypointDecl
@@ -162,6 +172,8 @@ func (c *Compiler) compileEntrypoints(recipeNames map[config.RecipeName]struct{}
 			Default:     entrypoint.Default,
 			ReviewModel: entrypoint.ReviewModel,
 			MemoryModel: entrypoint.MemoryModel,
+
+			AllowLossyTranslation: cloneStringList(entrypoint.AllowLossyTranslation),
 		})
 	}
 	switch {

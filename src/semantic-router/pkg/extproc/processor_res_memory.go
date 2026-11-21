@@ -89,7 +89,7 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 	reservation.Start(memoryPersistenceJob{
 		extractor:         r.MemoryExtractor,
 		codecs:            r.ProtocolCodecs,
-		allowedLossy:      r.Config.AllowLossyTranslation,
+		allowedLossy:      r.acceptedLosses(ctx),
 		sessionID:         sessionID,
 		userID:            userID,
 		userMessage:       currentUserMessage,

@@ -144,7 +144,8 @@ func selectedCacheModel(requestModel string, selectedModels []string) string {
 
 // responseCachePolicyFingerprint is what besides the request decides its
 // answer: the plugins it runs, a decision's or, without one, the layered
-// defaults, and the decision's models and output contract.
+// defaults, the decision's models and output contract, and the translation
+// losses its entrypoint accepts when it sets its own.
 func responseCachePolicyFingerprint(cfg *config.RouterConfig, ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
@@ -152,6 +153,9 @@ func responseCachePolicyFingerprint(cfg *config.RouterConfig, ctx *RequestContex
 	policy := map[string]interface{}{
 		"plugins":         requestPlugins(cfg, ctx),
 		"client_protocol": string(ctx.SourceFormat),
+	}
+	if ctx.entrypoint != nil && ctx.entrypoint.AllowLossyTranslation != nil {
+		policy["accepted_losses"] = *ctx.entrypoint.AllowLossyTranslation
 	}
 	if decision := ctx.VSRSelectedDecision; decision != nil {
 		policy["decision"] = decision.Name
@@ -347,7 +351,7 @@ func (r *OpenAIRouter) createCacheHitResponse(
 	contentType := "application/json"
 	var responseBody []byte
 	if ctx.ExpectStreamingResponse {
-		engine, engineErr := r.protocolEngine()
+		engine, engineErr := r.protocolEngine(ctx)
 		if engineErr == nil {
 			responseBody, ctx.ProtocolDiagnostics, engineErr = encodeCachedSemanticStream(
 				engine, ctx, *semanticResponse, ctx.ProtocolDiagnostics,

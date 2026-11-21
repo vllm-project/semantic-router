@@ -128,12 +128,27 @@ def _protection_finding(router: dict, headers: dict[str, str]) -> RouterFinding 
     )
 
 
+# The key check_router_config adds to its view of global.router when the
+# connected entrypoint sets its own allow_lossy_translation: that entrypoint's
+# model_names, which the advice then names instead of global.router.
+OWN_LOSSES = "entrypoint_model_names"
+
+
+def _lossy_snippet(router: dict, fields: list[str]) -> str:
+    listed = ", ".join(fields)
+    if OWN_LOSSES in router:
+        names = ", ".join(router[OWN_LOSSES])
+        return (
+            f"entrypoints:\n  - model_names: [{names}]\n"
+            f"    allow_lossy_translation: [{listed}]"
+        )
+    return f"global:\n  router:\n    allow_lossy_translation: [{listed}]"
+
+
 def _lossy_finding(router: dict, field_name: str, why: str) -> RouterFinding | None:
     if field_name in (router.get("allow_lossy_translation") or []):
         return None
-    return RouterFinding(
-        why, f"global:\n  router:\n    allow_lossy_translation: [{field_name}]"
-    )
+    return RouterFinding(why, _lossy_snippet(router, [field_name]))
 
 
 def _model_formats(doc: dict) -> dict[str, str]:
@@ -186,7 +201,7 @@ def _claude_findings(doc: dict, router: dict, reach) -> list[RouterFinding | Non
                 f"{', '.join(missing)}, or the Router refuses Claude Code's error tool results,"
                 " system turns and files toward an openai backend"
                 + ("" if formats & OPENAI_FORMATS else MAYBE_OPENAI),
-                f"global:\n  router:\n    allow_lossy_translation: [{', '.join(missing)}]",
+                _lossy_snippet(router, missing),
             )
         )
     return findings
@@ -285,6 +300,24 @@ def entrypoint_models(doc: dict, model: str) -> list[str] | None:
     if groups is None:
         return None
     return list(dict.fromkeys(name for names, _ in groups for name in names))
+
+
+def _own_losses(doc: dict, router: dict, model: str | None) -> dict:
+    """global.router as a request for model sees it: an entrypoint's own
+    allow_lossy_translation replaces the global list for its requests."""
+    for entrypoint in doc.get("entrypoints") or []:
+        if (
+            isinstance(entrypoint, dict)
+            and entrypoint.get("api") in (None, "", "chat")
+            and model in (entrypoint.get("model_names") or [])
+            and entrypoint.get("allow_lossy_translation") is not None
+        ):
+            return {
+                **router,
+                "allow_lossy_translation": entrypoint["allow_lossy_translation"],
+                OWN_LOSSES: entrypoint["model_names"],
+            }
+    return router
 
 
 def _entrypoint_recipe(doc: dict, model: str) -> dict | None:
@@ -657,7 +690,7 @@ def check_router_config(
     """What this harness needs from a v0.5 Router configuration and does not find,
     for the models a request for model can reach (all of them when model is None
     or maps nowhere)."""
-    router = _get(doc, "global", "router") or {}
+    router = _own_losses(doc, _get(doc, "global", "router") or {}, model)
     reachable = entrypoint_models(doc, model) if model else None
     reach = (lambda _: True) if reachable is None else set(reachable).__contains__
     findings = {"claude-code": _claude_findings, "pi": _pi_findings}

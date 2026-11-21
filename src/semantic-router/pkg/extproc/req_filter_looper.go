@@ -215,7 +215,7 @@ func (r *OpenAIRouter) releaseLooperAnswer(
 	}
 	// The first render already reported each extension it dropped.
 	diagnostics := reqCtx.ProtocolDiagnostics
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(reqCtx)
 	if err == nil {
 		noted, err = finalizeLooperResponseExtensions(engine, noted, resp.RouterExtensions(), reqCtx, streaming)
 	}
@@ -291,7 +291,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 			"Looper cannot represent the request semantics", "looper_reasoning_continuity_unsupported",
 		)
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(reqCtx)
 	if err == nil {
 		var encoded protocolcodec.RequestResult
 		encoded, err = engine.EncodeRequest(llmprotocol.OpenAIChatV1, *request, llmprotocol.Envelope{})

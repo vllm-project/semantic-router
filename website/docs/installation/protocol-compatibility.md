@@ -629,7 +629,7 @@ Completions or Responses backend, the request fails before routing with
 `unsupported_capability`, and the message names the first signed block:
 
 ```text
-messages[1].content[0].signature: the selected model cannot accept signed thinking; an operator can accept this loss by listing reasoning.signature in global.router.allow_lossy_translation
+messages[1].content[0].signature: the selected model cannot accept signed thinking; an operator can accept this loss by listing reasoning.signature in global.router.allow_lossy_translation or, for an entrypoint that sets its own list, in that entrypoint's allow_lossy_translation
 ```
 
 The same setting lets these requests through:
@@ -858,7 +858,8 @@ tools or error translation.
   that cannot be represented return a typed protocol error. A
   `lossy_translation` error for a loss an operator may accept, such as
   `tool_result.is_error`, names the `global.router.allow_lossy_translation`
-  setting that accepts it, and so do the `unsupported_tools_defer_loading`
+  setting and the entrypoint's own `allow_lossy_translation` that accept it,
+  and so do the `unsupported_tools_defer_loading`
   error and the `unsupported_capability` error for signed thinking in a
   request. The `unsupported_capability` errors for files, signed reasoning in
   a response and stored completions don't; their sections above name the
@@ -886,6 +887,9 @@ tools or error translation.
   `reasoning.signature` for signed thinking in a response or in a Messages
   request's history (see signed reasoning above), `store` (see stored
   completions above), and every other lossy translation still fails closed.
+  An entrypoint's own `allow_lossy_translation` replaces the global list for
+  the requests that name it, and `[]` accepts no loss; see
+  [One gateway for Claude Code and Codex](agent-harness#one-gateway-for-claude-code-and-codex).
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.

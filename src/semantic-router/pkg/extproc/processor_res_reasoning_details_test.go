@@ -39,7 +39,7 @@ func TestOpenRouterReasoningDetailsSurviveRouterResponseAndDispatch(t *testing.T
 				require.Contains(t, reply, `"reasoning_content":"thought"`, "clients render the plain reasoning text")
 			}
 			require.NotNil(t, ctx.SemanticResponse)
-			engine, err := router.protocolEngine()
+			engine, err := router.protocolEngine(nil)
 			require.NoError(t, err)
 			response, err := engine.EncodeResponse(llmprotocol.OpenAIChatV1, *ctx.SemanticResponse, llmprotocol.Envelope{})
 			require.NoError(t, err)

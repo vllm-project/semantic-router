@@ -153,7 +153,7 @@ func (r *OpenAIRouter) addSemanticCacheEntry(
 // streamsFromCache reports whether a cache hit can stream the request's
 // answer back.
 func (r *OpenAIRouter) streamsFromCache(ctx *RequestContext) bool {
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err == nil {
 		_, _, err = encodeCachedSemanticStream(engine, ctx, *ctx.SemanticResponse, nil)
 	}

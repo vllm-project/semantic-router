@@ -114,6 +114,17 @@ describe('manager load and save', () => {
     },
   )
 
+  it.each([[['tools.defer_loading']], [[]]])(
+    'retains the default entrypoint when it sets allow_lossy_translation %j',
+    (losses) => {
+      const original = v05Config()
+      original.entrypoints![0].allow_lossy_translation = losses
+      const view = projectCanonicalConfigForManager(original)
+      expect(view.entrypoints?.[0].allow_lossy_translation).toEqual(losses)
+      expect(canonicalizeConfigForManagerSave(view)).toEqual(original)
+    },
+  )
+
   it('saves the edited signals and decisions of the default recipe', () => {
     const view = projectCanonicalConfigForManager(v05Config())
     view.decisions![0].priority = 300

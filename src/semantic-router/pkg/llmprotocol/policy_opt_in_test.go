@@ -7,7 +7,8 @@ import (
 
 func TestOptInHintNamesTheSettingOnlyForAcceptableLosses(t *testing.T) {
 	for _, field := range OptInLossyFields() {
-		if hint := OptInHint(field); !strings.Contains(hint, field+" in global.router.allow_lossy_translation") {
+		if hint := OptInHint(field); !strings.Contains(hint, field+" in global.router.allow_lossy_translation") ||
+			!strings.Contains(hint, "that entrypoint's allow_lossy_translation") {
 			t.Errorf("OptInHint(%q) = %q", field, hint)
 		}
 	}

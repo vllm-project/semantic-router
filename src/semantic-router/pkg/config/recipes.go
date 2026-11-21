@@ -79,6 +79,9 @@ type EntrypointMapping struct {
 	ReviewModel string
 	// MemoryModel names another entrypoint model used for agent memory calls.
 	MemoryModel string
+	// AllowLossyTranslation, when set, replaces the global accepted losses for
+	// requests to this entrypoint. RouterConfig.AcceptedLosses reads it.
+	AllowLossyTranslation *[]string
 }
 
 // RoutingDecisionRef identifies a decision inside its owning recipe. The

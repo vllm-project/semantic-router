@@ -218,6 +218,16 @@ def _validate_entrypoints(
                 )
     entries = effective_entrypoints(config)
     for index, entrypoint in enumerate(config.entrypoints):
+        if (
+            entrypoint.api == "systemone"
+            and entrypoint.allow_lossy_translation is not None
+        ):
+            errors.append(
+                ValidationError(
+                    "a systemone entrypoint translates no wire format",
+                    field=f"entrypoints[{index}].allow_lossy_translation",
+                )
+            )
         for key in ("review_model", "memory_model"):
             delegate = getattr(entrypoint, key)
             if not delegate:

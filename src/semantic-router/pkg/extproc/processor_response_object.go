@@ -88,7 +88,7 @@ func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
 		return
 	}
 
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		logResponseObjectPersistenceFailure(ctx, err)
 		return
