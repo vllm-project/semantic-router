@@ -9,9 +9,15 @@ from starlette.testclient import TestClient
 from vllm_srun import dtypes
 from vllm_srun.accel import onednn
 from vllm_srun.api.app import create_app
-from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, EngineArgs, ModelConfig, ServeConfig
+from vllm_srun.config import (
+    DEFAULT_MAX_NUM_SEQS,
+    EngineArgs,
+    ModelConfig,
+    ServeConfig,
+    load_models_file,
+)
 from vllm_srun.engines.native.engine import NativeEngine
-from vllm_srun.errors import VerificationError
+from vllm_srun.errors import RuntimeServiceError, VerificationError
 from vllm_srun.families.task_heads import family as task_heads
 from vllm_srun.plugins.base import BackboneSpec, DtypePolicy, ModelSpec
 from vllm_srun.runtime import Runtime
@@ -471,5 +477,153 @@ def test_system_one_refuses_a_question_over_the_process_max_model_len(
             "/v1/systemone", json={"state": STATE, "questions": question}
         )
         assert response.status_code == 200
+    finally:
+        runtime.stop()
+
+
+@pytest.mark.parametrize(
+    "models",
+    [
+        (
+            ModelConfig(model="facebook/opt-125m", device="cpu"),
+            ModelConfig(model="facebook/opt-125m", device="cpu"),
+        ),
+        (
+            ModelConfig(model="org1/qwen-2.5-7b", device="cpu"),
+            ModelConfig(model="org2/qwen-2.5-7b", device="cpu"),
+        ),
+        (
+            ModelConfig(model="org/foo", device="cpu"),
+            ModelConfig(model="bar", name="foo", device="cpu"),
+        ),
+        (
+            ModelConfig(model="bar", name="foo", device="cpu"),
+            ModelConfig(model="org/foo", device="cpu"),
+        ),
+    ],
+)
+def test_runtime_rejects_duplicate_and_colliding_model_names(models):
+    with pytest.raises(ValueError, match="served model names must be unique"):
+        Runtime(ServeConfig(models=models))
+
+
+def test_runtime_accepts_distinct_explicit_names_for_same_model():
+    models = (
+        ModelConfig(model="facebook/opt-125m", name="opt-0", device="cpu"),
+        ModelConfig(model="facebook/opt-125m", name="opt-1", device="cpu"),
+    )
+    runtime = Runtime(ServeConfig(models=models))
+    assert [served.label for served in runtime.served] == ["opt-0", "opt-1"]
+    assert set(runtime.health.describe().keys()) == {"opt-0", "opt-1"}
+
+
+@pytest.mark.parametrize(
+    "content,expected_name",
+    [
+        (
+            "models:\n  - model: org1/qwen-2.5-7b\n  - model: org2/qwen-2.5-7b\n",
+            "qwen-2.5-7b",
+        ),
+        (
+            "models:\n  - model: org/foo\n  - model: bar\n    name: foo\n",
+            "foo",
+        ),
+        (
+            "models:\n  - model: bar\n    name: foo\n  - model: org/foo\n",
+            "foo",
+        ),
+    ],
+)
+def test_load_models_file_rejects_unnamed_duplicate_and_colliding_models(
+    tmp_path, content, expected_name
+):
+    path = tmp_path / "models.yaml"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(ValueError, match=f"duplicate model name {expected_name!r}"):
+        load_models_file(path)
+
+
+def test_runtime_health_retains_preload_labels_for_same_package(
+    qwen3_package, package_copy
+):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(model=str(qwen3_package), device="cpu"),
+                ModelConfig(model=str(package_copy), device="cpu"),
+            )
+        )
+    )
+    try:
+        assert [served.label for served in runtime.served] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        # IDs are fixed from config before serving starts and do not change as models load.
+        assert [served.served_id for served in runtime.served] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        assert [card["id"] for card in runtime.model_cards()] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+
+        # Progressive loading: load the first model alone while the second copy is still
+        # loading in the background. The advertised ID must not switch to the package ID.
+        runtime.served[0].load()
+        assert runtime.served[0].model is not None
+        assert runtime.served[1].model is None
+        assert [served.served_id for served in runtime.served] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        assert [card["id"] for card in runtime.model_cards()] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        client = TestClient(create_app(runtime))
+        response = client.get("/v1/models")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert [item["id"] for item in data] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        assert runtime.lookup(data[0]["id"]) is runtime.served[0]
+
+        shared_package_id = runtime.served[0].model.info.id
+        with pytest.raises(RuntimeServiceError) as exc_info:
+            runtime.lookup(shared_package_id)
+        assert exc_info.value.code == "model_not_found"
+
+        # Now load the second copy: IDs and lookups must not mutate.
+        runtime.served[1].load()
+        assert runtime.served[1].model is not None
+        assert [served.served_id for served in runtime.served] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        cards = runtime.model_cards()
+        assert [card["id"] for card in cards] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        for card, served in zip(cards, runtime.served, strict=True):
+            assert runtime.lookup(card["id"]) is served
+
+        response = client.get("/v1/models")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert [item["id"] for item in data] == [
+            qwen3_package.name,
+            package_copy.name,
+        ]
+        for item, served in zip(data, runtime.served, strict=True):
+            assert runtime.lookup(item["id"]) is served
+
+        with pytest.raises(RuntimeServiceError) as exc_info:
+            runtime.lookup(shared_package_id)
+        assert exc_info.value.code == "model_not_found"
     finally:
         runtime.stop()

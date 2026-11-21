@@ -25,14 +25,13 @@ from concurrent.futures import Future
 from dataclasses import dataclass, field, replace
 from functools import partial
 from http import HTTPStatus
-from pathlib import Path
 from typing import Any
 
 from . import assets as assetlib
 from . import dtypes, media
 from .accel.autotune import KernelChoices, freeze_autotune
 from .accel.cpu import cap_threads
-from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig
+from .config import ONNX_RUNTIME_SPIN_COUNT, ModelConfig, ServeConfig, name_of
 from .errors import (
     PackageError,
     RuntimeServiceError,
@@ -315,10 +314,6 @@ class ResultCache:
                 self._values.popitem(last=False)
 
 
-def _name_of(artifact: str) -> str:
-    return Path(artifact.rstrip("/")).name or artifact
-
-
 class ServedModel:
     """One model of the process: its configuration, loaded model, scheduler and health."""
 
@@ -355,15 +350,32 @@ class ServedModel:
     def served_id(self) -> str | None:
         if self.config.name:
             return self.config.name
+        if len(self.runtime.served) > 1:
+            return self.label
         return self.model.info.id if self.model else None
 
     @property
     def label(self) -> str:
-        return self.served_id or _name_of(self.config.model)
+        return self.config.name or name_of(self.config.model)
 
     def names(self) -> set[str]:
-        names = {self.config.name, self.config.model, _name_of(self.config.model)}
-        if self.model is not None:
+        names = {self.config.name, self.config.model, name_of(self.config.model)}
+        if self.model is not None and (
+            len(self.runtime.served) == 1
+            or not any(
+                other is not self
+                and (
+                    other.config.name == self.model.info.id
+                    or other.config.model == self.config.model
+                    or (self.config.name is None and other.config.name is None)
+                    or (
+                        other.model is not None
+                        and other.model.info.id == self.model.info.id
+                    )
+                )
+                for other in self.runtime.served
+            )
+        ):
             names |= {self.model.info.id, self.model.info.repo}
         return {name for name in names if name}
 
@@ -840,7 +852,7 @@ class ServedModel:
     def card(self, plugins: list[dict[str, Any]]) -> dict[str, Any]:
         if self.model is None or self.placement is None or self.package is None:
             return {
-                "id": self.config.name or self.config.model,
+                "id": self.served_id or self.config.name or self.config.model,
                 "object": "model",
                 "family": self.family.name if self.family else "unknown",
                 "surfaces": [],
@@ -994,7 +1006,7 @@ class Runtime:
         self._planning: dict[object, float] = {}
         self._planning_lock = threading.Lock()
         self.served = [ServedModel(self, model) for model in config.served_models()]
-        labels = [served.config.name for served in self.served if served.config.name]
+        labels = [served.label for served in self.served]
         if len(labels) != len(set(labels)):
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
