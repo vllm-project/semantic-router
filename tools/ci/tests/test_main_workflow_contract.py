@@ -14,6 +14,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
+from manual_ci import MERGIFY_BOT_ID  # noqa: E402
 from workflow_policy_validation import validate_main_latest  # noqa: E402
 
 UPSTREAM = "vllm-project/semantic-router"
@@ -387,19 +388,47 @@ class PullRequestGateContractTests(unittest.TestCase):
                             self.assertEqual(allowed, not cancelled)
         self.assertTrue(self.workflow["concurrency"]["cancel-in-progress"])
 
-    def test_stable_gate_rejects_unsuccessful_shared_qualification(self) -> None:
-        script = self.gate["steps"][0]["run"]
+    def test_only_trusted_queue_drafts_run_full_qualification(self) -> None:
+        self.assertEqual(
+            " ".join(self.workflow["jobs"]["ci"]["with"]["draft"].split()),
+            "${{ github.event.pull_request.draft"
+            f" && !(github.event.pull_request.user.id == {MERGIFY_BOT_ID}"
+            " && github.event.pull_request.user.login == 'mergify[bot]'"
+            " && github.event.pull_request.user.type == 'Bot'"
+            " && github.event.pull_request.head.repo.full_name == github.repository"
+            " && startsWith(github.head_ref, 'mergify/merge-queue/')) }}",
+        )
+
+    def test_stable_gate_only_accepts_complete_eligible_qualification(self) -> None:
+        step = self.gate["steps"][0]
         self.assertEqual(self.gate["needs"], "ci")
-        for result, expected_exit in (
-            ("success", 0),
-            ("skipped", 1),
-            ("failure", 1),
-            ("cancelled", 1),
+        self.assertEqual(
+            step["env"]["DRAFT_PLAN"],
+            "${{ toJSON(fromJSON(needs.ci.outputs.plan || '{}').draft) }}",
+        )
+        self.assertEqual(
+            step["env"]["PUBLISHER_READY"], "${{ needs.ci.outputs.publisher_ready }}"
+        )
+        for publisher, draft_plan, result, expected_exit in (
+            ("true", "true", "success", 0),  # CI Execution is separate from PR Gate.
+            ("true", "false", "skipped", 1),
+            ("true", "false", "failure", 1),
+            ("true", "false", "cancelled", 1),
+            ("false", "true", "success", 1),  # Legacy PR Gate rejects draft Plans.
+            ("false", "null", "success", 1),
+            ("false", "false", "success", 0),
         ):
-            with self.subTest(result=result):
+            with self.subTest(
+                publisher=publisher, draft_plan=draft_plan, result=result
+            ):
                 actual = subprocess.run(
-                    ["bash", "-e", "-c", script],
-                    env={**os.environ, "RESULT": result},
+                    ["bash", "-e", "-c", step["run"]],
+                    env={
+                        **os.environ,
+                        "PUBLISHER_READY": publisher,
+                        "DRAFT_PLAN": draft_plan,
+                        "RESULT": result,
+                    },
                     capture_output=True,
                     text=True,
                     check=False,

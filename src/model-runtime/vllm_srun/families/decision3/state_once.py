@@ -953,7 +953,9 @@ class StateOnceModel(Decision3Model):
             and items[0].readouts is None
             else self._branch_forwards(items)
         )
-        tokens = sum(item.cost or len(item.ids) for item in items)
+        tokens = sum(
+            item.cost if item.cost is not None else len(item.ids) for item in items
+        )
         # A forward that captured a graph ran its body several times: not what its tokens cost.
         if tokens and self._graph_captures() == captured:
             sample = (time.perf_counter() - started) / tokens
