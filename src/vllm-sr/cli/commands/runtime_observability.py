@@ -110,6 +110,17 @@ def _load_tracing_projection(state_path: Path) -> dict[str, object] | None:
     return state
 
 
+def runtime_tracing_disabled(runtime_path: Path) -> bool:
+    """Whether serve turned tracing off because the stack runs no collector.
+
+    The projection state exists only while that override is in force, so a
+    later materialization of the same stack can repeat it.
+    """
+    return (
+        _load_tracing_projection(runtime_path.with_suffix(".tracing.json")) is not None
+    )
+
+
 def recover_runtime_tracing_projection(runtime_path: Path) -> None:
     """Recover source provenance before deciding whether source edits apply."""
     state = _load_tracing_projection(runtime_path.with_suffix(".tracing.json"))
