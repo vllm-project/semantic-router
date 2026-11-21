@@ -75,10 +75,11 @@ func applyWrittenConfig(configPath string, configDir string, previousData []byte
 }
 
 // savedConfigWarnings are the Router's warnings about a configuration its
-// validator accepted. A save response lists them only when there are any, so
-// a clean save answers as it always did.
-func savedConfigWarnings(cfg *routerconfig.RouterConfig) []routerconfig.ConfigWarning {
-	return routerconfig.Warnings(cfg)
+// validator accepted, and what saving it over previous loses. A save response
+// lists them only when there are any, so a clean save answers as it always
+// did.
+func savedConfigWarnings(previous []byte, cfg *routerconfig.RouterConfig) []routerconfig.ConfigWarning {
+	return append(routerconfig.Warnings(cfg), replayStoreResetWarnings(previous, cfg)...)
 }
 
 // writeConfigSavedResponse answers a saved change the runtime applied.
@@ -338,8 +339,9 @@ func propagateConfigToRuntime(configPath string, configDir string) error {
 	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
 		return awaitManagedRuntime(effectiveConfigPath)
 	}
-
-	return nil
+	// Elsewhere the Router reads the saved file itself, and its verdict is
+	// what the save reports.
+	return awaitRouterVerdictOn(effectiveConfigPath)
 }
 
 func isManagedContainerConfigPath(configPath string) bool {
@@ -350,7 +352,20 @@ func isManagedContainerConfigPath(configPath string) bool {
 
 // awaitManagedRuntime checks the running containers' verdict on the synced config.
 func awaitManagedRuntime(effectiveConfigPath string) error {
-	file, err := os.Open(effectiveConfigPath)
+	envoyChanged, err := refreshManagedSplitEnvoyConfig(effectiveConfigPath)
+	if err != nil {
+		return err
+	}
+	if envoyChanged {
+		return &restartNeededError{detail: envoyRestartDetail}
+	}
+	return awaitRouterVerdictOn(effectiveConfigPath)
+}
+
+// awaitRouterVerdictOn waits for the Router's verdict on the runtime config
+// at path, written at its modification time.
+func awaitRouterVerdictOn(path string) error {
+	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("open the synced runtime config: %w", err)
 	}
@@ -362,13 +377,6 @@ func awaitManagedRuntime(effectiveConfigPath string) error {
 	info, err := file.Stat()
 	if err != nil {
 		return fmt.Errorf("stat the synced runtime config: %w", err)
-	}
-	envoyChanged, err := refreshManagedSplitEnvoyConfig(effectiveConfigPath)
-	if err != nil {
-		return err
-	}
-	if envoyChanged {
-		return &restartNeededError{detail: envoyRestartDetail}
 	}
 	return waitForRouterVerdict(context.Background(), activationDigest(runtimeConfig), info.ModTime())
 }

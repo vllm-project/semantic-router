@@ -518,7 +518,12 @@ The `store_backend` field controls where routing-decision replay records are per
 | `milvus` | Vector-searchable replay records | Semantic replay search |
 | `qdrant` | Vector-searchable replay records | Semantic replay search in a Qdrant deployment |
 | `file` | Survives router restart on one Router; routing data only | The default for local and single-Router deployments |
-| `memory` | Lost on router restart | Local development only |
+| `memory` | Lost on router restart, kept across a configuration reload that leaves `ttl_seconds` as it was | Local development only |
+
+Any other `store_backend` fails validation, in `vllm-sr config validate` as
+when the Router loads the file.
+The configuration schema lists these six, and the Dashboard's Router Replay
+card offers the same.
 
 ## Data and Security
 

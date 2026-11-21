@@ -76,8 +76,11 @@ func ConfigureRouterVerdict(routerAPIURL string, provider routerauth.CredentialP
 	}
 }
 
-// waitForRouterVerdict reports an observed rejection of the document, including
-// a restart requirement. If no verdict is available, reload can continue asynchronously.
+// waitForRouterVerdict waits for the Router to take or refuse the document with
+// this SHA-256, written at writtenAt. A refusal is a restartNeededError when a
+// restart is the only reason, and an error with the Router's reasons
+// otherwise. Without a Router, or without its verdict in time, the document
+// counts as applied.
 func waitForRouterVerdict(ctx context.Context, documentSHA256 string, writtenAt time.Time) error {
 	routerVerdict.RLock()
 	endpoint, client, provider := routerVerdict.endpoint, routerVerdict.client, routerVerdict.provider
@@ -106,7 +109,8 @@ func waitForRouterVerdict(ctx context.Context, documentSHA256 string, writtenAt 
 	}
 }
 
-// judgeRouterAttempt reports whether the matching document is active or rejected.
+// judgeRouterAttempt reads the Router's verdict on one document: done once the
+// Router activated, superseded or refused it, with the refusal as the error.
 func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (done bool, err error) {
 	digest := strings.TrimPrefix(documentSHA256, "sha256:")
 	if response.GeneratedRuntimeHash != digest {
@@ -120,18 +124,28 @@ func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (done 
 	if attempt == nil || strings.TrimPrefix(attempt.DocumentHash, "sha256:") != digest {
 		return false, nil
 	}
-	if attempt.Status != "failed" && attempt.Status != "rejected" {
+	switch attempt.Status {
+	case "superseded":
+		// A later document replaced it; its own save reports on it.
+		return true, nil
+	case "failed", "rejected":
+	default:
 		return false, nil
 	}
 	if len(attempt.Reasons) == 0 {
-		return true, errors.New("router rejected configuration activation")
+		return true, fmt.Errorf("the Router did not apply it: its attempt %s", attempt.Status)
 	}
+	restart := true
 	messages := make([]string, 0, len(attempt.Reasons))
 	for _, reason := range attempt.Reasons {
-		if reason.Code != restartRequiredCode {
-			return true, fmt.Errorf("router rejected configuration activation (%q)", reason.Code)
-		}
+		restart = restart && reason.Code == restartRequiredCode
 		messages = append(messages, reason.Message)
 	}
-	return true, &restartNeededError{detail: strings.Join(messages, "; ")}
+	if restart {
+		return true, &restartNeededError{detail: strings.Join(messages, "; ")}
+	}
+	for i, reason := range attempt.Reasons {
+		messages[i] = fmt.Sprintf("%s (%s)", reason.Message, reason.Code)
+	}
+	return true, fmt.Errorf("the Router did not apply it: %s", strings.Join(messages, "; "))
 }

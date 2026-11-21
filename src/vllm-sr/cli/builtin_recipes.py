@@ -33,6 +33,21 @@ def _bundle(name: str, version: str):
     return asset, document, _model_assets_root().joinpath(version, asset["bundle"])
 
 
+def _require_bindable(name: str, version: str) -> None:
+    """Refuse a bundle whose catalog targets another CLI and Router.
+
+    An older catalog snapshot can still be listed and exported, but its
+    recipes use a config schema this CLI and its Router do not load.
+    """
+    served = [m for m in load_model_catalog(version).models if m.asset == name]
+    if served and not any(model.compatibility.compatible for model in served):
+        raise ValueError(
+            f"Catalog {version} bundle '{name}' cannot be bound by this CLI "
+            f"({served[0].compatibility.reason}); use --catalog-version latest, "
+            "or the vllm-sr release that catalog was published for"
+        )
+
+
 def _requires_backend(decision: dict[str, Any]) -> bool:
     return not any(
         plugin.get("type") == "fast_response" for plugin in decision.get("plugins", [])
@@ -199,6 +214,7 @@ def compose_builtin_recipe(
     package, provider document, and authored model metadata are unchanged.
     Algorithm contracts and minimum pools remain authoritative.
     """
+    _require_bindable(bundle, version)
     _, document, _ = _bundle(bundle, version)
     recipes = [
         recipe for recipe in document.get("recipes", []) if recipe["name"] == name

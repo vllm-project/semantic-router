@@ -161,7 +161,8 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         })
       }
 
-      // Refresh in place so the section keeps its state instead of remounting.
+      // Refresh in place: the loading state would unmount the section, and
+      // with it the warnings and editor state a section keeps.
       await fetchConfig(false)
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to save configuration')

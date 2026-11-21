@@ -201,7 +201,7 @@ func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, []ro
 		return nil, nil, err
 	}
 
-	return updatedYAML, savedConfigWarnings(parsed), nil
+	return updatedYAML, savedConfigWarnings(existingData, parsed), nil
 }
 
 func parseRawGlobalOverrideNode(raw []byte) (*yaml.Node, bool, error) {
