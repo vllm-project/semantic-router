@@ -266,8 +266,8 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return nil, nil, err
 	}
 	if decoder.context.Target == llmprotocol.OpenAIResponsesV1 && len(chunk.Choices) == 1 && len(chunk.Choices[0].Delta.ToolCalls) > 0 {
-		if err := rejectNullChatStreamArguments(parsed.Data); err != nil {
-			return nil, nil, err
+		if nullErr := rejectNullChatStreamArguments(parsed.Data); nullErr != nil {
+			return nil, nil, nullErr
 		}
 	}
 	if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
