@@ -32,6 +32,7 @@ Independent human check (no API needed):
 """
 
 import argparse
+import json
 import os
 import sys
 from collections import Counter
@@ -73,6 +74,7 @@ from audit_lib.human_review import (
     write_sheet,
 )
 from audit_lib.judgment import build_user_message, parse_lines, save_judgments
+from audit_lib.materialize import judged_dataset_rows
 from audit_lib.report import (
     DEFAULT_COMPARE,
     PredictionIdentityError,
@@ -313,6 +315,35 @@ def cmd_sheet(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_judged(args: argparse.Namespace) -> int:
+    """Write a dataset file that adds the judge's strict label beside the original.
+
+    The strict label (`judged_label_name`) is the one adopted as the operative
+    policy in the #3198 thread: "BOTH" means the user explicitly asked for
+    visuals, not that visuals would merely help. `label_name` is kept exactly as
+    the dataset has it, as its own column, per that same ruling: nothing here
+    overwrites the original.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        1 if nothing has been judged yet, otherwise 0.
+    """
+    rows = load_split(args)
+    records = records_for_split(read_checkpoint(args.checkpoint), args.split)
+    if not records:
+        print("no judgments yet")
+        return 1
+    out_rows = judged_dataset_rows(rows, records)
+    path = Path(args.out) if args.out else HERE / f"judged_{args.split}.jsonl"
+    with open(path, "w", encoding="utf-8") as f:
+        for row in out_rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    print(f"wrote {len(out_rows)} rows to {path}")
+    return 0
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     """Print agreement with the original labels, model re-scoring and paired tests.
 
@@ -333,10 +364,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         else DEFAULT_COMPARE
     )
     original = [r["label_name"] for r in rows]
+    human_labels = load_human(args.human, args.split) if args.human else None
     human = (
-        estimate_error_rates(load_human(args.human, args.split), original, records)
-        if args.human
-        else None
+        estimate_error_rates(human_labels, original, records) if human_labels else None
     )
     lines = build_report_lines(
         args.split,
@@ -345,6 +375,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         preds=load_predictions(args.eval_report, args.preds, rows),
         pairs=pairs,
         human=human,
+        human_labels=human_labels,
         rejudged=records_for_split(
             read_checkpoint(args.rejudge_checkpoint), args.split
         ),
@@ -480,6 +511,16 @@ def add_review_commands(sub, common) -> None:
         help="filled-in sheet from `sheet` (id<TAB>text<TAB>label); adds a human-review section",
     )
     s.set_defaults(fn=cmd_report)
+
+    s = sub.add_parser(
+        "export-judged",
+        parents=[common],
+        help="write a dataset file with the judge's label beside the original",
+    )
+    s.add_argument(
+        "--out", default=None, help="default: label_audit/judged_<split>.jsonl"
+    )
+    s.set_defaults(fn=cmd_export_judged)
 
     s = sub.add_parser(
         "sheet", parents=[common], help="write a blinded human-review sheet"
