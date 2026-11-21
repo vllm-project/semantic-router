@@ -190,6 +190,9 @@ func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]inte
 	assertReferenceConfigMemoryCoverage(t, mustMapAt(t, stores, "memory"))
 	assertReferenceConfigVectorStoreCoverage(t, mustMapAt(t, stores, "vector_store"))
 	assertReferenceConfigToolSessionsCoverage(t, mustMapAt(t, stores, "tool_sessions"))
+	guard := mustMapAt(t, stores, "guard_verdicts")
+	assertMapCoversStructFields(t, guard, reflect.TypeOf(GuardVerdictStoreConfig{}), "global.stores.guard_verdicts")
+	assertMapCoversStructFields(t, mustMapAt(t, guard, "redis"), reflect.TypeOf(GuardVerdictRedisConfig{}), "global.stores.guard_verdicts.redis")
 }
 
 func assertReferenceConfigToolSessionsCoverage(t testingT, toolSessions map[string]interface{}) {

@@ -2881,6 +2881,19 @@ global:
         conn_max_lifetime: 300
         table_name: vector_store_registry
 
+    # Optional sharing of complete request-stage guard window answers.
+    # Omit this block (or use backend: local) for process-local caching.
+    guard_verdicts:
+      backend: redis
+      hmac_key_env: VLLM_SR_GUARD_HMAC_KEY
+      timeout_ms: 50
+      redis:
+        address: redis.example.com:6379
+        username: router
+        password_env: VLLM_SR_GUARD_REDIS_PASSWORD
+        database: 0
+        tls: false
+
     # Session-scoped sticky tool-set selection's shared store (issue #3347).
     # Constructed only when at least one decision's tools.select.sticky is
     # enabled; see website/docs/tutorials/plugin/tools.md. backend:

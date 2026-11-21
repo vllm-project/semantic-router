@@ -458,7 +458,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 			err := readCtx.Err()
 			kept := false
 			if err == nil {
-				response, kept = c.keptWindow(call)
+				response, kept = c.keptWindow(readCtx, call)
 			}
 			if err == nil && !kept {
 				if slots != nil {
@@ -468,7 +468,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 				if slots != nil {
 					<-slots
 				}
-				c.keepWindow(call, response, err)
+				c.keepWindow(readCtx, call, response, err)
 			}
 			if err != nil {
 				err = windowError(readCtx, err)

@@ -238,9 +238,10 @@ read their whole input: `domains`, `complexity`, `modality`, `fact_check`,
   brings a long input to a Router still reads all of its windows: on one
   deployment, with 2,048-token windows four at a time, a fresh 80K-token turn
   took about 5.5 s to route and a 300K-token turn about 20 s, and the same turn
-  read again on that Router about 1 s. Each Router keeps its own answers, so a
+  read again on that Router about 1 s. By default each Router keeps its own answers, so a
   session whose requests reach several Router replicas reads a long turn once
-  on each, and a restarted Router starts with none.
+  on each, and a restarted Router starts with none. The optional shared
+  verdict store below lets replicas reuse completed checks.
 - An input whose windows are all read by the signals' deadline is read at the
   configured size, as fast as its windows are read. A scan that falls behind,
   whose windows left would not all be read in time at the pace it read the
@@ -373,3 +374,114 @@ the deployment dedicated CPUs or a GPU.
 has the measured latency per size, and the
 [model runtime records](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records)
 the full measurements.
+
+### Sharing guard verdicts across replicas
+
+Enable `global.stores.guard_verdicts` on each Router to reuse completed
+request-stage window checks across replicas. The default is `backend: local`.
+
+```yaml
+global:
+  stores:
+    guard_verdicts:
+      backend: redis
+      hmac_key_env: VLLM_SR_GUARD_HMAC_KEY
+      timeout_ms: 50
+      redis:
+        address: redis.example.com:6379
+        password_env: VLLM_SR_GUARD_REDIS_PASSWORD
+        database: 0
+        tls: false
+```
+
+This example uses an external Redis service; replace its address and supply
+`VLLM_SR_GUARD_REDIS_PASSWORD` yourself. `vllm-sr serve` does not provision or
+rewrite a Redis address for guard verdicts. The managed stack's reserved
+`VLLM_SR_STACK_REDIS_PASSWORD` is not a Recipe package binding.
+
+Keep Redis on a Router-private network with authenticated access. Its ACL must
+allow `GETRANGE` and `SET` on `~vsr:guard-verdicts:v1:*`; allowing only `GET`
+does not permit these bounded reads. The client also uses Redis connection
+setup commands (`HELLO` and `CLIENT`); `PING` is useful for health checks. Set
+`redis.username` when using a Redis ACL user, and `redis.tls: true` for TLS
+with certificate verification against the system trust store. Load the Redis
+password into the environment variable named by `password_env`. All Router
+replicas must hold the same independent HMAC secret in the variable named by
+`hmac_key_env`: generate 32 random bytes encoded as 64 hex digits, for example
+with `openssl rand -hex 32`, and distribute them through your secret manager.
+Names must match `[A-Z_][A-Z0-9_]*` without whitespace or `${...}` interpolation.
+Missing or invalid secrets fail initialization for recipes with request-stage
+guards; Redis being unavailable does not. Redis and its other clients must not
+receive the HMAC secret.
+
+For a Recipe package, explicitly authorize both names with `--recipe-env` when
+starting `vllm-sr serve`. The CLI sends guard credentials declared in the startup
+config only to the Router. Dashboard activation checks the authorized names;
+the Router validates their values. Provision new guard credentials by restarting
+the stack with that config, rather than sharing the HMAC secret with Dashboard.
+
+Lookups check local memory first, then Redis. Only answers with every question
+answered, no errors, and complete input coverage are retained. The shared keys
+reuse the existing window hashes within a separate namespace per recipe.
+For `systemone` deployments, the hash also binds the remote endpoint, model
+name, API schema and deviations. Attached `model_runtime` deployments bind each
+effective endpoint and served model, including attached workers in a mixed
+managed/attached replica pool, alongside the observed model identity.
+For `model_runtime`, that identity includes the precision reported by the runtime.
+With `dtype: auto`, replicas running the same weights at different precisions
+therefore scan their windows independently.
+Both providers bind static deployment `headers` and `tls.server_name`, which
+is sent as SNI and can select a different backend policy. Changing these inputs
+forces a fresh scan across classifier generations; reordering headers or replicas
+does not affect reuse. A deployment without a known model or connection identity
+does not retain window verdicts. Use a versioned remote model name when
+replacing a guard at the same endpoint: changes behind an unchanged model name
+are not detectable from the configuration.
+Both `systemone` and attached `model_runtime` deployments with `auth` (static or delegated), TLS client certificates
+(`tls.cert_file` and `tls.key_file`), or `forward_request_headers` skip both local
+and Redis window caching. Credentials, client certificates and forwarded headers
+can select different guard policies. Static keys are read when the remote call
+is sent and can rotate without changing configuration; the same certificate
+paths can hold different identities across replicas or classifier generations.
+Window keys cannot bind these to a fixed identity. Server-only TLS still allows
+window reuse when the SNI identity is unchanged; changing `tls.ca_file` alone
+does not change the guard policy identity.
+Entries contain hashes and answers, never prompt text; PII span text is restored
+from the current request's offsets. Each entry's signature binds the key,
+answers, format version and expiry. A modified, expired, oversized or otherwise
+invalid entry is treated as a miss. Response-stage answers are never shared.
+
+The local cache retains its sliding 30-minute lifetime. First model results are
+published before the request returns. Local hits perform no Redis I/O.
+Local and shared hits enter the bounded 1,024-window renewal queue only when
+they extend the last published expiry by at least five minutes, or no successful
+publication is known. Fresh hits reserve no queue slots. The worker drains ready
+renewals when signaled and does not poll idle caches. Queued hits coalesce; the
+signed expiry is the last queued use plus 30 minutes, never the later write time.
+If hits stop before the next renewal becomes due, shared entries can expire up
+to five minutes before their local counterparts. Evicted shared entries are
+restored on the next eligible renewal. Queue
+overflow, shutdown or a failed write can lose a renewal; a later miss scans
+again. Recipes share one connection pool and outage state, and recipes without
+request-stage guards create no client.
+
+Each store operation has a `timeout_ms` budget (default 50, range 1–1,000).
+Request lookups and first writes also respect the request deadline; background
+renewals use an independent budget. Transport failures suppress store I/O for
+one second. Capacity waits are bounded misses and do not trigger an outage
+cooldown. The local cache remains bounded to 16,384 windows per classifier;
+configure Redis memory limits and eviction for the shared store. Entries larger
+than 256 KiB stay local.
+
+`vsr_guard_verdict_store_ops_total{op,outcome}` distinguishes local hits, Redis
+hits/misses, invalid or expired entries, oversized payloads, transport errors,
+cooldown, capacity waits and renewal queue overflow. Check `op="get",outcome="hit"`
+to confirm shared reuse. Unavailable stores and invalid signatures also produce
+warnings limited to once per minute per category; logs contain no keys, payloads,
+endpoints or raw Redis errors.
+
+With two replicas handling successive requests for an unchanged long turn,
+`vsr_signal_scan_windows_total{source="read"}` counts the initial model reads,
+and subsequent reuse counts as `source="kept"`. The first scan of a new input
+still costs the same. Simultaneous cold requests can both scan a window before
+its first result is stored; this cache does not coordinate in-flight scans.

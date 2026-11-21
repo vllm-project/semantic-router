@@ -16,6 +16,11 @@ from types import SimpleNamespace
 import pytest
 from cli import container_cli, container_start, storage_secrets
 from cli.commands.runtime_paths import DASHBOARD_STATE_GID
+from cli.commands.runtime_support import (
+    append_passthrough_env_vars,
+    configure_recipe_env_bindings,
+    validate_config_recipe_env_bindings,
+)
 from cli.management_credential import (
     management_credential_path,
     stack_management_credential,
@@ -156,6 +161,52 @@ def test_container_start_vllm_sr_omits_storage_credentials_without_state(
             assert not set(STORAGE_SECRET_ENV_NAMES) & set(env)
         for name in STORAGE_SECRET_ENV_NAMES:
             assert name not in cmd
+
+
+@pytest.mark.parametrize("recipe_binding", [False, True])
+def test_shared_guard_credentials_reach_only_router(
+    tmp_path, monkeypatch, caplog, recipe_binding
+):
+    config_path = _minimal_stack_config(tmp_path)
+    with config_path.open("a") as config_file:
+        config_file.write(
+            "global:\n  stores:\n    guard_verdicts:\n      backend: redis\n"
+            "      hmac_key_env: GUARD_SIGNING_KEY\n      redis:\n"
+            "        address: redis:6379\n        password_env: GUARD_REDIS_PASSWORD\n"
+        )
+    _stub_runtime_images(monkeypatch)
+    _stub_valid_container_cli(monkeypatch, tmp_path)
+    secrets = {"GUARD_SIGNING_KEY": "ab" * 32, "GUARD_REDIS_PASSWORD": "guard-password"}
+    for name, value in secrets.items():
+        monkeypatch.setenv(name, value)
+    caplog.set_level(logging.INFO)
+    env_vars = {}
+    if recipe_binding:
+        names = configure_recipe_env_bindings(env_vars, secrets)
+        validate_config_recipe_env_bindings(config_path, names)
+    else:
+        append_passthrough_env_vars(env_vars, config_path)
+    captured = _capture_run_commands_with_env(monkeypatch)
+    rc, _, _ = container_cli.container_start_vllm_sr(
+        str(config_path),
+        env_vars,
+        [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
+        state_root_dir=str(tmp_path),
+        minimal=False,
+    )
+    assert rc == 0
+    commands = _commands_by_container(captured)
+    router_cmd, router_env = commands["vllm-sr-router-container"]
+    for name, value in secrets.items():
+        assert name in router_cmd
+        assert router_env[name] == value
+        assert value not in caplog.text
+        for container, (cmd, _env) in commands.items():
+            assert value not in " ".join(cmd)
+            if container != "vllm-sr-router-container":
+                # Docker only passes host variables named by an env flag
+                # into a container, even when its CLI inherits the host env.
+                assert name not in cmd
 
 
 def _bearer_stack_config(tmp_path):

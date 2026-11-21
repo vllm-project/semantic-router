@@ -813,6 +813,7 @@ domains:
       - tools/make/build-run-test.mk
       - tools/ci/run_core_tests.py
       - src/semantic-router/pkg/contextcompression/*redis*
+      - src/semantic-router/pkg/classification/classifier_signal_scan_verdicts*
       - src/semantic-router/pkg/responsestore/*redis*
       - src/semantic-router/pkg/routerreplay/store/*postgres*
       - src/semantic-router/pkg/postgres/**

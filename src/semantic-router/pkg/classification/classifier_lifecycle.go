@@ -134,6 +134,9 @@ func (c *Classifier) closeResources() error {
 	if c.ownsEmbeddingSet {
 		closeResource("embeddings", c.embeddingSet)
 	}
+	if c.ownsSharedVerdicts && c.sharedVerdicts != nil {
+		closeResource("guard verdicts", c.sharedVerdicts.sharedVerdictStore)
+	}
 	return errors.Join(closeErrors...)
 }
 
@@ -153,6 +156,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 	}
 
 	appendTask("classifier.systemone", false, len(c.preparedSystemOneRules()) > 0, c.prepareSystemOneSignals)
+	appendTask("classifier.guard_verdicts", false, c.needsSharedVerdicts(), c.initializeSharedVerdicts)
 	appendTask("classifier.language", true, len(c.Config.LanguageRules) > 0, c.initializeLanguageClassifier)
 
 	return tasks

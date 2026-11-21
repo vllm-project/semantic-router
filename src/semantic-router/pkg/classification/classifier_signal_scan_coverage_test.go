@@ -102,12 +102,15 @@ func findsInjection(state, _ string, question api.Question) (api.Answer, bool) {
 // deadline timeout and the jailbreak rule's fields rule, from a fake
 // vela3-turbo validated at 32,768 tokens whose engine reads one state at a
 // time, perWindow each.
-func refusingGuardClassifier(t *testing.T, timeout time.Duration, rule string, perWindow time.Duration) (*Classifier, *runtimetest.Runtime) {
+func refusingGuardClassifier(t *testing.T, timeout time.Duration, rule string, perWindow time.Duration, configure ...func(*config.RouterConfig)) (*Classifier, *runtimetest.Runtime) {
 	t.Helper()
 	document := strings.NewReplacer("TIMEOUT", fmt.Sprint(timeout.Milliseconds()), "RULE\n", rule).Replace(refusingGuardConfig)
 	cfg, err := config.ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
+	}
+	for _, apply := range configure {
+		apply(cfg)
 	}
 	runtime, fake := servingtest.Runtime(t, map[string]runtimetest.Model{
 		"primary": {Family: presets.FamilyVela3D3, MaxInputTokens: 32_768, Answer: findsInjection},
