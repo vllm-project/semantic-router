@@ -282,7 +282,8 @@ def test_a_known_uid_keeps_its_environment(monkeypatch):
 
 def clear_allocator_settings(monkeypatch):
     for name in cli.ALLOCATOR_SETTINGS:
-        monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
 
 
 def as_build(monkeypatch, cuda, hip, initialized=False):
