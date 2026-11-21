@@ -26,7 +26,7 @@ so readiness compares like with like against the recorded answers.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -121,6 +121,8 @@ def coalesced(
     max_rows: int,
     lane: Callable[[WorkItem], str] | None = None,
     packed: bool = False,
+    splits: bool = False,
+    key: Callable[[WorkItem], Hashable | None] | None = None,
 ) -> list[Batch]:
     """Rows of every queued request in shared batches, each holding the rows of one lane.
 
@@ -135,6 +137,15 @@ def coalesced(
     of arrivals adds as many turns as its busiest lane needs, as it would
     without lanes. The batches are approximate: a row's neighbours, padding
     and GEMM shapes depend on the rows beside it.
+
+    ``splits`` says the model splits an over-budget batch itself (a state-once
+    family's branched forwards) and ``key`` names each row's family packing
+    key (``LoadedModel.packing_key``): a row costlier than its budget then
+    packs only with rows of the same key — equal content is what the family
+    encodes once — up to ``max_rows``. A row of a different key, or whose key
+    is None (the family does not vouch for it), runs alone as before, and
+    sub-budget rows never join an over-budget batch. Batches of sub-budget
+    rows keep their budget bound.
     """
     lanes: dict[str, list[tuple[Job, int]]] = {}
     for job in jobs:
@@ -149,16 +160,30 @@ def coalesced(
         batches: list[Batch] = []
         current: dict[int, tuple[Job, list[int]]] = {}
         width = total = count = 0
+        # the current batch's packing key, when it holds over-budget rows
+        over_key: Hashable | None = None
         for job, index in rows:
             length = padded(cost(job.items[index]))
             new_width = max(width, length)
             size = total + length if packed else new_width * (count + 1)
-            if current and (size > cap or count + 1 > max_rows):
+            row_key = (
+                key(job.items[index])
+                if (splits and key is not None and length > cap)
+                else None
+            )
+            if current and (
+                (
+                    size > cap
+                    and not (splits and over_key is not None and row_key == over_key)
+                )
+                or count + 1 > max_rows
+            ):
                 batches.append(_batch(current, exact=False, lane=name))
-                current, total, count = {}, 0, 0
+                current, total, count, over_key = {}, 0, 0, None
                 new_width = length
             current.setdefault(id(job), (job, []))[1].append(index)
             width, total, count = new_width, total + length, count + 1
+            over_key = over_key or row_key
         if current:
             batches.append(_batch(current, exact=False, lane=name))
         planned.append(batches)
@@ -185,7 +210,13 @@ def _turn(sub: tuple[Batch, ...]) -> Batch:
     )
 
 
-def shared_batches(trees: list[Batch], budget: int, max_rows: int) -> list[Batch]:
+def shared_batches(
+    trees: list[Batch],
+    budget: int,
+    max_rows: int,
+    splits: bool = False,
+    key: Callable[[WorkItem], Hashable | None] | None = None,
+) -> list[Batch]:
     """Shared-context batches of one request each, packed into batches of several requests.
 
     Only for a model whose items each name their own context. A request's
@@ -194,19 +225,42 @@ def shared_batches(trees: list[Batch], budget: int, max_rows: int) -> list[Batch
     costs its block and its share of the state) and ``max_rows`` items. A
     request costlier than ``budget``, or with more items than ``max_rows``,
     runs alone.
+
+    ``splits`` says the model splits an over-budget batch itself (a state-once
+    family's branched forwards) and ``key`` names each row's family packing
+    key (``LoadedModel.packing_key``): costlier-than-budget requests then pack
+    together only when their keys match — equal content is what the family
+    encodes once, the same key its own grouping dedupes on — still up to
+    ``max_rows``. Requests of a different key, or whose key is None, keep
+    running alone, so a burst of distinct large states waits no longer than
+    it would with the runs-alone rule.
     """
     units = sorted(trees, key=lambda batch: -sum(cost(item) for item in batch.items()))
     batches: list[Batch] = []
     current: list[Batch] = []
     tokens = rows = 0
+    # the current batch's packing key, when it holds over-budget trees
+    over_key: Hashable | None = None
     for unit in units:
         size = sum(cost(item) for item in unit.items())
         count = len(unit.items())
-        if current and (tokens + size > budget or rows + count > max_rows):
+        unit_key = (
+            key(unit.items()[0])
+            if (splits and key is not None and size > budget)
+            else None
+        )
+        if current and (
+            (
+                tokens + size > budget
+                and not (splits and over_key is not None and unit_key == over_key)
+            )
+            or rows + count > max_rows
+        ):
             batches.append(_shared(current))
-            current, tokens, rows = [], 0, 0
+            current, tokens, rows, over_key = [], 0, 0, None
         current.append(unit)
         tokens, rows = tokens + size, rows + count
+        over_key = over_key or unit_key
     if current:
         batches.append(_shared(current))
     return batches
@@ -364,7 +418,11 @@ class Batcher:
             )
             family = model.coalesced_token_budget()
             trees = shared_batches(
-                trees, min(budget, family) if family else budget, self.max_num_seqs
+                trees,
+                min(budget, family) if family else budget,
+                self.max_num_seqs,
+                model.splits_forwards,
+                model.packing_key,
             )
         if not rest:
             return trees
@@ -386,5 +444,11 @@ class Batcher:
             return min(budget, family) if family else budget
 
         return trees + coalesced(
-            rest, lane_budget, self.max_num_seqs, model.lane, model.packs_merged_rows
+            rest,
+            lane_budget,
+            self.max_num_seqs,
+            model.lane,
+            model.packs_merged_rows,
+            model.splits_forwards,
+            model.packing_key,
         )

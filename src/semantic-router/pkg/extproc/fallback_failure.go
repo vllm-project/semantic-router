@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 
@@ -13,8 +14,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 // failedAttempt is a fallback candidate's failed upstream answer.
@@ -34,12 +37,27 @@ func failedCandidateAttempt(dispatch *providerDispatch, status int, body []byte,
 	attempt := &failedAttempt{status: status, body: body, format: dispatch.targetFormat}
 	if status == 0 {
 		attempt.transport, attempt.body = true, nil
-		attempt.status = http.StatusServiceUnavailable
+		attempt.status, attempt.failure = http.StatusServiceUnavailable, candidateFailure(callErr)
 		if errors.Is(callErr, context.DeadlineExceeded) {
 			attempt.status, attempt.failure = http.StatusGatewayTimeout, "timeout"
 		}
 	}
 	return attempt
+}
+
+// candidateFailure names why a candidate the Router called itself did not
+// answer, as pkg/upstream names a native call's: a connection that could not
+// be opened, or one that broke after the request went out.
+func candidateFailure(err error) string {
+	var connErr *connector.Error
+	if !errors.As(err, &connErr) || connErr.Kind != connector.KindTransport {
+		return ""
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) && opErr.Op == "dial" {
+		return string(upstream.KindConnectFailure)
+	}
+	return string(upstream.KindReset)
 }
 
 // failedOutcomeAttempt describes a native candidate call that failed, from
@@ -53,23 +71,36 @@ func failedOutcomeAttempt(candidate *fallbackCandidate, outcome routing.Outcome)
 
 // failedAttemptResponse answers the client with the last attempt of a
 // fallback chain that ended without a success: the backend's error, with its
-// status, in the client's protocol (a refusal of a prompt over the window as
-// context_length_exceeded), or, when no backend answered, an unavailable
+// status, in the client's protocol and terms (normalizeUpstreamClientError),
+// or, when no backend answered, an unavailable
 // error that keeps the transport's detail out of the client's message. No
 // response phase sees that answer, so the record ends with it here.
 func (r *OpenAIRouter) failedAttemptResponse(ctx *RequestContext, attempt *failedAttempt) *ext_proc.ProcessingResponse {
 	if attempt == nil {
 		return nil
 	}
-	protocolError := r.failedAttemptError(attempt)
+	return r.answerFailedCall(ctx, attempt.status, r.failedAttemptError(ctx, attempt), attempt.replayReason())
+}
+
+// answerFailedCall answers the client with protocolError and status for an
+// upstream call that gave it no answer, and ends the record with it for
+// reason.
+func (r *OpenAIRouter) answerFailedCall(
+	ctx *RequestContext, status int, protocolError *llmprotocol.ProtocolError, reason string,
+) *ext_proc.ProcessingResponse {
 	ctx.ImmediateProtocolError = protocolError
-	response := r.encodeImmediateResponseForClient(r.createErrorResponse(attempt.status, protocolError.Message), ctx)
-	reason := "upstream_error_response"
-	if attempt.transport {
-		reason = "upstream_" + cmp.Or(attempt.failure, "unavailable")
-	}
-	r.failAnsweredRouterReplay(ctx, attempt.status, response.GetImmediateResponse().GetBody(), reason)
+	response := r.encodeImmediateResponseForClient(r.createErrorResponse(status, protocolError.Message), ctx)
+	r.failAnsweredRouterReplay(ctx, status, response.GetImmediateResponse().GetBody(), reason)
 	return response
+}
+
+// replayReason is why the record of a request answered with the attempt's
+// failure fails.
+func (attempt *failedAttempt) replayReason() string {
+	if attempt.transport {
+		return "upstream_" + cmp.Or(attempt.failure, "unavailable")
+	}
+	return "upstream_error_response"
 }
 
 // fallbackCredentialRefusal is the request's 401 when a chain ended at a
@@ -82,7 +113,7 @@ func (r *OpenAIRouter) fallbackCredentialRefusal(ctx *RequestContext) *ext_proc.
 	return refused
 }
 
-func (r *OpenAIRouter) failedAttemptError(attempt *failedAttempt) *llmprotocol.ProtocolError {
+func (r *OpenAIRouter) failedAttemptError(ctx *RequestContext, attempt *failedAttempt) *llmprotocol.ProtocolError {
 	if attempt.transport {
 		if attempt.status == http.StatusGatewayTimeout {
 			return llmprotocol.NewError(llmprotocol.ErrorUpstreamTimeout, "upstream_timeout", "the model service did not answer in time", nil)
@@ -97,7 +128,7 @@ func (r *OpenAIRouter) failedAttemptError(attempt *failedAttempt) *llmprotocol.P
 	if err != nil || decoded.Error == nil {
 		return upstreamTransportFallback(attempt.status, err)
 	}
-	_ = normalizeUpstreamContextLength(attempt.status)(&decoded)
+	_ = normalizeUpstreamClientError(ctx, attempt.status)(&decoded)
 	return decoded.Error
 }
 

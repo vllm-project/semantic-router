@@ -43,10 +43,11 @@ export interface UnifiedTool {
   rawTool: MCPToolDefinition | RegisteredTool | BuiltInTool
 }
 
-export type ServerFilter = 'all' | 'connected' | 'disconnected'
-export type ServerSort = 'name-asc' | 'status' | 'tools-desc'
+export interface ServerFilters {
+  transports: string[]
+  statuses: string[]
+}
 export type ToolSourceFilter = 'all' | UnifiedTool['sourceType']
-export type ToolSort = 'name-asc' | 'source-asc' | 'parameters-desc'
 
 export const MCP_TOOLS_PAGE_SIZE = 12
 export const MCP_SERVERS_PAGE_SIZE = 8

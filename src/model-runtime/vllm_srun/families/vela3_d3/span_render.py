@@ -10,14 +10,13 @@ and end on word boundaries.
 from __future__ import annotations
 
 from bisect import bisect_left
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
-from ...errors import QuestionError
-from ..decision3.prompt import render
+from ...text import bounds
+from ..decision3.prompt import PromptEncoder, render
 from ..vela2.words import words_of
 
 WINDOW, STRIDE, MAX_TARGET = 1800, 1536, 2048
@@ -64,10 +63,10 @@ def windows(firsts: np.ndarray, count: int) -> list[tuple[int, int]]:
 
 
 class Renderer:
-    """Renders a span question's windows with the base's tokenizer and answer codes."""
+    """Renders a span question's windows with the base's prompt encoder and answer codes."""
 
-    def __init__(self, tokenizer: Any, codes: list[str]):
-        self.tokenizer = tokenizer
+    def __init__(self, prompts: PromptEncoder, codes: list[str]):
+        self.prompts = prompts
         self.codes = codes
 
     @staticmethod
@@ -111,10 +110,10 @@ class Renderer:
             head + options + ["", "Reply with only the code of the best option."]
         )
         rendered = render(user)
-        user_start = rendered.index(user)
+        user_start = "".join(rendered).index(user)
         text_start = user_start + len("State:\n") + start
-        encoding = self.tokenizer.encode(rendered, add_special_tokens=False)
-        offsets = np.asarray(encoding.offsets, dtype=np.int64).reshape(-1, 2)
+        encoding = self.prompts.encode(rendered)
+        offsets = np.asarray(encoding.offsets, dtype=np.int32).reshape(-1, 2)
         words = words_of(text, offsets - text_start)
         spans, firsts = words.offsets, words.first
         position = user_start + len("\n".join(head)) + 1
@@ -131,28 +130,42 @@ class Renderer:
             option_ranges=tuple(ranges),
         )
 
+    def read(self, text: str, budget: int | None) -> Any:
+        """The target's encoding, or None when it holds more than ``budget`` tokens.
+
+        A target within the budget is read whole, since its windows cover all
+        of it. A longer one is read only one token past the budget, and not at
+        all when it is certainly longer.
+        """
+        tokenizer = self.prompts.text
+        if budget is None:
+            return tokenizer.encode(text, add_special_tokens=False)
+        if bounds.surely_over(tokenizer, text, budget):
+            return None
+        read = bounds.read(tokenizer, text, budget + 1)
+        return read.encoding if read.tokens <= budget else None
+
     def windows(
         self,
         parts: list[tuple[str, str]],
         target: str,
         question: str,
         labels: list[tuple[str, str]],
-        refuse: Callable[[int], QuestionError | None] = lambda count: None,
-    ) -> tuple[list[Window], int]:
+        budget: int | None = None,
+    ) -> tuple[list[Window], int] | None:
         """The question's windows and its target's token count.
 
-        ``refuse`` sees the target's token count before any window is
-        rendered; the error it returns fails the question.
+        None for a target of more than ``budget`` tokens, before any window is
+        rendered.
         """
         text = dict(parts)[target]
-        encoding = self.tokenizer.encode(text, add_special_tokens=False)
+        encoding = self.read(text, budget)
+        if encoding is None:
+            return None
         count = len(encoding.ids)
-        refused = refuse(count)
-        if refused is not None:
-            raise refused
         if count <= MAX_TARGET:
             return [self.window(parts, target, question, labels, text, 0)], count
-        offsets = np.asarray(encoding.offsets, dtype=np.int64).reshape(-1, 2)
+        offsets = np.asarray(encoding.offsets, dtype=np.int32).reshape(-1, 2)
         firsts = words_of(text, offsets).first
         out = []
         for a, b in windows(firsts, count):

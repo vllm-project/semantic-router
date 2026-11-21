@@ -3,7 +3,7 @@ is_mtpe: false
 title: 配置工作流
 description: 选择 CLI、控制面板、Helm、Operator 和 DSL 如何编写并应用同一份 canonical Router 配置。
 translation:
-  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
+  source_commit: "f041b8ee78de8680ab63e3c4d135b75c63514e63"
   source_file: "docs/installation/configuration-workflows.md"
   outdated: false
 ---
@@ -33,17 +33,17 @@ vllm-sr serve --config config.yaml
 
 空的本地工作区会以设置模式启动控制面板。用它绑定模型端点、选择基线策略、预览结果，并激活完整配置；仍在等待的 `vllm-sr serve` 随后用这份配置启动 Router。
 
-激活后，从 **Build → Routing → Models** 连接物理 Chat 后端。**Mixture-of-Models** 有三个 tab：
+激活后，从 **Models → Backend models** 连接物理 Chat 后端。**Routing → Recipes** 有三个 tab：
 
-- **Models** 发布和管理公开模型入口；
-- **Recipes** 管理入口选择的策略；
+- **Public models** 发布和管理公开模型入口；
+- **Recipes** 管理入口选择的策略，并列出随 vLLM-SR 安装的内置配方；在内置配方上选择 **Create model** 会把你的模型分配给它的决策并发布它；
 - **Probes** 检查配方场景，并支持生成或仅路由校验。
 
-**Build → System One** 单独提供 **Decision Models**、**Decision Playground** 和 **Decision Monitoring**，用于管理判断模型部署、测试类型化问题及查看运行时观测。
+**Models → Decision models** 单独提供 **Deploy**、**Playground** 和 **Monitoring** tab，用于管理判断模型部署、测试类型化问题及查看运行时观测。
 
 将 provider 生成与路由评估分开验证。即使所选后端无法生成，探针也可以选择预期路由。
 
-可视化 DSL 编辑器拥有路由语义。它在替换其路由表面时保留 listeners、providers、全局设置和设置状态。多配方生命周期变更从 Mixture-of-Models 或管理 API 管理，以免可视化编辑悄悄丢弃另一个配方。
+**Routing → Config editor** 拥有路由语义。它在替换其路由表面时保留 listeners、providers、全局设置和设置状态。多配方生命周期变更从 **Routing → Recipes** 或管理 API 管理，以免编辑器中的变更悄悄丢弃另一个配方。
 
 ## Helm {#helm}
 
@@ -102,7 +102,7 @@ Helm values 在安装时为 Router ConfigMap 提供初始内容：
 
 - **在线编辑在升级后保留。** 之后由 Dashboard 或 Router API 保存的配置编辑，会在普通的 Helm 升级中保留。
 - **有意应用修订后的 `configOverride`**，需要在那次升级中修改 `configMap.applyValuesRevision`。之后的升级沿用同一修订值时，会保留后续的在线编辑。
-- **滚动发布。** 保存的 ConfigMap 编辑会在 Router Deployment 滚动发布后生效。
+- **滚动发布。** 保存的 ConfigMap 编辑会在 Router Deployment 滚动发布后生效。Dashboard 通过 Kubernetes API 读取已保存的 ConfigMap，因此其配置页面和模型健康状态会在几秒内显示该编辑，无需重启。
 
 `vllm-sr serve --target kubernetes --config config.yaml` 将所选文档作为原子覆盖传递，因此 chart 示例路由不能合并到其中。该命令拒绝空文档或仅包含 setup 的文档，并且不会注入本地 Docker 服务地址或知识库路径。先运行 `vllm-sr config validate`，以便 schema 和引用错误在部署前失败。
 

@@ -59,7 +59,7 @@ global:
 | `apis.<api>.models` | 某个 API 只接受的请求模型。 | 该类全部模型 |
 | `apis.systemone.schema` | listener 对客户端使用的 System One schema：`vllm-sr/5.0`，或 `vllm-sr/4.0`（同时接受旧契约的全部请求形式）。见 [System One schema](../system-one/use/schemas.md)。 | `vllm-sr/5.0` |
 | `apis.systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
-| `apis.systemone.vsr` | 指向该 listener 的 vSR 智能体插件的行为：`redact`、`shield`、`guard`、`check`、`escalate`、`router` 和 `router_turns` 的开关，以及 `router_goal`（`quality`、`balanced` 或 `save`）。listing（`GET /v1/systemone/models`）把它交给插件，这里设置的每个字段优先于插件自己的选项。Dashboard 在 Config › Global Config › vSR agent plugins 中以复选框编辑它。 | 插件自己的选项 |
+| `apis.systemone.vsr` | 指向该 listener 的 vSR 智能体插件的行为：`redact`、`shield`、`guard`、`check`、`escalate`、`router` 和 `router_turns` 的开关，以及 `router_goal`（`quality`、`balanced` 或 `save`）。listing（`GET /v1/systemone/models`）把它交给插件，这里设置的每个字段优先于插件自己的选项。Dashboard 在 Settings › Router settings › vSR agent plugins 中将每个字段编辑为 Default（省略）、On 或 Off。 | 插件自己的选项 |
 | `tls.cert_file`、`tls.key_file` | 单向 TLS。 | 关闭 |
 | `identity.trust_headers`、`identity.trusted_peers` | listener 在 standalone 模式下信任的身份来源。 | 无 |
 
@@ -151,7 +151,7 @@ global:
 | `request-params` — 路由插件 | `request_params` 是在转发到后端之前校验并裁剪 OpenAI Chat Completions 请求正文的路由局部插件。 | [`config/fragments/plugin/request-params/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/request-params/) | [指南](../tutorials/plugin/request-params) |
 | `response-cache` — 路由插件 | `response_cache` 是复用精确或语义兼容的先前响应的路由局部插件。 | [`config/fragments/plugin/response-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-cache/) | [指南](../tutorials/plugin/response-cache) |
 | `response-guard` — 路由插件 | `response_guard` 是一个路由局部插件，按它所检查的信号拦截或标注模型的回答。 | [`config/fragments/plugin/response-guard/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-guard/) | [指南](../tutorials/plugin/response-guard) |
-| `router-replay` — 路由插件 | `router_replay` 是在一条路由上覆盖回放/调试捕获的路由局部插件。 | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [指南](../tutorials/plugin/router-replay) |
+| `router-replay` — 路由插件 | 使用 Router Replay 在 Dashboard 的 **Requests** 页面检查请求：所选路由、模型、token 用量、响应和工具轨迹。 | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [指南](../tutorials/plugin/router-replay) |
 | `system-prompt` — 路由插件 | `system_prompt` 是在匹配流量上插入或修改系统提示词的路由局部插件。 | [`config/fragments/plugin/system-prompt/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/system-prompt/) | [指南](../tutorials/plugin/system-prompt) |
 | `tools` — 路由插件 | `tools` 是允许、阻止或移除请求工具，并由决策模型过滤或添加请求所需工具的路由局部插件。 | [`config/fragments/plugin/tools/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tools/) | [指南](../tutorials/plugin/tools) |
 

@@ -69,7 +69,8 @@ its own protocol, and Router Replay records the request as refused; see
 | `name` | The rule's name, which `{type: jailbreak, name: ...}` conditions and guard rules use |
 | `predicate` | The least probability of `jailbreak`; by default the model's calibrated threshold (0.88 on vela3-fast) at the request stage, else 0.5 |
 | `stage` | `request` (default) or `response`, which reads the model's answer |
-| `input.history` | Also read the earlier user and tool turns |
+| `input.history` | Also read the earlier user turns |
+| `input.tool_results` | Also read the tool results returned in the current turn. Off by default |
 | `on_unscanned` | What the rule reports when only some windows of a long input were read: `best_effort` (the default), `match`, `no_match` or `unknown` |
 | `min_coverage` | With `best_effort`, the share of the windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
 | `on_unknown` | Request stage: what the rule reports when its model gives no answer, `match` (the default) or `no_match` |
@@ -77,15 +78,18 @@ its own protocol, and Router Replay records the request as refused; see
 
 ### What it reads
 
-At the request stage, the question reads the consecutive user and tool
-messages that end the request, stopping at an assistant message, so every
-textual tool result of the turn is read together. A system message inside the
-conversation, which Claude Code inserts after the user's message or a tool
-result, does not end the turn. With `input.history`, it also reads the
-earlier user and tool text. System and developer instructions and assistant
-replies are not read as attack evidence. It also reads what
-`global.router.routing_input` removes from the routing text, so a fake memory
-block or runtime-context turn cannot hide an attack.
+At the request stage, the question reads the user's text of the current turn:
+the consecutive user and tool messages that end the request, stopping at an
+assistant message. A system message inside the conversation, which Claude Code
+inserts after the user's message or a tool result, does not end the turn. With
+`input.tool_results`, it also reads the textual tool results of the turn,
+where a fetched page or file can carry instructions; without it, the default,
+a turn that holds only tool results, as an agent's tool loop does, or only a
+picture, gives the rule nothing to read, and it does not match. With
+`input.history`, it also reads the earlier user text. System and developer
+instructions and assistant replies are not read as attack evidence. It also
+reads what `global.router.routing_input` removes from the routing text, so a
+fake memory block or runtime-context turn cannot hide an attack.
 
 The question reads its whole input. An input longer than one of the
 deployment's `scan_window`s, a long pasted document or a long tool output, is

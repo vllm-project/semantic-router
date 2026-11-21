@@ -1,27 +1,24 @@
-import { formatInsightsCost } from '../utils/insightsCost'
+import type { BadgeProps, StatusTone } from '../ui'
+import { formatInsightsCost, isInsightsNoCurrency } from '../utils/insightsCost'
 
+import { displaySessionId, sessionParam } from './insightsAgentIdentity'
 import { compactID } from './insightsReviewSupport'
-import type { RunAgent, RunCall, RunCost, RunResponse, RunSummary } from './insightsRunTypes'
+import type {
+  RunAgent,
+  RunCall,
+  RunCost,
+  RunCurrencyCost,
+  RunReportedOutcome,
+  RunSummary,
+} from './insightsRunTypes'
 
-export const RUN_MARKER_LABELS: Record<string, string> = {
-  switch: 'Model switched',
-  escalation: 'Escalated',
-  guard: 'Guard flagged',
-  block: 'Blocked',
-  fallback: 'Fell back',
-  failure: 'Failed',
-  tool_failure: 'Tool failed',
-}
-
-// A marker's one-character glyph in the diagram, its label in the title.
-export const RUN_MARKER_GLYPHS: Record<string, string> = {
-  switch: '⇄',
-  escalation: '↑',
-  guard: '⚑',
-  block: '⊘',
-  fallback: '↺',
-  failure: '✕',
-  tool_failure: '⚠',
+// How a run ended, as a status: only state is colored.
+export const RUN_STATUS_TONES: Record<string, StatusTone> = {
+  answered: 'success',
+  in_progress: 'info',
+  failed: 'danger',
+  aborted: 'neutral',
+  unknown: 'neutral',
 }
 
 export const RUN_OUTCOME_LABELS: Record<string, string> = {
@@ -29,54 +26,196 @@ export const RUN_OUTCOME_LABELS: Record<string, string> = {
   failed: 'Failed',
   aborted: 'Abandoned',
   in_progress: 'Running',
-  unknown: 'No final answer',
+  unknown: 'Ended',
 }
 
-export const HARNESS_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
-  codex: 'Codex',
+// The verdicts the outcome API takes, each with its label and how it reads.
+export const OUTCOME_VERDICTS: Record<string, { label: string; tone: BadgeProps['tone'] }> = {
+  good_fit: { label: 'Good fit', tone: 'success' },
+  underpowered: { label: 'Underpowered', tone: 'warning' },
+  overprovisioned: { label: 'Overprovisioned', tone: 'info' },
+  failed: { label: 'Failed', tone: 'danger' },
 }
 
-// One color per model, in the order the run used them most: the hues the
-// session routing history gives its agents.
-const MODEL_HUES = ['#5cc8b8', '#a395e8', '#e0a84f', '#e8798f', '#7aa7e8', '#c9cbd0']
+const OUTCOME_WORDS: Record<string, string> = {
+  user: 'User',
+  agent: 'Agent',
+  eval: 'Evaluation',
+  operator: 'Operator',
+  provider: 'Provider',
+  router: 'Router',
+  model: 'Model',
+  route: 'Route',
+  policy: 'Policy',
+  stability: 'Stability',
+}
+
+/** An outcome source or target as a word: "eval" reads "Evaluation". */
+export function outcomeWord(value: string): string {
+  return OUTCOME_WORDS[value] ?? value.replace(/_/g, ' ')
+}
+
+export function verdictLabel(verdict: string): string {
+  return OUTCOME_VERDICTS[verdict]?.label ?? verdict.replace(/_/g, ' ')
+}
+
+/** How many reported outcomes each verdict has, in the order the outcome API lists verdicts. */
+export function countVerdicts(
+  reported: { outcome: Pick<RunReportedOutcome, 'verdict'> }[],
+): { verdict: string; count: number }[] {
+  const counts = new Map<string, number>()
+  for (const { outcome } of reported) {
+    counts.set(outcome.verdict, (counts.get(outcome.verdict) ?? 0) + 1)
+  }
+  const known = Object.keys(OUTCOME_VERDICTS)
+  return [...counts]
+    .map(([verdict, count]) => ({ verdict, count }))
+    .sort(
+      (left, right) =>
+        (known.indexOf(left.verdict) + 1 || known.length + 1) -
+          (known.indexOf(right.verdict) + 1 || known.length + 1) ||
+        left.verdict.localeCompare(right.verdict),
+    )
+}
+
+// One color per model, in the order the run used them most.
+const MODEL_HUES = [
+  'var(--chart-4)',
+  'var(--chart-3)',
+  'var(--chart-2)',
+  'var(--chart-5)',
+  'var(--chart-1)',
+  'var(--chart-7)',
+]
 
 export function modelHue(models: { name: string }[], model?: string): string {
   const index = models.findIndex((entry) => entry.name === model)
-  return index < 0 ? '#8a94a6' : MODEL_HUES[index % MODEL_HUES.length]
+  return index < 0 ? 'var(--chart-8)' : MODEL_HUES[index % MODEL_HUES.length]
 }
 
 export function getRunPath(sessionId: string, step?: string) {
-  const query = new URLSearchParams({ session: sessionId })
+  const query = new URLSearchParams({ session: sessionParam(sessionId) })
   if (step) query.set('step', step)
-  return `/insights/run?${query.toString()}`
+  return `/observe/runs?${query.toString()}`
 }
 
-export function formatRunCost(cost: RunCost): string {
-  const amounts = (cost.by_currency ?? []).map((entry) =>
-    formatInsightsCost(entry.total, entry.currency),
+const isCurrency = (currency?: string) =>
+  Boolean(currency?.trim()) && !isInsightsNoCurrency(currency)
+
+/**
+ * The one currency a run's money reads in: the real currency that carries
+ * the most, else the plain price units when nothing else priced its calls.
+ */
+export function runCurrency(cost: Pick<RunCost, 'by_currency'>): string | undefined {
+  const entries = cost.by_currency ?? []
+  const real = entries.filter((entry) => isCurrency(entry.currency))
+  let lead: RunCurrencyCost | undefined
+  for (const entry of real.length ? real : entries) {
+    if (!lead || Math.abs(entry.total) > Math.abs(lead.total)) lead = entry
+  }
+  return lead?.currency
+}
+
+export interface RunCostView {
+  /** The total in the run's one currency, or "no price". */
+  text: string
+  /** Whether the total leaves calls out: priced in another unit, or not priced. */
+  partial: boolean
+  /** How many calls it leaves out, when they can be counted. */
+  unpriced?: number
+  /** Why, in words, for a tooltip. */
+  note?: string
+}
+
+/**
+ * A run's or an agent's cost in one currency. Calls priced in anything else
+ * are left out and counted, never added; with the calls at hand the count is
+ * exact.
+ */
+export function runCostView(
+  cost: RunCost,
+  calls?: Pick<RunCall, 'currency' | 'cost'>[],
+): RunCostView {
+  const currency = runCurrency(cost)
+  const lead = (cost.by_currency ?? []).find((entry) => entry.currency === currency)
+  const others = (cost.by_currency ?? []).filter(
+    (entry) => entry.currency !== currency && entry.total !== 0,
   )
-  if (amounts.length === 0) return 'no price'
-  const unpriced = cost.unpriced_records + cost.unpriced_router_calls
-  return amounts.join(' + ') + (unpriced > 0 ? ` (${unpriced} unpriced)` : '')
+  const missing = cost.unpriced_records + cost.unpriced_router_calls
+  const text = lead ? formatInsightsCost(lead.total, lead.currency) : 'no price'
+  const counted = calls
+    ? calls.filter((call) => call.cost !== undefined && call.currency !== currency).length
+    : undefined
+  const unpriced =
+    others.length === 0 ? missing : counted !== undefined ? counted + missing : undefined
+  if (others.length === 0 && missing === 0) return { text, partial: false }
+  const parts = others.map((entry) =>
+    isCurrency(entry.currency)
+      ? `calls priced in ${entry.currency}`
+      : 'calls priced in plain units, by rates set without a currency',
+  )
+  if (cost.unpriced_records)
+    parts.push(countText(cost.unpriced_records, 'call') + ' without a price')
+  if (cost.unpriced_router_calls)
+    parts.push(countText(cost.unpriced_router_calls, 'Router call') + ' without a price')
+  return {
+    text,
+    partial: true,
+    unpriced,
+    note: `${lead ? `The total is in ${isCurrency(currency) ? currency : 'plain units'} only.` : 'No call has a price in one currency.'} Not added: ${parts.join('; ')}.`,
+  }
+}
+
+/** A run's cost as one figure in one currency: what tables and lane labels show. */
+export function formatRunCost(cost: RunCost): string {
+  return runCostView(cost).text
+}
+
+/** The calls a cost leaves out, as a short hint. */
+export function unpricedText(view: Pick<RunCostView, 'partial' | 'unpriced'>): string | undefined {
+  if (!view.partial) return undefined
+  return view.unpriced ? `${view.unpriced.toLocaleString()} unpriced` : 'partly unpriced'
+}
+
+/** A call's cost when it is in the run's currency; the plain units of an older price read as none. */
+export function callCostText(call: Pick<RunCall, 'cost' | 'currency'>, currency?: string): string {
+  if (call.cost === undefined) return '—'
+  if (currency && call.currency !== currency) return '—'
+  return formatInsightsCost(call.cost, call.currency)
 }
 
 export function formatRunDuration(ms: number): string {
-  if (ms < 1_000) return `${ms}ms`
+  if (ms < 1_000) return `${Math.round(ms)}ms`
   const seconds = ms / 1_000
   if (seconds < 60) return `${seconds.toFixed(1)}s`
   const minutes = Math.floor(seconds / 60)
-  return `${minutes}m ${Math.round(seconds % 60)}s`
+  if (minutes < 60) return `${minutes}m ${Math.round(seconds % 60)}s`
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
 // A run reads by the name its harness gave the session, else its main
 // agent's first prompt, else its session.
-export function runTitle(run: RunSummary): string {
-  return run.session_name || run.prompt?.trim() || `Session ${compactID(run.session_id)}`
+export function runTitle(run: Pick<RunSummary, 'session_name' | 'prompt' | 'session_id'>): string {
+  return (
+    run.session_name ||
+    run.prompt?.trim() ||
+    `Session ${compactID(displaySessionId(run.session_id))}`
+  )
+}
+
+/** Text on one line, its whitespace collapsed and cut at max characters. */
+export function oneLine(text: string, max = 120): string {
+  const line = text.replace(/\s+/g, ' ').trim()
+  return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line
+}
+
+/** A run's title on one line, for headers, rows and chips; the task reads in full elsewhere. */
+export function runHeadline(run: Pick<RunSummary, 'session_name' | 'prompt' | 'session_id'>) {
+  return oneLine(runTitle(run))
 }
 
 export function countText(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`
+  return `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`
 }
 
 export function runAgentTreeText(run: RunSummary): string {
@@ -85,30 +224,11 @@ export function runAgentTreeText(run: RunSummary): string {
   return `main, ${countText(subagents, 'subagent')}`
 }
 
-export interface RunSegment {
-  key: string
-  agent: string
-  model: string
-  calls: RunCall[]
-  // The run-wide index of the segment's last call.
-  last: number
-  // Percent of the run's span where the segment starts, and how much it covers.
-  left: number
-  width: number
-  markers: string[]
-}
-
-export interface RunLane {
-  agent: RunAgent
-  depth: number
-  segments: RunSegment[]
-  // Percent of the run's span where the agent's first call starts.
-  spawnAt?: number
-}
-
-// A call's start and end, its Looper hops included: a Looper call's record
-// starts once its hops are done.
-function callSpan(call: RunCall): [number, number] {
+/**
+ * A call's start and end, its Looper hops included: a Looper call's record
+ * starts once its hops are done.
+ */
+export function callSpan(call: RunCall): [number, number] {
   let begin = Date.parse(call.timestamp)
   let end = begin + call.duration_ms
   for (const hop of call.hops ?? []) {
@@ -119,8 +239,8 @@ function callSpan(call: RunCall): [number, number] {
   return [begin, end]
 }
 
-// The run's agents in tree order, each after the agent that spawned it.
-function orderAgents(agents: RunAgent[]): { agent: RunAgent; depth: number }[] {
+/** The run's agents in tree order, each after the agent that spawned it, with its depth. */
+export function orderRunAgents(agents: RunAgent[]): { agent: RunAgent; depth: number }[] {
   const labels = new Set(agents.map((agent) => agent.label))
   const ordered: { agent: RunAgent; depth: number }[] = []
   const visit = (parent: string | undefined, depth: number) => {
@@ -136,48 +256,21 @@ function orderAgents(agents: RunAgent[]): { agent: RunAgent; depth: number }[] {
   return ordered
 }
 
-// buildRunLanes lays a run out as one lane per agent, each a sequence of
-// segments: calls of the agent on one model that no other agent's call came
-// between, with the markers of the calls in it, so a run of hundreds of calls
-// reads as a few blocks and an agent waiting on its subagent shows a gap.
-export function buildRunLanes(response: RunResponse): RunLane[] {
-  const start = Date.parse(response.run.started_at)
-  const span = Math.max(Date.parse(response.run.ended_at) - start, 1)
-  const percent = (time: number) => Math.min(100, Math.max(0, ((time - start) / span) * 100))
-  const lanes = orderAgents(response.run.agents).map(({ agent, depth }) => ({
-    agent,
-    depth,
-    segments: [] as RunSegment[],
-  }))
-  const byLabel = new Map(lanes.map((lane) => [lane.agent.label, lane]))
-  response.calls.forEach((call, index) => {
-    const lane = byLabel.get(call.agent)
-    if (!lane) return
-    const [begin, end] = callSpan(call)
-    const model = call.model ?? ''
-    let segment = lane.segments[lane.segments.length - 1]
-    if (!segment || segment.model !== model || segment.last !== index - 1) {
-      segment = {
-        key: call.record_id,
-        agent: call.agent,
-        model,
-        calls: [],
-        last: index,
-        left: percent(begin),
-        width: 0,
-        markers: [],
-      }
-      lane.segments.push(segment)
-    }
-    segment.calls.push(call)
-    segment.last = index
-    segment.width = Math.max(segment.width, percent(end) - segment.left)
-    for (const marker of call.markers ?? []) {
-      if (!segment.markers.includes(marker)) segment.markers.push(marker)
-    }
-  })
-  return lanes.map((lane) =>
-    lane.depth > 0 && lane.segments.length > 0 ? { ...lane, spawnAt: lane.segments[0].left } : lane,
+/** What the run page's calls table shows: the agents and events it keeps, and its page. */
+export interface CallsView {
+  agents: string[]
+  markers: string[]
+  page: number
+  size: number
+}
+
+/** The calls the agent and event filters keep, in time order. */
+export function filterRunCalls(calls: RunCall[], view: Pick<CallsView, 'agents' | 'markers'>) {
+  return calls.filter(
+    (call) =>
+      (view.agents.length === 0 || view.agents.includes(call.agent)) &&
+      (view.markers.length === 0 ||
+        (call.markers ?? []).some((marker) => view.markers.includes(marker))),
   )
 }
 

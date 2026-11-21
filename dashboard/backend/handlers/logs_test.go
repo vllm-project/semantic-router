@@ -31,7 +31,7 @@ func TestLogsHandlerReadsBoundedSpoolAndRedactsSecrets(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "/api/logs?component=router&lines=20", nil)
 	response := httptest.NewRecorder()
-	newLogsHandler(root).ServeHTTP(response, request)
+	newLogsHandler(root, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
@@ -57,11 +57,11 @@ func TestLogsHandlerReadsBoundedSpoolAndRedactsSecrets(t *testing.T) {
 	}
 }
 
-func TestLogsHandlerReportsUnsupportedWithoutSpool(t *testing.T) {
+func TestLogsHandlerReportsUnsupportedWithoutSpoolOrCluster(t *testing.T) {
 	t.Parallel()
 	request := httptest.NewRequest(http.MethodGet, "/api/logs?component=all", nil)
 	response := httptest.NewRecorder()
-	newLogsHandler("").ServeHTTP(response, request)
+	newLogsHandler("", nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
@@ -73,13 +73,42 @@ func TestLogsHandlerReportsUnsupportedWithoutSpool(t *testing.T) {
 	if payload.Supported || payload.DeploymentType != "unsupported" || payload.Message != logsUnsupportedNotice || payload.Error != "" {
 		t.Fatalf("unexpected unsupported contract: %#v", payload)
 	}
+	if payload.Components == nil || len(payload.Components) != 0 || payload.Logs == nil || payload.Count != 0 {
+		t.Fatalf("unsupported logs must list no components and no entries: %#v", payload)
+	}
+}
+
+func TestLogsHandlerLabelsCombinedSpoolLinesByService(t *testing.T) {
+	t.Parallel()
+	root := newTestLogSpool(t)
+	for component, line := range map[string]string{"router": "[info] routed", "dashboard": "[info] served"} {
+		if err := os.WriteFile(filepath.Join(root, component+".log"), []byte(line+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/logs?component=all&lines=30", nil)
+	response := httptest.NewRecorder()
+	newLogsHandler(root, nil).ServeHTTP(response, request)
+
+	var payload LogsResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	lines := map[string]string{}
+	for _, entry := range payload.Logs {
+		lines[entry.Service] = entry.Line
+	}
+	if len(payload.Logs) != 2 || lines["router"] != "[info] routed" || lines["dashboard"] != "[info] served" {
+		t.Fatalf("combined spool entries = %#v", payload.Logs)
+	}
 }
 
 func TestLogsHandlerRejectsUnknownComponent(t *testing.T) {
 	t.Parallel()
 	request := httptest.NewRequest(http.MethodGet, "/api/logs?component=../../etc/passwd", nil)
 	response := httptest.NewRecorder()
-	newLogsHandler(t.TempDir()).ServeHTTP(response, request)
+	newLogsHandler(t.TempDir(), nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "invalid_component") {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
@@ -90,7 +119,7 @@ func TestLogsHandlerRejectsNonGETRequests(t *testing.T) {
 	t.Parallel()
 	request := httptest.NewRequest(http.MethodPost, "/api/logs", strings.NewReader("{}"))
 	response := httptest.NewRecorder()
-	newLogsHandler(t.TempDir()).ServeHTTP(response, request)
+	newLogsHandler(t.TempDir(), nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusMethodNotAllowed || response.Header().Get("Allow") != "GET, HEAD" {
 		t.Fatalf("status = %d, Allow = %q, body = %s", response.Code, response.Header().Get("Allow"), response.Body.String())
@@ -113,7 +142,7 @@ func TestLogsHandlerRejectsSymlinkedComponentFile(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "/api/logs?component=router", nil)
 	response := httptest.NewRecorder()
-	newLogsHandler(root).ServeHTTP(response, request)
+	newLogsHandler(root, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "must-not-be-read") {
 		t.Fatalf("unsafe file was exposed: status = %d, body = %s", response.Code, response.Body.String())
@@ -136,7 +165,7 @@ func TestLogsHandlerRejectsSymlinkedSpoolRoot(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "/api/logs?component=router", nil)
 	response := httptest.NewRecorder()
-	newLogsHandler(rootLink).ServeHTTP(response, request)
+	newLogsHandler(rootLink, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "must-not-be-read") {
 		t.Fatalf("symlinked root was exposed: status = %d, body = %s", response.Code, response.Body.String())
@@ -162,7 +191,7 @@ func TestLogsHandlerRejectsHardLinkedComponentFile(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "/api/logs?component=router", nil)
 	response := httptest.NewRecorder()
-	newLogsHandler(root).ServeHTTP(response, request)
+	newLogsHandler(root, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "must-not-be-read") {
 		t.Fatalf("hard-linked file was exposed: status = %d, body = %s", response.Code, response.Body.String())
@@ -183,7 +212,7 @@ func TestLogsHandlerBoundsResponseBytes(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "/api/logs?component=dashboard&lines=1000", nil)
 	response := httptest.NewRecorder()
-	newLogsHandler(root).ServeHTTP(response, request)
+	newLogsHandler(root, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body prefix = %.200s", response.Code, response.Body.String())
