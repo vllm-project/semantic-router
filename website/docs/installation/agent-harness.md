@@ -137,9 +137,12 @@ codex --profile vllm-sr
 Here each harness has its own Router, served from `claude-code.yaml` and
 `codex.yaml`. The command reaches the gateway at the first listener of the
 configuration it is given (`config.yaml` by default); `--base-url` names
-another origin. When that listener has `api_keys` or `api_key_files` and the
-variable is unset, the command stops before writing anything, so a key written
-before is never replaced.
+another origin. When nothing answers at that listener, the command first starts
+the Router with `vllm-sr serve --config <the same file>` and goes on once it is
+healthy; `--dry-run` only says it would, `--no-serve` leaves it stopped, and a
+gateway named by `--base-url` is never started. When that listener has
+`api_keys` or `api_key_files` and the variable is unset, the command stops
+before writing anything, so a key written before is never replaced.
 
 The command shows the changes and asks before writing them:
 
@@ -190,6 +193,9 @@ It then reports three checks, each on its own line:
   goes back, as the harness sends them. A stream that ends in an error fails
   it, and the check runs only after the basic reply passed.
 
+Both requests carry `x-vsr-probe: connect`, so Router Replay records them with
+`request_kind: probe` and **Requests** lists no agent run for them.
+
 On a failure the line says what failed in words: a key the gateway refused, no
 connection at that address, or no answer in time. Only the listener's own
 refusal (`invalid_api_key`) is read as a refused key. Any other 401, such as
@@ -222,6 +228,7 @@ sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
 the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
+With `--dry-run` it only lists what it would restore or remove.
 A file nothing else changed since the command wrote it gets back the very bytes
 it had, its formatting and a missing final newline included.
 
@@ -245,7 +252,15 @@ model cannot know without running the command, and is stopped after 120
 seconds. This spends a few short model calls on your login or key. The harness reads its own credentials
 as it always does, and the lines shown hide the gateway key, the value of any
 variable whose name says it holds a secret, and bearer tokens. Each step gets a
-line, and a failed one fails the command:
+line, and a failed one fails the command.
+
+The run sends `x-vsr-probe: connect`, so Router Replay records it as a check
+and **Requests** lists no agent run for it: Claude Code through `ANTHROPIC_CUSTOM_HEADERS`
+in a private copy of its settings, beside the custom headers it already sends,
+and Codex through a `-c model_providers.vllm-sr.http_headers` override. The
+settings connect writes for normal use carry neither. Pi takes headers only from
+`models.json` in its agent directory, so only the check of a dry run, which
+writes its own copy, marks its run; the check of a written provider is listed.
 
 - `Harness`: found on `PATH`, with its version. A harness that exits before
   it runs the task, as Codex does on a `config.toml` it cannot load, fails
@@ -270,7 +285,9 @@ project settings, in the Codex home and in Pi's agent directory. For each
 connection it shows the files written, the gateway, the entrypoint, the review and memory models (Codex), the context
 window and the login, whether each file still holds what connect wrote
 (`as written`, `changed` with the keys that differ, or `missing`; tables Codex
-appends to the profile count as written, as for `--undo`), and whether the
+appends to the profile, and a TOML table Codex writes back with the same values,
+as `codex mcp add` does with `300.0` for `300`, count as written, as for
+`--undo`), and whether the
 gateway answers a basic reply now. That sends one short request with the key
 the harness would send and waits up to 5 seconds. It sends nothing, and says
 why, once Claude Code's settings name another gateway or model than connect
@@ -361,7 +378,9 @@ settings, the first that sets it, else from your shell, and the launch's
 and keeps the lines it finds; for `--worktree new` the project's files are those
 of the checkout it is made from. Claude Code also starts its conversation with
 `--session-id` set to the same id, so its own `x-claude-code-session-id` carries
-it too, and `-- --resume <id>` resumes it later.
+it too, and `-- --resume <id>` resumes it later. The harness also gets the id in
+`VSR_SESSION_ID`, the session its vSR plugin reports tool timing under
+([Tool timing in the run view](#tool-timing-in-the-run-view)).
 
 The Router reads `x-vsr-session-id` before any other session header, so while
 `global.router.learning.protection.identity.headers.session` is unset, as in the
@@ -1186,8 +1205,9 @@ plugin installs from `--vsr-source`, this repository on GitHub by default, in
 the agent's own CLI (`claude plugin` or `codex plugin`), and only when it is
 missing. For Claude Code the command then sets the plugin's options through
 `claude plugin configure`: a remote runtime, the gateway's `/v1/decisions`, the
-first published System One model, and `router: false` so the gateway chooses the
-models. When the API key variable is set it also passes `runtimeToken`, which
+first published System One model, `router: false` so the gateway chooses the
+models, and `managementUrl` for tool timing (a plugin installed before that
+option existed is left without it). When the API key variable is set it also passes `runtimeToken`, which
 Claude Code keeps in its credential store, not in `settings.json`; the preview
 names the variable and never shows the key. For Codex it writes
 `runtimeUrl`, `runtimeModel` and `managementUrl` to `$CODEX_HOME/vsr.json`
@@ -1195,6 +1215,15 @@ names the variable and never shows the key. For Codex it writes
 the Router's management API on the gateway's host, at
 `global.services.management_api.port` (8080 by default) moved by the stack's
 port offset.
+
+Codex 0.166 runs a plugin's hooks only once a person trusted them, and asks
+again after each plugin update. Trusting them is your consent, so the command
+never does it for you and ends by saying the step: start `codex` once and,
+when it says the vSR hooks are new or changed, choose **Trust all and
+continue** (or **Review hooks**). `codex exec` never asks, so until then no
+Codex session runs any of them: no guard before a command, no redact or shield
+on its output, no turn line and no [tool
+timing](#tool-timing-in-the-run-view).
 
 Both harnesses preview everything with `--dry-run`, the plugin commands
 included, which run only when writing. `--undo` sets back the plugin options the
@@ -1250,6 +1279,46 @@ and under a session the Router derives otherwise.
   auth, set `VSR_MANAGEMENT_TOKEN` to a token with `replay.read`.
 - **No answer within 1.5 seconds**, or no record of the turn, ends the turn
   without a line. Set `managementUrl` to `""` in `vsr.json` to turn it off.
+
+#### Tool timing in the run view
+
+On its own, the gateway sees a tool call only between the response that asked
+for it and the next request that carries its result, so Router Replay's run view
+shows that window for every call of one response. With `managementUrl` set, both
+plugins report each tool call as the harness ran it, to
+`POST /api/v1/observability/tool-events`: the tool's name and call id, when it
+started and ended, whether it succeeded, failed or was refused, and when it was
+put to approval. They never send a tool's input or output. The run view joins a
+report to the call of the same id in the same session and shows its own time
+and its approval wait apart, parallel calls each with their own time.
+
+- **Claude Code** reports every tool, when the call settles, in batches sent a
+  second later at most and never in the call's way. The start is Claude Code's
+  own measure of the tool's run, which leaves out the permission prompt and the
+  hooks, so the approval wait is the time from the ask to that start. A call
+  refused before it ran is reported as denied.
+- **Codex** runs the plugin as an async hook on every tool's `PreToolUse`,
+  `PermissionRequest` and `PostToolUse`, which Codex does not wait for, and
+  reports a call once it returns. Codex 0.166 runs `PostToolUse` only for a tool
+  that returned, so a refused call keeps the gateway's window, and its hooks do
+  not say when a person answered an approval: a call that asked for one is
+  timed from when Codex took it up, the wait included, beside when it asked.
+  A call is failed when its command exited with a code other than 0, and
+  succeeded otherwise. `PostToolUse` carries the command's output alone, so
+  the plugin reads how it ended from the header of the output Codex gave the
+  model (`Process exited with code 1`), which Codex writes to the session's
+  transcript on that machine, and sends only the status.
+- **Codex runs the hooks only once trusted**: until a person trusts the vSR
+  hooks in Codex's terminal UI, no Codex session reports a call, `codex exec`
+  included, and the run view keeps the gateway's window and status for every
+  call (see [With the vSR plugin](#with-the-vsr-plugin)).
+- **The session** is `VSR_SESSION_ID` when `vllm-sr connect --launch` started
+  the harness, else the harness's own session id, which is what Replay files
+  the run under unless protection reads another identity header.
+- **The management API** must be reachable at `managementUrl`. With bearer
+  auth, set `VSR_MANAGEMENT_TOKEN` to a token whose role has `learning.ingest`,
+  as `operator` does. A report that cannot be sent within two seconds is
+  dropped, and the run view keeps the gateway's window for its calls.
 
 #### Rules of your own for guard and redact
 
@@ -1374,8 +1443,9 @@ a custom base URL otherwise; the
 [agent signal](../tutorials/signal/heuristic/agent) routes on them, and the
 Dashboard's **Requests** page names a session's run with the title Claude Code
 shows for it ([Session names](../tutorials/plugin/router-replay#session-names)).
-Codex sends no thread name the gateway can tie to its run, so **Requests** shows
-a Codex run by its first prompt.
+The Codex terminal UI's title thread carries the first prompt, which ties it to
+its run, so a Codex run reads by its title too; a headless `codex exec` or
+`claude -p` run reads by its first prompt.
 
 Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
 `codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider
@@ -1675,7 +1745,8 @@ decision override, whose whole call the Router bounds, with the
 `total_timeout: 0s` to add; each decision whose fallback is off or too short
 for an agent call, with the block to add where it is set (the decision's own
 `fallback`, its recipe's, or `global.router.fallback`); and each decision that
-names one model:
+names one model. A decision that names no model, such as one that blocks with
+`fast_response`, calls no model and needs neither:
 
 ```text
 - fallback on decision all, so a model call that fails moves to the decision's next model ... with 1200s for it: ...

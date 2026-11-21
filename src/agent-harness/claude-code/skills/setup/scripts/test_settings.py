@@ -450,5 +450,16 @@ class RuntimeModelOption(unittest.TestCase):
         self.assertEqual(settings.defaults()["runtimeModel"], "")
 
 
+class ManagementUrlOption(unittest.TestCase):
+    def test_empty_sends_no_timing_and_a_url_must_be_http(self):
+        self.assertEqual(settings.parse_value("managementUrl", ""), "")
+        self.assertEqual(
+            settings.parse_value("managementUrl", " http://127.0.0.1:8080 "),
+            "http://127.0.0.1:8080",
+        )
+        with self.assertRaisesRegex(settings.SettingsError, "http://"):
+            settings.parse_value("managementUrl", "127.0.0.1:8080")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from secrets import token_hex
 
-from cli.harness_connect import SECRET_NAME
+from cli.harness_connect import PROVIDER, SECRET_NAME
+from cli.harness_router_check import PROBE_HEADER, PROBE_VALUE
 from cli.router_management_client import (
     OBSERVABILITY_REPLAYS_PATH,
     RouterManagementClient,
@@ -84,6 +85,8 @@ def codex_argv(config: list[str], workdir: Path, review: bool) -> list[str]:
         "codex",
         "exec",
         *config,
+        "-c",
+        f"model_providers.{PROVIDER}.http_headers.{PROBE_HEADER}={json.dumps(PROBE_VALUE)}",
         *sandbox,
         "--json",
         "--ephemeral",

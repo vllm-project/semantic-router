@@ -5,10 +5,11 @@
 | Path | What it holds |
 | --- | --- |
 | `.codex-plugin/plugin.json` | The manifest: name `vsr`, the hooks file, the icon. The root `.agents/plugins/marketplace.json` lists this folder as `vsr@vllm-sr`. |
-| `hooks.json` | Three command hooks: on `Bash`, `PreToolUse` runs `hooks/vsr.py pre` and `PostToolUse` runs `hooks/vsr.py post`; `Stop` runs `hooks/vsr.py stop` at the end of each turn. `statusMessage` names each hook on Codex's review screen. |
+| `hooks.json` | The command hooks: on `Bash`, `PreToolUse` runs `hooks/vsr.py pre` and `PostToolUse` runs `hooks/vsr.py post`; `Stop` runs `hooks/vsr.py stop` at the end of each turn; on every tool, `PreToolUse`, `PermissionRequest` and `PostToolUse` run `hooks/vsr.py tool` as async hooks Codex does not wait for. `statusMessage` names a hook on Codex's review screen. |
 | `hooks/vsr.py` | The hooks: guard, then redact and shield, and the turn line. Settings come from `vsr.json` in the Codex home and `VSR_*` variables. Python 3 standard library only. |
+| `hooks/timing.py` | Tool timing for Router Replay's run view: a small file per call under `vsr-tools/` in the Codex home, and the call sent to the management API once it returns. |
 | `hooks/framing.py` | The Claude Code plugin's questions, copied from `claude-code/skills/setup/scripts/framing.py`; `test_framing_copy.py` fails when the two differ. |
-| `hooks/test_vsr.py` | The hooks against a stub decision runtime and a stub Router management API. |
+| `hooks/test_vsr.py`, `hooks/test_timing.py` | The hooks against a stub decision runtime and a stub Router management API. |
 
 ## Run and check
 
@@ -54,7 +55,11 @@ Measured on Codex CLI 0.166.0 through a Router listener with vela3-lite:
 | Untrusted hooks in `codex exec` | Skipped without a word. `--dangerously-bypass-hook-trust` runs them, for tests only. |
 
 A `Bash` event's `tool_input` is `{"command": "..."}`, and `PostToolUse`'s `tool_response` is the
-output as one string. Codex sets `PLUGIN_ROOT` (and `CLAUDE_PLUGIN_ROOT`) to the installed copy.
+output as one string, without how the command ended. The output Codex gives the model starts with
+it (`Process exited with code 1`, or the shell tool's `Exit code: 1`), and Codex writes it to the
+session's transcript (`transcript_path`) a moment after an async `PostToolUse` starts, so
+`hooks/timing.py` reads the status from there. Codex sets `PLUGIN_ROOT` (and `CLAUDE_PLUGIN_ROOT`)
+to the installed copy.
 
 The `Stop` contract is read from Codex 0.166's source, not measured: the hooks crate's
 `stop.command.input` schema and `core/src/hook_runtime.rs`. The event carries `session_id`,

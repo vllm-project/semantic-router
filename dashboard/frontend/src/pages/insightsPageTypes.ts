@@ -379,6 +379,10 @@ export interface InsightsAggregateCostCoverage {
   unpriced_records: number
   unpriced_reasons?: Record<string, number>
   looper_hop_records: number
+  /** Requests refused with a 4xx before any model answered: they cost nothing. */
+  refused_records?: number
+  /** Requests no provider answered, its connection failed or reset before any response: they cost nothing. */
+  unanswered_records?: number
   list_price_records: number
   caller_login_records: number
   router_calls: number

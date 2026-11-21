@@ -70,6 +70,7 @@ func (r *OpenAIRouter) handleRouterReplayRunAPI(ctx context.Context, method stri
 	for _, record := range records {
 		builder.add(record)
 	}
+	builder.toolReports = r.toolEvents.Session(sessionID)
 	summary, calls := builder.build()
 	// A lean read leaves the prompts out; the task is the first main call's.
 	if summary.Prompt == "" && builder.firstMain.recordID != "" {
@@ -125,9 +126,10 @@ func (r *OpenAIRouter) queryRouterReplayRuns(ctx context.Context, filters router
 		prompts: make(map[string]string, len(builders)),
 	}
 	for sessionID, builder := range builders {
-		if builder.titlesOnly() {
+		if builder.sidesOnly() {
 			continue
 		}
+		builder.toolReports = r.toolEvents.Session(sessionID)
 		summary, _ := builder.build()
 		list.runs = append(list.runs, summary)
 		list.prompts[sessionID] = builder.firstMain.recordID

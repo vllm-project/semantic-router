@@ -5014,6 +5014,34 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/router/config/catalog-prices": {
+      "get": {
+        "operationId": "getApiRouterConfigCatalogPrices",
+        "summary": "GET /api/router/config/catalog-prices",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/api/router/config/deploy": {
       "post": {
         "operationId": "postApiRouterConfigDeploy",

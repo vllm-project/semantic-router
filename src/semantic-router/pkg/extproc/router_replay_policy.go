@@ -132,6 +132,13 @@ func replayResponseContentAllowed(ctx *RequestContext) bool {
 	return ctx != nil && ctx.RouterReplayPluginConfig.CapturesRawContent()
 }
 
+// replayKeepsToolNames reports whether a record keeps the tool history of a
+// capture that keeps no text: where the policy keeps tool names, and never on
+// a masking route.
+func replayKeepsToolNames(ctx *RequestContext) bool {
+	return ctx != nil && ctx.RouterReplayPluginConfig.KeepsToolNames() && !replaySuppressesBody(ctx)
+}
+
 // applyReplayPrivacyEvidence leaves a raw capture's record as it is. Verified
 // and none keep the prompt alone, where allowed, and none of the rest.
 func applyReplayPrivacyEvidence(ctx *RequestContext, record *routerreplay.RoutingRecord, promptAllowed bool) {
@@ -143,7 +150,12 @@ func applyReplayPrivacyEvidence(ctx *RequestContext, record *routerreplay.Routin
 	record.RequestBody, record.RequestBodyTruncated = "", false
 	record.ResponseBody, record.ResponseBodyTruncated = "", false
 	record.ToolDefinitions, record.ToolDefinitionsTruncated = "", false
+	// The tool history stays without its text where the policy keeps it.
+	trace := record.ToolTrace
 	record.ToolTrace = nil
+	if replayKeepsToolNames(ctx) {
+		record.ToolTrace = routerreplay.ToolTraceStructure(trace)
+	}
 	if !promptAllowed {
 		record.Prompt, record.PromptTruncated = "", false
 	}

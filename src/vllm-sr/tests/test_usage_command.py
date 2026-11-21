@@ -244,9 +244,47 @@ def test_usage_counts_a_looper_request_once_with_its_hops_in_it(router):
     summary = json.loads(_usage(router, "--json").output)
     assert summary["requests"]["total"] == summary["requests"]["completed"] == 1
     # a row with no price has every request of it unpriced, as the text says
-    row = {"requests": 1, "spend": {}, "unpriced": 1}
+    row = {"requests": 1, "spend": {}, "unpriced": 1, "refused": 0, "unanswered": 0}
     assert summary["models"] == [{"name": "premium-ref", **row}]
     assert summary["entrypoints"] == [{"name": "vllm-sr/rate", **row}]
+
+
+def test_usage_does_not_count_a_refused_or_unanswered_request_as_unpriced(router):
+    # a block and a budget refusal reached no model and cost nothing; a
+    # response guard's refusal of a priced answer and a request that failed
+    # upstream are what they were
+    refused = {**FAILED, "response_status": 400}
+    budget = {**FAILED, "response_status": 429, "cost_accounting": {"budget": {}}}
+    # a block on a stream ends with an error event under its 200
+    streamed = {**FAILED, "response_status": 200, "terminal_reason": "request_rejected"}
+    reset = {**FAILED, "response_status": 503, "terminal_reason": "upstream_reset"}
+    provider_error = {
+        **FAILED,
+        "response_status": 502,
+        "terminal_reason": "upstream_error_response",
+    }
+    router["records"] = [
+        _record("r1", "s1", "vllm-sr/auto", "qwen-msg", 0.0002, **DONE),
+        _record("r2", "s1", "vllm-sr/auto", "qwen-msg", **refused),
+        _record("r6", "s1", "vllm-sr/auto", "", **streamed),
+        _record("r3", "s1", "vllm-sr/auto", "", **budget),
+        _record("r4", "s1", "vllm-sr/auto", "qwen-msg", 0.0002, **refused),
+        _record("r5", "s1", "vllm-sr/auto", "qwen-msg", **FAILED, response_status=502),
+        # no provider answered: the connection was reset before any response
+        _record("r7", "s1", "vllm-sr/auto", "qwen-msg", **reset),
+        # a provider's own error reply got a response and stays unpriced
+        _record("r8", "s1", "vllm-sr/auto", "qwen-msg", **provider_error),
+    ]
+    router["aggregate"] = {**AGGREGATE, "record_count": 8}
+
+    lines = _lines(_usage(router))
+    assert lines[lines.index("Top models") + 1 :] == [
+        "qwen-msg 6 requests, 0.000400 USD, 2 with no price,"
+        " 1 refused before any model answered, 1 no provider answered",
+        "Top entrypoints",
+        "vllm-sr/auto 8 requests, 0.000400 USD, 2 with no price,"
+        " 3 refused before any model answered, 1 no provider answered",
+    ]
 
 
 def test_usage_json_reads_a_duration_window(router):
@@ -267,10 +305,30 @@ def test_usage_json_reads_a_duration_window(router):
     }
     assert summary["sessions"] == 2
     assert summary["cost"] == AGGREGATE["summary"]["by_currency"]
+    # a session of only side requests, such as a title, is no run, as Runs counts
+    title = _record(
+        "t1", "s9", "vllm-sr/auto", "qwen-msg", request_kind="session_title"
+    )
+    router["records"] = [*RECORDS, title]
+    assert json.loads(_usage(router, "--json").output)["sessions"] == 2
     assert summary["reviews"] == AGGREGATE["reviews"]
     assert summary["models"] == [
-        {"name": "qwen-msg", "requests": 2, "spend": {"USD": 0.0003}, "unpriced": 0},
-        {"name": "qwen-chat", "requests": 1, "spend": {"USD": 0.00012}, "unpriced": 0},
+        {
+            "name": "qwen-msg",
+            "requests": 2,
+            "spend": {"USD": 0.0003},
+            "unpriced": 0,
+            "refused": 0,
+            "unanswered": 0,
+        },
+        {
+            "name": "qwen-chat",
+            "requests": 1,
+            "spend": {"USD": 0.00012},
+            "unpriced": 0,
+            "refused": 0,
+            "unanswered": 0,
+        },
     ]
     assert [row["name"] for row in summary["entrypoints"]] == [
         "vllm-sr/auto",

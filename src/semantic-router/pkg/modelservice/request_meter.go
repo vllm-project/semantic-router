@@ -66,7 +66,14 @@ func RecordModelCall(ctx context.Context, call ModelCall) {
 	meter.mu.Unlock()
 }
 
+// reportRuntimeCall reports a runtime task's usage. A task no runtime
+// answered, whose connection failed or timed out before any reply, charged
+// nothing and is no call to price, as a request no provider answered is
+// none.
 func reportRuntimeCall(ctx context.Context, task api.BundleTask, result api.BundleResult) {
+	if result == (api.BundleResult{}) {
+		return
+	}
 	call := ModelCall{}
 	switch {
 	case task.Decisions != nil:
@@ -98,7 +105,13 @@ func reportRuntimeCall(ctx context.Context, task api.BundleTask, result api.Bund
 	RecordModelCall(ctx, call)
 }
 
-func reportRemoteCall(ctx context.Context, deployment, model string, data []byte) {
+// reportRemoteCall reports a System One call's usage from the reply the API
+// gave with status. A call with no reply, status 0, charged nothing and is
+// no call to price.
+func reportRemoteCall(ctx context.Context, deployment, model string, status int, data []byte) {
+	if status == 0 {
+		return
+	}
 	var body struct {
 		Model string `json:"model"`
 		Usage *struct {

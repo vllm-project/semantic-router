@@ -570,6 +570,12 @@ func (decoder *responsesStreamDecoder) validateResponsesTerminalOutput(raw json.
 	if err := decodeProviderValue(raw, &output, decoder.policy); err != nil {
 		return err
 	}
+	// ChatGPT's Codex backend sends an empty list when the request carries
+	// namespace tools. The streamed items stand, and the client's terminal
+	// event lists them.
+	if len(output) == 0 {
+		return nil
+	}
 	if len(output) != len(decoder.completedOutput) {
 		return invalidProviderResponse("stream_terminal_output_mismatch", "Responses terminal output does not contain every completed output item")
 	}

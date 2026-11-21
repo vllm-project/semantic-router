@@ -48,6 +48,12 @@
       "description": "Sent as the request's model when set, for a runtime that serves several models, such as a System One API (GET /v1/systemone/models lists them). Empty sends none.",
       "default": ""
     },
+    "managementUrl": {
+      "type": "string",
+      "title": "Router management API",
+      "description": "The Router management API (such as http://127.0.0.1:8080) that gets each tool call's timing for Router Replay's run view: the tool's name and call id, when it ran, how it ended and when it asked for approval, never its input or output. VSR_MANAGEMENT_TOKEN, when set, is sent as its bearer token. vllm-sr connect sets it. Empty sends nothing.",
+      "default": ""
+    },
     "router": {
       "type": "boolean",
       "title": "App: router",

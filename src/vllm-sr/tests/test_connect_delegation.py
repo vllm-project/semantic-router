@@ -64,6 +64,12 @@ class FakeClaude:
         return subprocess.CompletedProcess(argv, 0, out, "")
 
 
+@pytest.fixture(autouse=True)
+def router_answers(monkeypatch):
+    """A Router answers at every configuration's listener, so connect starts none."""
+    monkeypatch.setattr(command, "_answers", lambda _: True)
+
+
 def _installs(fake):
     """The commands that changed Claude Code's plugins or marketplaces."""
     changing = (["marketplace", "add"], ["marketplace", "remove"])
@@ -272,6 +278,32 @@ def test_codex_asks_claude_code_read_only_over_mcp(homes, monkeypatch, app):
 
     assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
     assert (path.read_text() if path.exists() else None) == (theirs if app else None)
+
+
+def test_codex_writing_back_the_mcp_table_leaves_it_connects(homes, monkeypatch):
+    # codex mcp add writes config.toml back in its own form: 300.0 for 300 and
+    # keys in another order, the same values
+    _, codex_home = homes
+    monkeypatch.setattr(command.subprocess, "run", FakeClaude())
+    args = ["connect", "codex", "--base-url", URL, "--no-vsr", "--app"]
+    args += ["--key-command", "pass show gw", "--delegate", "claude-code"]
+    path = codex_home / "config.toml"
+    theirs = '[mcp_servers.docs]\ncommand = "docs-mcp"\n'
+    path.write_text(theirs)
+    assert CliRunner().invoke(main, [*args, "--yes"]).exit_code == 0
+    text = path.read_text()
+    rewritten = text.replace("tool_timeout_sec = 300", "tool_timeout_sec = 300.0")
+    rewritten = rewritten.replace(
+        'command = "claude"\nargs = ["mcp", "serve"]',
+        'args = ["mcp", "serve"]\ncommand = "claude"',
+    )
+    assert rewritten != text
+    path.write_text(rewritten)
+
+    output = " ".join(CliRunner().invoke(main, ["connect", "status"]).output.split())
+    assert f"{path}: as written" in output
+    assert CliRunner().invoke(main, ["connect", "codex", "--undo"]).exit_code == 0
+    assert path.read_text() == theirs
 
 
 def test_codex_hands_edits_to_claude_code_only_through_an_opt_in_skill(

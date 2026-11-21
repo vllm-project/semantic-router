@@ -115,3 +115,54 @@ global:
 		t.Fatalf("config read status = %d, want 200: %s", w.Code, w.Body.String())
 	}
 }
+
+// A model that sets no pricing is priced at its provider's catalog list price,
+// and the models page reads that price here. A priced model and a self-hosted
+// model are not listed.
+func TestCatalogPricesHandlerListsCatalogPricedModels(t *testing.T) {
+	config := `version: v0.5
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8801
+providers:
+  defaults:
+    model: own
+  models:
+    - name: listed
+      provider_model_id: claude-sonnet-5-5
+      api_format: anthropic
+      backend_refs:
+        - {name: claude, provider: anthropic}
+    - name: own
+      provider_model_id: claude-sonnet-5-5
+      api_format: anthropic
+      pricing: {currency: USD, prompt_per_1m: 1, completion_per_1m: 2}
+      backend_refs:
+        - {name: claude, provider: anthropic}
+    - name: local
+      provider_model_id: claude-sonnet-5-5
+      backend_refs:
+        - {name: local, provider: vllm, endpoint: 127.0.0.1:8000}
+recipes:
+  - name: default
+`
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	CatalogPricesHandler(configPath)(w, httptest.NewRequest(http.MethodGet, "/api/router/config/catalog-prices", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		CatalogListPrices map[string]map[string]any `json:"catalog_list_prices"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.CatalogListPrices) != 1 || body.CatalogListPrices["listed"]["prompt_per_1m"] != 2.0 || body.CatalogListPrices["listed"]["currency"] != "USD" {
+		t.Fatalf("catalog prices = %v, want only listed at the anthropic list price", body.CatalogListPrices)
+	}
+}

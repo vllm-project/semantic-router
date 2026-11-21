@@ -11,6 +11,30 @@
             "statusMessage": "vSR guard: is this command safe to run?"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/vsr.py\" tool",
+            "timeout": 5,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/vsr.py\" tool",
+            "timeout": 5,
+            "async": true
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -22,6 +46,17 @@
             "command": "python3 \"${PLUGIN_ROOT}/hooks/vsr.py\" post",
             "timeout": 30,
             "statusMessage": "vSR redact and shield: reading the output"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/vsr.py\" tool",
+            "timeout": 5,
+            "async": true
           }
         ]
       }

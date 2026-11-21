@@ -29,7 +29,9 @@ func isOpenAIHostedResponses(profile *config.ProviderProfile, endpoint string, t
 }
 
 // Every endpoint must qualify because Envoy can send the model to any member
-// of its pool. A shadow dispatch instead names one concrete endpoint.
+// of its pool. A shadow dispatch instead names one concrete endpoint. An
+// OpenAI-hosted backend also reads tool namespaces, so a request sends its
+// namespaced tools there as its client declared them.
 func (r *OpenAIRouter) projectResponsesReasoningForBackend(request llmprotocol.Request, model string, target llmprotocol.WireFormat, shadows ...*shadowTarget) (llmprotocol.Request, llmprotocol.Diagnostics) {
 	hosted := false
 	if len(shadows) > 0 {
@@ -47,5 +49,6 @@ func (r *OpenAIRouter) projectResponsesReasoningForBackend(request llmprotocol.R
 			}
 		}
 	}
+	request.KeepToolNamespaces = hosted
 	return llmprotocol.ProjectResponsesReasoning(request, target, hosted)
 }

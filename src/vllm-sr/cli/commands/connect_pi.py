@@ -27,6 +27,7 @@ def _pi_options(command):
 def pi(
     router_config,
     base_url,
+    serve,
     model,
     api_key_env,
     dry_run,
@@ -41,9 +42,10 @@ def pi(
     home = hp.agent_dir(env)
     base._check_launch(False, (), undo, check=check)
     if undo:
-        base._undo(home)
+        base._undo(home, dry_run)
         return
     gateway, doc = base._gateway(router_config, base_url)
+    base._start_router(gateway, router_config, base_url, serve, dry_run)
     login = _login(home, rc.caller_provider(doc, model))
     if hp.stored_key(home):
         raise click.ClickException(
@@ -125,6 +127,9 @@ def _check_unwritten(
     if home:
         pinned = f"{hp.AGENT_DIR_VARIABLE}={shlex.quote(str(home))} "
         entry = {**entry, "apiKey": f"!{pinned}{entry['apiKey'][1:]}"}
+    # the check's own mark, in the copy of the provider only the check reads
+    probe = {rc.PROBE_HEADER: rc.PROBE_VALUE}
+    entry = {**entry, "headers": {**entry.get("headers", {}), **probe}}
     with tempfile.TemporaryDirectory(prefix="vllm-sr-check-") as agent:
         text = json.dumps({"providers": {hp.PROVIDER: entry}}, indent=2)
         hc.write_private(Path(agent) / "models.json", text)

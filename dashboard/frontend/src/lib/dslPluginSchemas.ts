@@ -82,7 +82,7 @@ function getResponseGuardPluginFieldSchema(): FieldSchema[] {
           required: true,
           options: ['block', 'annotate', 'none'],
           description:
-            'Refuse the answer with 403, deliver it with x-vsr-warnings, or only record it',
+            'Refuse the answer with HTTP 400, deliver it with x-vsr-warnings, or only record it',
         },
         {
           key: 'details',
@@ -156,7 +156,7 @@ function getFastResponsePluginFieldSchema(): FieldSchema[] {
       key: 'block',
       label: 'Block the request',
       type: 'boolean',
-      description: 'Refuse the request with HTTP 403 and this message instead of answering with it',
+      description: 'Refuse the request with HTTP 400 and this message instead of answering with it',
     },
   ]
 }

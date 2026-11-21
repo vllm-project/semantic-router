@@ -80,6 +80,11 @@ def parse_value(name: str, raw: object) -> object:
     if name == "runtimeModel":
         # Empty means the runtime's only model; a hosted System One API needs one named.
         return str(text).strip()
+    if name == "managementUrl":
+        # Empty sends no tool timing; vllm-sr connect sets it for the Router it connects.
+        if text and not str(text).startswith(("http://", "https://")):
+            raise SettingsError("managementUrl must start with http:// or https://")
+        return str(text)
     if not isinstance(text, str) or text == "":
         raise SettingsError(f"{name} takes a non-empty string")
     if name == "runtimeUrl" and not text.startswith(("http://", "https://")):

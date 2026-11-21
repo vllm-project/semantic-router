@@ -28,6 +28,24 @@ func (registry *EffectiveRegistry) ModelLabel(name string) string {
 	return name
 }
 
+// ModelLabels is the label of each configured model, by name. Models whose
+// labels match, such as several on one provider model id, read by their
+// configured names instead, so no two models read alike.
+func (registry *EffectiveRegistry) ModelLabels() map[string]string {
+	labels := make(map[string]string, len(registry.models))
+	shared := make(map[string]int)
+	for name := range registry.models {
+		labels[name] = registry.ModelLabel(name)
+		shared[labels[name]]++
+	}
+	for name, label := range labels {
+		if shared[label] > 1 {
+			labels[name] = name
+		}
+	}
+	return labels
+}
+
 // cardServedAs is the card a provider's catalog maps a native model id to.
 func (registry *EffectiveRegistry) cardServedAs(provider ProviderDefinition, modelID string) (ModelCard, bool) {
 	for _, binding := range provider.Models {

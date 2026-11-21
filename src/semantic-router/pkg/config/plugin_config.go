@@ -180,7 +180,19 @@ type RouterReplayPluginConfig struct {
 	// CaptureRequestBody is on, and principals without replay.detail still
 	// read the results redacted.
 	CaptureToolResults bool `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
-	MaxBodyBytes       int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
+	// CaptureSessionName keeps the name a run reads by, whatever
+	// PromptCapture says: the name the client's harness gave the session, its
+	// title or a /rename, else the first 120 characters of the main agent's
+	// first prompt. Nil where no layer sets it, which keeps it. Never kept on
+	// a masking route, and principals without replay.detail read it cleared.
+	CaptureSessionName *bool `json:"capture_session_name,omitempty" yaml:"capture_session_name,omitempty"`
+	// CaptureToolNames keeps a run's tool history whatever PromptCapture
+	// says: each tool call's name and call id, the status of its result, the
+	// names of the tools each request offered, and the subagent kind the
+	// harness sends, but no arguments, results, schemas or other text. Nil
+	// where no layer sets it, which keeps it. Never kept on a masking route.
+	CaptureToolNames *bool `json:"capture_tool_names,omitempty" yaml:"capture_tool_names,omitempty"`
+	MaxBodyBytes     int   `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
 	// MaxPromptBytes caps the prompt a record keeps under raw and verified,
 	// cut on a UTF-8 boundary; a cut record keeps the whole prompt's size and
 	// SHA-256. 0 means no limit. Nil where no layer sets it, so that

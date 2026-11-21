@@ -476,6 +476,8 @@ def codex_catalog(
             **base,
             "slug": name,
             "display_name": name,
+            "description": f"{name} through vLLM Semantic Router, which picks the model"
+            " for each request.",
             "visibility": "hide" if hidden else "list",
             "supports_search_tool": False,
             "apply_patch_tool_type": None,
@@ -978,8 +980,9 @@ def plugin_undo(manifest_dir: Path, inputs) -> list[tuple[str, dict]]:
     return undo
 
 
-def undo_changes(manifest_dir: Path) -> list[str]:
-    """Return each owned key to what it held before, unless it was changed since."""
+def undo_changes(manifest_dir: Path, write: bool = True) -> list[str]:
+    """Return each owned key to what it held before, unless it was changed since.
+    Without write, only say what that would do."""
     manifest_path = manifest_dir / MANIFEST
     record = _record(manifest_path)
     if record is None:
@@ -999,7 +1002,10 @@ def undo_changes(manifest_dir: Path) -> list[str]:
             text = _restored(item, probe, text, report)
             if text is None:
                 continue
-        if item["created"] and not text.strip():
+        if not write:
+            removing = item["created"] and not text.strip()
+            report.append(f"would {'remove' if removing else 'restore'} {path}")
+        elif item["created"] and not text.strip():
             path.unlink()
             if path.parent.name == CLAUDE_SKILL and not any(path.parent.iterdir()):
                 path.parent.rmdir()  # the skill's own folder
@@ -1007,7 +1013,8 @@ def undo_changes(manifest_dir: Path) -> list[str]:
         else:
             write_private(path, text)
             report.append(f"restored {path}")
-    manifest_path.unlink()
+    if write:
+        manifest_path.unlink()
     return report
 
 
@@ -1033,12 +1040,13 @@ def _restored(item: dict, probe: Change, text: str, report: list[str]) -> str | 
             if any(rule in ours for rule in now or []):
                 restore[key] = [rule for rule in now if rule not in ours] or None
             continue
-        if not still_written(key, now, written):
+        if not still_written(key, now, written, item["kind"]):
             what = path if key == "file" else f"{key} in {path}"
             report.append(f"kept {what}: it was changed after vllm-sr connect")
             continue
         restore[key] = entry["before"]
-        if now != written:
+        if key == "file" and now != written and now.startswith(written):
+            # the tables the harness appended after the file connect wrote
             tail = now[len(written) :].lstrip("\n")
             before = entry["before"] or ""
             if before and not before.endswith("\n"):
@@ -1047,16 +1055,31 @@ def _restored(item: dict, probe: Change, text: str, report: list[str]) -> str | 
     return probe.new_text(restore, text) if restore else None
 
 
-def still_written(key: str, now: Any, written: Any) -> bool:
+def still_written(key: str, now: Any, written: Any, kind: str = "") -> bool:
     """Whether an owned key, or a whole file, still holds what connect wrote. The
     Codex TUI appends tables of its own, such as [tui], to the profile, which
-    leaves the profile connect's."""
-    return now == written or (
-        key == "file"
-        and isinstance(written, str)
-        and bool(now)
-        and now.startswith(written)
+    leaves the profile connect's. A TOML value Codex wrote back in its own form,
+    as codex mcp add does with 300.0 for 300 and keys in another order, still
+    holds the same values."""
+    return (
+        now == written
+        or (
+            key == "file"
+            and isinstance(written, str)
+            and bool(now)
+            and now.startswith(written)
+        )
+        or (kind == "toml" and _same_toml(now, written))
     )
+
+
+def _same_toml(now: Any, written: Any) -> bool:
+    if not isinstance(now, str) or not isinstance(written, str):
+        return False
+    try:
+        return harness_toml.loads(now) == harness_toml.loads(written)
+    except ValueError:
+        return False
 
 
 # --- status ------------------------------------------------------------------------
@@ -1202,7 +1225,7 @@ def file_state(item: dict) -> dict[str, Any]:
         changed = [
             key
             for key, entry in item["keys"].items()
-            if not still_written(key, now[key], entry["written"])
+            if not still_written(key, now[key], entry["written"], item["kind"])
         ]
     except ValueError:  # no longer the JSON object connect wrote into
         changed = list(item["keys"])

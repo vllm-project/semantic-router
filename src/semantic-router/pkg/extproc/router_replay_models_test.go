@@ -11,8 +11,9 @@ import (
 )
 
 // The models route labels every configured model as a person reads it: a
-// catalog-backed model by its card, a provider model id the catalog maps by
-// that card, any other by its provider model id.
+// catalog-backed model by its card, a model the operator names by that
+// name, any other by its provider model id. Models that would read alike,
+// such as two on one provider model id, read by their configured names.
 func TestReplayModelsLabelTheConfiguredModels(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 listeners: []
@@ -29,11 +30,18 @@ providers:
           endpoint: http://127.0.0.1:18211/v1
     - name: known-id
       provider_model_id: Qwen/Qwen3.6-35B-A3B
+      display_name: House Qwen
       backend_refs:
         - name: local
           provider: vllm
           endpoint: http://127.0.0.1:18211/v1
     - name: premium-ref
+      provider_model_id: qwen36
+      backend_refs:
+        - name: local
+          provider: vllm
+          endpoint: http://127.0.0.1:18211/v1
+    - name: qwen-small
       provider_model_id: qwen36
       backend_refs:
         - name: local
@@ -49,8 +57,9 @@ global: {}
 	require.Equal(t, 200, replayAPIJSON(t, router, "/api/v1/observability/replays/models", &models))
 	require.Equal(t, "router_replay.models", models.Object)
 	require.Equal(t, []routerreplay.ModelLabel{
-		{Name: "known-id", Label: "Qwen3.6 35B A3B"},
-		{Name: "premium-ref", Label: "qwen36"},
+		{Name: "known-id", Label: "House Qwen"},
+		{Name: "premium-ref", Label: "premium-ref"},
 		{Name: "qwen-msg", Label: "Qwen3.6 35B A3B"},
+		{Name: "qwen-small", Label: "qwen-small"},
 	}, models.Data)
 }

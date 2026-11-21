@@ -92,7 +92,7 @@ func apiRouterReplayRoutes() []apiRoute {
 			EndpointMetadata{
 				Path:        apiObservabilityReplaysPath + "/models",
 				Method:      "GET",
-				Description: "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
+				Description: "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id, else its configured name where two models would read alike",
 			},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,

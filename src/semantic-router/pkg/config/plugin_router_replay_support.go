@@ -136,6 +136,19 @@ func RouterReplayPolicyOf(plugins []DecisionPlugin) *RouterReplayPluginConfig {
 	return &base
 }
 
+// KeepsSessionName reports whether records keep the name a run reads by: on
+// unless a layer sets capture_session_name: false.
+func (p *RouterReplayPluginConfig) KeepsSessionName() bool {
+	return p != nil && (p.CaptureSessionName == nil || *p.CaptureSessionName)
+}
+
+// KeepsToolNames reports whether records keep a run's tool history, its tool
+// names, call ids, result statuses and subagent kinds: on unless a layer sets
+// capture_tool_names: false.
+func (p *RouterReplayPluginConfig) KeepsToolNames() bool {
+	return p != nil && (p.CaptureToolNames == nil || *p.CaptureToolNames)
+}
+
 // PromptCaptureMode is the policy's prompt capture mode: the prompt_capture
 // set, else what a deprecated capture_personal_data meant, else none. A value
 // loading refuses is none too, so that no unknown mode keeps text.

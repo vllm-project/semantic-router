@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import useBuiltInModelCatalog from '../hooks/useBuiltInModelCatalog'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
@@ -340,6 +340,25 @@ function useEvaluationRecordInventory(
   return { groups, manage }
 }
 
+type ModelPrices = Record<string, NonNullable<NormalizedModel['pricing']>>
+
+// The catalog list price of each model that sets no pricing, as the Router
+// prices it. The page shows N/A when it is unavailable.
+function useCatalogListPrices(configRevision: unknown) {
+  const [prices, setPrices] = useState<ModelPrices>({})
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/router/config/catalog-prices', { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : {}))
+      .then((body: { catalog_list_prices?: ModelPrices }) =>
+        setPrices(body.catalog_list_prices ?? {}),
+      )
+      .catch(() => {})
+    return () => controller.abort()
+  }, [configRevision])
+  return prices
+}
+
 export function useConfigPageModelsSectionController(props: ConfigPageModelsSectionProps) {
   const { catalog, error: catalogError, ready, loading, retry } = useBuiltInModelCatalog()
   const health = useBackendModelHealth(props.config)
@@ -355,6 +374,7 @@ export function useConfigPageModelsSectionController(props: ConfigPageModelsSect
   const defaults = useDefaultModelChange(props)
   const evaluations = useEvaluationRecordInventory(props, catalog)
   const liveVerification = useModelLiveVerification(props.config)
+  const catalogPrices = useCatalogListPrices(props.config)
   return {
     catalog,
     filters,
@@ -364,6 +384,7 @@ export function useConfigPageModelsSectionController(props: ConfigPageModelsSect
     evaluations: { ...evaluations, ready, loading, retry },
     catalogError,
     liveVerification,
+    catalogPrices,
     health,
     traffic,
   }

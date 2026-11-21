@@ -35,7 +35,7 @@ import {
   type TimelineBreak,
   type TimelineMark,
 } from './insightsRunTimeline'
-import type { RunCall, RunSummary } from './insightsRunTypes'
+import type { RunCall, RunSummary, RunToolCall } from './insightsRunTypes'
 
 function modelTitle(labels: Record<string, string>, model: string): string {
   return model ? modelText(labels, model) : 'no model'
@@ -1006,7 +1006,10 @@ export function RunCallDetails({ call, currency }: { call: RunCall; currency?: s
               : undefined
           }
         >
-          {call.cost !== undefined ? cost : 'No price'}
+          {call.cost === undefined
+            ? 'No price'
+            : cost +
+              (cost !== '—' && call.pricing_source === 'catalog_list_price' ? ' list price' : '')}
         </Row>
         <Row label="Duration">{formatRunDuration(call.duration_ms)}</Row>
         {(call.router_calls ?? []).map((entry) => (
@@ -1044,8 +1047,8 @@ export function RunCallDetails({ call, currency }: { call: RunCall; currency?: s
         </div>
         <Row label="Tools">
           {call.tool_results
-            ? `${call.tool_results} returned · ${call.tool_failures ?? 0} failed`
-            : 'None returned'}
+            ? `${call.tool_results} results sent · ${call.tool_failures ?? 0} failed`
+            : 'No results sent'}
         </Row>
         {call.hops?.length ? (
           <Row label="Hops">
@@ -1111,6 +1114,7 @@ export function RunSegmentPanel({
           {countText(segment.calls.length, 'call')}
         </span>
       </header>
+      <RunToolList calls={segment.calls} />
       {segment.calls.length > 1 ? (
         <ol className="flex max-h-60 flex-col overflow-y-auto rounded-xl border border-border bg-card">
           {segment.calls.map((entry) => (
@@ -1127,7 +1131,9 @@ export function RunSegmentPanel({
                 <span className="hidden font-mono tabular text-subtle-foreground sm:inline">
                   {clock(Date.parse(entry.timestamp))}
                 </span>
-                <span className="truncate font-medium">{entry.decision || '—'}</span>
+                <span className="truncate font-medium">
+                  {entry.request_kind || entry.decision || '—'}
+                </span>
                 <Badge size="sm" tone={statusTone(entry)}>
                   {describeCallStatus(entry)}
                 </Badge>
@@ -1146,5 +1152,85 @@ export function RunSegmentPanel({
         <p className="text-[13px] text-muted-foreground">Pick a call for its card.</p>
       )}
     </aside>
+  )
+}
+
+// How long a tool call took on the client: the tool's own run when a harness
+// plugin reported it, else the gateway's window.
+function toolDuration(tool: RunToolCall): number | undefined {
+  if (tool.timing_source === 'plugin') {
+    return tool.started_at && tool.ended_at
+      ? Date.parse(tool.ended_at) - Date.parse(tool.started_at)
+      : undefined
+  }
+  return tool.client_ms
+}
+
+// A tool call's time as the run reads it. A plugin's report is the tool's
+// own run, with the time it waited for approval apart; the gateway's window
+// is an estimate, marked ≈, that the calls of one response share.
+function toolTimeText(tool: RunToolCall): string {
+  const duration = toolDuration(tool)
+  if (tool.timing_source !== 'plugin') {
+    return duration === undefined ? '' : `≈${formatRunDuration(duration)}`
+  }
+  let wait = ''
+  if (tool.approval_ms !== undefined) {
+    wait = `waited ${formatRunDuration(tool.approval_ms)} for approval`
+  } else if (tool.approval_requested_at) {
+    // A start the harness took before the answer holds the wait.
+    wait = duration === undefined ? 'asked for approval' : 'approval wait included'
+  }
+  return [duration === undefined ? '' : `ran ${formatRunDuration(duration)}`, wait]
+    .filter(Boolean)
+    .join(', ')
+}
+
+function toolStatusText(status?: string): string {
+  if (status === 'succeeded') return 'ok'
+  if (status === 'failed') return 'failed'
+  if (status === 'denied') return 'refused'
+  return 'no result yet'
+}
+
+// How long a tool call took on the client, and whose clock says so.
+function ToolDuration({ tool }: { tool: RunToolCall }) {
+  const text = toolTimeText(tool)
+  if (!text) return <span />
+  const source =
+    tool.timing_source === 'plugin'
+      ? "As the harness's vSR plugin reported it: the tool's own run, and its approval wait apart"
+      : 'Estimated by the gateway: from the response that asked for the call to the request that carried its result, shared by the calls of one response'
+  return (
+    <span title={source} data-timing={tool.timing_source}>
+      {text}
+    </span>
+  )
+}
+
+// Every tool call of a block's turns with its arguments and result.
+function RunToolList({ calls }: { calls: RunCall[] }) {
+  const rows = calls.flatMap((entry) =>
+    (entry.tool_calls ?? []).map((tool, index) => ({ entry, tool, index })),
+  )
+  if (rows.length === 0) return null
+  return (
+    <ol
+      className="m-0 grid list-none grid-cols-[minmax(0,max-content)_minmax(0,1fr)_auto_auto] gap-x-2 gap-y-1 p-0"
+      aria-label="Tool calls"
+    >
+      {rows.map(({ entry, tool, index }) => (
+        <li
+          key={`${entry.record_id}-${tool.id || index}`}
+          data-status={tool.status}
+          className="col-span-full grid grid-cols-subgrid items-baseline text-xs text-muted-foreground data-[status=failed]:[&>span]:text-destructive-foreground"
+        >
+          <strong className="truncate font-mono font-semibold text-foreground">{tool.name}</strong>
+          <code className="truncate">{tool.arguments || tool.summary || 'arguments not kept'}</code>
+          <ToolDuration tool={tool} />
+          <span>{toolStatusText(tool.status)}</span>
+        </li>
+      ))}
+    </ol>
   )
 }

@@ -93,11 +93,18 @@ func redactRunSummaryMap(run map[string]any) bool {
 	return changed
 }
 
-// redactRunCallMap clears a run call's protection and Looper reason and its
-// reported outcomes' text, and its Looper hops' too.
+// redactRunCallMap clears a run call's protection and Looper reason, its
+// reported outcomes' text and its tool calls' arguments, which keep their
+// names and statuses as a record's tool trace does, and its Looper hops' too.
 func redactRunCallMap(call map[string]any) bool {
 	changed := clearStringField(call, "reason")
 	if redactOutcomes(call["outcomes"]) {
+		changed = true
+	}
+	if tools, ok := call["tool_calls"].([]any); ok && redactEach(tools, func(tool map[string]any) bool {
+		cleared := clearStringField(tool, "summary")
+		return clearStringField(tool, "arguments") || cleared
+	}) {
 		changed = true
 	}
 	if hops, ok := call["hops"].([]any); ok && redactEach(hops, redactRunCallMap) {
@@ -106,9 +113,11 @@ func redactRunCallMap(call map[string]any) bool {
 	return changed
 }
 
-// redactAgentIdentityMap clears the hashes of the agent ids a harness sent.
+// redactAgentIdentityMap clears the hashes of the agent ids a harness sent,
+// and what its spawning tool call asked it for.
 func redactAgentIdentityMap(agent map[string]any) bool {
 	changed := clearStringField(agent, "id")
+	changed = clearStringField(agent, "task") || changed
 	return clearStringField(agent, "parent_id") || changed
 }
 
