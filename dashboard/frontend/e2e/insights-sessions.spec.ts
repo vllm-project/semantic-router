@@ -294,7 +294,7 @@ test('shows a dash with its reason instead of N/A in the totals and the breakdow
 }, info) => {
   await setup(page)
   await page.goto('/observe/requests')
-  await expect(page.getByText('Cost vs reference')).toBeVisible()
+  await expect(page.getByText('Saved vs priciest model')).toBeVisible()
   await expect(page.getByText('Saved by routing')).toHaveCount(0)
   const summary = page.getByRole('region', { name: 'Requests summary' })
   await expect(summary).toContainText(/cost only/i)

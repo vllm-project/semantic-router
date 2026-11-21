@@ -1639,7 +1639,7 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		{
 			name:       "router_replay_shadow",
 			pluginType: "router_replay",
-			body:       `enabled: true shadow: { model: "candidate" sample_rate: 0.1 max_concurrency: 2 timeout_seconds: 20 forward_headers: ["x-tenant"] }`,
+			body:       `enabled: true shadow: { models: ["candidate", "other"] sample_rate: 0.1 execution: { max_concurrency: 2 timeout: "20s" } budget: { max_response_bytes: 4096 } capture: { enabled: true max_bytes: 1024 } }`,
 			verifyType: "router_replay",
 		},
 		{

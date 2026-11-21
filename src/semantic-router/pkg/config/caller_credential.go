@@ -57,6 +57,11 @@ func validateCallerUpstreams(cfg *RouterConfig) error {
 			return fmt.Errorf("listeners[%d]: api_keys and api_key_files authenticate clients with the Authorization header, which carries the caller's login to %s; serve caller backends from a listener without client keys", index, first)
 		}
 	}
+	for index, entrypoint := range cfg.Entrypoints {
+		if entrypoint.ClientAuth != nil {
+			return fmt.Errorf("entrypoints[%d].client_auth authenticates clients with the Authorization header, which carries the caller's login to %s; serve caller backends without entrypoint client keys", index, first)
+		}
+	}
 	return cfg.validateCallerRequestOnly(first)
 }
 

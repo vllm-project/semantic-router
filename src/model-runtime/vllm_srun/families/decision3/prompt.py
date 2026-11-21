@@ -28,13 +28,14 @@ d3 layout.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
 from ...registry.artifacts import read_json, sha256_file
+from ...text import bounds
 
 
 class Token(str):
@@ -236,45 +237,90 @@ class PromptEncoder:
 
     def encode_batch(self, prompts: Sequence[Prompt]) -> list[Encoding]:
         """Each prompt's encoding; the text of every prompt in one call (the tokenizer releases the GIL for a batch)."""
-        runs: list[str] = []
-        # Per prompt: (start, end, token ID) of each token, or a None ID for the next run of text.
-        layouts: list[list[tuple[int, int, int | None]]] = []
-        for parts in prompts:
-            layout: list[tuple[int, int, int | None]] = []
-            run: list[str] = []
-            start = at = 0
-            for part in parts:
-                token = self.added.get(part) if isinstance(part, Token) else None
-                if token is None:
-                    if not run:
-                        start = at
-                    run.append(part)
-                else:
-                    if run:
-                        layout.append((start, at, None))
-                        runs.append("".join(run))
-                        run = []
-                    layout.append((at, at + len(part), token))
-                at += len(part)
-            if run:
-                layout.append((start, at, None))
-                runs.append("".join(run))
-            layouts.append(layout)
-        encoded = iter(self.text.encode_batch(runs, add_special_tokens=False))
-        out = []
-        for layout in layouts:
-            ids: list[int] = []
-            offsets: list[tuple[int, int]] = []
-            for start, end, token in layout:
-                if token is not None:
-                    ids.append(token)
-                    offsets.append((start, end))
-                    continue
-                text = next(encoded)
-                ids += text.ids
-                offsets += [(start + a, start + b) for a, b in text.offsets]
-            out.append(Encoding(ids, offsets))
+        split = [self._split(parts) for parts in prompts]
+        encoded = iter(
+            self.text.encode_batch(
+                [run for _, runs in split for run in runs], add_special_tokens=False
+            )
+        )
+        return [self._assemble(layout, encoded) for layout, _ in split]
+
+    def read_batch(
+        self, prompts: Sequence[Prompt], limit: int
+    ) -> list[Encoding | None]:
+        """Each prompt's encoding as ``encode_batch`` gives it, or None for a prompt of more than ``limit`` tokens.
+
+        ``limit + 1`` tokens decide a prompt, so its text is read only that far,
+        and not at all when a run of it certainly holds more (``bounds``).
+        """
+        split = [self._split(parts) for parts in prompts]
+        undecided = [
+            index
+            for index, (_, runs) in enumerate(split)
+            if not any(bounds.surely_over(self.text, run, limit) for run in runs)
+        ]
+        # The runs short enough to read whole go through one call: the
+        # tokenizer releases the GIL for a batch, not for a single text.
+        reads = iter(
+            bounds.read_batch(
+                self.text,
+                [run for index in undecided for run in split[index][1]],
+                limit + 1,
+            )
+        )
+        out: list[Encoding | None] = [None] * len(prompts)
+        for index in undecided:
+            layout, runs = split[index]
+            texts = [next(reads) for _ in runs]
+            if not all(read.complete for read in texts):
+                continue
+            encoding = self._assemble(layout, (read.encoding for read in texts))
+            if len(encoding.ids) <= limit:
+                out[index] = encoding
         return out
+
+    def _split(
+        self, parts: Prompt
+    ) -> tuple[list[tuple[int, int, int | None]], list[str]]:
+        """``parts`` as (start, end, token ID) of each token, or a None ID for the next run of text, and those runs."""
+        layout: list[tuple[int, int, int | None]] = []
+        runs: list[str] = []
+        run: list[str] = []
+        start = at = 0
+        for part in parts:
+            token = self.added.get(part) if isinstance(part, Token) else None
+            if token is None:
+                if not run:
+                    start = at
+                run.append(part)
+            else:
+                if run:
+                    layout.append((start, at, None))
+                    runs.append("".join(run))
+                    run = []
+                layout.append((at, at + len(part), token))
+            at += len(part)
+        if run:
+            layout.append((start, at, None))
+            runs.append("".join(run))
+        return layout, runs
+
+    @staticmethod
+    def _assemble(
+        layout: list[tuple[int, int, int | None]], texts: Iterator[Any]
+    ) -> Encoding:
+        """The prompt of ``layout``, its runs of text taken in order from the encodings ``texts``."""
+        ids: list[int] = []
+        offsets: list[tuple[int, int]] = []
+        for start, end, token in layout:
+            if token is not None:
+                ids.append(token)
+                offsets.append((start, end))
+                continue
+            text = next(texts)
+            ids += text.ids
+            offsets += [(start + a, start + b) for a, b in text.offsets]
+        return Encoding(ids, offsets)
 
 
 def check_chat_template(root: Path) -> None:
