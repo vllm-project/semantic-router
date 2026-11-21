@@ -97,7 +97,7 @@ listener 在一个 `apis` 映射中列出它提供的 API，键为注册表中�
 
 因为标准已能表达而移除的：`choices`、`levels` 和 `labels`（改用 `criteria`）；`images` 和 `videos`（改用 `assets`）；顶层 `states`（改用批量端点）；`{error: {...}}`（改用 `detail` 和平铺字段）；`options.long_context`（改用标准请求头）；隐式角色（改用 `roles`）。
 
-[扩展参考](/docs/system-one/reference/extension-reference)和[兼容性矩阵](/docs/system-one/reference/compatibility-matrix)由扩展规范生成。
+[扩展参考](/zh-hans/docs/system-one/reference/extension-reference)和[兼容性矩阵](/zh-hans/docs/system-one/reference/compatibility-matrix)由扩展规范生成。
 
 ## Router 作为客户端 {#the-router-as-a-client}
 

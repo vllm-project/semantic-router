@@ -52,6 +52,6 @@ translation:
 
 ## 下一步 {#next}
 
-- [系统概览](semantic-router-overview)：组件与请求生命周期。
-- [使用场景](use-cases)：适用于云、数据中心、边缘和企业模型池的路由模式。
-- [接入 agent harness](../installation/agent-harness)：集成你的 harness。
+- [系统概览](/zh-hans/docs/overview/semantic-router-overview)：组件与请求生命周期。
+- [使用场景](/zh-hans/docs/overview/use-cases)：适用于云、数据中心、边缘和企业模型池的路由模式。
+- [接入 agent harness](/zh-hans/docs/installation/agent-harness)：集成你的 harness。

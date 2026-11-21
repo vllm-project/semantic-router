@@ -724,5 +724,5 @@ Error: embedding dimension mismatch
 
 ## 后续步骤
 
-- [训练概览](/docs/v0.4/training/training-overview) — 通用训练文档
-- [模型性能评估](/docs/v0.4/training/model-performance-eval) — 详细性能指标
+- [训练概览](/zh-hans/docs/v0.4/training/training-overview) — 通用训练文档
+- [模型性能评估](/zh-hans/docs/v0.4/training/model-performance-eval) — 详细性能指标
