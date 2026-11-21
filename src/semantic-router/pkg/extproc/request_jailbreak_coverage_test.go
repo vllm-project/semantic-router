@@ -61,9 +61,12 @@ INPUT
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			header := routing.Header{
-				{Name: ":method", Value: "POST"}, {Name: ":path", Value: path},
-				{Name: ":authority", Value: "router"}, {Name: ":scheme", Value: "http"},
-				{Name: "content-type", Value: "application/json"}, {Name: "anthropic-version", Value: "2023-06-01"},
+				{Name: ":method", Value: "POST"},
+				{Name: ":path", Value: path},
+				{Name: ":authority", Value: "router"},
+				{Name: ":scheme", Value: "http"},
+				{Name: "content-type", Value: "application/json"},
+				{Name: "anthropic-version", Value: "2023-06-01"},
 			}
 			plan, err := routing.NewEngine(router, routing.DefaultOptions).Plan(ctx, &routing.Request{Header: header, Body: []byte(tc.body)})
 			if err != nil {
