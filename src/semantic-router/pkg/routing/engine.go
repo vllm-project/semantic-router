@@ -261,7 +261,7 @@ func (e *engine) Respond(ctx context.Context, plan *Plan, resp *UpstreamResponse
 
 	body, err := readBounded(resp.Body, e.opts.MaxBufferedBodyBytes)
 	if err != nil {
-		return nil, err
+		return e.cutBody(ctx, session, err)
 	}
 	effect, err = session.ResponseBody(body, true)
 	if err != nil {
@@ -280,6 +280,25 @@ func (e *engine) Respond(ctx context.Context, plan *Plan, resp *UpstreamResponse
 		body = ApplyBodyMutation(body, effect.Body)
 	}
 	return clientResponse(header, body), nil
+}
+
+// cutBody answers for a buffered upstream body that failed to arrive whole:
+// with the session's answer when it gives one, else with err, which the
+// gateway ends the request on. A body over the buffer limit or a request its
+// client left keeps its error.
+func (e *engine) cutBody(ctx context.Context, session Session, err error) (*Response, error) {
+	cut, ok := session.(CutBodySession)
+	if !ok || ctx.Err() != nil || errors.Is(err, ErrBufferLimit) {
+		return nil, err
+	}
+	effect, cutErr := cut.ResponseBodyCut(err)
+	if cutErr != nil {
+		return nil, cutErr
+	}
+	if effect == nil || effect.Immediate == nil {
+		return nil, err
+	}
+	return RenderImmediate(effect.Immediate, e.opts.Limits), nil
 }
 
 func headerMutationOf(effect *Effect) *HeaderMutation {
