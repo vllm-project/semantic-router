@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -29,6 +30,50 @@ func TestBuiltInDigestMatchesPublishedCatalog(t *testing.T) {
 	}
 	if got := effective.Digest(); got != want {
 		t.Fatalf("effective digest = %s, want %s", got, want)
+	}
+}
+
+func TestBuiltInGemma4ITVLLMBindings(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		checkpoint string
+		context    int
+	}{
+		{"google/gemma-4-12B-it", 262144},
+		{"google/gemma-4-26B-A4B-it", 262144},
+		{"google/gemma-4-E4B-it", 131072},
+		{"google/gemma-4-E2B-it", 131072},
+	} {
+		t.Run(tc.checkpoint, func(t *testing.T) {
+			effective, err := registry.Compile(CompileInput{
+				Providers: []ProviderInstance{{Name: "local", Catalog: "vllm", BaseURL: "http://127.0.0.1:8000"}},
+				Models: []ModelAlias{{
+					Name: "gemma", Catalog: strings.ToLower(tc.checkpoint),
+					Providers: []ModelProviderBinding{{Name: "local"}},
+				}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			model, ok := effective.Model("gemma")
+			if !ok || len(model.Providers) != 1 {
+				t.Fatalf("compiled provider binding is missing: %+v", model)
+			}
+			card := model.Card.Card
+			if card.Distribution.License != "Apache-2.0" || card.Limits.ContextWindowSize != tc.context || card.ReasoningFamily != "gemma4" {
+				t.Fatalf("unexpected model card: %+v", card)
+			}
+			binding := model.Providers[0]
+			if binding.Binding.ModelID != tc.checkpoint || binding.Binding.Protocol != "openai/chat-completions@1" {
+				t.Fatalf("binding = %+v, want Chat Completions for %q", binding.Binding, tc.checkpoint)
+			}
+			if binding.CatalogBinding == nil || binding.CatalogBinding.ReasoningTransport != "chat_template_kwargs" {
+				t.Fatalf("missing vLLM thinking transport: %+v", binding.CatalogBinding)
+			}
+		})
 	}
 }
 
