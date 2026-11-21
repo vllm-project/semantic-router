@@ -76,11 +76,12 @@ func ConfigureRouterVerdict(routerAPIURL string, provider routerauth.CredentialP
 	}
 }
 
-// awaitRouterVerdict waits for the Router to take or refuse the document with
-// this SHA-256. A refusal is a restartNeededError when a restart is the only
-// reason, and an error with the Router's reasons otherwise. Without a Router,
-// or without its verdict in time, the document counts as applied.
-func awaitRouterVerdict(ctx context.Context, documentSHA256 string) error {
+// waitForRouterVerdict waits for the Router to take or refuse the document with
+// this SHA-256, written at writtenAt. A refusal is a restartNeededError when a
+// restart is the only reason, and an error with the Router's reasons
+// otherwise. Without a Router, or without its verdict in time, the document
+// counts as applied.
+func waitForRouterVerdict(ctx context.Context, documentSHA256 string, writtenAt time.Time) error {
 	routerVerdict.RLock()
 	endpoint, client, provider := routerVerdict.endpoint, routerVerdict.client, routerVerdict.provider
 	routerVerdict.RUnlock()
@@ -91,7 +92,12 @@ func awaitRouterVerdict(ctx context.Context, documentSHA256 string) error {
 	defer cancel()
 	for {
 		if response, err := fetchRouterConfigHash(ctx, client, endpoint, provider); err == nil {
-			if verdict, done := judgeRouterAttempt(response, documentSHA256); done {
+			// A retry of the same bytes can first see a rejection from the
+			// previous write, before the Router starts processing this one.
+			if attempt := response.Activation; attempt != nil && !attempt.StartedAt.IsZero() && attempt.StartedAt.Before(writtenAt) {
+				response.Activation = nil
+			}
+			if done, verdict := judgeRouterAttempt(response, documentSHA256); done {
 				return verdict
 			}
 		}
@@ -104,24 +110,30 @@ func awaitRouterVerdict(ctx context.Context, documentSHA256 string) error {
 }
 
 // judgeRouterAttempt reads the Router's verdict on one document: done once the
-// Router activated or refused it, with the refusal as the error.
-func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (verdict error, done bool) {
+// Router activated, superseded or refused it, with the refusal as the error.
+func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (done bool, err error) {
 	digest := strings.TrimPrefix(documentSHA256, "sha256:")
 	if response.GeneratedRuntimeHash != digest {
-		return nil, false
+		return false, nil
+	}
+	if response.ActiveRuntimeHash == digest {
+		// A restored document may already be active without a new attempt.
+		return true, nil
 	}
 	attempt := response.Activation
-	switch {
-	case attempt == nil || attempt.Status == "preparing" || strings.TrimPrefix(attempt.DocumentHash, "sha256:") != digest:
-		return nil, false
-	case attempt.Status == "active":
-		return nil, response.ActiveRuntimeHash == digest
-	case attempt.Status == "superseded":
+	if attempt == nil || strings.TrimPrefix(attempt.DocumentHash, "sha256:") != digest {
+		return false, nil
+	}
+	switch attempt.Status {
+	case "superseded":
 		// A later document replaced it; its own save reports on it.
-		return nil, true
+		return true, nil
+	case "failed", "rejected":
+	default:
+		return false, nil
 	}
 	if len(attempt.Reasons) == 0 {
-		return fmt.Errorf("the Router did not apply it: its attempt %s", attempt.Status), true
+		return true, fmt.Errorf("the Router did not apply it: its attempt %s", attempt.Status)
 	}
 	restart := true
 	messages := make([]string, 0, len(attempt.Reasons))
@@ -130,7 +142,10 @@ func judgeRouterAttempt(response routerConfigHash, documentSHA256 string) (verdi
 		messages = append(messages, reason.Message)
 	}
 	if restart {
-		return &restartNeededError{detail: strings.Join(messages, "; ")}, true
+		return true, &restartNeededError{detail: strings.Join(messages, "; ")}
 	}
-	return fmt.Errorf("the Router did not apply it: %s", strings.Join(messages, "; ")), true
+	for i, reason := range attempt.Reasons {
+		messages[i] = fmt.Sprintf("%s (%s)", reason.Message, reason.Code)
+	}
+	return true, fmt.Errorf("the Router did not apply it: %s", strings.Join(messages, "; "))
 }

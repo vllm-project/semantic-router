@@ -16,8 +16,8 @@ import (
 
 // These tests pin the shadow trust boundary for headers. A decision's
 // header_mutation runs for the primary backend and may carry its credential,
-// so nothing it sets reaches the shadow unless forward_headers names it, and
-// credential carriers never do. Only configuredProviderAuthorizer sets the shadow's key.
+// so none of its mutations reach the shadow. Only configuredProviderAuthorizer
+// sets the shadow's key.
 // Client headers never reach the shadow either, including baggage the trace
 // propagator extracts from the client: only the span context crosses.
 
@@ -90,7 +90,7 @@ func TestShadowDispatchForwardsNoDecisionHeadersByDefault(t *testing.T) {
 	assertNoShadowCredentialHeaders(t, wire)
 	for _, name := range []string{"X-Internal-Token", "x-tenant"} {
 		if got := wire.Get(name); got != "" {
-			t.Fatalf("decision header %s=%q reached the shadow without forward_headers", name, got)
+			t.Fatalf("decision header %s=%q reached the shadow", name, got)
 		}
 	}
 	if wire.Get(headers.RequestID) == "" {
@@ -98,82 +98,38 @@ func TestShadowDispatchForwardsNoDecisionHeadersByDefault(t *testing.T) {
 	}
 }
 
-func TestShadowDispatchForwardsOnlyAllowlistedDecisionHeaders(t *testing.T) {
-	backend, router, primaryModel := newShadowHeaderTestRouter(t)
-	pluginCfg := shadowTestPluginConfig()
-	pluginCfg.ForwardHeaders = []string{"X-TENANT"}
-
-	runShadowRequest(t, router, primaryModel, pluginCfg, shadowCredentialMutations)
+func TestShadowDispatchForwardsAllowlistedDecisionHeaders(t *testing.T) {
+	backend, router, primary := newShadowHeaderTestRouter(t)
+	cfg := shadowTestPluginConfig()
+	// Include credential names to exercise runtime filtering independently of config validation.
+	cfg.ForwardHeaders = []string{"X-Tenant", "Authorization", shadowTestPrimaryAuthHeader}
+	run := runShadowRequest(t, router, primary, cfg, shadowCredentialMutations)
 	waitForShadow(t, router)
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("shadow outcome: %+v", outcome)
+	}
 	wire := backend.headers[0]
-	if got := wire.Get("x-tenant"); got != "acme" {
-		t.Fatalf("x-tenant = %q, want the allowlisted decision header forwarded", got)
-	}
-	if got := wire.Get("X-Internal-Token"); got != "" {
-		t.Fatalf("custom secret outside forward_headers reached the shadow: %q", got)
-	}
 	assertNoShadowCredentialHeaders(t, wire)
-}
-
-// Request routing sends no key to a provider whose auth is none, so a shadow
-// call to one sends none either, whatever key the model carries, such as the
-// placeholder key Ollama's OpenAI examples use, with or without auth.header.
-func TestShadowDispatchSendsNoKeyToANoAuthProvider(t *testing.T) {
-	for _, authHeader := range []string{"", "Authorization"} {
-		t.Run("auth.header="+authHeader, func(t *testing.T) {
-			backend := newShadowTestBackend(t)
-			router, primaryModel := newShadowTestRouter(t, backend)
-			for index := range router.Config.VLLMEndpoints {
-				if router.Config.VLLMEndpoints[index].Name == "shadow-backend" {
-					router.Config.VLLMEndpoints[index].Type = "ollama"
-					router.Config.VLLMEndpoints[index].ProviderProfileName = "shadow-ollama"
-				}
-			}
-			router.Config.ProviderProfiles["shadow-ollama"] = config.ProviderProfile{
-				Type: "ollama", BaseURL: backend.server.URL, AuthHeader: authHeader,
-			}
-			shadowParams := router.Config.ModelConfig[shadowTestModel]
-			shadowParams.AccessKeys = map[string]string{"ollama": "ollama"}
-			router.Config.ModelConfig[shadowTestModel] = shadowParams
-
-			run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), nil)
-			waitForShadow(t, router)
-			if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
-				t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
-			}
-			if got := backend.headers[0].Values("Authorization"); len(got) != 0 {
-				t.Fatalf("Authorization = %q, want no key sent to a no-auth provider", got)
-			}
-		})
+	if wire.Get("x-tenant") != "acme" || wire.Get("x-internal-token") != "" {
+		t.Fatalf("unexpected forwarded headers: %v", wire)
 	}
 }
 
-func TestShadowDispatchNeverForwardsCredentialsEvenWhenListed(t *testing.T) {
-	backend, router, primaryModel := newShadowHeaderTestRouter(t)
-	shadowParams := router.Config.ModelConfig[shadowTestModel]
-	shadowParams.AccessKeys = map[string]string{"openai": "shadow-key"}
-	router.Config.ModelConfig[shadowTestModel] = shadowParams
-	// Config validation rejects these names; bypass it here to prove the
-	// runtime floor holds on its own.
-	pluginCfg := shadowTestPluginConfig()
-	pluginCfg.ForwardHeaders = []string{"Authorization", shadowTestPrimaryAuthHeader, "x-api-key", "x-tenant"}
-
-	runShadowRequest(t, router, primaryModel, pluginCfg, shadowCredentialMutations)
+func TestShadowDispatchUsesOnlyCandidateCredential(t *testing.T) {
+	backend, router, primary := newShadowHeaderTestRouter(t)
+	params := router.Config.ModelConfig[shadowTestModel]
+	params.AccessKeys = map[string]string{"openai": "shadow-key"}
+	router.Config.ModelConfig[shadowTestModel] = params
+	runShadowRequest(t, router, primary, shadowTestPluginConfig(), shadowCredentialMutations)
 	waitForShadow(t, router)
 	wire := backend.headers[0]
-	if got := wire.Values("Authorization"); len(got) != 1 || got[0] != "Bearer shadow-key" {
-		t.Fatalf("Authorization = %q, want only the shadow model's static key", got)
+	if wire.Get("Authorization") != "Bearer shadow-key" {
+		t.Fatal("wrong candidate credential")
 	}
-	for _, name := range shadowCredentialHeaderNames {
-		if name == "Authorization" {
-			continue
+	for _, name := range []string{"X-Internal-Token", "x-tenant", shadowTestPrimaryAuthHeader} {
+		if wire.Get(name) != "" {
+			t.Fatalf("primary header leaked: %s", name)
 		}
-		if got := wire.Get(name); got != "" {
-			t.Fatalf("listed credential header %s=%q still reached the shadow", name, got)
-		}
-	}
-	if got := wire.Get("x-tenant"); got != "acme" {
-		t.Fatalf("x-tenant = %q, want the harmless allowlisted header kept", got)
 	}
 }
 
@@ -220,7 +176,7 @@ func TestShadowDispatchNeverForwardsClientBaggage(t *testing.T) {
 	}
 	wire := backend.headers[0]
 	if got := wire.Values("baggage"); len(got) != 0 {
-		t.Fatalf("client baggage reached the shadow with an empty forward_headers: %q", got)
+		t.Fatalf("client baggage reached the shadow: %q", got)
 	}
 	if got := wire.Get("traceparent"); !strings.Contains(got, shadowTestClientTraceID) {
 		t.Fatalf("traceparent = %q, want the client's trace %s still propagated", got, shadowTestClientTraceID)
@@ -302,16 +258,45 @@ func TestShadowHeaderIsSensitive(t *testing.T) {
 	}
 }
 
-// A request that matches no decision carries its default header_mutation to
-// the primary, so its shadow gets the headers forward_headers names too.
-func TestShadowForwardsTheDefaultHeaderMutationsOfAnUnmatchedRequest(t *testing.T) {
+// Default primary header mutations must not cross into a shadow backend.
+func TestShadowDoesNotForwardDefaultHeaderMutations(t *testing.T) {
 	ctx := &RequestContext{RequestID: "shadow-defaults"}
 	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{DefaultPlugins: []config.DecisionPlugin{{
 		Type:          config.DecisionPluginHeaderMutation,
 		Configuration: config.MustStructuredPayload(map[string]interface{}{"add": []map[string]string{{"name": "x-tenant", "value": "acme"}}}),
 	}}}})
-	extra := (&OpenAIRouter{}).shadowExtraHeaders(ctx, nil, &config.RouterReplayShadowConfig{ForwardHeaders: []string{"x-tenant"}})
-	if extra["x-tenant"] != "acme" {
-		t.Fatalf("shadow headers = %v, want the default x-tenant forwarded", extra)
+	extra := (&OpenAIRouter{}).shadowExtraHeaders(ctx, nil, nil)
+	if extra["x-tenant"] != "" {
+		t.Fatalf("shadow headers = %v, default x-tenant must stay on the primary", extra)
+	}
+}
+
+func TestShadowDispatchSendsNoKeyToANoAuthProvider(t *testing.T) {
+	for _, authHeader := range []string{"", "Authorization"} {
+		t.Run("auth.header="+authHeader, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primaryModel := newShadowTestRouter(t, backend)
+			for index := range router.Config.VLLMEndpoints {
+				if router.Config.VLLMEndpoints[index].Name == "shadow-backend" {
+					router.Config.VLLMEndpoints[index].Type = "ollama"
+					router.Config.VLLMEndpoints[index].ProviderProfileName = "shadow-ollama"
+				}
+			}
+			router.Config.ProviderProfiles["shadow-ollama"] = config.ProviderProfile{
+				Type: "ollama", BaseURL: backend.server.URL, AuthHeader: authHeader,
+			}
+			shadowParams := router.Config.ModelConfig[shadowTestModel]
+			shadowParams.AccessKeys = map[string]string{"ollama": "ollama"}
+			router.Config.ModelConfig[shadowTestModel] = shadowParams
+
+			run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), nil)
+			waitForShadow(t, router)
+			if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+				t.Fatalf("shadow verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
+			}
+			if got := backend.headers[0].Values("Authorization"); len(got) != 0 {
+				t.Fatalf("Authorization = %q, want no key sent to a no-auth provider", got)
+			}
+		})
 	}
 }

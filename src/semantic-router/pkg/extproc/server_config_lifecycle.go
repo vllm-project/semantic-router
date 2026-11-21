@@ -303,7 +303,7 @@ func (w *warmedRouter) Activate(context.Context) error {
 			router.WorkflowStateService.CommitStorePolicy()
 			router.activateReplayStores()
 		}
-		publishSnapshotState(candidate, snapshot, router, s.runtime, acquire)
+		publishSnapshotState(candidate, snapshot, router, s.runtime, acquire, s.service)
 	})
 	if err != nil {
 		return configsnapshot.Reject(configsnapshot.StageActivate, configsnapshot.CodeShuttingDown, err)

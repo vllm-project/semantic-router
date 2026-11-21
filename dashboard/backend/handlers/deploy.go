@@ -672,7 +672,12 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 
 	restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 	if applyErr != nil {
-		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", applyErr), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_activation_failed",
+			"message": formatRuntimeApplyError("Failed to apply rolled back config to runtime", applyErr),
+		})
 		return
 	}
 	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {

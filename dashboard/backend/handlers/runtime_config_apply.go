@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -349,8 +350,7 @@ func isManagedContainerConfigPath(configPath string) bool {
 	return cleaned == configured || cleaned == legacyManagedContainerConfigPath
 }
 
-// awaitManagedRuntime finds out whether the stack's running containers take
-// the synced runtime config. If they can't, it returns the restart needed.
+// awaitManagedRuntime checks the running containers' verdict on the synced config.
 func awaitManagedRuntime(effectiveConfigPath string) error {
 	envoyChanged, err := refreshManagedSplitEnvoyConfig(effectiveConfigPath)
 	if err != nil {
@@ -363,13 +363,22 @@ func awaitManagedRuntime(effectiveConfigPath string) error {
 }
 
 // awaitRouterVerdictOn waits for the Router's verdict on the runtime config
-// at path.
+// at path, written at its modification time.
 func awaitRouterVerdictOn(path string) error {
-	runtimeConfig, err := os.ReadFile(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open the synced runtime config: %w", err)
+	}
+	defer file.Close()
+	runtimeConfig, err := io.ReadAll(file)
 	if err != nil {
 		return fmt.Errorf("read the synced runtime config: %w", err)
 	}
-	return awaitRouterVerdict(context.Background(), activationDigest(runtimeConfig))
+	info, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("stat the synced runtime config: %w", err)
+	}
+	return waitForRouterVerdict(context.Background(), activationDigest(runtimeConfig), info.ModTime())
 }
 
 // refreshManagedSplitEnvoyConfig regenerates the Envoy config a split stack

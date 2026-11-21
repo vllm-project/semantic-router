@@ -42,6 +42,9 @@ func decodeAnthropicRequestContentBlock(body json.RawMessage, policy llmprotocol
 	if content, ok, err := decodeAnthropicToolReference(body, policy); ok {
 		return content, err
 	}
+	if content, ok := decodeAnthropicServerToolBlock(body); ok {
+		return content, nil
+	}
 	typeName, err := anthropicRequestContentType(body)
 	if err != nil {
 		return llmprotocol.Content{}, err
@@ -74,6 +77,9 @@ func decodeAnthropicToolReference(body json.RawMessage, policy llmprotocol.Polic
 }
 
 func decodeAnthropicResponseContentBlock(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, error) {
+	if content, ok := decodeAnthropicServerToolBlock(body); ok {
+		return content, nil
+	}
 	typeName, err := anthropicResponseContentType(body)
 	if err != nil {
 		return llmprotocol.Content{}, err
@@ -100,10 +106,16 @@ func decodeAnthropicContentBlock(
 	if err := validateAnthropicContentVariant(body, typeName, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
+	citations, err := anthropicTextCitations(typeName, block.Citations)
+	if err != nil {
+		return llmprotocol.Content{}, err
+	}
 	if err := validateAnthropicContentExtensions(block, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
-	return decodeAnthropicTypedContent(typeName, block, policy)
+	content, err := decodeAnthropicTypedContent(typeName, block, policy)
+	content.Raw = citations
+	return content, err
 }
 
 func validateAnthropicContentVariant(body json.RawMessage, typeName string, providerOutput bool) error {
@@ -240,9 +252,6 @@ func anthropicResponseContentType(body json.RawMessage) (string, error) {
 }
 
 func validateAnthropicContentExtensions(block anthropicContentWire, providerOutput bool) error {
-	if citations := bytes.TrimSpace(block.Citations); len(citations) > 0 && !bytes.Equal(citations, []byte("null")) {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "the Router does not support Anthropic citations", nil)
-	}
 	if err := validateAnthropicToolCaller(block.Caller, providerOutput); err != nil {
 		return err
 	}
@@ -699,8 +708,16 @@ func appendAnthropicMessages(wire *anthropicRequestWire, messages []llmprotocol.
 }
 
 func appendAnthropicTools(wire *anthropicRequestWire, tools []llmprotocol.Tool) error {
-	encoded := make([]anthropicToolWire, 0, len(tools))
+	encoded := make([]any, 0, len(tools))
 	for _, tool := range tools {
+		if tool.Kind == llmprotocol.ToolKindServer {
+			raw, err := encodeAnthropicServerTool(tool)
+			if err != nil {
+				return err
+			}
+			encoded = append(encoded, raw)
+			continue
+		}
 		encoded = append(encoded, anthropicToolWire{Name: tool.Name, Description: tool.Description, InputSchema: tool.InputSchema, Strict: tool.Strict, CacheControl: encodeAnthropicCacheControl(tool.Cache)})
 	}
 	if len(encoded) == 0 {
@@ -792,7 +809,9 @@ func encodeAnthropicContent(contents []llmprotocol.Content) (json.RawMessage, er
 func encodeAnthropicContentBlock(content llmprotocol.Content) (anthropicContentWire, error) {
 	switch content.Kind {
 	case llmprotocol.ContentText:
-		return anthropicContentWire{Type: "text", Text: content.Text, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
+		return anthropicContentWire{Type: "text", Text: content.Text, Citations: content.Raw, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
+	case llmprotocol.ContentServerTool:
+		return anthropicContentWire{raw: content.Raw}, nil
 	case llmprotocol.ContentReasoning:
 		if err := requireReasoningRepresentation(llmprotocol.AnthropicMessagesV1, []llmprotocol.Content{content}); err != nil {
 			return anthropicContentWire{}, err
