@@ -52,14 +52,19 @@ def flagged(probs, threshold, min_span):
 
 def metrics(rows, threshold, min_span):
     tp = fp = fn = tn = 0
+    sentinel_skipped = 0
     for faithful, needs_check, probs in rows:
-        hit = needs_check and flagged(probs, threshold, min_span)
+        if not needs_check:
+            sentinel_skipped += 1
+            continue
+        hit = flagged(probs, threshold, min_span)
         if not faithful:
             tp, fn = tp + hit, fn + (not hit)
         else:
             fp, tn = fp + hit, tn + (not hit)
     p = tp / (tp + fp) if tp + fp else 0.0
     r = tp / (tp + fn) if tp + fn else 0.0
+    checked = tp + fp + fn + tn
     return {
         "threshold": threshold,
         "min_span": min_span,
@@ -67,10 +72,11 @@ def metrics(rows, threshold, min_span):
         "fp": fp,
         "fn": fn,
         "tn": tn,
+        "sentinel_skipped": sentinel_skipped,
         "precision": round(p, 3),
         "recall": round(r, 3),
         "f1": round(2 * p * r / (p + r), 3) if p + r else 0.0,
-        "accuracy": round((tp + tn) / len(rows), 3),
+        "accuracy": round((tp + tn) / checked, 3) if checked else 0.0,
     }
 
 
