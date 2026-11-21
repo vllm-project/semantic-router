@@ -65,3 +65,43 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://ai.google.dev/gemini-api/docs/models
+- catalog: google/gemini-4-argon
+  relationship: first_party
+  id: gemini-4-argon
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-20
+    source: https://aistudio.google.com/docs/models/gemini-4-argon
+- catalog: google/gemini-4-carbon
+  relationship: first_party
+  id: gemini-4-carbon
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-20
+    source: https://aistudio.google.com/docs/models/gemini-4-carbon
+- catalog: google/gemini-4-hydrogen
+  relationship: first_party
+  id: gemini-4-hydrogen
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-20
+    source: https://aistudio.google.com/docs/models/gemini-4-hydrogen
+- catalog: google/gemini-4-neon
+  relationship: first_party
+  id: gemini-4-neon
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-20
+    source: https://aistudio.google.com/docs/models/gemini-4-neon
