@@ -132,7 +132,23 @@ agent-vscode-test: harness-node-bootstrap ## Run the VS Code extension's tests a
 		PATH="$$NODE_PATH" npm ci --no-audit --no-fund --loglevel=error && \
 		PATH="$$NODE_PATH" npm test
 
-agent-plugins-test: harness-node-bootstrap agent-vscode-test ## Run the agent plugins' tests: Claude Code's engine tests, both vSR plugins' Python tests and the VS Code extension's tests
+# The OpenCode plugin runs its TypeScript sources directly, which needs a Node that strips types; an older host Node
+# gives way to the repo-local one.
+agent-opencode-test: harness-node-bootstrap ## Run the vSR OpenCode plugin's type check, format check and unit tests
+	@$(LOG_TARGET)
+	@NODE_PATH="$$PATH"; \
+	if ! node --experimental-strip-types -e '' >/dev/null 2>&1; then \
+		if [ "$$($(AGENT_NODEENV)/bin/node --version 2>/dev/null)" != "v$(AGENT_NODE_VERSION)" ]; then \
+			"$(AGENT_PYTHON)" -m nodeenv --force --node="$(AGENT_NODE_VERSION)" --prebuilt "$(AGENT_NODEENV)" || exit 1; \
+		fi; \
+		NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; \
+	fi; \
+	cd src/agent-harness/opencode && \
+		PATH="$$NODE_PATH" npm ci --ignore-scripts --no-audit --no-fund --loglevel=error && \
+		PATH="$$NODE_PATH" npm run check && \
+		PATH="$$NODE_PATH" npm test
+
+agent-plugins-test: harness-node-bootstrap agent-vscode-test agent-opencode-test ## Run the agent plugins' tests: Claude Code's engine tests, both vSR plugins' Python tests, the OpenCode plugin's tests and the VS Code extension's tests
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
