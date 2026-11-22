@@ -59,3 +59,30 @@ func TestShadowDispatchSkipsModelThatLacksARequestedModality(t *testing.T) {
 		})
 	}
 }
+
+func TestShadowDispatchSkipsOnlyTheIncompatibleCandidate(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primary := newShadowTestRouter(t, backend)
+	text := router.Config.ModelConfig[shadowTestModel]
+	text.Capabilities = []string{"text"}
+	router.Config.ModelConfig[shadowTestModel] = text
+	vision := text
+	vision.Capabilities = []string{"text", "vision"}
+	router.Config.ModelConfig["vision-candidate"] = vision
+
+	cfg := shadowTestPluginConfig()
+	cfg.Models = append(cfg.Models, "vision-candidate")
+	before := shadowDroppedFor(shadowReasonBackendLacksCapability)
+	run := runShadowRequest(t, router, primary, cfg, withImageContent)
+	waitForShadow(t, router)
+
+	if got := backend.requestCount(); got != 1 {
+		t.Fatalf("shadow backend requests = %d, want 1", got)
+	}
+	if got := shadowDroppedFor(shadowReasonBackendLacksCapability) - before; got != 1 {
+		t.Fatalf("incompatible candidate drops = %v, want 1", got)
+	}
+	if outcome := singleShadowOutcome(t, run); outcome.TargetRef != "vision-candidate" || outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("unexpected candidate outcome: %+v", outcome)
+	}
+}

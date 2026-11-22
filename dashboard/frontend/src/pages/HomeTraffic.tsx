@@ -6,7 +6,7 @@ import {
   Gauge,
   GitBranch,
   MessagesSquare,
-  PiggyBank,
+  Scale,
   Rocket,
   ServerOff,
   Zap,
@@ -47,12 +47,14 @@ import {
   requestClassOf,
   type AgentRuleIndex,
 } from './insightsAgentIdentity'
+import { useInsightsConfig } from './insightsConfigFacts'
+import { formatSaving, savingsReference } from './insightsCostAccounting'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { formatLatency } from './insightsDisplayFormat'
 import { RelativeTime } from './InsightsDisplay'
 import { HarnessLogo, RequestClassBadge } from './InsightsHarness'
 import { API_CLIENT_LABEL, harnessInfo } from './insightsHarness'
-import { ModelChip } from './insightsModelLabelSupport'
+import { ModelChip, useModelLabels } from './insightsModelLabelSupport'
 import {
   formatInsightsDecisionName,
   getInsightsLifecyclePresentation,
@@ -63,10 +65,10 @@ import {
   carriedP95,
   HOME_RANGE_LABEL,
   HOME_RECENT_LIMIT,
-  moreCurrenciesLabel,
   needsTrafficWindow,
   spendSummary,
   TRAFFIC_UNAVAILABLE,
+  unpricedHint,
   type HomeRange,
   type TrafficView,
 } from './homeSupport'
@@ -111,6 +113,8 @@ export function HomeKpis({
   view: TrafficView | null
   range: HomeRange
 }) {
+  const labels = useModelLabels()
+  const { costBaselineModel } = useInsightsConfig()
   if (traffic.unavailable || (traffic.error && !traffic.aggregate)) return null
   const aggregate = traffic.aggregate
   if (!aggregate) {
@@ -141,6 +145,7 @@ export function HomeKpis({
       ? `newest ${formatInsightsCount(view.sampled ?? 0)}`
       : HOME_RANGE_LABEL[range]
   const money = spendSummary(aggregate)
+  const reference = savingsReference(aggregate.summary.coverage, costBaselineModel, labels)
   const failed = aggregate.lifecycle.failed + aggregate.lifecycle.aborted
   const savedShare =
     money.saved !== undefined && money.baseline ? (money.saved / money.baseline) * 100 : undefined
@@ -197,7 +202,7 @@ export function HomeKpis({
           icon={<CircleDollarSign className="size-4 text-chart-6" />}
           value={money.spend}
           format={(value) => formatInsightsCost(value, money.currency, { total: true })}
-          hint={moreCurrenciesLabel(money.otherCurrencies) ?? perThousand}
+          hint={unpricedHint(money) ?? perThousand}
           spark={series?.map((point) => point.cost)}
           sparkColor="var(--chart-6)"
         />
@@ -206,46 +211,62 @@ export function HomeKpis({
         <div className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full bg-[radial-gradient(closest-side,var(--glow-gold),transparent)]" />
         <div className="relative flex h-full flex-col gap-3 px-4 pb-4 pt-4">
           <span className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">
-            <PiggyBank className="size-4 text-chart-2" />
-            Saved by routing
+            <Scale className="size-4 text-chart-2" />
+            {reference.label}
           </span>
-          <div className="flex items-baseline gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1.5">
             <span
               className={cn(
-                'text-[26px] font-semibold leading-none tracking-[-0.03em] tabular',
-                money.saved !== undefined && money.saved < 0 && 'text-destructive-foreground',
+                'whitespace-nowrap text-[26px] font-semibold leading-none tracking-[-0.03em] tabular',
               )}
             >
-              {money.saved === undefined
-                ? 'N/A'
-                : formatInsightsCost(money.saved, money.currency, { total: true })}
+              {money.saved === undefined ? (
+                <span
+                  className="cursor-help text-subtle-foreground"
+                  title="No request was priced against a reference model yet."
+                >
+                  —
+                </span>
+              ) : (
+                formatSaving(money.saved, money.currency)
+              )}
             </span>
             {savedShare !== undefined && savedShare > 0 ? (
-              <Badge tone="gold">{savedShare.toFixed(0)}% less</Badge>
+              <Badge tone="outline">{savedShare.toFixed(0)}% less</Badge>
             ) : null}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11.5px] leading-snug text-muted-foreground">
             {money.saved === undefined
-              ? 'No request was priced against a baseline yet.'
-              : 'Compared with sending each request to its baseline model.'}
+              ? 'No request was priced against a reference model yet.'
+              : [reference.hint, reference.mixed].filter(Boolean).join(' ')}
           </p>
-          {money.saved !== undefined && money.baseline ? (
+          {money.saved !== undefined && money.actual !== undefined && money.baseline ? (
             <div className="mt-auto">
-              <div className="mb-1.5 flex justify-between text-[11px] text-subtle-foreground tabular">
+              <div className="mb-1.5 flex justify-between gap-2 text-[11px] text-subtle-foreground tabular">
                 <span>
-                  Actual {formatInsightsCost(money.spend, money.currency, { total: true })}
+                  Actual {formatInsightsCost(money.actual, money.currency, { total: true })}
                 </span>
-                <span>
-                  Baseline {formatInsightsCost(money.baseline, money.currency, { total: true })}
+                <span className="truncate">
+                  {reference.short}{' '}
+                  {formatInsightsCost(money.baseline, money.currency, { total: true })}
                 </span>
               </div>
               <Progress
-                value={Math.min(100, (money.spend / money.baseline) * 100)}
+                value={Math.min(100, (money.actual / money.baseline) * 100)}
                 tone="neutral"
-                aria-label={`${formatInsightsShare(money.spend, money.baseline)} of the baseline`}
+                aria-label={`${formatInsightsShare(money.actual, money.baseline)} of the reference cost`}
                 className="[&>div]:bg-chart-2"
               />
             </div>
+          ) : null}
+          {aggregate.summary.coverage?.router_calls || money.routerCalls ? (
+            <p
+              className="text-[11px] text-subtle-foreground tabular"
+              data-testid="home-router-calls"
+            >
+              Router’s own calls:{' '}
+              {formatInsightsCost(money.routerCalls, money.currency, { total: true })}
+            </p>
           ) : null}
         </div>
       </Card>

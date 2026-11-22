@@ -7,9 +7,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 const systemOneSignalErrorPrefix = "systemone_"
@@ -21,6 +23,10 @@ const unreadToolResult = "unreadable_tool_result"
 // unreadImage is why a rule that reads the images read only part of them: an
 // image no decision model decodes, such as a remote URL or a GIF.
 const unreadImage = "unreadable_image"
+
+// unreadVideo is why a rule that reads the videos read only part of them: a
+// video no decision model decodes, such as a remote URL or an AVI.
+const unreadVideo = "unreadable_video"
 
 // SystemOneQuestionID is the ID a rule's question carries on the wire: the
 // Router's own, with a ':', so it is never an ID a model family was trained
@@ -80,6 +86,20 @@ type ConversationTurn struct {
 // a tool result held content that is not text, which toolResults leaves out,
 // and imagesIncomplete whether an image is one no decision model decodes,
 // which images leaves out.
+// tailCap keeps the last limit bytes of s behind a truncation marker. A
+// limit of 0, the config default, keeps s whole. The cut backs onto a rune
+// start: a mid-rune cut would read U+FFFD at the seam.
+func tailCap(s string, limit int) string {
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+	const marker = "[state truncated] "
+	for len(s)-limit < len(s) && !utf8.RuneStart(s[len(s)-limit]) {
+		limit--
+	}
+	return marker + s[len(s)-limit:]
+}
+
 type systemOneReading struct {
 	request               string
 	history               []string
@@ -91,6 +111,7 @@ type systemOneReading struct {
 	context               string
 	images                []string
 	videos                []string
+	videosIncomplete      bool
 }
 
 // previousAnswer is the last assistant turn before the current user turn,
@@ -111,16 +132,17 @@ func (r systemOneReading) previousAnswer() string {
 func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request {
 	input := rule.Input
 	if !input.ReadsRequest() {
-		return modelservice.Request{State: strings.Join(r.besidesRequest(input), "\n\n")}
+		return modelservice.Request{State: tailCap(strings.Join(r.besidesRequest(input), "\n\n"), input.MaxStateBytes)}
 	}
 	if request, ok := r.spanScan(rule); ok {
 		return request
 	}
 	parts := map[string]string{}
 	add := func(name, text string) {
-		if strings.TrimSpace(text) != "" {
-			parts[name] = text
+		if strings.TrimSpace(text) == "" {
+			return
 		}
+		parts[name] = tailCap(text, input.MaxStateBytes)
 	}
 	if input.History {
 		add("history", strings.Join(r.history, "\n\n"))
@@ -145,7 +167,7 @@ func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request 
 	if input.Answer {
 		add("answer", r.answer)
 	}
-	request := modelservice.Request{State: r.request}
+	request := modelservice.Request{State: tailCap(r.request, input.MaxStateBytes)}
 	if len(parts) > 0 {
 		add("request", r.request)
 		request = modelservice.Request{Parts: parts}
@@ -228,6 +250,8 @@ func (r systemOneReading) unread(rule config.SystemOneRule) string {
 		return unreadToolResult
 	case r.imagesIncomplete && rule.Input.Image:
 		return unreadImage
+	case r.videosIncomplete && rule.Input.Video:
+		return unreadVideo
 	}
 	return ""
 }
@@ -280,6 +304,9 @@ type systemOneCall struct {
 	// window it reads again answered its questions, so its failure leaves
 	// none of them unknown.
 	reread bool
+	// verdict keys the window's answers in windowVerdicts; nil for a call
+	// whose answers are not kept.
+	verdict *windowVerdictKey
 }
 
 // systemOneCalls groups rules by the deployment that answers them and the
@@ -414,6 +441,7 @@ func newResponseSignalResults() *SignalResults {
 // content it cannot read, is not asked and resolves as its on_unscanned says.
 func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []askedRule, reading systemOneReading) {
 	reading.images, reading.imagesIncomplete = decodedImages(reading.images)
+	reading.videos, reading.videosIncomplete = decodedVideos(reading.videos)
 	for _, asked := range rules {
 		if reason := reading.unread(asked.rule); reason != "" && !reading.hasInput(asked.rule) {
 			mu.Lock()
@@ -441,13 +469,17 @@ func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResul
 	}
 }
 
-// decodedImageTypes are the image data URLs the decision models decode.
-var decodedImageTypes = []string{"data:image/png;", "data:image/jpeg;", "data:image/jpg;", "data:image/webp;"}
-
 // undecodedImage reports an image no decision model decodes: one that was
-// not inline, an empty entry, or another format such as GIF.
+// not inline, an empty entry, or another format such as GIF. The codec is the
+// one that reads the medium downstream, so it answers what decodes.
 func undecodedImage(image string) bool {
-	return !slices.ContainsFunc(decodedImageTypes, func(prefix string) bool { return strings.HasPrefix(image, prefix) })
+	return !systemonecodec.DecodesImage(image)
+}
+
+// undecodedVideo reports a video no decision model decodes: one that was
+// not inline, an empty entry, or another format.
+func undecodedVideo(video string) bool {
+	return !systemonecodec.DecodesVideo(video)
 }
 
 // decodedImages keeps the images a decision model decodes and reports
@@ -455,6 +487,13 @@ func undecodedImage(image string) bool {
 func decodedImages(images []string) ([]string, bool) {
 	kept := slices.DeleteFunc(slices.Clone(images), undecodedImage)
 	return kept, len(kept) < len(images)
+}
+
+// decodedVideos keeps the videos a decision model decodes and reports
+// whether an input video is one no decision model decodes.
+func decodedVideos(videos []string) ([]string, bool) {
+	kept := slices.DeleteFunc(slices.Clone(videos), undecodedVideo)
+	return kept, len(kept) < len(videos)
 }
 
 func (c *Classifier) evaluateSystemOneDeployment(

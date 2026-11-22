@@ -448,8 +448,9 @@ its retrieval calls.
 When the Router cannot route a request, it answers the request itself and calls
 no backend. The error uses the client's protocol. In OpenAI Chat Completions and
 Responses errors, `error.code` is a stable reason code and `error.message` a
-short message. Apart from the budget and context-length errors, the message
-names no model, decision, or request content:
+short message. Apart from the budget and context-length errors, and the model
+errors, which name the model the client sent, the message names no model,
+decision, or request content:
 
 ```json
 {"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
@@ -457,7 +458,8 @@ names no model, decision, or request content:
 
 | Code | Status | `error.type` | Meaning |
 | --- | --- | --- | --- |
-| `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
+| `model_not_found` | 404 | `invalid_request_error` | The request names a model this Router does not serve on any listener: no entrypoint name, provider model or LoRA adapter. The message is OpenAI's, ``The model `x` does not exist or you do not have access to it.``, which OpenAI SDKs read as an unknown model. Anthropic Messages clients get `not_found_error`. |
+| `model_not_allowed` | 403 | `permission_error` | The listener's [model allow-list](../installation/gateway-modes#model-allow-list) leaves out a model the Router serves on other listeners. The message names the model. |
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
 | `context_length_exceeded` | 400 | `invalid_request_error` | The Router's count puts the request beyond the band around the `context_window_size` of every model that could serve it (3% with a model's own tokenizer, 30% with the proxy tokenizer): beside the signals, for every model the request can reach, which cancels the signals still running, or after the decision, for its candidates. `param` is `messages`, and the message names the widest window and the request's estimated count, as OpenAI's does: `This model's maximum context length is 1048576 tokens. However, your request has an estimated 1100000 input tokens. Please reduce the length of the input.` Anthropic Messages clients get `prompt is too long: 1100000 tokens > 1048576 maximum`. See [the context window check](../installation/model-configuration#check-prompts-against-the-context-window). The [request budget check](#request-budget-errors) answers the same code. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
@@ -507,14 +509,33 @@ failures retain their selection-error behavior, `no_eligible_model`. Budget chec
 truncate requests by themselves; opt into
 [context compression](../tutorials/plugin/context.md#compression-and-budget) when appropriate.
 
-These counts are estimates. A backend can still reject a request; its valid
-HTTP status and meaningful message are retained. vLLM integer codes are exposed
-as strings in OpenAI-compatible errors: `BadRequestError` with `code: 400`
-becomes `invalid_request_error` with `code: "400"`. A backend's refusal of a
-prompt longer than its window (vLLM's `param: input_tokens`, or a message about
-the context length, window or size, or Anthropic's `prompt is too long`) gets
-the code `context_length_exceeded` instead, and keeps the backend's message,
-which names its window and the prompt's count.
+These counts are estimates. A backend can still reject a request. Its HTTP
+status is kept, and a `4xx` error reaches the client in the client's error
+format and in the Router's terms:
+
+- **Beyond the window.** A refusal of a prompt or an output limit beyond the
+  backend's window gets `context_length_exceeded`: vLLM's `param:
+  input_tokens`, its `'max_tokens' or 'max_completion_tokens' is too large`
+  and `max_completion_tokens=... cannot be greater than max_model_len=...`
+  errors, a message about the context length, window or size, or Anthropic's
+  `prompt is too long`.
+- **Other refusals.** Any other `400` gets `invalid_request`. Another `4xx`
+  keeps the backend's code, except vLLM's integer status, which becomes the
+  Router's code for that status, such as `not_found`. A `5xx` is passed on as
+  it is.
+- **The client's names.** `param` and the message name the member the client
+  sent: `max_tokens`, `max_completion_tokens` or `max_output_tokens` for the
+  output limit, although the Router sends a Chat backend
+  `max_completion_tokens`, and `messages` or `input` for the prompt. The
+  message keeps the backend's numbers and drops its own setting names, such as
+  `max_model_len`, and vLLM's `(parameter=..., value=...)` suffix.
+
+A Chat request with `max_tokens: 5000000` to a model with a 262,144-token
+window gets:
+
+```json
+{"error":{"type":"invalid_request_error","code":"context_length_exceeded","message":"max_tokens is too large: 5000000. This model's maximum context length is 262144 tokens, and your request has 12 input tokens. Please request fewer output tokens.","param":"max_tokens"}}
+```
 
 A streaming request rejected before generation receives the same non-2xx JSON
 error, not a successful SSE stream. When Replay is enabled, it records the
@@ -573,7 +594,9 @@ List and aggregate requests accept filters such as `recipe`, `decision`,
 approval reviews, `request_kind=codex_approval_review`, `review_status`,
 `review_outcome`, and `review_risk`. `turn_id` matches a record's `turn_id` or
 `parent_turn_id`: the calls one Codex turn sent, and the approval reviews and
-subagent calls it started. `since` keeps the records at or after an RFC 3339
+subagent calls it started. `has_session=true` keeps the records that belong to
+a session, the ones the runs list folds into agent runs, so totals can cover
+exactly what a sessions view lists. `since` keeps the records at or after an RFC 3339
 timestamp, such as `2026-11-15T15:00:00Z` (send an offset's `+` as `%2B`), so
 the list and the aggregate cover one window; [`vllm-sr usage`](../tutorials/plugin/router-replay#usage-in-the-terminal)
 reads both that way. Pagination uses `limit`
@@ -581,6 +604,15 @@ and `offset`; `limit` is capped at 100. `showDetails=true` requests large body
 fields, so use it only when those fields are needed. See
 [Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
 for the review record and the aggregate's `reviews` summary.
+
+`harness` keeps the records sent by the harnesses it lists, comma-separated:
+`claude_code`, `codex`, `opencode`, `deepseek_harness`, `cursor`, `openclaw`, and `api_client` for
+the requests no harness sent, such as a script calling the API directly; a
+record's harness is its `agent.harness`, described in
+[Agent runs](../tutorials/plugin/router-replay#agent-runs). The list response
+carries `harness_counts`, the records every other filter selects counted by
+harness, such as `{"api_client": 51234, "claude_code": 1820, "codex": 977}`,
+so a page of one harness's records still shows how many each harness sent.
 
 With `since`, the aggregate also takes `interval`, a duration of at least `1m`
 such as `5m` or `1h` that splits the window into at most 1,000 intervals. The
@@ -690,10 +722,11 @@ costs; infrastructure charges and billing adjustments are excluded.
 | `pricing_source` | `configured` for the model's `providers.models[].pricing`, or `catalog_list_price` when none is set and the built-in catalog lists a price for the model's provider. A list price is an estimate. |
 | `caller_login` | The model's backends take the client's own login (`auth.credential: caller`). Its cost is what the tokens would cost at API prices, not what the client's plan charges. |
 | `unpriced_reason` | Why `actual_cost` is missing: `no_usage`, `pricing_not_configured`, or `counted_in_parent` for a Looper hop's own record. |
+| `partial_usage` | The usage is what a stream reported before it was cut short, by its client or its backend: the prompt in full, as Anthropic counts it in `message_start`, and the output only as far as the stream had counted it. `actual_cost` prices that much, the record counts as priced in `summary.coverage` and in the run view, and a spend budget charges that price (`settlement: partial_usage`). A stream that reported no usage before its end, as an OpenAI stream sends it last, keeps none. |
 | `baseline_source` | `configured_model`, `recipe_most_expensive` (the default), or `selected_model` for a direct request. |
 | `baseline_unavailable` | Why a priced record has no baseline: `pricing_not_configured` or `currency_mismatch`. A configured baseline that cannot be used never falls back to the default. |
 | `router_calls` | Model calls the Router made itself to answer the request, entries by task `kind` and `model`. |
-| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls, and the `settlement`: `usage`, `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
+| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls, and the `settlement`: `usage`, `partial_usage` for a stream cut short, charged the usage it reported (`partial_usage` above), `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
 
 A Looper request's cost is its calls, so its record has no `actual_cost` and one
 `router_calls` entry of kind `looper`: `calls`, the request's `prompt_tokens`
@@ -821,7 +854,7 @@ request lacks pricing.
 | `priced_records` | Records whose every cost has a price. |
 | `partly_priced_records` | Records with some costs priced, such as a Looper request with an unpriced call. |
 | `unpriced_records` | Records with no price at all. |
-| `unpriced_reasons` | The partly priced and unpriced records by the reason of their first missing price, for example `pricing_not_configured`, `no_usage`, `not_completed` for a request that failed or has not finished, which is never fully priced, or `price_not_recorded` for a record written before the Router recorded why. |
+| `unpriced_reasons` | The partly priced and unpriced records by the reason of their first missing price, for example `pricing_not_configured`, `no_usage`, `not_completed` for a request that failed or has not finished, which is never fully priced unless it is a stream cut short whose usage is priced (`cost_accounting.partial_usage`), or `price_not_recorded` for a record written before the Router recorded why. |
 | `looper_hop_records` | Records of Looper hops, left out of the three counts because the record of the request that made each hop counts its call. |
 | `list_price_records` | Priced records whose rate is a catalog list price. |
 | `caller_login_records` | Records served on a client's own login, priced or not. |
@@ -871,7 +904,8 @@ Replay lifecycle values describe what the recorder observed:
   upstream response failed. The record keeps the status the client received,
   and `terminal_reason` says why, as in the table below.
 - `aborted`: the stream ended without a valid terminal frame, for example
-  after a disconnect or timeout.
+  after a disconnect or timeout, or, behind Envoy, after a local reply of
+  Envoy's own, which the Router never sees.
 
 An HTTP `200` response header alone does not make a streaming record
 `completed`. A stream that reached its terminal frame does, even when the
@@ -880,13 +914,13 @@ asked to omit.
 
 | `terminal_reason` of a `failed` record | When |
 | --- | --- |
-| `request_rejected` | The Router refused the request after routing it, with a `4xx`: before it sent the request to a backend, such as for a capability the selected model's wire format lacks or a `fast_response` that sets `block: true`, or in place of the answer, such as a `response_guard` block. A held stream's refusal arrives as its error event and keeps the `200`. A guard overload is a refusal its client retries, whether as `429` or as `529`, and so is a fallback candidate that needs a delegated credential the request does not carry. |
+| `request_rejected` | The Router refused the request after routing it, with a `4xx`: before it sent the request to a backend, such as for a capability the selected model's wire format lacks or a `fast_response` that sets `block: true`, or in place of the answer, such as a `response_guard` block. A stream's refusal, held or of a Looper answer, arrives as its error event and keeps the `200`. A guard overload is a refusal its client retries, whether as `429` or as `529`, and so is a fallback candidate that needs a delegated credential the request does not carry. |
 | `request_budget_exceeded` | The request does not fit the [request budget](#request-budget-errors) of any candidate. |
 | `budget_exceeded`, `budget_unpriced` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) refused the call before it was sent. |
 | `request_processing_failed` | The Router failed after routing. It answered with its own `5xx`, such as for a failed RAG retrieval, context compression that fails closed, a cached answer it cannot serve, a fast response it cannot encode, or a failed context recovery follow-up, or the request failed with an internal error. In standalone mode the record of such an error keeps the gateway's `500`. Behind Envoy, the ext_proc filter's `failure_mode_allow` decides what the client gets, so the record has no status. |
-| `upstream_invalid_response` | The Router cannot read or pass on the upstream answer, such as a cut body or one with no output, and answers `502` in place of the upstream's `200`. A held stream it read to its end but could not rebuild an answer from ends this way too, under its `200`. |
+| `upstream_invalid_response` | The Router cannot read or pass on the upstream answer, such as a cut body or one with no output whose stop does not explain it (an answer that ended its turn with nothing to say is an empty completion; see [Empty answers](../installation/protocol-compatibility#empty-answers)), and answers `502` in place of the upstream's `200`, also to a streaming client whose backend answered with one body instead of a stream. In standalone mode that includes a body the backend closes before its declared length; behind Envoy, Envoy answers such a body with its own `502` before the Router reads it, so that record ends `aborted`. A held stream it read to its end but could not rebuild an answer from ends this way too, under its `200`. |
 | `upstream_error_response` | The upstream answered with an error status, or its stream carried an error event, which keeps the `200` the stream began with. A fallback chain that ends without a success keeps the answer of its last attempt, in both modes. |
-| `upstream_<failure>` | No backend answered: in standalone mode, the gateway's `503` or `504` local reply, such as `upstream_connect_failure` or `upstream_reset`, and, in both modes, a fallback chain whose last attempt did not answer. |
+| `upstream_<failure>` | No backend answered: in standalone mode, the gateway's `503` or `504` local reply, such as `upstream_connect_failure` or `upstream_reset`, once the fallback chain has tried its candidates, and, in both modes, a fallback chain whose last candidate, which the Router calls itself, did not answer. In standalone mode a buffered answer that a timeout stops partway ends `upstream_timeout` with the Router's `504`. Behind Envoy no candidate follows a first attempt that got no answer: the client gets Envoy's local reply, which the Router never sees, and the record ends `aborted` with `stream_ended_before_terminal_response` and no status, as for a client that left before the answer began. |
 
 ## Which port should I use?
 

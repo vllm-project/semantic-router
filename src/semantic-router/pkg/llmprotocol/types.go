@@ -30,6 +30,23 @@ const (
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
 )
 
+// APIName is the API a wire format serves, as clients and operators call it;
+// the identifier itself is not client-facing.
+func (format WireFormat) APIName() string {
+	switch format {
+	case OpenAIChatV1:
+		return "Chat Completions"
+	case OpenAIResponsesV1:
+		return "Responses"
+	case AnthropicMessagesV1:
+		return "Anthropic Messages"
+	case OpenAIImagesV1:
+		return "Images"
+	default:
+		return string(format)
+	}
+}
+
 type Role string
 
 const (
@@ -63,6 +80,10 @@ const (
 	// image supplied as model input, while this kind preserves the lifecycle of
 	// a model-hosted image generation tool.
 	ContentGeneratedImage ContentKind = "generated_image"
+	// ContentServerTool is a call or a result of a tool the provider runs
+	// itself, such as Anthropic's web search. Raw holds the block as the
+	// provider wrote it, which only the same wire format can carry.
+	ContentServerTool ContentKind = "server_tool"
 )
 
 const (
@@ -91,6 +112,10 @@ type Content struct {
 	// ReasoningDetail is a typed continuity block, distinct from display text.
 	// Its identity and opaque payload must survive routing and tool turns.
 	ReasoningDetail *ReasoningDetail
+	// Raw is a ContentServerTool block as written, and for text the
+	// citations a server tool attached to it, as a JSON array. Neither has a
+	// neutral form, so only the wire format they came from carries them.
+	Raw json.RawMessage `json:",omitempty"`
 }
 
 // CacheDirective marks a request block or tool definition as an explicit
@@ -134,6 +159,13 @@ type InstructionBlock struct {
 	Role    Role
 	Content []Content
 	Name    string // Chat Completions participant name; formats without one drop it.
+	// Position is how many conversation messages came before the instruction
+	// where the client sent it, zero for one that leads the conversation. Chat
+	// Completions and Responses decoding read a system or developer message
+	// anywhere as an instruction and record it here. Code that inserts or
+	// removes conversation messages keeps it with InsertMessages and
+	// KeepInstructionPositions. It is not a wire field.
+	Position int `json:",omitempty"`
 }
 
 type ToolCall struct {
@@ -172,6 +204,10 @@ type ToolKind string
 
 const ToolKindCustom ToolKind = "custom"
 
+// ToolKindServer is a tool its provider defines, such as Anthropic's
+// web_search_20250305. Raw holds the definition as the client sent it.
+const ToolKindServer ToolKind = "server"
+
 type Tool struct {
 	Kind        ToolKind
 	Name        string
@@ -185,6 +221,8 @@ type Tool struct {
 	// namespace came from. Name holds the flat name every backend receives.
 	Namespace string
 	LocalName string
+	// Raw is a ToolKindServer definition as sent, in the source wire format.
+	Raw json.RawMessage `json:",omitempty"`
 }
 
 type CustomToolFormat struct {
@@ -328,6 +366,14 @@ type Request struct {
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
 	// output, but targets that cannot carry it must reject it, not drop it.
 	PromptCacheKey string
+	// ExtensionFields holds operator-whitelisted top-level request members
+	// the wire format does not declare (Policy.AllowedRequestExtensions),
+	// captured opaquely at ingress. Same-format dispatch merges them back;
+	// crossing formats drops them with a diagnostic. The Router never
+	// interprets their values.
+	ExtensionFields map[string]json.RawMessage
+	// ExtensionFieldsFormat is the wire format the members were captured from.
+	ExtensionFieldsFormat WireFormat
 	// ToolNameOrigins is decode state that no wire carries. A request that
 	// flattened a Responses namespace keeps where each tool name came from, so
 	// retained history prepended later is checked against the same names.

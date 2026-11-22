@@ -19657,9 +19657,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -19809,6 +19825,12 @@
                               },
                               "parent_id": {
                                 "type": "string"
+                              },
+                              "request_class": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
                               }
                             }
                           },
@@ -19912,6 +19934,9 @@
                                 ]
                               },
                               "caller_login": {
+                                "type": "boolean"
+                              },
+                              "partial_usage": {
                                 "type": "boolean"
                               },
                               "pricing_source": {
@@ -20058,8 +20083,14 @@
                               "type": "string"
                             }
                           },
+                          "history_image_count": {
+                            "type": "integer"
+                          },
                           "id": {
                             "type": "string"
+                          },
+                          "image_count": {
+                            "type": "integer"
                           },
                           "jailbreak_confidence": {
                             "nullable": true,
@@ -21331,6 +21362,9 @@
                           "request_kind": {
                             "type": "string"
                           },
+                          "requested_model": {
+                            "type": "string"
+                          },
                           "response_body": {
                             "type": "string"
                           },
@@ -22512,6 +22546,13 @@
                         ]
                       }
                     },
+                    "harness_counts": {
+                      "nullable": true,
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    },
                     "has_more": {
                       "type": "boolean"
                     },
@@ -22539,6 +22580,7 @@
                     "limit",
                     "offset",
                     "has_more",
+                    "harness_counts",
                     "data"
                   ]
                 }
@@ -22841,9 +22883,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -24044,9 +24102,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -24658,9 +24732,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -25453,6 +25543,9 @@
                           "agent": {
                             "type": "string"
                           },
+                          "agent_type": {
+                            "type": "string"
+                          },
                           "completion_tokens": {
                             "nullable": true,
                             "type": "integer"
@@ -25485,6 +25578,9 @@
                             "items": {
                               "type": "object"
                             }
+                          },
+                          "image_count": {
+                            "type": "integer"
                           },
                           "lifecycle_state": {
                             "type": "string"
@@ -25562,6 +25658,9 @@
                             "type": "string"
                           },
                           "record_id": {
+                            "type": "string"
+                          },
+                          "request_class": {
                             "type": "string"
                           },
                           "request_id": {
@@ -25743,6 +25842,9 @@
                                 "type": "string"
                               },
                               "spawned_after_record_id": {
+                                "type": "string"
+                              },
+                              "type": {
                                 "type": "string"
                               }
                             },
@@ -26252,9 +26354,25 @@
             }
           },
           {
+            "name": "has_session",
+            "in": "query",
+            "description": "With true, keep only the records that belong to a session, as the agent runs hold them.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "turn_id",
             "in": "query",
             "description": "Filter by agent turn: the requests a Codex turn sent and the ones it started, such as its approval reviews, matched on turn_id or parent_turn_id.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "harness",
+            "in": "query",
+            "description": "Keep the records of these harnesses, comma-separated: claude_code, codex, opencode, deepseek_harness, cursor, openclaw, and api_client for the records no harness sent.",
             "schema": {
               "type": "string"
             }
@@ -26460,6 +26578,9 @@
                                   "type": "string"
                                 },
                                 "spawned_after_record_id": {
+                                  "type": "string"
+                                },
+                                "type": {
                                   "type": "string"
                                 }
                               },
@@ -27452,6 +27573,12 @@
                         },
                         "parent_id": {
                           "type": "string"
+                        },
+                        "request_class": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
                         }
                       }
                     },
@@ -27555,6 +27682,9 @@
                           ]
                         },
                         "caller_login": {
+                          "type": "boolean"
+                        },
+                        "partial_usage": {
                           "type": "boolean"
                         },
                         "pricing_source": {
@@ -27701,8 +27831,14 @@
                         "type": "string"
                       }
                     },
+                    "history_image_count": {
+                      "type": "integer"
+                    },
                     "id": {
                       "type": "string"
+                    },
+                    "image_count": {
+                      "type": "integer"
                     },
                     "jailbreak_confidence": {
                       "nullable": true,
@@ -28972,6 +29108,9 @@
                       "type": "string"
                     },
                     "request_kind": {
+                      "type": "string"
+                    },
+                    "requested_model": {
                       "type": "string"
                     },
                     "response_body": {

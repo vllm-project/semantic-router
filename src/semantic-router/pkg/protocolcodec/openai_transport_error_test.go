@@ -29,6 +29,26 @@ func TestOpenAITransportErrorAcceptsVLLMHTTPStatusCodes(t *testing.T) {
 	}
 }
 
+// vLLM releases before its nested error envelope answer with the error's
+// members at the top level, beside "object": "error".
+func TestOpenAITransportErrorAcceptsVLLMFlatErrors(t *testing.T) {
+	const message = "'max_tokens' or 'max_completion_tokens' is too large: 5000000. This model's maximum context length is 262144 tokens and your request has 12 input tokens (5000000 > 262144 - 12). None"
+	body := []byte(`{"object":"error","message":"` + message + `","type":"BadRequestError","param":null,"code":400}`)
+	for _, format := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
+		decoded, diagnostics, err := NewBuiltinEngine().DecodeTransportError(format, body)
+		if err != nil || decoded.Error == nil || len(diagnostics) != 0 {
+			t.Fatalf("%s: decoded %+v, diagnostics %+v, error %v", format, decoded.Error, diagnostics, err)
+		}
+		if decoded.Error.Category != llmprotocol.ErrorInvalidRequest || decoded.Error.Code != "400" ||
+			decoded.Error.Parameter != "" || decoded.Error.Message != message {
+			t.Fatalf("%s: lost the flat error: %+v", format, decoded.Error)
+		}
+	}
+	if _, _, err := NewBuiltinEngine().DecodeTransportError(llmprotocol.OpenAIChatV1, []byte(`{"object":"list","message":"m","type":"BadRequestError"}`)); err == nil {
+		t.Fatal("a body that is not an error object was read as one")
+	}
+}
+
 func TestOpenAITransportErrorCodeRetainsStrictValidation(t *testing.T) {
 	for _, code := range []string{`true`, `{}`, `[]`, `400.5`, `400.0`, `399`, `600`, `1e400`} {
 		t.Run(code, func(t *testing.T) {

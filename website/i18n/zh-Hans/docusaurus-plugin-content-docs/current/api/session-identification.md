@@ -29,7 +29,7 @@ x-conversation-id: conversation-3
 
 Replay 在具有显式身份时使用相同配置的会话和对话请求头名称。记录对话 ID 不会改变保护范围，也不会在 session 范围下重置模型归属。
 
-Responses API 将显式对话成员关系与响应链路分开。请求中的 `conversation` 值标识成员关系；`previous_response_id` 读取保留历史并提供内部链路跟踪键，不会加入或创建对话。两者都不存在时，Router 生成内部跟踪身份。这些遥测身份不能替代路由学习保护所要求的配置身份请求头。
+Responses API 将对话与响应链路分开。Router 不保存 Conversations 对象，会以 `unsupported_conversation` 拒绝指定 `conversation` 的请求，参见[协议兼容性矩阵](../installation/protocol-compatibility)。`previous_response_id` 读取保留历史并提供内部链路跟踪键，不会加入或创建对话。没有它时，Router 生成内部跟踪身份。这些遥测身份不能替代路由学习保护所要求的配置身份请求头。
 
 ## Chat 与 Messages API 优先级 {#chat-and-messages-api-priority}
 

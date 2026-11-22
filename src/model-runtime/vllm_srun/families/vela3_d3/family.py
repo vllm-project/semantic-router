@@ -216,6 +216,20 @@ class Vela3D3Family(ModelFamily):
             spec,
             name=package.model_name,
             backbone=replace(spec.backbone, gated=gated, lm_head=lm_head),
+            # The package is validated as its own model (its own registry pin,
+            # tests and surfaces), so it consents to the measured approximate
+            # kernels for itself -- the fla-npu chunk on the SoCs its records
+            # cover (npu-fla-chunk-ascend950dt.md,
+            # npu-fla-chunk-ascend910b1.md), behind the FLA_NPU_APPROXIMATE
+            # opt-in. The consent is scoped to the npu: the CUDA and ROCm
+            # approximate kernels (cuda-fused-approximate.md) keep the base's
+            # consent, which is off -- no GPU record covers this family. The
+            # decision3 base's own dtype is otherwise unchanged.
+            dtype=replace(
+                spec.dtype,
+                approximate_kernels=True,
+                approximate_accelerators=frozenset({"npu"}),
+            ),
         )
 
     def load(
@@ -241,7 +255,7 @@ class Vela3D3Family(ModelFamily):
                 policy=Policy(
                     details.span, _names_only if definer is None else definer.define
                 ),
-                renderer=Renderer(model.tokenizer, model.codes),
+                renderer=Renderer(model.prompts, model.codes),
                 reader=SpanReader(engine_model, heads),
             ),
         )
@@ -292,7 +306,7 @@ def _definer(
             else "names"
         ),
         model.engine_model,
-        model.tokenizer,
+        model.prompts,
         model.pad_id,
         details.root / cache if isinstance(cache, str) else None,
         eos_token_id=(
