@@ -1,0 +1,44 @@
+# The provider catalog before config v0.3, with the global layout's runtime
+# and models: a model target that names its backend and auth profile, a
+# model's access block, the default model's earlier name, evaluations and a
+# quality score kept on model cards, and a decision's pii plugin. Migrate
+# writes them in the v0.3 layout and then as v0.5, in one run.
+providers:
+  defaults: {default_model: chat}
+  models:
+    - name: summarizer
+      access:
+        provider_model_id: org/summarizer-1
+        backend_refs: [{name: summarizer, endpoint: "127.0.0.1:8001", protocol: http}]
+  model_targets:
+    chat:
+      provider_model_id: org/chat-1
+      backend_refs: [chat-backend]
+      auth_ref: chat-auth
+  backends:
+    chat-backend: {endpoint: "127.0.0.1:8000", protocol: http, type: vllm}
+  auth_profiles:
+    chat-auth: {api_key_env: CHAT_API_KEY}
+routing:
+  models:
+    - name: chat
+      description: General chat model.
+      quality_score: 0.7
+    - name: summarizer
+      evaluations:
+        - {benchmark: vllm-sr/operator-rating@1.0.0, metrics: {score: 0.6}}
+  decisions:
+    - name: chat
+      priority: 10
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: chat}]
+      plugins:
+        - type: pii
+          configuration: {enabled: true, pii_types_allowed: [EMAIL_ADDRESS]}
+global:
+  runtime:
+    router: {strategy: priority}
+    response_api: {enabled: false}
+  models:
+    embeddings:
+      semantic: {qwen3_model_path: models/embedding, use_cpu: true}

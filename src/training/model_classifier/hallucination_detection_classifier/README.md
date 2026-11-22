@@ -5,16 +5,24 @@ pair. Each answer token is labelled as supported or hallucinated.
 
 ## Install
 
+This directory is a uv project (`pyproject.toml` and `uv.lock`). Create the
+environment from the lock:
+
 ```bash
-pip install -r requirements.txt
+cd src/training/model_classifier/hallucination_detection_classifier
+uv sync --locked
 ```
+
+`requirements.txt` stays for anyone who installs with `pip`. The commands below
+run from the repository root through `uv run --project`.
 
 ## Prepare Data
 
 Provide RAGTruth and, optionally, DART or E2E augmentation files:
 
 ```bash
-python prepare_data.py \
+uv run --project src/training/model_classifier/hallucination_detection_classifier \
+  python src/training/model_classifier/hallucination_detection_classifier/prepare_data.py \
   --ragtruth-path /path/to/ragtruth_data.json \
   --dart-path /path/to/dart_spans.json \
   --e2e-path /path/to/e2e_spans.json \
@@ -28,7 +36,8 @@ counts before training.
 ## Train
 
 ```bash
-python finetune.py \
+uv run --project src/training/model_classifier/hallucination_detection_classifier \
+  python src/training/model_classifier/hallucination_detection_classifier/finetune.py \
   --train-path data/train.json \
   --dev-path data/dev.json \
   --test-path data/test.json \
@@ -39,7 +48,8 @@ python finetune.py \
 ```
 
 `run_training.sh` wraps preparation and training in the environment expected by
-the script. Read it before use so its paths and downloads match your machine.
+the script. It runs both steps inside its own Docker image, not this lock. Read
+it before use so its paths and downloads match your machine.
 
 ## Evaluate the Right Boundary
 

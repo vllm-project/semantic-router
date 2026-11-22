@@ -11,6 +11,52 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+func TestAnthropicTextCitationsNullability(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		field  string
+		absent bool
+	}{
+		{"omitted", "", true},
+		{"null", `,"citations":null`, true},
+		{"whitespace_null", ",\"citations\": \n null \t", true},
+		{"string_null", `,"citations":"null"`, false},
+		{"empty_array", `,"citations":[]`, true},
+		{"object", `,"citations":{}`, false},
+	} {
+		body := json.RawMessage(`{"type":"text","text":"hello"` + tc.field + `}`)
+		for name, decode := range map[string]anthropicContentBlockDecoder{
+			"request":  decodeAnthropicRequestContentBlock,
+			"response": decodeAnthropicResponseContentBlock,
+		} {
+			t.Run(tc.name+"/"+name, func(t *testing.T) {
+				content, err := decode(body, llmprotocol.DefaultPolicy())
+				if !tc.absent {
+					assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_citations")
+					return
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if content.Text != "hello" || len(content.Citations) != 0 || content.Raw != nil {
+					t.Fatalf("text without citations changed: %+v", content)
+				}
+			})
+		}
+	}
+	// A server tool's citations travel with their text as written.
+	body := json.RawMessage(`{"type":"text","text":"hello","citations":[{"type":"web_search_result_location","url":"https://go.dev"}]}`)
+	for name, decode := range map[string]anthropicContentBlockDecoder{
+		"request":  decodeAnthropicRequestContentBlock,
+		"response": decodeAnthropicResponseContentBlock,
+	} {
+		content, err := decode(body, llmprotocol.DefaultPolicy())
+		if err != nil || content.Text != "hello" || string(content.Raw) != `[{"type":"web_search_result_location","url":"https://go.dev"}]` {
+			t.Fatalf("%s: cited text decoded as %+v, %v", name, content, err)
+		}
+	}
+}
+
 func TestChatResponseAcceptsNullAnnotationsWithoutWeakeningUnknownFields(t *testing.T) {
 	engine := NewBuiltinEngine()
 	withNull := []byte(`{"id":"response_1","model":"source-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello","annotations":null},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`)
@@ -26,7 +72,7 @@ func TestChatResponseAcceptsNullAnnotationsWithoutWeakeningUnknownFields(t *test
 	}
 
 	unknown := bytes.Replace(withNull, []byte(`"annotations":null`), []byte(`"annotations":null,"future_field":true`), 1)
-	if _, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, unknown, func(*llmprotocol.Response) error { return nil }); err == nil {
+	if _, err := conformanceEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, unknown, func(*llmprotocol.Response) error { return nil }); err == nil {
 		t.Fatal("unknown Chat response field was accepted")
 	}
 }
@@ -295,7 +341,7 @@ func pushResponsesCitationPrefix(t *testing.T, stream *StreamEngine) {
 		{
 			Type: "response.created", Sequence: 0,
 			Response: func() *responsesResponseWire {
-				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, "")
+				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, llmprotocol.ResponseRenderContext{})
 				return &response
 			}(),
 		},

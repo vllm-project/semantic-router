@@ -72,6 +72,7 @@ func resolveTransportGlobal(data []byte, value any) error {
 	// Setup patches can omit providers and routing, so normalize just the raw
 	// global block with the Router parser. This also applies its module-specific
 	// sparse override rules and preserves environment references for persistence.
+	// The checks that need the recipes run on the whole config before a save.
 	globalDocument, err := yaml.Marshal(struct {
 		Version string    `yaml:"version"`
 		Global  yaml.Node `yaml:"global"`
@@ -79,7 +80,7 @@ func resolveTransportGlobal(data []byte, value any) error {
 	if err != nil {
 		return err
 	}
-	parsed, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(globalDocument)
+	parsed, err := routerconfig.ParseGlobalYAMLBytesWithoutEnvExpansion(globalDocument)
 	if err != nil {
 		return fmt.Errorf("invalid global configuration: %w", err)
 	}

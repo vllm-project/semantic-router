@@ -24,6 +24,10 @@ func (encoder *responsesStreamEncoder) collectCompletedResponsesContent(
 		if kind == "" {
 			kind = llmprotocol.ContentText
 		}
+		// An encrypted-only item completes without inventing a plaintext part.
+		if kind == llmprotocol.ContentReasoning && !encoder.contentStarted[key] && encoder.contentText[key] == nil {
+			continue
+		}
 		contentEvent := event
 		contentEvent.ContentIndex = key.content
 		completed, err := encoder.completeResponsesContent(contentEvent, outputKey, kind)
@@ -73,6 +77,7 @@ func marshalCompletedResponsesItem(
 		return item, err
 	}
 	item.Type, item.Role = "reasoning", ""
+	item.Summary = json.RawMessage(`[]`)
 	var err error
 	if len(parts.reasoningSummary) > 0 {
 		item.Summary, err = json.Marshal(parts.reasoningSummary)
@@ -92,7 +97,8 @@ func (encoder *responsesStreamEncoder) responsesContentKeys(
 ) []streamContentKey {
 	keys := make([]streamContentKey, 0)
 	for key, kind := range encoder.encodedKinds {
-		if key.item == event.ItemIndex && responsesOutputKindForContent(kind) == outputKey.kind {
+		if key.item == event.ItemIndex && responsesOutputKindForContent(kind) == outputKey.kind &&
+			encoder.contentSegments[key] == outputKey.segment {
 			keys = append(keys, key)
 		}
 	}
@@ -269,16 +275,11 @@ func (encoder *responsesStreamEncoder) startResponsesContent(
 	reasoning := encoder.reasoningScopes[key]
 	scope := responsesContentScopeFor(kind, reasoning)
 	contentIndex := encoder.responsesContentWireIndex(event, outputKey, scope)
-	if kind == llmprotocol.ContentReasoning {
-		if normalizedReasoningScope(reasoning) == llmprotocol.ReasoningScopeText {
-			return nil, nil
-		}
-	}
 	wire := responsesEventWire{
 		Type: "response.content_part.added", Sequence: encoder.nextWireSequence(),
 		ItemID: encoder.outputIDs[outputKey], OutputIndex: responsesOutputIndex(encoder.outputIndexes[outputKey]),
 	}
-	if kind == llmprotocol.ContentReasoning {
+	if scope == responsesContentReasoningSummary {
 		wire.Type = "response.reasoning_summary_part.added"
 		wire.SummaryIndex = responsesContentIndex(contentIndex)
 	} else {
@@ -329,16 +330,13 @@ func (encoder *responsesStreamEncoder) completeResponsesContent(
 	if err != nil {
 		return nil, err
 	}
-	if kind == llmprotocol.ContentReasoning && normalizedReasoningScope(reasoning) == llmprotocol.ReasoningScopeText {
-		return append(frames, doneFrame), nil
-	}
 	part := responsesContentPart(kind, reasoning, text, encoder.contentCitations[key])
 	partDone := responsesEventWire{
 		Type: "response.content_part.done", Sequence: encoder.nextWireSequence(),
 		ItemID: encoder.outputIDs[outputKey], OutputIndex: responsesOutputIndex(encoder.outputIndexes[outputKey]),
 		Part: &part,
 	}
-	if kind == llmprotocol.ContentReasoning {
+	if scope == responsesContentReasoningSummary {
 		partDone.Type = "response.reasoning_summary_part.done"
 		partDone.SummaryIndex = responsesContentIndex(contentIndex)
 	} else {
@@ -356,9 +354,13 @@ func (encoder *responsesStreamEncoder) Finalize(reason error) ([][]byte, llmprot
 		return nil, nil, nil
 	}
 	encoder.terminal = true
+	frames, err := encoder.releaseHeldMessage(false)
+	if err != nil {
+		return nil, nil, err
+	}
 	protocolError := streamFinalizationError(reason, "stream ended before completion")
 	frame, err := encoder.encodeTransportError(protocolError)
-	return [][]byte{frame}, nil, err
+	return append(frames, frame), nil, err
 }
 
 func (encoder *responsesStreamEncoder) encodeTransportError(protocolError *llmprotocol.ProtocolError) ([]byte, error) {

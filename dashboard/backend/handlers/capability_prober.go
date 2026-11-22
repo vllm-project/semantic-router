@@ -4,8 +4,6 @@ import (
 	"context"
 	"maps"
 	"net/http"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,9 +11,8 @@ import (
 )
 
 const (
-	probeRouter    = "router"
-	probeSRBench   = "sr-bench"
-	probeMLService = "ml-service"
+	probeRouter  = "router"
+	probeSRBench = "sr-bench"
 
 	capabilityProbeInterval = 30 * time.Second
 	capabilityProbeTimeout  = 2 * time.Second
@@ -52,24 +49,15 @@ type CapabilityProber struct {
 	closeOnce sync.Once
 }
 
-// NewCapabilityProber probes the sr-bench service, and the ML service when it
-// runs as a sidecar.
+// NewCapabilityProber probes the sr-bench service.
 func NewCapabilityProber(cfg *config.Config, router RouterReadinessSource) *CapabilityProber {
 	probes := []capabilityProbe{{
 		name: probeSRBench,
 		check: func(ctx context.Context) bool {
-			token := strings.TrimSpace(os.Getenv(cfg.SRBenchTokenEnv))
+			token := srBenchToken(cfg)
 			return token != "" && probeHTTP(ctx, cfg.SRBenchURL+SRBenchAPIPath+"/health", token)
 		},
 	}}
-	if cfg.MLPipelineEnabled && cfg.MLServiceURL != "" {
-		probes = append(probes, capabilityProbe{
-			name: probeMLService,
-			check: func(ctx context.Context) bool {
-				return probeHTTP(ctx, strings.TrimRight(cfg.MLServiceURL, "/")+"/api/health", "")
-			},
-		})
-	}
 	return newCapabilityProber(router, probes, capabilityProbeInterval)
 }
 

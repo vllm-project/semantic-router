@@ -5,7 +5,11 @@ Vega-27B is a LoRA over the Qwen3.8-27B text model with the same layout.
 Decision 3.0 configs set ``attention_mode: noncausal_full_attention``: the
 full-attention layers then see the whole (left-padded) prompt while the Gated
 DeltaNet layers stay causal, and image prompts take the multimodal rotary
-positions of ``rope_index``.
+positions of ``rope_index``. A state-once config (``attention_mode``
+``prefix_bidir``, ``prefix_causal`` or ``causal`` with a state block per
+row) never lets a state token see a question: its requests run branched
+(``forward_branches``, ``branch.py``), and ``forward_rows`` runs each row alone
+under the same mask.
 """
 
 from __future__ import annotations
@@ -17,7 +21,20 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from ....accel.kernels import KernelSet
+from ....accel.kernels import (
+    KernelSet,
+    causal_conv1d_update_ref,
+    recurrent_gated_delta_rule_ref,
+)
+from .branch import (
+    LAYOUTS,
+    Branches,
+    StaticBranches,
+    branch_gated_delta,
+    is_branches,
+    is_static,
+    state_once_mask,
+)
 from .common import (
     GatedMLP,
     GatedRMSNorm,
@@ -69,11 +86,13 @@ class GatedDeltaNet(nn.Module):
     def forward(
         self,
         hidden_states: torch.Tensor,
-        mask: torch.Tensor | Tree | Packed | None,
+        mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         if is_tree(mask):
             return tree_gated_delta(self, hidden_states, mask, kernels)
+        if is_branches(mask):
+            return branch_gated_delta(self, hidden_states, mask, kernels)
         if is_packed(mask):
             return packed_gated_delta(self, hidden_states, mask, kernels)
         if mask is not None:
@@ -121,6 +140,95 @@ class GatedDeltaNet(nn.Module):
         out: torch.Tensor = self.out_proj(core)
         return out
 
+    def forward_cached(
+        self,
+        hidden_states: torch.Tensor,
+        mask: torch.Tensor | None,
+        kernels: KernelSet,
+        past: tuple[torch.Tensor, torch.Tensor] | None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        """``forward`` plus the conv and recurrent state a later token continues from.
+
+        ``past`` is that state. A first call (``past`` None) runs the chunked rule and keeps the
+        last ``conv_kernel_size`` pre-convolution frames, left-padded with zeros when the prompt
+        is shorter. A later call is one token: ``causal_conv1d_update`` and the recurrent rule.
+        """
+        if mask is not None:
+            dtype = hidden_states.dtype
+            hidden_states = (hidden_states * mask[:, :, None]).to(dtype)
+        batch_size, seq_len, _ = hidden_states.shape
+        mixed_qkv = self.in_proj_qkv(hidden_states).transpose(1, 2)
+        z = self.in_proj_z(hidden_states).reshape(
+            batch_size, seq_len, -1, self.head_v_dim
+        )
+        b = self.in_proj_b(hidden_states)
+        a = self.in_proj_a(hidden_states)
+        if past is None:
+            conv_state = conv_cache(mixed_qkv, self.conv_kernel_size)
+            mixed_qkv = kernels("causal_conv1d")(
+                mixed_qkv,
+                self.conv1d.weight.squeeze(1),
+                self.conv1d.bias,
+                activation=self.activation,
+            )
+        else:
+            mixed_qkv, conv_state = causal_conv1d_update_ref(
+                mixed_qkv,
+                past[0],
+                self.conv1d.weight.squeeze(1),
+                self.conv1d.bias,
+                self.activation,
+            )
+        mixed_qkv = mixed_qkv.transpose(1, 2)
+        query, key, value = torch.split(
+            mixed_qkv, [self.key_dim, self.key_dim, self.value_dim], dim=-1
+        )
+        query = query.reshape(batch_size, seq_len, -1, self.head_k_dim)
+        key = key.reshape(batch_size, seq_len, -1, self.head_k_dim)
+        value = value.reshape(batch_size, seq_len, -1, self.head_v_dim)
+        beta = b.sigmoid()
+        g = -self.A_log.float().exp() * F.softplus(a.float() + self.dt_bias)
+        if self.num_v_heads // self.num_k_heads > 1:
+            query = query.repeat_interleave(self.num_v_heads // self.num_k_heads, dim=2)
+            key = key.repeat_interleave(self.num_v_heads // self.num_k_heads, dim=2)
+        if past is None:
+            core, recurrent = kernels("chunk_gated_delta_rule")(
+                query,
+                key,
+                value,
+                g=g,
+                beta=beta,
+                initial_state=None,
+                output_final_state=True,
+                use_qk_l2norm_in_kernel=True,
+            )
+        else:
+            core, recurrent = recurrent_gated_delta_rule_ref(
+                query,
+                key,
+                value,
+                g,
+                beta,
+                initial_state=past[1],
+                output_final_state=True,
+                use_qk_l2norm_in_kernel=True,
+            )
+        if recurrent is None:
+            raise RuntimeError("a cached gated-delta step produced no recurrent state")
+        core = core.reshape(-1, self.head_v_dim)
+        z = z.reshape(-1, self.head_v_dim)
+        core = self.norm(core, z)
+        core = core.reshape(batch_size, seq_len, -1)
+        out: torch.Tensor = self.out_proj(core)
+        return out, (conv_state, recurrent)
+
+
+def conv_cache(mixed_qkv: torch.Tensor, kernel: int) -> torch.Tensor:
+    """The last ``kernel`` frames before the convolution, left-padded with zeros if shorter."""
+    if mixed_qkv.shape[-1] >= kernel:
+        return mixed_qkv[:, :, -kernel:].contiguous()
+    return F.pad(mixed_qkv, (kernel - mixed_qkv.shape[-1], 0))
+
 
 class GatedAttention(nn.Module):
     def __init__(self, config: dict[str, Any]):
@@ -151,7 +259,7 @@ class GatedAttention(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        mask: torch.Tensor | Tree | Packed | None,
+        mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         input_shape = hidden_states.shape[:-1]
@@ -174,6 +282,43 @@ class GatedAttention(nn.Module):
         output = output * torch.sigmoid(gate)
         out: torch.Tensor = self.o_proj(output)
         return out
+
+    def forward_cached(
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        mask: torch.Tensor | None,
+        kernels: KernelSet,
+        past: tuple[torch.Tensor, torch.Tensor] | None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        """``forward``, keeping the keys and values (already rotary-applied) a later token attends to.
+
+        ``past`` is those cached keys and values. A later call concatenates the new ones after them
+        and runs SDPA with no mask: one query is not causal.
+        """
+        input_shape = hidden_states.shape[:-1]
+        hidden_shape = (*input_shape, -1, self.head_dim)
+        query, gate = torch.chunk(
+            self.q_proj(hidden_states).view(*input_shape, -1, self.head_dim * 2),
+            2,
+            dim=-1,
+        )
+        gate = gate.reshape(*input_shape, -1)
+        query = self.q_norm(query.view(hidden_shape)).transpose(1, 2)
+        key = self.k_norm(self.k_proj(hidden_states).view(hidden_shape)).transpose(1, 2)
+        value = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        cos, sin = rotary
+        query, key = apply_partial_rotary(query, key, cos, sin)
+        if past is not None:
+            key = torch.cat([past[0], key], dim=2)
+            value = torch.cat([past[1], value], dim=2)
+        output = attention(
+            kernels, query, key, value, mask, groups=self.groups, scaling=self.scaling
+        )
+        output = output.reshape(*input_shape, -1).contiguous()
+        output = output * torch.sigmoid(gate)
+        out: torch.Tensor = self.o_proj(output)
+        return out, (key, value)
 
 
 class Qwen3_5Layer(nn.Module):
@@ -198,21 +343,51 @@ class Qwen3_5Layer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        full_mask: torch.Tensor | Tree | Packed | None,
-        linear_mask: torch.Tensor | Tree | Packed | None,
+        full_mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
+        linear_mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         residual = hidden_states
+        rows = getattr(full_mask, "readout", None)
         hidden_states = self.input_layernorm(hidden_states)
         if self.kind == "linear_attention":
             hidden_states = self.linear_attn(hidden_states, linear_mask, kernels)
         else:
             hidden_states = self.self_attn(hidden_states, rotary, full_mask, kernels)
+        if rows is not None:
+            # Only these rows of a last layer are read (``StaticBranches.reading``).
+            residual, hidden_states = residual[:, rows], hidden_states[:, rows]
         hidden_states = residual + hidden_states
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
         return residual + hidden_states
+
+    def forward_cached(
+        self,
+        hidden_states: torch.Tensor,
+        rotary: tuple[torch.Tensor, torch.Tensor],
+        full_mask: torch.Tensor | None,
+        linear_mask: torch.Tensor | None,
+        kernels: KernelSet,
+        past: tuple[torch.Tensor, torch.Tensor] | None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        """The layer plus the state (conv and recurrent, or keys and values) the next token needs."""
+        residual = hidden_states
+        hidden_states = self.input_layernorm(hidden_states)
+        if self.kind == "linear_attention":
+            hidden_states, state = self.linear_attn.forward_cached(
+                hidden_states, linear_mask, kernels, past
+            )
+        else:
+            hidden_states, state = self.self_attn.forward_cached(
+                hidden_states, rotary, full_mask, kernels, past
+            )
+        hidden_states = residual + hidden_states
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        return residual + hidden_states, state
 
     def forward_forest(
         self,
@@ -375,7 +550,12 @@ class Qwen3_5Backbone(nn.Module):
         kinds = config["layer_types"]
         if len(kinds) != config["num_hidden_layers"]:
             raise ValueError("layer_types must name every layer")
-        self.noncausal = config.get("attention_mode", "causal") == NONCAUSAL
+        self.layout = config.get("attention_mode", "causal")
+        if self.layout not in (NONCAUSAL, *LAYOUTS):
+            raise ValueError(f"unsupported Qwen3.5 attention mode {self.layout!r}")
+        self.noncausal = self.layout == NONCAUSAL
+        # No state token attends to a question: a request's state runs once (``forward_branches``).
+        self.state_once = self.layout in LAYOUTS
         self.embed_tokens = nn.Embedding(config["vocab_size"], config["hidden_size"])
         self.layers = nn.ModuleList([Qwen3_5Layer(config, kind) for kind in kinds])
         self.norm = ZeroCenteredRMSNorm(config["hidden_size"], config["rms_norm_eps"])
@@ -428,6 +608,31 @@ class Qwen3_5Backbone(nn.Module):
         normed: torch.Tensor = self.norm(hidden_states)
         return normed
 
+    def embed(
+        self,
+        input_ids: torch.Tensor,
+        images: tuple[torch.Tensor, int] | None = None,
+        videos: tuple[torch.Tensor, int] | None = None,
+        where: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Token embeddings with image (then video) features in place of their placeholder tokens.
+
+        ``where`` (the shape of ``input_ids``) limits the placeholders to the
+        positions it marks; elsewhere a placeholder ID is an ordinary token.
+        """
+        embeds: torch.Tensor = self.embed_tokens(input_ids)
+        for media in (images, videos):
+            if media is None:
+                continue
+            features, token_id = media
+            place = input_ids == token_id
+            if where is not None:
+                place = place & where
+            embeds = embeds.masked_scatter(
+                place.unsqueeze(-1), features.to(embeds.device, embeds.dtype)
+            )
+        return embeds
+
     def forward_images(
         self,
         input_ids: torch.Tensor,
@@ -440,19 +645,52 @@ class Qwen3_5Backbone(nn.Module):
     ) -> torch.Tensor:
         """A noncausal image prompt: image (then video) features in place of their placeholder tokens, rotary
         ``positions`` (``rope_index``)."""
-        embeds = self.embed_tokens(input_ids)
-        embeds = embeds.masked_scatter(
-            (input_ids == image_token_id).unsqueeze(-1),
-            features.to(embeds.device, embeds.dtype),
-        )
-        if videos is not None:
-            video_features, video_token_id = videos
-            embeds = embeds.masked_scatter(
-                (input_ids == video_token_id).unsqueeze(-1),
-                video_features.to(embeds.device, embeds.dtype),
-            )
+        embeds = self.embed(input_ids, (features, image_token_id), videos)
         full_mask, linear_mask = noncausal_masks(attention_mask, padded)
         return self.forward_embeds(embeds, positions, full_mask, linear_mask)
+
+    def forward_rows(
+        self,
+        embeds: torch.Tensor,
+        attention_mask: torch.Tensor,
+        states: list[int],
+        positions: torch.Tensor,
+        padded: bool,
+    ) -> torch.Tensor:
+        """Left-padded rows, each alone under the state-once layout: row ``b``'s first ``states[b]`` tokens are
+        its state block. ``positions`` ``[3, B, L]`` count from each row's first token; ``padded`` (host-known)
+        says whether any row is padded."""
+        if not self.state_once:
+            raise ValueError(f"attention mode {self.layout!r} has no state blocks")
+        full_mask = state_once_mask(attention_mask, states, self.layout)
+        linear_mask = attention_mask if padded and attention_mask.shape[1] > 1 else None
+        return self.forward_embeds(embeds, positions, full_mask, linear_mask)
+
+    def forward_branches(
+        self,
+        embeds: torch.Tensor,
+        positions: torch.Tensor,
+        branches: Branches | StaticBranches,
+        rows: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """A packed ``Branches`` row (``[1, T, hidden]`` embeddings, ``[3, T]`` positions) through every layer;
+        with ``rows``, the final norm of those rows only (``[1, len(rows), hidden]``).
+        """
+        if not self.state_once:
+            raise ValueError(f"attention mode {self.layout!r} cannot branch")
+        assert self.kernels is not None, "bind kernels before running the backbone"
+        rotary = self.rotary_emb(embeds, positions[:, None])
+        hidden_states = embeds
+        last = len(self.layers) - 1
+        for index, layer in enumerate(self.layers):
+            mask = branches
+            if rows is not None and index == last and is_static(branches):
+                mask = branches.reading(rows)
+            hidden_states = layer(hidden_states, rotary, mask, mask, self.kernels)
+        if rows is not None and not is_static(branches):
+            hidden_states = hidden_states[:, rows]
+        normed: torch.Tensor = self.norm(hidden_states)
+        return normed
 
     def forward_packed(self, input_ids: torch.Tensor, packed: Packed) -> torch.Tensor:
         """Packed text rows (``[1, T]`` ids, ``packed.py``) through every layer; ``[1, T, hidden]``."""

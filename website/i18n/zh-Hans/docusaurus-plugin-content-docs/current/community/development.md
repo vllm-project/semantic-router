@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 开发指南
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
@@ -15,7 +16,7 @@ translation:
 - Git
 - GNU Make
 - Docker 或 Podman
-- Python 3.10 或更高版本，用于 CLI、测试、训练和模拟器工具
+- Python 3.10 或更高版本，用于 CLI、测试和模拟器工具；`src/training/` 下的训练项目需要 Python 3.11 或更高版本
 
 仓库引导目标会创建 Python 环境，并安装校验工具链：
 
@@ -130,7 +131,7 @@ curl -sS http://localhost:8899/v1/chat/completions \
 ## 调试
 
 - 先用 `vllm-sr logs <service>` 看组件日志，再依赖容器名。
-- 通过模型运行时状态与日志检查 worker 就绪状态和失败原因，参见[运行时排障](../model-runtime/troubleshooting.md)。
+- 通过模型运行时状态与日志检查 worker 就绪状态和失败原因，参见[运行时排障](../model-runtime/deploy/troubleshooting.md)。
 - Router 诊断设 `SR_LOG_LEVEL=debug`。
 - 在运行时调试配置前，先跑 `vllm-sr config validate --config <file>`。
-- 启动和网络失败见[常见错误](/zh-Hans/docs/troubleshooting/common-errors)和[容器连通性](/zh-Hans/docs/troubleshooting/container-connectivity)。
+- 启动和网络失败见[常见错误](/docs/troubleshooting/common-errors)和[容器连通性](/docs/troubleshooting/container-connectivity)。

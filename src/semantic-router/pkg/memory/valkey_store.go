@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -77,7 +78,7 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	}
 
 	cfg := options.Config
-	if cfg.EmbeddingModel == "" {
+	if reflect.ValueOf(cfg).IsZero() {
 		cfg = DefaultMemoryConfig()
 	}
 
@@ -85,7 +86,7 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelMMBERT}
+		embeddingCfg = defaultEmbeddingConfig()
 	}
 
 	vc := options.ValkeyConfig
@@ -138,8 +139,8 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 		return nil, err
 	}
 
-	logging.Infof("ValkeyStore: initialized with index='%s', prefix='%s', embedding_model='%s', dimension=%d",
-		store.indexName, store.collectionPrefix, store.embeddingConfig.Model, store.dimension)
+	logging.Infof("ValkeyStore: initialized with index='%s', prefix='%s', embedding='%s', dimension=%d",
+		store.indexName, store.collectionPrefix, store.embeddingConfig.Deployment, store.dimension)
 
 	return store, nil
 }
@@ -324,10 +325,7 @@ func (v *ValkeyStore) rerankAndFilter(candidates []*RetrieveResult, opts Retriev
 	}
 
 	if len(results) > 0 {
-		ids := make([]string, len(results))
-		for i, r := range results {
-			ids[i] = r.Memory.ID
-		}
+		ids := retrieveResultIDs(results)
 		v.life.goBackground(func(ctx context.Context) { v.recordRetrievalBatch(ctx, ids) })
 	}
 
@@ -432,10 +430,7 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		limit = v.config.DefaultRetrievalLimit
 	}
 
-	threshold := opts.Threshold
-	if threshold <= 0 {
-		threshold = v.config.DefaultSimilarityThreshold
-	}
+	threshold := opts.minSimilarity(v.config.DefaultSimilarityThreshold)
 
 	if err := valkeyValidateRetrieveOpts(opts); err != nil {
 		status = "error"

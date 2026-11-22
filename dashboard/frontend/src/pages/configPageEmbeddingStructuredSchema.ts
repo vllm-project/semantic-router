@@ -1,25 +1,23 @@
 import {
-  boolean,
   number,
   object,
   text,
   type RouterStructuredFieldDefinition,
 } from './configPageRouterStructuredSchemaPrimitives'
 
+// A store indexed with a model other than embeddings.default names that
+// deployment; the dimension is the width its vectors carry.
+export const STORE_EMBEDDING_FIELD: RouterStructuredFieldDefinition = {
+  label: 'Embedding',
+  description:
+    'Deployment that embeds this store, when it was indexed with another model than embeddings.default, and the dimension of its vectors.',
+  schema: object('Embedding', {
+    deployment: text('Deployment', { placeholder: 'vela-embedding' }),
+    dimension: number('Dimension', { min: 1 }),
+  }),
+}
+
 export const EMBEDDING_MODELS_STRUCTURED_FIELDS: Record<string, RouterStructuredFieldDefinition> = {
-  embedding_config: {
-    label: 'Embedding Optimization',
-    description:
-      'Layer, dimension, preload, and soft-matching controls shared by embedding consumers.',
-    schema: object('Embedding Optimization', {
-      preload_embeddings: boolean('Preload Embeddings'),
-      target_dimension: number('Target Dimension (0 = full model)', { min: 0 }),
-      target_layer: number('Target Layer', { min: 0 }),
-      enable_soft_matching: boolean('Enable Soft Matching'),
-      top_k: number('Top K (0 = no limit)', { min: 0 }),
-      min_score_threshold: number('Min Score Threshold', { min: 0, max: 1, step: 0.01 }),
-    }),
-  },
   endpoint: {
     label: 'Remote Endpoint',
     description:

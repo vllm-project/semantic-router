@@ -24,6 +24,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -59,7 +60,12 @@ func (l *BaseLooper) dispatchModel(
 	if baseReq != nil {
 		ctx = contextWithRoutingRecipe(ctx, baseReq.RecipeName)
 	}
-	return l.client.CallModelWithOptions(ctx, *stageReq, target, options)
+	// Each call is an attempt of the execution trace, which prices it at its
+	// model's rates for the request's router calls.
+	ctx, attempt := startAttempt(ctx, modelAttemptSpec(baseReq, stageReq, "call", "", target.Name))
+	response, err := l.client.CallModelWithOptions(ctx, *stageReq, target, options)
+	attempt.finish(attemptResult{response: response, err: err, reason: attemptReasonFromError(err)})
+	return response, err
 }
 
 // startConfidenceModelAttempt validates and dispatches one traced Confidence model call.
@@ -68,6 +74,7 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	baseReq *Request,
 	stageReq *openai.ChatCompletionNewParams,
 	modelName, stage, role string,
+	toolStage llmprotocol.TrustedStage,
 	streaming bool,
 	iteration int,
 	logprobsConfig *LogprobsConfig,
@@ -94,6 +101,7 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 			Iteration:        iteration,
 			Mode:             responseMode(streaming),
 			Logprobs:         logprobsConfig,
+			ToolStage:        toolStage,
 		},
 	)
 	if err != nil && attempt != nil {

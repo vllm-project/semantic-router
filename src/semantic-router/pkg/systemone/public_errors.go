@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // runtimeCodes are the model runtime's documented request-level error codes
@@ -14,12 +15,13 @@ import (
 // deployment keys, so a client gets one of these codes with words written
 // here, never the runtime's message.
 var runtimeCodes = map[api.ErrorBodyCode]int{
-	api.InvalidRequest:     400,
-	api.ModelNotFound:      404,
-	api.RequestTooLarge:    413,
-	api.UnsupportedSurface: 422,
-	api.Overloaded:         429,
-	api.NotReady:           503,
+	api.InvalidRequest:       400,
+	api.ModelNotFound:        404,
+	api.RequestTooLarge:      413,
+	api.UnsupportedMediaType: 415,
+	api.UnsupportedSurface:   422,
+	api.Overloaded:           429,
+	api.NotReady:             503,
 }
 
 // mediaReasons word the runtime's image and video rejection reasons; %s takes
@@ -31,7 +33,7 @@ var mediaReasons = map[api.ErrorBodyReason]string{
 	api.ImageAspectRatio: "image aspect ratio exceeds %s:1",
 	api.ImageMalformed:   "malformed image",
 	api.ImageUnsupported: "model does not read images",
-	api.VideoFormat:      "video must be a base64 MP4, WebM, QuickTime or Matroska data URL",
+	api.VideoFormat:      "video must be a base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data URL",
 	api.VideoTooLarge:    "video exceeds %s",
 	api.VideoTooLong:     "video longer than %s s",
 	api.VideoPixels:      "video frames exceed %s pixels",
@@ -41,23 +43,53 @@ var mediaReasons = map[api.ErrorBodyReason]string{
 	api.VideoUnsupported: "model does not read videos",
 }
 
-// runtimeFailure is the public status, code and message for a runtime's
-// non-2xx answer: its documented code, and for a rejected image or video the
-// reason in the words above.
-func runtimeFailure(status int, body []byte) (int, string, string) {
+// limitedReasons are the request reasons whose public error carries the
+// runtime's limit, as System One's request-level token error does.
+var limitedReasons = map[string]bool{"request_tokens": true}
+
+// runtimeFailure is the public status, code, message, reason and limit for a
+// runtime's non-2xx answer: its documented code (a media refusal's public code,
+// systemonecodec.PublicCode), for a rejected image or video the reason in the
+// words above, and the limit of a limitedReasons refusal.
+func runtimeFailure(status int, body []byte) (int, string, string, string, *int) {
 	var answer api.ErrorResponse
 	if json.Unmarshal(body, &answer) != nil {
-		return status, "systemone_request_failed", "systemone request failed"
+		return status, "systemone_request_failed", "systemone request failed", "", nil
 	}
 	code := answer.Error.Code
 	documented, ok := runtimeCodes[code]
 	if !ok {
-		return status, "systemone_request_failed", "systemone request failed"
+		return status, "systemone_request_failed", "systemone request failed", "", nil
 	}
-	if code == api.InvalidRequest {
-		return documented, string(code), mediaReason(answer.Error.Reason, answer.Error.Limit)
+	if code == api.InvalidRequest || code == api.UnsupportedMediaType {
+		reason := publicReason(answer.Error.Reason)
+		var limit *int
+		if limitedReasons[reason] && answer.Error.Limit != nil && *answer.Error.Limit > 0 {
+			limit = answer.Error.Limit
+		}
+		public := systemonecodec.PublicCode(string(code), reason)
+		return documented, public, mediaReason(answer.Error.Reason, answer.Error.Limit), reason, limit
 	}
-	return documented, string(code), strings.ReplaceAll(string(code), "_", " ")
+	return documented, string(code), strings.ReplaceAll(string(code), "_", " "), "", nil
+}
+
+// publicReason is a runtime reason a client may read: one of the fixed words
+// worded here.
+func publicReason(reason *api.ErrorBodyReason) string {
+	if reason == nil {
+		return ""
+	}
+	word := string(*reason)
+	if _, known := mediaReasons[*reason]; known {
+		return word
+	}
+	if _, known := requestReasons[word]; known {
+		return word
+	}
+	if _, known := questionReasons[word]; known {
+		return word
+	}
+	return ""
 }
 
 func mediaReason(reason *api.ErrorBodyReason, limit *int) string {
@@ -66,6 +98,15 @@ func mediaReason(reason *api.ErrorBodyReason, limit *int) string {
 	}
 	words, ok := mediaReasons[*reason]
 	if !ok {
+		if words, ok = requestReasons[string(*reason)]; ok {
+			if limitedReasons[string(*reason)] && limit != nil && *limit > 0 {
+				return fmt.Sprintf("%s (at most %s: the state once and every question's own)", words, thousands(*limit))
+			}
+			return words
+		}
+		if words, ok = questionReasons[string(*reason)]; ok {
+			return "no question is valid: " + words
+		}
 		return "invalid request"
 	}
 	if !strings.Contains(words, "%s") {

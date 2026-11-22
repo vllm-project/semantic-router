@@ -25,7 +25,7 @@ describe('config page model normalization', () => {
       },
     }
 
-    expect(getNormalizedModels(config, true, catalog)).toEqual([
+    expect(getNormalizedModels(config, catalog)).toEqual([
       expect.objectContaining({
         name: 'frontier',
         catalog: builtIn.id,
@@ -53,7 +53,7 @@ describe('config page model normalization', () => {
       },
     }
 
-    expect(getNormalizedModels(config, true, catalog)).toEqual([
+    expect(getNormalizedModels(config, catalog)).toEqual([
       expect.objectContaining({
         name: 'private-reasoner',
         reasoning: {
@@ -82,7 +82,7 @@ describe('config page model normalization', () => {
       },
     }
 
-    expect(getNormalizedModels(config, true, catalog)).toEqual([
+    expect(getNormalizedModels(config, catalog)).toEqual([
       expect.objectContaining({
         reasoning_modes: ['disabled', 'adaptive', 'enabled'],
       }),
@@ -110,34 +110,8 @@ describe('config page model normalization', () => {
       },
     }
 
-    const [chat, responses] = getNormalizedModels(config, true, catalog)
+    const [chat, responses] = getNormalizedModels(config, catalog)
     expect(chat.reasoning_efforts).toEqual(['low', 'medium', 'high', 'xhigh'])
     expect(responses.reasoning_efforts).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
-  })
-})
-
-it('preserves legacy wire format, reasoning and model identity in the edit projection', () => {
-  const [model] = getNormalizedModels(
-    {
-      model_config: {
-        legacy: {
-          api_format: 'anthropic',
-          reasoning_family: 'claude',
-          model_id: 'remote-id',
-          external_model_ids: { anthropic: 'remote-id' },
-          preferred_endpoints: ['legacy-endpoint'],
-        },
-      },
-    },
-    false,
-    catalog,
-  )
-  expect(model).toMatchObject({
-    api_format: 'anthropic',
-    api_format_override: 'anthropic',
-    reasoning: { family: 'claude' },
-    provider_model_id: 'remote-id',
-    external_model_ids: { anthropic: 'remote-id' },
-    backend_refs: [{ name: 'legacy-endpoint' }],
   })
 })

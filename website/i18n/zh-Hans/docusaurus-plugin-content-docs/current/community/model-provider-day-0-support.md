@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型与提供商 Day-0 支持
 description: 一次加入内置模型或提供商，再从共享目录生成所有运行时和产品视图。
 translation:
@@ -9,7 +10,7 @@ translation:
 
 # 模型与提供商 Day-0 支持
 
-内置支持是一份经过校验的资源图，而不是把名字加进几份互不相干的清单。`config/catalog/` 下的仓库目录会生成运行时注册表、内置发行、控制面板模型库和添加模型卡片，以及公开的[模型页](/models)。
+内置支持是一份经过校验的资源图，而不是把名字加进几份互不相干的清单。`config/catalog/` 下的仓库目录会生成运行时注册表、内置发行、控制面板模型库和 Connect model 中的提供商卡片，以及公开的[模型页](/models)。
 
 ## 选择最小改动
 
@@ -26,7 +27,7 @@ translation:
 
 内置物理目录按主流模型创建方精选，而不是按全球模型数量排名。对已有创建方，Day-0 贡献通常把目录补到或轮换到大约最近三代或有代表性的产品线。加入新创建方会改变 `manifest.yaml.inventory.physical` 中的已审基线；应说明该公司为何属于主流集合，以及哪些当前产品线构成有用的运维面。生成器强制创建方成员资格和最低深度，人工评审决定时效和相关性。
 
-提供商支持是独立的。新的 Provider ID 可以没有任何内置模型映射，但对添加模型里的手写自定义模型仍然有价值。不要为了让提供商卡片看起来“有货”而加一张冷门 Model Card。
+提供商支持是独立的。新的 Provider ID 可以没有任何内置模型映射，但对 Connect model 里的手写自定义模型仍然有价值。不要为了让提供商卡片看起来“有货”而加一张冷门 Model Card。
 
 ## 添加模型
 
@@ -106,7 +107,7 @@ OpenAI 绑定记录：工具需要 Responses；超过 272,000 输入 token 的�
 Astra 的工具调用请用 Responses。最小路由配置不需要手写 Model Card 或推理家族：
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: astra
@@ -115,19 +116,19 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
-
-routing:
-  decisions:
-    - name: astra_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: astra
-          use_reasoning: true
-          reasoning_effort: high
+          auth: {api_key_env: OPENAI_API_KEY}
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 对没有工具的普通 Chat Completions 工作负载，省略 `api_format: responses`；同一目录绑定会发出顶层 `reasoning_effort`，并在启动时拒绝仅限 Responses 的 effort。Responses 发出 `reasoning.effort`。黑盒 E2E 还证明 Responses 工具定义能在 Router 到提供商的一跳中存活。生成的 Router、CLI、控制面板和网站视图都来自这些编写的资源。
@@ -147,7 +148,7 @@ make e2e-test-specific \
 内置卡片用一个可选的 `catalog` 引用选择。模型 `name` 仍是面向请求的别名，而 `backend_refs[].provider` 是目录 Provider ID：
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: production
@@ -158,14 +159,16 @@ providers:
       backend_refs:
         - name: primary
           provider: provider-id
-          api_key_env: PROVIDER_API_KEY
+          auth: {api_key_env: PROVIDER_API_KEY}
 ```
 
-内置卡片不需要 `routing.modelCards`。有意覆盖时，用规范目录身份作为卡片名：
+内置卡片不需要 `providers.models`。有意覆盖时，用规范目录身份作为卡片名：
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: organization/model
       tags: [production, approved]
 ```
@@ -195,7 +198,8 @@ providers:
         - name: lab
           provider: vllm
           endpoint: model-gateway.example:8000/v1
-
+      context_window_size: 131072
+      capabilities: [chat, tools, reasoning]
 evaluation:
   records:
     - model: private-reasoner
@@ -204,12 +208,8 @@ evaluation:
       reasoning_effort: high
       metrics:
         pass_rate: 0.82
-
-routing:
-  modelCards:
-    - name: private-reasoner
-      context_window_size: 131072
-      capabilities: [chat, tools, reasoning]
+recipes:
+  - name: default
 ```
 
 用户编写的记录刻意保持小表面：`model`、`benchmark` 和 `metrics`，外加可选的 `benchmark_profile`、`reasoning_effort`、`source`、`measured_at` 和标量 `metadata`。省略 `benchmark_profile` 以使用已知基准的默认配置；测量来自特定模型 effort 时设置 `reasoning_effort`。目录记录在内部保留更丰富的证据和出处。自定义基准身份仍带命名空间和版本，指标值必须有限。

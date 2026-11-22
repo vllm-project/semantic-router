@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -69,7 +70,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 
 	// Use default config if not provided
 	cfg := options.Config
-	if cfg.EmbeddingModel == "" {
+	if reflect.ValueOf(cfg).IsZero() {
 		cfg = DefaultMemoryConfig()
 		if options.EmbeddingConfig != nil && options.EmbeddingConfig.Provider != nil {
 			cfg.Milvus.Dimension = options.Config.Milvus.Dimension
@@ -81,7 +82,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelMMBERT}
+		embeddingCfg = defaultEmbeddingConfig()
 	}
 
 	dimension, err := StorageDimension(cfg.Milvus.Dimension, embeddingCfg)
@@ -110,7 +111,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 
 	logging.ComponentEvent("memory", "milvus_store_initialized", map[string]interface{}{
 		"collection_name": store.collectionName,
-		"embedding_model": store.embeddingConfig.Model,
+		"embedding":       store.embeddingConfig.Deployment,
 		"dimension":       store.config.Milvus.Dimension,
 	})
 

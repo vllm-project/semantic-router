@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -98,7 +99,7 @@ func TestDecodeRejectsOutOfRangeSetAndSpanProbabilities(t *testing.T) {
 		for _, preset := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/preset=%t", name, preset), func(t *testing.T) {
 				kind, noul := "noul", 0.5
-				sets := map[string]api.SetAnswer{"topics": {Probabilities: map[string]float64{"billing": probability}}}
+				sets := map[string]api.SetAnswer{"topics": {Probabilities: map[string]float64{"billing": probability, "shipping": 0.5}}}
 				spans := map[string][]api.Span{"cities": {{Label: "city", Text: "Paris", End: 5, Probability: probability}}}
 				body := api.DecisionResponse{
 					Answers: map[string]api.Answer{"cities": {Type: &kind, Noul: &noul}},
@@ -187,11 +188,15 @@ func TestBundleAsksOneModelTheStagesQuestionsAboutOneStateInOneTask(t *testing.T
 		t.Fatalf("one bundle with one task for every state expected: %d bundles, %d tasks", calls, tasks)
 	}
 	asked := runtime.Decisions()
-	if len(asked) != 1 || asked[0].State != "refund my billing to Tom" || len(asked[0].Questions) != 3 || asked[0].States == nil || len(*asked[0].States) != 1 {
-		t.Fatalf("the state with the most questions is the request's own, the other one of its states: %+v", asked)
+	if len(asked) != 1 || asked[0].State != nil || asked[0].Questions != nil || asked[0].States == nil {
+		t.Fatalf("one batch with an entry per state, none of them at the top level: %+v", asked)
 	}
-	if entry := (*asked[0].States)["1"]; entry.State != "a different message for person" || len(entry.Questions) != 1 {
-		t.Fatalf("the other state's entry: %+v", entry)
+	entries := map[interface{}]int{}
+	for _, entry := range *asked[0].States {
+		entries[entry.State] = len(entry.Questions)
+	}
+	if want := map[interface{}]int{"refund my billing to Tom": 3, "a different message for person": 1}; !reflect.DeepEqual(entries, want) {
+		t.Fatalf("the questions about one state in its one entry: %v, want %v", entries, want)
 	}
 	if len(answers[0].Answers) != 2 || answers[0].Answers["topics"].Probabilities["billing"] != 0.9 || answers[0].Answers["topics"].Selected[0] != "billing" {
 		t.Fatalf("the signals' caller gets its own answers: %+v", answers[0].Answers)

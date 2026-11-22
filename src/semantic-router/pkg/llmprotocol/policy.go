@@ -1,5 +1,10 @@
 package llmprotocol
 
+import (
+	"encoding/json"
+	"slices"
+)
+
 type UnknownFieldPolicy string
 
 const (
@@ -13,6 +18,50 @@ const (
 	LossyReject              LossyPolicy = "reject"
 	LossyAllowWithDiagnostic LossyPolicy = "allow_with_diagnostic"
 )
+
+// LossyFieldToolResultError names the Anthropic tool-result failure flag, which
+// OpenAI request formats cannot carry.
+const LossyFieldToolResultError = "tool_result.is_error"
+
+// LossyFieldSystemMessageRole names the role of system and developer
+// messages, which ProjectSystemMessages sends a Chat backend as one leading
+// system message and, inside the conversation, as user text.
+const LossyFieldSystemMessageRole = "messages[].role"
+
+// LossyFieldUnreadableFile names files in the conversation when the selected
+// model declares no file input. Accepting the loss sends each such file as a
+// short note, which ProjectUnreadableFiles writes.
+const LossyFieldUnreadableFile = "content.file"
+
+// LossyFieldToolDeferLoading names a tool's request to be loaded on demand
+// through the provider's tool search. Accepting the loss sends the tool with its
+// full definition, as a backend without tool search would see it.
+const LossyFieldToolDeferLoading = "tools.defer_loading"
+
+// LossyFieldReasoningSignature names the signature an Anthropic backend puts
+// on its thinking, which Chat Completions and Responses clients cannot carry.
+const LossyFieldReasoningSignature = "reasoning.signature"
+
+// LossyFieldStore names a request's store: true, which asks the provider to
+// keep the completion. Accepting the loss sends the request without it to a
+// backend whose wire format keeps no completions, which ProjectUnstoredRequest
+// writes.
+const LossyFieldStore = "store"
+
+// OptInLossyFields lists the losses an operator may accept while every other
+// lossy translation keeps failing closed.
+func OptInLossyFields() []string {
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolDeferLoading, LossyFieldReasoningSignature, LossyFieldStore}
+}
+
+// OptInHint is what a refusal of field adds when an operator may accept that
+// loss: the setting that lists it. It is empty for every other field.
+func OptInHint(field string) string {
+	if !slices.Contains(OptInLossyFields(), field) {
+		return ""
+	}
+	return "; an operator can accept this loss by listing " + field + " in global.router.allow_lossy_translation"
+}
 
 type MissingIDPolicy string
 
@@ -28,22 +77,26 @@ const (
 	SourceBoundedSameFormat SourcePreservationPolicy = "bounded_same_format"
 )
 
-// ResponseVendor identifies a provider with response-only wire extensions.
+// ResponseVendor identifies a provider whose failures arrive in an envelope
+// other than its wire format's canonical error object. The backend's provider
+// type selects it; members a wire contract does not declare are tolerated for
+// every backend and need no vendor.
 type ResponseVendor string
 
-// ResponseVendorAzure permits Azure OpenAI response extensions.
-const ResponseVendorAzure ResponseVendor = "azure"
-
-// ResponseVendorCloudflare permits Cloudflare Workors AI response extensions:
-// decorated chat completions and a top-level errors[] array with Workors AI's
-// own integral codes instead of the canonical OpenAI error object.
+// ResponseVendorCloudflare decodes Cloudflare Workers AI failures: a top-level
+// errors[] array with Workers AI's own integral codes instead of the canonical
+// OpenAI error object.
 const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 
-// ResponseVendorSnowflake permits Snowflake Cortex AI response handling: its
-// failures arrive as a flat object carrying the vendor's own string code instead
-// of the canonical OpenAI error object. No accepted-response decoration has been
-// observed, so this vendor changes only how failures are decoded.
+// ResponseVendorSnowflake decodes Snowflake Cortex AI failures: a flat object
+// carrying the vendor's own string code instead of the canonical OpenAI error
+// object. Accepted responses use the canonical contract.
 const ResponseVendorSnowflake ResponseVendor = "snowflake"
+
+// ResponseVendorOpenRouter decodes OpenRouter failures: the canonical OpenAI
+// error object without a type, plus a provider metadata object and a
+// top-level user_id. Accepted responses use the canonical contract.
+const ResponseVendorOpenRouter ResponseVendor = "openrouter"
 
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
@@ -51,14 +104,34 @@ type Policy struct {
 	MissingStableIDs   MissingIDPolicy
 	SourcePreservation SourcePreservationPolicy
 	Limits             Limits
-	// ResponseVendor permits provider-specific fields at the response boundary.
-	// Empty keeps strict canonical decoding.
+	// ResponseVendor selects a provider's own failure envelope at the response
+	// boundary. Empty decodes the wire format's canonical error object.
 	ResponseVendor ResponseVendor
+	// RejectUnknownUpstreamFields fails an upstream response, stream frame or
+	// error envelope that carries a member its wire contract does not declare,
+	// instead of dropping and reporting the member. Conformance tests set it so
+	// the Router's own fixtures and provider simulator cannot drift from the
+	// modelled contracts. The Router never sets it, and configuration cannot
+	// reach it.
+	RejectUnknownUpstreamFields bool
 	// ProviderStopSequences lets a decoder report a provider's non-standard
 	// matched stop sequence (vLLM's choices[].stop_reason) as a stop_sequence
 	// terminal. TranslateResponse and NewStreamWithMutation set it only when
 	// the target wire format can carry a matched stop sequence.
 	ProviderStopSequences bool
+	// RequestOutputLimit is the output token limit the backend received with
+	// the request whose reply this policy decodes, 0 when the request set
+	// none. A reply that stopped for its tool calls once its output reached
+	// the limit decodes as stopped at the limit (ToolCallStopAtOutputLimit).
+	RequestOutputLimit int64
+	// AllowedLossyFields are translated with a diagnostic even under
+	// LossyReject. Entries come from OptInLossyFields.
+	AllowedLossyFields []string
+	// AllowedRequestExtensions names top-level request members the wire
+	// format does not declare that the Router nevertheless captures at
+	// ingress and merges back on same-format dispatch. Entries come from
+	// operator configuration; every member not listed keeps failing closed.
+	AllowedRequestExtensions []string
 }
 
 type Limits struct {
@@ -92,6 +165,7 @@ type Limits struct {
 	ReasoningEffortBytes int
 	StopSequences        int
 	StopBytes            int
+	LogitBiasEntries     int
 	TextBytes            int
 	MediaReferenceBytes  int
 	MediaDataBytes       int
@@ -99,6 +173,10 @@ type Limits struct {
 	UnfinishedArguments  int
 	Events               int
 	Diagnostics          int
+	// RequestExtensionBytes bounds the total captured extension member
+	// value bytes; RequestExtensionMembers bounds their count.
+	RequestExtensionBytes   int
+	RequestExtensionMembers int
 }
 
 func DefaultPolicy() Policy {
@@ -112,14 +190,15 @@ func DefaultPolicy() Policy {
 			Alternatives: 32, OutputItems: 4096, ContentBlocks: 16_384,
 			Citations: 256, CitationURLBytes: 16 << 10, CitationTitleBytes: 16 << 10,
 			JSONDepth: 128, ToolResultDepth: 8,
-			Tools: 256, ToolNameBytes: 256, ToolDescriptionBytes: 16 << 10,
+			Tools: 256, ToolNameBytes: 256, ToolDescriptionBytes: 256 << 10,
 			IdentifierBytes: 1024, SchemaBytes: 4 << 20, MetadataBytes: 64 << 10,
 			MetadataEntries: 256, MetadataKeyBytes: 256, MetadataValueBytes: 8 << 10,
 			ToolArgumentsBytes: 4 << 20, ReasoningEffortBytes: 32,
-			StopSequences: 16, StopBytes: 64 << 10, TextBytes: 16 << 20,
+			StopSequences: 16, StopBytes: 64 << 10, LogitBiasEntries: 16_384, TextBytes: 16 << 20,
 			MediaReferenceBytes: 16 << 10, MediaDataBytes: 48 << 20,
 			SSEFrameBytes: 1 << 20, UnfinishedArguments: 4 << 20,
 			Events: 1_000_000, Diagnostics: 64,
+			RequestExtensionBytes: 256 << 10, RequestExtensionMembers: 16,
 		},
 	}
 }
@@ -148,6 +227,10 @@ type Diagnostics []Diagnostic
 // provider state.
 type ResponseRenderContext struct {
 	PreviousResponseID string
+	// RequestEcho is a JSON object of the request members, as the client sent
+	// them, that the request format's response object repeats. The request
+	// codec writes it, and only the same format's response encoder reads it.
+	RequestEcho json.RawMessage
 }
 
 // Envelope is bounded, ephemeral wire fidelity and rendering state. It must
@@ -160,6 +243,10 @@ type Envelope struct {
 	ResponseReencodeRequired bool // Provider decorations must not be replayed to a same-format client.
 	SourceStop               string
 	ResponseRender           ResponseRenderContext
+	// OutputLimitField is the member a Chat request set its output limit with,
+	// max_tokens or max_completion_tokens, so an error about the limit names
+	// the one the client sent.
+	OutputLimitField string
 }
 
 func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy Policy, response bool) bool {
@@ -171,7 +258,7 @@ func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy 
 		if envelope.ResponseReencodeRequired {
 			return false
 		}
-		if envelope.ResponseRender.PreviousResponseID != "" {
+		if envelope.ResponseRender.PreviousResponseID != "" || len(envelope.ResponseRender.RequestEcho) > 0 {
 			return false
 		}
 		return len(envelope.Response) > 0

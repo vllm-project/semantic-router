@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import ProductLoadingState from '../components/ProductLoadingState'
 import SetupStatusPage from './SetupStatusPage'
-import styles from './AppStatus.module.css'
+import { Alert, Button } from '../ui'
 
 /** Requires authentication; redirects to login with return path. */
 const AuthGate: React.FC = () => {
@@ -33,20 +33,29 @@ const AuthGate: React.FC = () => {
 
   return (
     <>
-      {sessionError && (
-        <div className={styles.sessionNotice} role="alert">
-          <p>{sessionError}</p>
-          <button
-            type="button"
-            disabled={isLoading}
-            onClick={() => {
-              void refreshSession()
-            }}
+      {sessionError ? (
+        <div className="fixed bottom-4 left-1/2 z-[60] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 shadow-lg">
+          <Alert
+            tone="warning"
+            title="Your session could not be refreshed"
+            actions={
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isLoading}
+                onClick={() => {
+                  void refreshSession()
+                }}
+              >
+                {isLoading ? 'Retrying…' : 'Retry'}
+              </Button>
+            }
+            className="bg-popover"
           >
-            {isLoading ? 'Retrying…' : 'Retry'}
-          </button>
+            <span role="alert">{sessionError}</span>
+          </Alert>
         </div>
-      )}
+      ) : null}
       <Outlet />
     </>
   )

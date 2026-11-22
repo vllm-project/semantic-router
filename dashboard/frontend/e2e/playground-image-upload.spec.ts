@@ -42,8 +42,7 @@ test('previews an uploaded image and sends it through the vision route', async (
       headers: {
         'Content-Type': 'text/event-stream',
         'x-vsr-selected-model': 'local/vision-backend',
-        'x-vsr-selected-modality': 'image',
-        'x-vsr-matched-context': 'image_content',
+        'x-vsr-trace': 'signals=("context:image_content")',
       },
       body: streamBody('The image is a one-pixel test fixture.'),
     })
@@ -85,8 +84,10 @@ test('previews an uploaded image and sends it through the vision route', async (
     .toBe(1)
   const assistantMessage = page.locator('[data-message-role="assistant"]').last()
   await expect(assistantMessage.getByText('local/vision-backend', { exact: true })).toBeVisible()
-  await assistantMessage.getByText('Response details', { exact: true }).click()
-  await expect(assistantMessage.getByTitle('Context: Image Content')).toBeVisible()
+  await assistantMessage.getByRole('button', { name: /^Inspect route/ }).click()
+  const inspector = page.getByTestId('playground-inspector')
+  await inspector.getByText('Response details', { exact: true }).click()
+  await expect(inspector.getByTitle('Context: Image Content')).toBeVisible()
 
   expect(requestBody).not.toBeNull()
   const messages = requestBody!.messages as Array<{ role: string; content: unknown }>

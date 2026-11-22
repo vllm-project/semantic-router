@@ -23,10 +23,11 @@ const (
 // SRBenchHandler is an authenticated transport to the independent sr-bench
 // service. It owns no worker, run state, or process lifecycle.
 type SRBenchHandler struct {
-	origin   *url.URL
-	token    string
-	readonly bool
-	client   *http.Client
+	origin    *url.URL
+	token     string
+	readonly  bool
+	client    *http.Client
+	summaries runSummaryCache
 }
 
 func NewSRBenchHandler(origin, token string, readonly bool) (*SRBenchHandler, error) {
@@ -51,8 +52,12 @@ func (h *SRBenchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeSRBenchError(w, http.StatusNotFound, "sr-bench endpoint not found")
 		return
 	}
-	if !slices.Contains(strings.Split(method, ", "), r.Method) {
-		w.Header().Set("Allow", method)
+	requestMethod := r.Method
+	if requestMethod == http.MethodHead {
+		requestMethod = http.MethodGet
+	}
+	if !slices.Contains(strings.Split(method, ", "), requestMethod) {
+		w.Header().Set("Allow", strings.ReplaceAll(method, http.MethodGet, "GET, HEAD"))
 		writeSRBenchError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
@@ -61,7 +66,7 @@ func (h *SRBenchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeSRBenchError(w, http.StatusUnauthorized, "Authentication is required")
 		return
 	}
-	if h.readonly && r.Method != http.MethodGet && !dashboardauth.IsSRBenchComparisonRequest(r.Method, r.URL.Path) {
+	if h.readonly && r.Method != http.MethodGet && r.Method != http.MethodHead && !dashboardauth.IsSRBenchComparisonRequest(r.Method, r.URL.Path) {
 		writeSRBenchError(w, http.StatusForbidden, "Dashboard is read-only")
 		return
 	}
@@ -81,7 +86,12 @@ func (h *SRBenchHandler) forward(w http.ResponseWriter, r *http.Request, actor d
 	upstream := *h.origin
 	upstream.Path = r.URL.Path
 	upstream.RawQuery = r.URL.RawQuery
-	request, err := http.NewRequestWithContext(r.Context(), r.Method, upstream.String(), bytes.NewReader(body))
+	// Read the GET representation because response validation requires JSON.
+	method := r.Method
+	if method == http.MethodHead {
+		method = http.MethodGet
+	}
+	request, err := http.NewRequestWithContext(r.Context(), method, upstream.String(), bytes.NewReader(body))
 	if err != nil {
 		writeSRBenchError(w, http.StatusBadGateway, "sr-bench request could not be forwarded")
 		return
@@ -93,7 +103,7 @@ func (h *SRBenchHandler) forward(w http.ResponseWriter, r *http.Request, actor d
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("X-SR-Bench-Actor-ID", actor.UserID)
 	request.Header.Set("X-SR-Bench-Actor-Role", actor.Role)
-	if r.Method != http.MethodGet && dashboardauth.RejectRevokedMutation(w, r) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && dashboardauth.RejectRevokedMutation(w, r) {
 		return
 	}
 	response, err := h.client.Do(request)
@@ -106,6 +116,9 @@ func (h *SRBenchHandler) forward(w http.ResponseWriter, r *http.Request, actor d
 	if err != nil || len(data) > maxSRBenchResponseBytes || !json.Valid(data) || response.StatusCode >= 300 && response.StatusCode < 400 {
 		writeSRBenchError(w, http.StatusBadGateway, "sr-bench service returned an invalid response")
 		return
+	}
+	if method == http.MethodGet && r.URL.Path == SRBenchAPIPath+"/runs" && response.StatusCode == http.StatusOK {
+		data = h.enrichRunList(r.Context(), actor, data)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(response.StatusCode)

@@ -6,175 +6,775 @@
   ],
   "models": [
     {
-      "id": "vllm-sr/Decision-2.0-Kai-0.6B",
-      "name": "Decision-2.0-Kai-0.6B",
+      "id": "vllm-sr/Decision-1.0-Eos-0.8B",
+      "name": "Decision-1.0-Eos-0.8B",
       "provider": "vllm-sr",
-      "family": "decision2",
-      "revision": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",
-      "backbone": "qwen3",
-      "minMemoryGiB": 4
-    },
-    {
-      "id": "vllm-sr/Decision-2.0-Eos-0.8B",
-      "name": "Decision-2.0-Eos-0.8B",
-      "provider": "vllm-sr",
-      "family": "decision2",
-      "revision": "3594047d69f476f1d01cf84c593e213fc3a4dfe0",
+      "family": "decision1",
+      "familyLabel": "Decision 1.0",
+      "revision": "2ca39a23e3f4500873ebcd8f97394268e27d3167",
       "backbone": "qwen3_5_text",
-      "minMemoryGiB": 4
-    },
-    {
-      "id": "vllm-sr/Decision-2.0-Sol-2B",
-      "name": "Decision-2.0-Sol-2B",
-      "provider": "vllm-sr",
-      "family": "decision2",
-      "revision": "64235bef55dad29387dd16da7c90e038bf2f0972",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 8
-    },
-    {
-      "id": "vllm-sr/Decision-2.0-Nox-4B",
-      "name": "Decision-2.0-Nox-4B",
-      "provider": "vllm-sr",
-      "family": "decision2",
-      "revision": "25e8f67d1b486c647222df3aac640d2d5d736bbe",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 16
-    },
-    {
-      "id": "vllm-sr/Decision-2.0-Lux-9B",
-      "name": "Decision-2.0-Lux-9B",
-      "provider": "vllm-sr",
-      "family": "decision2",
-      "revision": "78bf3c03d9147aeb30b641edfe0e30ed04887ca5",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 24
-    },
-    {
-      "id": "vllm-sr/Decision-2.0-Vega-27B",
-      "name": "Decision-2.0-Vega-27B",
-      "provider": "vllm-sr",
-      "family": "decision2",
-      "revision": "7aec49ae11a18741706da549ab626b9052795fe7",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 72
+      "minMemoryGiB": 4,
+      "parameters": 753446208,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "The smallest Decision 1.0 decoder, on the Qwen3.5 backbone."
     },
     {
       "id": "vllm-sr/Decision-1.0-Kai-0.6B",
       "name": "Decision-1.0-Kai-0.6B",
       "provider": "vllm-sr",
       "family": "decision1",
+      "familyLabel": "Decision 1.0",
       "revision": "79263ba4c4befac3845e7c1111c2c679d0716623",
       "backbone": "modernbert",
-      "minMemoryGiB": 4
+      "minMemoryGiB": 4,
+      "parameters": 571909635,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU."
     },
     {
       "id": "vllm-sr/Decision-1.0-Lex-0.6B",
       "name": "Decision-1.0-Lex-0.6B",
       "provider": "vllm-sr",
       "family": "decision1",
+      "familyLabel": "Decision 1.0",
       "revision": "a5ba6895347218eb8acd818420001b59a00b64c2",
       "backbone": "modernbert",
-      "minMemoryGiB": 4
-    },
-    {
-      "id": "vllm-sr/Decision-1.0-Route-0.6B",
-      "name": "Decision-1.0-Route-0.6B",
-      "provider": "vllm-sr",
-      "family": "decision1",
-      "revision": "deed1f29dad146d2138588025afb83dbdaf3c133",
-      "backbone": "modernbert",
-      "minMemoryGiB": 4
-    },
-    {
-      "id": "vllm-sr/Decision-1.0-Eos-0.8B",
-      "name": "Decision-1.0-Eos-0.8B",
-      "provider": "vllm-sr",
-      "family": "decision1",
-      "revision": "2ca39a23e3f4500873ebcd8f97394268e27d3167",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 4
-    },
-    {
-      "id": "vllm-sr/Decision-1.0-Sol-2B",
-      "name": "Decision-1.0-Sol-2B",
-      "provider": "vllm-sr",
-      "family": "decision1",
-      "revision": "5c698b1ad76abf7c35fc4957519c47668f54d23a",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 8
-    },
-    {
-      "id": "vllm-sr/Decision-1.0-Nox-4B",
-      "name": "Decision-1.0-Nox-4B",
-      "provider": "vllm-sr",
-      "family": "decision1",
-      "revision": "7f65e1db2c55a11ab8b558a8027c8883752f192d",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 16
+      "minMemoryGiB": 4,
+      "parameters": 571909635,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU."
     },
     {
       "id": "vllm-sr/Decision-1.0-Lux-9B",
       "name": "Decision-1.0-Lux-9B",
       "provider": "vllm-sr",
       "family": "decision1",
+      "familyLabel": "Decision 1.0",
       "revision": "2064c84daf599447f840719ef8e86db152a56851",
       "backbone": "qwen3_5_text",
-      "minMemoryGiB": 24
+      "minMemoryGiB": 24,
+      "parameters": 7940895744,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "The 9B Decision 1.0 decoder on the Qwen3.5 backbone, the family's largest, for a GPU."
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Nox-4B",
+      "name": "Decision-1.0-Nox-4B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "familyLabel": "Decision 1.0",
+      "revision": "7f65e1db2c55a11ab8b558a8027c8883752f192d",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 16,
+      "parameters": 4208383488,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "A 4B Decision 1.0 decoder on the Qwen3.5 backbone, for a GPU."
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Route-0.6B",
+      "name": "Decision-1.0-Route-0.6B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "familyLabel": "Decision 1.0",
+      "revision": "deed1f29dad146d2138588025afb83dbdaf3c133",
+      "backbone": "modernbert",
+      "minMemoryGiB": 4,
+      "parameters": 571909635,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the Vela encoder backbone. It runs well on a CPU."
+    },
+    {
+      "id": "vllm-sr/Decision-1.0-Sol-2B",
+      "name": "Decision-1.0-Sol-2B",
+      "provider": "vllm-sr",
+      "family": "decision1",
+      "familyLabel": "Decision 1.0",
+      "revision": "5c698b1ad76abf7c35fc4957519c47668f54d23a",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 8,
+      "parameters": 1883930944,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "A 2B Decision 1.0 decoder on the Qwen3.5 backbone."
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Eos-0.8B",
+      "name": "Decision-2.0-Eos-0.8B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "familyLabel": "Decision 2.0",
+      "revision": "3594047d69f476f1d01cf84c593e213fc3a4dfe0",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 4,
+      "parameters": 753446208,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "A 0.8B Decision 2.0 model for slightly harder questions than Kai-0.6B, at a similar cost."
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Kai-0.6B",
+      "name": "Decision-2.0-Kai-0.6B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "familyLabel": "Decision 2.0",
+      "revision": "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764",
+      "backbone": "qwen3",
+      "minMemoryGiB": 4,
+      "parameters": 597103104,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "The smallest Decision 2.0 model, for fast, simple routing questions: the size to try first in this family. Two questions take about 0.2 s on 16 CPU cores."
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Lux-9B",
+      "name": "Decision-2.0-Lux-9B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "familyLabel": "Decision 2.0",
+      "revision": "78bf3c03d9147aeb30b641edfe0e30ed04887ca5",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 24,
+      "parameters": 7940895744,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "A 9B Decision 2.0 model, the most accurate at moderate cost, on a GPU with 24 GB or more."
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Nox-4B",
+      "name": "Decision-2.0-Nox-4B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "familyLabel": "Decision 2.0",
+      "revision": "25e8f67d1b486c647222df3aac640d2d5d736bbe",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 16,
+      "parameters": 4208383488,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "A 4B Decision 2.0 model for nuanced questions and questions with many options, on a GPU."
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Sol-2B",
+      "name": "Decision-2.0-Sol-2B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "familyLabel": "Decision 2.0",
+      "revision": "64235bef55dad29387dd16da7c90e038bf2f0972",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 8,
+      "parameters": 1883930944,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "A 2B Decision 2.0 model for questions that need more judgment. Serve it on a GPU, or on a CPU for low traffic."
+    },
+    {
+      "id": "vllm-sr/Decision-2.0-Vega-27B",
+      "name": "Decision-2.0-Vega-27B",
+      "provider": "vllm-sr",
+      "family": "decision2",
+      "familyLabel": "Decision 2.0",
+      "revision": "7aec49ae11a18741706da549ab626b9052795fe7",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 72,
+      "parameters": 29365153792,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [],
+      "summary": "The 27B Decision 2.0 model, the most accurate of the family, on one GPU with 64 GB or more."
+    },
+    {
+      "id": "vllm-sr/Vela-2.0-0.3B",
+      "name": "Vela-2.0-0.3B",
+      "provider": "vllm-sr",
+      "family": "vela2",
+      "familyLabel": "Vela 2.0",
+      "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+      "backbone": "modernbert",
+      "minMemoryGiB": 4,
+      "parameters": 309114371,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score",
+        "set",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "The previous default decision model, a ModernBERT encoder for a CPU. It answers set and span questions as well, with calibrated thresholds for the built-in questions."
+    },
+    {
+      "id": "vllm-sr/Vela-2.0-0.8B",
+      "name": "Vela-2.0-0.8B",
+      "provider": "vllm-sr",
+      "family": "vela2",
+      "familyLabel": "Vela 2.0",
+      "revision": "a778eb2ae2304cfa72fca7e53a19136dea5be012",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 4,
+      "parameters": 755685699,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score",
+        "set",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router",
+        "broad"
+      ],
+      "summary": "The smallest Vela 2.0 decoder. On a GPU it is ahead of the Vela 1.0 specialists on most built-in signals; on a CPU a request takes seconds."
+    },
+    {
+      "id": "vllm-sr/Vela-2.0-4B",
+      "name": "Vela-2.0-4B",
+      "provider": "vllm-sr",
+      "family": "vela2",
+      "familyLabel": "Vela 2.0",
+      "revision": "c1e64d4f872cb38bc58502e6888340100bab9d55",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 16,
+      "parameters": 4213980675,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score",
+        "set",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router",
+        "broad"
+      ],
+      "summary": "A 4B Vela 2.0 decoder, ahead of the Vela 1.0 specialists on every built-in signal but fact check, on a GPU."
+    },
+    {
+      "id": "vllm-sr/Vela-2.0-9B",
+      "name": "Vela-2.0-9B",
+      "provider": "vllm-sr",
+      "family": "vela2",
+      "familyLabel": "Vela 2.0",
+      "revision": "bc8761637d8788619dfbaf6d8890128efe85fd40",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 24,
+      "parameters": 7949850627,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score",
+        "set",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router",
+        "broad"
+      ],
+      "summary": "The 9B Vela 2.0 decoder, ahead of the Vela 1.0 specialists on every built-in signal, on a GPU."
     },
     {
       "id": "vllm-sr/d3",
       "name": "d3",
       "provider": "vllm-sr",
       "family": "decision3",
+      "familyLabel": "Decision 3.0",
       "revision": "cbff3a3cb0b074b6585fe9f747b9f9f5557a0e75",
       "backbone": "qwen3_5_text",
-      "minMemoryGiB": 72
-    },
-    {
-      "id": "vllm-sr/d3-flash",
-      "name": "d3-flash",
-      "provider": "vllm-sr",
-      "family": "decision3",
-      "revision": "521525effa79469d899a570726547dd7f00da3af",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 32
-    },
-    {
-      "id": "vllm-sr/d3-mini",
-      "name": "d3-mini",
-      "provider": "vllm-sr",
-      "family": "decision3",
-      "revision": "a475367de0d8133a3c1a2a0dc12303d89cfa2ab4",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 16
-    },
-    {
-      "id": "vllm-sr/d3-nano",
-      "name": "d3-nano",
-      "provider": "vllm-sr",
-      "family": "decision3",
-      "revision": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 8
-    },
-    {
-      "id": "vllm-sr/d3-lite",
-      "name": "d3-lite",
-      "provider": "vllm-sr",
-      "family": "decision3",
-      "revision": "a8d25a91ef75552803f7009d25b7bd435991abd9",
-      "backbone": "qwen3_5_text",
-      "minMemoryGiB": 4
+      "minMemoryGiB": 72,
+      "parameters": 26086635760,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [],
+      "summary": "The 27B Decision 3.0 model, the family's largest, for your own questions about text, images and video. Its quantized packages hold it in a third to three fifths of the memory."
     },
     {
       "id": "vllm-sr/d3-edge",
       "name": "d3-edge",
       "provider": "vllm-sr",
       "family": "decision3",
+      "familyLabel": "Decision 3.0",
       "revision": "18d61df78684675463af9ae732872478845c5a79",
       "backbone": "qwen3_5_text",
-      "minMemoryGiB": 4
+      "minMemoryGiB": 4,
+      "parameters": 594582720,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [],
+      "summary": "The smallest Decision 3.0 model, a pruned d3-lite. It answers your own questions about text, images and video on a small GPU."
+    },
+    {
+      "id": "vllm-sr/d3-flash",
+      "name": "d3-flash",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "familyLabel": "Decision 3.0",
+      "revision": "521525effa79469d899a570726547dd7f00da3af",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 32,
+      "parameters": 8393739504,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [],
+      "summary": "A 9B Decision 3.0 model for your own questions about text, images and video, and the base of vela3-flash."
+    },
+    {
+      "id": "vllm-sr/d3-lite",
+      "name": "d3-lite",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "familyLabel": "Decision 3.0",
+      "revision": "a8d25a91ef75552803f7009d25b7bd435991abd9",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 4,
+      "parameters": 853247040,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [],
+      "summary": "A small Decision 3.0 model for questions about text, images and video, and the base that vela3-lite's adapters were trained on."
+    },
+    {
+      "id": "vllm-sr/d3-mini",
+      "name": "d3-mini",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "familyLabel": "Decision 3.0",
+      "revision": "a475367de0d8133a3c1a2a0dc12303d89cfa2ab4",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 16,
+      "parameters": 4539918336,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [],
+      "summary": "A 4B Decision 3.0 model for your own questions about text, images and video, and the base of vela3-mini."
+    },
+    {
+      "id": "vllm-sr/d3-nano",
+      "name": "d3-nano",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "familyLabel": "Decision 3.0",
+      "revision": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 8,
+      "parameters": 2213763904,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [],
+      "summary": "A 2B Decision 3.0 model for your own questions about text, images and video."
+    },
+    {
+      "id": "vllm-sr/d3-turbo",
+      "name": "d3-turbo",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "familyLabel": "Decision 3.0",
+      "revision": "689b3af198baaf6f11110be38a9daa7188dfd8ad",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 72,
+      "parameters": 26086635760,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [],
+      "summary": "A 27B Decision 3.0 model that reads a request's input once and answers every question from that reading, so asking many questions about one input costs little more than asking one. It also locates things in images and videos."
+    },
+    {
+      "id": "vllm-sr/d3-ultra",
+      "name": "d3-ultra",
+      "provider": "vllm-sr",
+      "family": "decision3",
+      "familyLabel": "Decision 3.0",
+      "revision": "52ba9e7a00402f9560c7fba8c039608e7ddee7fb",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 72,
+      "parameters": 26086635760,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [],
+      "summary": "A 27B Decision 3.0 model that reads a text request's list of questions in front of its state, so every question sees what else is asked. It is also offered as a hosted System One API."
+    },
+    {
+      "id": "vllm-sr/vela3-fast",
+      "name": "vela3-fast",
+      "provider": "vllm-sr",
+      "family": "vela3",
+      "familyLabel": "Vela 3.0",
+      "revision": "7cbefd4b92b57234bd0ffb9872451e81abcdac79",
+      "backbone": "ultrabert",
+      "minMemoryGiB": 12,
+      "parameters": 1518582809,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "The default decision model. A CPU-friendly encoder with trained adapters for every built-in routing question, calibrated thresholds, and spans for PII and hallucination checks."
+    },
+    {
+      "id": "vllm-sr/vela3-fast-vision",
+      "name": "vela3-fast-vision",
+      "provider": "vllm-sr",
+      "family": "vela3",
+      "familyLabel": "Vela 3.0",
+      "revision": "1e13154c1c2137654c79c4a08b912f0085bf9fe8",
+      "backbone": "ultravbert",
+      "minMemoryGiB": 6,
+      "parameters": 874361092,
+      "questionTypes": [],
+      "modalities": [],
+      "spanHeads": [],
+      "summary": ""
+    },
+    {
+      "id": "vllm-sr/vela3-flash",
+      "name": "vela3-flash",
+      "provider": "vllm-sr",
+      "family": "vela3_d3",
+      "familyLabel": "Vela 3.0",
+      "revision": "af48828de3f9769795d8fc5c42d6cc337a1816b0",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 32,
+      "parameters": 8828306163,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score",
+        "span"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the built-in questions and spans."
+    },
+    {
+      "id": "vllm-sr/vela3-lite",
+      "name": "vela3-lite",
+      "provider": "vllm-sr",
+      "family": "vela3_d3",
+      "familyLabel": "Vela 3.0",
+      "revision": "c789afd6fbeaceb3c734b95b9ca3ad9772a7f434",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 4,
+      "parameters": 902579779,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score",
+        "span"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "Vela 3.0 on d3-lite: trained adapters for the built-in questions, spans, and image input, with lower latency on a small GPU."
+    },
+    {
+      "id": "vllm-sr/vela3-mini",
+      "name": "vela3-mini",
+      "provider": "vllm-sr",
+      "family": "vela3_d3",
+      "familyLabel": "Vela 3.0",
+      "revision": "bbc0206efbbbee5d41955b429e98238b5ad32252",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 16,
+      "parameters": 4792108035,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score",
+        "span"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions still on trained adapters and spans."
+    },
+    {
+      "id": "vllm-sr/vela3-turbo",
+      "name": "vela3-turbo",
+      "provider": "vllm-sr",
+      "family": "vela3_d3",
+      "familyLabel": "Vela 3.0",
+      "revision": "ce95e6d9e10def159fbdb39c95bfc4ff6a30b955",
+      "backbone": "qwen3_5_text",
+      "minMemoryGiB": 72,
+      "parameters": 27626482419,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "score",
+        "span"
+      ],
+      "modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "Vela 3.0 on d3-turbo, the largest Vela: it answers each request on d3-turbo's state-once path, then asks the router questions again with their adapters on."
+    },
+    {
+      "id": "vllm-sr/vela3.1-fast",
+      "name": "vela3.1-fast",
+      "provider": "vllm-sr",
+      "family": "vela3",
+      "familyLabel": "Vela 3.1",
+      "revision": "0ed6ed301fbbf0c312f11a13ad17e3a6f8887262",
+      "backbone": "ultrabert",
+      "minMemoryGiB": 15,
+      "parameters": 1927527449,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "The Vela 3.1 release of vela3-fast: the same router questions and spans with new weights, and described yes/no questions such as \"can wait\" or \"needs immediate action\". Opt-in; it has no calibrated thresholds yet."
+    },
+    {
+      "id": "vllm-sr/vela3.1-pico-150m",
+      "name": "vela3.1-pico-150m",
+      "provider": "vllm-sr",
+      "family": "vela3_pico",
+      "familyLabel": "Vela 3.1",
+      "revision": "dad77ad7a83c884b3e608a58c13cf25beba00803",
+      "backbone": "ultrabert",
+      "minMemoryGiB": 2,
+      "parameters": 153207299,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "The smallest Vela 3.1 model, a 150M encoder for small CPU hosts, with the same questions and spans as vela3.1-pico-380m. Opt-in; it has no calibrated thresholds yet."
+    },
+    {
+      "id": "vllm-sr/vela3.1-pico-380m",
+      "name": "vela3.1-pico-380m",
+      "provider": "vllm-sr",
+      "family": "vela3_pico",
+      "familyLabel": "Vela 3.1",
+      "revision": "a79cbf66ee09245ef8f40f66afa9bcbd57ccf5a5",
+      "backbone": "ultrabert",
+      "minMemoryGiB": 3,
+      "parameters": 380961027,
+      "questionTypes": [
+        "choice",
+        "noul",
+        "span"
+      ],
+      "modalities": [
+        "text"
+      ],
+      "spanHeads": [
+        "router"
+      ],
+      "summary": "A small Vela 3.1 model: one 380M encoder answers the built-in routing questions and the PII and hallucination spans, a whole call in one pass when it fits 8,192 tokens. Opt-in; it has no calibrated thresholds yet."
     }
   ]
 }

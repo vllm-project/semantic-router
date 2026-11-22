@@ -3,7 +3,7 @@
 The Decision 3.0 vision fixture served on a GPU: merged text and image rows run packed (variable-length
 attention, the chunked gated-delta kernel over ``cu_seqlens``, one packed tower call) and answer as each
 question alone; the batch limits the engine arguments leave unset come from the device class and the startup
-calibration.
+calibration, which a state-once package's branched forwards pass too.
 """
 
 from __future__ import annotations
@@ -12,7 +12,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from vllm_srun.accel.gpu import _wrap_varlen  # noqa: E402
+from vllm_srun.accel.kernels import varlen_attention_ref  # noqa: E402
 from vllm_srun.config import ModelConfig, ServeConfig  # noqa: E402
+from vllm_srun.engines.native.models.packed import Packed  # noqa: E402
 from vllm_srun.runtime import Runtime  # noqa: E402
 from vllm_srun.scheduler import calibration  # noqa: E402
 from vllm_srun.testing.decision3 import write_fixture  # noqa: E402
@@ -22,18 +25,85 @@ from .test_decision3_family import QUESTIONS  # noqa: E402
 pytestmark = pytest.mark.gpu
 
 
-@pytest.fixture(scope="module")
-def served(tmp_path_factory):
+@pytest.mark.parametrize("groups", [1, 2])
+def test_installed_varlen_api_matches_per_row_attention(groups):
+    """Exercise the installed torch interface and its real GPU GQA kernel."""
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA or ROCm GPU")
+    varlen_attn = pytest.importorskip("torch.nn.attention.varlen").varlen_attn
+
+    torch.manual_seed(4)
+    packed = Packed([3, 7, 1], torch.device("cuda"))
+    q = torch.randn(11, 4, 64, device="cuda", dtype=torch.bfloat16)
+    k, v = (
+        torch.randn(11, 4 // groups, 64, device="cuda", dtype=torch.bfloat16)
+        for _ in range(2)
+    )
+    out = _wrap_varlen(varlen_attn)(q, k, v, packed, scale=64**-0.5, groups=groups)
+    want = varlen_attention_ref(q, k, v, packed, scale=64**-0.5, groups=groups)
+    torch.testing.assert_close(out, want, rtol=0.02, atol=0.02)
+
+
+def _device_kernels():
+    from vllm_srun.accel.cuda import CUDAAccelerator
+    from vllm_srun.accel.rocm import ROCmAccelerator
+
+    accelerator = ROCmAccelerator() if torch.version.hip else CUDAAccelerator()
+    return accelerator.kernels(accelerator.devices()[0])
+
+
+@pytest.mark.parametrize("scale", [64**-0.5, 0.1])
+@pytest.mark.parametrize("groups", [1, 2])
+@pytest.mark.parametrize("dtype", [torch.bfloat16, torch.float16])
+def test_the_device_varlen_kernel_keeps_each_row_to_itself(groups, scale, dtype):
+    """The kernel the device registers, whichever PyTorch API provides it."""
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA or ROCm GPU")
+    kernels = _device_kernels()
+    if kernels.preferred_source("varlen_attention") == "torch-reference":
+        pytest.skip("no variable-length attention kernel on this device")
+    attend = kernels.preferred("varlen_attention")
+    torch.manual_seed(5)
+    packed = Packed([3, 7, 1], torch.device("cuda"))
+    q = torch.randn(11, 4, 64, device="cuda", dtype=dtype)
+    k, v = (
+        torch.randn(11, 4 // groups, 64, device="cuda", dtype=dtype) for _ in range(2)
+    )
+    out = attend(q, k, v, packed, scale=scale, groups=groups)
+    want = varlen_attention_ref(q, k, v, packed, scale=scale, groups=groups)
+    torch.testing.assert_close(out, want, rtol=0.02, atol=0.02)
+    # Changing the middle row leaves its neighbours bit for bit.
+    q[3:10], k[3:10], v[3:10] = q[3:10] + 1, k[3:10] - 1, v[3:10] * 2
+    moved = attend(q, k, v, packed, scale=scale, groups=groups)
+    assert torch.equal(moved[:3], out[:3]) and torch.equal(moved[10:], out[10:])
+    assert not torch.equal(moved[3:10], out[3:10])
+
+
+def _serve(path, variant, seed):
+    """The fixture ``variant`` served on the GPU with default engine arguments."""
     if not torch.cuda.is_available():
         pytest.skip("needs a CUDA or ROCm GPU")
     device = "rocm:0" if torch.version.hip else "cuda:0"
-    package = write_fixture(
-        tmp_path_factory.mktemp("d3-gpu") / "d3-vision", "vision", seed=11
-    )
+    package = write_fixture(path, variant, seed=seed)
     runtime = Runtime(
         ServeConfig(models=(ModelConfig(model=str(package), device=device),))
     )
     runtime.start(background=False)
+    return runtime
+
+
+@pytest.fixture(scope="module")
+def served(tmp_path_factory):
+    runtime = _serve(tmp_path_factory.mktemp("d3-gpu") / "d3-vision", "vision", 11)
+    yield runtime.served[0]
+    runtime.stop()
+
+
+@pytest.fixture(scope="module")
+def state_once_served(tmp_path_factory):
+    runtime = _serve(
+        tmp_path_factory.mktemp("d3-gpu") / "prefix_bidir", "prefix_bidir", 31
+    )
     yield runtime.served[0]
     runtime.stop()
 
@@ -51,7 +121,10 @@ def test_merged_rows_pack_where_the_kernels_allow(served):
     if not engine.supports_packed:
         pytest.skip(engine.receipt()["packed"]["skipped"])
     assert served.model.packs_merged_rows
-    assert engine.receipt()["packed"] == {"attention": "torch-varlen-attention"}
+    assert engine.receipt()["packed"]["attention"] in (
+        "torch-varlen-attention",
+        "aten-flash-attention",
+    )
 
 
 def test_packed_rows_answer_as_each_question_alone(served, png_url):
@@ -78,7 +151,9 @@ def test_packed_rows_answer_as_each_question_alone(served, png_url):
         assert _gap(merged, alone) < 0.02
 
 
-def test_the_token_budget_is_calibrated_at_startup(served):
+@pytest.mark.parametrize("which", ["served", "state_once_served"])
+def test_the_token_budget_is_calibrated_at_startup(which, request):
+    served = request.getfixturevalue(which)
     entry = calibration.device_class(served.placement.device)
     assert entry is not None
     assert served.args.max_num_seqs == entry.max_num_seqs

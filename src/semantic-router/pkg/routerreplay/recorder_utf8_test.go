@@ -17,6 +17,7 @@ func TestRecorderUTF8Boundaries(t *testing.T) {
 func exerciseRecorderUTF8Boundaries(t *testing.T, recorder *Recorder) {
 	t.Helper()
 	recorder.SetCapturePolicy(true, true, 4096)
+	recorder.SetMaxPromptBytes(4096)
 	recorder.SetMaxToolTraceBytes(4096)
 	for _, test := range []struct {
 		name, prefix, suffix string
@@ -111,7 +112,8 @@ func TestReplayTextNormalizationAndExactBoundaries(t *testing.T) {
 		t.Fatal("an existing body truncation flag was lost")
 	}
 	record := RoutingRecord{Prompt: "a\xffb", ToolDefinitions: "a\xffb", PromptTruncated: true, ToolDefinitionsTruncated: true}
-	applyMaxToolTraceBytes(&record, 0)
+	capRecordPrompt(&record, 0)
+	applyMaxToolTraceBytes(&record, recorderPolicy{})
 	if record.Prompt != "a\uFFFDb" || record.ToolDefinitions != "a\uFFFDb" {
 		t.Fatal("unbounded structured text must still be valid UTF-8")
 	}

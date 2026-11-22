@@ -12,7 +12,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -63,7 +63,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -114,7 +114,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -165,7 +165,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -216,7 +216,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -267,7 +267,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -318,7 +318,54 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ec_transfer_params",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -381,7 +428,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -432,7 +479,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_2",
+          "id": "msg_5aaab330b3dd4348ee387081",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -479,11 +526,58 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
           "stop_reason": "max_tokens",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "input_messages",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
           "stop_sequence": null,
           "type": "message",
           "usage": {
@@ -526,7 +620,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -566,6 +660,53 @@
       }
     },
     {
+      "name": "kv_transfer_params",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "max_output_tokens",
       "outcome": {
         "status": "ok",
@@ -577,7 +718,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -628,7 +769,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -679,7 +820,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -730,7 +871,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -777,7 +918,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -828,7 +969,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -875,7 +1016,54 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "output.status",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "output_messages",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -922,7 +1110,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -973,7 +1161,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1024,7 +1212,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1075,7 +1263,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1126,7 +1314,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1177,7 +1365,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1228,7 +1416,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1279,7 +1467,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1330,7 +1518,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1381,7 +1569,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1432,7 +1620,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1483,7 +1671,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1530,7 +1718,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1581,7 +1769,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1632,7 +1820,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1683,7 +1871,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1734,7 +1922,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1785,7 +1973,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1836,7 +2024,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1887,7 +2075,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1938,7 +2126,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1989,7 +2177,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -2018,6 +2206,26 @@
         },
         "diagnostics": [
           {
+            "field": "usage.input_tokens_details.cached_tokens_per_turn",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.input_tokens_details.input_tokens_per_turn",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.output_tokens_details.output_tokens_per_turn",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.output_tokens_details.tool_output_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.output_tokens_details.tool_output_tokens_per_turn",
+            "action": "dropped"
+          },
+          {
             "field": "output.status",
             "action": "dropped"
           },
@@ -2040,7 +2248,7 @@
               "type": "text"
             }
           ],
-          "id": "resp_1",
+          "id": "msg_7a8babb8a11671dfe03c4a5e",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,

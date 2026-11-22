@@ -3,6 +3,7 @@ package historylock
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -13,8 +14,10 @@ func TestASecondWriterWaitsForTheFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info, err := os.Stat(dir); err != nil || info.Mode().Perm() != 0o700 {
-		t.Fatalf("history directory = %v, %v; want it private to its owner", info, err)
+	if runtime.GOOS != "windows" {
+		if info, err := os.Stat(dir); err != nil || info.Mode().Perm() != 0o700 {
+			t.Fatalf("history directory = %v, %v; want it private to its owner", info, err)
+		}
 	}
 	acquired := make(chan func(), 1)
 	go func() {

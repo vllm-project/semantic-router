@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -172,18 +173,18 @@ func TestSetupPatchWithoutGlobalPreservesExistingOverride(t *testing.T) {
 
 func TestConfigTransportPreservesGlobalEnvironmentReferences(t *testing.T) {
 	t.Setenv("TRANSPORT_MODEL_PATH", "resolved-path-must-not-be-persisted")
-	input := []byte("global:\n  model_catalog:\n    embeddings:\n      semantic:\n        qwen3_model_path: ${TRANSPORT_MODEL_PATH}\n")
+	input := []byte("global:\n  stores:\n    memory:\n      milvus:\n        address: ${TRANSPORT_MODEL_PATH}\n")
 	config, err := decodeYAMLTaggedBytes[canonicalConfigTransport](input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.Global.ModelCatalog.Embeddings.Semantic.Qwen3ModelPath != "${TRANSPORT_MODEL_PATH}" {
+	if config.Global.Stores.Memory.Milvus.Address != "${TRANSPORT_MODEL_PATH}" {
 		t.Fatal("transport expanded an environment reference into persisted configuration")
 	}
 }
 
 func TestConfigTransportResolvesGlobalAliasesFromOtherSections(t *testing.T) {
-	input := []byte("version: v0.3\nlisteners: &empty []\nglobal:\n  model_catalog:\n    kbs: *empty\n")
+	input := []byte("version: v0.5\nlisteners: &empty []\nglobal:\n  router:\n    headers:\n      session_id_headers: *empty\n")
 	config, err := decodeYAMLTaggedBytes[canonicalConfigTransport](input)
 	if err != nil {
 		t.Fatal(err)
@@ -193,4 +194,210 @@ func TestConfigTransportResolvesGlobalAliasesFromOtherSections(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertTransportGlobalParity(t, input, roundTrip)
+}
+
+// A delegated deployment is valid only when a recipe asks it, which the
+// global block alone cannot show (installation/security-hardening.md).
+const delegatedDecisionConfig = `version: v0.5
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8801
+providers:
+  defaults:
+    model: test-model
+  models:
+    - name: test-model
+      provider_model_id: test-model
+      backend_refs:
+        - name: primary
+          provider: vllm
+          endpoint: host.docker.internal:8000
+          protocol: http
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_team
+          description: Which team should handle the request.
+          deployment: team-decisions
+          question:
+            type: choice
+            instructions: Which team should handle this request?
+            choices:
+              - key: billing
+                description: Payments and refunds
+              - key: engineering
+                description: Outages and bugs
+    decisions:
+      - name: billing-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: support_team
+              label: billing
+        modelRefs:
+          - model: test-model
+global:
+  services:
+    authz:
+      delegated_credential:
+        enabled: true
+  model_catalog:
+    deployments:
+      team-decisions:
+        provider: systemone
+        endpoint: https://decisions.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          credential: delegated
+`
+
+func requireDelegatedDeployment(t *testing.T, surface string, document []byte) {
+	t.Helper()
+	cfg, err := routerconfig.ParseYAMLBytes(document)
+	if err != nil {
+		t.Fatalf("%s: Router refuses the config: %v", surface, err)
+	}
+	if auth := cfg.ModelDeployments["team-decisions"].Auth; auth == nil || auth.Credential != routerconfig.CredentialDelegated {
+		t.Fatalf("%s: team-decisions auth = %+v, want credential %q", surface, auth, routerconfig.CredentialDelegated)
+	}
+}
+
+func TestConfigEditorKeepsADelegatedDecisionDeployment(t *testing.T) {
+	isolateConfigMutationRuntime(t)
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(delegatedDecisionConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	read := httptest.NewRecorder()
+	ConfigHandler(configPath, false)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil))
+	if read.Code != http.StatusOK {
+		t.Fatalf("GET /api/router/config/all = %d: %s", read.Code, read.Body.String())
+	}
+	requireDelegatedDeployment(t, "config/all", read.Body.Bytes())
+	requireTransportHTTPResult(t, UpdateConfigHandler(configPath, false, ""), "/api/router/config/update", read.Body.Bytes())
+	saved, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireDelegatedDeployment(t, "saved config", saved)
+}
+
+func TestSetupKeepsADelegatedDecisionDeployment(t *testing.T) {
+	isolateConfigMutationRuntime(t)
+	allowLoopbackForTest(t)
+	dir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, dir)
+	resolver := setupmode.New(configPath, false)
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(delegatedDecisionConfig))
+	}))
+	defer remote.Close()
+
+	imported := requireTransportHTTPResult(t, SetupImportRemoteHandler(configPath, resolver), "/api/setup/import-remote",
+		mustJSONRaw(t, SetupImportRemoteRequest{URL: remote.URL}))
+	var importResult SetupImportRemoteResponse
+	if err := json.Unmarshal(imported.Body.Bytes(), &importResult); err != nil {
+		t.Fatal(err)
+	}
+	requireDelegatedDeployment(t, "import-remote", importResult.Config)
+	validated := requireTransportHTTPResult(t, SetupValidateHandler(configPath, resolver), "/api/setup/validate",
+		mustJSONRaw(t, SetupConfigRequest{Config: importResult.Config}))
+	var validateResult SetupValidateResponse
+	if err := json.Unmarshal(validated.Body.Bytes(), &validateResult); err != nil {
+		t.Fatal(err)
+	}
+	requireDelegatedDeployment(t, "validate", validateResult.Config)
+	requireTransportHTTPResult(t, SetupActivateHandler(configPath, false, dir, resolver), "/api/setup/activate",
+		mustJSONRaw(t, SetupConfigRequest{Config: validateResult.Config}))
+	activated, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireDelegatedDeployment(t, "activated config", activated)
+}
+
+// The shipped reference config asks a delegated decision deployment.
+func TestConfigEditorReadsTheShippedConfig(t *testing.T) {
+	configPath, err := filepath.Abs(filepath.Join("..", "..", "..", "config", "config.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := httptest.NewRecorder()
+	ConfigHandler(configPath, false)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil))
+	if read.Code != http.StatusOK {
+		t.Fatalf("GET /api/router/config/all = %d: %s", read.Code, read.Body.String())
+	}
+	var document struct {
+		Global struct {
+			ModelCatalog struct {
+				Deployments map[string]routerconfig.ModelDeployment `json:"deployments"`
+			} `json:"model_catalog"`
+		} `json:"global"`
+	}
+	if err := json.Unmarshal(read.Body.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if auth := document.Global.ModelCatalog.Deployments["decision-delegated"].Auth; auth == nil || auth.Credential != routerconfig.CredentialDelegated {
+		t.Fatalf("decision-delegated auth = %+v, want credential %q", auth, routerconfig.CredentialDelegated)
+	}
+}
+
+// Evaluation records hold the measurements a recipe's model selection reads.
+func TestSetupKeepsTheEvaluationSection(t *testing.T) {
+	isolateConfigMutationRuntime(t)
+	allowLoopbackForTest(t)
+	dir := t.TempDir()
+	configPath := createBootstrapSetupConfig(t, dir)
+	resolver := setupmode.New(configPath, false)
+	patch := createValidSetupPatch()
+	patch["evaluation"] = map[string]any{"records": []map[string]any{{
+		"model":     "test-model",
+		"benchmark": "vllm-sr/operator-rating@1.0.0",
+		"metrics":   map[string]any{"score": 0.9},
+	}}}
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(mustJSONRaw(t, patch))
+	}))
+	defer remote.Close()
+	requireEvaluation := func(surface string, document []byte) {
+		t.Helper()
+		cfg, err := routerconfig.ParseYAMLBytes(document)
+		if err != nil {
+			t.Fatalf("%s: Router refuses the config: %v", surface, err)
+		}
+		if cfg.Evaluation == nil || len(cfg.Evaluation.Records) != 1 {
+			t.Fatalf("%s: evaluation = %+v, want the test-model record", surface, cfg.Evaluation)
+		}
+		if record := cfg.Evaluation.Records[0]; record.Model != "test-model" || record.Benchmark != "vllm-sr/operator-rating@1.0.0" || record.Metrics["score"] != 0.9 {
+			t.Fatalf("%s: evaluation record = %+v", surface, record)
+		}
+	}
+	requireEvaluation("remote config", mustJSONRaw(t, patch))
+
+	imported := requireTransportHTTPResult(t, SetupImportRemoteHandler(configPath, resolver), "/api/setup/import-remote",
+		mustJSONRaw(t, SetupImportRemoteRequest{URL: remote.URL}))
+	var importResult SetupImportRemoteResponse
+	if err := json.Unmarshal(imported.Body.Bytes(), &importResult); err != nil {
+		t.Fatal(err)
+	}
+	requireEvaluation("import-remote", importResult.Config)
+	validated := requireTransportHTTPResult(t, SetupValidateHandler(configPath, resolver), "/api/setup/validate",
+		mustJSONRaw(t, SetupConfigRequest{Config: importResult.Config}))
+	var validateResult SetupValidateResponse
+	if err := json.Unmarshal(validated.Body.Bytes(), &validateResult); err != nil {
+		t.Fatal(err)
+	}
+	requireEvaluation("validate", validateResult.Config)
+	requireTransportHTTPResult(t, SetupActivateHandler(configPath, false, dir, resolver), "/api/setup/activate",
+		mustJSONRaw(t, SetupConfigRequest{Config: importResult.Config}))
+	activated, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireEvaluation("activated config", activated)
 }

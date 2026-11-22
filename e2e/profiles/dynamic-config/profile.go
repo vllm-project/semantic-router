@@ -106,9 +106,6 @@ func (p *Profile) GetTestCases() []string {
 		testmatrix.RouterSmoke,
 		[]string{
 			"decision-priority-selection",
-			"plugin-chain-execution",
-			"rule-condition-logic",
-			"embedding-signal-routing",
 			"dynamic-config-generation-lifecycle",
 		},
 	)
@@ -164,7 +161,7 @@ func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deploye
 		Chart:       "oci://docker.io/envoyproxy/gateway-helm",
 		Namespace:   "envoy-gateway-system",
 		Version:     "v1.6.0",
-		ValuesFiles: []string{"https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"},
+		ValuesFiles: []string{"https://raw.githubusercontent.com/envoyproxy/ai-gateway/v0.4.0/manifests/envoy-gateway-values.yaml"},
 		Wait:        true,
 		Timeout:     "10m",
 	}

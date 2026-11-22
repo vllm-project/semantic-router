@@ -1,19 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SystemStatus } from '../utils/routerRuntime'
 import type { RouterConfig } from './dashboardPageTypes'
 import type { CanonicalGlobalConfig } from './configPageSupport'
 import { responseErrorMessage } from './configPageRequestErrors'
+import { withCanonicalLayout, withRoutingView } from './configPageCanonicalLayout'
 import {
   readDecisionModelApplyResult,
   type DecisionModelActivation,
   type DecisionModelApplyResult,
   type ModelRuntimeInventory,
 } from './decisionModelManagement'
-import {
-  configuredDecisionModel,
-  withDecisionModel,
-  type DecisionModelName,
-} from './decisionModelSupport'
+import { configuredDecisionModel } from './decisionModelSupport'
 import { useDashboardObservation } from '../utils/useDashboardObservation'
 import { invalidateDashboardObservations } from '../utils/dashboardObservationCache'
 import { withRequestTimeout } from '../utils/boundedRequest'
@@ -44,17 +41,19 @@ export function useDecisionModelManagement() {
   const activationObservation = useDashboardObservation<DecisionModelActivation>(
     '/api/router/api/v1/config/hash',
   )
-  const config = configObservation.data
+  const config = useMemo(
+    () =>
+      configObservation.data ? withRoutingView(configObservation.data) : configObservation.data,
+    [configObservation.data],
+  )
   // Authored config and effective defaults are different contracts. Cache both,
   // but never make runtime observations wait for either configuration view.
   const global = globalObservation.data
   const status = statusObservation.data
   const inventory = inventoryObservation.data
   const activation = activationObservation.data
-  const [choice, setChoice] = useState<DecisionModelName | null>(null)
   const [deploying, setDeploying] = useState(false)
   const [applyResult, setApplyResult] = useState<DecisionModelApplyResult | null>(null)
-  const [applyError, setApplyError] = useState<string | null>(null)
   const mutationInProgress = useRef(false)
   const { refresh: refreshConfig } = configObservation
   const { refresh: refreshGlobal } = globalObservation
@@ -93,51 +92,22 @@ export function useDecisionModelManagement() {
   )
   const latest = Math.max(...observations.map(([, value]) => value.updatedAt ?? 0))
   const updatedAt = latest ? new Date(latest) : null
-  const loading = globalObservation.loading
   const refreshing = observations.some(([, value]) => value.refreshing)
   const savedModel = global ? configuredDecisionModel({ global }) : null
-  const selectedModel = choice ?? savedModel
-  const deploy = async () => {
-    if (!selectedModel || !global || mutationInProgress.current) return
-    mutationInProgress.current = true
-    setDeploying(true)
-    setApplyResult(null)
-    setApplyError(null)
-    try {
-      const current = await withRequestTimeout((signal) =>
-        fetchSnapshot<RouterConfig>('/api/router/config/all', signal),
-      )
-      const next = withDecisionModel(current, selectedModel)
-      const response = await fetch('/api/router/config/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(next),
-      })
-      setApplyResult(await readDecisionModelApplyResult(response))
-      window.dispatchEvent(new Event('config-deployed'))
-      return next
-    } catch (cause) {
-      setApplyError(cause instanceof Error ? cause.message : 'The deployment request failed.')
-      throw cause
-    } finally {
-      mutationInProgress.current = false
-      setDeploying(false)
-      void refreshSnapshot()
-    }
-  }
 
+  // Every write reads a fresh canonical snapshot, so concurrent edits elsewhere survive.
   const updateConfig = async (mutate: (current: RouterConfig) => RouterConfig) => {
     if (mutationInProgress.current) throw new Error('Another configuration request is in progress.')
     mutationInProgress.current = true
     setDeploying(true)
     try {
       const current = await withRequestTimeout((signal) =>
-        fetchSnapshot<RouterConfig>('/api/router/config/all', signal),
+        fetchSnapshot<RouterConfig>(configPath, signal),
       )
       const response = await fetch('/api/router/config/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mutate(current)),
+        body: JSON.stringify(withCanonicalLayout(mutate(withRoutingView(current)))),
       })
       const result = await readDecisionModelApplyResult(response)
       setApplyResult(result)
@@ -157,18 +127,16 @@ export function useDecisionModelManagement() {
     inventory,
     activation,
     savedModel,
-    selectedModel,
-    selectModel: setChoice,
     errors,
     observationState,
-    loading,
     refreshing,
     deploying,
     applyResult,
-    applyError,
+    clearApplyResult: () => setApplyResult(null),
     updatedAt,
-    deploy,
     updateConfig,
     refresh: refreshSnapshot,
   }
 }
+
+export type DecisionModelManagement = ReturnType<typeof useDecisionModelManagement>

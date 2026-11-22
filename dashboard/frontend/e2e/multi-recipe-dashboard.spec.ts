@@ -1,85 +1,116 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
 
+const recipeScope = (page: Page) => page.getByRole('combobox', { name: 'Recipe', exact: true })
+
+/** Picks a recipe from the design-system Select, whose options read "<name> <counts>". */
+async function chooseRecipe(page: Page, recipe: string) {
+  await recipeScope(page).click()
+  await page.getByRole('option', { name: new RegExp(`^${recipe}\\b`) }).click()
+}
+
 const config = {
-  version: 'v0.3',
+  version: 'v0.5',
   providers: {
-    defaults: { default_model: 'model-a' },
+    defaults: { model: 'model-a' },
     models: [{ name: 'model-a' }],
-  },
-  routing: {
-    modelCards: [{ name: 'model-a' }],
-    decisions: [],
   },
   entrypoints: [
     { model_names: ['vllm-sr/balanced'], recipe: 'balanced' },
     { model_names: ['vllm-sr/private'], recipe: 'privacy' },
   ],
   recipes: [
+    { name: 'default', decisions: [] },
     {
       name: 'balanced',
       description: 'Balanced objective',
-      routing: {
-        signals: {
-          keywords: [
-            {
-              name: 'balanced-keyword',
-              operator: 'OR',
-              keywords: ['balanced'],
-              case_sensitive: false,
-            },
-          ],
-        },
-        projections: {
-          scores: [{ name: 'balanced-score', method: 'weighted_sum', inputs: [] }],
-          mappings: [
-            {
-              name: 'balanced-map',
-              source: 'balanced-score',
-              method: 'threshold_bands',
-              outputs: [{ name: 'balanced-standard' }],
-            },
-          ],
-        },
-        decisions: [
+      signals: {
+        keywords: [
           {
-            name: 'balanced-route',
-            description: 'Balanced route',
-            priority: 100,
-            rules: {
-              operator: 'AND',
-              conditions: [{ type: 'keyword', name: 'balanced-keyword' }],
-            },
-            modelRefs: [{ model: 'model-a', use_reasoning: false }],
+            name: 'balanced-keyword',
+            operator: 'OR',
+            keywords: ['balanced'],
+            case_sensitive: false,
           },
         ],
       },
+      projections: {
+        scores: [{ name: 'balanced-score', method: 'weighted_sum', inputs: [] }],
+        mappings: [
+          {
+            name: 'balanced-map',
+            source: 'balanced-score',
+            method: 'threshold_bands',
+            outputs: [{ name: 'balanced-standard' }],
+          },
+        ],
+      },
+      decisions: [
+        {
+          name: 'balanced-route',
+          description: 'Balanced route',
+          priority: 100,
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'keyword', name: 'balanced-keyword' }],
+          },
+          modelRefs: [{ model: 'model-a', use_reasoning: false }],
+        },
+      ],
     },
     {
       name: 'privacy',
       description: 'Private objective',
-      routing: {
-        projections: {
-          scores: [{ name: 'private-score', method: 'weighted_sum', inputs: [] }],
-          mappings: [],
-        },
-        signals: {
-          pii: [{ name: 'private-pii', threshold: 0.8 }],
-        },
-        decisions: [
-          {
-            name: 'private-route',
-            description: 'Private route',
-            priority: 100,
-            rules: {
-              operator: 'AND',
-              conditions: [{ type: 'pii', name: 'private-pii' }],
-            },
-            modelRefs: [{ model: 'model-a', use_reasoning: false }],
-          },
-        ],
+      projections: {
+        scores: [{ name: 'private-score', method: 'weighted_sum', inputs: [] }],
+        mappings: [],
       },
+      signals: {
+        pii: [{ name: 'private-pii', predicate: { gte: 0.8 } }],
+      },
+      decisions: [
+        {
+          name: 'private-route',
+          description: 'Private route',
+          priority: 100,
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'pii', name: 'private-pii' }],
+          },
+          modelRefs: [{ model: 'model-a', use_reasoning: false }],
+        },
+      ],
+    },
+  ],
+}
+
+const builtInRecipes = {
+  catalog_version: 'latest',
+  bundles: [
+    {
+      name: 'mom-v1',
+      sha256: 'sha256:aaaa',
+      recipes: [
+        {
+          name: 'vault',
+          description: 'Keep private traffic inside the deployment boundary.',
+          decisions: [
+            {
+              name: 'guard',
+              description: 'Contain prompt attacks.',
+              algorithm: null,
+              minimum_candidates: 0,
+            },
+            {
+              name: 'private',
+              description: 'Serve private requests.',
+              algorithm: 'multi_factor',
+              minimum_candidates: 1,
+            },
+          ],
+        },
+      ],
     },
   ],
 }
@@ -89,6 +120,13 @@ let savedConfig: typeof config | undefined
 test.beforeEach(async ({ page }) => {
   savedConfig = undefined
   await mockAuthenticatedAppShell(page)
+  await page.route('**/api/recipes/builtin', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(builtInRecipes),
+    })
+  })
   await page.route('**/api/router/config/all', async (route) => {
     await route.fulfill({
       status: 200,
@@ -129,20 +167,24 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('creates a Mixture-of-Models without clipped aliases or assignments', async ({ page }) => {
+test('creates a public model without clipped aliases or assignments', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/config/entrypoints-recipes')
+  await page.goto('/routing/recipes')
 
-  await expect(page.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true')
-  await page.getByRole('button', { name: 'Create model' }).click()
+  await expect(page.getByRole('tab', { name: /Public models/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await page.getByRole('button', { name: 'New public model', exact: true }).click()
 
-  const dialog = page.getByRole('dialog', { name: 'Create model' })
+  const dialog = page.getByRole('dialog', { name: 'New public model' })
   await expect(dialog).toBeVisible()
   await dialog.getByLabel('Model name').fill('vllm-sr/new-mixture')
 
-  const aliasInput = dialog.getByPlaceholder('Add an alias')
+  const aliasInput = dialog.getByLabel('Aliases')
+  await expect(aliasInput).toHaveAttribute('placeholder', 'Add an alias')
   await aliasInput.fill('new-mixture')
-  await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+  await aliasInput.press('Enter')
   await expect(dialog.getByText('new-mixture', { exact: true })).toBeVisible()
 
   const assignment = dialog.getByText('balanced-route', { exact: true }).first()
@@ -161,7 +203,7 @@ test('creates a Mixture-of-Models without clipped aliases or assignments', async
   await expect(assignmentPanel).toContainText('1 selected')
 
   await expect(assignmentPanel.getByRole('checkbox')).toBeChecked()
-  await dialog.getByRole('button', { name: 'Create model' }).click()
+  await dialog.getByRole('button', { name: 'Create public model' }).click()
   await expect(dialog).toBeHidden()
 
   await expect.poll(() => savedConfig).toBeDefined()
@@ -173,46 +215,100 @@ test('creates a Mixture-of-Models without clipped aliases or assignments', async
     model_names: ['vllm-sr/auto'],
     recipe: 'default',
   })
-  expect(savedConfig?.recipes[0].routing.decisions[0].modelRefs).toEqual([
-    { model: 'model-a', use_reasoning: false },
-  ])
+  const balanced = savedConfig?.recipes.find((recipe) => recipe.name === 'balanced')
+  expect(balanced?.decisions[0].modelRefs).toEqual([{ model: 'model-a', use_reasoning: false }])
+})
+
+test('publishes a built-in recipe from the config the packaged CLI composes', async ({ page }) => {
+  let composeRequest: unknown
+  const vault = { name: 'vault', description: 'Composed vault', decisions: [] }
+  await page.route('**/api/recipes/builtin/compose', async (route) => {
+    composeRequest = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...config,
+        entrypoints: [
+          ...config.entrypoints,
+          { model_names: ['acme/vault', 'vault'], recipe: 'vault' },
+        ],
+        recipes: [...config.recipes, vault],
+      }),
+    })
+  })
+  await page.goto('/routing/recipes')
+  await page.getByRole('tab', { name: /^Recipes/ }).click()
+  await page.getByRole('button', { name: 'Actions for vault', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Create public model' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'New public model' })
+  await expect(dialog.getByLabel('Recipe', { exact: true }).locator('option:checked')).toHaveText(
+    'vault',
+  )
+  await dialog.getByLabel('Model name').fill('acme/vault')
+  const aliasInput = dialog.getByLabel('Aliases')
+  await aliasInput.fill('vault')
+  await aliasInput.press('Enter')
+  await expect(dialog.getByRole('tabpanel', { name: 'guard model assignment' })).toContainText(
+    'No model needed',
+  )
+  await dialog.getByRole('tab', { name: /private/ }).click()
+  await dialog
+    .getByRole('tabpanel', { name: 'private model assignment' })
+    .getByText('model-a', { exact: true })
+    .click()
+  await dialog.getByRole('button', { name: 'Create public model' }).click()
+  await expect(dialog).toBeHidden()
+
+  expect(composeRequest).toEqual({
+    bundle: 'mom-v1',
+    recipe: 'vault',
+    bindings: { private: [{ model: 'model-a', use_reasoning: false }] },
+    model_names: ['acme/vault', 'vault'],
+  })
+  await expect.poll(() => savedConfig).toBeDefined()
+  expect(savedConfig?.entrypoints).toContainEqual({
+    model_names: ['acme/vault', 'vault'],
+    recipe: 'vault',
+  })
+  expect(savedConfig?.recipes).toContainEqual(vault)
 })
 
 test('dashboard and managers expose recipe-owned routing state', async ({ page }) => {
   await page.goto('/dashboard')
 
-  await expect(page.getByRole('button').filter({ hasText: 'Decisions' }).first()).toContainText('2')
-  await expect(page.getByRole('button').filter({ hasText: 'Signals' }).first()).toContainText('2')
-  await expect(page.getByText('balanced-route')).toBeVisible()
-  await expect(page.getByText('private-route')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Routing objectives' })).toBeVisible()
-  await expect(page.getByText('3 profiles')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'View Default routing topology' })).toBeVisible()
-  await page.getByRole('button', { name: 'View privacy topology' }).click()
-  await expect(page).toHaveURL(/\/topology\?scope=privacy$/)
+  await expect(page.getByTestId('home-count-decisions')).toContainText('2')
+  await expect(page.getByTestId('home-count-signals')).toContainText('2')
+  const routingMix = page.getByTestId('home-routing-mix')
+  await expect(routingMix.getByText('balanced-route')).toBeVisible()
+  await expect(routingMix.getByText('private-route')).toBeVisible()
+  await expect(page.getByTestId('home-count-recipes')).toContainText('3')
+  await expect(
+    page.getByTestId('home-agents').getByRole('heading', { name: 'Agents in use' }),
+  ).toBeVisible()
 
-  await page.goto('/config/signals')
-  const signalScope = page.getByLabel('Routing profile')
-  await expect(signalScope).toHaveValue('balanced')
-  await expect(page.getByRole('button', { name: 'View keyword-balanced-keyword' })).toBeVisible()
-  await signalScope.selectOption('privacy')
-  await expect(page.getByRole('button', { name: 'View pii-private-pii' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'View keyword-balanced-keyword' })).toHaveCount(0)
+  await page.goto('/routing/signals')
+  await expect(recipeScope(page)).toContainText('balanced')
+  await expect(page.getByRole('row', { name: /balanced-keyword/ })).toBeVisible()
+  await chooseRecipe(page, 'privacy')
+  await expect(recipeScope(page)).toContainText('privacy')
+  await expect(page).toHaveURL(/recipe=privacy/)
+  await expect(page.getByRole('row', { name: /private-pii/ })).toBeVisible()
+  await expect(page.getByRole('row', { name: /balanced-keyword/ })).toHaveCount(0)
 
-  await page.goto('/config/projections')
-  const projectionScope = page.getByLabel('Routing profile')
-  await expect(projectionScope).toHaveValue('balanced')
+  await page.goto('/routing/projections')
+  await expect(recipeScope(page)).toContainText('balanced')
   await expect(page.getByText('balanced-score').first()).toBeVisible()
-  await projectionScope.selectOption('privacy')
+  await chooseRecipe(page, 'privacy')
   await expect(page.getByText('private-score').first()).toBeVisible()
   await expect(page.getByText('balanced-score')).toHaveCount(0)
 
-  await page.goto('/config/decisions')
-  const decisionScope = page.getByLabel('Routing profile')
-  await expect(decisionScope).toHaveValue('balanced')
-  await expect(page.getByRole('button', { name: 'View balanced-route' })).toBeVisible()
-  await decisionScope.selectOption('privacy')
-  await expect(page.getByRole('button', { name: 'View private-route' })).toBeVisible()
+  await page.goto('/routing/decisions')
+  await expect(recipeScope(page)).toContainText('balanced')
+  await expect(page.getByRole('row', { name: /balanced-route/ })).toBeVisible()
+  await chooseRecipe(page, 'privacy')
+  await expect(page.getByRole('row', { name: /private-route/ })).toBeVisible()
 })
 
 test('topology switches the complete graph and test model by entrypoint recipe', async ({
@@ -220,23 +316,41 @@ test('topology switches the complete graph and test model by entrypoint recipe',
 }) => {
   await page.goto('/topology')
 
-  const scope = page.getByLabel('Entrypoint / recipe')
-  await expect(scope).toHaveValue('default')
-  await expect(scope.locator('option:checked')).toHaveText('Default routing · vllm-sr/auto')
+  const scope = recipeScope(page)
+  await expect(scope).toHaveText('Default routing')
+  await expect(
+    page.getByRole('complementary', { name: 'Topology view' }).locator('select'),
+  ).toHaveCount(0)
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
   await expect(page.getByTestId('rf__node-decision-private-route')).toHaveCount(0)
-  await scope.selectOption('balanced')
-  await expect(scope).toHaveValue('balanced')
+  // Each option names the recipe and, below it, what the recipe routes with.
+  await scope.click()
+  const balanced = page.getByRole('option', { name: /^balanced\b/ })
+  await expect(balanced).toContainText('1 decision · 1 signal')
+  await expect(page.getByRole('option', { name: /^privacy\b/ })).toContainText(
+    '1 decision · 1 signal',
+  )
+  await balanced.click()
+  await expect(scope).toHaveText('balanced')
+  await expect(page).toHaveURL(/\/routing\/topology\?scope=balanced$/)
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toBeVisible()
-  await expect(
-    page.getByTestId('rf__node-signal-group-keyword').getByText('balanced-keyword'),
-  ).toBeVisible()
-  await expect(
-    page.getByTestId('rf__node-projection-group-balanced-map').getByText('balanced-standard'),
-  ).toBeVisible()
+  await expect(page.getByTestId('rf__node-signal-group-keyword')).toContainText('balanced-keyword')
+  await expect(page.getByTestId('rf__node-projection-group-balanced-map')).toContainText(
+    'balanced-standard',
+  )
 
-  await scope.selectOption('privacy')
+  // The Router preview tests a prompt against the recipe's public model.
+  const preview = page.waitForRequest('**/api/topology/test-query')
+  await page.getByRole('textbox', { name: 'Test a prompt' }).fill('balanced answers please')
+  await page.getByRole('button', { name: 'Run', exact: true }).click()
+  expect((await preview).postDataJSON()).toMatchObject({
+    query: 'balanced answers please',
+    model: 'vllm-sr/balanced',
+  })
+
+  await chooseRecipe(page, 'privacy')
+  await expect(scope).toHaveText('privacy')
   await expect(page.getByTestId('rf__node-decision-private-route')).toBeVisible()
-  await expect(page.getByTestId('rf__node-signal-group-pii').getByText('private-pii')).toBeVisible()
+  await expect(page.getByTestId('rf__node-signal-group-pii')).toContainText('private-pii')
   await expect(page.getByTestId('rf__node-decision-balanced-route')).toHaveCount(0)
 })

@@ -42,11 +42,18 @@ function buildConfig() {
         prompt_per_1m: index / 100,
         completion_per_1m: index / 50,
       },
+      description:
+        index === 299
+          ? 'Unique needle model for large inventory search coverage.'
+          : `Scale-test routing model ${index}`,
+      capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
+      tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
+      param_size: `${8 + (index % 4) * 8}B`,
     }
   })
 
   return {
-    version: 'v0.3',
+    version: 'v0.5',
     listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
     providers: {
       defaults: {
@@ -54,37 +61,47 @@ function buildConfig() {
       },
       models,
     },
-    routing: {
-      modelCards: models.map((model, index) => ({
-        name: model.name,
-        description:
-          index === 299
-            ? 'Unique needle model for large inventory search coverage.'
-            : `Scale-test routing model ${index}`,
-        capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
-        tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
-        modality: 'text',
-        param_size: `${8 + (index % 4) * 8}B`,
-      })),
-      signals: {},
-      decisions: [
-        {
-          name: 'protected-production-route',
-          description: 'Keeps one non-default model protected by a routing reference.',
-          priority: 1,
-          rules: { operator: 'AND' as const, conditions: [] },
-          modelRefs: [
-            {
-              model: REFERENCED_MODEL,
-              use_reasoning: false,
-              weight: 1,
-            },
-          ],
-        },
-      ],
-    },
+    recipes: [
+      {
+        name: 'default',
+        signals: {},
+        decisions: [
+          {
+            name: 'protected-production-route',
+            description: 'Keeps one non-default model protected by a routing reference.',
+            priority: 1,
+            rules: { operator: 'AND' as const, conditions: [] },
+            modelRefs: [
+              {
+                model: REFERENCED_MODEL,
+                use_reasoning: false,
+                weight: 1,
+              },
+            ],
+          },
+        ],
+      },
+    ],
     global: {},
-    plugins: {},
+  }
+}
+
+// Models without a backend have nothing to check; of the rest, a few are down or degraded.
+function modelHealth(name: string, index: number) {
+  if (index % 2 === 1 || index > MODEL_COUNT - 1) {
+    return { model: name, status: 'unchecked', reason: 'No backend endpoint to check.' }
+  }
+  if (index % 20 === 4) {
+    return { model: name, status: 'down', reason: 'The backend could not be reached.' }
+  }
+  const p95Ms = 300 + (index % 7) * 110
+  return {
+    model: name,
+    status: index % 20 === 8 ? 'degraded' : 'healthy',
+    reason: index % 20 === 8 ? 'Slow: answered in 2.8 s.' : undefined,
+    latencyMs: p95Ms - 40,
+    p95Ms,
+    recentMs: [p95Ms - 60, p95Ms - 40, p95Ms],
   }
 }
 
@@ -141,6 +158,22 @@ async function mockLargeModelInventory(
     })
   })
 
+  await page.route('**/api/models/health*', async (route) => {
+    const wanted = new URL(route.request().url()).searchParams.getAll('model')
+    const models = config.providers.models
+      .map((model, index) => modelHealth(model.name, index))
+      .filter((entry) => wanted.length === 0 || wanted.includes(entry.model))
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ checkedAt: new Date().toISOString(), intervalSeconds: 30, models }),
+    })
+  })
+
+  await page.route('**/api/router/api/v1/observability/replays/aggregate*', (route) =>
+    route.fulfill({ status: 404, body: 'Router Replay is off' }),
+  )
+
   await page.route('**/api/status', async (route) => {
     await route.fulfill({
       status: 200,
@@ -159,42 +192,53 @@ async function mockLargeModelInventory(
 
 function inventoryTable(page: Page) {
   return page.getByRole('table').filter({
-    has: page.getByRole('columnheader', { name: 'Model Name', exact: true }),
+    has: page.getByRole('columnheader', { name: 'Model', exact: true }),
   })
 }
 
+// A filter pill, not the column header of the same name.
+function filterPill(page: Page, label: string) {
+  return page
+    .getByRole('button', { name: label, exact: true })
+    .and(page.locator('[aria-haspopup="dialog"]'))
+}
+
 function inventoryPagination(page: Page) {
-  // Inventory and Evaluation Evidence each have their own model pagination.
-  return inventoryTable(page).locator('../..').getByRole('group', { name: 'models pagination' })
+  return page.getByRole('group', { name: 'models pagination' })
 }
 
-async function showTwentyFiveModels(page: Page) {
-  const pagination = inventoryPagination(page)
-  await expect(pagination).toContainText(`1–5 of ${MODEL_COUNT} models`)
-  await pagination.getByLabel('Rows').selectOption('25')
-  await expect(pagination).toContainText(`1–25 of ${MODEL_COUNT} models`)
+async function openRowAction(page: Page, model: string, action: string) {
+  await page.getByRole('button', { name: `Actions for ${model}`, exact: true }).click()
+  // The previous row's menu can still be animating out; act in the open one.
+  await page
+    .locator('[role="menu"][data-state="open"]')
+    .getByRole('menuitem', { name: action, exact: true })
+    .click()
 }
 
-test.describe('Models inventory at 300+ scale', () => {
+function bodyOverflow(page: Page) {
+  return page.evaluate(() => getComputedStyle(document.body).overflow)
+}
+
+test.describe('Backend models inventory at 300+ scale', () => {
   test('keeps pricing clear of actions at 1320px', async ({ page }) => {
     await page.setViewportSize({ width: 1320, height: 549 })
     await mockLargeModelInventory(page)
-    await page.goto('/config/models')
+    await page.goto('/models/backends')
 
     const table = inventoryTable(page)
-    const pricing = table.getByRole('columnheader', { name: 'Pricing', exact: true })
+    const pricing = table.getByRole('columnheader', { name: 'Price / 1M', exact: true })
     await expect(pricing).toBeVisible()
-    const viewButton = page.getByRole('button', { name: `View ${DEFAULT_MODEL}`, exact: true })
-    const row = table.getByRole('row').filter({ has: viewButton })
+    const actionsButton = page.getByRole('button', { name: `Actions for ${DEFAULT_MODEL}` })
+    const row = table.getByRole('row').filter({ has: actionsButton })
+    const priceCell = row.getByRole('cell').filter({ hasText: /\$0\.00\s*\/\s*\$0\.00/ })
+    await expect(priceCell).toBeVisible()
 
-    // Text visibility alone misses a sticky Actions cell covering Pricing.
+    // Text visibility alone misses an Actions cell covering Pricing.
     // Measure before clicking, since Playwright may scroll the table for us.
     for (const [price, actions] of [
       [pricing, table.getByRole('columnheader', { name: 'Actions', exact: true })],
-      [
-        row.getByRole('cell', { name: '$0.00 / 1M', exact: true }),
-        row.getByRole('cell').filter({ has: viewButton }),
-      ],
+      [priceCell, row.getByRole('cell').filter({ has: actionsButton })],
     ]) {
       const priceBounds = await price.boundingBox()
       const actionBounds = await actions.boundingBox()
@@ -203,18 +247,18 @@ test.describe('Models inventory at 300+ scale', () => {
       expect(actionBounds!.x).toBeGreaterThanOrEqual(priceBounds!.x + priceBounds!.width - 1)
     }
 
-    await row.getByRole('button', { name: `View ${DEFAULT_MODEL}`, exact: true }).click()
-    await expect(page.getByRole('dialog', { name: `Model: ${DEFAULT_MODEL}` })).toBeVisible()
+    await openRowAction(page, DEFAULT_MODEL, 'View details')
+    await expect(page.getByRole('dialog', { name: DEFAULT_MODEL })).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`m=${DEFAULT_MODEL}`))
   })
 
   test('adds and edits one model with one canonical write per action', async ({ page }) => {
     test.setTimeout(90_000)
     const { writes } = await mockLargeModelInventory(page)
-    await page.goto('/config/models')
-    await showTwentyFiveModels(page)
+    await page.goto('/models/backends')
 
     await expect(inventoryPagination(page)).toContainText(`1–25 of ${MODEL_COUNT} models`)
-    await page.getByRole('button', { name: 'Add Model' }).click()
+    await page.getByRole('button', { name: 'Connect model', exact: true }).click()
 
     const addDialog = page.getByRole('dialog', { name: 'Add models' })
     await addDialog.getByRole('button', { name: /vLLM Connect a private vLLM endpoint/ }).click()
@@ -235,20 +279,21 @@ test.describe('Models inventory at 300+ scale', () => {
     ).toBeGreaterThanOrEqual(14)
 
     await advancedSettings.click()
-    await connectionDialog.getByLabel('Name prefix Optional').fill('model-305-added')
-    await connectionDialog.getByLabel('Reasoning family Optional').selectOption('qwen3')
-    await connectionDialog
-      .getByLabel('Description Optional')
-      .fill('Added from the 305-model inventory.')
-    await connectionDialog.getByLabel('Modality Optional').selectOption('ar')
-    await connectionDialog.getByLabel('Parameter size Optional').fill('32B')
-    await connectionDialog.getByLabel('Context window Optional').fill('131072')
-    await connectionDialog.getByLabel('Capabilities Comma separated').fill('chat, reasoning')
-    await connectionDialog.getByLabel('Tags Comma separated').fill('rocm, new')
-    await connectionDialog.getByLabel('Input cost Optional').fill('0.25')
-    await connectionDialog.getByLabel('Output cost Optional').fill('0.5')
-    await connectionDialog.getByLabel('Max retries 0–5').fill('2')
-    await connectionDialog.getByLabel('Load balancing Optional').selectOption('LEAST_REQUEST')
+    await connectionDialog.getByLabel('Name prefix').fill('model-305-added')
+    await connectionDialog.getByLabel('Reasoning family').selectOption('qwen3')
+    await connectionDialog.getByLabel('Description').fill('Added from the 305-model inventory.')
+    await connectionDialog.getByLabel('Parameter size').fill('32B')
+    await connectionDialog.getByLabel('Context window').fill('131072')
+    const capabilities = connectionDialog.getByLabel('Capabilities')
+    await capabilities.fill('chat, reasoning')
+    await capabilities.press('Enter')
+    const tags = connectionDialog.getByLabel('Tags')
+    await tags.fill('rocm, new')
+    await tags.press('Enter')
+    await connectionDialog.getByLabel('Input cost').fill('0.25')
+    await connectionDialog.getByLabel('Output cost').fill('0.5')
+    await connectionDialog.getByLabel('Max retries').fill('2')
+    await connectionDialog.getByLabel('Load balancing').selectOption('LEAST_REQUEST')
     await connectionDialog.getByRole('button', { name: 'Add 1 model' }).click()
 
     await expect(connectionDialog).toBeHidden()
@@ -257,11 +302,10 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(addedConfig).not.toHaveProperty('signals')
     expect(addedConfig).not.toHaveProperty('decisions')
     expect(addedConfig).not.toHaveProperty('model_config')
-    expect(addedConfig.version).toBe('v0.3')
+    expect(addedConfig.version).toBe('v0.5')
     expect(addedConfig.providers.defaults.model).toBe(DEFAULT_MODEL)
     expect(addedConfig.providers.defaults).not.toHaveProperty('default_model')
     expect(addedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
-    expect(addedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
     expect(
       addedConfig.providers.models.find(
         (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
@@ -269,12 +313,12 @@ test.describe('Models inventory at 300+ scale', () => {
     ).toMatchObject({
       name: 'model-305-added/physical/Qwen-Scale-305',
       provider_model_id: 'physical/Qwen-Scale-305',
-      api_format: 'openai',
+      api_format: 'chat_completions',
       reasoning: { family: 'qwen3' },
       backend_refs: [
         {
           name: 'vllm-primary',
-          base_url: 'http://localhost:8000/v1',
+          endpoint: 'http://localhost:8000/v1',
           provider: 'vllm',
           api_key: 'test-provider-key',
         },
@@ -287,24 +331,18 @@ test.describe('Models inventory at 300+ scale', () => {
         cache_write_per_1m: 0.25,
       },
       reliability: { retry_count: 2, lb_policy: 'LEAST_REQUEST' },
-    })
-    expect(
-      addedConfig.routing.modelCards.find(
-        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
-      ),
-    ).toMatchObject({
       description: 'Added from the 305-model inventory.',
       capabilities: ['chat', 'reasoning'],
       tags: ['rocm', 'new'],
-      modality: 'ar',
       param_size: '32B',
       context_window_size: 131072,
     })
 
-    const search = page.getByPlaceholder('Search name, ID, family, tag, or capability...')
+    await expect(inventoryPagination(page)).toContainText(`of ${MODEL_COUNT + 1} models`)
+    const search = page.getByPlaceholder('Search models, IDs or tags…')
     await search.fill('model-305-added/physical/Qwen-Scale-305')
     await expect(inventoryPagination(page)).toContainText('1–1 of 1 models')
-    await page.getByRole('button', { name: 'Edit model-305-added/physical/Qwen-Scale-305' }).click()
+    await openRowAction(page, 'model-305-added/physical/Qwen-Scale-305', 'Edit')
 
     const editDialog = page.getByRole('dialog', {
       name: 'Edit Model: model-305-added/physical/Qwen-Scale-305',
@@ -312,9 +350,12 @@ test.describe('Models inventory at 300+ scale', () => {
     await expect(editDialog.getByLabel('Provider Model ID')).toHaveValue('physical/Qwen-Scale-305')
     await editDialog.getByLabel('Provider Model ID').fill('physical/Qwen-Scale-305-v2')
     await editDialog
-      .getByLabel('Description')
+      .getByLabel('Description', { exact: true })
       .fill('Updated without shrinking the large inventory.')
-    await editDialog.getByRole('textbox', { name: 'Tag 2', exact: true }).fill('updated')
+    await editDialog.getByRole('button', { name: 'Remove new', exact: true }).click()
+    const tagInput = editDialog.getByRole('textbox', { name: 'Tags', exact: true })
+    await tagInput.fill('updated')
+    await tagInput.press('Enter')
     await editDialog.getByRole('button', { name: 'Save', exact: true }).click()
 
     await expect(editDialog).toBeHidden()
@@ -325,19 +366,12 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(editedConfig).not.toHaveProperty('model_config')
     expect(editedConfig.providers.defaults.model).toBe(DEFAULT_MODEL)
     expect(editedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
-    expect(editedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
     expect(
       editedConfig.providers.models.find(
         (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
       ),
     ).toMatchObject({
       provider_model_id: 'physical/Qwen-Scale-305-v2',
-    })
-    expect(
-      editedConfig.routing.modelCards.find(
-        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
-      ),
-    ).toMatchObject({
       description: 'Updated without shrinking the large inventory.',
       tags: ['rocm', 'updated'],
     })
@@ -345,96 +379,101 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(editedConfig.providers.models.some((model) => model.name === 'model-304')).toBe(true)
   })
 
-  test('paginates 25 rows and composes family filters with search', async ({ page }) => {
+  test('paginates 25 rows and composes kind and health filters with search', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await mockLargeModelInventory(page)
-    await page.goto('/config/models')
-    await showTwentyFiveModels(page)
+    await page.goto('/models/backends')
 
-    await expect(page.getByRole('heading', { name: 'Models', exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Backend models', exact: true })).toBeVisible()
     await expect(inventoryPagination(page)).toContainText(`1–25 of ${MODEL_COUNT} models`)
-    await expect(page.getByRole('button', { name: /^Expand model-/ })).toHaveCount(25)
+    await expect(page.getByRole('button', { name: /^Actions for model-/ })).toHaveCount(25)
     await expect(inventoryTable(page).getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
     await expect(page.getByText('model-024', { exact: true })).toBeVisible()
 
-    const modelHeader = page.getByRole('columnheader', { name: 'Model Name' })
-    const pricingHeader = page.getByRole('columnheader', { name: 'Pricing' })
+    const modelHeader = page.getByRole('columnheader', { name: 'Model', exact: true })
     await expect
       .poll(async () => (await modelHeader.boundingBox())?.width ?? 0)
       .toBeGreaterThanOrEqual(260)
-    await expect
-      .poll(async () => (await pricingHeader.boundingBox())?.width ?? 0)
-      .toBeGreaterThanOrEqual(124)
-    await expect(pricingHeader).toHaveText('Pricing')
+    await expect(page.getByRole('columnheader', { name: 'Price / 1M' })).toHaveText('Price / 1M')
 
-    await inventoryPagination(page)
-      .getByRole('button', { name: 'Next page' })
-      .click()
+    await inventoryPagination(page).getByRole('button', { name: 'Next page' }).click()
     await expect(inventoryPagination(page)).toContainText(`26–50 of ${MODEL_COUNT} models`)
     await expect(page.getByText('model-025', { exact: true })).toBeVisible()
     await expect(page.getByText('model-049', { exact: true })).toBeVisible()
     await expect(inventoryTable(page).getByText(DEFAULT_MODEL, { exact: true })).toHaveCount(0)
 
-    await page.getByLabel('Reasoning family').selectOption('family-alpha')
-    await expect(inventoryPagination(page)).toContainText('1–25 of 102 models')
-    await expect(inventoryTable(page).getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
+    await filterPill(page, 'Kind').click()
+    await page.getByRole('menuitemcheckbox', { name: /^Chat/ }).click()
+    await page.keyboard.press('Escape')
+    await expect(inventoryPagination(page)).toContainText('1–25 of 50 models')
+    await expect(inventoryTable(page).getByText('model-005', { exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: 'Clear filters' }).click()
-    await page
-      .getByPlaceholder('Search name, ID, family, tag, or capability...')
-      .fill('model-299-needle')
+    await filterPill(page, 'Health').click()
+    await page.getByRole('menuitemcheckbox', { name: /^Down/ }).click()
+    await page.keyboard.press('Escape')
+    await expect(inventoryPagination(page)).toContainText('1–16 of 16 models')
+    const downRow = inventoryTable(page).getByRole('row').filter({ hasText: 'model-004' })
+    await expect(downRow.getByText('Down', { exact: true })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Clear filters' }).click()
+    await page.getByPlaceholder('Search models, IDs or tags…').fill('model-299-needle')
     await expect(inventoryPagination(page)).toContainText('1–1 of 1 models')
     await expect(page.getByText('model-299-needle', { exact: true })).toBeVisible()
     await expect(page.getByText('physical/Qwen-Scale-299', { exact: true })).toBeVisible()
   })
 
-  test('keeps body lock and focus intact across the shared view-to-edit transition', async ({
-    page,
-  }) => {
+  test('keeps body lock and focus intact across the view-to-edit transition', async ({ page }) => {
     await mockLargeModelInventory(page)
-    await page.goto('/config/models')
-    await showTwentyFiveModels(page)
+    await page.goto('/models/backends')
 
-    const viewButton = inventoryTable(page).getByRole('button', { name: `View ${DEFAULT_MODEL}` })
-    await viewButton.focus()
-    await viewButton.click()
+    const actions = inventoryTable(page).getByRole('button', {
+      name: `Actions for ${DEFAULT_MODEL}`,
+    })
+    await actions.focus()
+    await openRowAction(page, DEFAULT_MODEL, 'View details')
 
-    const viewDialog = page.getByRole('dialog', { name: `Model: ${DEFAULT_MODEL}` })
-    await expect(viewDialog).toBeVisible()
-    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
-    await viewDialog.getByRole('button', { name: 'Edit', exact: true }).click()
+    const viewSheet = page.getByRole('dialog', { name: DEFAULT_MODEL })
+    await expect(viewSheet).toBeVisible()
+    await expect.poll(() => bodyOverflow(page)).toBe('hidden')
+    await viewSheet.getByRole('button', { name: 'Edit model', exact: true }).click()
 
     const editDialog = page.getByRole('dialog', { name: `Edit Model: ${DEFAULT_MODEL}` })
     await expect(editDialog).toBeVisible()
-    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+    await expect.poll(() => bodyOverflow(page)).toBe('hidden')
     await expect
       .poll(() => editDialog.evaluate((element) => element.contains(document.activeElement)))
       .toBe(true)
 
+    // Closing the editor returns to the sheet it was opened from.
     await page.keyboard.press('Escape')
     await expect(editDialog).toBeHidden()
-    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('')
-    await expect(viewButton).toBeFocused()
+    await expect(viewSheet).toBeVisible()
+    await expect.poll(() => bodyOverflow(page)).toBe('hidden')
+
+    await page.keyboard.press('Escape')
+    await expect(viewSheet).toBeHidden()
+    await expect.poll(() => bodyOverflow(page)).not.toBe('hidden')
+    await expect(page).not.toHaveURL(/m=/)
   })
 
   test('keeps selection across pages, blocks protected models, and saves a bulk delete once', async ({
     page,
   }) => {
     const { writes } = await mockLargeModelInventory(page)
-    await page.goto('/config/models')
-    await showTwentyFiveModels(page)
+    await page.goto('/models/backends')
 
     await expect(page.getByLabel(`Select model ${DEFAULT_MODEL}`)).toBeDisabled()
     await expect(page.getByLabel(`Select model ${REFERENCED_MODEL}`)).toBeDisabled()
 
-    await page.getByRole('button', { name: `Delete ${DEFAULT_MODEL}` }).click()
+    await openRowAction(page, DEFAULT_MODEL, 'Delete')
     await expect(
       page.getByText('Choose a different default model before deleting this model.'),
     ).toBeVisible()
     await expect(page.getByRole('alertdialog')).toHaveCount(0)
     expect(writes).toHaveLength(0)
 
-    await page.getByRole('button', { name: `Delete ${REFERENCED_MODEL}` }).click()
+    await openRowAction(page, REFERENCED_MODEL, 'Delete')
     await expect(
       page.getByText('Remove this model from 1 routing decision before deleting it.'),
     ).toBeVisible()
@@ -442,9 +481,7 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(writes).toHaveLength(0)
 
     await page.getByLabel('Select model model-002').check()
-    await inventoryPagination(page)
-      .getByRole('button', { name: 'Next page' })
-      .click()
+    await inventoryPagination(page).getByRole('button', { name: 'Next page' }).click()
     await page.getByLabel('Select model model-026').check()
 
     await expect(page.getByText('2 selected', { exact: true })).toBeVisible()
@@ -462,7 +499,7 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(dialogBox).not.toBeNull()
     expect(dialogBox?.y ?? -1).toBeGreaterThanOrEqual(0)
     expect((dialogBox?.y ?? 0) + (dialogBox?.height ?? 0)).toBeLessThanOrEqual(480)
-    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden')
+    expect(await bodyOverflow(page)).toBe('hidden')
 
     const confirmationInput = dialog.getByLabel(/Type DELETE 2 to confirm/)
     await confirmationInput.focus()
@@ -485,16 +522,21 @@ test.describe('Models inventory at 300+ scale', () => {
 
   test('hides every write affordance when explicit permissions are read-only', async ({ page }) => {
     const { writes } = await mockLargeModelInventory(page, { readonlyUser: true })
-    await page.goto('/config/models')
-    await showTwentyFiveModels(page)
+    await page.goto('/models/backends')
 
     await expect(inventoryPagination(page)).toContainText(`1–25 of ${MODEL_COUNT} models`)
-    await expect(page.getByRole('button', { name: 'Add Model' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Add Family' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: /^Edit model-/ })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: /^Delete model-/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Connect model' })).toHaveCount(0)
     await expect(page.getByRole('checkbox', { name: /^Select model / })).toHaveCount(0)
-    await expect(inventoryTable(page).getByRole('button', { name: `View ${DEFAULT_MODEL}` })).toBeVisible()
+    await page.getByRole('button', { name: 'More model actions' }).click()
+    await expect(page.getByRole('menuitem', { name: 'Reasoning families' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Add a model manually' })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: `Actions for ${DEFAULT_MODEL}`, exact: true }).click()
+    await expect(page.getByRole('menuitem', { name: 'View details', exact: true })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Check health', exact: true })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Edit', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('menuitem', { name: 'Delete', exact: true })).toHaveCount(0)
+    await page.keyboard.press('Escape')
     expect(writes).toHaveLength(0)
   })
 })

@@ -94,6 +94,15 @@ func (p routerLearningPolicy) toReplayProtection() *routerreplay.LearningProtect
 	if diag.rescue {
 		out.Rescue = &routerreplay.LearningRescueDiagnostics{Active: true}
 	}
+	if release := diag.release; release != nil {
+		out.Release = &routerreplay.LearningReleaseDiagnostics{
+			Honored:       release.honored,
+			Reason:        release.reason,
+			Header:        release.header,
+			PreviousModel: release.previousModel,
+			SelectedModel: release.selectedModel,
+		}
+	}
 	applyReplayProtectionTrace(out, diag.trace)
 	if out.SwitchMargin == 0 && diag.trace != nil {
 		out.SwitchMargin = diag.trace.SwitchMargin

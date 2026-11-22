@@ -17,8 +17,8 @@ are entries under `providers.models`.
 | Use a private model without Router-generated reasoning controls | Omit | Omit | Set when different from `name` | Set the Provider and endpoint. |
 | Use a private model with a known built-in family | Omit | `family: <built-in-id>` | Optional | Set a compatible Provider and endpoint. |
 | Use a private model with unique reasoning controls | Omit | Complete inline definition | Optional | Set a compatible Provider and endpoint. |
-| Add routing metadata to a private model | Omit | Optional | Optional | Add `routing.modelCards` under the alias. |
-| Add local metadata to a catalog model | Canonical Model Card ID | Omit; inherited | Provider-dependent | Add `routing.modelCards` under the catalog ID. |
+| Add routing metadata to a private model | Omit | Optional | Optional | Add `providers.models` under the alias. |
+| Add local metadata to a catalog model | Canonical Model Card ID | Omit; inherited | Provider-dependent | Set the metadata on the catalog-backed alias. |
 | Load balance identical replicas | Either | Determined by model identity | One effective ID | Put homogeneous targets in one `backend_refs` list. |
 | Route across different Providers or protocols | Configure one Model per contract | Determined per Model | Determined per Provider | Use separate aliases in the same decision. |
 
@@ -29,7 +29,7 @@ are entries under `providers.models`.
   catalog: openai/gpt-5.6-sol
   backend_refs:
     - provider: openai
-      api_key_env: OPENAI_API_KEY
+      auth: {api_key_env: OPENAI_API_KEY}
 ```
 
 ## Catalog model with an operator deployment name
@@ -40,8 +40,8 @@ are entries under `providers.models`.
   provider_model_id: my-production-deployment
   backend_refs:
     - provider: microsoft-foundry
-      base_url: https://example.services.ai.azure.com
-      api_key_env: FOUNDRY_API_KEY
+      endpoint: https://example.services.ai.azure.com
+      auth: {api_key_env: FOUNDRY_API_KEY}
 ```
 
 ## Custom pass-through model
@@ -92,8 +92,8 @@ are entries under `providers.models`.
 - `catalog` together with any `providers.models[].reasoning` block;
 - `reasoning.family` together with inline reasoning fields;
 - an inline definition without both `type` and `parameter`;
-- a Model Card override named after a catalog-backed alias instead of its
-  canonical `catalog` ID;
+- a second `providers.models` entry named after the `catalog` ID of a
+  catalog-backed alias (set metadata on the alias instead);
 - a custom Model Card whose name differs from the custom Model alias;
 - a decision effort or mode unsupported by the Model family or Provider
   mapping; and

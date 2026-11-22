@@ -25,19 +25,19 @@ const record = {
   baseline_cost: 0.004,
   cost_savings: 0.003,
   baseline_model: 'baseline-model',
-  signals: { domain: ['technical'], embedding: ['code'] },
+  signals: { domain: ['technical', 'code'] },
   route_diagnostics: { selection_reasoning: 'Selected the highest ranked eligible model.' },
   projections: ['specialist'],
   projection_scores: { complexity: 0.72, action_margin: -0.125 },
-  signal_values: { 'embedding:code': 0.9, 'classifier:zero': 0 },
-  signal_confidences: { 'classifier:zero': 0, 'domain:technical': 0.82 },
-  signal_error_matches: { 'classifier:zero': false },
+  signal_values: { 'domain:code': 0.9, 'systemone:zero': 0 },
+  signal_confidences: { 'systemone:zero': 0, 'domain:technical': 0.82 },
+  signal_error_matches: { 'systemone:zero': false },
   projection_trace: {
     schema_version: '1',
     partitions: [
       {
         group_name: 'intent',
-        signal_type: 'embedding',
+        signal_type: 'domain',
         semantics: 'softmax',
         temperature: 0.7,
         winner: 'code',
@@ -51,7 +51,7 @@ const record = {
       },
       {
         group_name: 'fallback_group',
-        signal_type: 'classifier',
+        signal_type: 'domain',
         winner: 'general',
         default_used: true,
         winner_score: 0,
@@ -63,8 +63,8 @@ const record = {
         name: 'complexity',
         total: 0.72,
         inputs: [
-          { type: 'signal', name: 'embedding:code', value: 0.9, weight: 0.8, contribution: 0.72 },
-          { type: 'signal', name: 'classifier:zero', value: 0, weight: 0.2, contribution: 0 },
+          { type: 'signal', name: 'domain:code', value: 0.9, weight: 0.8, contribution: 0.72 },
+          { type: 'signal', name: 'systemone:zero', value: 0, weight: 0.2, contribution: 0 },
         ],
       },
     ],
@@ -102,10 +102,23 @@ test('insight detail leads with routing outcomes and progressively reveals proje
   page,
 }, info) => {
   const writes = await setup(page)
-  await page.goto('/insights/insight-ui-example')
+  await page.goto('/observe/requests/insight-ui-example')
   const trace = page.getByRole('region', { name: 'Projection Trace', exact: true })
   await expect(trace).toBeVisible()
-  await expect(page.getByLabel('Selected route')).toContainText('efficient-model')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('request-ui-ex')
+  await expect(page.getByText('Routed to', { exact: false }).first()).toContainText(
+    'efficient-model',
+  )
+  const steps = page.locator('[data-trace-step]')
+  await expect(steps).toHaveText([
+    'Received',
+    'Signals matched',
+    'Projections',
+    'Decision matched',
+    'Model selected',
+    'Plugins',
+    'Response',
+  ])
   await expect(trace.getByRole('region', { name: 'Signal groups', exact: true })).toBeVisible()
   await expect(trace.getByRole('region', { name: 'Weighted scores', exact: true })).toBeVisible()
   await expect(trace.getByRole('region', { name: 'Routing outputs', exact: true })).toBeVisible()
@@ -115,11 +128,6 @@ test('insight detail leads with routing outcomes and progressively reveals proje
   await expect(
     page.getByRole('button', { name: 'Expand Routing Metadata', exact: true }),
   ).toHaveAttribute('aria-expanded', 'false')
-  const selected = await page
-    .getByRole('region', { name: 'Model Selection', exact: true })
-    .boundingBox()
-  const projection = await trace.boundingBox()
-  expect(selected!.y + selected!.height).toBeLessThan(projection!.y)
   await page.screenshot({ path: info.outputPath('insight-desktop-overview.png'), fullPage: true })
   await trace.getByText('Inspect intent candidates', { exact: true }).click()
   await expect(trace.getByRole('table', { name: 'intent candidates', exact: true })).toBeVisible()
@@ -128,7 +136,7 @@ test('insight detail leads with routing outcomes and progressively reveals proje
   await expect(
     trace
       .getByRole('table', { name: 'complexity calculation', exact: true })
-      .getByRole('row', { name: /classifier:zero/ }),
+      .getByRole('row', { name: /systemone:zero/ }),
   ).toContainText('0.0000')
   await trace.getByText('Inspect capability thresholds', { exact: true }).click()
   const source = trace.getByRole('link', { name: 'complexity', exact: true })
@@ -148,12 +156,14 @@ test('insight detail leads with routing outcomes and progressively reveals proje
   await expect(
     metadata.getByRole('region', { name: 'Projection scores', exact: true }),
   ).toContainText('-0.1250')
+  // System One's raw values fold away under its answers until opened.
+  await metadata.getByText('Raw System One values', { exact: false }).click()
   const signals = metadata.getByRole('table', {
     name: 'Recorded signal values and confidence',
     exact: true,
   })
-  await expect(signals.getByRole('row', { name: /classifier:zero/ })).toHaveText(
-    'classifier:zero0.00000.0000No',
+  await expect(signals.getByRole('row', { name: /systemone:zero/ })).toHaveText(
+    'systemone:zero0.00000.0000No',
   )
   await expect(signals.getByRole('row', { name: /domain:technical/ })).toContainText('Not recorded')
   await metadata.screenshot({ path: info.outputPath('insight-metadata-expanded.png') })
@@ -165,7 +175,7 @@ test('projection and metadata stay usable on mobile with keyboard disclosure and
 }, info) => {
   await page.setViewportSize({ width: 390, height: 844 })
   const writes = await setup(page)
-  await page.goto('/insights/insight-ui-example')
+  await page.goto('/observe/requests/insight-ui-example')
   const trace = page.getByRole('region', { name: 'Projection Trace', exact: true })
   await expect(trace).toBeVisible()
   const summary = trace.getByText('Inspect complexity calculation', { exact: true }).locator('..')
@@ -200,10 +210,10 @@ test('legacy and partial records do not manufacture a projection result', async 
     },
     projections: undefined,
     projection_scores: undefined,
-    signal_values: { 'classifier:zero': 0 },
+    signal_values: { 'systemone:zero': 0 },
     signal_confidences: undefined,
   })
-  await page.goto('/insights/insight-ui-example')
+  await page.goto('/observe/requests/insight-ui-example')
   const trace = page.getByRole('region', { name: 'Projection Trace', exact: true })
   await expect(trace.getByText('No output selected', { exact: true })).toBeVisible()
   await expect(trace.getByRole('region', { name: 'Signal groups', exact: true })).toHaveCount(0)
@@ -213,22 +223,23 @@ test('legacy and partial records do not manufacture a projection result', async 
   ).toBeVisible()
   await expect(trace.getByRole('link')).toHaveCount(0)
   await page.getByRole('button', { name: 'Expand Routing Metadata', exact: true }).click()
+  await page.getByText('Raw System One values', { exact: false }).click()
   await expect(
     page
       .getByRole('table', { name: 'Recorded signal values and confidence', exact: true })
-      .getByRole('row', { name: /classifier:zero/ }),
+      .getByRole('row', { name: /systemone:zero/ }),
   ).toContainText('Not recorded')
 })
 
-test('usage leads with compact metrics while scores and independent status cards use the available width', async ({
+test('usage, signals and plugin status keep their recorded evidence behind progressive disclosure', async ({
   page,
 }, info) => {
   const writes = await setup(page, {
     ...record,
     signals: { ...record.signals, future_signal: ['future_rule_v1'] },
-    response_jailbreak_detected: true,
-    response_jailbreak_score_available: true,
-    response_jailbreak_confidence: 0,
+    jailbreak_detected: true,
+    jailbreak_score_available: true,
+    jailbreak_confidence: 0,
     hallucination_enabled: true,
     hallucination_score_available: false,
     outcomes: [
@@ -237,34 +248,34 @@ test('usage leads with compact metrics while scores and independent status cards
         target: 'response-check-unavailable',
         verdict: 'unavailable',
         reason: 'Detector unavailable',
-        metadata: { direction: 'response', signal: 'hallucination', score_available: 'false' },
+        metadata: { stage: 'response', signal: 'hallucination', score_available: 'false' },
       },
       {
         source: 'router',
         target: 'response-check-not-applicable',
         verdict: 'not_applicable',
         reason: 'No applicable context',
-        metadata: { direction: 'response', signal: 'hallucination', score_available: 'false' },
+        metadata: { stage: 'response', signal: 'hallucination', score_available: 'false' },
       },
     ],
   })
-  await page.goto('/insights/insight-ui-example')
+  await page.goto('/observe/requests/insight-ui-example')
   await page.getByRole('button', { name: 'Expand Routing Metadata', exact: true }).click()
   const metadata = page.getByRole('region', { name: 'Routing Metadata', exact: true })
-  const scores = metadata.getByRole('region', { name: 'Projection scores', exact: true })
-  const evidence = metadata.getByRole('region', { name: 'Signal evidence', exact: true })
-  const scoreBox = (await scores.boundingBox())!
-  const evidenceBox = (await evidence.boundingBox())!
-  expect(Math.abs(scoreBox.x - evidenceBox.x)).toBeLessThan(2)
-  expect(Math.abs(scoreBox.width - evidenceBox.width)).toBeLessThan(2)
-  await metadata.screenshot({ path: info.outputPath('routing-metadata-full-width.png') })
+  await expect(
+    metadata.getByRole('region', { name: 'Projection scores', exact: true }),
+  ).toBeVisible()
+  await expect(metadata.getByRole('region', { name: 'Signal evidence', exact: true })).toBeVisible()
+  await metadata.screenshot({ path: info.outputPath('routing-metadata.png') })
 
   const usage = page.getByRole('region', { name: 'Usage & Cost', exact: true })
-  const signals = page.getByRole('region', { name: 'Signals', exact: true })
+  const signals = page
+    .getByRole('list', { name: 'Routing trace' })
+    .locator('[data-trace-step="Signals matched"]')
+    .locator('xpath=ancestor::li[1]')
   const plugins = page.getByRole('region', { name: 'Plugin Status', exact: true })
-  await expect(signals.getByText('Recorded matches only.', { exact: false })).toBeVisible()
   await expect(signals.getByTitle('future_rule_v1', { exact: true })).toBeVisible()
-  await expect(plugins.getByText('Response jailbreak:', { exact: false })).toContainText('0.0%')
+  await expect(plugins.getByText('Request jailbreak:', { exact: false })).toContainText('0.0%')
   const outcomeSummary = plugins
     .locator('summary')
     .filter({ hasText: '1 unavailable · 1 not applicable' })
@@ -277,22 +288,13 @@ test('usage leads with compact metrics while scores and independent status cards
   const explanation = usage.getByText('How these estimates are calculated', { exact: true })
   const baselineBasis = usage.getByText('New records use the highest estimate', { exact: false })
   await expect(baselineBasis).toBeHidden()
-  const usageBox = (await usage.boundingBox())!
-  const signalsBox = (await signals.boundingBox())!
-  const pluginsBox = (await plugins.boundingBox())!
-  expect(Math.abs(usageBox.width - (await metadata.boundingBox())!.width)).toBeLessThan(2)
-  expect(usageBox.height).toBeLessThan(390)
-  expect(Math.abs(signalsBox.y - pluginsBox.y)).toBeLessThan(2)
-  expect(Math.abs(signalsBox.height - pluginsBox.height)).toBeGreaterThan(20)
   await usage.evaluate((element) => element.scrollIntoView({ block: 'start' }))
-  await page.screenshot({
-    path: info.outputPath('usage-and-status-desktop.png'),
-  })
+  await page.screenshot({ path: info.outputPath('usage-and-status-desktop.png') })
   await explanation.click()
   await expect(baselineBasis).toBeVisible()
   await expect(
     usage.getByRole('link', { name: 'View current configured model rates' }),
-  ).toBeVisible()
+  ).toHaveAttribute('href', '/models/backends')
   await explanation.click()
   await outcomeSummary.focus()
   await outcomeSummary.press('Enter')
@@ -301,12 +303,7 @@ test('usage leads with compact metrics while scores and independent status cards
   await expect(plugins.getByText('Score unavailable', { exact: true })).toHaveCount(2)
   await outcomeSummary.press('Enter')
   await page.setViewportSize({ width: 390, height: 844 })
-  const contextLabel = usage.getByText('Context tokens', { exact: true })
-  const promptLabel = usage.getByText('Prompt tokens', { exact: true })
-  expect(
-    Math.abs((await contextLabel.boundingBox())!.y - (await promptLabel.boundingBox())!.y),
-  ).toBeLessThan(2)
-  for (const region of [usage, signals, plugins]) {
+  for (const region of [usage, plugins]) {
     const box = (await region.boundingBox())!
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(390)
@@ -315,6 +312,5 @@ test('usage leads with compact metrics while scores and independent status cards
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1))
     .toBe(true)
   await usage.screenshot({ path: info.outputPath('usage-mobile.png') })
-  await metadata.screenshot({ path: info.outputPath('routing-metadata-mobile.png') })
   expect(writes).toEqual([])
 })

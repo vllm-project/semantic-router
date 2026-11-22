@@ -1,14 +1,15 @@
-"""Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold.
+"""Analyze MMLU-Pro results and generate a canonical v0.5 config scaffold.
 
 Two output modes (selectable via --mode):
 
   --mode full   (default, upstream behavior)
-      Generate a complete v0.3 config scaffold: providers, routing.modelCards,
-      routing.signals.domains, routing.decisions, global.*. Use this when you
+      Generate a complete v0.5 config scaffold: providers with model facts,
+      recipes[default].signals.domains, recipes[default].decisions, global.*.
+      Use this when you
       are bootstrapping a new deployment from evaluation results.
 
   --mode patch
-      Generate only the routing.signals.domains block plus a
+      Generate only the recipes[default].signals.domains block plus a
       merge_instructions note, as a YAML patch. Use this when you already
       have a config.yaml and want to update only the per-domain model_scores
       ranking + use_reasoning flags based on new evaluation results. Similar
@@ -27,71 +28,42 @@ How to read the output
 
   - Full mode: the output YAML is a complete config — load it with
     `vllm-sr serve` or merge into your deployment config.
-  - Patch mode: the output YAML contains routing.signals.domains and
-    merge_instructions. Open it, copy the domains block, and paste it
-    under routing.signals in your existing config.yaml.
+  - Patch mode: the output YAML contains recipes[default].signals.domains
+    and merge_instructions. Open it, copy the domains block, and paste it
+    under the signals of your default recipe in your existing config.yaml.
 
 The terminal output also prints a "Config saved to <path>" line and,
 when --cost-lambda > 0, a "Warning" line if --token-costs-dir was missing.
 """
 
 import argparse
+import copy
 import glob
 import json
 import os
 from collections import defaultdict
-from typing import Any
 from urllib.parse import unquote
 
 import yaml
 
-try:
-    from .artifact_inventory import DEFAULT_CONFIG, load_config
-except ImportError:
-    from artifact_inventory import DEFAULT_CONFIG, load_config
-
 DEFAULT_OUTPUT_FILE = "config/config.eval.yaml"
 
-DEFAULT_EMBEDDINGS = {
-    "semantic": {
-        "mmbert_model_path": "models/Vela-1.0-Encoder-307M-Embedding",
-        "use_cpu": True,
-        "embedding_config": {
-            "model_type": "mmbert",
-            "preload_embeddings": True,
-            "target_dimension": 768,
-            "target_layer": 22,
-            "min_score_threshold": 0.5,
-        },
-    }
-}
+# The response cache embeds with embeddings.default, the pre-declared
+# vela-embedding deployment.
+DEFAULT_EMBEDDINGS = {"default": {"deployment": "vela-embedding"}}
 
 DEFAULT_RESPONSE_CACHE = {
-    "enabled": True,
-    "embedding_model": "mmbert",
     "max_entries": 1000,
     "ttl_seconds": 3600,
 }
 
-DEFAULT_TOOLS = {
-    "enabled": True,
-    "top_k": 3,
-    "similarity_threshold": 0.2,
-    "tools_db_path": "config/runtime/tools/tools_db.json",
-    "fallback_to_empty": True,
+MODEL_FACTS = {
+    "description": (
+        "Generated from MMLU-Pro evaluation results for category-aware routing."
+    ),
+    "capabilities": ["chat"],
+    "tags": ["generated", "mmlu-pro"],
 }
-
-
-def canonical_modules() -> dict[str, Any]:
-    """Copy the prompt guard and classifier modules from the maintained config."""
-    modules = load_config(DEFAULT_CONFIG)["global"]["model_catalog"]["modules"]
-    return {
-        "prompt_guard": modules["prompt_guard"],
-        "classifier": {
-            "domain": modules["classifier"]["domain"],
-            "pii": modules["classifier"]["pii"],
-        },
-    }
 
 
 CATEGORY_REASONING = {
@@ -114,7 +86,7 @@ CATEGORY_REASONING = {
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold"
+        description="Analyze MMLU-Pro results and generate a canonical v0.5 config scaffold"
     )
     parser.add_argument(
         "--results-dir",
@@ -132,9 +104,9 @@ def parse_args():
         "--mode",
         choices=("full", "patch"),
         default="full",
-        help="Output mode: 'full' generates a complete v0.3 config scaffold "
+        help="Output mode: 'full' generates a complete v0.5 config scaffold "
         "(default, upstream behavior). 'patch' generates only the "
-        "routing.signals.domains section as a merge patch — useful when you "
+        "recipes[default].signals.domains section as a merge patch — useful when you "
         "already have a config and want to update just the routing policy "
         "based on new eval results (similar to bench/reasoning/canonical_patch.py).",
     )
@@ -270,6 +242,7 @@ def build_provider_models(
         provider_models.append(
             {
                 "name": model_name,
+                **copy.deepcopy(MODEL_FACTS),
                 "provider_model_id": model_name,
                 "api_format": api_format,
                 "external_model_ids": {provider_name: model_name},
@@ -287,21 +260,19 @@ def build_provider_models(
     return provider_models
 
 
-def build_routing_model_cards(ranked_models):
-    model_cards = []
-    for model_name, _average_accuracy in ranked_models:
-        model_cards.append(
-            {
-                "name": model_name,
-                "description": (
-                    "Generated from MMLU-Pro evaluation results for category-aware routing."
-                ),
-                "capabilities": ["chat"],
-                "tags": ["generated", "mmlu-pro"],
-                "modality": "ar",
-            }
-        )
-    return model_cards
+def response_cache_plugin(similarity_threshold):
+    return {
+        "type": "response_cache",
+        "configuration": {
+            "enabled": True,
+            "scope": "global",
+            "semantic": {
+                "match": {
+                    "recall": {"top_k": 1, "min_similarity": similarity_threshold}
+                }
+            },
+        },
+    }
 
 
 def build_domain_signals(category_accuracies):
@@ -321,7 +292,7 @@ def build_domain_signals(category_accuracies):
                 "description": (
                     f"MMLU-Pro category generated from evaluation results: {category_name}."
                 ),
-                "mmlu_categories": [category_name],
+                "labels": [category_name],
                 "model_scores": [
                     {
                         "model": model_name,
@@ -346,7 +317,7 @@ def generate_config_yaml(
     api_format,
     provider_name,
 ):
-    """Generate a canonical v0.3 config scaffold from MMLU-Pro results."""
+    """Generate a canonical v0.5 config scaffold from MMLU-Pro results."""
     average_accuracies = calculate_average_accuracies(category_accuracies)
     if not average_accuracies:
         raise ValueError("No non-auto model results were found in the input directory")
@@ -358,7 +329,7 @@ def generate_config_yaml(
     default_model = ranked_models[0][0]
 
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [],
         "providers": {
             "defaults": {
@@ -374,28 +345,18 @@ def generate_config_yaml(
                 provider_name,
             ),
         },
-        "routing": {
-            "modelCards": build_routing_model_cards(ranked_models),
-            "signals": {
-                "domains": build_domain_signals(category_accuracies),
-            },
-            "decisions": [],
-        },
         "global": {
-            "stores": {
-                "response_cache": {
-                    **DEFAULT_RESPONSE_CACHE,
-                    "similarity_threshold": similarity_threshold,
-                }
-            },
-            "integrations": {
-                "tools": DEFAULT_TOOLS,
-            },
-            "model_catalog": {
-                "embeddings": DEFAULT_EMBEDDINGS,
-                "modules": canonical_modules(),
-            },
+            "plugins": [response_cache_plugin(similarity_threshold)],
+            "stores": {"response_cache": dict(DEFAULT_RESPONSE_CACHE)},
+            "model_catalog": {"embeddings": DEFAULT_EMBEDDINGS},
         },
+        "recipes": [
+            {
+                "name": "default",
+                "signals": {"domains": build_domain_signals(category_accuracies)},
+                "decisions": [],
+            }
+        ],
     }
 
 
@@ -571,7 +532,7 @@ def build_cost_aware_domain_signals(
                 "description": (
                     f"MMLU-Pro category generated from evaluation results: {category_name}."
                 ),
-                "mmlu_categories": [category_name],
+                "labels": [category_name],
                 "model_scores": model_scores,
             }
         )
@@ -616,22 +577,18 @@ def main():
         signals_domains = build_domain_signals(category_accuracies)
 
     # ---- Mode: patch ----
-    # Generate only the routing.signals.domains block as a merge patch.
+    # Generate only the recipes[default].signals.domains block as a merge patch.
     # The user merges this into an existing config — similar to
     # bench/reasoning/canonical_patch.py's patch mode.
     if args.mode == "patch":
         patch = {
-            "routing": {
-                "signals": {
-                    "domains": signals_domains,
-                },
-            },
+            "recipes": [{"name": "default", "signals": {"domains": signals_domains}}],
             "merge_instructions": (
-                "Merge the 'routing.signals.domains' block into your "
-                "existing config.yaml under routing.signals. This patch "
-                "only updates per-domain model_scores ranking + "
+                "Merge the 'recipes[default].signals.domains' block into "
+                "your existing config.yaml under the default recipe's signals. "
+                "This patch only updates per-domain model_scores ranking + "
                 "use_reasoning. All other config sections (providers, "
-                "modelCards, decisions, global.*) are left untouched."
+                "decisions, global.*) are left untouched."
             ),
         }
         if args.cost_lambda > 0:
@@ -645,7 +602,7 @@ def main():
         return
 
     # ---- Mode: full (default, upstream behavior) ----
-    print("Generating canonical v0.3 config scaffold...")
+    print("Generating canonical v0.5 config scaffold...")
     config = generate_config_yaml(
         category_accuracies,
         args.similarity_threshold,
@@ -657,7 +614,7 @@ def main():
     )
     # Replace the pure-accuracy signals.domains with the cost-aware version
     # when cost-aware post-processing was requested.
-    config["routing"]["signals"]["domains"] = signals_domains
+    config["recipes"][0]["signals"]["domains"] = signals_domains
 
     print(f"Saving config to {args.output_file}...")
     save_config(config, args.output_file)

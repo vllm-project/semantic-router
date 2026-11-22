@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 从 Smoke 到冻结验收
 translation:
   source_commit: "31fa0fdab6787b3b149894db259af13c8ce42f5a"
@@ -44,8 +45,8 @@ Compare 允许比较 completed 或 failed 的 live 运行，但每个计划 cell
 
 只读 API 为 `GET /api/sr-bench/v1/replay-options` 和 `GET /api/sr-bench/v1/comparison-options`；不传 `baseline_run_id` 查询基线，传入后查询兼容下级。`limit` 为 1–25，`after` 必须使用上一页返回的不透明游标，CLI `benchmark replay-options` 使用相同游标。空页若仍有 `has_more: true`，表示搜索尚未完成，需点击 **Load more** 或传入下一页游标。`scan_limited: true` 表示部分证据超过单页验证限额，不能据此认定不存在其他兼容组合。可见的可比较证据变化时，游标失效并要求从第一页刷新。以上查询不调用模型。
 
-Experiment 持久关联 baseline、initial、preview、estimate、candidate、validation 和 recovery 运行，不改写原始回执。创建或关联实验、查询 Replay 资格和生成候选计划均不产生模型答案；属于同一 experiment 也不代表两次运行一定可比。已结束的完整 live 基线即使失败，也可提供候选计划的冻结协议；这不会重试生成或改写原证据。恢复子任务始终标为 recovery，不替代完整基线。管理员可以继续 CLI 创建的实验；其他可写用户只能在自己的实验中创建新任务。只读用户可以比较有权访问的已有结果。
+Experiment 持久关联 baseline、initial、preview、estimate、candidate、validation 和 recovery 运行，不改写原始回执。创建或关联实验、查询 Replay 资格和生成候选计划均不产生模型答案。在 Dashboard 的 **Runs** 中，从 **Experiment** 筛选器选择一个实验后，其运行按顺序排列（参考、起始配方、编号版本、验证），上方面板会建议下一步；同一筛选器中的 **New experiment…** 用于创建实验。属于同一 experiment 也不代表两次运行一定可比。已结束的完整 live 基线即使失败，也可提供候选计划的冻结协议；这不会重试生成或改写原证据。恢复子任务始终标为 recovery，不替代完整基线。管理员可以继续 CLI 创建的实验；其他可写用户只能在自己的实验中创建新任务。只读用户可以比较有权访问的已有结果。
 
-可在 Dashboard 实验详情或通过 `vllm-sr benchmark experiment delete EXPERIMENT_ID` 删除已结束的实验。删除仅移除分组和关联，保留全部运行、结果和产物；关联任务仍在运行时会阻止删除。重试同一删除会返回已保存的回执，已删除实验的创建键不能再次创建该实验。
+可在 **Runs** 中该实验的面板上或通过 `vllm-sr benchmark experiment delete EXPERIMENT_ID` 删除已结束的实验。删除仅移除分组和关联，保留全部运行、结果和产物；关联任务仍在运行时会阻止删除。重试同一删除会返回已保存的回执，已删除实验的创建键不能再次创建该实验。
 
 Replay 是答案复用产生的诊断估计，不是实测能力、延迟或节省结果；依赖学习状态的快照不允许 replay。离线 regrade 目前只支持选择题/网格最终答案，零模型调用且不改写原始结果。Export 仅允许明确标记的 dev 数据，拒绝 holdout 和未知 split；它不会启动训练。

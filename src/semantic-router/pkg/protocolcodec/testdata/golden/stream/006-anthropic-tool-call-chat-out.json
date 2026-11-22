@@ -53,12 +53,9 @@
               "tool_calls": [
                 {
                   "function": {
-                    "arguments": "\"Paris\"}",
-                    "name": "lookup"
+                    "arguments": "\"Paris\"}"
                   },
-                  "id": "call_1",
-                  "index": 0,
-                  "type": "function"
+                  "index": 0
                 }
               ]
             },

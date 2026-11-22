@@ -123,12 +123,16 @@ func (r *OpenAIRouter) renderAutomaticOutput(body []byte, dispatch *providerDisp
 	if err != nil {
 		return nil, err
 	}
-	authorize, err := configuredProviderAuthorizer(r.Config, dispatch.profile, dispatch.logicalModel)
+	authorize, err := configuredProviderAuthorizer(r.Config, dispatch.profile, dispatch.logicalModel, "automatic_output_render")
 	if err != nil {
 		return nil, err
 	}
 	base := providerEndpointScheme(r.Config, dispatch.backendName, dispatch.profile) + "://" + dispatch.backendAddress
-	client, err := connector.New(base, authorize, connector.Options{AttemptTimeout: 30 * time.Second, MaxRequestBytes: 16 << 20, MaxResponseBytes: 32 << 20, MaxErrorBytes: 8 << 10})
+	tlsConfig, err := providerTLSConfig(dispatch.profile)
+	if err != nil {
+		return nil, err
+	}
+	client, err := connector.New(base, authorize, connector.Options{AttemptTimeout: 30 * time.Second, MaxRequestBytes: 16 << 20, MaxResponseBytes: 32 << 20, MaxErrorBytes: 8 << 10, TLSConfig: tlsConfig})
 	if err != nil {
 		return nil, err
 	}

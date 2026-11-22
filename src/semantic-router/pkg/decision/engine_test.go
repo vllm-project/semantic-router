@@ -7,13 +7,12 @@ import (
 )
 
 type evaluateDecisionsCase struct {
-	name                  string
-	decisions             []config.Decision
-	strategy              config.RoutingStrategy
-	matchedKeywordRules   []string
-	matchedEmbeddingRules []string
-	matchedDomainRules    []string
-	expectedDecision      string
+	name                string
+	decisions           []config.Decision
+	strategy            config.RoutingStrategy
+	matchedKeywordRules []string
+	matchedDomainRules  []string
+	expectedDecision    string
 }
 
 type evaluateSignalsCase struct {
@@ -104,12 +103,11 @@ func TestDecisionEngine_EvaluateDecisions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewDecisionEngine(nil, nil, nil, tt.decisions, tt.strategy)
-			result, err := engine.EvaluateDecisions(
-				tt.matchedKeywordRules,
-				tt.matchedEmbeddingRules,
-				tt.matchedDomainRules,
-			)
+			engine := NewDecisionEngine(tt.decisions, tt.strategy)
+			result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+				KeywordRules: tt.matchedKeywordRules,
+				DomainRules:  tt.matchedDomainRules,
+			})
 			assertDecisionResult(t, result, err, tt.expectedDecision)
 		})
 	}
@@ -160,7 +158,7 @@ func TestDecisionEngine_EvaluateDecisionsWithFactCheck(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewDecisionEngine(nil, nil, nil, tt.decisions, config.RoutingStrategyPriority)
+			engine := NewDecisionEngine(tt.decisions, config.RoutingStrategyPriority)
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
 			assertDecisionResult(t, result, err, tt.expectedDecision)
 		})
@@ -210,7 +208,7 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			engine := NewDecisionEngine(nil, nil, nil, tt.decisions, config.RoutingStrategyPriority)
+			engine := NewDecisionEngine(tt.decisions, config.RoutingStrategyPriority)
 			result, err := engine.EvaluateDecisionsWithSignals(tt.signals)
 			assertDecisionResult(t, result, err, tt.expectedDecision)
 			if result != nil && result.Confidence != 1.0 {
@@ -222,15 +220,12 @@ func TestDecisionEngine_EvaluateDecisionsWithNOTOperator(t *testing.T) {
 
 func TestDecisionEngine_UnsupportedConditionDoesNotMatch(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{ruleDecision(
 			"unsupported-signal", 10, "AND",
 			config.RuleCondition{Type: "unsupported", Name: "unknown"},
 		)},
-		config.RoutingStrategyPriority,
-	)
+		config.RoutingStrategyPriority)
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{})
 	assertDecisionResult(t, result, err, "")

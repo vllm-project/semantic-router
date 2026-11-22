@@ -63,6 +63,7 @@ export const decisionRulesForSave = (
   if (rules.operator !== 'AND' && conditions.length === 0) {
     throw new Error(`The root ${rules.operator} group needs at least one condition.`)
   }
+  if (rules.on_error) throw new Error('on_error only applies to leaf conditions.')
   conditions.forEach((condition, index) => validateCondition(condition, `Condition #${index + 1}`))
   if (rules.on_unknown && conditions.some((condition) => conditionUsesOnError(condition))) {
     throw new Error('Rules on_unknown cannot be combined with condition on_error.')
@@ -137,4 +138,144 @@ const parsePluginConfiguration = (
   } catch {
     throw new Error(`Plugin #${index + 1} configuration must be valid JSON.`)
   }
+}
+
+// Drawer editing works on a copy of the decision as written: fields the
+// editor does not touch keep their exact values, and saving only normalizes
+// what the old form normalized (trimmed names, dropped empty blocks).
+
+export type DecisionTab = 'overview' | 'rules' | 'models' | 'algorithm' | 'plugins' | 'advanced'
+
+export class DecisionDraftError extends Error {
+  constructor(
+    message: string,
+    readonly tab: DecisionTab,
+  ) {
+    super(message)
+  }
+}
+
+const OPTIONAL_BLOCKS = [
+  'action',
+  'adaptations',
+  'reliability',
+  'fallback',
+  'output_contract_spec',
+  'retention',
+  'annotations',
+] as const
+
+const MODEL_REF_TEXT_FIELDS = [
+  'lora_name',
+  'reasoning_description',
+  'reasoning_mode',
+  'reasoning_effort',
+] as const
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function newDecisionDraft(): DecisionConfig {
+  return { name: '', description: '', priority: 1, rules: {}, modelRefs: [] }
+}
+
+export function cloneDecision(decision: DecisionConfig): DecisionConfig {
+  return JSON.parse(JSON.stringify(decision)) as DecisionConfig
+}
+
+/** Model references as saved: a model each, trimmed text, no empty optional values. */
+export function decisionModelRefsFromDraft(
+  refs: DecisionConfig['modelRefs'] | undefined,
+): DecisionConfig['modelRefs'] {
+  return (refs ?? []).flatMap((ref) => {
+    const model = typeof ref?.model === 'string' ? ref.model.trim() : ''
+    if (!model) return []
+    const next: Record<string, unknown> = { ...ref, model }
+    for (const key of MODEL_REF_TEXT_FIELDS) {
+      const value = typeof next[key] === 'string' ? (next[key] as string).trim() : next[key]
+      if (value === '' || value === undefined) delete next[key]
+      else next[key] = value
+    }
+    if (
+      next.weight !== undefined &&
+      !(typeof next.weight === 'number' && Number.isFinite(next.weight))
+    )
+      delete next.weight
+    return [next as unknown as DecisionConfig['modelRefs'][number]]
+  })
+}
+
+/** The decision a draft saves as, or the first problem with the tab it belongs to. */
+export function decisionFromDraft(
+  draft: DecisionConfig,
+  validate: {
+    algorithmErrors?: (algorithm: Record<string, unknown>) => string[]
+    actionErrors?: (action: Record<string, unknown>) => string[]
+    declarativeErrors?: (decision: DecisionConfig) => string[]
+  } = {},
+): DecisionConfig {
+  const next = cloneDecision(draft) as DecisionConfig & Record<string, unknown>
+  next.name = (next.name || '').trim()
+  if (!next.name) throw new DecisionDraftError('Name is required.', 'overview')
+  try {
+    next.rules = decisionRulesForSave(next.rules)
+  } catch (error) {
+    throw new DecisionDraftError(error instanceof Error ? error.message : String(error), 'rules')
+  }
+  next.modelRefs = decisionModelRefsFromDraft(next.modelRefs)
+  if (next.plugins !== undefined) {
+    try {
+      next.plugins = decisionPluginsForSave(next.plugins as DecisionFormState['plugins'])
+    } catch (error) {
+      throw new DecisionDraftError(
+        error instanceof Error ? error.message : String(error),
+        'plugins',
+      )
+    }
+  }
+  for (const key of OPTIONAL_BLOCKS) {
+    if (isPlainObject(next[key]) && Object.keys(next[key] as object).length === 0) delete next[key]
+  }
+  if (Array.isArray(next.candidateIterations) && next.candidateIterations.length === 0)
+    delete next.candidateIterations
+  if (typeof next.output_contract === 'string') {
+    const contract = next.output_contract.trim()
+    if (contract) next.output_contract = contract
+    else delete next.output_contract
+  }
+  for (const key of ['priority', 'tier'] as const) {
+    if (next[key] !== undefined && !(typeof next[key] === 'number' && Number.isFinite(next[key])))
+      delete next[key]
+  }
+  if (next.output !== undefined && !isPlainObject(next.output)) delete next.output
+  if (isPlainObject(next.output) && Object.keys(next.output).length === 0) delete next.output
+  if (isPlainObject(next.action)) {
+    const problem = validate.actionErrors?.(next.action)[0]
+    if (problem) throw new DecisionDraftError(problem, 'models')
+  }
+  if (isPlainObject(next.algorithm)) {
+    const problem = validate.algorithmErrors?.(next.algorithm)[0]
+    if (problem) throw new DecisionDraftError(problem, 'algorithm')
+  }
+  const declarative = validate.declarativeErrors?.(next)[0]
+  if (declarative) throw new DecisionDraftError(declarative, 'advanced')
+  return next
+}
+
+/** Writes a decision into the profile's list in place; a new or renamed-onto-free name is appended. */
+export function upsertDecision(
+  decisions: readonly DecisionConfig[],
+  decision: DecisionConfig,
+  originalName?: string,
+): DecisionConfig[] {
+  const clash = decisions.find(
+    (entry) => entry.name === decision.name && entry.name !== originalName,
+  )
+  if (clash)
+    throw new DecisionDraftError(`A decision named “${decision.name}” already exists.`, 'overview')
+  const index =
+    originalName === undefined ? -1 : decisions.findIndex((entry) => entry.name === originalName)
+  if (index < 0) return [...decisions, decision]
+  return decisions.map((entry, position) => (position === index ? decision : entry))
 }

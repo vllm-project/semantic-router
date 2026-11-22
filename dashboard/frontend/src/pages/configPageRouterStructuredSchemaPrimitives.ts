@@ -9,6 +9,8 @@ export type RouterStructuredKind =
   | 'string-map'
   | 'object'
   | 'object-list'
+  /** A mapping of user-named entries that share one object schema. */
+  | 'object-map'
   | 'json'
 
 export interface RouterStructuredSchema {
@@ -22,6 +24,8 @@ export interface RouterStructuredSchema {
   max?: number
   step?: number
   fields?: Record<string, RouterStructuredSchema>
+  /** Generated fields this editor deliberately leaves out. */
+  omit?: readonly string[]
   item?: RouterStructuredSchema
   itemLabelKey?: string
   addLabel?: string

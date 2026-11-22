@@ -1,6 +1,7 @@
-import { active, seconds } from './model'
+import { active } from './model'
 import { duration, elapsedSeconds } from './activityPresentation'
 import { useActivityClock } from './useActivityClock'
+import { SummaryStat } from './benchUi'
 import type { Run } from './types'
 
 export default function RunElapsed({
@@ -13,14 +14,17 @@ export default function RunElapsed({
   const running = active(run.status)
   const now = useActivityClock(running)
   return (
-    <div aria-label="Elapsed wall time">
-      <span>Elapsed wall time</span>
-      <strong>
-        {running ? duration(elapsedSeconds(run.created_at, now)) : seconds(savedSeconds)}
-      </strong>
-      <small>
-        {running ? 'Since this run was created · updates while active' : 'Saved run duration'}
-      </small>
-    </div>
+    <SummaryStat
+      aria-label="Elapsed wall time"
+      label="Duration"
+      value={
+        running
+          ? duration(elapsedSeconds(run.created_at, now))
+          : savedSeconds == null || !Number.isFinite(savedSeconds)
+            ? '—'
+            : duration(savedSeconds)
+      }
+      hint={running ? 'Since this run was created · updates while active' : 'Saved run duration'}
+    />
   )
 }

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "2e968c6bb62123c2cfbc239cc727f1e4d1d92b03"
   source_file: "docs/tutorials/signal/heuristic/input-modality.md"
@@ -11,7 +12,7 @@ translation:
 
 `input_modality` 确定性匹配已解析请求中存在哪些输入种类——`text`、`image`、`audio` 或 `video`。检测纯属结构：Router 检查用户消息中的 content-part 类型，从不运行分类器、嵌入模型或任何其他机器学习推理。
 
-输入模态独立于预期*输出*模态（`modality` 信号区分 `AR` 与 `DIFFUSION` 生成），也独立于为语义匹配嵌入的载荷（嵌入的 `query_modality`）。一个请求可同时包含多种输入模态，每条已配置规则独立匹配。
+输入模态独立于请求所要的*输出*，后者由 [`modality`](../application/modality.md) 信号读取。一个请求可同时包含多种输入模态，每条已配置规则独立匹配。
 
 ## 主要优势 {#key-advantages}
 
@@ -21,38 +22,38 @@ translation:
 
 ## 解决什么问题？ {#what-problem-does-it-solve}
 
-常见拓扑是：任何包含图像的请求走向视觉能力模型，纯文本请求继续走正常语义路由。在该信号出现前，图像是否存在只能通过 `conversation` 信号的 `image_content` 源到达，既难发现又只覆盖图像。`input_modality` 直接命名这一概念，并覆盖全部四种模态。
+常见拓扑是：任何包含图像的请求走向视觉能力模型，纯文本请求继续走正常语义路由。`input_modality` 直接命名请求携带的内容，并覆盖全部四种模态。
 
 注意 `NOT image_input` 并不等于「仅文本」：没有图像的请求仍可能是仅音频或空请求。将 `text` 模态规则与媒体规则的否定组合，才能精确表达仅文本。
 
 ## 何时使用 {#when-to-use}
 
-当路由决策取决于存在哪些输入种类——而不是媒体内容是什么——时，使用 `input_modality`。要按图像的语义内容路由，请改用带 `query_modality: image` 的 embedding 信号。
+当路由决策取决于存在哪些输入种类——而不是媒体内容是什么——时，使用 `input_modality`。要按图像或视频所呈现的内容路由，请改用带 `input.image` 或 `input.video` 的 [`systemone`](../systemone#read-more-than-the-current-turn) 问题；其部署必须能读取该媒介，否则配置以 `input_modality_unsupported` 被拒绝。
 
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    input_modality:
-      - name: image_input
-        description: Request contains at least one image content part.
-        modality: image
-      - name: audio_input
-        description: Request contains at least one audio content part.
-        modality: audio
-
-  decisions:
-    - name: vision-request
-      description: Send image-bearing requests to the vision pool.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-          - type: input_modality
-            name: image_input
-      modelRefs:
-        - model: vision-model
+recipes:
+  - name: default
+    signals:
+      input_modality:
+        - name: image_input
+          description: Request contains at least one image content part.
+          modality: image
+        - name: audio_input
+          description: Request contains at least one audio content part.
+          modality: audio
+    decisions:
+      - name: vision-request
+        description: Send image-bearing requests to the vision pool.
+        priority: 1000
+        rules:
+          operator: AND
+          conditions:
+            - type: input_modality
+              name: image_input
+        modelRefs:
+          - model: vision-model
 ```
 
 `modality` 必须是 `text`、`image`、`audio` 或 `video` 之一。规则名必须唯一且已去空白。
@@ -70,10 +71,9 @@ routing:
 
 ## 可观测性 {#observability}
 
-匹配规则暴露在 `x-vsr-matched-input-modality` 响应头、classify/eval 响应的 `input_modality` 字段、router-回放记录，以及标准的每信号 Prometheus 指标（`llm_signal_match_total{signal_type="input_modality"}`）中。
+匹配规则以 `input_modality:<name>` 暴露在 `x-vsr-trace` 的 `signals` 成员、classify/eval 响应的 `input_modality` 字段、router-回放记录，以及标准的每信号 Prometheus 指标（`llm_signal_match_total{signal_type="input_modality"}`）中。
 
 ## 相关信号 {#related-signals}
 
-- [`modality`](../learned/modality.md) — 预期输出模态（`AR`、`DIFFUSION`、`BOTH`）。
-- 带 `query_modality: image` 的 [`embedding`](../learned/embedding.md) — 图像内容的语义分类。
-- [`conversation`](conversation.md) — 请求形态事实；其 `image_content` 源仍受支持，并共享同一底层图像计数。
+- [`modality`](../application/modality.md) — 请求所要的输出：文本、图像、带图像的文本、语音、音频或视频。
+- [`conversation`](conversation.md) — 请求形态事实，例如消息数量、工具定义与工具循环。

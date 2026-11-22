@@ -281,6 +281,12 @@ func (q *QdrantStore) AttachResponse(ctx context.Context, id string, body string
 	})
 }
 
+func (q *QdrantStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
+	return q.updateRecord(ctx, id, func(r *Record) {
+		prompt.Apply(r)
+	})
+}
+
 func (q *QdrantStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
 		r.Outcomes = append(r.Outcomes, cloneOutcome(outcome))
@@ -299,6 +305,7 @@ func (q *QdrantStore) UpdateHallucinationStatus(ctx context.Context, id string, 
 
 func (q *QdrantStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
+		r.ProviderCache = cloneProviderCacheAccounting(usage.ProviderCache)
 		r.PromptTokens = cloneIntPtr(usage.PromptTokens)
 		r.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 		r.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
@@ -309,12 +316,20 @@ func (q *QdrantStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 		r.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 		r.Currency = cloneStringPtr(usage.Currency)
 		r.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		r.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 	})
 }
 
 func (q *QdrantStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
 		r.ToolTrace = cloneToolTrace(&trace)
+	})
+}
+
+// UpdateReview replaces the approval review of a record.
+func (q *QdrantStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	return q.updateRecord(ctx, id, func(r *Record) {
+		r.Review = CloneReview(&review)
 	})
 }
 

@@ -15,8 +15,8 @@ import (
 func (m *MilvusStore) ensureCollection(ctx context.Context) error {
 	logging.Infof("MilvusStore: ensuring collection '%s' (dimension=%d)", m.collectionName, m.config.Milvus.Dimension)
 
-	err := milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, m.client, m.collectionName, func(innerCtx context.Context) error {
-		return m.createMemoryCollection(innerCtx)
+	err := milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(ctx, m.client, m.collectionName, m.createMemoryCollection, func(innerCtx context.Context) error {
+		return milvuslifecycle.ValidateFloatVectorDimension(innerCtx, m.client, m.collectionName, "embedding", m.config.Milvus.Dimension)
 	}, milvuslifecycle.CollectionRetryOptions{})
 	if err != nil {
 		return err

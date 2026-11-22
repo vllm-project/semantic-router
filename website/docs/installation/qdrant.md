@@ -164,11 +164,8 @@ restore procedures for the persistent volume.
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: qdrant
-      similarity_threshold: 0.90
       ttl_seconds: 7200
-      embedding_model: mmbert
       qdrant:
         host: qdrant                   # Service name or hostname
         port: 6334
@@ -177,20 +174,25 @@ global:
         connect_timeout: 10
 ```
 
+The store holds the backend; a
+[`response_cache` plugin](../tutorials/plugin/response-cache) turns caching on
+and sets the recall's `min_similarity`.
+
 ### Agentic Memory
+
+A [`context` plugin](../tutorials/plugin/context#memory-sources) with a
+`memory` source reads and writes this store.
 
 ```yaml
 global:
   stores:
     memory:
-      enabled: true
       backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
         collection: agentic_memory
-        dimension: 256               # mmbert: 64, 128, 256, 512 or 768
-      embedding_model: mmbert
+        dimension: 256               # Vela Embedding: 64, 128, 256, 512 or 768
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
@@ -211,8 +213,6 @@ global:
       enabled: true
       backend_type: qdrant
       file_storage_dir: /var/lib/vsr/data
-      embedding_model: multimodal
-      embedding_dimension: 384
       qdrant:
         host: qdrant
         port: 6334
@@ -232,15 +232,19 @@ the configured embedding model.
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
         collection_name: router_replay
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
-This enables the router-wide replay policy. Add a route-local `router_replay`
+The `router_replay` plugin in `global.plugins` enables the router-wide replay
+policy. Add a route-local `router_replay`
 plugin only when a decision needs to override capture or retention behavior;
 see the [Router Replay plugin](../tutorials/plugin/router-replay).
 

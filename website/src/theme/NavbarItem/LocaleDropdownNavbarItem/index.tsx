@@ -105,20 +105,16 @@ function useLocaleDropdownUtils() {
   }
 }
 
-export default function LocaleDropdownNavbarItem({
-  mobile,
-  dropdownItemsBefore,
-  dropdownItemsAfter,
-  queryString,
-  ...props
-}: Props): ReactNode {
+export function useLocaleItems(
+  { mobile, queryString }: { mobile?: boolean, queryString?: string },
+): LinkLikeNavbarItemProps[] {
   const utils = useLocaleDropdownUtils()
 
   const {
     i18n: { currentLocale, locales },
   } = useDocusaurusContext()
 
-  const localeItems = locales.map((locale): LinkLikeNavbarItemProps => ({
+  return locales.map((locale): LinkLikeNavbarItemProps => ({
     label: utils.getLabel(locale),
     lang: utils.getLang(locale),
     to: utils.getURL(locale, { queryString }),
@@ -131,7 +127,20 @@ export default function LocaleDropdownNavbarItem({
           : 'dropdown__link--active'
         : '',
   }))
+}
 
+export default function LocaleDropdownNavbarItem({
+  mobile,
+  dropdownItemsBefore,
+  dropdownItemsAfter,
+  queryString,
+  ...props
+}: Props): ReactNode {
+  const {
+    i18n: { currentLocale, localeConfigs },
+  } = useDocusaurusContext()
+
+  const localeItems = useLocaleItems({ mobile, queryString })
   const items = [...dropdownItemsBefore, ...localeItems, ...dropdownItemsAfter]
   const dropdownLabel = mobile
     ? translate({
@@ -139,7 +148,7 @@ export default function LocaleDropdownNavbarItem({
         id: 'theme.navbar.mobileLanguageDropdown.label',
         description: 'The label for the mobile language switcher dropdown',
       })
-    : utils.getLabel(currentLocale)
+    : localeConfigs[currentLocale].label
 
   return (
     <DropdownNavbarItem

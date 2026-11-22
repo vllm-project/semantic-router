@@ -19,7 +19,7 @@ import (
 )
 
 const azureIngressTestConfig = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: worker
@@ -36,7 +36,8 @@ providers:
         - provider: vllm
           endpoint: http://127.0.0.1:18001/v1
           api_key: provider-secret
-routing: {}
+recipes:
+  - name: default
 `
 
 func TestValidateAzureDeploymentPaths(t *testing.T) {
@@ -150,7 +151,7 @@ func TestAzureDeploymentChatRoutesTheDeploymentModel(t *testing.T) {
 			dispatch := stream.Responses[1].GetRequestBody().GetResponse()
 			require.NotNil(t, dispatch, "request was not dispatched: %v", stream.Responses[1].GetImmediateResponse())
 			emitted := headerValuesByName(dispatch.GetHeaderMutation().GetSetHeaders())
-			assert.Equal(t, "worker", emitted[headers.SelectedModel])
+			assert.Equal(t, "worker", emitted[headers.VSRRouteModel])
 			assert.Equal(t, "/v1/chat/completions", emitted[":path"])
 			var wire struct {
 				Model string `json:"model"`
@@ -198,7 +199,7 @@ func TestAzureResponsesAndV1ChatDispatch(t *testing.T) {
 			dispatch := stream.Responses[1].GetRequestBody().GetResponse()
 			require.NotNil(t, dispatch, "request was not dispatched: %v", stream.Responses[1].GetImmediateResponse())
 			emitted := headerValuesByName(dispatch.GetHeaderMutation().GetSetHeaders())
-			assert.Equal(t, "worker", emitted[headers.SelectedModel])
+			assert.Equal(t, "worker", emitted[headers.VSRRouteModel])
 			assert.Equal(t, "/v1/chat/completions", emitted[":path"])
 			var wire struct {
 				Model    string            `json:"model"`
@@ -238,7 +239,7 @@ func newAzureIngressTestRouter(t *testing.T) *OpenAIRouter {
 	t.Helper()
 	cfg, err := config.ParseYAMLBytes([]byte(azureIngressTestConfig))
 	require.NoError(t, err)
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	return &OpenAIRouter{
 		Config:             cfg,

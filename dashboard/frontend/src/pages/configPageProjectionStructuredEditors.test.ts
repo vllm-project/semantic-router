@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
+import { TooltipProvider } from '../ui'
+
 import {
   ProjectionCalibrationEditor,
   ProjectionInputsEditor,
@@ -26,10 +28,10 @@ describe('projection structured editors', () => {
   it('renders typed inputs, calibration, and output threshold controls', () => {
     const markup = renderToStaticMarkup(
       createElement(
-        'div',
+        TooltipProvider,
         null,
         createElement(ProjectionInputsEditor, {
-          value: [{ type: 'embedding', name: 'support', weight: 0.5, value_source: 'confidence' }],
+          value: [{ type: 'domain', name: 'support', weight: 0.5, value_source: 'confidence' }],
           onChange: vi.fn(),
         }),
         createElement(ProjectionCalibrationEditor, {
@@ -46,7 +48,8 @@ describe('projection structured editors', () => {
     expect(markup).toContain('Input type')
     expect(markup).toContain('Value source')
     expect(markup).toContain('Slope')
-    expect(markup).toContain('Less than')
+    expect(markup).toContain('Upper bound')
+    expect(markup).toContain('value="0.25"')
     expect(markup).not.toContain('textarea')
   })
 })

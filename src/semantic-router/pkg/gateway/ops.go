@@ -3,6 +3,9 @@ package gateway
 import (
 	"net/http"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 // Probe paths the gateway answers itself, before API keys and routing.
@@ -63,15 +66,17 @@ func newAccessRecord(r *http.Request) AccessRecord {
 		Path:          requestTarget(r),
 		Protocol:      r.Proto,
 		BytesReceived: max(r.ContentLength, 0),
-		ForwardedFor:  r.Header.Get("X-Forwarded-For"),
+		ForwardedFor:  r.Header.Get(headers.XForwardedFor),
 		UserAgent:     r.Header.Get("User-Agent"),
 		Authority:     r.Host,
 	}
 }
 
-// exchange is the state one request accumulates for its access record.
+// exchange is the state one request accumulates: its access record and, when
+// no backend answered, the local reply the client got.
 type exchange struct {
 	record AccessRecord
+	local  *routing.LocalReply
 }
 
 func (h *Handler) logAccess(x *exchange, w *countingWriter) {

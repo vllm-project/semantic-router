@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"bytes"
+	"net/http"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -20,18 +22,55 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 		defer recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	}
 
-	if looperResponse := r.handleLooperResponseBody(v.ResponseBody.Body, v.ResponseBody.GetEndOfStream(), ctx); looperResponse != nil {
-		return looperResponse, nil
+	responseBody, decoded, failure := r.decodeUpstreamResponseBody(v.ResponseBody.Body, ctx)
+	if failure != nil {
+		return failure, nil
+	}
+	response := r.handleDecodedResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), completionLatency, ctx)
+	deliverUpstreamResponseBody(response, ctx, responseBody, decoded)
+	// A buffered body can precede trailers even when its entire payload arrived.
+	ctx.bufferedResponseComplete = !ctx.IsStreamingResponse
+	return response, nil
+}
+
+// answerInPlaceOfUpstream answers with status in place of the upstream
+// response. No later phase sees that answer, so the replay record ends here
+// with what the client got, for reason.
+func (r *OpenAIRouter) answerInPlaceOfUpstream(ctx *RequestContext, status int, message, reason string) *ext_proc.ProcessingResponse {
+	response := r.createErrorResponse(status, message)
+	r.failAnsweredRouterReplay(ctx, status, response.GetImmediateResponse().GetBody(), reason)
+	return response
+}
+
+// invalidUpstreamResponse answers with 502 for an upstream response the Router
+// cannot pass on.
+func (r *OpenAIRouter) invalidUpstreamResponse(ctx *RequestContext, message string) *ext_proc.ProcessingResponse {
+	return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, message, "upstream_invalid_response")
+}
+
+// handleDecodedResponseBody runs the response phases on the upstream body as
+// the router reads it, after any content coding is removed.
+func (r *OpenAIRouter) handleDecodedResponseBody(
+	responseBody []byte,
+	endOfStream bool,
+	completionLatency time.Duration,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	if looperResponse := r.handleLooperResponseBody(responseBody, endOfStream, ctx); looperResponse != nil {
+		return looperResponse
 	}
 
-	responseBody := v.ResponseBody.Body
 	if isUpstreamTransportError(ctx) {
-		return r.handleUpstreamTransportError(responseBody, ctx), nil
+		return r.handleUpstreamTransportError(responseBody, ctx)
 	}
 
 	if ctx.IsStreamingResponse {
-		return r.handleSemanticStreamingResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), ctx), nil
+		return r.handleSemanticStreamingResponseBody(responseBody, endOfStream, ctx)
 	}
+	// Recovery and redaction replace this slice before the pipeline copies
+	// it. Compare with the decoded upstream body so same-format Chat still
+	// emits BodyMutation. Gzip replacement stays in deliverUpstreamResponseBody.
+	incomingBody := responseBody
 	recoveredBody, recoveryErr := r.handleContextRecoveryFollowup(
 		ctx.TraceContext,
 		responseBody,
@@ -42,24 +81,29 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 			"request_id": ctx.RequestID,
 			"error":      recoveryErr.Error(),
 		})
-		if contextRecoveryFailClosed(ctx) {
-			return r.createErrorResponse(502, "Context recovery followup failed"), nil
+		if contextRecoveryFailClosed(r.Config, ctx) {
+			return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, "Context recovery followup failed", "request_processing_failed")
 		}
 		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {
 		responseBody = recoveredBody
 	}
 
-	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency), nil
+	return r.handleNonStreamingResponseBody(
+		responseBody,
+		ctx,
+		completionLatency,
+		!bytes.Equal(responseBody, incomingBody),
+	)
 }
 
-func contextRecoveryFailClosed(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+func contextRecoveryFailClosed(cfg *config.RouterConfig, ctx *RequestContext) bool {
+	if ctx == nil {
 		return false
 	}
-	plugin := ctx.VSRSelectedDecision.GetContextCompressionConfig()
+	plugin := contextCompression(requestPlugins(cfg, ctx))
 	return plugin != nil &&
-		plugin.EffectiveFailureMode() == config.ContextCompressionFailureClosed
+		plugin.Compress.EffectiveFailureMode() == config.ContextCompressionFailureClosed
 }
 
 func buildResponseBodyContinueResponse(

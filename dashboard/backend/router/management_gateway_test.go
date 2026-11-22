@@ -28,7 +28,7 @@ func TestManagementGatewaySharesRBACAndReadonlyPolicy(t *testing.T) {
 		provider := routerProxyCredentialProvider{token: "router-management"}
 		registerRouterAPIProxy(mux, cfg, nil, nil, nil, provider)
 		for _, policy := range routercontract.ManagementPolicies() {
-			path := strings.NewReplacer("{type}", "rag", "{id}", "record-1", "{name}", "example").Replace(policy.Path)
+			path := strings.NewReplacer("{type}", "context", "{id}", "record-1", "{name}", "example").Replace(policy.Path)
 			perms := auth.RequiredPermissions(policy.Method, path)
 			if !reflect.DeepEqual(perms, policy.Permissions) {
 				t.Fatalf("RBAC drift for %s %s: %v", policy.Method, path, perms)

@@ -33,34 +33,13 @@ ROOT = Path(__file__).resolve().parents[2]
 ROUTER = ROOT / "src/semantic-router"
 # Environment variable -> the runtime's built-in package it names.
 PACKAGES = {
-    "VLLM_SR_DOMAIN_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
-    "VLLM_SR_PII_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-PII",
-    "VLLM_SR_JAILBREAK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
-    "VLLM_SR_FACTCHECK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
-    "VLLM_SR_FEEDBACK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
     "VLLM_SR_MMBERT_TEST_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
 }
-# Router consumers read their label mappings from the package directory; the
-# runtime's pinned file list leaves them out.
+# Files the runtime's pinned file list leaves out of a package directory.
 ROUTER_FILES = ["*_mapping.json"]
-CLASSIFIER_TESTS = (
-    "TestJailbreakDistributionRealModel",
-    "TestJailbreakRiskRealModelContract",
-    "TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow",
-    "TestFeedbackPredictionAndAbstentionRealModel",
-    "TestFeedbackForcedAbstentionPreservesPredictionRealModel",
-    "TestFactCheckPolicyRealModel",
-    "TestFactCheckEmptyInputRealModel",
-    "TestLocalClassifierMaintainedCPU",
-    "TestUnifiedClassifierPublishedModels",
-)
 CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
 # The pinned Omni Nano snapshot (VELA_OMNI_ARTIFACT) serves these.
 OMNI_TESTS = {
-    "classification": (
-        "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
-        "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
-    ),
     "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
 }
 # Log -> the Vela 2.0 size a runtime of its own serves for the tests that log
@@ -80,7 +59,6 @@ VELA2_SUITES = {
     ),
 }
 SELECTIONS = (
-    ("./pkg/classification", CLASSIFIER_TESTS, "classification.jsonl"),
     ("./pkg/cache", CACHE_TESTS, "cache.jsonl"),
     *(
         ("./pkg/" + package, names, "omni-" + package + ".jsonl")

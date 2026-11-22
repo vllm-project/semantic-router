@@ -14,7 +14,7 @@ from cli.model_catalog import ModelCatalogError
 
 def _asset_document(model_id: str, recipe: str, provider: str) -> dict:
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
         "global": {"router": {"strategy": "priority"}},
         "providers": {
@@ -24,23 +24,22 @@ def _asset_document(model_id: str, recipe: str, provider: str) -> dict:
                 {"name": provider},
             ],
         },
-        "routing": {
-            "strategy": "priority",
-            "modelCards": [
-                {"name": "local/fallback"},
-                {"name": provider},
-            ],
-        },
-        "entrypoints": [{"model_names": [model_id], "recipe": recipe}],
-        "recipes": [{"name": recipe, "routing": {"decisions": []}}],
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True},
+            {"model_names": [model_id], "recipe": recipe},
+        ],
+        "recipes": [
+            {"name": "default", "strategy": "priority"},
+            {"name": recipe, "decisions": []},
+        ],
     }
 
 
 def test_role_validation_scopes_future_generations_to_their_asset_and_recipe() -> None:
     v1 = _asset_document("vllm-sr/mom-v1-blend", "balance", "local/v1")
     v2 = _asset_document("vllm-sr/mom-v2-blend", "next", "local/v2")
-    v1["recipes"][0]["routing"]["decisions"] = [{"modelRefs": [{"model": "local/v1"}]}]
-    v2["recipes"][0]["routing"]["decisions"] = [{"modelRefs": [{"model": "local/v2"}]}]
+    v1["recipes"][1]["decisions"] = [{"modelRefs": [{"model": "local/v1"}]}]
+    v2["recipes"][1]["decisions"] = [{"modelRefs": [{"model": "local/v2"}]}]
 
     model_catalog._validate_catalog_model_role_pool(
         "vllm-sr/mom-v1-blend",
@@ -67,7 +66,7 @@ def test_role_validation_scopes_future_generations_to_their_asset_and_recipe() -
 def test_role_validation_accepts_connection_free_recipe_templates() -> None:
     document = _asset_document("vllm-sr/mom-v1-blend", "balance", "local/v1")
     document.pop("providers")
-    document["recipes"][0]["routing"]["decisions"] = []
+    document["recipes"][1]["decisions"] = []
 
     model_catalog._validate_catalog_model_role_pool(
         "vllm-sr/mom-v1-blend",
@@ -133,6 +132,6 @@ def test_package_stager_discovers_every_declared_catalog_asset(
     assert (destination / "latest/mom-v1/config.yaml").is_file()
     assert (destination / "latest/mom-v2/metadata.yaml").is_file()
 
-    (version / "undeclared.yaml").write_text("version: v0.3\n", encoding="utf-8")
+    (version / "undeclared.yaml").write_text("version: v0.5\n", encoding="utf-8")
     with pytest.raises(ValueError, match="contents differ from the declared assets"):
         stager.check()

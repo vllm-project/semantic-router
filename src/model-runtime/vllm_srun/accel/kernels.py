@@ -35,12 +35,23 @@ class Kernel:
 
 @dataclass
 class KernelSet:
-    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants."""
+    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants.
+
+    ``approximate_slots`` narrows ``allow_approximate`` to the named slots, for a family
+    whose records cover only some of the device's approximate kernels; None allows every slot.
+    """
 
     device: str
     available: dict[str, list[Kernel]] = field(default_factory=dict)
     allow_approximate: bool = False
+    approximate_slots: frozenset[str] | None = None
     variants: dict[str, str] = field(default_factory=dict)
+
+    def allows(self, name: str) -> bool:
+        """Whether this slot may run an approximate kernel."""
+        return self.allow_approximate and (
+            self.approximate_slots is None or name in self.approximate_slots
+        )
 
     def register(self, kernel: Kernel) -> None:
         self.available.setdefault(kernel.name, []).insert(0, kernel)
@@ -53,9 +64,7 @@ class KernelSet:
         candidates = self.available.get(name, [])
         for variant in dict.fromkeys((self.variants.get(name), None)):
             for kernel in candidates:
-                if kernel.variant == variant and (
-                    kernel.exact or self.allow_approximate
-                ):
+                if kernel.variant == variant and (kernel.exact or self.allows(name)):
                     return kernel
         raise KeyError(f"no kernel registered for {name!r} on {self.device}")
 
@@ -123,6 +132,126 @@ def causal_conv1d_ref(
     if activation is not None:
         out = _activation(activation)(out)
     return out.to(hidden_states.dtype)
+
+
+def causal_conv1d_update_ref(
+    hidden_states: torch.Tensor,
+    conv_state: torch.Tensor,
+    weight: torch.Tensor,
+    bias: torch.Tensor | None = None,
+    activation: str | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """One cached causal-conv step: concatenate the state, conv1d with no padding, keep the new tail.
+
+    ``hidden_states`` and ``conv_state`` are ``[batch, channels, time]``. The returned state is the
+    last ``conv_state`` frames of the concatenation (Transformers' ``causal_conv1d_update``).
+    """
+    _, hidden_size, seq_len = hidden_states.shape
+    state_len = conv_state.shape[-1]
+    joined = torch.cat([conv_state, hidden_states], dim=-1).to(weight.dtype)
+    updated = joined[:, :, -state_len:].contiguous()
+    out = F.conv1d(joined, weight.unsqueeze(1), bias, padding=0, groups=hidden_size)[
+        :, :, -seq_len:
+    ]
+    if activation is not None:
+        out = _activation(activation)(out)
+    return out.to(hidden_states.dtype), updated.to(hidden_states.dtype)
+
+
+def recurrent_gated_delta_rule_ref(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    g: torch.Tensor,
+    beta: torch.Tensor,
+    initial_state: torch.Tensor | None = None,
+    output_final_state: bool = False,
+    use_qk_l2norm_in_kernel: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """The gated delta rule one token at a time (Transformers' ``torch_recurrent_gated_delta_rule``).
+
+    Inputs are ``[batch, time, heads, dim]``, the same layout as ``chunk_gated_delta_rule_ref``.
+    A cached decode step passes the prefill's final state as ``initial_state``.
+    """
+    initial_dtype = query.dtype
+    if use_qk_l2norm_in_kernel:
+        query = l2norm(query, dim=-1, eps=1e-6)
+        key = l2norm(key, dim=-1, eps=1e-6)
+    query, key, value, beta, decay = [
+        x.transpose(1, 2).to(torch.float32, memory_format=torch.contiguous_format)
+        for x in (query, key, value, beta, g)
+    ]
+    batch_size, num_heads, sequence_length, k_head_dim = key.shape
+    v_head_dim = value.shape[-1]
+    query = query * (k_head_dim**-0.5)
+    core = torch.zeros(
+        batch_size,
+        num_heads,
+        sequence_length,
+        v_head_dim,
+        dtype=value.dtype,
+        device=value.device,
+    )
+    if initial_state is None:
+        current = torch.zeros(
+            batch_size,
+            num_heads,
+            k_head_dim,
+            v_head_dim,
+            dtype=value.dtype,
+            device=value.device,
+        )
+    else:
+        current = initial_state.to(value)
+    for index in range(sequence_length):
+        query_t = query[:, :, index]
+        key_t = key[:, :, index]
+        value_t = value[:, :, index]
+        decay_t = decay[:, :, index].exp().unsqueeze(-1).unsqueeze(-1)
+        beta_t = beta[:, :, index].unsqueeze(-1)
+        current = current * decay_t
+        memory = (current * key_t.unsqueeze(-1)).sum(dim=-2)
+        delta = (value_t - memory) * beta_t
+        current = current + key_t.unsqueeze(-1) * delta.unsqueeze(-2)
+        core[:, :, index] = (current * query_t.unsqueeze(-1)).sum(dim=-2)
+    core = core.transpose(1, 2).to(initial_dtype, memory_format=torch.contiguous_format)
+    return core, current if output_final_state else None
+
+
+def gdn_prep_ref(
+    mixed_qkv: torch.Tensor,
+    b: torch.Tensor,
+    a: torch.Tensor,
+    conv_weight: torch.Tensor,
+    a_log: torch.Tensor,
+    dt_bias: torch.Tensor,
+    k_heads: int,
+    head_dim: int,
+    conv_fn=None,
+    conv_bias: torch.Tensor | None = None,
+    activation: str | None = "silu",
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Released GatedDeltaNet prep: conv + SiLU, split q/k/v, sigmoid beta, softplus gate.
+
+    Layout matches ``triton_gfx942.gdn_prep`` (q/k at ``k_heads``, before GQA repeat).
+    ``mixed_qkv`` is ``[B, T, C]``, ``conv_weight`` is ``[C, KW]``. ``conv_fn`` is the
+    ``causal_conv1d`` slot (``[B, C, T]``); the torch reference runs when it is omitted.
+    """
+    conv = conv_fn or causal_conv1d_ref
+    channels_time = mixed_qkv.transpose(1, 2).contiguous()
+    mixed = conv(
+        channels_time, conv_weight, bias=conv_bias, activation=activation
+    ).transpose(1, 2)
+    batch, length, channels = mixed.shape
+    key_dim = k_heads * head_dim
+    value_dim = channels - 2 * key_dim
+    query, key, value = torch.split(mixed, [key_dim, key_dim, value_dim], dim=-1)
+    query = query.reshape(batch, length, k_heads, head_dim)
+    key = key.reshape(batch, length, k_heads, head_dim)
+    value = value.reshape(batch, length, value_dim // head_dim, head_dim)
+    beta = b.sigmoid()
+    gate = -a_log.float().exp() * F.softplus(a.float() + dt_bias)
+    return query, key, value, gate, beta
 
 
 def chunk_gated_delta_rule_ref(
@@ -207,6 +336,59 @@ def chunk_gated_delta_rule_ref(
         initial_dtype, memory_format=torch.contiguous_format
     )
     return core_attn_out, last_recurrent_state
+
+
+def attn_prep_ref(
+    q_proj_out: torch.Tensor,
+    k_proj_out: torch.Tensor,
+    q_norm_w1: torch.Tensor,
+    k_norm_w1: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    heads: int,
+    kv_heads: int,
+    head_dim: int,
+    eps: float,
+    *,
+    gated: bool = True,
+    zero_centred: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Eager ``attn_prep``: per-head RMSNorm then rotary, matching the native decoder.
+
+    Qwen3.5 (``gated`` and ``zero_centred``): ``q_proj_out`` is ``[B, T, H * 2D]``
+    (query then unused gate), norms multiply by the already-offset ``*_w1`` and
+    round to the input dtype before partial RoPE. Qwen3 (neither): norms round
+    ``x * rstd`` to the input dtype, multiply by ``w`` in FP32, and apply full
+    RoPE. Layout out is ``[B, H, T, D]`` / ``[B, Hkv, T, D]``.
+    """
+    batch, length = q_proj_out.shape[:2]
+    q_width = 2 * head_dim if gated else head_dim
+    query = q_proj_out.view(batch, length, heads, q_width)[..., :head_dim]
+    key = k_proj_out.view(batch, length, kv_heads, head_dim)
+
+    def rms(x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+        scaled = x.float() * torch.rsqrt(x.float().pow(2).mean(-1, keepdim=True) + eps)
+        if zero_centred:
+            return (scaled * weight.float()).to(x.dtype)
+        return scaled.to(x.dtype).float() * weight.float()
+
+    query = rms(query, q_norm_w1).transpose(1, 2)
+    key = rms(key, k_norm_w1).transpose(1, 2)
+    rotary_dim = cos.shape[-1]
+    cos_h = cos.unsqueeze(1)
+    sin_h = sin.unsqueeze(1)
+
+    def rotate_half(x: torch.Tensor) -> torch.Tensor:
+        half = x.shape[-1] // 2
+        return torch.cat((-x[..., half:], x[..., :half]), dim=-1)
+
+    def embed(x: torch.Tensor) -> torch.Tensor:
+        rot, passthrough = x[..., :rotary_dim], x[..., rotary_dim:]
+        spun = (rot * cos_h) + (rotate_half(rot) * sin_h)
+        out = torch.cat([spun, passthrough], dim=-1) if passthrough.numel() else spun
+        return out.to(q_proj_out.dtype)
+
+    return embed(query), embed(key)
 
 
 def varlen_attention_ref(

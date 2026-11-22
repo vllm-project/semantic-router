@@ -2,12 +2,18 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 )
+
+// ErrLastUserManager is returned by validateRemainingUserManagers when a
+// role/status change would leave the system with no active user managers.
+var ErrLastUserManager = errors.New("cannot remove the last active user manager")
 
 func adminUsersCollectionHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +30,7 @@ func adminUsersCollectionHandler(svc *Service) http.HandlerFunc {
 		}
 
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			handleAdminUsersList(w, r, svc)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -37,6 +43,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request, svc *Service) 
 	limit := positiveQueryInt(r, "limit", 100, 200)
 	options := UserListOptions{
 		Status: r.URL.Query().Get("status"),
+		Role:   r.URL.Query().Get("role"),
 		Query:  r.URL.Query().Get("q"),
 		Sort:   r.URL.Query().Get("sort"),
 		Order:  r.URL.Query().Get("order"),
@@ -45,17 +52,20 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request, svc *Service) 
 	}
 	users, err := svc.store.ListUsers(r.Context(), options)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("failed to list users: %v", err)
+		http.Error(w, "failed to list users", http.StatusInternalServerError)
 		return
 	}
 	total, err := svc.store.CountFilteredUsers(r.Context(), options)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("failed to count users: %v", err)
+		http.Error(w, "failed to list users", http.StatusInternalServerError)
 		return
 	}
 	stats, err := svc.store.UserDirectoryStats(r.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("failed to load user stats: %v", err)
+		http.Error(w, "failed to list users", http.StatusInternalServerError)
 		return
 	}
 
@@ -101,7 +111,7 @@ func adminUserItemHandler(svc *Service) http.HandlerFunc {
 		}
 
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			handleAdminUserGet(w, r, svc, userID)
 		case http.MethodPatch:
 			handleAdminUserPatch(w, r, svc, ac, userID)
@@ -116,7 +126,12 @@ func adminUserItemHandler(svc *Service) http.HandlerFunc {
 func handleAdminUserGet(w http.ResponseWriter, r *http.Request, svc *Service, userID string) {
 	user, err := svc.store.GetUserByID(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("failed to load user: %v", err)
+		http.Error(w, "failed to load user", http.StatusInternalServerError)
 		return
 	}
 
@@ -137,7 +152,12 @@ func handleAdminUserPatch(
 
 	target, err := svc.store.GetUserByID(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("failed to load user: %v", err)
+		http.Error(w, "failed to load user", http.StatusInternalServerError)
 		return
 	}
 
@@ -164,7 +184,12 @@ func handleAdminUserPatch(
 		normalizedRole,
 		normalizedStatus,
 	); validationErr != nil {
-		http.Error(w, validationErr.Error(), http.StatusConflict)
+		if errors.Is(validationErr, ErrLastUserManager) {
+			http.Error(w, validationErr.Error(), http.StatusConflict)
+			return
+		}
+		log.Printf("user manager validation error: %v", validationErr)
+		http.Error(w, "failed to update user", http.StatusInternalServerError)
 		return
 	}
 
@@ -176,7 +201,8 @@ func handleAdminUserPatch(
 		if writeAdminMutationAuthorizationError(w, err) {
 			return
 		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Printf("failed to update user: %v", err)
+		http.Error(w, "failed to update user", http.StatusInternalServerError)
 		return
 	}
 
@@ -202,7 +228,12 @@ func handleAdminUserDelete(
 
 	target, err := svc.store.GetUserByID(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		log.Printf("failed to load user: %v", err)
+		http.Error(w, "failed to load user", http.StatusInternalServerError)
 		return
 	}
 
@@ -213,7 +244,12 @@ func handleAdminUserDelete(
 		target.Role,
 		"inactive",
 	); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		if errors.Is(err, ErrLastUserManager) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		log.Printf("user manager validation error: %v", err)
+		http.Error(w, "failed to delete user", http.StatusInternalServerError)
 		return
 	}
 
@@ -224,7 +260,8 @@ func handleAdminUserDelete(
 		if writeAdminMutationAuthorizationError(w, err) {
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("failed to delete user: %v", err)
+		http.Error(w, "failed to delete user", http.StatusInternalServerError)
 		return
 	}
 
@@ -289,7 +326,7 @@ func validateRemainingUserManagers(
 		return err
 	}
 	if remainingManagers == 0 {
-		return errors.New("cannot remove the last active user manager")
+		return ErrLastUserManager
 	}
 
 	return nil

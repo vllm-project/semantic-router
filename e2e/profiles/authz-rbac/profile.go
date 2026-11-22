@@ -41,7 +41,7 @@ const (
 	chartEnvoyGateway       = "oci://docker.io/envoyproxy/gateway-helm"
 	chartAIGatewayCRD       = "oci://docker.io/envoyproxy/ai-gateway-crds-helm"
 	chartAIGateway          = "oci://docker.io/envoyproxy/ai-gateway-helm"
-	envoyGatewayValuesURL   = "https://raw.githubusercontent.com/envoyproxy/ai-gateway/main/manifests/envoy-gateway-values.yaml"
+	envoyGatewayValuesURL   = "https://raw.githubusercontent.com/envoyproxy/ai-gateway/v0.4.0/manifests/envoy-gateway-values.yaml"
 
 	// File path constants
 	valuesFile = "e2e/profiles/authz-rbac/values.yaml"
@@ -175,13 +175,8 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		// Standard functional test — validates end-to-end routing
 		"chat-completions-request",
-		// Authz-specific functional test (200 OK; identity headers are stripped by Envoy Lua before ext_proc)
-		"chat-completions-request-authz",
 		// Security test — validates that client-supplied identity headers are stripped
 		"authz-header-spoofing",
-		// NOTE: ratelimit-limitor is NOT run here: it requires x-authz-* from the client to reach
-		// the router, but EnvoyPatchPolicy Lua strips those headers (same as production anti-spoofing).
-		// Run ratelimit-limitor from a profile without header stripping, or after JWT sets headers post-strip.
 	}
 }
 

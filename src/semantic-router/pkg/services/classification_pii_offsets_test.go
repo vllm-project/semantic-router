@@ -2,14 +2,12 @@ package services
 
 import (
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 )
 
 // Byte offsets land past the end of the string for a code-point client.
 func TestBuildPIIEntitiesReportsRuneOffsets(t *testing.T) {
 	text := "こんにちは、私は John Smith です。電話は 415-555-0134"
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: "John Smith", Start: 25, End: 35, Confidence: 0.99},
 		{EntityType: "PHONE_NUMBER", Text: "415-555-0134", Start: 55, End: 67, Confidence: 0.99},
 	}
@@ -31,7 +29,7 @@ func TestBuildPIIEntitiesReportsRuneOffsets(t *testing.T) {
 
 func TestBuildPIIEntitiesLeavesAsciiOffsetsAlone(t *testing.T) {
 	text := "Contact John Smith at 415-555-0134."
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: "John Smith", Start: 8, End: 18, Confidence: 0.9},
 	}
 	entities := buildPIIEntities(text, detections, true, false, true, map[string]string{})
@@ -43,7 +41,7 @@ func TestBuildPIIEntitiesLeavesAsciiOffsetsAlone(t *testing.T) {
 // omitempty on a plain int drops an offset of 0.
 func TestBuildPIIEntitiesKeepsZeroStartPosition(t *testing.T) {
 	text := "John Smith called yesterday."
-	detections := []classification.PIIDetection{
+	detections := []piiDetection{
 		{EntityType: "PERSON", Text: "John Smith", Start: 0, End: 10, Confidence: 0.9},
 	}
 	entities := buildPIIEntities(text, detections, true, false, true, map[string]string{})

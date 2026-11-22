@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -9,10 +10,11 @@ import (
 // HandleReplayRequest adapts the existing Router Replay serializer to the
 // transport-neutral contract consumed by the authenticated management API.
 func (r *OpenAIRouter) HandleReplayRequest(
+	ctx context.Context,
 	method string,
 	requestTarget string,
 ) (routerruntime.ReplayResponse, bool) {
-	response := r.handleRouterReplayAPI(method, requestTarget)
+	response := r.handleRouterReplayAPI(ctx, method, requestTarget)
 	if response == nil {
 		return routerruntime.ReplayResponse{}, false
 	}

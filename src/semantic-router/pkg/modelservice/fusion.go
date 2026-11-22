@@ -110,6 +110,9 @@ func fusedClassify(first api.BundleTask, calls []*bundleCall, list api.ClassifyI
 
 // answer hands every call its part of the task's result.
 func (t *bundleTask) answer(result api.BundleResult, err error) {
+	if len(t.calls) > 0 {
+		reportRuntimeCall(t.calls[0].ctx, t.task, result)
+	}
 	if t.decision != nil {
 		t.answerDecision(result, err)
 		return

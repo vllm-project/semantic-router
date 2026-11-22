@@ -5,6 +5,15 @@ description: Let Semantic Router choose a model pool while llm-d schedules a rep
 
 # Integrate with llm-d
 
+:::note Experimental integration example
+
+This integration has no maintained platform-specific E2E qualification. The
+project continuously tests standalone and the Agent Router ExtProc path. Use
+this guide as an example and qualify the exact upstream release and deployment
+you choose. See [Deployment Support](../support-matrix).
+
+:::
+
 llm-d is one
 [Inference Router](../../overview/semantic-router-overview#protocol-and-deployment-boundaries),
 alongside vLLM Router and the [AIBrix gateway](aibrix). Use this topology when
@@ -23,7 +32,7 @@ family applies to the request.
 client
   -> inference gateway
   -> Semantic Router ExtProc
-  -> HTTPRoute selected by x-selected-model
+  -> HTTPRoute selected by x-vsr-route-model
   -> InferencePool
   -> llm-d endpoint picker
   -> model replica
@@ -52,7 +61,7 @@ Keep these names aligned across the two systems:
 | Name | Owner | Requirement |
 | --- | --- | --- |
 | Provider model | Semantic Router | `providers.models[].name` is the logical pool name selected by a recipe. |
-| Request header | Semantic Router | The Router writes the selected provider model to `x-selected-model`. |
+| Request header | Semantic Router | The Router writes the selected provider model to `x-vsr-route-model`. |
 | Route match | Gateway API | An `HTTPRoute` matches that exact header value. |
 | Backend reference | Gateway API / llm-d | The route targets the intended `InferencePool`. |
 | Served model | Model server | The pool's replicas accept the model identity forwarded by the gateway. |
@@ -73,7 +82,7 @@ spec:
     - matches:
         - headers:
             - type: Exact
-              name: x-selected-model
+              name: x-vsr-route-model
               value: local/code
       backendRefs:
         - group: inference.networking.k8s.io
@@ -106,7 +115,7 @@ the llm-d deployment and must use the API version supported by that release.
 4. Keep `global.router.clear_route_cache: true` in the canonical Router config.
    The gateway must call ExtProc in the downstream request path, preserve its
    route-cache clearing response, and then re-evaluate the `HTTPRoute` after
-   Semantic Router writes `x-selected-model`.
+   Semantic Router writes `x-vsr-route-model`.
 
 ## Verify one layer at a time
 
@@ -140,7 +149,7 @@ Verify all three decisions rather than stopping at HTTP 200:
 
 | Symptom | Check |
 | --- | --- |
-| Route never matches | Compare `x-selected-model` with the `HTTPRoute` value, including case and namespace. |
+| Route never matches | Compare `x-vsr-route-model` with the `HTTPRoute` value, including case and namespace. |
 | `ResolvedRefs=False` | Check the `InferencePool` name, group, port, and cross-namespace permissions. |
 | Correct pool, wrong served model | Align the provider's model identity with the model name accepted by the replicas. |
 | Semantic Router is bypassed | Confirm the gateway invokes ExtProc before route matching. |

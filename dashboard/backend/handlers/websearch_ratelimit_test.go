@@ -319,8 +319,8 @@ func TestWebSearchRateLimitStatsHandlerRejectsUnsupportedMethods(t *testing.T) {
 			if response.Code != http.StatusMethodNotAllowed {
 				t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
 			}
-			if response.Header().Get("Allow") != http.MethodGet {
-				t.Fatalf("Allow = %q, want GET", response.Header().Get("Allow"))
+			if response.Header().Get("Allow") != "GET, HEAD" {
+				t.Fatalf("Allow = %q, want GET, HEAD", response.Header().Get("Allow"))
 			}
 		})
 	}

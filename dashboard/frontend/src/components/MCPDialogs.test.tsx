@@ -3,50 +3,59 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 
-import { MCPServerDialog } from './MCPServerDialog'
-import { MCPToolDetailModal } from './MCPToolDetailModal'
-import { MCP_REDACTED_ARGUMENTS } from './mcpConfigPanelUtils'
-import type { UnifiedTool } from './mcpConfigPanelTypes'
+import type { MCPServerConfig } from '../tools/mcp'
+import { MCPServerFormBody } from './MCPServerDialog'
+import { MCP_REDACTED_ARGUMENTS, type ServerFormValues } from './mcpConfigPanelUtils'
 
-describe('MCP dialog accessibility contracts', () => {
-  it('labels the server editor and exposes an intentional initial focus target', () => {
-    const markup = renderToStaticMarkup(
-      createElement(MCPServerDialog, {
-        server: null,
-        onClose: vi.fn(),
-        onSave: vi.fn(async () => undefined),
-        onTest: vi.fn(async () => ({ success: true })),
-      }),
-    )
+const values = (overrides: Partial<ServerFormValues> = {}): ServerFormValues => ({
+  name: '',
+  description: '',
+  transport: 'stdio',
+  enabled: true,
+  command: '',
+  args: [],
+  preserveArguments: false,
+  url: '',
+  headers: {},
+  timeout: '30000',
+  ...overrides,
+})
 
-    expect(markup).toContain('role="dialog"')
-    expect(markup).toContain('aria-modal="true"')
-    expect(markup).toMatch(/aria-labelledby="[^"]+"/)
-    expect(markup).toContain('aria-label="Close MCP server dialog"')
+const form = (server: MCPServerConfig | null, formValues: ServerFormValues) =>
+  renderToStaticMarkup(
+    createElement(MCPServerFormBody, {
+      server,
+      values: formValues,
+      busy: false,
+      onChange: vi.fn(),
+    }),
+  )
+
+describe('MCP server editor', () => {
+  it('labels the fields and offers structured arguments with an initial focus target', () => {
+    const markup = form(null, values())
+
     expect(markup).toContain('data-dialog-initial-focus="true"')
     expect(markup).toContain('role="radiogroup"')
     expect(markup).toContain('Add argument')
     expect(markup).toContain('No command arguments configured.')
     expect(markup).not.toContain('<textarea')
-    expect(markup).not.toContain('one per line')
   })
 
   it('edits HTTP headers as structured key/value rows', () => {
-    const markup = renderToStaticMarkup(
-      createElement(MCPServerDialog, {
-        server: {
-          id: 'docs',
-          name: 'Docs server',
-          transport: 'streamable-http',
-          enabled: true,
-          connection: {
-            url: 'https://mcp.example.test',
-            headers: { Authorization: 'Bearer secret' },
-          },
-        },
-        onClose: vi.fn(),
-        onSave: vi.fn(async () => undefined),
-        onTest: vi.fn(async () => ({ success: true })),
+    const server: MCPServerConfig = {
+      id: 'docs',
+      name: 'Docs server',
+      transport: 'streamable-http',
+      enabled: true,
+      connection: { url: 'https://mcp.example.test', headers: { Authorization: 'Bearer secret' } },
+    }
+    const markup = form(
+      server,
+      values({
+        transport: 'streamable-http',
+        url: 'https://mcp.example.test',
+        headers: { Authorization: 'Bearer secret' },
       }),
     )
 
@@ -55,26 +64,19 @@ describe('MCP dialog accessibility contracts', () => {
     expect(markup).toContain('Bearer secret')
     expect(markup).toContain('Add header')
     expect(markup).not.toContain('<textarea')
-    expect(markup).not.toContain('one per line')
   })
 
   it('shows hidden stdio arguments as an explicit preserve-or-replace state', () => {
-    const markup = renderToStaticMarkup(
-      createElement(MCPServerDialog, {
-        server: {
-          id: 'filesystem',
-          name: 'Filesystem server',
-          transport: 'stdio',
-          enabled: true,
-          connection: {
-            command: 'npx',
-            args: [MCP_REDACTED_ARGUMENTS],
-          },
-        },
-        onClose: vi.fn(),
-        onSave: vi.fn(async () => undefined),
-        onTest: vi.fn(async () => ({ success: true })),
-      }),
+    const server: MCPServerConfig = {
+      id: 'filesystem',
+      name: 'Filesystem server',
+      transport: 'stdio',
+      enabled: true,
+      connection: { command: 'npx', args: [MCP_REDACTED_ARGUMENTS] },
+    }
+    const markup = form(
+      server,
+      values({ name: 'Filesystem server', command: 'npx', preserveArguments: true }),
     )
 
     expect(markup).toContain('Configured arguments are hidden and will be preserved.')
@@ -83,28 +85,6 @@ describe('MCP dialog accessibility contracts', () => {
       'Transport cannot be changed after creation. Create a new server instead.',
     )
     expect(markup).not.toContain(MCP_REDACTED_ARGUMENTS)
-  })
-
-  it('labels tool details with their name and description', () => {
-    const tool: UnifiedTool = {
-      id: 'mcp-search',
-      name: 'search_docs',
-      description: 'Search the documentation index.',
-      source: 'docs-server',
-      sourceType: 'mcp',
-      parameters: [],
-      rawTool: {} as UnifiedTool['rawTool'],
-    }
-    const markup = renderToStaticMarkup(
-      createElement(MCPToolDetailModal, { tool, onClose: vi.fn() }),
-    )
-
-    expect(markup).toContain('role="dialog"')
-    expect(markup).toContain('aria-modal="true"')
-    expect(markup).toMatch(/aria-labelledby="[^"]+"/)
-    expect(markup).toMatch(/aria-describedby="[^"]+"/)
-    expect(markup).toContain('aria-label="Close tool details"')
-    expect(markup).toContain('Search the documentation index.')
   })
 
   it('routes server deletion through the shared confirmation dialog', () => {
@@ -119,5 +99,12 @@ describe('MCP dialog accessibility contracts', () => {
     )
     expect(panelSource).not.toContain('runtimeConfigWritable')
     expect(panelSource).toContain('server-wide read-only policy disables MCP server changes')
+  })
+
+  it('labels the tool details dialog and its close button', () => {
+    const source = readFileSync(new URL('./MCPToolDetailModal.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('aria-label="Close tool details"')
+    expect(source).toContain('<DialogTitle')
+    expect(source).toContain('<DialogDescription')
   })
 })

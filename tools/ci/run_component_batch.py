@@ -7,13 +7,17 @@ import argparse
 import json
 import os
 import subprocess
+import time
 from pathlib import Path
 
 from ci_plan import digest
 from ci_results import actual_platform, make_receipt
+from execution_batches import contract_minutes, validate_component_batch
+from execution_targets import execution_observation
 from python_test_evidence import summarize
 from verification_catalog import load_catalog
-from workflow_evidence import go_cases, junit_cases
+from worker_process import run_command as run_isolated_command
+from workflow_evidence import go_cases, junit_cases, plugin_test_cases
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -24,26 +28,23 @@ def validate_batch(batch: dict) -> None:
     if not worker or batch.get("go") != worker["go"]:
         raise ValueError("component batch has an unknown worker contract")
     records = batch.get("verifications", [])
-    if len(records) != 1:
-        raise ValueError("component worker requires exactly one verification")
-    row = records[0]
-    declared = catalog["verifications"].get(row["id"], {})
-    if (
-        batch.get("id") != row["id"]
-        or batch.get("display_name") != row["display_name"]
-        or declared.get("executor") != "tools"
-        or declared.get("worker") != batch["worker"]
-        or row.get("executor") != "tools"
-        or row.get("worker") != batch["worker"]
-        or row.get("target") != declared.get("target")
-        or row.get("contract_sha256")
-        != digest(
-            {key: value for key, value in row.items() if key != "contract_sha256"}
-        )
-    ):
-        raise ValueError(
-            f"component contract differs from its planned worker: {row['id']}"
-        )
+    for row in records:
+        declared = catalog["verifications"].get(row["id"], {})
+        if (
+            declared.get("executor") != "tools"
+            or declared.get("worker") != batch["worker"]
+            or row.get("executor") != "tools"
+            or row.get("worker") != batch["worker"]
+            or row.get("target") != declared.get("target")
+            or row.get("contract_sha256")
+            != digest(
+                {key: value for key, value in row.items() if key != "contract_sha256"}
+            )
+        ):
+            raise ValueError(
+                f"component contract differs from its planned worker: {row['id']}"
+            )
+    validate_component_batch(batch, catalog["component_workers"])
 
 
 def commands(target: str, output: Path) -> list[list[str]]:
@@ -65,13 +66,16 @@ def commands(target: str, output: Path) -> list[list[str]]:
         ]
     if target == "test-e2e-unit":
         return [["make", target, f"E2E_UNIT_REPORT_DIR={output}"]]
+    if target == "agent-plugins-test":
+        return [
+            ["make", target, f"AGENT_PLUGINS_TEST_REPORT={output / 'plugin-tests.log'}"]
+        ]
     if target == "model-runtime-test":
         return [["make", "model-runtime-install"], ["make", target]]
     if target in {
         "vllm-sr-test",
         "harness-check",
         "onnx-artifact-test",
-        "ck-rewrite-test",
         "test-training-contracts",
         "test-provider-mocker",
         "test-bench-tools",
@@ -80,17 +84,21 @@ def commands(target: str, output: Path) -> list[list[str]]:
     raise ValueError(f"unknown component target: {target}")
 
 
-def run_command(command: list[str], env: dict, log: Path) -> None:
+def run_command(command: list[str], env: dict, log: Path, deadline: float) -> None:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(command, 45 * 60)
     with log.open("a") as stream:
         stream.write("$ " + " ".join(command) + "\n")
         stream.flush()
-        result = subprocess.run(
+        result = run_isolated_command(
             command,
             cwd=ROOT,
             env=env,
             stdout=stream,
             stderr=subprocess.STDOUT,
             check=False,
+            timeout=remaining,
         )
     if result.returncode:
         print("\n".join(log.read_text().splitlines()[-100:]), flush=True)
@@ -114,11 +122,20 @@ def contract_evidence(record: dict, output: Path) -> dict:
             "expected_cases": expected,
             "cases": cases,
         }
-    return summarize(output / "python-events.jsonl")
+    evidence = summarize(output / "python-events.jsonl")
+    if record["target"] == "agent-plugins-test":
+        # The plugin engine's own cases count beside the plugins' Python tests.
+        engine = plugin_test_cases(output / "plugin-tests.log")
+        names = [case["id"] for case in engine]
+        evidence["expected_cases"] = [*evidence["expected_cases"], *names]
+        evidence["discovered_cases"] = [*evidence["discovered_cases"], *names]
+        evidence["cases"] = [*evidence["cases"], *engine]
+    return evidence
 
 
 def run_batch(batch: dict, output: Path) -> bool:
     validate_batch(batch)
+    execution_observation(batch["verifications"][0], actual_platform())
     # A rerun must not qualify stale output from a prior execution.
     output.mkdir(parents=True, exist_ok=False)
     results = output / "results"
@@ -144,6 +161,7 @@ def run_batch(batch: dict, output: Path) -> bool:
         (raw / "verification.json").write_text(json.dumps(record, indent=2) + "\n")
         log = raw / "commands.log"
         print(f"::group::{record['display_name']}", flush=True)
+        deadline = time.monotonic() + contract_minutes(record) * 60
         try:
             if target == "test-training-contracts":
                 python = str(ROOT / ".venv-agent/bin/python")
@@ -166,7 +184,7 @@ def run_batch(batch: dict, output: Path) -> bool:
                         "tools/ci/training-test-requirements.txt",
                     ],
                 ):
-                    run_command(command, env, log)
+                    run_command(command, env, log, deadline)
             test_env = dict(env)
             if target not in {"test-e2e-unit", "soak-test"}:
                 test_env.update(
@@ -178,7 +196,7 @@ def run_batch(batch: dict, output: Path) -> bool:
             if target == "test-training-contracts":
                 test_env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
             for command in commands(target, raw):
-                run_command(command, test_env, log)
+                run_command(command, test_env, log, deadline)
             evidence = contract_evidence(record, raw)
             (raw / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
             receipt = make_receipt(
@@ -201,6 +219,7 @@ def run_batch(batch: dict, output: Path) -> bool:
             TypeError,
             OSError,
             subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
         ) as exc:
             failed.append(identity)
             (raw / "failure.txt").write_text(str(exc) + "\n")

@@ -13,15 +13,22 @@ from vllm_srun.plugins.base import Job
 from vllm_srun.plugins.decisions import DecisionModel, RenderedItem
 from vllm_srun.scheduler import scheduler as scheduler_module
 from vllm_srun.scheduler.batching import (
+    Batch,
     Batcher,
     SharedContext,
     SharePolicy,
     coalesced,
     merged,
     reference,
+    shared_batches,
 )
 from vllm_srun.scheduler.planner import cost, micro_batches
-from vllm_srun.scheduler.scheduler import DEADLINE, Scheduler, SchedulerLimits
+from vllm_srun.scheduler.scheduler import (
+    BURST_WINDOWS,
+    DEADLINE,
+    Scheduler,
+    SchedulerLimits,
+)
 from vllm_srun.timing import RunTiming
 
 ALONE = EngineArgs(max_num_seqs=1)
@@ -39,13 +46,13 @@ def job(items, group=None, reference=False):
     return Job(items, None, 0.0, group=group, reference=reference)
 
 
-def item(name, length):
+def item(name, length, offset=0):
     return RenderedItem(
         name,
         "noul",
-        list(range(length)),
-        [length - 3, length - 2],
-        length - 1,
+        list(range(offset, offset + length)),
+        [offset + length - 3, offset + length - 2],
+        offset + length - 1,
         ["false", "true"],
         ["No", "Yes"],
     )
@@ -75,6 +82,9 @@ class FakeModel(DecisionModel):
     def forward_token_budget(self):
         return self.budget
 
+    def packing_key(self, item):
+        return tuple(item.ids)
+
 
 def test_micro_batches_split_longest_first_and_keep_request_order():
     assert micro_batches([10, 20, 30], None) == [[0, 1, 2]]
@@ -82,6 +92,160 @@ def test_micro_batches_split_longest_first_and_keep_request_order():
     assert micro_batches([10, 20, 30], 64) == [[1, 2], [0]]
     with pytest.raises(ValueError):
         micro_batches([100], 64)
+
+
+def test_micro_batches_batches_a_zero_cost_tail_instead_of_dividing_by_it():
+    """A zero-padded row sorts last (longest first); dividing the budget by its
+    padded length of zero must not raise, and every zero-cost row still gets a
+    batch of its own rather than being dropped."""
+    assert micro_batches([30, 30, 0, 0], 32) == [[0], [1], [2, 3]]
+
+
+def test_over_budget_rows_of_one_state_share_a_batch_when_the_family_splits():
+    """Equal-content over-budget rows pack: the family encodes their shared content once."""
+    jobs = [job([item(f"j{i}", 300)]) for i in range(3)]  # padded 304 > budget 256
+    model = FakeModel(256)
+    model.splits_forwards = True
+    batches = batcher(model, EngineArgs(max_num_batched_tokens=256)).plan(jobs, None)
+    assert [[(id(job), idx) for job, idx in b.parts] for b in batches] == [
+        [(id(jobs[0]), [0]), (id(jobs[1]), [0]), (id(jobs[2]), [0])],
+    ]
+
+
+def test_over_budget_rows_of_distinct_content_run_alone_when_the_family_splits():
+    """Distinct-content over-budget rows do not pack: each waits for its own run.
+
+    A burst of distinct large states then finishes like the runs-alone rule,
+    not like one forward holding every state.
+    """
+    jobs = [
+        job([item(f"j{i}", 300, offset=300 * i)]) for i in range(3)
+    ]  # padded 304 > budget 256, distinct content
+    model = FakeModel(256)
+    model.splits_forwards = True
+    batches = batcher(model, EngineArgs(max_num_batched_tokens=256)).plan(jobs, None)
+    assert [[(id(job), idx) for job, idx in b.parts] for b in batches] == [
+        [(id(jobs[0]), [0])],
+        [(id(jobs[1]), [0])],
+        [(id(jobs[2]), [0])],
+    ]
+
+
+def test_over_budget_rows_run_alone_when_the_family_does_not_split():
+    jobs = [job([item(f"j{i}", 300)]) for i in range(3)]  # padded 304 > budget 256
+    batches = batcher(FakeModel(256), EngineArgs(max_num_batched_tokens=256)).plan(
+        jobs, None
+    )
+    assert [[(id(job), idx) for job, idx in b.parts] for b in batches] == [
+        [(id(jobs[0]), [0])],
+        [(id(jobs[1]), [0])],
+        [(id(jobs[2]), [0])],
+    ]
+
+
+def test_sub_budget_packing_keeps_its_budget_when_the_family_splits():
+    jobs = [job([item(f"j{i}", 100)]) for i in range(4)]  # padded 104; 104*3 > 256
+    model = FakeModel(256)
+    model.splits_forwards = True
+    batches = batcher(model, EngineArgs(max_num_batched_tokens=256)).plan(jobs, None)
+    assert [[(id(job), idx) for job, idx in b.parts] for b in batches] == [
+        [(id(jobs[0]), [0]), (id(jobs[1]), [0])],
+        [(id(jobs[2]), [0]), (id(jobs[3]), [0])],
+    ]
+
+
+def test_sub_budget_packing_recovers_after_an_over_budget_row():
+    """The over-budget flag resets with the batch: sub-budget rows pack again after mixed traffic."""
+    over_jobs = [job([item(f"o{i}", 300)]) for i in range(2)]  # padded 304 > 256
+    small_jobs = [job([item(f"s{i}", 100)]) for i in range(4)]  # 104*3 > 256
+    model = FakeModel(256)
+    model.splits_forwards = True
+    batches = batcher(model, EngineArgs(max_num_batched_tokens=256)).plan(
+        over_jobs + small_jobs, None
+    )
+    assert [[(id(job), idx) for job, idx in b.parts] for b in batches] == [
+        [(id(over_jobs[0]), [0]), (id(over_jobs[1]), [0])],
+        [(id(small_jobs[0]), [0]), (id(small_jobs[1]), [0])],
+        [(id(small_jobs[2]), [0]), (id(small_jobs[3]), [0])],
+    ]
+
+
+def test_over_budget_shared_trees_pack_when_content_equal():
+    """One-question requests of one state are shared trees on the default config.
+
+    ``shared_context_default`` makes each a tree planned by ``shared_batches``,
+    so the over-budget split rule has to live there: equal-content trees pack
+    into one batch (the family encodes the state once), distinct-content trees
+    keep running alone.
+    """
+    same = [
+        job([item(f"j{i}", 150)]) for i in range(3)
+    ]  # ids = range(150): equal content
+    other = job(
+        [
+            RenderedItem(
+                "k",
+                "noul",
+                list(range(50, 200)),
+                [197, 198],
+                199,
+                ["false", "true"],
+                ["No", "Yes"],
+            )
+        ]
+    )
+    trees = [Batch(parts=[(j, [0])], shared_prefix=118) for j in same] + [
+        Batch(parts=[(other, [0])], shared_prefix=118)
+    ]
+    packed = shared_batches(
+        trees, 100, 8, splits=True, key=lambda item: tuple(item.ids)
+    )
+    assert (
+        len(packed) == 2
+    )  # the three equal trees share a batch; the distinct one runs alone
+    keys = sorted(len(batch.parts) for batch in packed)
+    assert keys == [1, 3]
+    assert all(batch.shared_prefix == 118 for batch in packed)
+    # without splits, the runs-alone rule holds as on main
+    assert len(shared_batches(trees, 100, 8)) == 4
+
+
+def test_one_question_requests_of_one_state_plan_as_one_batch():
+    """The end-to-end plan path on the default shared-context config.
+
+    Three one-question requests of one state, budget under the state length:
+    a shared tree each, packed into one batch when the family splits forwards
+    (three batches of one before the shared_batches rule) — the H100 fan-out
+    shape this change is for.
+    """
+    jobs = [job([item(f"j{i}", 150)]) for i in range(3)]
+    model = FakeModel(256)
+    model.merges_shared_batches = True
+    model.splits_forwards = True
+    model.shared_context = lambda items, token_budget: len(items[0].ids) - 32
+    # bind() reads the engine spec for the shared-token break-even; a model
+    # that answers shared_context() itself never needs it.
+    shared = SharedContext()
+    shared.threshold = 0
+    batches = batcher(model, EngineArgs(max_num_batched_tokens=100), shared).plan(
+        jobs, None
+    )
+    assert len(batches) == 1
+    assert len(batches[0].parts) == 3
+    assert batches[0].shared_prefix == 118
+    # the same plan without splits_forwards: each tree runs alone, as on main
+    model.splits_forwards = False
+    model2 = FakeModel(256)
+    model2.merges_shared_batches = True
+    model2.shared_context = model.shared_context
+    assert (
+        len(
+            batcher(model2, EngineArgs(max_num_batched_tokens=100), shared).plan(
+                jobs, None
+            )
+        )
+        == 3
+    )
 
 
 def test_one_seq_per_forward_runs_every_row_alone():
@@ -431,6 +595,131 @@ def test_other_forward_errors_fail_only_their_batch():
         scheduler.stop()
 
 
+@pytest.mark.parametrize("boundary", ["budget", "queue", "forward", "planning"])
+def test_worker_failure_answers_all_admitted_jobs_and_closes_admission(boundary):
+    entered, release = threading.Event(), threading.Event()
+    error = RuntimeError(f"injected {boundary} failure")
+
+    def fail():
+        entered.set()
+        if boundary == "planning":
+            # _take holds the condition; let admission proceed while this hook waits.
+            assert scheduler._lock.wait_for(release.is_set, timeout=5)
+        else:
+            assert release.wait(5)
+        raise error
+
+    model = FakeModel()
+    if boundary == "budget":
+        model.forward_token_budget = fail
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs(max_num_seqs=2)),
+        observe=lambda event, values: fail() if event == boundary else None,
+        planning=lambda opened: fail() if boundary == "planning" else False,
+    )
+    # More rows than one forward can hold: a forward failure also leaves ready work.
+    futures = scheduler.submit_group(
+        [[item("a", 8), item("b", 8), item("c", 8)], [item("d", 8)]],
+        deadlines=[None, None],
+    )
+    scheduler.start()
+    try:
+        assert entered.wait(5)
+        queued = scheduler.submit([item("queued", 8)], deadline=None)
+        cancelled = scheduler.submit([item("cancelled", 8)], deadline=None)
+        assert cancelled.cancel()
+        release.set()
+        with scheduler._lock:
+            scheduler._lock.notify_all()
+        for future in [*futures, queued]:
+            with pytest.raises(RuntimeError, match=f"injected {boundary} failure"):
+                future.result(timeout=2)
+        scheduler._thread.join(2)
+        assert not scheduler._thread.is_alive()
+        assert scheduler.failure is error
+        assert scheduler.depth() == 0
+        assert scheduler._pending_jobs == scheduler._pending_tokens == 0
+        assert cancelled.cancelled()
+        with pytest.raises(RuntimeServiceError) as caught:
+            scheduler.submit([item("later", 8)], deadline=None)
+        assert caught.value.code == "not_ready"
+        model.device_thread = False
+        assert scheduler.run_now([[item("inline", 8)]], deadlines=[None]) is None
+    finally:
+        release.set()
+        scheduler.stop()
+
+
+@pytest.mark.parametrize("result_count", [0, 1, 3])
+@pytest.mark.parametrize("inline", [False, True], ids=["worker", "inline"])
+def test_wrong_result_count_fails_every_job_and_keeps_serving(
+    monkeypatch, result_count, inline
+):
+    model = FakeModel()
+    model.device_thread = not inline
+    run = model.run
+
+    def wrong_once(items):
+        values = run(items)
+        if len(model.calls) == 1:
+            return (values + values)[:result_count]
+        return values
+
+    monkeypatch.setattr(model, "run", wrong_once)
+    scheduler = Scheduler(model, batcher(model, EngineArgs(max_num_seqs=8)))
+    scheduler.start()
+    try:
+        submit = scheduler.run_now if inline else scheduler.submit_group
+        futures = submit([[item("a", 8)], [item("b", 8)]], deadlines=[None, None])
+        assert futures is not None
+        for future in futures:
+            with pytest.raises(
+                RuntimeError,
+                match=f"model result count mismatch: expected 2, got {result_count}",
+            ):
+                future.result(timeout=5)
+        assert model.calls == [["a", "b"]]
+        assert scheduler.failure is None
+        assert scheduler._thread.is_alive()
+        wait_until(lambda: scheduler._pending_jobs == 0)
+        served = scheduler.submit([item("later", 8)], deadline=None)
+        assert served.result(timeout=5) == [[0.0, 8.0]]
+        assert model.calls == [["a", "b"], ["later"]]
+    finally:
+        scheduler.stop()
+
+
+class OutOfMemoryModel(FakeModel):
+    def run(self, items):
+        import torch
+
+        raise torch.OutOfMemoryError("CUDA out of memory. Tried to allocate 2.00 GiB")
+
+
+def test_a_forward_out_of_device_memory_answers_request_too_large():
+    scheduler = Scheduler(
+        OutOfMemoryModel(), batcher(), device_fault=lambda error: False
+    )
+    scheduler.start()
+    try:
+        future = scheduler.submit([item("a", 4)], deadline=None)
+        with pytest.raises(RuntimeServiceError) as caught:
+            future.result(timeout=5)
+        assert caught.value.code == "request_too_large"
+        assert scheduler.failure is None
+    finally:
+        scheduler.stop()
+
+
+def test_a_shared_forward_out_of_device_memory_answers_overloaded():
+    import torch
+
+    error = scheduler_module._out_of_memory(torch.OutOfMemoryError("oom"), jobs=2)
+    assert error is not None and error.code == "overloaded"
+    assert scheduler_module._out_of_memory(RuntimeError("other"), jobs=1) is None
+
+
 class WorkerModel(FakeModel):
     """Runs on any thread; records the threads and the most batches in flight at once."""
 
@@ -544,6 +833,70 @@ def test_batching_window_coalesces_concurrent_requests():
         for future in futures:
             future.result(timeout=5)
         assert len(model.calls) == 1 and sorted(model.calls[0]) == ["r0", "r1", "r2"]
+    finally:
+        scheduler.stop()
+
+
+def test_a_job_served_alone_does_not_wait_for_the_batching_window():
+    model = FakeModel()
+    scheduler = Scheduler(
+        model, batcher(model, EngineArgs()), SchedulerLimits(batch_window_ms=2_000)
+    )
+    scheduler.start()
+    try:
+        started = time.monotonic()
+        scheduler.submit_group([[item("a", 8)]], deadlines=[None], alone=True)[
+            0
+        ].result(timeout=5)
+        assert time.monotonic() - started < 1.0
+    finally:
+        scheduler.stop()
+
+
+def test_a_window_waits_for_requests_still_being_planned_when_it_opened():
+    model = FakeModel()
+    planning = threading.Event()
+    planning.set()
+    opened: list[float] = []
+
+    def still_planning(window_opened: float) -> bool:
+        opened.append(window_opened)
+        return planning.is_set()
+
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs()),
+        SchedulerLimits(batch_window_ms=100),
+        planning=still_planning,
+    )
+    scheduler.start()
+    try:
+        first = scheduler.submit([item("a", 8)], deadline=None)
+        # Past the window, within BURST_WINDOWS of it: the second request is still on its way.
+        time.sleep(0.15)
+        second = scheduler.submit([item("b", 8)], deadline=None)
+        planning.clear()
+        first.result(timeout=5)
+        second.result(timeout=5)
+        assert len(model.calls) == 1 and opened
+    finally:
+        scheduler.stop()
+
+
+def test_a_window_waits_for_a_burst_at_most_burst_windows():
+    model = FakeModel()
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs()),
+        SchedulerLimits(batch_window_ms=100),
+        planning=lambda opened: True,
+    )
+    scheduler.start()
+    try:
+        started = time.monotonic()
+        scheduler.submit([item("a", 8)], deadline=None).result(timeout=5)
+        elapsed = time.monotonic() - started
+        assert 0.1 * BURST_WINDOWS - 0.05 <= elapsed < 0.1 * BURST_WINDOWS + 0.7
     finally:
         scheduler.stop()
 
@@ -697,6 +1050,14 @@ def test_inputs_without_token_ids_count_by_their_cost():
     batches = merged([images, text], cap=512)
     assert [names(batch) for batch in batches] == [["t"], ["i1"], ["i2"]]
     assert cost(Media("i1")) == 300 and cost(item("t", 8)) == 8
+
+
+def test_cost_keeps_an_explicitly_declared_zero():
+    """A state-once question whose share of its state and own block both come
+    out to zero still has real token IDs (the shared state's); only an unset
+    cost should fall back to len(ids)."""
+    assert cost(Media("q", ids=(1, 2, 3, 4, 5), cost=0)) == 0
+    assert cost(Media("q", ids=(1, 2, 3, 4, 5))) == 300
 
 
 class GatedModel(FakeModel):
@@ -869,6 +1230,35 @@ def test_coalescing_jobs_join_a_busy_worker_after_one_window():
         scheduler.stop()
 
 
+def test_requests_that_arrive_while_a_batch_waits_share_its_forward():
+    blocker, first = threading.Event(), threading.Event()
+    model = GatedModel(gates={"blocker": blocker, "a": first})
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs(max_num_batched_tokens=16)),
+        SchedulerLimits(batch_window_ms=20),
+    )
+    scheduler.start()
+    try:
+        scheduler.submit([item("blocker", 8)], deadline=None)
+        assert model.entered.wait(5)
+        model.entered.clear()
+        waiting = [scheduler.submit([item(name, 8)], deadline=None) for name in "abc"]
+        blocker.set()
+        # [a, b] runs, [c] waits for the device.
+        assert model.entered.wait(5)
+        late = scheduler.submit([item("d", 8)], deadline=None)
+        time.sleep(0.05)
+        first.set()
+        for future in [*waiting, late]:
+            future.result(timeout=5)
+        assert model.calls == [["blocker"], ["a", "b"], ["c", "d"]]
+    finally:
+        blocker.set()
+        first.set()
+        scheduler.stop()
+
+
 def test_a_job_past_its_deadline_skips_its_remaining_batches():
     gate = threading.Event()
     model = GatedModel(budget=64, gates={"long0": gate})
@@ -933,11 +1323,19 @@ def test_a_group_is_queued_at_once_and_answered_per_job():
         scheduler.stop()
 
 
-def test_a_group_beyond_the_queue_bound_is_refused_whole():
+def test_a_group_beyond_the_queue_bound_is_admitted_only_when_nothing_is_pending():
     scheduler = Scheduler(FakeModel(), batcher(), SchedulerLimits(max_queue=1))
+    first = scheduler.submit_group(
+        [[item("a", 4)], [item("b", 4)]], deadlines=[None, None]
+    )
     with pytest.raises(RuntimeServiceError) as error:
-        scheduler.submit_group([[item("a", 4)], [item("b", 4)]], deadlines=[None, None])
-    assert error.value.code == "overloaded"
+        scheduler.submit_group([[item("c", 4)], [item("d", 4)]], deadlines=[None, None])
+    assert error.value.code == "overloaded" and scheduler.depth() == 2
+    scheduler.start()
+    try:
+        assert [future.result(timeout=5) for future in first] == [[[0.0, 4.0]]] * 2
+    finally:
+        scheduler.stop()
 
 
 def test_a_group_timing_counts_a_forward_once_however_many_of_its_jobs_it_holds():

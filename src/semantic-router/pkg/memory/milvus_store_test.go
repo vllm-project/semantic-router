@@ -4,7 +4,9 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -17,19 +19,21 @@ import (
 
 // MockMilvusClient facilitates testing without a running Milvus instance
 type MockMilvusClient struct {
-	SearchFunc           func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
-	HasCollectionFunc    func(ctx context.Context, coll string) (bool, error)
-	InsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
-	UpsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
-	DeleteFunc           func(ctx context.Context, coll string, part string, expr string) error
-	QueryFunc            func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
-	CreateCollectionFunc func(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error
-	SearchCallCount      int
-	InsertCallCount      int
-	UpsertCallCount      int
-	DeleteCallCount      int
-	QueryCallCount       int
-	CapturedSchema       *entity.Schema // Captures schema passed to CreateCollection
+	SearchFunc              func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
+	HasCollectionFunc       func(ctx context.Context, coll string) (bool, error)
+	InsertFunc              func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	UpsertFunc              func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	DeleteFunc              func(ctx context.Context, coll string, part string, expr string) error
+	QueryFunc               func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
+	CreateCollectionFunc    func(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error
+	DescribeCollectionFunc  func(ctx context.Context, coll string) (*entity.Collection, error)
+	SearchCallCount         int
+	InsertCallCount         int
+	UpsertCallCount         int
+	DeleteCallCount         int
+	QueryCallCount          int
+	LoadCollectionCallCount int
+	CapturedSchema          *entity.Schema // Captures schema passed to CreateCollection
 }
 
 func (m *MockMilvusClient) Search(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
@@ -86,7 +90,10 @@ func (m *MockMilvusClient) CreateCollection(ctx context.Context, schema *entity.
 	return nil
 }
 
-func (m *MockMilvusClient) DescribeCollection(context.Context, string) (*entity.Collection, error) {
+func (m *MockMilvusClient) DescribeCollection(ctx context.Context, collection string) (*entity.Collection, error) {
+	if m.DescribeCollectionFunc != nil {
+		return m.DescribeCollectionFunc(ctx, collection)
+	}
 	return nil, nil
 }
 
@@ -99,6 +106,7 @@ func (m *MockMilvusClient) GetCollectionStatistics(context.Context, string) (map
 }
 
 func (m *MockMilvusClient) LoadCollection(context.Context, string, bool, ...client.LoadCollectionOption) error {
+	m.LoadCollectionCallCount++
 	return nil
 }
 
@@ -340,8 +348,11 @@ func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
 	// The qwen3 model type stores the test provider's full output
 	testEmbeddingConfig := EmbeddingConfig{
-		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelQwen3,
+		Provider:   memoryTestEmbeddingProvider(),
+		Deployment: "qwen3-embedding",
+	}
+	mockClient.DescribeCollectionFunc = func(_ context.Context, collection string) (*entity.Collection, error) {
+		return &entity.Collection{Schema: memoryCollectionSchema(collection, testEmbeddingConfig.Provider.Dimension())}, nil
 	}
 	options := MilvusStoreOptions{
 		Client:          mockClient,
@@ -366,7 +377,7 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 				entity.NewColumnVarChar("id", []string{"mem_1"}),
 				entity.NewColumnVarChar("content", []string{"The budget is $50k"}),
 				entity.NewColumnVarChar("memory_type", []string{"semantic"}),
-				entity.NewColumnVarChar("metadata", []string{`{"source": "slack", "importance": "high"}`}),
+				entity.NewColumnVarChar("metadata", []string{`{"source":"slack","importance":"high","created_by_user_id":"user-origin","conversation_id":"conversation-123","created_via":"llm_extraction"}`}),
 			},
 		},
 	}
@@ -387,8 +398,35 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 	assert.Equal(t, "The budget is $50k", results[0].Memory.Content)
 	assert.Equal(t, MemoryTypeSemantic, results[0].Memory.Type)
 	assert.Equal(t, "slack", results[0].Memory.Source)
+	assert.Equal(t, "user-origin", results[0].Memory.CreatedByUserID)
+	assert.Equal(t, "conversation-123", results[0].Memory.ConversationID)
+	assert.Equal(t, "llm_extraction", results[0].Memory.CreatedVia)
 	assert.Equal(t, float32(0.95), results[0].Score)
 	// Note: "importance": "high" is a string, so it won't be set in Memory.Importance (which is float32)
+}
+
+func TestMemoryMetadataJSON_ProvenanceRoundTrip(t *testing.T) {
+	input := &Memory{
+		UserID:          "owner",
+		CreatedByUserID: "user-origin",
+		ConversationID:  "conversation-123",
+		CreatedVia:      "llm_extraction",
+	}
+
+	raw, err := memoryMetadataJSON(input)
+	require.NoError(t, err)
+
+	var metadata map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &metadata))
+	assert.Equal(t, "user-origin", metadata["created_by_user_id"])
+	assert.Equal(t, "conversation-123", metadata["conversation_id"])
+	assert.Equal(t, "llm_extraction", metadata["created_via"])
+
+	got := &Memory{}
+	populateMemoryFromMetadataString(got, string(raw))
+	assert.Equal(t, input.CreatedByUserID, got.CreatedByUserID)
+	assert.Equal(t, input.ConversationID, got.ConversationID)
+	assert.Equal(t, input.CreatedVia, got.CreatedVia)
 }
 
 func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {
@@ -743,6 +781,28 @@ func TestMilvusStore_Store_Success(t *testing.T) {
 	assert.GreaterOrEqual(t, len(capturedColumns), 7, "Expected at least 7 columns for insert")
 }
 
+func TestMilvusStore_Store_RetryAfterTransientInsertUsesUpsert(t *testing.T) {
+	store, mockClient := setupTestStore()
+	store.retryBaseDelay = time.Millisecond
+
+	mockClient.InsertFunc = func(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+		return nil, errors.New("context deadline exceeded")
+	}
+	mockClient.UpsertFunc = func(context.Context, string, string, ...entity.Column) (entity.Column, error) {
+		return nil, nil
+	}
+
+	err := store.Store(context.Background(), &Memory{
+		ID:      "test-mem-retry",
+		Content: "User prefers window seats",
+		UserID:  "user-123",
+		Type:    MemoryTypeSemantic,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, mockClient.InsertCallCount)
+	assert.Equal(t, 1, mockClient.UpsertCallCount)
+}
+
 func TestMilvusStore_Store_MissingRequiredFields(t *testing.T) {
 	store, _ := setupTestStore()
 	ctx := context.Background()
@@ -903,6 +963,59 @@ func TestMilvusStore_ForgetByScope_MissingUserID(t *testing.T) {
 	assert.Contains(t, err.Error(), "user ID is required")
 }
 
+func TestMilvusStore_ForgetByScope_ProjectID_ReturnsDeleteErrors(t *testing.T) {
+	store, mockClient := setupTestStore()
+	ctx := context.Background()
+	deleteErr := errors.New("permanent test delete error")
+
+	mockClient.QueryFunc = func(
+		ctx context.Context,
+		coll string,
+		parts []string,
+		expr string,
+		out []string,
+		opts ...client.SearchQueryOptionFunc,
+	) (client.ResultSet, error) {
+		return []entity.Column{
+			entity.NewColumnVarChar("id", []string{"mem-1", "mem-2"}),
+			entity.NewColumnVarChar("metadata", []string{
+				`{"project_id":"p"}`,
+				`{"project_id":"p"}`,
+			}),
+		}, nil
+	}
+
+	attemptedIDs := make(map[string]bool)
+
+	mockClient.DeleteFunc = func(
+		ctx context.Context,
+		coll string,
+		part string,
+		expr string,
+	) error {
+		switch expr {
+		case `id == "mem-1"`:
+			attemptedIDs["mem-1"] = true
+			return deleteErr
+		case `id == "mem-2"`:
+			attemptedIDs["mem-2"] = true
+			return nil
+		default:
+			return fmt.Errorf("unexpected delete expression: %s", expr)
+		}
+	}
+
+	err := store.ForgetByScope(ctx, MemoryScope{
+		UserID:    "u",
+		ProjectID: "p",
+	})
+
+	require.Error(t, err, "ForgetByScope must report individual deletion failures")
+	assert.ErrorIs(t, err, deleteErr)
+	assert.True(t, attemptedIDs["mem-1"], "must attempt the failing deletion")
+	assert.True(t, attemptedIDs["mem-2"], "must continue to the next deletion")
+}
+
 func TestMilvusStore_Update_Success(t *testing.T) {
 	store, mockClient := setupTestStore()
 	ctx := context.Background()
@@ -965,6 +1078,34 @@ func TestMilvusStore_Update_NotFound(t *testing.T) {
 // Schema Tests
 // ============================================================================
 
+func TestMilvusStore_ExistingCollectionDimension(t *testing.T) {
+	embeddingConfig := EmbeddingConfig{Provider: memoryTestEmbeddingProvider()}
+	expected := embeddingConfig.Provider.Dimension()
+	for _, stored := range []int{expected, expected * 2} {
+		t.Run(fmt.Sprintf("stored_%d", stored), func(t *testing.T) {
+			mockClient := &MockMilvusClient{DescribeCollectionFunc: func(_ context.Context, collection string) (*entity.Collection, error) {
+				return &entity.Collection{Schema: memoryCollectionSchema(collection, stored)}, nil
+			}}
+			store, err := NewMilvusStore(MilvusStoreOptions{
+				Client:          mockClient,
+				CollectionName:  "test_memories",
+				Enabled:         true,
+				EmbeddingConfig: &embeddingConfig,
+			})
+			if stored == expected {
+				require.NoError(t, err)
+				require.NotNil(t, store)
+				assert.Equal(t, 1, mockClient.LoadCollectionCallCount)
+			} else {
+				assert.ErrorContains(t, err, fmt.Sprintf(`collection "test_memories" vector field "embedding" has dimension %d, expected %d`, stored, expected))
+				assert.Nil(t, store)
+				assert.Zero(t, mockClient.LoadCollectionCallCount)
+			}
+			assert.Nil(t, mockClient.CapturedSchema, "existing collections must not be recreated")
+		})
+	}
+}
+
 func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	mockClient := &MockMilvusClient{}
 
@@ -974,8 +1115,8 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	}
 
 	testEmbeddingConfig := EmbeddingConfig{
-		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelQwen3,
+		Provider:   memoryTestEmbeddingProvider(),
+		Deployment: "qwen3-embedding",
 	}
 
 	config := DefaultMemoryConfig()
@@ -1166,5 +1307,37 @@ func TestMilvusStore_Retrieve_ProjectScopeWidensPastLegacyCandidates(t *testing.
 			assert.Equal(t, tt.wantTopKs, gotTopKs)
 			assert.Equal(t, tt.wantEfs, gotEfs)
 		})
+	}
+}
+
+// A memory source's min_similarity is any cosine: a bound of zero or less
+// applies as written, and only an unset one takes the store's
+// default_similarity_threshold.
+func TestMilvusStore_Retrieve_KeepsANonPositiveMinSimilarity(t *testing.T) {
+	store, mockClient := setupTestStore()
+	mockClient.SearchFunc = func(context.Context, string, []string, string, []string, []entity.Vector, string, entity.MetricType, int, entity.SearchParam, ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return []client.SearchResult{{
+			ResultCount: 3,
+			Scores:      []float32{0.85, 0.3, -0.1},
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2", "id3"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2", "c3"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic", "semantic"}),
+			},
+		}}, nil
+	}
+	for _, tt := range []struct {
+		name string
+		opts RetrieveOptions
+		want int
+	}{
+		{name: "zero", opts: RetrieveOptions{Threshold: 0, ThresholdSet: true}, want: 2},
+		{name: "negative", opts: RetrieveOptions{Threshold: -0.2, ThresholdSet: true}, want: 3},
+		{name: "unset", opts: RetrieveOptions{}, want: 1},
+	} {
+		tt.opts.Query, tt.opts.UserID = "test", "u1"
+		results, err := store.Retrieve(context.Background(), tt.opts)
+		require.NoError(t, err)
+		assert.Len(t, results, tt.want, tt.name)
 	}
 }

@@ -1,0 +1,168 @@
+name: Operator Source Contracts
+
+on:
+  workflow_call:
+    inputs:
+      verification:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.25'
+  GOPROXY: 'https://proxy.golang.org|direct'
+
+jobs:
+  checks:
+    name: Source Contracts
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ./deploy/operator
+    env:
+      OPERATOR_TEST_REPORT_DIR: ${{ github.workspace }}/.agent-harness/operator-unit
+    steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install receipt dependencies
+        run: python3 -m pip install PyYAML==6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: deploy/operator/go.sum
+
+      - name: Download dependencies
+        id: dependencies
+        run: go mod download
+
+      - name: Vet Operator Code
+        id: vet
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: go vet ./...
+
+      - name: Resolve golangci-lint version
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        id: golangci_lint
+        working-directory: ${{ github.workspace }}
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+
+      - name: Lint Operator Code
+        id: lint
+        if: ${{ !cancelled() && steps.golangci_lint.outcome == 'success' }}
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: ${{ steps.golangci_lint.outputs.version }}
+          install-mode: goinstall
+          working-directory: deploy/operator
+          args: --timeout=5m --config=${{ github.workspace }}/tools/linter/go/.golangci.yml
+
+      - name: Discover Operator Unit Tests
+        id: discovery
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: |
+          mkdir -p "$OPERATOR_TEST_REPORT_DIR"
+          go test -json -list '^Test' ./... > "$OPERATOR_TEST_REPORT_DIR/operator-discovery.jsonl"
+      - name: Run Operator Unit Tests
+        id: tests
+        if: ${{ !cancelled() && steps.discovery.outcome == 'success' }}
+        run: go test -json -race -count=1 -coverprofile=coverage.out -covermode=atomic ./... > "$OPERATOR_TEST_REPORT_DIR/operator-events.jsonl"
+      - name: Check Complete Unit Test Inventory
+        if: ${{ !cancelled() && steps.discovery.outcome == 'success' && steps.tests.outcome != 'skipped' }}
+        run: |
+          python3 ../../tools/ci/deployment_test_results.py operator-unit \
+            --discovery "$OPERATOR_TEST_REPORT_DIR/operator-discovery.jsonl" \
+            --events "$OPERATOR_TEST_REPORT_DIR/operator-events.jsonl" \
+            --output "$OPERATOR_TEST_REPORT_DIR/operator-unit.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          overwrite: true
+          name: operator-unit
+          path: .agent-harness/operator-unit/
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() && steps.tests.outcome == 'success' }}
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./deploy/operator/coverage.out
+          flags: operator
+          name: operator-coverage
+
+      - name: Install controller-gen
+        id: controller_gen
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        run: |
+          GOBIN=$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.19.0
+
+      - name: Generate manifests and API code
+        id: manifests
+        if: ${{ !cancelled() && steps.controller_gen.outcome == 'success' }}
+        run: make manifests generate
+
+      - name: Verify no changes
+        id: generated
+        if: ${{ !cancelled() && steps.manifests.outcome == 'success' }}
+        run: |
+          git add -A -- .
+          if ! git diff --cached --quiet -- .; then
+            echo "Generated operator artifacts are out of date. Run 'make manifests generate' in deploy/operator and commit the changes."
+            git diff --cached -- .
+            exit 1
+          fi
+
+      - name: Regenerate bundle
+        id: bundle
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
+        # 'make bundle' installs pinned controller-gen/kustomize/operator-sdk into
+        # bin/, regenerates the manifests and OLM bundle, and runs
+        # 'operator-sdk bundle validate' as its final step.
+        run: make bundle
+
+      - name: Verify bundle is up to date
+        id: bundle_drift
+        if: ${{ !cancelled() && steps.bundle.outcome == 'success' }}
+        # Stage everything first so newly generated (untracked) files are caught
+        # and shown by the diff, not just modifications to tracked files.
+        run: |
+          git add -A -- .
+          if ! git diff --cached --quiet -- .; then
+            echo "::error::OLM bundle is out of date. Run 'make bundle' in deploy/operator and commit the regenerated bundle."
+            git diff --cached -- .
+            exit 1
+          fi
+
+      - name: Record complete source contract evidence
+        if: always()
+        working-directory: ${{ github.workspace }}
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+          STEP_RESULTS: ${{ toJSON(steps) }}
+        run: |
+          python3 tools/ci/deployment_test_results.py operator-source \
+            --report "$OPERATOR_TEST_REPORT_DIR/operator-unit.json" \
+            --steps "$STEP_RESULTS" --output operator-source-evidence.json
+          python3 tools/ci/ci_results.py record --verification "$VERIFICATION" \
+            --evidence operator-source-evidence.json --output operator-source-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          overwrite: true
+          name: ci-result-${{ fromJSON(inputs.verification).id }}
+          path: operator-source-result.json
+          if-no-files-found: error

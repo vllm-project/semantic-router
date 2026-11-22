@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -164,7 +165,7 @@ func auditModelVerificationAttempt(
 	})
 	auditContext, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), modelVerificationAuditTimeout)
 	defer cancel()
-	_ = auditor.AddAuditLog(auditContext, dashboardauth.AuditLog{
+	if err := auditor.AddAuditLog(auditContext, dashboardauth.AuditLog{
 		UserID:     actor,
 		Action:     "model.inference_verify",
 		Resource:   "models",
@@ -175,7 +176,9 @@ func auditModelVerificationAttempt(
 		StatusCode: status,
 		CreatedAt:  time.Now().Unix(),
 		ExtraJSON:  string(extra),
-	})
+	}); err != nil {
+		log.Printf("audit log write failed for model.inference_verify: %v", err)
+	}
 }
 
 func decodeModelVerificationRequest(w http.ResponseWriter, r *http.Request, target *ModelVerificationRequest) error {

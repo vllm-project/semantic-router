@@ -1,0 +1,30 @@
+[project]
+name = "user-feedback-classifier"
+version = "0.0.0"
+description = "Environment for the user feedback classifier under src/training/model_classifier/user_feedback_classifier"
+# The README trainer (sequence_repair) uses hashlib.file_digest, added in 3.11.
+requires-python = ">=3.11"
+dependencies = [
+    # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
+    # transformers.Trainer needs accelerate at runtime although nothing imports it.
+    "accelerate>=0.24.0,<2",
+    "datasets>=2.14.0,<6",
+    "numpy>=1.24.0,<3",
+    "scikit-learn>=1.3.0,<2",
+    # requirements.txt says 2.0.0, but its wheels omit the CUDA libraries on Linux.
+    "torch>=2.0.1,<3",
+    "transformers>=4.36.0,<6",
+    # Imported but missing from requirements.txt; lower bounds follow the other LoRA areas.
+    "peft>=0.10,<1",
+    "safetensors>=0.4,<1",
+]
+
+[dependency-groups]
+# Only data_processing/ imports these.
+data = [
+    "requests>=2.31.0,<3",
+    "tqdm>=4.66.0,<5",
+]
+
+[tool.uv]
+package = false

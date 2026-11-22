@@ -1,9 +1,6 @@
-import type { ReactNode } from 'react'
-
 import type { FieldConfig } from '../components/EditModal'
 import type { BuiltInModelCatalog } from '../types/modelCatalog'
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
-import type { ViewSection } from '../components/ViewModal'
 import type { NormalizedModel, RoutingModelCard } from './configPageSupport'
 import {
   effectiveModelCardFormData,
@@ -15,20 +12,13 @@ import {
   modelAPIFormatField,
   modelReasoningFamilyField,
 } from './configPageModelFormFields'
-import {
-  ModelBackendRefsEditor,
-  ModelCapabilitiesEditor,
-  ModelExternalIdsEditor,
-  ModelLorasEditor,
-  ModelPricingEditor,
-  ModelReliabilityEditor,
-  ModelTagsEditor,
-} from './configPageModelStructuredEditors'
 
 export const modelCardPatch = (data: Record<string, unknown>): Omit<RoutingModelCard, 'name'> => {
   const capabilities = normalizeStringList(data.capabilities)
   const tags = normalizeStringList(data.tags)
   const loras = normalizeModelLoras(data.loras)
+  const input = normalizeStringList(data.input_modalities)
+  const output = normalizeStringList(data.output_modalities)
   return {
     param_size:
       typeof data.param_size === 'string' && data.param_size.trim()
@@ -42,8 +32,11 @@ export const modelCardPatch = (data: Record<string, unknown>): Omit<RoutingModel
     capabilities: capabilities.length ? capabilities : undefined,
     loras: loras.length ? loras : undefined,
     tags: tags.length ? tags : undefined,
-    modality:
-      typeof data.modality === 'string' && data.modality.trim() ? data.modality.trim() : undefined,
+    // A model reads and writes text unless it declares otherwise.
+    modalities:
+      input.length || output.length
+        ? { input: input.length ? input : ['text'], output: output.length ? output : ['text'] }
+        : undefined,
   }
 }
 
@@ -51,6 +44,7 @@ const addOnlyFields: FieldConfig[] = [
   {
     name: 'model_name',
     label: 'Model Name',
+    section: 'Identity',
     type: 'text',
     required: true,
     placeholder: 'e.g., openai/gpt-4',
@@ -58,85 +52,85 @@ const addOnlyFields: FieldConfig[] = [
   },
 ]
 
+const hiddenForCatalogModels = (data: Record<string, unknown>) =>
+  Boolean(String(data.catalog || '').trim())
+
+const inlineReasoningFields: FieldConfig[] = (
+  [
+    {
+      name: 'reasoning_type',
+      label: 'Inline Reasoning Type',
+      type: 'select',
+      options: [
+        '',
+        'reasoning_effort',
+        'reasoning_mode',
+        'chat_template_kwargs',
+        'top_level_reasoning_effort',
+      ],
+      description: 'Use only when no built-in family matches a custom model.',
+    },
+    {
+      name: 'reasoning_parameter',
+      label: 'Inline Reasoning Parameter',
+      type: 'text',
+      placeholder: 'e.g., enable_thinking',
+    },
+    {
+      name: 'reasoning_activation_parameter',
+      label: 'Inline Reasoning Activation Parameter',
+      type: 'text',
+      placeholder: 'e.g., enable_thinking',
+      description: 'Optional activation flag used alongside a reasoning-effort parameter.',
+    },
+    {
+      name: 'reasoning_effort_flags',
+      label: 'Inline Effort Flags',
+      type: 'text',
+      placeholder: 'low=low_effort, medium=medium_effort',
+      description: 'Advanced: map effort names to boolean chat-template flags.',
+    },
+    {
+      name: 'reasoning_levels',
+      label: 'Inline Reasoning Levels',
+      type: 'text',
+      placeholder: 'low, medium, high',
+    },
+    {
+      name: 'reasoning_default',
+      label: 'Inline Reasoning Default',
+      type: 'text',
+      placeholder: 'medium',
+    },
+    {
+      name: 'reasoning_modes',
+      label: 'Supported Reasoning Modes',
+      type: 'text',
+      placeholder: 'adaptive, disabled',
+      description: 'Optional mode controls independent from the effort ladder.',
+    },
+    {
+      name: 'reasoning_default_mode',
+      label: 'Default Reasoning Mode',
+      type: 'select',
+      options: ['', 'enabled', 'adaptive', 'disabled'],
+    },
+    {
+      name: 'reasoning_disabled',
+      label: 'Inline Reasoning Disabled Value',
+      type: 'text',
+      placeholder: 'none or disabled',
+      description: 'Optional native level that explicitly disables reasoning.',
+    },
+  ] satisfies FieldConfig[]
+).map((field) => ({ ...field, section: 'Reasoning', shouldHide: hiddenForCatalogModels }))
+
 const reasoningFields = (
   reasoningFamilyNames: string[],
   catalog: BuiltInModelCatalog | null,
 ): FieldConfig[] => [
   modelReasoningFamilyField(reasoningFamilyNames, catalog),
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_type',
-    label: 'Inline Reasoning Type',
-    type: 'select',
-    options: [
-      '',
-      'reasoning_effort',
-      'reasoning_mode',
-      'chat_template_kwargs',
-      'top_level_reasoning_effort',
-    ],
-    description: 'Use only when no built-in family matches a custom model.',
-  },
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_parameter',
-    label: 'Inline Reasoning Parameter',
-    type: 'text',
-    placeholder: 'e.g., enable_thinking',
-  },
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_activation_parameter',
-    label: 'Inline Reasoning Activation Parameter',
-    type: 'text',
-    placeholder: 'e.g., enable_thinking',
-    description: 'Optional activation flag used alongside a reasoning-effort parameter.',
-  },
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_effort_flags',
-    label: 'Inline Effort Flags',
-    type: 'text',
-    placeholder: 'low=low_effort, medium=medium_effort',
-    description: 'Advanced: map effort names to boolean chat-template flags.',
-  },
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_levels',
-    label: 'Inline Reasoning Levels',
-    type: 'text',
-    placeholder: 'low, medium, high',
-  },
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_default',
-    label: 'Inline Reasoning Default',
-    type: 'text',
-    placeholder: 'medium',
-  },
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_modes',
-    label: 'Supported Reasoning Modes',
-    type: 'text',
-    placeholder: 'adaptive, disabled',
-    description: 'Optional mode controls independent from the effort ladder.',
-  },
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_default_mode',
-    label: 'Default Reasoning Mode',
-    type: 'select',
-    options: ['', 'enabled', 'adaptive', 'disabled'],
-  },
-  {
-    shouldHide: (data) => Boolean(String(data.catalog || '').trim()),
-    name: 'reasoning_disabled',
-    label: 'Inline Reasoning Disabled Value',
-    type: 'text',
-    placeholder: 'none or disabled',
-    description: 'Optional native level that explicitly disables reasoning.',
-  },
+  ...inlineReasoningFields,
 ]
 
 const identityFields = (
@@ -146,6 +140,7 @@ const identityFields = (
   {
     name: 'catalog',
     label: 'Built-in Catalog Model',
+    section: 'Identity',
     type: 'text',
     placeholder: 'e.g., organization/model-id',
     description:
@@ -156,28 +151,31 @@ const identityFields = (
   {
     name: 'provider_model_id',
     label: 'Provider Model ID',
+    section: 'Identity',
     type: 'text',
     placeholder: 'e.g., openai/gpt-4.1',
     description:
       'Concrete upstream model identifier stored under providers.models[].provider_model_id',
   },
   modelAPIFormatField(catalog),
-  { name: 'param_size', label: 'Parameter Size', type: 'text', placeholder: 'e.g., 8B' },
+  {
+    name: 'param_size',
+    label: 'Parameter Size',
+    section: 'Identity',
+    type: 'text',
+    placeholder: 'e.g., 8B',
+  },
   {
     name: 'context_window_size',
     label: 'Context Window Size',
+    section: 'Identity',
     type: 'number',
     placeholder: 'e.g., 131072',
   },
   {
-    name: 'modality',
-    label: 'Modality',
-    type: 'text',
-    placeholder: 'e.g., text, omni, diffusion',
-  },
-  {
     name: 'description',
     label: 'Description',
+    section: 'Identity',
     type: 'textarea',
     placeholder: 'Short routing-facing model description',
   },
@@ -189,9 +187,8 @@ export const modelDialogFields = (
   catalog: BuiltInModelCatalog | null = null,
 ): FieldConfig[] => [
   ...(mode === 'add' ? addOnlyFields : []),
-  ...identityFields(mode, catalog).slice(0, 1),
+  ...identityFields(mode, catalog),
   ...reasoningFields(reasoningFamilyNames, catalog),
-  ...identityFields(mode, catalog).slice(1),
   ...getModelStructuredFormFields(),
 ]
 
@@ -206,9 +203,10 @@ export const newModelFormData = (): Record<string, unknown> => ({
   context_window_size: '',
   description: '',
   capabilities: [],
+  input_modalities: [],
+  output_modalities: [],
   loras: [],
   tags: [],
-  modality: '',
   backend_refs: [
     {
       name: 'endpoint-1',
@@ -232,111 +230,3 @@ export const editModelFormData = (model: NormalizedModel): Record<string, unknow
   pricing: model.pricing || {},
   reliability: model.reliability || {},
 })
-
-const baseModelViewSection = (model: NormalizedModel, defaultModel: string): ViewSection => ({
-  title: 'Basic Information',
-  fields: [
-    { label: 'Model Name', value: model.name },
-    { label: 'Catalog Model', value: model.catalog || 'Custom' },
-    { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
-    { label: 'Is Default', value: model.name === defaultModel ? 'Yes' : 'No' },
-    { label: 'Provider Model ID', value: model.provider_model_id || 'N/A' },
-    {
-      label: 'API Format',
-      value: model.api_format || (model.backend_refs?.length ? 'Unresolved' : 'Not connected'),
-    },
-    { label: 'Modality', value: model.modality || 'N/A' },
-    { label: 'Param Size', value: model.param_size || 'N/A' },
-    {
-      label: 'Context Window',
-      value: model.context_window_size ? `${model.context_window_size}` : 'N/A',
-    },
-  ],
-})
-
-const modelRoutingMetadataSection = (model: NormalizedModel): ViewSection | null => {
-  const present =
-    model.description || model.capabilities?.length || model.tags?.length || model.loras?.length
-  if (!present) return null
-  return {
-    title: 'Routing Metadata',
-    fields: [
-      { label: 'Description', value: model.description || 'N/A', fullWidth: true },
-      {
-        label: 'Capabilities',
-        value: <ModelCapabilitiesEditor value={model.capabilities || []} readOnly />,
-        fullWidth: true,
-      },
-      {
-        label: 'Tags',
-        value: <ModelTagsEditor value={model.tags || []} readOnly />,
-        fullWidth: true,
-      },
-      {
-        label: 'LoRAs',
-        value: <ModelLorasEditor value={model.loras || []} readOnly />,
-        fullWidth: true,
-      },
-    ],
-  }
-}
-
-const editorViewSection = (title: string, label: string, value: ReactNode): ViewSection => ({
-  title,
-  fields: [{ label, value, fullWidth: true }],
-})
-
-const appendModelInfrastructureSections = (
-  sections: ViewSection[],
-  model: NormalizedModel,
-  isReadonly: boolean,
-): void => {
-  if (model.external_model_ids && Object.keys(model.external_model_ids).length) {
-    sections.push(
-      editorViewSection(
-        'External Model IDs',
-        'Provider IDs',
-        <ModelExternalIdsEditor value={model.external_model_ids} readOnly />,
-      ),
-    )
-  }
-  if (model.backend_refs?.length) {
-    sections.push(
-      editorViewSection(
-        `Provider Backends (${model.backend_refs.length})`,
-        'Configured Backend Refs',
-        <ModelBackendRefsEditor value={model.backend_refs} readOnly maskSensitive={isReadonly} />,
-      ),
-    )
-  }
-  if (model.pricing) {
-    sections.push(
-      editorViewSection(
-        'Pricing',
-        'Token Pricing',
-        <ModelPricingEditor value={model.pricing} readOnly />,
-      ),
-    )
-  }
-  if (model.reliability) {
-    sections.push(
-      editorViewSection(
-        'Delivery',
-        'Policy',
-        <ModelReliabilityEditor value={model.reliability} readOnly />,
-      ),
-    )
-  }
-}
-
-export const modelViewSections = (
-  model: NormalizedModel,
-  defaultModel: string,
-  isReadonly: boolean,
-): ViewSection[] => {
-  const sections = [baseModelViewSection(model, defaultModel)]
-  const metadata = modelRoutingMetadataSection(model)
-  if (metadata) sections.push(metadata)
-  appendModelInfrastructureSections(sections, model, isReadonly)
-  return sections
-}

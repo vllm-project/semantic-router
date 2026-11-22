@@ -48,18 +48,6 @@
   outline-offset: 2px;
 }
 
-/* The landing page keeps dark chrome in both color modes. */
-:global(.site-root--home) .link {
-  color: #a1a1aa;
-}
-
-:global(.site-root--home) .link:hover,
-:global(.site-root--home) .link:focus-visible,
-:global(.site-root--home) .linkActive {
-  background: rgba(48, 162, 255, 0.12);
-  color: #fafafa;
-}
-
 /* Collapses at 996px to match Docusaurus breakpoint and shell.css. */
 @media (max-width: 996px) {
   .root {

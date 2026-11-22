@@ -49,9 +49,51 @@ def run_go(
             for event in events
             if event.get("Action") == "output"
         ]
-        print("".join(failures[-80:]))
+        print(failure_report(events) or "".join(failures[-80:]))
         raise ValueError(f"Go invocation failed; inspect {output}")
     return events
+
+
+def failure_report(events: list[dict]) -> str:
+    """Each failed package's own output and its failed tests' output.
+
+    Packages run concurrently, so the invocation's last output belongs to
+    whichever package finished last. A test binary that exited mid-test
+    leaves its running tests without a result; the report names them.
+    """
+    failed = dict.fromkeys(
+        event.get("Package")
+        for event in events
+        if event.get("Action") == "fail" and not event.get("Test")
+    )
+    sections = []
+    for package in failed:
+        own = [event for event in events if event.get("Package") == package]
+        ended = {
+            event["Test"]: event["Action"]
+            for event in own
+            if event.get("Test") and event.get("Action") in {"pass", "fail", "skip"}
+        }
+        running = [
+            event["Test"]
+            for event in own
+            if event.get("Action") == "run" and event["Test"] not in ended
+        ]
+        shown = {
+            None,
+            *running,
+            *(name for name, action in ended.items() if action == "fail"),
+        }
+        lines = [
+            event.get("Output", "")
+            for event in own
+            if event.get("Action") == "output" and event.get("Test") in shown
+        ]
+        header = f"=== {package_id(package or '')} failed"
+        if running:
+            header += "; its test binary exited while running " + ", ".join(running)
+        sections.append(header + "\n" + "".join(lines[-80:]))
+    return "\n".join(sections)
 
 
 def terminal_cases(events: list[dict], *, roots_only: bool = False) -> list[dict]:

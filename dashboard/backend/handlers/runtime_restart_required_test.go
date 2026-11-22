@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const testDocument = "4f2a"
@@ -30,19 +31,29 @@ func TestJudgeRouterAttempt(t *testing.T) {
 		{name: "an older attempt", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: &routerConfigAttempt{DocumentHash: "older", Status: "failed"}}},
 		{name: "still preparing", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: &routerConfigAttempt{DocumentHash: testDocument, Status: "preparing"}}},
 		{name: "hot-reloaded", response: routerConfigHash{GeneratedRuntimeHash: testDocument, ActiveRuntimeHash: testDocument, Activation: &routerConfigAttempt{DocumentHash: testDocument, Status: "active"}}, done: true},
+		{name: "restored document is already active", response: routerConfigHash{GeneratedRuntimeHash: testDocument, ActiveRuntimeHash: testDocument}, done: true},
 		{name: "refused for a restart", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: restartAttempt(restartRequiredCode, "the port changes from 8899 to 9000")}, done: true, restart: true, detailContains: "8899 to 9000"},
-		{name: "refused for another reason", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: restartAttempt("unsupported", "no")}, done: true},
+		{name: "refused for another reason", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: restartAttempt("model_unavailable", "model preparation failed")}, done: true, detailContains: "model_unavailable"},
+		{name: "refused without reasons", response: routerConfigHash{GeneratedRuntimeHash: testDocument, Activation: &routerConfigAttempt{DocumentHash: testDocument, Status: "failed"}}, done: true, detailContains: "router rejected configuration activation"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			detail, done, restart := judgeRouterAttempt(test.response, "sha256:"+testDocument)
-			if done != test.done || restart != test.restart || !strings.Contains(detail, test.detailContains) {
-				t.Fatalf("judge = (%q, %v, %v), want done=%v restart=%v", detail, done, restart, test.done, test.restart)
+			done, err := judgeRouterAttempt(test.response, "sha256:"+testDocument)
+			_, restart := asRestartNeeded(err)
+			if done != test.done || restart != test.restart {
+				t.Fatalf("judge = (%v, %v), want done=%v restart=%v", done, err, test.done, test.restart)
+			}
+			if test.detailContains == "" {
+				if err != nil {
+					t.Fatalf("unexpected verdict error: %v", err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), test.detailContains) {
+				t.Fatalf("verdict error = %v, want %q", err, test.detailContains)
 			}
 		})
 	}
 }
 
-func TestRouterRestartReasonWaitsForTheRoutersVerdict(t *testing.T) {
+func TestWaitForRouterVerdictReportsRestart(t *testing.T) {
 	var polls atomic.Int32
 	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/config/hash" {
@@ -59,22 +70,43 @@ func TestRouterRestartReasonWaitsForTheRoutersVerdict(t *testing.T) {
 	ConfigureRouterVerdict(router.URL, nil)
 	defer ConfigureRouterVerdict("", nil)
 
-	detail, restart := routerRestartReason(context.Background(), testDocument)
-	if !restart || !strings.Contains(detail, "listeners[http].port") || polls.Load() < 3 {
-		t.Fatalf("verdict = (%q, %v) after %d polls", detail, restart, polls.Load())
+	verdict := waitForRouterVerdict(context.Background(), testDocument, time.Time{})
+	if restart, ok := asRestartNeeded(verdict); !ok || !strings.Contains(restart.detail, "listeners[http].port") || polls.Load() < 3 {
+		t.Fatalf("verdict = %v after %d polls", verdict, polls.Load())
+	}
+}
+
+func TestWaitForRouterVerdictIgnoresEarlierRejectionOfTheSameDocument(t *testing.T) {
+	writtenAt := time.Now()
+	var polls atomic.Int32
+	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		response := routerConfigHash{GeneratedRuntimeHash: testDocument}
+		if polls.Add(1) == 1 {
+			response.Activation = restartAttempt("model_unavailable", "older attempt")
+			response.Activation.StartedAt = writtenAt.Add(-time.Minute)
+		} else {
+			response.ActiveRuntimeHash = testDocument
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	t.Cleanup(router.Close)
+	ConfigureRouterVerdict(router.URL, nil)
+	t.Cleanup(func() { ConfigureRouterVerdict("", nil) })
+	if verdict := waitForRouterVerdict(context.Background(), testDocument, writtenAt); verdict != nil || polls.Load() != 2 {
+		t.Fatalf("verdict = %v after %d polls, want activation on the second response", verdict, polls.Load())
 	}
 }
 
 func TestWithoutARouterEverySavedConfigHotReloads(t *testing.T) {
 	ConfigureRouterVerdict("", nil)
-	if detail, restart := routerRestartReason(context.Background(), testDocument); restart || detail != "" {
-		t.Fatalf("verdict = (%q, %v) with no Router configured", detail, restart)
+	if verdict := waitForRouterVerdict(context.Background(), testDocument, time.Time{}); verdict != nil {
+		t.Fatalf("verdict = %v with no Router configured", verdict)
 	}
 }
 
 func TestRecordRestartRecordsThePendingActivation(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	message, err := recordRestart(configPath, envoyRestartDetail)
@@ -100,7 +132,7 @@ func TestRecordRestartRecordsThePendingActivation(t *testing.T) {
 
 func TestASavedConfigThatNeedsARestartIsRecordedOnce(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	original := propagateConfig
@@ -120,7 +152,7 @@ func TestASavedConfigThatNeedsARestartIsRecordedOnce(t *testing.T) {
 
 func TestAFailedSaveRestoresWithoutRecordingARestart(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n# rejected\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n# rejected\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	original := propagateConfig
@@ -134,7 +166,7 @@ func TestAFailedSaveRestoresWithoutRecordingARestart(t *testing.T) {
 		return &restartNeededError{detail: envoyRestartDetail}
 	}
 
-	_, err := applyWrittenConfig(configPath, filepath.Dir(configPath), []byte("version: v0.3\n"), true)
+	_, err := applyWrittenConfig(configPath, filepath.Dir(configPath), []byte("version: v0.5\n"), true)
 	if err == nil || !strings.Contains(formatRuntimeApplyError("Failed to apply config to runtime", err), "Previous config restored.") {
 		t.Fatalf("applyWrittenConfig error = %v, want the rejection with the previous config restored", err)
 	}
@@ -145,7 +177,7 @@ func TestAFailedSaveRestoresWithoutRecordingARestart(t *testing.T) {
 
 func TestRestartRequiredResponseIsAccepted(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	writeRestartRequiredResponse(recorder, "20261007-1", "Restart required: run `vllm-sr serve` to apply.")
+	writeRestartRequiredResponse(recorder, "20261007-1", "Restart required: run `vllm-sr serve` to apply.", nil)
 	var body map[string]string
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)

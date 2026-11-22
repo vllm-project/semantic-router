@@ -520,6 +520,36 @@ func TestLocalLimiterWindowReset(t *testing.T) {
 	}
 }
 
+// A bucket whose window ended carries nothing into its next window, so the
+// limiter drops it instead of keeping one per user and model it ever saw. A
+// live window survives the sweep.
+func TestLocalLimiterDropsExpiredBuckets(t *testing.T) {
+	limiter := NewLocalLimiter([]Rule{
+		{Name: "short", RequestsPerUnit: 1, Unit: 20 * time.Millisecond},
+		{Name: "hourly", Match: RuleMatch{User: "alice"}, RequestsPerUnit: 1, Unit: time.Hour},
+	})
+	alice := Context{UserID: "alice", Model: "m"}
+	if d, _ := limiter.Check(alice); !d.Allowed {
+		t.Fatal("first request should be allowed")
+	}
+	for i := range 100 {
+		_, _ = limiter.Check(Context{UserID: fmt.Sprint(i), Model: "m"})
+	}
+	time.Sleep(30 * time.Millisecond)
+	if d, _ := limiter.Check(alice); d.Allowed {
+		t.Fatal("the live hourly window was dropped with the expired ones")
+	}
+	buckets := 0
+	limiter.buckets.Range(func(_, _ any) bool {
+		buckets++
+		return true
+	})
+	// alice's hourly bucket and her new short window
+	if buckets != 2 {
+		t.Fatalf("buckets = %d, want 2", buckets)
+	}
+}
+
 // ── LocalLimiter — no rules matches all ──
 
 func TestLocalLimiterNoRules(t *testing.T) {
@@ -530,5 +560,117 @@ func TestLocalLimiterNoRules(t *testing.T) {
 	}
 	if !d.Allowed {
 		t.Error("no rules should allow all")
+	}
+}
+
+// ── LocalLimiter — denied requests must not consume quota ──
+
+func TestLocalLimiterDeniedRequestRefundsRPMInSameRule(t *testing.T) {
+	limiter := NewLocalLimiter([]Rule{
+		{
+			Name:            "combined",
+			Match:           RuleMatch{User: "*"},
+			RequestsPerUnit: 2,
+			TokensPerUnit:   5,
+			Unit:            time.Minute,
+		},
+	})
+
+	// Each oversized request is denied by TPM; the RPM slot consumed before
+	// the TPM check must be refunded.
+	for i := 0; i < 3; i++ {
+		d, err := limiter.Check(Context{UserID: "alice", Model: "gpt-4", TokenCount: 6})
+		if err != nil {
+			t.Fatalf("denied request %d: unexpected error: %v", i+1, err)
+		}
+		if d.Allowed {
+			t.Fatalf("denied request %d: expected TPM denial", i+1)
+		}
+	}
+
+	// With refunds, the full RPM budget is still available.
+	for i := 0; i < 2; i++ {
+		d, err := limiter.Check(Context{UserID: "alice", Model: "gpt-4", TokenCount: 1})
+		if err != nil {
+			t.Fatalf("valid request %d: unexpected error: %v", i+1, err)
+		}
+		if !d.Allowed {
+			t.Fatalf("valid request %d: denied, but TPM denials must not consume RPM quota", i+1)
+		}
+	}
+}
+
+func TestLocalLimiterDeniedRequestRefundsEarlierRule(t *testing.T) {
+	limiter := NewLocalLimiter([]Rule{
+		{
+			Name:            "loose-rpm",
+			Match:           RuleMatch{User: "*"},
+			RequestsPerUnit: 3,
+			Unit:            time.Minute,
+		},
+		{
+			Name:          "strict-tpm",
+			Match:         RuleMatch{User: "*"},
+			TokensPerUnit: 5,
+			Unit:          time.Minute,
+		},
+	})
+
+	// Denied by the second rule; the first rule's quota must be refunded.
+	for i := 0; i < 4; i++ {
+		d, err := limiter.Check(Context{UserID: "alice", Model: "gpt-4", TokenCount: 6})
+		if err != nil {
+			t.Fatalf("denied request %d: unexpected error: %v", i+1, err)
+		}
+		if d.Allowed {
+			t.Fatalf("denied request %d: expected strict-tpm denial", i+1)
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		d, err := limiter.Check(Context{UserID: "alice", Model: "gpt-4", TokenCount: 1})
+		if err != nil {
+			t.Fatalf("valid request %d: unexpected error: %v", i+1, err)
+		}
+		if !d.Allowed {
+			t.Fatalf("valid request %d: denied, but strict-tpm denials must not consume loose-rpm quota", i+1)
+		}
+	}
+}
+
+func TestLocalLimiterRefundSkipsRolledWindow(t *testing.T) {
+	limiter := NewLocalLimiter([]Rule{
+		{
+			Name:            "short-window",
+			Match:           RuleMatch{User: "*"},
+			RequestsPerUnit: 1,
+			Unit:            20 * time.Millisecond,
+		},
+	})
+
+	ctx := Context{UserID: "alice", Model: "gpt-4"}
+	if d, _ := limiter.Check(ctx); !d.Allowed {
+		t.Fatal("first request should be allowed")
+	}
+
+	// After the window rolls, a stale refund must not credit the new window.
+	key := limiter.bucketKey("short-window", "alice", "gpt-4", "rpm")
+	v, ok := limiter.buckets.Load(key)
+	if !ok {
+		t.Fatal("bucket not found")
+	}
+	b := v.(*bucket)
+	staleWindowEnd := b.windowEnd
+
+	time.Sleep(30 * time.Millisecond)
+
+	if d, _ := limiter.Check(ctx); !d.Allowed {
+		t.Fatal("request in the new window should be allowed")
+	}
+	b.refund(1, staleWindowEnd)
+
+	d, _ := limiter.Check(ctx)
+	if d.Allowed {
+		t.Error("stale refund credited the new window; request should have been denied")
 	}
 }

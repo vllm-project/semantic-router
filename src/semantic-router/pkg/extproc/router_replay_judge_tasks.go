@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -25,10 +26,11 @@ var storedResponseFormats = []llmprotocol.WireFormat{
 // manifest the dataset export does and hands out blinded pairwise tasks over
 // it. The tasks carry captured text, so the route needs replay.detail.
 func (r *OpenAIRouter) handleRouterReplayJudgeTasksAPI(
+	ctx context.Context,
 	method string,
 	rawQuery string,
 ) *ext_proc.ProcessingResponse {
-	values, manifest, records, failure := r.buildRouterReplayDataset(method, rawQuery)
+	values, manifest, records, failure := r.buildRouterReplayDataset(ctx, method, rawQuery)
 	if failure != nil {
 		return failure
 	}
@@ -37,13 +39,13 @@ func (r *OpenAIRouter) handleRouterReplayJudgeTasksAPI(
 	if err != nil {
 		return r.createErrorResponse(400, err.Error())
 	}
-	return r.createRouterReplayJSONResponse(200, tasks)
+	return r.createJSONResponse(200, tasks)
 }
 
 // judgeTaskTexts reads the text behind each example's digests. The input is the
 // stored request body, the exact bytes the input digest covers. The primary is
 // the assistant text of the stored response, and each shadow is the excerpt the
-// shadow dispatch plugin captured. BuildJudgeTasks decides whether each text is
+// router_replay shadow captured. BuildJudgeTasks decides whether each text is
 // whole by hashing it, so nothing here needs to.
 func (r *OpenAIRouter) judgeTaskTexts(
 	manifest shadowdataset.Manifest,

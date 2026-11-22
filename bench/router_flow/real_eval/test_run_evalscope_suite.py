@@ -22,6 +22,14 @@ from bench.router_flow.real_eval.run_evalscope_suite import (
 TERMINUS2_MAX_TURNS = 200
 
 
+def recipe_decisions(config: dict) -> list[dict]:
+    return [
+        decision
+        for recipe in config["recipes"]
+        for decision in recipe.get("decisions", [])
+    ]
+
+
 def test_selected_benchmarks_preserves_requested_order() -> None:
     suite = {
         "benchmarks": [
@@ -111,7 +119,7 @@ def test_livecode_omni_config_routes_every_decision_to_loop_algorithm() -> None:
     config_path = Path(__file__).parents[1] / "configs" / "amd_auto_livecode_omni.yaml"
     config = yaml.safe_load(config_path.read_text())
 
-    decisions = config["routing"]["decisions"]
+    decisions = recipe_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
@@ -338,7 +346,7 @@ def test_hle_glm52_config_uses_only_glm52_loop_models() -> None:
     }
     assert provider_model_by_name["gpt55-judge"] == "openai/gpt-5.5"
 
-    decisions = config["routing"]["decisions"]
+    decisions = recipe_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
@@ -409,7 +417,7 @@ def test_hle_hybrid_config_discloses_glm_and_closed_model_pool() -> None:
         "google/gemini-3.1-pro-preview",
     } <= provider_model_ids
 
-    decisions = config["routing"]["decisions"]
+    decisions = recipe_decisions(config)
     assert decisions
     closed_refs = set()
     for decision in decisions:
@@ -447,7 +455,7 @@ def test_swe_glm52_config_uses_only_glm52_loop_models() -> None:
     }
     assert set(provider_model_by_name.values()) == {"z-ai/glm-5.2"}
 
-    decisions = config["routing"]["decisions"]
+    decisions = recipe_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
@@ -483,7 +491,7 @@ def test_livecode_glm52_omni_config_uses_only_glm52_loop_models() -> None:
     }
     assert set(provider_model_by_name.values()) == {"z-ai/glm-5.2"}
 
-    decisions = config["routing"]["decisions"]
+    decisions = recipe_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
@@ -516,7 +524,7 @@ def test_livecode_kimi_k27_code_omni_config_uses_only_kimi_loop_models() -> None
         "moonshotai/kimi-k2.7-code"
     }
 
-    decisions = config["routing"]["decisions"]
+    decisions = recipe_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
@@ -565,7 +573,7 @@ def test_scicode_omni_config_routes_every_decision_to_loop_algorithm() -> None:
     config_path = Path(__file__).parents[1] / "configs" / "amd_auto_scicode_omni.yaml"
     config = yaml.safe_load(config_path.read_text())
 
-    decisions = config["routing"]["decisions"]
+    decisions = recipe_decisions(config)
     assert decisions
     assert decisions[-1]["priority"] == 1
     for decision in decisions:

@@ -54,7 +54,7 @@ func TestMilvusSemanticPolarityStorageIntegration(t *testing.T) {
 	cfg := milvusExactTestConfig(host, port)
 	cfg.Search.TopK = 5
 	cfg.Search.ConsistencyLevel = "Strong"
-	backend, err := NewMilvusCache(MilvusCacheOptions{EmbeddingProvider: remoteVectorPolarityProvider(), Enabled: true, TTLSeconds: 60, EmbeddingModel: "qwen3", Config: cfg})
+	backend, err := NewMilvusCache(MilvusCacheOptions{EmbeddingProvider: remoteVectorPolarityProvider(), Enabled: true, TTLSeconds: 60, EmbeddingDeployment: "qwen3-embedding", Config: cfg})
 	if err != nil {
 		storagetest.Unavailable(t, "milvus", err)
 	}
@@ -82,7 +82,7 @@ func TestMilvusSemanticPolarityStorageIntegration(t *testing.T) {
 func TestQdrantSemanticPolarityStorageIntegration(t *testing.T) {
 	storagetest.Require(t, "qdrant")
 	host, port := remoteVectorStorageAddress(t, "QDRANT", 6334)
-	backend, err := NewQdrantCache(QdrantCacheOptions{EmbeddingProvider: remoteVectorPolarityProvider(), Enabled: true, TTLSeconds: 60, EmbeddingModel: "qwen3", Config: &config.QdrantConfig{Host: host, Port: port, ConnectTimeout: 5, CollectionName: fmt.Sprintf("polarity_cache_%d", time.Now().UnixNano())}})
+	backend, err := NewQdrantCache(QdrantCacheOptions{EmbeddingProvider: remoteVectorPolarityProvider(), Enabled: true, TTLSeconds: 60, EmbeddingDeployment: "qwen3-embedding", Config: &config.QdrantConfig{Host: host, Port: port, ConnectTimeout: 5, CollectionName: fmt.Sprintf("polarity_cache_%d", time.Now().UnixNano())}})
 	if err != nil {
 		storagetest.Unavailable(t, "qdrant", err)
 	}
@@ -103,17 +103,17 @@ func exerciseRemoteVectorPolarityStorage(t *testing.T, backend CacheBackend, kin
 	opposite.SemanticQuery = remoteVectorOpposite
 	require.NoError(t, service.StoreSemantic(ctx, CacheWrite{Identity: opposite, RequestID: "opposite", ResponseBody: []byte("opposite"), TTL: TTL(time.Minute)}))
 	// Verify the stored entry is visible before asserting the guarded miss.
-	control, err := service.LookupSemantic(ctx, SemanticLookup{Identity: opposite, Threshold: .8})
+	control, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: opposite, Bounds: atThreshold(.8)}))
 	require.NoError(t, err)
 	require.True(t, control.Found)
-	miss, err := service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Threshold: .8})
+	miss, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Bounds: atThreshold(.8)}))
 	require.NoError(t, err)
 	require.False(t, miss.Found)
 
 	paraphrase := identity
 	paraphrase.SemanticQuery = remoteVectorParaphrase
 	require.NoError(t, service.StoreSemantic(ctx, CacheWrite{Identity: paraphrase, RequestID: "paraphrase", ResponseBody: []byte("correct"), TTL: TTL(time.Minute)}))
-	hit, err := service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Threshold: .8})
+	hit, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Bounds: atThreshold(.8)}))
 	require.NoError(t, err)
 	require.True(t, hit.Found)
 	require.Equal(t, "correct", string(hit.ResponseBody))
@@ -122,12 +122,12 @@ func exerciseRemoteVectorPolarityStorage(t *testing.T, backend CacheBackend, kin
 
 	other := identity
 	other.Partition.RequestModel = "tenant-b"
-	isolated, err := service.LookupSemantic(ctx, SemanticLookup{Identity: other, Threshold: .8})
+	isolated, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: other, Bounds: atThreshold(.8)}))
 	require.NoError(t, err)
 	require.False(t, isolated.Found)
 	// Older records that lack their original query must not be replayed.
 	require.NoError(t, backend.AddEntry(ctx, "legacy-unknown", service.ResolveIdentity(other).SemanticPartitionKey(), "", nil, []byte("unknown"), 60))
-	unknown, err := service.LookupSemantic(ctx, SemanticLookup{Identity: other, Threshold: .8})
+	unknown, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: other, Bounds: atThreshold(.8)}))
 	require.NoError(t, err)
 	require.False(t, unknown.Found)
 }

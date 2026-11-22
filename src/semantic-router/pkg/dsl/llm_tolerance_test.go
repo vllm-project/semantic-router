@@ -122,7 +122,7 @@ func TestPluginNameNormalization(t *testing.T) {
 	input := `ROUTE test {
   PRIORITY 1
   MODEL "qwen:7b"
-  PLUGIN semantic-cache {
+  PLUGIN response-cache {
     enabled: true
   }
 }`

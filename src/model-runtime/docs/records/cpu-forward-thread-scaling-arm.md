@@ -106,6 +106,29 @@ current load as much as of host and input size — on a shared host the
 loaded-window numbers are the realistic ones for production, and the
 optimum drifts with the neighbors' load.
 
+### The two-level resolver, re-measured on the 920
+
+The resolver shipped since differs from the one the end-to-end numbers
+above measured: the exploration window is 48 requests, level 1 (the
+default) never serves the learned counts — it reports them per input-size
+bucket while the configured count serves on — and level 2 adds a
+16-request transition before a learned count may serve. The 920 (384
+cores, taskset 0-31, background load ~12) re-ran the A/B against that
+head, including the counts 1–2 Vela 2.0 rows the earlier runs skipped:
+
+| Workload (920, head design) | static 1 | static 2 | static 16 | level 1 steady | level 2 serving |
+| --- | --- | --- | --- | --- | --- |
+| Vela 1.0, 29 tokens, 16-thread budget | 92.2 ms | — | **79.4 ms** | 81.0 ms | 78.7–84.7 ms |
+| Vela 2.0, 662 tokens, 4 signals, `--threads 2` | 1293.3 ms | **1279.7 ms** | — | 1240.1 ms | 1116.8–1373.2 ms |
+
+Level 1's steady state and level 2's serving phase both land on the static
+optimum for their budget — 16 threads for the short classify, 2 of the 2
+allowed for the long decisions call — with no regression: the resolver
+learns the count the static runs already favor. The exploration tax is
+bounded at 48 requests (level 1) or 64 (level 2, transition included),
+during which each request pays the shadow pass and the warm configured
+pass on top of the one that serves.
+
 ### Responses are bit-identical across thread counts
 
 Byte-comparing the same inputs across thread counts: Vela 1.0 at 29 and

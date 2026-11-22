@@ -30,7 +30,7 @@ curl -s localhost:8100/v1/decisions -H 'content-type: application/json' -d '{
 
 | Endpoint | Purpose |
 | --- | --- |
-| `POST /v1/decisions`, `POST /v1/systemone` | Choice, Noul and Score answers (a superset of System One), plus Set and Span where a model declares them, and `images` and `videos` for models that read them (Decision 3.0) |
+| `POST /v1/decisions`, `POST /v1/systemone` | Choice, Noul and Score answers, plus Box, Set and Span where a model declares them, and `images`, `assets` and `videos` for models that read them (Decision 3.0). `/v1/systemone` accepts System One requests as the official SDKs send them (assets, multipart and compressed bodies, the long-context header) and answers a request with a failed question as a whole; the differences from System One are listed in the [reference](../../website/docs/model-runtime/reference.md#system-one-compatibility) |
 | `POST /v1/classify` | Fixed heads: label distributions, label scores and token spans over texts, pairs or grounded answers |
 | `POST /v1/embeddings` | OpenAI-compatible embeddings with dimensions and layer exits |
 | `POST /v1/rerank` | Pair scores of documents against a query |
@@ -70,6 +70,15 @@ what was read; it does not establish prediction accuracy.
 `vllm-srun models` lists the built-in models with their pinned
 revisions. Every package is verified against its manifest or the pinned file
 digests before load, and code shipped inside packages is never executed.
+
+Vela 3.1-fast's released `render31.py` fingerprint selects described yes/no
+questions: `criteria: {"false": "can wait", "true": "needs immediate action"}`
+renders descriptions on the `no` and `yes` options. Legacy Vela 3.0 packages
+keep bare yes/no questions and reject descriptions. The renderer is hashed,
+not imported; an unknown fingerprint is rejected rather than silently using
+legacy semantics. Router-option schema expansion remains unchanged, matching
+the published package's outer router path. This does not change the default
+model or thresholds, or establish full-checkpoint parity.
 
 ## Plugins
 

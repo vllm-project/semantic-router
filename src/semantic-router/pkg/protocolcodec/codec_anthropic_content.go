@@ -3,6 +3,8 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -37,6 +39,12 @@ func decodeAnthropicContentArray(
 }
 
 func decodeAnthropicRequestContentBlock(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, error) {
+	if content, ok, err := decodeAnthropicToolReference(body, policy); ok {
+		return content, err
+	}
+	if content, ok := decodeAnthropicServerToolBlock(body); ok {
+		return content, nil
+	}
 	typeName, err := anthropicRequestContentType(body)
 	if err != nil {
 		return llmprotocol.Content{}, err
@@ -44,7 +52,34 @@ func decodeAnthropicRequestContentBlock(body json.RawMessage, policy llmprotocol
 	return decodeAnthropicContentBlock(body, typeName, policy, false)
 }
 
+// decodeAnthropicToolReference reads a tool search result that names a deferred
+// tool. Once the operator accepts the tools.defer_loading loss every tool is
+// already sent in full, so the reference reaches the backend as the tool's name.
+// Without that opt-in the block stays unsupported.
+func decodeAnthropicToolReference(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, bool, error) {
+	if !slices.Contains(policy.AllowedLossyFields, llmprotocol.LossyFieldToolDeferLoading) {
+		return llmprotocol.Content{}, false, nil
+	}
+	var reference struct {
+		Type     string `json:"type"`
+		ToolName string `json:"tool_name"`
+	}
+	if err := json.Unmarshal(body, &reference); err != nil || reference.Type != "tool_reference" {
+		return llmprotocol.Content{}, false, nil
+	}
+	if err := decodeWireValue(body, &reference, policy); err != nil {
+		return llmprotocol.Content{}, true, err
+	}
+	if reference.ToolName == "" {
+		return llmprotocol.Content{}, true, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_content_variant", "Anthropic tool_reference requires tool_name", nil)
+	}
+	return llmprotocol.Content{Kind: llmprotocol.ContentText, Text: reference.ToolName}, true, nil
+}
+
 func decodeAnthropicResponseContentBlock(body json.RawMessage, policy llmprotocol.Policy) (llmprotocol.Content, error) {
+	if content, ok := decodeAnthropicServerToolBlock(body); ok {
+		return content, nil
+	}
 	typeName, err := anthropicResponseContentType(body)
 	if err != nil {
 		return llmprotocol.Content{}, err
@@ -71,10 +106,16 @@ func decodeAnthropicContentBlock(
 	if err := validateAnthropicContentVariant(body, typeName, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
+	citations, err := anthropicTextCitations(typeName, block.Citations)
+	if err != nil {
+		return llmprotocol.Content{}, err
+	}
 	if err := validateAnthropicContentExtensions(block, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
-	return decodeAnthropicTypedContent(typeName, block, policy)
+	content, err := decodeAnthropicTypedContent(typeName, block, policy)
+	content.Raw = citations
+	return content, err
 }
 
 func validateAnthropicContentVariant(body json.RawMessage, typeName string, providerOutput bool) error {
@@ -211,9 +252,6 @@ func anthropicResponseContentType(body json.RawMessage) (string, error) {
 }
 
 func validateAnthropicContentExtensions(block anthropicContentWire, providerOutput bool) error {
-	if len(block.Citations) > 0 {
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "Anthropic citations are not supported by the neutral contract", nil)
-	}
 	if err := validateAnthropicToolCaller(block.Caller, providerOutput); err != nil {
 		return err
 	}
@@ -243,7 +281,7 @@ func validateAnthropicToolCaller(raw json.RawMessage, providerOutput bool) error
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_content_caller",
-			"Anthropic programmatic tool callers are not supported by the neutral contract",
+			"the Router does not support Anthropic programmatic tool callers",
 			nil,
 		)
 	}
@@ -345,7 +383,7 @@ func validateAnthropicMediaSource(typeName string, source *anthropicMediaSourceW
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_document_source",
-			"Anthropic document source cannot be represented by the neutral protocol",
+			"the Router does not support this Anthropic document source",
 			nil,
 		)
 	case "":
@@ -390,13 +428,18 @@ func invalidAnthropicMediaSource(message string) error {
 }
 
 func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	request, projectionDiagnostics := llmprotocol.ProjectResponsesReasoning(request, llmprotocol.AnthropicMessagesV1, false)
+	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredCapabilities(request)); err != nil {
+		return nil, projectionDiagnostics, err
+	}
 	if envelope.CanReplay(llmprotocol.AnthropicMessagesV1, request.Generation, policy, false) {
-		return append([]byte(nil), envelope.Request...), nil, nil
+		return append([]byte(nil), envelope.Request...), projectionDiagnostics, nil
 	}
 	if err := validateAnthropicEncodableRequest(request); err != nil {
-		return nil, nil, err
+		return nil, projectionDiagnostics, err
 	}
 	diagnostics, validationErr := anthropicRequestDiagnostics(request, policy)
+	diagnostics = appendDiagnostics(projectionDiagnostics, diagnostics, policy.Limits.Diagnostics)
 	if validationErr != nil {
 		return nil, diagnostics, validationErr
 	}
@@ -451,7 +494,7 @@ func buildAnthropicRequestWire(
 	if instructionErr := encodeAnthropicInstructions(&wire, request); instructionErr != nil {
 		return anthropicRequestWire{}, diagnostics, instructionErr
 	}
-	if messagesErr := appendAnthropicMessages(&wire, request.Messages); messagesErr != nil {
+	if messagesErr := appendAnthropicMessages(&wire, responsesAssistantTurns(request)); messagesErr != nil {
 		return anthropicRequestWire{}, diagnostics, messagesErr
 	}
 	if toolsErr := appendAnthropicTools(&wire, request.Tools); toolsErr != nil {
@@ -470,6 +513,9 @@ func anthropicRequestDiagnostics(request llmprotocol.Request, policy llmprotocol
 	}
 	if request.ReasoningSummary != "" {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Messages cannot request a reasoning summary")
+	}
+	if hasParticipantNames(request) {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "messages[].name", "Messages has no participant names")
 	}
 	if err := appendAnthropicContentDiagnostics(&diagnostics, request, policy); err != nil {
 		return diagnostics, err
@@ -507,7 +553,8 @@ func appendAnthropicStateDiagnostics(
 	request llmprotocol.Request,
 	policy llmprotocol.Policy,
 ) error {
-	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Store != nil || request.Truncation != "" {
+	storing := request.Store != nil && *request.Store
+	if request.PreviousResponseID != "" || request.ConversationID != "" || storing || request.Truncation == llmprotocol.TruncationAuto {
 		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "conversation_state", "Messages has no stateful response reference")
 	}
 	return nil
@@ -535,7 +582,12 @@ func appendAnthropicOutputDiagnostics(
 		return nil
 	}
 	if request.OutputFormat.Strict != nil && !*request.OutputFormat.Strict {
-		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "output_format.strict", "Messages always enforces its output schema")
+		// an answer held to the schema is one a best-effort request accepts too
+		*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{{
+			Source: request.Trusted.SourceFormat, Target: llmprotocol.AnthropicMessagesV1,
+			Field: "output_format.strict", Action: llmprotocol.DiagnosticApproximated,
+			Reason: "Messages always enforces its output schema",
+		}}, policy.Limits.Diagnostics)
 	}
 	if request.OutputFormat.Name != "" && request.OutputFormat.Name != "structured_output" {
 		appendProviderFieldOmission(diagnostics, policy, request.Trusted.SourceFormat, "output_format.name", "Messages output schemas are unnamed")
@@ -551,6 +603,7 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 		Model: request.Model, Stream: request.Stream, Temperature: request.Sampling.Temperature,
 		TopP: request.Sampling.TopP, TopK: request.Sampling.TopK, StopSequences: append([]string(nil), request.Sampling.Stop...),
 		ContextManagement: append(json.RawMessage(nil), request.ContextManagement...),
+		Safeguards:        append(json.RawMessage(nil), request.Safeguards...),
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if request.Sampling.MaxOutputTokens == nil {
@@ -560,7 +613,8 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 			Target: llmprotocol.AnthropicMessagesV1,
 			Field:  "max_tokens",
 			Action: llmprotocol.DiagnosticGenerated,
-			Reason: "Anthropic Messages requires an explicit output limit; the source request omitted one",
+			Reason: fmt.Sprintf("Anthropic Messages requires an explicit output limit; the source request omitted one, so %d was sent; "+
+				"request_params.default_max_tokens sets this value", defaultAnthropicMaxOutputTokens),
 		})
 	} else {
 		wire.MaxTokens = llmprotocol.Int64(*request.Sampling.MaxOutputTokens)
@@ -654,8 +708,16 @@ func appendAnthropicMessages(wire *anthropicRequestWire, messages []llmprotocol.
 }
 
 func appendAnthropicTools(wire *anthropicRequestWire, tools []llmprotocol.Tool) error {
-	encoded := make([]anthropicToolWire, 0, len(tools))
+	encoded := make([]any, 0, len(tools))
 	for _, tool := range tools {
+		if tool.Kind == llmprotocol.ToolKindServer {
+			raw, err := encodeAnthropicServerTool(tool)
+			if err != nil {
+				return err
+			}
+			encoded = append(encoded, raw)
+			continue
+		}
 		encoded = append(encoded, anthropicToolWire{Name: tool.Name, Description: tool.Description, InputSchema: tool.InputSchema, Strict: tool.Strict, CacheControl: encodeAnthropicCacheControl(tool.Cache)})
 	}
 	if len(encoded) == 0 {
@@ -747,8 +809,13 @@ func encodeAnthropicContent(contents []llmprotocol.Content) (json.RawMessage, er
 func encodeAnthropicContentBlock(content llmprotocol.Content) (anthropicContentWire, error) {
 	switch content.Kind {
 	case llmprotocol.ContentText:
-		return anthropicContentWire{Type: "text", Text: content.Text, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
+		return anthropicContentWire{Type: "text", Text: content.Text, Citations: content.Raw, CacheControl: encodeAnthropicCacheControl(content.Cache)}, nil
+	case llmprotocol.ContentServerTool:
+		return anthropicContentWire{raw: content.Raw}, nil
 	case llmprotocol.ContentReasoning:
+		if err := requireReasoningRepresentation(llmprotocol.AnthropicMessagesV1, []llmprotocol.Content{content}); err != nil {
+			return anthropicContentWire{}, err
+		}
 		if content.Cache != nil {
 			return anthropicContentWire{}, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_cache_directive", "Anthropic Messages cannot attach cache_control to thinking content", nil)
 		}
@@ -830,6 +897,7 @@ func anthropicContentDiagnostics(contents []llmprotocol.Content, source llmproto
 				return diagnostics, err
 			}
 		}
+		appendAnthropicMediaOmissions(&diagnostics, content, source, policy)
 		if content.Kind == llmprotocol.ContentToolResult && content.ToolResult != nil {
 			nested, err := anthropicContentDiagnostics(content.ToolResult.Content, source, policy)
 			diagnostics = appendDiagnostics(diagnostics, nested, policy.Limits.Diagnostics)
@@ -839,4 +907,15 @@ func anthropicContentDiagnostics(contents []llmprotocol.Content, source llmproto
 		}
 	}
 	return diagnostics, nil
+}
+
+// Messages images have no detail level and documents no file name. The
+// default detail, auto, loses nothing.
+func appendAnthropicMediaOmissions(diagnostics *llmprotocol.Diagnostics, content llmprotocol.Content, source llmprotocol.WireFormat, policy llmprotocol.Policy) {
+	if content.Kind == llmprotocol.ContentImage && content.Detail != "" && content.Detail != "auto" {
+		appendProviderFieldOmission(diagnostics, policy, source, "content.image.detail", "Messages images have no detail level")
+	}
+	if content.Kind == llmprotocol.ContentFile && content.Filename != "" {
+		appendProviderFieldOmission(diagnostics, policy, source, "content.file.filename", "Messages documents have no file name")
+	}
 }

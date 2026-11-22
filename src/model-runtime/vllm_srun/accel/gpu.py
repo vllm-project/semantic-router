@@ -1,8 +1,12 @@
 """Shared logic for CUDA and ROCm accelerators (both use the torch.cuda device API).
 
-The released runtime runs the backbone under BF16 autocast and takes the
-gated-delta and causal-convolution kernels from FLA and causal-conv1d when
-they are installed, else the torch references. The same order applies here.
+The released GPU runtimes run the backbone under BF16 autocast and prefer
+installed FLA and causal-conv1d kernels over torch references. This base class
+registers that order; each accelerator can restrict selection by exactness.
+CUDA marks causal-conv1d approximate, so exact-only/non-consenting models use
+torch reference even when the package is installed. Decision 1.0 Qwen and BF16
+Decision 3.0 then differ from their released CUDA convolution path; see
+``docs/records/cuda-causal-conv1d-exactness.md`` for scope and evidence.
 """
 
 from __future__ import annotations
@@ -16,11 +20,22 @@ from typing import Any
 
 import torch
 
+from ..engines.native.quantized import float8_format
 from ..plugins.base import Accelerator, DeviceInfo
-from .kernels import Kernel, KernelSet, reference_kernels
+from .kernels import Kernel, KernelSet, reference_kernels, varlen_attention_ref
 
 _DEVICE_LOCKS: dict[int, Any] = {}
 _LOCKS = threading.Lock()
+
+# Cached but unused device memory that device work on an integrated GPU hands back
+# once it grows past this: a long forward's peak otherwise stays cached, and there
+# that cache is host RAM nothing else on the machine can use. A discrete GPU keeps
+# its cache, so the next long forward does not pay to allocate it again.
+RELEASE_IDLE_BYTES = 2 << 30
+# Per device, what the last release left idle (blocks the cache cannot free,
+# such as graph pools), so that slack does not trigger a release on every call.
+_IDLE_FLOOR: dict[int, int] = {}
+_INTEGRATED: dict[int, bool] = {}
 
 # Errors after which the process's device context stays unusable.
 DEVICE_FAULT_MARKERS = (
@@ -29,6 +44,219 @@ DEVICE_FAULT_MARKERS = (
     "device-side assert",
     "illegal memory access",
 )
+
+
+_CGROUP_ROOT = "/sys/fs/cgroup"
+_PROC_SELF_CGROUP = "/proc/self/cgroup"
+_MEMINFO = "/proc/meminfo"
+# cgroup v1 reports a huge value when no limit is set.
+_V1_UNLIMITED = 1 << 60
+
+
+def _host_mem_available_bytes(meminfo_path: str | None = None) -> int | None:
+    """Reclaimable system memory in bytes (``MemAvailable``), None when unreadable."""
+    path = meminfo_path if meminfo_path is not None else _MEMINFO
+    try:
+        with open(path, encoding="utf-8") as stream:
+            for line in stream:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _cgroup_rel_paths(
+    proc_path: str | None = None,
+) -> tuple[str | None, str | None]:
+    """This process's cgroup paths: (v2 path, v1 memory path), None when unresolvable."""
+    path = proc_path if proc_path is not None else _PROC_SELF_CGROUP
+    try:
+        with open(path, encoding="utf-8") as stream:
+            lines = stream.read().splitlines()
+    except OSError:
+        return None, None
+    v2: str | None = None
+    v1: str | None = None
+    for line in lines:
+        try:
+            hid, controllers, cgroup = line.split(":", 2)
+        except ValueError:
+            continue
+        if not cgroup.startswith("/"):
+            continue
+        if hid == "0" and controllers == "":
+            v2 = cgroup
+        elif "memory" in controllers.split(","):
+            v1 = cgroup
+    return v2, v1
+
+
+def _ancestor_dirs(root: str, rel: str | None) -> list[str]:
+    """``root`` joined with ``rel`` and each parent down to ``root``."""
+    base = root.rstrip("/") or "/"
+    if not rel or rel == "/":
+        return [base]
+    if ".." in rel.split("/"):
+        return [base]
+    parts = [part for part in rel.split("/") if part not in ("", ".")]
+    if not parts:
+        return [base]
+    dirs = [base + "/" + "/".join(parts[:index]) for index in range(len(parts), 0, -1)]
+    dirs.append(base)
+    return dirs
+
+
+def _inactive_file_bytes(prefix: str, key: str) -> int:
+    """Reclaimable file cache in bytes under ``prefix/memory.stat`` for ``key``."""
+    try:
+        with open(prefix + "/memory.stat", encoding="utf-8") as stream:
+            for line in stream:
+                name, _, value = line.partition(" ")
+                if name != key or not value.strip():
+                    continue
+                try:
+                    return max(0, int(value))
+                except ValueError:
+                    return 0
+    except OSError:
+        return 0
+    return 0
+
+
+def _v2_remaining(directory: str) -> int | None:
+    """Remaining bytes under a v2 limit (``memory.max`` minus ``memory.current``)."""
+    prefix = directory.rstrip("/") or "/"
+    try:
+        with open(prefix + "/memory.max", encoding="utf-8") as stream:
+            value = stream.read().strip()
+    except OSError:
+        return None
+    if value == "max" or not value:
+        return None
+    try:
+        limit = int(value)
+    except ValueError:
+        return None
+    if limit <= 0:
+        return 0
+    try:
+        with open(prefix + "/memory.current", encoding="utf-8") as stream:
+            current = int(stream.read().strip())
+    except (OSError, ValueError):
+        current = 0
+    # Inactive file cache is the reclaimable working-set component (what the
+    # kubelet uses); active file may be mapped weights still in use, so it
+    # stays counted.
+    current = max(0, current - _inactive_file_bytes(prefix, "inactive_file"))
+    return max(0, limit - max(0, current))
+
+
+def _v1_remaining(directory: str) -> int | None:
+    """Remaining bytes under a v1 limit (``limit_in_bytes`` minus ``usage``)."""
+    prefix = directory.rstrip("/") or "/"
+    try:
+        with open(prefix + "/memory.limit_in_bytes", encoding="utf-8") as stream:
+            limit = int(stream.read().strip())
+    except (OSError, ValueError):
+        return None
+    if limit >= _V1_UNLIMITED:
+        return None
+    if limit <= 0:
+        return 0
+    try:
+        with open(prefix + "/memory.usage_in_bytes", encoding="utf-8") as stream:
+            current = int(stream.read().strip())
+    except (OSError, ValueError):
+        current = 0
+    # Inactive file cache is the reclaimable working-set component (what the
+    # kubelet uses); active file may be mapped weights still in use, so it
+    # stays counted.
+    current = max(0, current - _inactive_file_bytes(prefix, "total_inactive_file"))
+    return max(0, limit - max(0, current))
+
+
+def _cgroup_limit_bytes(
+    cgroup_root: str | None = None, proc_path: str | None = None
+) -> int | None:
+    """Remaining bytes under this container's memory limit, None when unlimited.
+
+    ``memory.max`` is the total, not the free bytes, so each level contributes
+    its limit minus its current usage. Nested limits all apply, so this is the
+    minimum over the process's cgroup and its ancestors (v2 and v1). Falls
+    back to the root files when the process's cgroup is unresolvable.
+    """
+    root = cgroup_root if cgroup_root is not None else _CGROUP_ROOT
+    proc = proc_path if proc_path is not None else _PROC_SELF_CGROUP
+    try:
+        v2_rel, v1_rel = _cgroup_rel_paths(proc)
+    except OSError:
+        v2_rel, v1_rel = None, None
+    remaining: list[int] = []
+    if v2_rel is not None:
+        for directory in _ancestor_dirs(root, v2_rel):
+            try:
+                value = _v2_remaining(directory)
+            except OSError:
+                continue
+            if value is not None:
+                remaining.append(value)
+    else:
+        try:
+            value = _v2_remaining(root)
+        except OSError:
+            value = None
+        if value is not None:
+            remaining.append(value)
+    v1_base = root.rstrip("/") + "/memory"
+    if v1_rel is not None:
+        for directory in _ancestor_dirs(v1_base, v1_rel):
+            try:
+                value = _v1_remaining(directory)
+            except OSError:
+                continue
+            if value is not None:
+                remaining.append(value)
+    else:
+        try:
+            value = _v1_remaining(v1_base)
+        except OSError:
+            value = None
+        if value is not None:
+            remaining.append(value)
+    if not remaining:
+        return None
+    return min(remaining)
+
+
+def _integrated_free_bytes(
+    total: int | None,
+    cgroup_root: str | None = None,
+    proc_path: str | None = None,
+    meminfo_path: str | None = None,
+) -> int | None:
+    """Usable bytes on an integrated GPU, which shares memory with the CPU.
+
+    ``torch.cuda.mem_get_info`` stays low there while reclaimable page cache
+    shows as used, so this reads the host's ``MemAvailable`` instead, capped
+    by the container's remaining (limit minus usage where present) and by the
+    device size. ``MemAvailable`` already excludes unreclaimable memory.
+    """
+    if meminfo_path is not None:
+        available = _host_mem_available_bytes(meminfo_path)
+    else:
+        available = _host_mem_available_bytes()
+    if available is None:
+        return None
+    if cgroup_root is not None or proc_path is not None:
+        limit = _cgroup_limit_bytes(cgroup_root, proc_path)
+    else:
+        limit = _cgroup_limit_bytes()
+    if limit is not None:
+        available = min(available, limit)
+    if total is not None:
+        available = min(available, total)
+    return available
 
 
 def device_lock(index: int) -> Any:
@@ -46,11 +274,74 @@ def _current_device(target: torch.device) -> AbstractContextManager[Any]:
     return torch.cuda.device(target)
 
 
+def _idle_bytes(index: int) -> int:
+    stats = torch.cuda.memory_stats(index)
+    return stats["reserved_bytes.all.current"] - stats["allocated_bytes.all.current"]
+
+
+def _integrated(index: int) -> bool:
+    integrated = _INTEGRATED.get(index)
+    if integrated is None:
+        properties = torch.cuda.get_device_properties(index)
+        integrated = _INTEGRATED[index] = bool(
+            getattr(properties, "is_integrated", False)
+        )
+    return integrated
+
+
+def _release_idle_cache(target: torch.device) -> None:
+    """On an integrated GPU, return the allocator's unused blocks once they exceed
+    ``RELEASE_IDLE_BYTES`` over the last release.
+
+    Runs under the device lock, so no graph capture on the device is in flight.
+    A failure here never replaces the device work's own result or error.
+    """
+    if target.type != "cuda" or not torch.cuda.is_available():
+        return
+    index = target.index or 0
+    try:
+        if not _integrated(index):
+            return
+        if _idle_bytes(index) > _IDLE_FLOOR.get(index, 0) + RELEASE_IDLE_BYTES:
+            torch.cuda.empty_cache()
+            _IDLE_FLOOR[index] = _idle_bytes(index)
+    except Exception:
+        pass
+
+
 def _optional(module: str, attribute: str) -> Any:
     try:
         return getattr(importlib.import_module(module), attribute)
     except Exception:
         return None
+
+
+def nvfp4_unavailable(index: int | None) -> str | None:
+    """Why device ``index`` cannot multiply NVFP4 weights (``quantization.NVFP4``); None when it can.
+
+    NVFP4 needs NVIDIA FP4 tensor cores (Blackwell: compute capability 10.x or
+    12.x), a PyTorch with FP4 tensors and the block-scaled ``scaled_mm``, and
+    Triton, which quantizes the activations.
+    """
+    if torch.version.hip is not None:
+        return "NVFP4 weights need NVIDIA FP4 tensor cores, which ROCm GPUs do not have"
+    scaling = _optional("torch.nn.functional", "ScalingType")
+    if not hasattr(torch, "float4_e2m1fn_x2") or not hasattr(scaling, "BlockWise1x16"):
+        return (
+            f"PyTorch {torch.__version__} has no FP4 tensors with block-scaled "
+            "torch.nn.functional.scaled_mm"
+        )
+    if not torch.cuda.is_available():
+        return "no CUDA device"
+    major, minor = torch.cuda.get_device_capability(index or 0)
+    if major not in (10, 12):
+        return (
+            f"compute capability {major}.{minor} has no FP4 tensor cores "
+            "(NVFP4 needs a Blackwell GPU, compute capability 10.x or 12.x)"
+        )
+    if _optional("triton", "__version__") is None:
+        return "NVFP4 activations are quantized with Triton, which is not installed"
+    return None
 
 
 class GPUAccelerator(Accelerator):
@@ -74,6 +365,14 @@ class GPUAccelerator(Accelerator):
                 free, total = torch.cuda.mem_get_info(index)
             except RuntimeError:
                 free, total = None, properties.total_memory
+            # An integrated GPU shares memory with the CPU, where mem_get_info
+            # stays low while reclaimable page cache shows as used; the
+            # placement check below then reads host MemAvailable instead.
+            # getattr guards older PyTorch without the is_integrated flag.
+            if getattr(properties, "is_integrated", False):
+                integrated = _integrated_free_bytes(properties.total_memory)
+                if integrated is not None:
+                    free = integrated
             devices.append(
                 DeviceInfo(
                     accelerator=self.name,
@@ -105,6 +404,11 @@ class GPUAccelerator(Accelerator):
             kernels.register(
                 Kernel("chunk_gated_delta_rule", _wrap_delta(delta), "fla", exact=True)
             )
+        static = _static_delta()
+        if static is not None:
+            kernels.register(
+                Kernel("chunk_gated_delta_rule_static", static, "fla", exact=True)
+            )
         varlen = _optional("torch.nn.attention.varlen", "varlen_attn")
         if varlen is not None:
             kernels.register(
@@ -125,7 +429,15 @@ class GPUAccelerator(Accelerator):
             "fla": _optional("fla.ops.gated_delta_rule", "chunk_gated_delta_rule")
             is not None,
             "causal_conv1d": _optional("causal_conv1d", "causal_conv1d_fn") is not None,
+            "float8": float8_format(self.torch_device(device)) is not None,
+            "nvfp4": nvfp4_unavailable(device.index) is None,
         }
+
+    def lacks(self, device: DeviceInfo, capability: str) -> str:
+        if capability == "nvfp4":
+            reason = nvfp4_unavailable(device.index) or "no FP4 tensor cores"
+            return f"{device.label}: {reason}; serve NVFP4 packages on a Blackwell GPU"
+        return super().lacks(device, capability)
 
     def autocast(
         self, device: DeviceInfo, dtype: str | None
@@ -146,9 +458,15 @@ class GPUAccelerator(Accelerator):
         Triton kernels (FLA's among them) launch on the thread's current
         device, so the work makes the model's GPU current: otherwise a model on
         any GPU but the first faults reading its own memory from GPU 0.
+        On an integrated GPU the work's idle cache is released afterwards
+        (``_release_idle_cache``).
         """
-        with device_lock(device.index or 0), _current_device(self.torch_device(device)):
-            return work()
+        target = self.torch_device(device)
+        with device_lock(device.index or 0), _current_device(target):
+            try:
+                return work()
+            finally:
+                _release_idle_cache(target)
 
     def device_fault(self, error: BaseException) -> bool:
         """Device errors poison the context; running out of memory fails only the batch."""
@@ -161,17 +479,171 @@ class GPUAccelerator(Accelerator):
         )
 
 
+# causal-conv1d computes a row's offset in 32 bits (``index_t`` is ``uint32_t``): in a
+# call over more elements, a row past the range reads and writes other rows' memory and
+# its own output is never written. Calls stay within the signed range.
+CONV_ELEMENTS = 1 << 31
+
+
 def _wrap_conv(fn: Any) -> Any:
+    """causal-conv1d's convolution; a call over more than ``CONV_ELEMENTS`` elements runs
+    in slices of whole rows."""
+
     def conv(hidden_states, weight, bias=None, activation=None):
-        return fn(hidden_states, weight, bias=bias, activation=activation)
+        batch, channels, length = hidden_states.shape
+        row = max(hidden_states.stride(0), channels * length, 1)
+        rows = max(1, CONV_ELEMENTS // row)
+        if batch <= rows:
+            return fn(hidden_states, weight, bias=bias, activation=activation)
+        out = torch.empty_like(hidden_states)
+        for start in range(0, batch, rows):
+            part = hidden_states[start : start + rows]
+            out[start : start + rows] = fn(part, weight, bias, activation=activation)
+        return out
 
     return conv
 
 
+# FLA's chunk length, which a static layout's chunk index counts in.
+CHUNK = 64
+
+
+def _static_delta() -> Any:
+    """FLA's chunked gated delta rule over packed sequences with a caller-given chunk index, for graphs.
+
+    The public entry point builds the chunk index from ``cu_seqlens`` on the
+    host, which a captured graph would keep from its capture. This one takes it
+    as a device tensor the caller rewrites before each replay and derives the
+    rest from ``cu_seqlens`` on the device. FLA's tensor cache matches tensors
+    by identity, so its chunk offsets are reused only among the calls of one
+    forward, whose layout views are its own. Otherwise it is the public path:
+    L2-normalized query and key, scale ``1 / sqrt(K)``, the output cast to the
+    query's dtype. None where this FLA lacks the entry point.
+    """
+    try:
+        from fla.modules.l2norm import l2norm_fwd
+        from fla.ops.gated_delta_rule.chunk import chunk_gated_delta_rule_fwd
+    except Exception:
+        return None
+    if "chunk_indices" not in inspect.signature(chunk_gated_delta_rule_fwd).parameters:
+        return None
+
+    def delta(
+        query,
+        key,
+        value,
+        g,
+        beta,
+        initial_state,
+        output_final_state,
+        cu_seqlens,
+        chunk_indices,
+    ):
+        q, _ = l2norm_fwd(query.contiguous())
+        k, _ = l2norm_fwd(key.contiguous())
+        _, out, _, final, _, _ = chunk_gated_delta_rule_fwd(
+            q=q,
+            k=k,
+            v=value.contiguous(),
+            g=g.contiguous(),
+            beta=beta.contiguous(),
+            scale=k.shape[-1] ** -0.5,
+            initial_state=initial_state,
+            output_final_state=output_final_state,
+            cu_seqlens=cu_seqlens,
+            chunk_indices=chunk_indices,
+        )
+        return out.to(q.dtype), final
+
+    delta.chunk_indexed = True  # type: ignore[attr-defined]
+    delta.regions = _static_regions(l2norm_fwd)  # type: ignore[attr-defined]
+    return delta
+
+
+def _static_regions(l2norm_fwd: Any) -> Any:
+    """``chunk_gated_delta_rule_static`` over a static layout's two regions, the second continuing the first.
+
+    FLA's gate cumulative sum and intra-chunk solve treat every chunk alone, so
+    they run once over both regions' chunks (the layout's combined offsets and
+    chunk index); the recurrence runs per region, the second from the first's
+    final states of each segment's ``owner``, and the output per region. Every
+    chunk computes what the region's own call computes. None where this FLA's
+    forward has other stages.
+    """
+    try:
+        from fla.ops.gated_delta_rule import chunk as fla_chunk
+    except Exception:
+        return None
+    stages = (
+        "chunk_local_cumsum",
+        "chunk_gated_delta_rule_fwd_intra",
+        "chunk_gated_delta_rule_fwd_h",
+        "chunk_fwd_o",
+    )
+    if not hasattr(fla_chunk, "RCP_LN2") or not all(
+        "chunk_indices"
+        in inspect.signature(getattr(fla_chunk, name, lambda: None)).parameters
+        for name in stages
+    ):
+        return None
+    cumsum, intra, recurrence, output = (getattr(fla_chunk, name) for name in stages)
+    source = inspect.getsource(fla_chunk.chunk_gated_delta_rule_fwd)
+    if any(f"{name}(" not in source for name in stages):
+        return None
+
+    def regions(query, key, value, g, beta, split, combined, first, second, owner):
+        q, _ = l2norm_fwd(query.contiguous())
+        k, _ = l2norm_fwd(key.contiguous())
+        v = value.contiguous()
+        g = cumsum(
+            g.contiguous(), chunk_size=CHUNK, scale=fla_chunk.RCP_LN2,
+            cu_seqlens=combined[0], chunk_indices=combined[1],
+        )  # fmt: skip
+        w, u, _ = intra(
+            k=k, v=v, g=g, beta=beta.contiguous(),
+            cu_seqlens=combined[0], chunk_size=CHUNK, chunk_indices=combined[1],
+        )  # fmt: skip
+        outputs, initial = [], None
+        for rows, (offsets, chunks), last in (
+            (slice(0, split), first, False),
+            (slice(split, None), second, True),
+        ):
+            h, v_new, final = recurrence(
+                k=k[:, rows], w=w[:, rows], u=u[:, rows], g=g[:, rows],
+                initial_state=initial, output_final_state=not last, chunk_size=CHUNK,
+                cu_seqlens=offsets, chunk_indices=chunks,
+            )  # fmt: skip
+            outputs.append(output(
+                q=q[:, rows], k=k[:, rows], v=v_new, h=h, g=g[:, rows], scale=k.shape[-1] ** -0.5,
+                cu_seqlens=offsets, chunk_size=CHUNK, chunk_indices=chunks,
+            ))  # fmt: skip
+            if not last:
+                initial = final[owner].contiguous()
+        return torch.cat(outputs, dim=1).to(q.dtype)
+
+    return regions
+
+
 def _wrap_varlen(fn: Any) -> Any:
     """PyTorch's variable-length flash attention over packed rows, non-causal, keys with fewer heads in-kernel."""
+    accepted = set(inspect.signature(fn).parameters)
 
     def attend(query, key, value, packed, *, scale, groups):
+        if query.dtype not in (torch.float16, torch.bfloat16):
+            # flash attention takes 16-bit inputs only (FP32 at --dtype float32)
+            return varlen_attention_ref(
+                query, key, value, packed, scale=scale, groups=groups
+            )
+        # Torch 2.10 uses the default scale and infers GQA from the head counts.
+        if "scale" not in accepted and scale != query.shape[-1] ** -0.5:
+            return varlen_attention_ref(
+                query, key, value, packed, scale=scale, groups=groups
+            )
+        extra = {}
+        if "scale" in accepted:
+            extra["scale"] = scale
+        if "enable_gqa" in accepted:
+            extra["enable_gqa"] = groups > 1
         cu = packed.cu_seqlens_int32
         return fn(
             query,
@@ -181,11 +653,17 @@ def _wrap_varlen(fn: Any) -> Any:
             cu,
             packed.max_length,
             packed.max_length,
-            scale=scale,
-            enable_gqa=groups > 1,
+            **extra,
         )
 
     return attend
+
+
+def _flash_varlen(query, key, value, cu_seq_q, cu_seq_k, max_q, max_k, *, scale):
+    """The flash attention op ``torch.nn.attention.varlen`` calls, for PyTorch releases without that module."""
+    return torch.ops.aten._flash_attention_forward(
+        query, key, value, cu_seq_q, cu_seq_k, max_q, max_k, 0.0, False, False, scale=scale
+    )[0]  # fmt: skip
 
 
 def _wrap_delta(fn: Any) -> Any:

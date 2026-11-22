@@ -203,15 +203,21 @@ class Window:
     end: int
 
 
-def plan_windows(
-    content_tokens: int, envelope: Envelope, size: int, overlap: int
-) -> list[Window]:
-    """Windows covering every content token; ``size`` counts the envelope."""
+def window_width(envelope: Envelope, size: int, overlap: int) -> int:
+    """The content tokens a ``size`` window holds; ``size`` counts the envelope."""
     width = size - envelope.size
     if width <= 0:
         raise ValueError("window size must leave room for content after special tokens")
     if not 0 <= overlap < width:
         raise ValueError("window overlap must be smaller than its content width")
+    return width
+
+
+def plan_windows(
+    content_tokens: int, envelope: Envelope, size: int, overlap: int
+) -> list[Window]:
+    """Windows covering every content token; ``size`` counts the envelope."""
+    width = window_width(envelope, size, overlap)
     if content_tokens <= 0:
         raise ValueError("window scanning requires nonempty content")
     stride = width - overlap

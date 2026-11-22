@@ -1,0 +1,605 @@
+package masking
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
+
+// byteRange returns the byte offsets of substr within text, matching how a
+// real classifier reports spans (D2: byte offsets, not rune offsets).
+func byteRange(t *testing.T, text, substr string) (int, int) {
+	t.Helper()
+	start := strings.Index(text, substr)
+	if start < 0 {
+		t.Fatalf("substring %q not found in %q", substr, text)
+	}
+	return start, start + len(substr)
+}
+
+func defaultCfg() *config.MaskingPluginConfig {
+	return &config.MaskingPluginConfig{}
+}
+
+// Case: Single span.
+func TestMaskText_SingleSpan(t *testing.T) {
+	text := "mail alice@x.com"
+	start, end := byteRange(t, text, "alice@x.com")
+	spans := []Span{{EntityType: "EMAIL_ADDRESS", Start: start, End: end, Confidence: 1.0}}
+
+	got, citations, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "mail [EMAIL_ADDRESS_0]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if len(citations) != 0 {
+		t.Fatalf("expected no citations, got %v", citations)
+	}
+}
+
+// Case: Repeat value.
+func TestMaskText_RepeatValue(t *testing.T) {
+	text := "alice@x.com wrote to alice@x.com"
+	first := strings.Index(text, "alice@x.com")
+	second := strings.LastIndex(text, "alice@x.com")
+	spans := []Span{
+		{EntityType: "EMAIL_ADDRESS", Start: first, End: first + len("alice@x.com"), Confidence: 1.0},
+		{EntityType: "EMAIL_ADDRESS", Start: second, End: second + len("alice@x.com"), Confidence: 1.0},
+	}
+
+	got, _, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "[EMAIL_ADDRESS_0] wrote to [EMAIL_ADDRESS_0]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: Distinct values.
+func TestMaskText_DistinctValues(t *testing.T) {
+	text := "alice@x.com and bob@x.com"
+	aliceStart, aliceEnd := byteRange(t, text, "alice@x.com")
+	bobStart, bobEnd := byteRange(t, text, "bob@x.com")
+	spans := []Span{
+		{EntityType: "EMAIL_ADDRESS", Start: aliceStart, End: aliceEnd, Confidence: 1.0},
+		{EntityType: "EMAIL_ADDRESS", Start: bobStart, End: bobEnd, Confidence: 1.0},
+	}
+
+	got, _, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "[EMAIL_ADDRESS_0]") || !strings.Contains(got, "[EMAIL_ADDRESS_1]") {
+		t.Fatalf("expected both _0 and _1 placeholders, got %q", got)
+	}
+}
+
+// Case: Nested overlap. This is the corruption measured in §0.5: a PERSON
+// span over "John Smith" and a narrower FIRST_NAME span over "John" must
+// collapse into one clean splice, not two overlapping ones.
+func TestMaskText_NestedOverlap(t *testing.T) {
+	text := "call John Smith now"
+	personStart, personEnd := byteRange(t, text, "John Smith")
+	firstNameStart, firstNameEnd := byteRange(t, text, "John")
+	spans := []Span{
+		{EntityType: "PERSON", Start: personStart, End: personEnd, Confidence: 1.0},
+		{EntityType: "FIRST_NAME", Start: firstNameStart, End: firstNameEnd, Confidence: 1.0},
+	}
+
+	got, _, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "call [PERSON_0] now"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: Order independence. Same two nested spans, reversed input order, must
+// produce byte-identical output. This is the test that would catch a
+// regression to unstable sorting.
+func TestMaskText_OrderIndependence(t *testing.T) {
+	text := "call John Smith now"
+	personStart, personEnd := byteRange(t, text, "John Smith")
+	firstNameStart, firstNameEnd := byteRange(t, text, "John")
+
+	forward := []Span{
+		{EntityType: "PERSON", Start: personStart, End: personEnd, Confidence: 1.0},
+		{EntityType: "FIRST_NAME", Start: firstNameStart, End: firstNameEnd, Confidence: 1.0},
+	}
+	reversed := []Span{
+		{EntityType: "FIRST_NAME", Start: firstNameStart, End: firstNameEnd, Confidence: 1.0},
+		{EntityType: "PERSON", Start: personStart, End: personEnd, Confidence: 1.0},
+	}
+
+	gotForward, _, err := MaskText(text, forward, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	gotReversed, _, err := MaskText(text, reversed, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotForward != gotReversed {
+		t.Fatalf("order dependence detected: forward=%q reversed=%q", gotForward, gotReversed)
+	}
+}
+
+// Case: Adjacent, not overlapping. Two spans that touch at a boundary must
+// stay separate, not merge into one.
+func TestMaskText_AdjacentSpansNotMerged(t *testing.T) {
+	text := "abcdefgh"
+	spans := []Span{
+		{EntityType: "TYPE_A", Start: 0, End: 4, Confidence: 1.0},
+		{EntityType: "TYPE_B", Start: 4, End: 8, Confidence: 1.0},
+	}
+
+	got, _, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "[TYPE_A_0][TYPE_B_0]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: Non-ASCII offsets. "José" contains a two-byte rune, so byte offsets
+// and rune offsets diverge here. This fails if anyone switches the splice to
+// rune-based indexing (D2).
+func TestMaskText_NonASCIIByteOffsets(t *testing.T) {
+	text := "contact José at j@x.com"
+	personStart, personEnd := byteRange(t, text, "José")
+	emailStart, emailEnd := byteRange(t, text, "j@x.com")
+	spans := []Span{
+		{EntityType: "PERSON", Start: personStart, End: personEnd, Confidence: 1.0},
+		{EntityType: "EMAIL_ADDRESS", Start: emailStart, End: emailEnd, Confidence: 1.0},
+	}
+
+	got, _, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "contact [PERSON_0] at [EMAIL_ADDRESS_0]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: Span past end.
+func TestMaskText_SpanPastEndErrors(t *testing.T) {
+	text := "short"
+	spans := []Span{{EntityType: "PERSON", Start: 0, End: len(text) + 1, Confidence: 1.0}}
+
+	got, citations, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err == nil {
+		t.Fatalf("expected error, got output %q", got)
+	}
+	if got != "" || citations != nil {
+		t.Fatalf("expected no output on error, got text %q citations %v", got, citations)
+	}
+}
+
+// Case: Inverted span.
+func TestMaskText_InvertedSpanErrors(t *testing.T) {
+	text := "short"
+	spans := []Span{{EntityType: "PERSON", Start: 3, End: 3, Confidence: 1.0}}
+
+	got, citations, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err == nil {
+		t.Fatalf("expected error, got output %q", got)
+	}
+	if got != "" || citations != nil {
+		t.Fatalf("expected no output on error, got text %q citations %v", got, citations)
+	}
+}
+
+// Case: Type not included.
+func TestMaskText_TypeNotIncludedNotMasked(t *testing.T) {
+	text := "call John Smith now"
+	start, end := byteRange(t, text, "John Smith")
+	spans := []Span{{EntityType: "PERSON", Start: start, End: end, Confidence: 1.0}}
+	cfg := &config.MaskingPluginConfig{EntityTypes: []string{"EMAIL_ADDRESS"}}
+
+	got, _, err := MaskText(text, spans, nil, NewAllocator(cfg))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != text {
+		t.Fatalf("expected unmasked text %q, got %q", text, got)
+	}
+}
+
+// Case: Empty entity_types masks every type.
+func TestMaskText_EmptyEntityTypesMasksAll(t *testing.T) {
+	text := "call John Smith now"
+	start, end := byteRange(t, text, "John Smith")
+	spans := []Span{{EntityType: "PERSON", Start: start, End: end, Confidence: 1.0}}
+	cfg := &config.MaskingPluginConfig{EntityTypes: nil}
+
+	got, _, err := MaskText(text, spans, nil, NewAllocator(cfg))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "call [PERSON_0] now"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: Citation before span is unchanged.
+func TestMaskText_CitationBeforeSpanUnchanged(t *testing.T) {
+	text := "mail alice@x.com"
+	start, end := byteRange(t, text, "alice@x.com")
+	spans := []Span{{EntityType: "EMAIL_ADDRESS", Start: start, End: end, Confidence: 1.0}}
+	citations := []llmprotocol.Citation{{StartIndex: 0, EndIndex: 4}}
+
+	_, got, err := MaskText(text, spans, citations, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 || got[0].StartIndex != 0 || got[0].EndIndex != 4 {
+		t.Fatalf("expected citation unchanged at [0,4), got %v", got)
+	}
+}
+
+// Case: Citation after span is shifted by the net length delta.
+func TestMaskText_CitationAfterSpanShifted(t *testing.T) {
+	text := "mail alice@x.com"
+	start, end := byteRange(t, text, "alice@x.com") // [5,16), length 11
+	spans := []Span{{EntityType: "EMAIL_ADDRESS", Start: start, End: end, Confidence: 1.0}}
+	// "XXXXXXX{index}" resolves to "XXXXXXX0" (length 8): the span shortens
+	// by exactly 3 bytes, matching the plan's worked example.
+	cfg := &config.MaskingPluginConfig{Placeholders: map[string]string{"EMAIL_ADDRESS": "XXXXXXX{index}"}}
+	citations := []llmprotocol.Citation{{StartIndex: 17, EndIndex: 20}}
+
+	_, got, err := MaskText(text, spans, citations, NewAllocator(cfg))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 || got[0].StartIndex != 14 || got[0].EndIndex != 17 {
+		t.Fatalf("expected citation shifted to [14,17), got %v", got)
+	}
+}
+
+// Case: code points are counted across several spans with multi-byte text
+// between them, so a citation after both shifts by both deltas.
+func TestMaskText_CitationAfterSeveralSpansWithMultiByteText(t *testing.T) {
+	text := "日本 Bob と Ann です"
+	bobStart, bobEnd := byteRange(t, text, "Bob")
+	annStart, annEnd := byteRange(t, text, "Ann")
+	spans := []Span{
+		{EntityType: "PERSON", Start: bobStart, End: bobEnd, Confidence: 1.0},
+		{EntityType: "PERSON", Start: annStart, End: annEnd, Confidence: 1.0},
+	}
+	// one between the names, one over Ann, and one after both
+	citations := []llmprotocol.Citation{{StartIndex: 7, EndIndex: 8}, {StartIndex: 9, EndIndex: 12}, {StartIndex: 13, EndIndex: 15}}
+
+	got, gotCitations, err := MaskText(text, spans, citations, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "日本 [PERSON_0] と [PERSON_1] です"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	want := []llmprotocol.Citation{{StartIndex: 14, EndIndex: 15}, {StartIndex: 27, EndIndex: 29}}
+	if len(gotCitations) != 2 || gotCitations[0] != want[0] || gotCitations[1] != want[1] {
+		t.Fatalf("got citations %v, want %v", gotCitations, want)
+	}
+}
+
+// Case: a span that cuts a character fails closed (D4) instead of leaving
+// half of it beside the placeholder.
+func TestMaskText_SpanSplittingACharacterFailsClosed(t *testing.T) {
+	text := "éx"
+	for _, span := range []Span{{Start: 0, End: 1}, {Start: 1, End: 3}} {
+		span.EntityType, span.Confidence = "PERSON", 1
+		if _, _, err := MaskText(text, []Span{span}, nil, NewAllocator(defaultCfg())); err == nil || !strings.Contains(err.Error(), "splits a character") {
+			t.Errorf("span [%d,%d): err = %v, want it refused", span.Start, span.End, err)
+		}
+	}
+}
+
+// Case: Citation overlapping a masked span is dropped.
+func TestMaskText_CitationOverlappingSpanDropped(t *testing.T) {
+	text := "mail alice@x.com"
+	start, end := byteRange(t, text, "alice@x.com")
+	spans := []Span{{EntityType: "EMAIL_ADDRESS", Start: start, End: end, Confidence: 1.0}}
+	citations := []llmprotocol.Citation{{StartIndex: 0, EndIndex: 20}}
+
+	_, got, err := MaskText(text, spans, citations, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("expected overlapping citation to be dropped, got %v", got)
+	}
+}
+
+// Regression: llmprotocol.Citation offsets are Unicode code points
+// (llmprotocol/types.go), not bytes like Span offsets (D2). A leading
+// multi-byte rune before the masked span makes the span's byte-end (8)
+// diverge from its code-point end (7); a citation starting exactly at the
+// code-point end is adjacent, not overlapping, and must be kept and shifted.
+// A byte-based comparison would wrongly treat it as overlapping and drop it.
+func TestMaskText_CitationOffsetsAreCodePointsNotBytes(t *testing.T) {
+	text := "é ALICE end"
+	start, end := byteRange(t, text, "ALICE") // byte range [3,8): matches classifier convention
+	spans := []Span{{EntityType: "PERSON", Start: start, End: end, Confidence: 1.0}}
+	cfg := &config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "Y"}}
+	// Code-point end of the span is 7 (é=1 code point, space=1, ALICE=5),
+	// even though its byte end is 8 (é is 2 bytes). This citation starts
+	// exactly there.
+	citations := []llmprotocol.Citation{{StartIndex: 7, EndIndex: 9}}
+
+	_, gotCitations, err := MaskText(text, spans, citations, NewAllocator(cfg))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(gotCitations) != 1 {
+		t.Fatalf("expected the adjacent citation to survive, got %v", gotCitations)
+	}
+	if gotCitations[0].StartIndex != 3 || gotCitations[0].EndIndex != 5 {
+		t.Fatalf("expected citation shifted to [3,5), got [%d,%d)", gotCitations[0].StartIndex, gotCitations[0].EndIndex)
+	}
+}
+
+// Case: Allocator across calls — the per-type counter must not reuse an
+// index for a different value on a later MaskText call (D5).
+func TestAllocator_AcrossCallsNoIndexReuse(t *testing.T) {
+	a := NewAllocator(defaultCfg())
+
+	firstText := "alice@x.com"
+	firstSpans := []Span{{EntityType: "EMAIL_ADDRESS", Start: 0, End: len(firstText), Confidence: 1.0}}
+	firstGot, _, err := MaskText(firstText, firstSpans, nil, a)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "[EMAIL_ADDRESS_0]"; firstGot != want {
+		t.Fatalf("got %q, want %q", firstGot, want)
+	}
+
+	secondText := "bob@x.com"
+	secondSpans := []Span{{EntityType: "EMAIL_ADDRESS", Start: 0, End: len(secondText), Confidence: 1.0}}
+	secondGot, _, err := MaskText(secondText, secondSpans, nil, a)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "[EMAIL_ADDRESS_1]"; secondGot != want {
+		t.Fatalf("got %q, want %q", secondGot, want)
+	}
+}
+
+// Case: a placeholder already in the text is not masked again, while a real
+// value next to it still is, for the default shape, a vSR mark and a
+// configured template.
+func TestMaskText_ExistingPlaceholderNotMaskedAgain(t *testing.T) {
+	cases := []struct {
+		name, text, inside, want string
+		cfg                      *config.MaskingPluginConfig
+	}{
+		{"default shape", "Hi [PERSON_2], Bob called", "PERSON_2", "Hi [PERSON_2], [PERSON_0] called", defaultCfg()},
+		{"vSR mark", `"customer": "[vsr:name]", Bob called`, "vsr:name", `"customer": "[vsr:name]", [PERSON_0] called`, defaultCfg()},
+		{"vSR rule mark", `"payer": "[vsr:employee_id]", Bob called`, "vsr:employee_id", `"payer": "[vsr:employee_id]", [PERSON_0] called`, defaultCfg()},
+		{
+			"configured template", "Hi <<name 3>>, Bob called", "name 3", "Hi <<name 3>>, <<name 0>> called",
+			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "<<name {index}>>"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			inStart, inEnd := byteRange(t, tc.text, tc.inside)
+			bobStart, bobEnd := byteRange(t, tc.text, "Bob")
+			spans := []Span{
+				{EntityType: "PERSON", Start: inStart, End: inEnd, Confidence: 0.9},
+				{EntityType: "PERSON", Start: bobStart, End: bobEnd, Confidence: 0.9},
+			}
+			got, _, err := MaskText(tc.text, spans, nil, NewAllocator(tc.cfg))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Case: the exemption never lets real personal data through. A span that
+// reaches past a placeholder is masked, and a template without a letter
+// besides {index} exempts nothing, since its pattern would also match the
+// digits inside a phone number.
+func TestMaskText_PlaceholderExemptionDoesNotSkipRealValues(t *testing.T) {
+	text := `mail "[PERSON_0]"@example.com today`
+	start, end := byteRange(t, text, `"[PERSON_0]"@example.com`)
+	got, _, err := MaskText(text, []Span{{EntityType: "EMAIL_ADDRESS", Start: start, End: end, Confidence: 0.9}}, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "mail [EMAIL_ADDRESS_0] today"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	text = "call 415-555-0134 now"
+	start, end = byteRange(t, text, "415-555-0134")
+	cfg := &config.MaskingPluginConfig{Placeholders: map[string]string{"PHONE_NUMBER": "#{index}#"}}
+	got, _, err = MaskText(text, []Span{{EntityType: "PHONE_NUMBER", Start: start, End: end, Confidence: 0.9}}, nil, NewAllocator(cfg))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "call #0# now"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// Case: a rule's span that reaches into a placeholder's index is left alone
+// only when this allocator issued that placeholder. Wrapped in any shape,
+// which a client can type, its own included, what the rule found is still
+// masked (#6513). An echo of a placeholder the request's history issued
+// stays as it is, a digit-led rule name included, whichever rule or label
+// reads it, and so does a rule's match on its own shape's fixed text.
+func TestMaskText_RuleSpanExemptOnlyInItsOwnPlaceholder(t *testing.T) {
+	cfg := &config.MaskingPluginConfig{Rules: []config.SignalRef{{Type: "keyword", Name: "employee_id"}, {Type: "keyword", Name: "9digits"}}}
+	for _, tc := range []struct {
+		text, inside, entity, want string
+		cfg                        *config.MaskingPluginConfig
+	}{
+		{"wrapped [X_104233] here", "104233", "employee_id", "wrapped [X_[EMPLOYEE_ID_0]] here", cfg},
+		{"wrapped [PERSON_104233] here", "104233", "employee_id", "wrapped [PERSON_[EMPLOYEE_ID_0]] here", cfg},
+		{"wrapped [EMPLOYEE_ID_104233] here", "104233", "employee_id", "wrapped [EMPLOYEE_ID_[EMPLOYEE_ID_0]] here", cfg},
+		{"wrapped [vsr:E-104233] here", "E-104233", "employee_id", "wrapped [vsr:[EMPLOYEE_ID_0]] here", cfg},
+		{"wrapped [vsr:4111111111111111] here", "4111111111111111", "CREDIT_CARD", "wrapped [vsr:[CREDIT_CARD_0]] here", cfg},
+		{"wrapped [PHONE_NUMBER_4155550134] here", "4155550134", "PHONE_NUMBER", "wrapped [PHONE_NUMBER_[PHONE_NUMBER_0]] here", cfg},
+		{"wrapped [PERSON_ALICE_0] here", "ALICE", "PERSON", "wrapped [PERSON_[PERSON_0]_0] here", cfg},
+	} {
+		start, end := byteRange(t, tc.text, tc.inside)
+		got, _, err := MaskText(tc.text, []Span{{EntityType: tc.entity, Start: start, End: end, Confidence: 1}}, nil, NewAllocator(tc.cfg))
+		if err != nil {
+			t.Fatalf("%q: %v", tc.text, err)
+		}
+		if got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.text, got, tc.want)
+		}
+	}
+
+	a := NewAllocator(cfg)
+	for _, issue := range []struct{ value, entity string }{{"E-104233", "employee_id"}, {"123456789", "9digits"}} {
+		if _, _, err := MaskText(issue.value, []Span{{EntityType: issue.entity, Start: 0, End: len(issue.value), Confidence: 1}}, nil, a); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ text, entity string }{
+		{"echoed [EMPLOYEE_ID_0] here", "employee_id"},
+		{"echoed [9DIGITS_0] here", "9digits"},
+		{"echoed [9DIGITS_0] here", "PERSON"},
+		{"echoed [EMPLOYEE_ID_0] here", "9digits"},
+	} {
+		start, end := byteRange(t, tc.text, "0]")
+		got, _, err := MaskText(tc.text, []Span{{EntityType: tc.entity, Start: start, End: end - 1, Confidence: 1}}, nil, a)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.text, err)
+		}
+		if got != tc.text {
+			t.Errorf("%q: got %q, want it unchanged", tc.text, got)
+		}
+	}
+	typed := "typed [EMPLOYEE_ID_3] here"
+	start, end := byteRange(t, typed, "EMPLOYEE_ID")
+	got, _, err := MaskText(typed, []Span{{EntityType: "employee_id", Start: start, End: end, Confidence: 1}}, nil, NewAllocator(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != typed {
+		t.Errorf("a match on the fixed text: got %q, want it unchanged", got)
+	}
+}
+
+// Case: a configured rule template whose fixed text a value shares. The
+// rule's match takes in the template's letters, and is still masked unless
+// the request issued that placeholder (#6513).
+func TestMaskText_RuleTemplateSharingTheValueShape(t *testing.T) {
+	cfg := &config.MaskingPluginConfig{
+		Rules:        []config.SignalRef{{Type: "keyword", Name: "employee_id"}},
+		Placeholders: map[string]string{"employee_id": "[E-{index}]"},
+	}
+	a := NewAllocator(cfg)
+	for _, tc := range []struct{ text, value, want string }{
+		{"wrapped [E-104233] here", "E-104233", "wrapped [[E-0]] here"},
+		{"echoed [E-0] here", "E-0", "echoed [E-0] here"},
+	} {
+		start, end := byteRange(t, tc.text, tc.value)
+		got, _, err := MaskText(tc.text, []Span{{EntityType: "employee_id", Start: start, End: end, Confidence: 1}}, nil, a)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.text, err)
+		}
+		if got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.text, got, tc.want)
+		}
+	}
+}
+
+// Case: a placeholder the request holds before the allocator issued it,
+// which a client may have typed, is never issued for a new value (#6513):
+// in a rule's shape, in a template that extends the default shape, in a
+// template with no letter, next to another one it overlaps, and for a label
+// outside the pii preset.
+func TestMaskText_ClientPlaceholderIsNotReissued(t *testing.T) {
+	for _, tc := range []struct {
+		cfg                       *config.MaskingPluginConfig
+		text, entity, value, want string
+	}{
+		{
+			&config.MaskingPluginConfig{Rules: []config.SignalRef{{Type: "keyword", Name: "account_numbers"}}},
+			"[ACCOUNT_NUMBERS_0] is overdue, and so is account 19104822", "account_numbers", "19104822",
+			"[ACCOUNT_NUMBERS_0] is overdue, and so is account [ACCOUNT_NUMBERS_1]",
+		},
+		{
+			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "[PERSON_{index}]!"}},
+			"[PERSON_0]! then Alice", "PERSON", "Alice", "[PERSON_0]! then [PERSON_1]!",
+		},
+		{
+			&config.MaskingPluginConfig{Placeholders: map[string]string{"PHONE_NUMBER": "#{index}#"}},
+			"keep #0#, call 415-555-0134", "PHONE_NUMBER", "415-555-0134", "keep #0#, call #1#",
+		},
+		{
+			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "__NAME{index}__"}},
+			"__NAME0__NAME1__ then Alice", "PERSON", "Alice", "__NAME0__NAME1__ then __NAME2__",
+		},
+		{
+			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "X0X{index}X"}},
+			"X0X0X1X then Alice", "PERSON", "Alice", "X0X0X1X then X0X2X",
+		},
+		{
+			&config.MaskingPluginConfig{}, "[AGE_0] then 23", "AGE", "23", "[AGE_0] then [AGE_1]",
+		},
+	} {
+		start, end := byteRange(t, tc.text, tc.value)
+		got, _, err := MaskText(tc.text, []Span{{EntityType: tc.entity, Start: start, End: end, Confidence: 1}}, nil, NewAllocator(tc.cfg))
+		if err != nil {
+			t.Fatalf("%q: %v", tc.text, err)
+		}
+		if got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.text, got, tc.want)
+		}
+	}
+}
+
+// Case: an issued placeholder that starts inside the one before it is still
+// found, so an echo of both stays as it is when a detector reads the second
+// one's index.
+func TestMaskText_OverlappingIssuedPlaceholdersStayExempt(t *testing.T) {
+	a := NewAllocator(&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "X0X{index}X"}})
+	text := "Alice, Bob"
+	if _, _, err := MaskText(text, []Span{{EntityType: "PERSON", Start: 0, End: 5, Confidence: 1}, {EntityType: "PERSON", Start: 7, End: 10, Confidence: 1}}, nil, a); err != nil {
+		t.Fatal(err)
+	}
+	echo := "X0X0X1X"
+	got, _, err := MaskText(echo, []Span{{EntityType: "PERSON", Start: 5, End: 6, Confidence: 1}}, nil, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != echo {
+		t.Fatalf("got %q, want it unchanged", got)
+	}
+}
+
+// Case: only an index Placeholder can write makes a placeholder: no leading
+// zero and at most nine digits. Text shaped like one otherwise, such as
+// [PERSON_007] or a ten-digit index, exempts no detector span.
+func TestMaskText_IndexPlaceholderCannotWriteIsNoPlaceholder(t *testing.T) {
+	text := "Hi [PERSON_007] and [PERSON_1234567890]"
+	var spans []Span
+	for _, inside := range []string{"PERSON_007", "PERSON_1234567890"} {
+		start, end := byteRange(t, text, inside)
+		spans = append(spans, Span{EntityType: "PERSON", Start: start, End: end, Confidence: 1})
+	}
+	got, _, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "Hi [[PERSON_0]] and [[PERSON_1]]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
