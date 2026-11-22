@@ -879,6 +879,7 @@ def _build_dashboard_runtime_env(
         "DASHBOARD_ADMIN_EMAIL",
         "DASHBOARD_ADMIN_PASSWORD",
         "DASHBOARD_ADMIN_NAME",
+        "DASHBOARD_ALLOWED_ORIGINS",
     ):
         value = os.getenv(name)
         if value:

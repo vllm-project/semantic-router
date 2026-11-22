@@ -309,7 +309,7 @@
       "sensitivity": "none",
       "owner": "routing",
       "version": "v0.5",
-      "doc": "Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, Router Replay reads an `auxiliary` call asking for a JSON object of one `title` field as the session's title request and names its run with the answer, and providers receive it."
+      "doc": "Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, protection holds a request of any class but `main`, `subagent` and `workflow` under a key of its class beside its agent's, Router Replay reads an `auxiliary` call asking for a JSON object of one `title` field as the session's title request and names its run with the answer, and providers receive it."
     },
     {
       "name": "session-id",
