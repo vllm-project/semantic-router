@@ -113439,11 +113439,12 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "self_hosted",
           "restrictions": {
-            "minimum_vllm_version": "0.32.0",
+            "evaluated_vllm_version": "0.30.0",
             "reference_deployments": [
               "4x H100 (tensor parallel 4)",
               "2x GB200 (tensor parallel 2)"
             ],
+            "reference_vllm_image": "vllm/vllm-openai:v0.32.0",
             "trust_remote_code": true
           },
           "verification": {
@@ -113462,9 +113463,6 @@ const builtInCatalogJSON = `{
           "relationship": "self_hosted",
           "restrictions": {
             "reasoning_parser_plugin": "ultra_v3_reasoning_parser.py",
-            "reference_deployments": [
-              "1x A100, H100-80GB, or Blackwell GPU (tensor parallel 1)"
-            ],
             "required_environment": {
               "VLLM_USE_V2_MODEL_RUNNER": "1"
             },
