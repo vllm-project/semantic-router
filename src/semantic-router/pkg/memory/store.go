@@ -3,7 +3,63 @@ package memory
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 )
+
+type storeValue struct {
+	store Store
+}
+
+// StoreSlot publishes a generation-owned memory store atomically. The slot's
+// identity stays stable while an unavailable backend is reconnecting, so all
+// consumers of that generation observe the same store once it becomes ready.
+type StoreSlot struct {
+	current atomic.Pointer[storeValue]
+}
+
+// NewStoreSlot creates a slot with store as its initial value. A nil store
+// leaves the slot empty until Install succeeds.
+func NewStoreSlot(store Store) *StoreSlot {
+	slot := &StoreSlot{}
+	if store != nil {
+		slot.current.Store(&storeValue{store: store})
+	}
+	return slot
+}
+
+// Load returns the currently published store, or nil while it is unavailable.
+func (s *StoreSlot) Load() Store {
+	if s == nil {
+		return nil
+	}
+	value := s.current.Load()
+	if value == nil {
+		return nil
+	}
+	return value.store
+}
+
+// Install publishes store only when the slot is still empty. This prevents a
+// late or duplicate reconnect attempt from replacing a store already in use.
+func (s *StoreSlot) Install(store Store) bool {
+	if s == nil || store == nil {
+		return false
+	}
+	return s.current.CompareAndSwap(nil, &storeValue{store: store})
+}
+
+// Close removes and closes the published store. Generation shutdown calls it
+// only after request and persistence work has drained.
+func (s *StoreSlot) Close() error {
+	if s == nil {
+		return nil
+	}
+	value := s.current.Swap(nil)
+	if value == nil || value.store == nil {
+		return nil
+	}
+	return value.store.Close()
+}
 
 // globalMemoryStore holds the global memory store instance for API access.
 // Set by the ExtProc router during initialization.
