@@ -151,7 +151,7 @@ recipes:
 			}
 			defer remote.Close(context.Background())
 			listener := &cfg.Listeners[0]
-			handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, router, nil, remote, &FrontendModels{}))
+			handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, router, nil, remote, &FrontendModels{}), systemone.ClientAuth{})
 			body := tc.request
 			if body == "" {
 				body = `{"model":"vllm-sr/auto","state":"Where is the logo?","images":["data:image/png;base64,iVBORw0KGgo="],"questions":{"where":{"type":"box","instructions":"Find the logo."}}}`

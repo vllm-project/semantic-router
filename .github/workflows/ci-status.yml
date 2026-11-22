@@ -17,8 +17,14 @@ permissions:
 jobs:
   resolve:
     name: Resolve qualification identity
+    # Only successful PR-related Community completions can restore a pending Gate.
     if: >-
-      github.event_name == 'workflow_run'
+      (github.event_name == 'workflow_run'
+        && (github.event.workflow_run.path != '.github/workflows/community.yml'
+          || (github.event.action == 'completed'
+            && github.event.workflow_run.conclusion == 'success'
+            && (github.event.workflow_run.event == 'pull_request'
+              || github.event.workflow_run.event == 'pull_request_review'))))
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -58,6 +64,7 @@ jobs:
       contents: read
       actions: read
       checks: write
+      statuses: write
       issues: write
       # PR guidance uses /issues APIs but still writes to a PR resource.
       pull-requests: write
