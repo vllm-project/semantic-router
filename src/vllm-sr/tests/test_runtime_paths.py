@@ -277,10 +277,74 @@ def test_runtime_config_output_skips_posix_permissions_when_unsupported(
         pytest.fail("POSIX chmod must not run on an unsupported platform")
 
     monkeypatch.setattr(runtime_paths.os, "chmod", unexpected_chmod)
+    monkeypatch.setattr(runtime_paths.os, "fchmod", unexpected_chmod, raising=False)
 
     output_path = _runtime_config_output_path(tmp_path / "config.yaml")
 
     assert output_path.parent == runtime_dir
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_runtime_config_output_hardens_without_chmod_follow_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # glibc < 2.32 cannot emulate fchmodat(AT_SYMLINK_NOFOLLOW), so CPython
+    # raises NotImplementedError for os.chmod(..., follow_symlinks=False).
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    runtime_dir.chmod(0o755)
+    real_chmod = os.chmod
+
+    def chmod_without_nofollow(path, mode, *, dir_fd=None, follow_symlinks=True):
+        if not follow_symlinks:
+            raise NotImplementedError(
+                "chmod: follow_symlinks unavailable on this platform"
+            )
+        real_chmod(path, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(runtime_paths.os, "chmod", chmod_without_nofollow)
+
+    output_path = _runtime_config_output_path(tmp_path / "config.yaml")
+
+    assert output_path.parent == runtime_dir
+    assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o700
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_harden_private_directory_rejects_symlink_swapped_in_after_inspection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    outside_dir = tmp_path / "outside"
+    runtime_dir.mkdir()
+    outside_dir.mkdir()
+    runtime_dir.chmod(0o755)
+    outside_dir.chmod(0o755)
+    inspected = runtime_dir.lstat()
+    runtime_dir.rmdir()
+    runtime_dir.symlink_to(outside_dir, target_is_directory=True)
+
+    with pytest.raises(OSError):
+        runtime_paths._chmod_directory_without_following(runtime_dir, 0o700, inspected)
+
+    assert stat.S_IMODE(outside_dir.stat().st_mode) == 0o755
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_harden_private_directory_rejects_directory_replaced_after_inspection(
+    tmp_path: Path,
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    inspected = runtime_dir.lstat()
+    runtime_dir.rename(tmp_path / "moved")
+    runtime_dir.mkdir()
+    runtime_dir.chmod(0o755)
+
+    with pytest.raises(OSError):
+        runtime_paths._chmod_directory_without_following(runtime_dir, 0o700, inspected)
+
+    assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o755
 
 
 def test_runtime_config_output_rejects_existing_non_directory(tmp_path: Path):
