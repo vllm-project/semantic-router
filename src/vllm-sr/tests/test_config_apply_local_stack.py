@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -355,7 +356,7 @@ def test_restart_required_is_saved_for_the_next_serve(monkeypatch, stack, tmp_pa
     monkeypatch.setattr(
         config_management,
         "save_pending_restart",
-        lambda *args: saved.append(args) or tmp_path / "runtime-config.yaml",
+        lambda *args, **_kwargs: saved.append(args) or tmp_path / "runtime-config.yaml",
     )
     result = _apply(
         monkeypatch, stack, FakeClient(plan=refuse), tmp_path / "config.yaml"
@@ -386,6 +387,63 @@ def test_restart_required_without_a_local_stack_names_the_restart(
     assert result.exit_code == 1
     assert "Restart required: listeners changed" in result.output
     assert "Envoy" not in result.output
+
+
+@pytest.mark.parametrize(
+    ("new_version", "edit_during_save", "preserve_mtime"),
+    [
+        ("v0.5", False, False),
+        ("v99.0", False, False),
+        ("v0.5", True, False),
+        ("v0.5", False, True),
+    ],
+)
+def test_restart_required_rejects_a_source_change(
+    monkeypatch, stack, tmp_path, new_version, edit_during_save, preserve_mtime
+):
+    source = tmp_path / "config.yaml"
+    original_stat = source.stat()
+    runtime = stack.runtime_config()
+    previous_config = SOURCE.replace(f"port: {MOVED_PORT}", "port: 8899").encode()
+    runtime.write_bytes(previous_config)
+
+    def edit_source():
+        source.write_text(
+            SOURCE.replace(f"port: {MOVED_PORT}", "port: 8891").replace(
+                "version: v0.5", f"version: {new_version}"
+            ),
+            encoding="utf-8",
+        )
+        if preserve_mtime:
+            os.utime(source, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+
+    def refuse():
+        if edit_during_save:
+            build = local_stack_config.build_effective_config_bytes
+
+            def build_after_edit(*args, **kwargs):
+                edit_source()
+                return build(*args, **kwargs)
+
+            monkeypatch.setattr(
+                local_stack_config, "build_effective_config_bytes", build_after_edit
+            )
+        else:
+            edit_source()
+        raise RouterManagementError("HTTP 409", status=409, code="RESTART_REQUIRED")
+
+    client = FakeClient(plan=refuse)
+    result = _apply(monkeypatch, stack, client, source)
+
+    assert len(client.sent) == 1
+    planned = yaml.safe_load(client.sent[0])
+    assert planned["listeners"][0]["port"] == 8890
+    assert planned["version"] == "v0.5"
+    assert result.exit_code == 1, result.output
+    assert "Config source changed" in result.output
+    assert runtime.read_bytes() == previous_config
+    assert read_pending_activation(runtime) is None
+    assert not runtime.with_suffix(".provenance.json").exists()
 
 
 def test_a_timed_out_apply_says_the_change_may_still_activate(
