@@ -914,8 +914,9 @@ func (decoder *chatStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, l
 	if frameErr != nil {
 		return events, diagnostics, frameErr
 	}
-	terminalEvents, err := decoder.finalize(reason)
+	terminalEvents, finalizeDiagnostics, err := decoder.finalize(reason)
 	events = append(events, terminalEvents...)
+	diagnostics = appendDiagnostics(diagnostics, finalizeDiagnostics, decoder.policy.Limits.Diagnostics)
 	return events, diagnostics, err
 }
 

@@ -33,7 +33,7 @@ var mediaReasons = map[api.ErrorBodyReason]string{
 	api.ImageAspectRatio: "image aspect ratio exceeds %s:1",
 	api.ImageMalformed:   "malformed image",
 	api.ImageUnsupported: "model does not read images",
-	api.VideoFormat:      "video must be a base64 MP4, WebM, QuickTime or Matroska data URL",
+	api.VideoFormat:      "video must be a base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data URL",
 	api.VideoTooLarge:    "video exceeds %s",
 	api.VideoTooLong:     "video longer than %s s",
 	api.VideoPixels:      "video frames exceed %s pixels",

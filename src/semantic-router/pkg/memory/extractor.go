@@ -11,7 +11,6 @@ import (
 
 	"github.com/openai/openai-go"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -66,47 +65,6 @@ func extractAssistantContentString(c openai.ChatCompletionAssistantMessageParamC
 		}
 	}
 	return strings.Join(parts, " ")
-}
-
-// sdkHistoryMessages adapts the string-based extractor API to the same
-// ordered content used by the router. Other roles still separate turns.
-func sdkHistoryMessages(history []openai.ChatCompletionMessageParamUnion) []llmprotocol.Message {
-	messages := make([]llmprotocol.Message, len(history))
-	for i, msg := range history {
-		switch {
-		case msg.OfUser != nil:
-			messages[i] = llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{
-				Kind: llmprotocol.ContentText, Text: SDKMessageContent(msg),
-			}}}
-		case msg.OfAssistant != nil:
-			messages[i] = llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: sdkAssistantParts(msg.OfAssistant)}
-		}
-	}
-	return messages
-}
-
-func sdkAssistantParts(msg *openai.ChatCompletionAssistantMessageParam) []llmprotocol.Content {
-	var parts []llmprotocol.Content
-	if text := msg.Content.OfString.Value; text != "" {
-		parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: text})
-	}
-	for _, part := range msg.Content.OfArrayOfContentParts {
-		switch {
-		case part.OfText != nil:
-			parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.OfText.Text})
-		case part.OfRefusal != nil:
-			parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: part.OfRefusal.Refusal})
-		}
-	}
-	if refusal := msg.Refusal.Value; refusal != "" {
-		parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: refusal})
-	}
-	for _, call := range msg.ToolCalls {
-		parts = append(parts, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
-			Name: call.Function.Name, Arguments: call.Function.Arguments,
-		}})
-	}
-	return parts
 }
 
 // sdkUserMessage constructs an SDK user message from a plain string.
@@ -165,7 +123,7 @@ const DefaultSessionStride = 3
 
 // MemoryExtractor stores conversation turns directly in the vector store.
 // No LLM extraction is performed -- the original user question and assistant
-// response (with think tags stripped from prose) are embedded and stored as-is, preserving
+// response (with think tags stripped) are embedded and stored as-is, preserving
 // full conversation fidelity with zero additional inference cost.
 //
 // In addition to per-turn chunks, a session-level rolling window chunk is
@@ -246,8 +204,8 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 // ProcessResponseWithHistoryCount stores the current conversation turn directly in
 // the vector store (Q: ... / A: ...) and, every N turns, a session-level
 // rolling window chunk that concatenates recent turns for multi-hop retrieval.
-// assistantResponse is raw prose. Call StoreAssistantTurn with an answer
-// rendered from structured prose and tool calls.
+// assistantResponse is raw prose. Use StoreAssistantTurn for a structured answer
+// whose prose has already been cleaned separately from its tool arguments.
 //
 // The session chunk is built from the conversation history (obtained from the
 // Response API's previous_response_id chain) plus the current turn. This gives
@@ -266,26 +224,25 @@ func (e *MemoryExtractor) ProcessResponseWithHistoryCount(
 	assistantResponse string,
 	history []openai.ChatCompletionMessageParamUnion,
 ) (int, error) {
-	return e.storeAssistantTurn(ctx, userID, userMessage, func() (string, []llmprotocol.Message) {
-		return StripThinkTags(assistantResponse), sdkHistoryMessages(history)
+	return e.storeAssistantTurn(ctx, userID, userMessage, history, func() string {
+		return StripThinkTags(assistantResponse)
 	})
 }
 
-// StoreAssistantTurn stores a rendered assistant answer and any due session
-// window. The caller has already stripped reasoning from the answer's prose
-// while it could distinguish prose from tool arguments. Prior messages retain
-// their structured content until the rolling window needs them.
+// StoreAssistantTurn stores a rendered current answer, including literal tool
+// arguments. The caller has already stripped inline reasoning from its prose.
 func (e *MemoryExtractor) StoreAssistantTurn(
 	ctx context.Context, userID, userMessage, assistantResponse string,
-	history []llmprotocol.Message,
+	history []openai.ChatCompletionMessageParamUnion,
 ) (int, error) {
-	return e.storeAssistantTurn(ctx, userID, userMessage, func() (string, []llmprotocol.Message) {
-		return assistantResponse, history
+	return e.storeAssistantTurn(ctx, userID, userMessage, history, func() string {
+		return assistantResponse
 	})
 }
 
 func (e *MemoryExtractor) storeAssistantTurn(
-	ctx context.Context, userID, userMessage string, prepare func() (string, []llmprotocol.Message),
+	ctx context.Context, userID, userMessage string,
+	history []openai.ChatCompletionMessageParamUnion, prepareAnswer func() string,
 ) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
@@ -295,7 +252,7 @@ func (e *MemoryExtractor) storeAssistantTurn(
 		return 0, nil
 	}
 
-	assistantResponse, history := prepare()
+	assistantResponse := prepareAnswer()
 	if userMessage == "" && assistantResponse == "" {
 		logging.Debugf("Memory chunk store: SKIPPED - empty turn")
 		return 0, nil
@@ -376,7 +333,7 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 	userID string,
 	userMessage string,
 	assistantResponse string,
-	history []llmprotocol.Message,
+	history []openai.ChatCompletionMessageParamUnion,
 ) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
@@ -439,10 +396,10 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 }
 
 // countTurns counts user turns in a message history. Each user message is one turn.
-func countTurns(history []llmprotocol.Message) int {
+func countTurns(history []openai.ChatCompletionMessageParamUnion) int {
 	n := 0
 	for _, m := range history {
-		if m.Role == llmprotocol.RoleUser {
+		if m.OfUser != nil {
 			n++
 		}
 	}
@@ -451,29 +408,39 @@ func countTurns(history []llmprotocol.Message) int {
 
 // buildSessionChunk concatenates the last windowSize turns from history plus
 // the current turn into a single multi-turn context chunk.
-func buildSessionChunk(history []llmprotocol.Message, userMsg, assistantResp string, windowSize int) string {
-	var chunks []string
-	for i := len(history) - 1; i >= 0 && len(chunks) < windowSize-1; i-- {
-		if msg := history[i]; msg.Role == llmprotocol.RoleUser {
-			chunks = append(chunks, formatTurnChunk(llmprotocol.TextContent(msg.Content), historyAssistantText(history[i+1:])))
+func buildSessionChunk(history []openai.ChatCompletionMessageParamUnion, userMsg, assistantResp string, windowSize int) string {
+	var pairs []string
+	turnEnd := len(history)
+	for i := len(history) - 1; i >= 0 && len(pairs) < windowSize-1; i-- {
+		if history[i].OfUser != nil {
+			answer := historicalTurnAnswer(history[i+1 : turnEnd])
+			pairs = append(pairs, formatTurnChunk(SDKMessageContent(history[i]), answer))
+			turnEnd = i
 		}
 	}
-	slices.Reverse(chunks)
-	chunks = append(chunks, formatTurnChunk(userMsg, assistantResp))
-	return strings.Join(chunks, "\n---\n")
+	slices.Reverse(pairs)
+	pairs = append(pairs, formatTurnChunk(userMsg, assistantResp))
+	return strings.Join(pairs, "\n---\n")
 }
 
-// Responses can represent the prose and tool calls of one assistant turn as
-// consecutive items. Keep their boundaries until the complete answer is rendered.
-func historyAssistantText(history []llmprotocol.Message) string {
-	var output []llmprotocol.OutputItem
-	for _, msg := range history {
-		if msg.Role != llmprotocol.RoleAssistant {
-			break
+// Plain turns use the reply immediately following the user. A tool exchange
+// discards provisional prose and starts a new search for the final visible text.
+func historicalTurnAnswer(messages []openai.ChatCompletionMessageParamUnion) string {
+	var answer string
+	afterTool := false
+	for i, msg := range messages {
+		assistant := msg.OfAssistant
+		switch {
+		case msg.OfTool != nil || (assistant != nil && len(assistant.ToolCalls) > 0):
+			afterTool = true
+			answer = ""
+		case assistant != nil && (i == 0 || afterTool):
+			if text := StripThinkTags(extractAssistantContentString(assistant.Content)); text != "" {
+				answer = text
+			}
 		}
-		output = append(output, llmprotocol.OutputItem{Role: msg.Role, Content: msg.Content})
 	}
-	return (&llmprotocol.Response{Output: output}).AssistantText(StripThinkTags)
+	return answer
 }
 
 // formatTurnChunk combines a user message and assistant response into a single

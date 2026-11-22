@@ -15,8 +15,9 @@ decision answers, or a surface response's numbers (``LoadedModel.golden_values``
 Loading checks that the answers are deterministic and well formed but does not
 compare them with the recorded references, which a recording replaces;
 ``previous`` counts the answers each recorded reference still matches.
-``--record`` writes a generic device-class reference and any hardware-qualified
-reference, keyed by repository and pinned revision, with the PyTorch version
+``--record`` writes a GPU's hardware-qualified reference alone (``--generic``
+adds the device-class one) and both on a CPU, keyed by repository and pinned
+revision, with the PyTorch version
 each was recorded with (``torch``); at a ``--dtype`` other than the model's
 ``auto`` both keys carry it (``cpu@bfloat16``). Within a revision and PyTorch
 version, the first generic baseline is retained while hardware entries are
@@ -129,7 +130,9 @@ def answers(
         runtime.stop()
 
 
-def record(path: Path, entries: list[dict[str, Any]]) -> None:
+def record(
+    path: Path, entries: list[dict[str, Any]], generic_too: bool = False
+) -> None:
     table = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
     for entry in entries:
         current = table.get(entry["repo"])
@@ -137,13 +140,23 @@ def record(path: Path, entries: list[dict[str, Any]]) -> None:
             current = {"revision": entry["revision"], "answers": {}}
         answers, recorded_with = current["answers"], current.get("torch", {})
         version = entry.get("torch")
-        generic = qualified(
-            entry["device"].split(":", 1)[0], entry.get("dtype", "auto")
+        device_class = entry["device"].split(":", 1)[0]
+        generic = qualified(device_class, entry.get("dtype", "auto"))
+        # A class reference is checked against every other architecture of its
+        # class, failing hosts that should serve `unverified`, and recording one
+        # drops the hardware entry that answers as it. A CPU keeps its baseline.
+        scoped = (
+            device_class != "cpu"
+            and not generic_too
+            and any(key != generic for key in entry["golden_answers"])
         )
         for key, values in entry["golden_answers"].items():
-            if key == generic and key in answers and recorded_with.get(key) == version:
-                continue
-            if key != generic and values == answers.get(generic):
+            if key == generic:
+                if scoped:
+                    continue
+                if key in answers and recorded_with.get(key) == version:
+                    continue
+            elif not scoped and values == answers.get(generic):
                 answers.pop(key, None)
                 recorded_with.pop(key, None)
                 continue
@@ -178,6 +191,11 @@ def main() -> None:
     parser.add_argument(
         "--record", type=Path, help="merge into this golden answers file"
     )
+    parser.add_argument(
+        "--generic",
+        action="store_true",
+        help="on a GPU, also record the device-class reference",
+    )
     args = parser.parse_args()
     if bool(args.model) == bool(args.family):
         parser.error("give a model or --family")
@@ -192,7 +210,7 @@ def main() -> None:
     )
     entries = [answers(args, model, revision) for model, revision in targets]
     if args.record:
-        record(args.record, entries)
+        record(args.record, entries, args.generic)
     print(json.dumps(entries if args.family else entries[0], indent=2, sort_keys=True))
 
 

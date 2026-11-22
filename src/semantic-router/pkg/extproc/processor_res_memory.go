@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"runtime/debug"
 
+	"github.com/openai/openai-go"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -110,12 +112,13 @@ type memoryPersistenceJob struct {
 }
 
 func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceOutcome, error) {
-	if _, err := encodeMemoryHistory(job.codecs, job.allowedLossy, job.history); err != nil {
+	extractorHistory, historyErr := memoryHistoryForExtractor(job.codecs, job.allowedLossy, job.history)
+	if historyErr != nil {
 		return memory.PersistenceOutcome{
 			Status:   "extraction_failed",
 			Reason:   "history_encode_error",
 			FailOpen: true,
-		}, err
+		}, historyErr
 	}
 
 	logging.Infof(
@@ -132,7 +135,7 @@ func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceO
 		job.userID,
 		job.userMessage,
 		job.assistantResponse,
-		job.history,
+		extractorHistory,
 	)
 	if err != nil {
 		return memory.PersistenceOutcome{}, err
@@ -204,14 +207,11 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 	return r.Config.Memory.AutoStore
 }
 
-// encodeMemoryHistory enforces the configured history translation policy and
-// records its losses. Storage reads the ordered neutral messages because Chat
-// moves tool calls out of the content sequence.
-func encodeMemoryHistory(
+func memoryHistoryForExtractor(
 	codecs *protocolcodec.Registry,
 	allowedLossy []string,
 	history []llmprotocol.Message,
-) ([]byte, error) {
+) ([]openai.ChatCompletionMessageParamUnion, error) {
 	if len(history) == 0 {
 		return nil, nil
 	}
@@ -230,5 +230,9 @@ func encodeMemoryHistory(
 	// The extraction runs after the reply, so what the encode dropped, such
 	// as a Responses blob, is counted and logged rather than sent to a client.
 	recordProtocolDiagnostics(&RequestContext{TargetFormat: llmprotocol.OpenAIChatV1}, encoded.Diagnostics)
-	return encoded.Body, nil
+	request, err := parseOpenAIRequest(encoded.Body)
+	if err != nil {
+		return nil, fmt.Errorf("parse encoded history: %w", err)
+	}
+	return request.Messages, nil
 }

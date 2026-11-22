@@ -23,6 +23,8 @@ type QueryFilters struct {
 	Harness string
 	// Since keeps the records at or after an instant; zero keeps every one.
 	Since time.Time
+	// HasSession keeps the records that belong to a session.
+	HasSession bool
 	// RecipeSet distinguishes an explicit legacy empty recipe from no filter.
 	RecipeSet bool
 }
@@ -44,6 +46,13 @@ type RecordPage struct {
 	// HarnessCounts counts the records every filter but Harness selects, by
 	// FilterHarness.
 	HarnessCounts map[string]int
+}
+
+// RunReader optionally reads one agent run's records, oldest first, without
+// their captured bodies or prompt and with each tool trace's steps but not
+// their payloads: what the run view needs of a session of thousands of calls.
+type RunReader interface {
+	QueryRun(ctx context.Context, filters QueryFilters) ([]Record, error)
 }
 
 // QueryReader optionally provides database-side pagination and a streaming

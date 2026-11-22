@@ -393,7 +393,7 @@ A model whose card lists the `image` modality (Decision 3.0) also reads
 Every question of the state sees them, in front of its text and in this order;
 the model resizes each to at most `limits.image_max_pixels` pixels. A model
 whose card lists the `video` modality also reads `videos`: base64 MP4, WebM,
-QuickTime or Matroska data URLs, each of at most `limits.video_max_bytes`
+QuickTime, Matroska or MPEG-TS data URLs, each of at most `limits.video_max_bytes`
 bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
 pixels per frame, after the images. The model reads `limits.video_fps` frames
 per second, at least 4 and at most `limits.video_max_frames` spread over the

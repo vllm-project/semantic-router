@@ -36,6 +36,9 @@ type routerReplayFilters struct {
 	cacheStatus string
 	sessionID   string
 	turnID      string
+	// hasSession keeps the records that belong to a session, as the
+	// Sessions view lists them.
+	hasSession bool
 	// harness is a sorted, comma-separated list of routerReplayHarnesses.
 	harness string
 	since   time.Time
@@ -59,6 +62,9 @@ func (filters routerReplayFilters) cacheKey() string {
 	}
 	if !filters.since.IsZero() {
 		values.Set("since", filters.since.UTC().Format(time.RFC3339Nano))
+	}
+	if filters.hasSession {
+		values.Set("has_session", "true")
 	}
 	return values.Encode()
 }
@@ -263,6 +269,14 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		filters.since = since
 	}
 
+	if raw := strings.TrimSpace(values.Get("has_session")); raw != "" {
+		hasSession, err := strconv.ParseBool(raw)
+		if err != nil {
+			return filters, fmt.Errorf("has_session must be true or false")
+		}
+		filters.hasSession = hasSession
+	}
+
 	harness, err := parseRouterReplayHarnesses(values)
 	if err != nil {
 		return filters, err
@@ -338,6 +352,7 @@ func doesRouterReplayRecordMatchFilters(
 		matchesOptionalValue(record.Recipe, filters.recipe),
 		matchesOptionalModel(record, filters.model),
 		matchesOptionalValue(record.SessionID, filters.sessionID),
+		!filters.hasSession || record.SessionID != "",
 		matchesOptionalTurn(record, filters.turnID),
 		matchesOptionalHarness(record, filters.harness),
 		filters.since.IsZero() || !record.Timestamp.Before(filters.since),

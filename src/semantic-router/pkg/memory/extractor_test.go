@@ -276,7 +276,7 @@ func TestCountTurns(t *testing.T) {
 		sdkUserMessage("q2"),
 		sdkAssistantMessage("a2"),
 	}
-	assert.Equal(t, 2, countTurns(sdkHistoryMessages(history)))
+	assert.Equal(t, 2, countTurns(history))
 	assert.Equal(t, 0, countTurns(nil))
 }
 
@@ -288,7 +288,7 @@ func TestBuildSessionChunk(t *testing.T) {
 		sdkAssistantMessage("Rob Pike and others at Google."),
 	}
 
-	chunk := buildSessionChunk(sdkHistoryMessages(history), "Is it fast?", "Yes, Go is very fast.", 3)
+	chunk := buildSessionChunk(history, "Is it fast?", "Yes, Go is very fast.", 3)
 
 	assert.Contains(t, chunk, "Q: Who created it?")
 	assert.Contains(t, chunk, "A: Rob Pike and others at Google.")
@@ -303,7 +303,7 @@ func TestBuildSessionChunk_WindowLargerThanHistory(t *testing.T) {
 		sdkAssistantMessage("Hello!"),
 	}
 
-	chunk := buildSessionChunk(sdkHistoryMessages(history), "Bye", "Goodbye!", 10)
+	chunk := buildSessionChunk(history, "Bye", "Goodbye!", 10)
 
 	assert.Contains(t, chunk, "Q: Hi")
 	assert.Contains(t, chunk, "Q: Bye")
@@ -317,14 +317,10 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	// Build 2 turns of history; +1 current = 3 turns total = stride triggers
 	history := []openai.ChatCompletionMessageParamUnion{
 		sdkUserMessage("What is your name?"),
-		sdkAssistantMessage("<think>private</think>I am an AI assistant."),
+		sdkAssistantMessage("I am an AI assistant."),
 		sdkUserMessage("What languages do you know?"),
 		sdkAssistantMessage("I can help with Go, Python, and more."),
 	}
-	const args = `{"path":"<think>.txt","contents":"keep me"}`
-	history[1].OfAssistant.ToolCalls = []openai.ChatCompletionMessageToolCallParam{{
-		Function: openai.ChatCompletionMessageToolCallFunctionParam{Name: "write", Arguments: args},
-	}}
 
 	// 3rd turn triggers session chunk (stride=3)
 	storedCount, err := extractor.ProcessResponseWithHistoryCount(
@@ -344,10 +340,6 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	var sources []string
 	for _, m := range results.Memories {
 		sources = append(sources, m.Source)
-		if m.Source == "session_window" {
-			assert.Contains(t, m.Content, "A: I am an AI assistant.\ntool write\n"+args)
-			assert.NotContains(t, m.Content, "<think>private</think>")
-		}
 	}
 	assert.Contains(t, sources, "conversation")
 	assert.Contains(t, sources, "session_window")
@@ -392,6 +384,57 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 	}
 	// Stride=3: fires at turn 3 and turn 6 → 2 session chunks
 	assert.Equal(t, 2, sessionChunks, "should produce 2 overlapping session chunks for 6 turns")
+}
+
+func TestSessionWindowStoresFinalToolAnswers(t *testing.T) {
+	lookup := func(id, preamble string) openai.ChatCompletionMessageParamUnion {
+		msg := sdkAssistantMessage(preamble)
+		msg.OfAssistant.ToolCalls = []openai.ChatCompletionMessageToolCallParam{{
+			ID: id, Type: "function",
+			Function: openai.ChatCompletionMessageToolCallFunctionParam{Name: "lookup", Arguments: "{}"},
+		}}
+		return msg
+	}
+
+	// The sixth turn writes the five-turn window at the default stride.
+	history := []openai.ChatCompletionMessageParamUnion{
+		sdkUserMessage("What can I borrow?"), sdkAssistantMessage("Books and maps."),
+		sdkUserMessage("Where is the atlas?"), lookup("atlas", "I'll check the shelf."),
+		openai.ToolMessage("shelf=9", "atlas"), sdkAssistantMessage("<think>Reading the result.</think>The atlas is on shelf nine."),
+		sdkUserMessage("Is the globe available?"), sdkAssistantMessage("I'll check the catalog."),
+		lookup("globe", ""), openai.ToolMessage("pending", "globe"), lookup("desk", "I'll ask at the desk."),
+		sdkUserMessage("Where are the maps?"), lookup("maps", ""),
+		openai.ToolMessage("floor=B1", "maps"), sdkAssistantMessage("Maps are downstairs."),
+		sdkUserMessage("When do you open?"), sdkAssistantMessage("We open at nine."),
+		sdkAssistantMessage("Is there anything else you need?"),
+	}
+	ctx := t.Context()
+	store := newTestInMemoryStore()
+	extractor := NewMemoryChunkStore(store)
+	_, err := extractor.ProcessResponseWithHistoryCount(ctx, "library", "reader", "When do you close?", "We close at six.", history)
+	require.NoError(t, err)
+	records, err := store.List(ctx, ListOptions{UserID: "reader"})
+	require.NoError(t, err)
+
+	for _, record := range records.Memories {
+		if record.Source == "session_window" {
+			require.Equal(t, `Q: Where is the atlas?
+A: The atlas is on shelf nine.
+---
+Q: Is the globe available?
+---
+Q: Where are the maps?
+A: Maps are downstairs.
+---
+Q: When do you open?
+A: We open at nine.
+---
+Q: When do you close?
+A: We close at six.`, record.Content)
+			return
+		}
+	}
+	t.Fatal("session window was not stored")
 }
 
 func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {

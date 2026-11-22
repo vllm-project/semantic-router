@@ -55,7 +55,6 @@ func persistenceRegressionContext(decision string) *RequestContext {
 
 func TestScheduleResponseMemoryStorePreservesToolArguments(t *testing.T) {
 	const currentArgs = `{"path":"<think>.txt","contents":"keep me"}`
-	const priorArgs = "read <think>old</think>.txt"
 	backend := &persistenceRegressionStore{InMemoryStore: memory.NewInMemoryStore()}
 	runner := memory.NewPersistenceRunner(5*time.Second, 1, 1)
 	router := &OpenAIRouter{
@@ -68,13 +67,16 @@ func TestScheduleResponseMemoryStorePreservesToolArguments(t *testing.T) {
 		neutralMemoryMessage("user", "Read the previous file."),
 		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
 			{Kind: llmprotocol.ContentText, Text: "<think>private history</think>Reading."},
-			{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: "prior", Name: "read", Arguments: priorArgs}},
-			{Kind: llmprotocol.ContentText, Text: "Ready."},
+			{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: "prior", Name: "read", Arguments: "previous.txt"}},
 		}},
 		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
 			Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{Kind: llmprotocol.ToolKindCustom, CallID: "prior", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "ok"}}},
 		}}},
-		neutralMemoryMessage("user", "Is it ready?"), neutralMemoryMessage("assistant", "Yes."),
+		neutralMemoryMessage("assistant", "<think>private reflection</think>The file is ready."),
+		neutralMemoryMessage("user", "Where was it saved?"),
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "lookup", Name: "locate", Arguments: "{}"},
+		}}},
 		neutralMemoryMessage("user", "Save my notes."),
 	}
 	response := memoryTestResponse("Saving. <think>private plan</think>")
@@ -88,13 +90,13 @@ func TestScheduleResponseMemoryStorePreservesToolArguments(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, stored.Memories, 2)
 	current := "Q: Save my notes.\nA: Saving.\ntool write\n" + currentArgs
-	prior := "Q: Read the previous file.\nA: Reading.\ntool read\n" + priorArgs + "\nReady."
+	prior := "Q: Read the previous file.\nA: The file is ready.\n---\nQ: Where was it saved?"
 	chunks := make(map[string]string)
 	for _, mem := range stored.Memories {
 		chunks[mem.Source] = mem.Content
 	}
 	assert.Equal(t, current, chunks["conversation"])
-	assert.Equal(t, prior+"\n---\nQ: Is it ready?\nA: Yes.\n---\n"+current, chunks["session_window"])
+	assert.Equal(t, prior+"\n---\n"+current, chunks["session_window"])
 }
 
 func TestScheduleResponseMemoryStore_QueuedJobUsesSubmissionSnapshot(t *testing.T) {

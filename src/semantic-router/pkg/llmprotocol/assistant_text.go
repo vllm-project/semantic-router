@@ -2,17 +2,6 @@ package llmprotocol
 
 import "strings"
 
-// TextContent joins the nonempty text blocks of a message with spaces.
-func TextContent(contents []Content) string {
-	parts := make([]string, 0, len(contents))
-	for _, content := range contents {
-		if content.Kind == ContentText && content.Text != "" {
-			parts = append(parts, content.Text)
-		}
-	}
-	return strings.Join(parts, " ")
-}
-
 // AssistantText renders the primary assistant output in order. Text and refusal
 // parts form one prose run until a visible tool call. transformProse, when
 // supplied, receives each complete run and never receives tool arguments.
