@@ -1016,8 +1016,10 @@ tools or error translation.
   terminal output agree; whitespace-only argument prefixes are held until an
   object follows or the call finishes. This is a wire-level guarantee, not tool
   schema validation: required-field validation remains with the tool consumer.
-  Explicit `null`, arrays, other non-objects, and malformed non-empty JSON still
-  end the stream with `invalid_stream_tool_arguments`; other translation
+  A wire `arguments: null` can be a streaming placeholder: later object argument
+  text is accepted, but a normally finished call with only null and no non-whitespace
+  argument text is rejected. Arrays, other non-objects, and malformed non-empty JSON
+  still end the stream with `invalid_stream_tool_arguments`; other translation
   directions retain their existing validation. A cut response is not cached,
   stored, or kept as the replay response body.
 - A Responses reasoning item can carry different non-empty `encrypted_content`

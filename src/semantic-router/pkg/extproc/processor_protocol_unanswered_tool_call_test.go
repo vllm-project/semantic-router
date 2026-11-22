@@ -395,6 +395,58 @@ func TestResponsesEmptyArgumentToolStreamRejectsInvalidArguments(t *testing.T) {
 	}
 }
 
+func TestResponsesNullArgumentPlaceholderStream(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		members []string
+		want    string
+	}{
+		{"object follows", []string{`,"arguments":null`, `,"arguments":"{\"timezone\":"`, `,"arguments":"\"UTC\"}"`}, `{"timezone":"UTC"}`},
+		{"empty object follows", []string{`,"arguments":null`, `,"arguments":"{}"`}, "{}"},
+		{"nothing follows", []string{`,"arguments":null`}, ""},
+		{"whitespace follows", []string{`,"arguments":null`, `,"arguments":" \t"`}, ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			router := &OpenAIRouter{}
+			ctx := &RequestContext{SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIChatV1, RequestModel: "public-model", TraceContext: t.Context()}
+			var body strings.Builder
+			reads := emptyArgumentChatToolStream(test.members, "tool_calls", 3)
+			for index, read := range reads {
+				reply := router.handleSemanticStreamingResponseBody([]byte(read), index == len(reads)-1, ctx)
+				body.Write(deliveredBody(t, reply, read))
+				if index <= len(test.members) {
+					require.False(t, ctx.StreamingAborted, "placeholder rejected before completion: %s", body.String())
+				}
+			}
+			events := responsesToolEvents(t, body.String())
+			terminal := events[len(events)-1]
+			if test.want == "" {
+				require.True(t, ctx.StreamingAborted)
+				require.Equal(t, "error", terminal.Type)
+				require.Equal(t, "invalid_stream_tool_arguments", terminal.Code)
+				require.NotContains(t, body.String(), `"type":"response.completed"`)
+				return
+			}
+			require.False(t, ctx.StreamingAborted)
+			require.Equal(t, "response.completed", terminal.Type)
+			require.Len(t, terminal.Response.Output, 1)
+			require.Equal(t, test.want, terminal.Response.Output[0].Arguments)
+			var deltas strings.Builder
+			for _, event := range events {
+				switch event.Type {
+				case "response.function_call_arguments.delta":
+					deltas.WriteString(event.Delta)
+				case "response.function_call_arguments.done":
+					require.Equal(t, test.want, event.Arguments)
+				case "response.output_item.done":
+					require.Equal(t, test.want, event.Item.Arguments)
+				}
+			}
+			require.Equal(t, test.want, deltas.String())
+		})
+	}
+}
+
 func TestResponsesEmptyArgumentToolStreamPreservesOutputLimits(t *testing.T) {
 	router := outputLimitToolRouter(t)
 	for _, test := range []struct {

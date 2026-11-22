@@ -180,6 +180,52 @@ func assertEmptyArgumentsResponses(t *testing.T, frames [][]byte, want map[strin
 	}
 }
 
+func TestChatResponsesNullArgumentPlaceholder(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		arguments []string
+		want      string
+	}{
+		{"object follows", []string{`{"q":`, `"ok"}`}, `{"q":"ok"}`},
+		{"empty object follows", []string{"{}"}, "{}"},
+		{"nothing follows", nil, ""},
+		{"empty follows", []string{""}, ""},
+		{"whitespace follows", []string{" \t"}, ""},
+		{"array follows", []string{"[]"}, ""},
+		{"malformed follows", []string{"{bad}"}, ""},
+	} {
+		for _, split := range []bool{false, true} {
+			for _, parallel := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/split=%t/parallel=%t", test.name, split, parallel), func(t *testing.T) {
+					chunks := emptyArgumentsChatStream(test.arguments, "tool_calls", parallel, 3)
+					chunks[0] = strings.Replace(chunks[0], `"name":"task_status"`, `"name":"task_status","arguments":null`, 1)
+					// Arrival of null alone must not abort an unfinished call.
+					stream, err := NewBuiltinEngine().NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.StreamContext{Context: t.Context()})
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, _, _, err = stream.Push([]byte(chunks[0])); err != nil {
+						t.Fatal(err)
+					}
+					frames, err := translateEmptyArgumentsChunks(t, NewBuiltinEngine(), chunks, split)
+					if test.want == "" {
+						requireProtocolErrorCode(t, err, "invalid_stream_tool_arguments")
+						return
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					want := map[string]string{"call_empty": test.want}
+					if parallel {
+						want["call_other"] = `{"q":"ok"}`
+					}
+					assertEmptyArgumentsResponses(t, frames, want)
+				})
+			}
+		}
+	}
+}
+
 func TestChatResponsesEmptyArgumentsBoundaries(t *testing.T) {
 	for name, arguments := range map[string][]string{"null": {"null"}, "array": {"[]"}, "scalar": {"1"}, "malformed": {"{bad}"}, "cut object": {`{"q":`}} {
 		t.Run(name, func(t *testing.T) {
@@ -213,12 +259,20 @@ func TestChatResponsesEmptyArgumentsBoundaries(t *testing.T) {
 			assertEmptyArgumentsResponses(t, frames, map[string]string{"call_empty": "{}", "call_other": `{"q":"ok"}`})
 		})
 	}
-	t.Run("explicit wire null", func(t *testing.T) {
-		chunks := emptyArgumentsChatStream(nil, "tool_calls", false, 3)
-		chunks[0] = strings.Replace(chunks[0], `"name":"task_status"`, `"name":"task_status","arguments":null`, 1)
-		_, err := translateEmptyArgumentsChunks(t, NewBuiltinEngine(), chunks, true)
-		requireProtocolErrorCode(t, err, "invalid_stream_tool_arguments")
-	})
+	for _, finish := range []string{"length", "tool_calls"} {
+		t.Run("wire null at output limit/"+finish, func(t *testing.T) {
+			chunks := emptyArgumentsChatStream(nil, finish, false, 3)
+			chunks[0] = strings.Replace(chunks[0], `"name":"task_status"`, `"name":"task_status","arguments":null`, 1)
+			frames, err := translateEmptyArgumentsChunks(t, engineWithRequestOutputLimit(t, 3), chunks, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := string(bytes.Join(frames, nil))
+			if !strings.Contains(body, `"type":"response.incomplete"`) || !strings.Contains(body, `"reason":"max_output_tokens"`) || strings.Contains(body, `"type":"response.completed"`) {
+				t.Fatalf("null placeholder was not preserved at limit: %s", body)
+			}
+		})
+	}
 	for _, finish := range []string{"stop", "tool_calls"} {
 		t.Run("normal finish/"+finish, func(t *testing.T) {
 			chunks := emptyArgumentsChatStream(nil, finish, false, 3)

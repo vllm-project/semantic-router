@@ -23,7 +23,8 @@ type chatStreamDecoder struct {
 	nativeReasonReported   bool
 	reportedOmissions      map[string]bool
 	stopSequence           string
-	deferredToolCompletion bool // empty calls wait for trailing output-limit usage
+	deferredToolCompletion bool         // empty calls wait for trailing output-limit usage
+	nullToolArguments      map[int]bool // raw null placeholders, indexed by neutral item
 	reasoningDetails       *chatReasoningDetailState
 }
 
@@ -265,11 +266,6 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err != nil {
 		return nil, nil, err
 	}
-	if decoder.context.Target == llmprotocol.OpenAIResponsesV1 && len(chunk.Choices) == 1 && len(chunk.Choices[0].Delta.ToolCalls) > 0 {
-		if nullErr := rejectNullChatStreamArguments(parsed.Data); nullErr != nil {
-			return nil, nil, nullErr
-		}
-	}
 	if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
 		return nil, nil, reservedErr
 	}
@@ -277,6 +273,11 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIChatV1, unknownFields)
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, diagnostics, err
+	}
+	if decoder.context.Target == llmprotocol.OpenAIResponsesV1 && len(chunk.Choices) == 1 && len(chunk.Choices[0].Delta.ToolCalls) > 0 {
+		if nullErr := decoder.observeNullChatStreamArguments(parsed.Data); nullErr != nil {
+			return nil, diagnostics, nullErr
+		}
 	}
 	// Some gateways emit empty synthetic chunks while waiting for the first
 	// model token. Before a response has started, any such chunk is a
@@ -611,13 +612,14 @@ func validateChatChunkToolIndexes(calls []chatChunkToolCallWire) error {
 	return nil
 }
 
-// Go decodes JSON null into a string's zero value. Keep explicit null distinct
-// from omitted/empty wire arguments before the Chat-to-Responses empty policy.
-func rejectNullChatStreamArguments(data []byte) error {
+// Go decodes JSON null into a string's zero value. Record the placeholder per
+// call, but allow subsequent argument text before deciding at completion.
+func (decoder *chatStreamDecoder) observeNullChatStreamArguments(data []byte) error {
 	var chunk struct {
 		Choices []struct {
 			Delta struct {
 				ToolCalls []struct {
+					Index    int `json:"index"`
 					Function struct {
 						Arguments json.RawMessage `json:"arguments"`
 					} `json:"function"`
@@ -631,7 +633,10 @@ func rejectNullChatStreamArguments(data []byte) error {
 	for _, choice := range chunk.Choices {
 		for _, call := range choice.Delta.ToolCalls {
 			if bytes.Equal(bytes.TrimSpace(call.Function.Arguments), []byte("null")) {
-				return nonObjectToolArgumentsError()
+				if decoder.nullToolArguments == nil {
+					decoder.nullToolArguments = make(map[int]bool)
+				}
+				decoder.nullToolArguments[call.Index+1] = true
 			}
 		}
 	}
@@ -965,6 +970,10 @@ func (decoder *chatStreamDecoder) completeActiveChatItems() ([]llmprotocol.Event
 	sort.Ints(active)
 	events := make([]llmprotocol.Event, 0, len(active))
 	for _, itemIndex := range active {
+		if decoder.nullToolArguments[itemIndex] && len(bytes.TrimSpace(decoder.toolArguments[itemIndex])) == 0 &&
+			(decoder.stop == llmprotocol.StopToolCall || decoder.stop == llmprotocol.StopEndTurn || decoder.stop == llmprotocol.StopSequence) {
+			return nil, nonObjectToolArgumentsError()
+		}
 		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: itemIndex, StopReason: decoder.stop})
 		if err != nil {
 			return nil, err
