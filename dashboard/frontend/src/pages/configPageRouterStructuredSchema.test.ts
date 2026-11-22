@@ -99,17 +99,21 @@ describe('router defaults structured schemas', () => {
     expect(normalized.skip_processing).toEqual({ enabled: true })
   })
 
-  it('does not reintroduce removed automatic model fields', () => {
+  it('saves strict entrypoint mode without reintroducing removed automatic model fields', () => {
     const cards = buildRouterSectionCards({
       config: null,
       routerConfig: { router_core: { strategy: 'priority' } },
       routerDefaults: null,
     })
     const routerCore = cards.find((card) => card.key === 'router_core')
-    const patch = routerCore?.save(routerCore.editData) as {
+    expect(routerCore?.editFields.find((field) => field.name === 'entrypoints_only')?.type).toBe(
+      'boolean',
+    )
+    const patch = routerCore?.save({ ...routerCore.editData, entrypoints_only: true }) as {
       router?: Record<string, unknown>
     }
 
+    expect(patch.router).toHaveProperty('entrypoints_only', true)
     expect(patch.router).not.toHaveProperty('auto_model_names')
   })
 
