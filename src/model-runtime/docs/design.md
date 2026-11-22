@@ -910,8 +910,8 @@ A request's `images` (base64 PNG, JPEG or WebP data URLs) are decoded by PIL
 and processed as the Transformers 5.17 torchvision `Qwen2VLImageProcessor`
 processes them: `smart_resize` to 65,536 to 1,638,400 pixels, a uint8 bicubic
 antialiased resize, one FP32 normalization and the patch layout. Its `videos`
-(base64 MP4, WebM, QuickTime or Matroska data URLs) are decoded as the d3
-runtime decodes them, by OpenCV's FFmpeg backend from a temporary file: 2
+(base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data URLs) are decoded as the
+d3 runtime decodes them, by OpenCV's FFmpeg backend from a temporary file: 2
 frames per second, at least 4 and at most 32 spread evenly over the whole
 video, converted to RGB, an odd count padded with the last frame. The
 Transformers 5.17 `Qwen3VLVideoProcessor` path follows with the d3 runtime's

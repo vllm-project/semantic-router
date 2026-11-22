@@ -13,12 +13,18 @@ from pathlib import Path
 from manual_ci import (
     MERGE_EVIDENCE_UNAVAILABLE,
     PAGE_SIZE,
+    PR_QUALIFICATION_CONTEXT,
     GitHubClient,
     ManualCIError,
     api_failure,
+    latest_qualification_status,
     main_contains,
+    pending_rerun_status,
     plan_for_run,
+    qualification_status_url,
     source_identity,
+    trusted_queue_pull,
+    write_qualification_status,
 )
 from pr_ci_events import resolve_event
 from pr_ci_pending import fingerprint, provenance, recover_pending, repair
@@ -84,6 +90,61 @@ class StatusClient(GitHubClient):
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 
+def qualifies_for_merge(repo: str, pull: dict, plan: dict | None) -> bool:
+    # A new Ready event must not promote the old draft run's receipt.
+    return (
+        plan is not None
+        and plan.get("draft") is False
+        and (pull.get("draft") is False or trusted_queue_pull(pull, repo))
+    )
+
+
+def current_publication_pull(client, repo: str, pull: dict, run: dict) -> dict | None:
+    fresh = client.request(f"repos/{repo}/actions/runs/{run['id']}")
+    current = client.request(f"repos/{repo}/pulls/{pull['number']}")
+    if (
+        current.get("state") != "open"
+        or current["head"]["sha"] != run["head_sha"]
+        or current.get("merge_commit_sha") != pull.get("merge_commit_sha")
+        or current.get("base", {}).get("sha") != pull.get("base", {}).get("sha")
+        or fresh.get("run_attempt") != run["run_attempt"]
+        or fresh.get("status") != run["status"]
+        or not latest_run(client, repo, run)
+    ):
+        return None
+    return current
+
+
+def publish_qualification_status(client, repo, pull, run, plan, result) -> dict:
+    payload = result["qualification_status"]
+    head = run["head_sha"]
+    try:
+        previous = latest_qualification_status(client, repo, head)
+        fence = pending_rerun_status(repo, run["id"], run["run_attempt"])
+        if all(previous.get(key) == value for key, value in fence.items()):
+            result["qualification_status_ignored"] = "waiting for rerun"
+            return result
+        current = current_publication_pull(client, repo, pull, run)
+        if current is None or (
+            payload["state"] == "success"
+            and not qualifies_for_merge(repo, current, plan)
+        ):
+            result["qualification_status_ignored"] = "superseded"
+            return result
+        if any(previous.get(key) != value for key, value in payload.items()):
+            write_qualification_status(client, repo, head, payload)
+    except (
+        ManualCIError,
+        KeyError,
+        TypeError,
+        OSError,
+        ValueError,
+        subprocess.TimeoutExpired,
+    ):
+        result["qualification_status_error"] = "Could not publish PR Qualification"
+    return result
+
+
 def publish(
     client,
     repo: str,
@@ -96,6 +157,8 @@ def publish(
     dry_run=False,
     reason: str | None = None,
 ) -> dict:
+    if state == "success" and not qualifies_for_merge(repo, pull, plan):
+        return {"ignored": "draft CI does not qualify this revision for merge"}
     title, summary = presentation(state, repo, pull, run, plan, reason)
     external = f"{PREFIX}{pull['number']}:{run['id']}:{run['run_attempt']}"
     payload = {
@@ -129,6 +192,13 @@ def publish(
             else None
         ),
     }
+    if state != "legacy":
+        result["qualification_status"] = {
+            "context": PR_QUALIFICATION_CONTEXT,
+            "state": state if state in {"success", "failure"} else "pending",
+            "target_url": qualification_status_url(repo, run["id"], run["run_attempt"]),
+            "description": title[:140],
+        }
     if reason == MERGE_EVIDENCE_UNAVAILABLE:
         result["reason_codes"] = [reason]
     if dry_run:
@@ -138,18 +208,11 @@ def publish(
     )
     # Recheck after reading artifacts/comments; an old completion must never
     # overwrite the status of a newer run, attempt, or contributor commit.
-    fresh = client.request(f"repos/{repo}/actions/runs/{run['id']}")
-    current = client.request(f"repos/{repo}/pulls/{pull['number']}")
-    if (
-        current.get("state") != "open"
-        or current["head"]["sha"] != run["head_sha"]
-        or current.get("merge_commit_sha") != pull.get("merge_commit_sha")
-        or current.get("base", {}).get("sha") != pull.get("base", {}).get("sha")
-        or fresh.get("run_attempt") != run["run_attempt"]
-        or fresh.get("status") != run["status"]
-        or not latest_run(client, repo, run)
-    ):
+    current = current_publication_pull(client, repo, pull, run)
+    if current is None:
         return {"ignored": "superseded while preparing status"}
+    if state == "success" and not qualifies_for_merge(repo, current, plan):
+        return {"ignored": "PR became draft while preparing its Gate"}
     if state != "legacy":
         fresh_checks = owned_checks(client, repo, pull)
         current_checks = [c for c in fresh_checks if c.get("external_id") == external]
@@ -181,7 +244,9 @@ def publish(
                 return {
                     "ignored": "pending publication evidence unavailable or changed"
                 }
-            return {**result, **recovered}
+            return publish_qualification_status(
+                client, repo, pull, run, plan, {**result, **recovered}
+            )
         # PATCH cannot move a check into a rerun's attempt. Only reuse a
         # visible check for this exact attempt, including when repairing an
         # external_id that the old publisher rewrote on a superseded check.
@@ -244,6 +309,8 @@ def publish(
             client.write(
                 f"repos/{repo}/issues/{pull['number']}/comments", {"body": comment_body}
             )
+    if state != "legacy":
+        return publish_qualification_status(client, repo, pull, run, plan, result)
     return result
 
 
@@ -975,6 +1042,8 @@ def main() -> int:
             run_id,
             dry_run=args.dry_run,
         )
+        if "qualification_status_error" in result:
+            print("::warning::Could not publish PR Qualification")
         print(json.dumps(result, indent=2))
         return 0
     except (
