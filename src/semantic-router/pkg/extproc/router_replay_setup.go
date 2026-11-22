@@ -38,6 +38,9 @@ func createReplayRuntime(cfg *config.RouterConfig) (map[string]*routerreplay.Rec
 // activateReplayStores gives the memory stores a generation shares with the
 // one it replaces the generation's max_records, once it serves.
 func (r *OpenAIRouter) activateReplayStores() {
+	if r == nil {
+		return
+	}
 	activate := func(recorder *routerreplay.Recorder) {
 		if recorder == nil {
 			return

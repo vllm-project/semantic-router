@@ -301,7 +301,6 @@ func (w *warmedRouter) Activate(context.Context) error {
 	err := s.service.swapSnapshot(router, snapshot, func(acquire AcquireFunc) {
 		if router != nil {
 			router.WorkflowStateService.CommitStorePolicy()
-			router.activateReplayStores()
 		}
 		publishSnapshotState(candidate, snapshot, router, s.runtime, acquire, s.service)
 	})
