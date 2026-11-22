@@ -276,6 +276,22 @@ func createSharedReplayStore(
 // rewritten.
 const replayFileMaxRecords = 1000
 
+// preparedReplayFileStore keeps the generation's limit separate from the
+// underlying file store shared with the serving Router.
+type preparedReplayFileStore struct {
+	*store.FileStore
+	maxRecords int
+}
+
+func (r *OpenAIRouter) commitReplayFileRetention() {
+	if r == nil || r.ReplayRecorder == nil {
+		return
+	}
+	if file, ok := r.ReplayRecorder.Reader().(*preparedReplayFileStore); ok {
+		file.CommitRetention(file.maxRecords)
+	}
+}
+
 // createReplayFileStore keeps the records in .vllm-sr/router-replay.jsonl in
 // the configuration file's directory, at most replayFileMaxRecords of them,
 // or in memory, as before the file store existed, where there is no such
@@ -286,10 +302,10 @@ func createReplayFileStore(cfg *config.RouterConfig, pluginCfg *config.RouterRep
 	if cfg.ConfigBaseDir != "" {
 		maxRecords := min(pluginCfg.MaxRecords, replayFileMaxRecords)
 		var storage *store.FileStore
-		if storage, err = store.OpenFileStore(path, maxRecords, cfg.RouterReplay.TTLSeconds); err == nil {
+		if storage, err = store.PrepareFileStore(path, replayFileMaxRecords, cfg.RouterReplay.TTLSeconds); err == nil {
 			logging.Infof("Router replay keeps records in %s (max_records=%d, ttl=%ds)",
 				path, maxRecords, cfg.RouterReplay.TTLSeconds)
-			return storage
+			return &preparedReplayFileStore{FileStore: storage, maxRecords: maxRecords}
 		}
 	}
 	logging.Warnf("Router replay cannot keep records in %s (%v); they stay in memory and are lost on restart. "+
