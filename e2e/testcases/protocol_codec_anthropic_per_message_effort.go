@@ -113,7 +113,7 @@ func runProtocolCodecAnthropicPerMessageEffort(
 		if inspectErr := assertPerMessageEffortProjection(upstream, check.format, check.userText); inspectErr != nil {
 			return fmt.Errorf("%s: %w", check.format, inspectErr)
 		}
-		warnings := result.Headers.Get("x-vsr-protocol-warnings")
+		warnings := result.Headers.Get(warningsHeader)
 		warned := hasProtocolFieldDiagnostic(warnings, "dropped", "messages[].output_config.effort")
 		if warned != (check.format != "anthropic.messages.v1") {
 			return fmt.Errorf("%s per-message effort warning = %t", check.format, warned)

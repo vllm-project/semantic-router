@@ -154,7 +154,7 @@ def append_plugin_cache_section(ctx):
 
 def append_accounting_section(ctx):
     coverage = (
-        "Detailed attempt instrumentation currently covers Confidence execution. "
+        "Detailed attempt instrumentation currently covers escalate execution. "
         "An absent series for another algorithm does not prove zero attempts. "
     )
     price_basis = (

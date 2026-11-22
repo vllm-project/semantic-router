@@ -13,7 +13,7 @@
           {
             "header": {
               "key": "x-vsr-schema-version",
-              "rawValueText": "2"
+              "rawValueText": "3"
             }
           },
           {

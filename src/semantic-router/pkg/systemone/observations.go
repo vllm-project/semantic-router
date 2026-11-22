@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // NativeRequest retains the wire document. Routing and acceptance inspect typed
@@ -20,10 +23,14 @@ type NativeRequest struct {
 	// InferenceBody requests internal provenance when an algorithm needs it.
 	// Only metadata visibility differs from Body; the native task stays raw.
 	InferenceBody json.RawMessage
+	// Requirements are what a candidate model must answer and read to answer
+	// the whole task.
+	Requirements Requirements
 }
 
-// Question identifies a question within one named state; the empty state is
-// the request's top-level state. These identities never depend on map order.
+// Question identifies a question within one named state: a batch entry's
+// name, or empty for a standard request. These identities never depend on
+// map order.
 type Question struct {
 	State, Name, Type string
 	FullInput         bool
@@ -46,18 +53,24 @@ type nativeState struct {
 	Questions map[string]json.RawMessage `json:"questions"`
 }
 
-// ParseNativeRequest admits explicit Decision 2.0 question types for auto.
+// ParseNativeRequest admits explicit Decision 2.0 question types for auto, in
+// a standard request (state and questions) or a batch (states), never both.
 // Concrete model requests continue through the native runtime unchanged.
 func ParseNativeRequest(body json.RawMessage) (*NativeRequest, error) {
 	var envelope struct {
 		nativeState
 		States map[string]nativeState `json:"states"`
 	}
-	if err := json.Unmarshal(body, &envelope); err != nil {
+	var task map[string]json.RawMessage
+	if json.Unmarshal(body, &envelope) != nil || json.Unmarshal(body, &task) != nil {
 		return nil, errors.New("invalid native request")
 	}
 	request := &NativeRequest{Body: append(json.RawMessage(nil), body...)}
-	if err := request.addState("", envelope.nativeState); err != nil {
+	if _, batch := task["states"]; !batch {
+		if err := request.addState("", envelope.nativeState); err != nil {
+			return nil, err
+		}
+	} else if err := batchOnly(task, envelope.States); err != nil {
 		return nil, err
 	}
 	names := make([]string, 0, len(envelope.States))
@@ -73,36 +86,48 @@ func ParseNativeRequest(body json.RawMessage) (*NativeRequest, error) {
 			return nil, err
 		}
 	}
+	request.Requirements = requirementsOf(request.Questions, body)
 	// Signals see the complete native task, including all states and questions.
 	// The model selector and transport options are not task evidence.
-	var task map[string]json.RawMessage
-	if json.Unmarshal(body, &task) == nil {
-		options := map[string]json.RawMessage{}
-		if raw, exists := task["options"]; exists && json.Unmarshal(raw, &options) != nil {
-			return nil, errors.New("native options must be an object")
-		}
-		if raw, exists := options["return_meta"]; exists {
-			var enabled *bool
-			if json.Unmarshal(raw, &enabled) != nil || enabled == nil {
-				return nil, errors.New("options.return_meta must be a boolean")
-			}
-			request.ReturnMeta = *enabled
-		}
-		request.InferenceBody = request.Body
-		if !request.ReturnMeta {
-			if options == nil {
-				options = map[string]json.RawMessage{}
-			}
-			options["return_meta"] = json.RawMessage("true")
-			task["options"], _ = json.Marshal(options)
-			request.InferenceBody, _ = json.Marshal(task)
-		}
-		delete(task, "model")
-		delete(task, "options")
-		encoded, _ := json.Marshal(task)
-		request.SignalText = string(encoded)
+	options := map[string]json.RawMessage{}
+	if raw, exists := task["options"]; exists && json.Unmarshal(raw, &options) != nil {
+		return nil, errors.New("native options must be an object")
 	}
+	if raw, exists := options["return_meta"]; exists {
+		var enabled *bool
+		if json.Unmarshal(raw, &enabled) != nil || enabled == nil {
+			return nil, errors.New("options.return_meta must be a boolean")
+		}
+		request.ReturnMeta = *enabled
+	}
+	request.InferenceBody = request.Body
+	if !request.ReturnMeta {
+		if options == nil {
+			options = map[string]json.RawMessage{}
+		}
+		options["return_meta"] = json.RawMessage("true")
+		task["options"], _ = json.Marshal(options)
+		request.InferenceBody, _ = json.Marshal(task)
+	}
+	delete(task, "model")
+	delete(task, "options")
+	encoded, _ := json.Marshal(task)
+	request.SignalText = string(encoded)
 	return request, nil
+}
+
+// batchOnly refuses a batch with a field of a standard request beside its
+// states, or with no entry.
+func batchOnly(task map[string]json.RawMessage, states map[string]nativeState) error {
+	for _, field := range []string{"state", "questions", "images", "videos"} {
+		if _, mixed := task[field]; mixed {
+			return fmt.Errorf("a request is a standard request (state and questions) or a batch (states), not both; this batch also has a top-level %s", field)
+		}
+	}
+	if len(states) == 0 {
+		return errors.New("states must be a nonempty object of named requests")
+	}
+	return nil
 }
 
 func (r *NativeRequest) addState(name string, state nativeState) error {
@@ -164,7 +189,7 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 			if q.Levels < 2 || q.Levels > 10 {
 				return errors.New("score requires two to ten levels")
 			}
-		case "noul":
+		case "noul", "box":
 		default:
 			return fmt.Errorf("auto does not support question type %q", question.Type)
 		}
@@ -173,29 +198,92 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 	return nil
 }
 
-// Observe preserves absent, failed and incomplete answers as invalid rather
-// than dropping them from a bundle's quality denominator.
-func (r *NativeRequest) Observe(body json.RawMessage) []Observation {
-	type responseState struct {
-		Answers map[string]json.RawMessage `json:"answers"`
+// requirementsOf are what a task's questions and media need of its model:
+// each question type, image or video for the media of the task and its
+// states, and full input when a question requires it.
+func requirementsOf(questions []Question, body json.RawMessage) Requirements {
+	var needs Requirements
+	for _, q := range questions {
+		if !slices.Contains(needs.QuestionTypes, q.Type) {
+			needs.QuestionTypes = append(needs.QuestionTypes, q.Type)
+		}
+		needs.FullInput = needs.FullInput || q.FullInput
 	}
+	sort.Strings(needs.QuestionTypes)
+	type media struct {
+		Images []json.RawMessage `json:"images"`
+		Videos []json.RawMessage `json:"videos"`
+	}
+	var task struct {
+		media
+		Assets map[string]json.RawMessage `json:"assets"`
+		States map[string]media           `json:"states"`
+	}
+	_ = json.Unmarshal(body, &task)
+	image, video := len(task.Images) > 0, len(task.Videos) > 0
+	for _, state := range task.States {
+		image = image || len(state.Images) > 0
+		video = video || len(state.Videos) > 0
+	}
+	for _, raw := range task.Assets {
+		var asset struct {
+			Type string `json:"type"`
+		}
+		_ = json.Unmarshal(raw, &asset)
+		if asset.Type == "video" {
+			video = true
+		} else {
+			image = true
+		}
+	}
+	if image {
+		needs.Modalities = append(needs.Modalities, config.SystemOneModalityImage)
+	}
+	if video {
+		needs.Modalities = append(needs.Modalities, config.SystemOneModalityVideo)
+	}
+	return needs
+}
+
+// stateAnswers is one state's part of a response: its answers by question
+// name and, beside them, the family-specific sets and spans. A set question
+// answers in sets and has no entry of its own in answers, where each label
+// repeats as a "<name>.<label>" Noul; a span question answers a Noul and lists
+// its spans in spans. Entries stay raw, so an absent entry, a null and an
+// empty result remain different.
+type stateAnswers struct {
+	Answers map[string]json.RawMessage `json:"answers"`
+	Sets    map[string]json.RawMessage `json:"sets"`
+	Spans   map[string]json.RawMessage `json:"spans"`
+}
+
+// answersByState decodes a response once and returns each state's part of it:
+// a standard request's under the empty name, a batch entry's under its own.
+func answersByState(body json.RawMessage) func(state string) stateAnswers {
 	var response struct {
-		responseState
-		States map[string]responseState `json:"states"`
+		stateAnswers
+		States map[string]stateAnswers `json:"states"`
 	}
 	if json.Unmarshal(body, &response) != nil {
 		// json.Unmarshal may populate a valid prefix before reporting a bad
 		// field later in the envelope. Never accept that partial decoding.
-		response.Answers = nil
-		response.States = nil
+		return func(string) stateAnswers { return stateAnswers{} }
 	}
+	return func(state string) stateAnswers {
+		if state == "" {
+			return response.stateAnswers
+		}
+		return response.States[state]
+	}
+}
+
+// Observe preserves absent, failed and incomplete answers as invalid rather
+// than dropping them from a bundle's quality denominator.
+func (r *NativeRequest) Observe(body json.RawMessage) []Observation {
+	answers := answersByState(body)
 	observations := make([]Observation, 0, len(r.Questions))
 	for _, q := range r.Questions {
-		answers := response.Answers
-		if q.State != "" {
-			answers = response.States[q.State].Answers
-		}
-		observations = append(observations, observeAnswer(q, answers[q.Name]))
+		observations = append(observations, observeAnswer(q, answers(q.State).Answers[q.Name]))
 	}
 	return observations
 }
@@ -211,6 +299,12 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 		Confidence    *float64           `json:"confidence"`
 		Coverage      string             `json:"input_coverage"`
 		Probabilities map[string]float64 `json:"probabilities"`
+		Box           *struct {
+			Top    *float64 `json:"top"`
+			Bottom *float64 `json:"bottom"`
+			Left   *float64 `json:"left"`
+			Right  *float64 `json:"right"`
+		} `json:"box"`
 	}
 	if json.Unmarshal(raw, &answer) != nil || answer.Type != q.Type || answer.Error != "" || (q.FullInput && answer.Coverage != "complete") {
 		return out
@@ -226,6 +320,10 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 			out.Probability = answer.Noul
 			out.Distribution = []float64{*answer.Noul, 1 - *answer.Noul}
 		}
+	case "box":
+		box := answer.Box
+		out.Valid = box != nil && probability(box.Top) && probability(box.Bottom) && probability(box.Left) && probability(box.Right) &&
+			*box.Top <= *box.Bottom && *box.Left <= *box.Right
 	}
 	if !out.Valid {
 		return out
@@ -233,7 +331,7 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 	if probability(answer.Confidence) {
 		out.Confidence = answer.Confidence
 	}
-	if q.Type != "noul" {
+	if q.Type == "choice" || q.Type == "score" {
 		expected := q.Levels
 		if q.Type == "choice" {
 			expected = len(q.ChoiceKeys)

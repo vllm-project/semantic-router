@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"unicode/utf8"
 
@@ -213,6 +215,12 @@ func outcome(value any, err error) string {
 		if !errors.As(err, &protocolErr) {
 			return "unexpected error type: " + err.Error()
 		}
+		// The single pass names the member at fault where the reference only
+		// says the JSON is invalid, so those errors compare as one kind.
+		switch protocolErr.Code {
+		case "invalid_json", "unknown_parameter", "invalid_type":
+			return "error invalid_json"
+		}
 		return "error " + protocolErr.Code + ": " + protocolErr.Message
 	}
 	encoded, marshalErr := json.Marshal(value)
@@ -383,17 +391,46 @@ func withReplaced(root any, path []any, value any) []byte {
 	return encoded
 }
 
-func TestSinglePassWireValidationMatchesTwoPass(t *testing.T) {
-	checked := 0
-	for _, seed := range differentialSeedBodies(t) {
-		checkSinglePassMatchesTwoPass(t, seed)
-		checked++
-		for _, mutant := range mutateWireBody(seed) {
-			checkSinglePassMatchesTwoPass(t, mutant)
-			checked++
+// differentialBodies is every seed and its mutants, each distinct body once.
+func differentialBodies(seeds [][]byte) [][]byte {
+	seen := make(map[string]struct{})
+	var bodies [][]byte
+	add := func(body []byte) {
+		if _, duplicate := seen[string(body)]; !duplicate {
+			seen[string(body)] = struct{}{}
+			bodies = append(bodies, body)
 		}
 	}
-	t.Logf("compared %d bodies", checked)
+	for _, seed := range seeds {
+		add(seed)
+		for _, mutant := range mutateWireBody(seed) {
+			add(mutant)
+		}
+	}
+	return bodies
+}
+
+// compareInParallel splits the bodies into one parallel subtest per CPU; each
+// comparison is independent, so the order they run in does not matter.
+func compareInParallel(t *testing.T, bodies [][]byte, check func(*testing.T, []byte)) {
+	var compared atomic.Int64
+	// Parallel subtests run after this function returns; the count is
+	// reported once they have all finished.
+	t.Cleanup(func() { t.Logf("compared %d of %d bodies", compared.Load(), len(bodies)) })
+	shards := runtime.GOMAXPROCS(0)
+	for shard := 0; shard < shards; shard++ {
+		t.Run(fmt.Sprintf("shard-%d", shard), func(t *testing.T) {
+			t.Parallel()
+			for index := shard; index < len(bodies); index += shards {
+				check(t, bodies[index])
+				compared.Add(1)
+			}
+		})
+	}
+}
+
+func TestSinglePassWireValidationMatchesTwoPass(t *testing.T) {
+	compareInParallel(t, differentialBodies(differentialSeedBodies(t)), checkSinglePassMatchesTwoPass)
 }
 
 func FuzzSinglePassWireValidationMatchesTwoPass(f *testing.F) {
@@ -550,16 +587,7 @@ func differentialProviderSeedBodies(t testing.TB) [][]byte {
 }
 
 func TestSinglePassProviderValidationMatchesTwoPass(t *testing.T) {
-	checked := 0
-	for _, seed := range differentialProviderSeedBodies(t) {
-		checkSinglePassProviderMatchesTwoPass(t, seed)
-		checked++
-		for _, mutant := range mutateWireBody(seed) {
-			checkSinglePassProviderMatchesTwoPass(t, mutant)
-			checked++
-		}
-	}
-	t.Logf("compared %d bodies", checked)
+	compareInParallel(t, differentialBodies(differentialProviderSeedBodies(t)), checkSinglePassProviderMatchesTwoPass)
 }
 
 func FuzzSinglePassProviderValidationMatchesTwoPass(f *testing.F) {

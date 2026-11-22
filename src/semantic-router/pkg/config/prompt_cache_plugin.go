@@ -34,8 +34,13 @@ func (c *PromptCachePluginConfig) EffectiveOnUnsupported() string {
 
 // GetPromptCacheConfig returns the route-local prompt-cache configuration.
 func (d *Decision) GetPromptCacheConfig() *PromptCachePluginConfig {
-	result := &PromptCachePluginConfig{}
-	return decodeDecisionPlugin(d, DecisionPluginPromptCache, result)
+	return PromptCachePluginOf(d.Plugins)
+}
+
+// PromptCachePluginOf is the prompt_cache plugin among a request's plugins,
+// nil without one.
+func PromptCachePluginOf(plugins []DecisionPlugin) *PromptCachePluginConfig {
+	return decodePlugin(plugins, DecisionPluginPromptCache, &PromptCachePluginConfig{})
 }
 
 func (c *PromptCachePluginConfig) withDefaults() PromptCachePluginConfig {

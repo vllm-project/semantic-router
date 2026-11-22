@@ -81,11 +81,11 @@ func TestRollbackCleanupFailureRetainsRetryableJournal(t *testing.T) {
 
 func TestSourceBaselineRefreshesAtomicallyByDigest(t *testing.T) {
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: filepath.Join(t.TempDir(), "config.yaml")})
-	first := []byte("version: v0.3\n# source\n")
+	first := []byte("version: v0.5\n# source\n")
 	if err := store.RefreshSourceBaseline(first); err != nil {
 		t.Fatal(err)
 	}
-	second := []byte("version: v0.3\n# edited source\n")
+	second := []byte("version: v0.5\n# edited source\n")
 	if err := store.RefreshSourceBaseline(second); err != nil {
 		t.Fatal(err)
 	}
@@ -103,11 +103,11 @@ func TestSourceBaselineRefreshesAtomicallyByDigest(t *testing.T) {
 
 func TestUnpublishedBaselineObjectDoesNotReplaceCurrentPointer(t *testing.T) {
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: filepath.Join(t.TempDir(), "config.yaml")})
-	current := []byte("version: v0.3\n# current\n")
+	current := []byte("version: v0.5\n# current\n")
 	if err := store.RefreshSourceBaseline(current); err != nil {
 		t.Fatal(err)
 	}
-	unpublished := []byte("version: v0.3\n# interrupted refresh\n")
+	unpublished := []byte("version: v0.5\n# interrupted refresh\n")
 	objectPath := store.sourceBaselineObjectPath(digestBytes(unpublished))
 	if err := writeFileAtomically(objectPath, unpublished); err != nil {
 		t.Fatal(err)

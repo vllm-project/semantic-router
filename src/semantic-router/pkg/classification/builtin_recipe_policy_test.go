@@ -35,16 +35,16 @@ func builtinPolicyClassifier(t *testing.T, name string) *Classifier {
 // controlled inputs to the shipped projections and rules, not model output.
 func balanceAnswers(task string, difficulty, deliberation float64, matched ...string) SignalResults {
 	in := SignalResults{
-		MatchedDecisionRules: append([]string{"task:" + task}, matched...),
+		MatchedSystemOneRules: append([]string{"task:" + task}, matched...),
 		SignalValues: map[string]float64{
-			"decision:difficulty":         difficulty,
-			"decision:needs:deliberation": deliberation,
-			"decision:needs:verification": 0,
-			"decision:needs:tools":        0,
+			"systemone:difficulty":         difficulty,
+			"systemone:needs:deliberation": deliberation,
+			"systemone:needs:verification": 0,
+			"systemone:needs:tools":        0,
 		},
 	}
 	if difficulty >= 2 {
-		in.MatchedDecisionRules = append(in.MatchedDecisionRules, "difficulty")
+		in.MatchedSystemOneRules = append(in.MatchedSystemOneRules, "difficulty")
 	}
 	return in
 }
@@ -61,16 +61,21 @@ func balanceLong(in SignalResults) SignalResults {
 	return in
 }
 
+func balanceImage(in SignalResults) SignalResults {
+	in.MatchedInputModalityRules = []string{"has_image"}
+	return in
+}
+
 // These are policy counterexamples, not classifier accuracy measurements. Read
 // the shipped recipe and run its actual projections and decision evaluator.
 func TestBuiltinBalanceEffortLanes(t *testing.T) {
 	c := builtinPolicyClassifier(t, "balance")
 	unknown := SignalResults{SignalErrors: map[string]string{}}
 	for _, name := range []string{"task", "difficulty", "precise_facts", "needs", "correction", "tool_use"} {
-		unknown.SignalErrors["decision:"+name] = "unavailable"
+		unknown.SignalErrors["systemone:"+name] = "unavailable"
 	}
 	tools := balanceAnswers("chat", 0.5, 0)
-	tools.SignalValues["decision:needs:tools"] = 0.7
+	tools.SignalValues["systemone:needs:tools"] = 0.7
 	tests := []struct {
 		name string
 		in   SignalResults
@@ -92,10 +97,10 @@ func TestBuiltinBalanceEffortLanes(t *testing.T) {
 		{"exact facts at maximum effort", balanceAnswers("facts", 3.5, 1, "precise_facts"), "frontier"},
 		{"long input", balanceLong(balanceAnswers("chat", 0.5, 0)), "long_context"},
 		{"long input with unknown answers", balanceLong(unknown), "long_context"},
-		{"long input outranks an image", balanceLong(balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image"}, nil, nil)), "long_context"},
-		{"image", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image"}, nil, nil), "vision"},
-		{"hard question about an image", balanceWith(balanceAnswers("stem", 3.5, 1), []string{"has_image"}, nil, nil), "vision"},
-		{"image during a tool loop", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image", "tool_loop"}, nil, nil), "vision"},
+		{"long input outranks an image", balanceLong(balanceImage(balanceAnswers("chat", 0.5, 0))), "long_context"},
+		{"image", balanceImage(balanceAnswers("chat", 0.5, 0)), "vision"},
+		{"hard question about an image", balanceImage(balanceAnswers("stem", 3.5, 1)), "vision"},
+		{"image during a tool loop", balanceImage(balanceWith(balanceAnswers("chat", 0.5, 0), []string{"tool_loop"}, nil, nil)), "vision"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { assertBuiltinPolicy(t, c, &tt.in, tt.want) })
@@ -129,7 +134,7 @@ func TestBuiltinHardNamedToolRequiresCapableCandidate(t *testing.T) {
 	for _, recipe := range []string{"balance", "speed", "cost", "accuracy"} {
 		t.Run(recipe, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, recipe)
-			in := &SignalResults{MatchedDecisionRules: []string{"depth"}, MatchedConversationRules: []string{"has_tools", "tool_required"}}
+			in := &SignalResults{MatchedSystemOneRules: []string{"depth"}, MatchedConversationRules: []string{"has_tools", "tool_required"}}
 			want := "reasoning"
 			if recipe == "balance" {
 				answers := balanceWith(balanceAnswers("agentic", 2.5, 0.2), []string{"has_tools"}, nil, nil)
@@ -170,7 +175,7 @@ func TestBuiltinRecipesReplayDefaultsRespectOperatorOptOut(t *testing.T) {
 	for _, name := range []string{"balance", "speed", "cost", "accuracy", "vault"} {
 		t.Run(name, func(t *testing.T) {
 			cfg := builtinPolicyClassifier(t, name).Config
-			if !cfg.RouterReplay.Enabled || cfg.RouterReplay.StoreBackend != "postgres" || cfg.RouterReplay.TTLSeconds != 604800 {
+			if !cfg.UsesRouterReplay() || cfg.RouterReplay.StoreBackend != "postgres" || cfg.RouterReplay.TTLSeconds != 604800 {
 				t.Fatal("built-in recipes must default to seven-day PostgreSQL Replay")
 			}
 			for _, route := range cfg.Decisions {
@@ -178,7 +183,12 @@ func TestBuiltinRecipesReplayDefaultsRespectOperatorOptOut(t *testing.T) {
 					t.Fatalf("decision %q must inherit Replay capture", route.Name)
 				}
 			}
-			cfg.RouterReplay.Enabled = false
+			cfg.GlobalPlugins = []config.DecisionPlugin{{
+				Type: config.DecisionPluginRouterReplay, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false}),
+			}}
+			if err := cfg.LayerPlugins(); err != nil {
+				t.Fatal(err)
+			}
 			for _, route := range cfg.Decisions {
 				if cfg.EffectiveRouterReplayConfig(&route) != nil {
 					t.Fatalf("global opt-out must prevent default capture for decision %q", route.Name)
@@ -201,20 +211,15 @@ func TestBuiltinVaultDataControlsAreIndependentOfVerdict(t *testing.T) {
 	for _, route := range cfg.Decisions {
 		t.Run(route.Name, func(t *testing.T) {
 			tools := route.GetToolsConfig()
-			memory := route.GetMemoryConfig()
+			context := route.GetContextConfig()
 			cache := route.GetResponseCacheConfig()
-			if tools == nil || !tools.Enabled || tools.EffectiveMode() != config.ToolsPluginModeNone || !tools.StripToolHistory {
+			if policy := tools.ActivePolicy(); policy.EffectiveMode() != config.ToolsPolicyModeNone || !policy.StripToolHistory {
 				t.Fatal("every Vault verdict must prevent client tool dispatch")
 			}
-			if memory == nil || memory.Enabled || cache == nil || cache.Enabled {
+			if context == nil || context.Enabled || cache == nil || cache.Enabled {
 				t.Fatal("every Vault verdict must disable memory and response caching")
 			}
-			drop := false
-			for _, emit := range route.Emits {
-				if emit.Kind == "retention" && emit.Retention != nil && emit.Retention.Drop != nil && *emit.Retention.Drop {
-					drop = true
-				}
-			}
+			drop := route.Retention != nil && route.Retention.Drop != nil && *route.Retention.Drop
 			if !drop || route.Adaptations.EffectiveMode() != config.DecisionAdaptationModeBypass {
 				t.Fatal("every Vault verdict must suppress content writes and adaptation")
 			}

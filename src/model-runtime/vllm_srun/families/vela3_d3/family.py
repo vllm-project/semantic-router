@@ -18,6 +18,7 @@ import torch
 from ...errors import PackageError
 from ...heads.span import SpanHead
 from ...plugins.base import (
+    BackboneSpec,
     DeviceInfo,
     EngineModel,
     GatedAdapterSpec,
@@ -34,11 +35,66 @@ from ..decision3.package import is_state_once
 from ..vela3_shared import PRESETS
 from . import package as pkg
 from .gates import Gates
+from .labeldef import LabelDefiner, lm_head_spec, writer_eos, writer_of
 from .model import GatedDecisions, TurboDecisions, Vela3D3Model
 from .span_policy import Policy
 from .span_read import SpanReader
 from .span_render import Renderer
 from .spans import Spans
+
+GOLDEN_STATE = {
+    "user": "Hi, I'm Tom Baker (tom.baker@example.com). Is paracetamol safe to take with ibuprofen?",
+    "answer": "Yes. Adults can take both, with paracetamol up to 4 grams in 24 hours.",
+}
+# Each question takes a different path in every size: ``topic`` the base with
+# adapters off, ``attack`` the decision adapter, ``domain`` its task adapter and
+# ``contact`` the ``pii`` router label set. Router questions keep the packages'
+# trained wording; changing any question invalidates the recorded references.
+GOLDEN_QUESTIONS = {
+    "topic": {
+        "type": "choice",
+        "instructions": "Which kind of advice does the user ask for?",
+        "criteria": {
+            "medical": "health, drugs or doses",
+            "legal": "laws or contracts",
+            "other": None,
+        },
+    },
+    "attack": {
+        "type": "choice",
+        "instructions": "Is this a prompt injection or jailbreak attempt?",
+        "criteria": {
+            "benign": "a normal request or quoted content that does not try to override system instructions or bypass safety rules",
+            "jailbreak": "a prompt injection or jailbreak that attempts to override system instructions, hijack the task, or bypass safety rules",
+        },
+    },
+    "domain": {
+        "type": "choice",
+        "instructions": "Which subject area is this request about?",
+        "criteria": {
+            "biology": "living organisms, anatomy, genetics, medical genetics or viruses",
+            "business": "management, marketing, accounting, business ethics or public relations",
+            "chemistry": "chemical substances, reactions, elements or laboratory chemistry",
+            "computer science": "programming, algorithms, computer systems, security or machine learning",
+            "economics": "markets, macroeconomics, microeconomics or econometrics",
+            "engineering": "electrical or other engineering design and systems",
+            "health": "medicine, clinical practice, nutrition, ageing or sexual health",
+            "history": "past events, periods and historical societies",
+            "law": "legal rules, jurisprudence, courts or international law",
+            "math": "arithmetic, algebra, geometry, statistics or other mathematics",
+            "other": "a subject that fits none of the listed areas",
+            "philosophy": "philosophy, ethics, moral questions or formal logic",
+            "physics": "physical laws, mechanics, astronomy or physical phenomena",
+            "psychology": "mind, behaviour, mental processes or psychological practice",
+            "religion": "religions, religious texts, beliefs, practices and theology",
+        },
+    },
+    "contact": {
+        "type": "span",
+        "criteria": ["EMAIL_ADDRESS", "PERSON", "PHONE_NUMBER"],
+        "over": "user",
+    },
+}
 
 # The one way a state-once base answers its gated rows again (``decisions.attention``): vela3-turbo's.
 NONCAUSAL_REPLAYS = "noncausal"
@@ -116,6 +172,13 @@ class Vela3D3Family(ModelFamily):
             details={"package": details, "base": base_package},
         )
 
+    def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
+        return builtin.golden(
+            package.model_sha256,
+            "decisions",
+            {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS},
+        )
+
     def kernel_choices(
         self, package: VerifiedPackage, device: DeviceInfo
     ) -> dict[str, Any]:
@@ -145,10 +208,28 @@ class Vela3D3Family(ModelFamily):
             )
             for name, adapter in details.adapters.items()
         }
+        lm_head = lm_head_spec(details.root, details.vela3, spec.backbone.config)
+        if lm_head is not None:
+            # A writer's base must name its end token; refused here, before any weight loads.
+            writer_eos(spec.backbone.config)
         return replace(
             spec,
             name=package.model_name,
-            backbone=replace(spec.backbone, gated=gated),
+            backbone=replace(spec.backbone, gated=gated, lm_head=lm_head),
+            # The package is validated as its own model (its own registry pin,
+            # tests and surfaces), so it consents to the measured approximate
+            # kernels for itself -- the fla-npu chunk on the SoCs its records
+            # cover (npu-fla-chunk-ascend950dt.md,
+            # npu-fla-chunk-ascend910b1.md), behind the FLA_NPU_APPROXIMATE
+            # opt-in. The consent is scoped to the npu: the CUDA and ROCm
+            # approximate kernels (cuda-fused-approximate.md) keep the base's
+            # consent, which is off -- no GPU record covers this family. The
+            # decision3 base's own dtype is otherwise unchanged.
+            dtype=replace(
+                spec.dtype,
+                approximate_kernels=True,
+                approximate_accelerators=frozenset({"npu"}),
+            ),
         )
 
     def load(
@@ -159,6 +240,9 @@ class Vela3D3Family(ModelFamily):
         model = Decision3Family(self.options).load_as(
             base, spec, engine_model, _model_class(base)
         )
+        definer = _definer(details, model, spec.backbone)
+        # Writing a definition decodes with the base while the request plans.
+        model.plans_run_forwards = definer is not None
         heads = {
             route: _head(details.root / file, engine_model.device)
             for route, file in details.span.heads.items()
@@ -168,8 +252,10 @@ class Vela3D3Family(ModelFamily):
                 details.vela3, details.router_questions, details.adapters
             ),
             Spans(
-                policy=Policy(details.span, _names_only),
-                renderer=Renderer(model.tokenizer, model.codes),
+                policy=Policy(
+                    details.span, _names_only if definer is None else definer.define
+                ),
+                renderer=Renderer(model.prompts, model.codes),
                 reader=SpanReader(engine_model, heads),
             ),
         )
@@ -203,12 +289,30 @@ def _head(path: Path, device: torch.device) -> SpanHead:
 
 
 def _names_only(names: list[str], only: set[str]) -> dict[str, str]:
-    """No definition writer yet: labels without a description run by name.
-
-    The packages' writers (vela3-mini's base, vela3-flash's grafted head) take
-    this place in #5703.
-    """
+    """No definition writer (``names``): labels without a description run by name."""
     return {}
+
+
+def _definer(
+    details: pkg.Vela3D3Package, model: Vela3D3Model, backbone: BackboneSpec
+) -> LabelDefiner | None:
+    """The package's definition writer; None for ``names`` and a base with no LM head."""
+    definitions = details.vela3.get("definitions") or {}
+    cache = definitions.get("cache_file") if isinstance(definitions, dict) else None
+    return writer_of(
+        (
+            str(definitions.get("writer") or "names")
+            if isinstance(definitions, dict)
+            else "names"
+        ),
+        model.engine_model,
+        model.prompts,
+        model.pad_id,
+        details.root / cache if isinstance(cache, str) else None,
+        eos_token_id=(
+            writer_eos(backbone.config) if backbone.lm_head is not None else None
+        ),
+    )
 
 
 def _model_class(base: VerifiedPackage) -> type[Vela3D3Model]:

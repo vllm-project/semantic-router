@@ -13,37 +13,31 @@ MODELS_MAKE = REPO_ROOT / "tools/make/models.mk"
 
 
 class ModelMakeContractsTests(unittest.TestCase):
-    def test_image_calibration_is_separate_and_every_stage_failure_propagates(
-        self,
-    ) -> None:
+    def test_every_published_model_stage_failure_propagates(self) -> None:
         for failure, count in (
-            ("", 3),
+            ("", 2),
             ("python3:model-artifacts", 1),
-            ("python3:image-calibration-manifest", 2),
-            ("python3:image-calibration", 3),
+            ("python3:runtime", 2),
         ):
             with self.subTest(failure=failure):
                 result, calls = self._run_target(failure)
                 self.assertEqual(
                     result.returncode == 0, not failure, result.stdout + result.stderr
                 )
-                self.assertEqual(len(calls), count)
-                self.assertTrue(
-                    calls[0]["suite"] == "model-artifacts"
-                    and all(
-                        call["suite"].startswith("image-calibration")
-                        for call in calls[1:]
-                    )
+                self.assertEqual(
+                    [call["suite"] for call in calls],
+                    ["model-artifacts", "runtime"][:count],
                 )
-                if not failure:
-                    self.assertEqual(calls[1]["manifest"], calls[2]["manifest"])
 
-    def test_calibration_prepares_the_nano_artifact_in_the_models_directory(self):
+    def test_the_contract_serves_the_nano_artifact_from_the_models_directory(self):
         result, calls = self._run_target()
         self.assertEqual(result.returncode, 0, result.stderr)
-        root = Path(calls[1]["manifest"]).parent.parent
-        self.assertEqual(calls[0]["output"], str(root / "models/vela-omni-artifacts"))
+        models = Path(calls[1]["models-dir"])
+        self.assertEqual(calls[0]["output"], str(models / "vela-omni-artifacts"))
         self.assertEqual(calls[0]["variants"], "nano")
+        self.assertEqual(
+            calls[1]["omni"], str(models / "vela-omni-artifacts/vela-1.0-omni-nano")
+        )
 
     def _run_target(
         self, failure: str = ""
@@ -63,12 +57,11 @@ class ModelMakeContractsTests(unittest.TestCase):
                     "args = sys.argv[1:]\n"
                     "def option(name, default=''):\n"
                     "    return args[args.index(name) + 1] if name in args else default\n"
-                    "default_suite = 'image-calibration' if args[0].endswith('image_calibration.py') or pathlib.Path(sys.argv[0]).name == 'docker' else 'runtime'\n"
+                    "default_suite = 'runtime'\n"
                     "if args[0].endswith('prepare_model_test_assets.py'): default_suite = 'model-artifacts'\n"
-                    "if '--prepare-manifest' in args: default_suite += '-manifest'\n"
                     "call = {'command': pathlib.Path(sys.argv[0]).name,\n"
                     "        'suite': option('--suite', default_suite)}\n"
-                    "for name in ('manifest', 'output', 'variants'):\n"
+                    "for name in ('models-dir', 'omni', 'output', 'variants'):\n"
                     "    call[name] = option('--' + name)\n"
                     "with open(os.environ['MODEL_CONTRACT_CALLS'], 'a') as output:\n"
                     "    output.write(json.dumps(call) + '\\n')\n"
@@ -92,7 +85,7 @@ class ModelMakeContractsTests(unittest.TestCase):
                 [
                     "make",
                     "--no-print-directory",
-                    "verify-image-routing-calibration",
+                    "test-models",
                     "SHELL=/bin/sh",
                     "AGENT_PYTHON=python3",
                     f"MODEL_TEST_REPORT_DIR={root / 'reports'}",

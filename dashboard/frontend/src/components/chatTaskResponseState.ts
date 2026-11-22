@@ -13,6 +13,7 @@ import {
   resolveAssistantContentUpdate,
 } from './chatToolCallSupport'
 import type { Choice, Message, ReMoMRoundResponse } from './ChatComponentTypes'
+import { PLAYGROUND_LATENCY_MS, PLAYGROUND_TTFT_MS } from './playgroundTimingHeaders'
 import type { ToolCall } from '../tools'
 
 type UpdateConversationMessages = (
@@ -78,7 +79,7 @@ export class ChatTaskResponseState {
   applyParsedCompletion(parsedCompletion: ParsedChatCompletion, streaming: boolean): void {
     if (this.firstResponseAt === null && parsedCompletion.choices.length > 0) {
       this.firstResponseAt = Date.now()
-      this.responseHeaders['x-vsr-ttft-ms'] = String(this.firstResponseAt - this.requestStartedAt)
+      this.responseHeaders[PLAYGROUND_TTFT_MS] = String(this.firstResponseAt - this.requestStartedAt)
     }
     if (parsedCompletion.reasoningMomResponses) {
       this.reasoningMomResponses = parsedCompletion.reasoningMomResponses
@@ -190,7 +191,7 @@ export class ChatTaskResponseState {
       this.latestThinkingProcessRef.current ||
       getFirstChoice(this.choiceContents)?.reasoningContent ||
       ''
-    this.responseHeaders['x-vsr-latency-ms'] = String(Date.now() - this.requestStartedAt)
+    this.responseHeaders[PLAYGROUND_LATENCY_MS] = String(Date.now() - this.requestStartedAt)
     this.streamingChoiceSync.drain()
     this.updateConversationMessages(this.conversationId, (prev) =>
       prev.map((message) =>

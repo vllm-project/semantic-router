@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"regexp"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -17,10 +19,15 @@ var TranslationLossyTotal = promauto.NewCounterVec(
 	[]string{"from", "to", "severity", "reason"},
 )
 
+// reasonCount matches the numbers a diagnostic reason carries, such as
+// "3 system messages sent as user text in place".
+var reasonCount = regexp.MustCompile(`[0-9]+`)
+
 // RecordTranslationWarning increments the translation-warning counter
 // for one warning observed during response translation. Empty
 // from/to/reason fall back to "unknown" so dashboard queries never see
-// the empty-string label.
+// the empty-string label. Numbers in reason become N, so a count from one
+// request does not open a series of its own.
 func RecordTranslationWarning(from, to, severity, reason string) {
 	if from == "" {
 		from = "unknown"
@@ -34,5 +41,5 @@ func RecordTranslationWarning(from, to, severity, reason string) {
 	if reason == "" {
 		reason = "unknown"
 	}
-	TranslationLossyTotal.WithLabelValues(from, to, severity, reason).Inc()
+	TranslationLossyTotal.WithLabelValues(from, to, severity, reasonCount.ReplaceAllString(reason, "N")).Inc()
 }

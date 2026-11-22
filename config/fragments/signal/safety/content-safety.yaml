@@ -1,71 +1,16 @@
-# Merge into a canonical config with a safety-capable default-model and two classify deployments that return every label.
-# Hazard is the independent sigmoid head; more than one risk can be present.
-version: v0.3
-global:
-  model_catalog:
-    deployments:
-      content-safety-binary:
-        provider: classify
-        endpoint: http://safety-binary:8080
-        timeout_ms: 10000
-      content-safety-hazard:
-        provider: classify
-        endpoint: http://safety-hazard:8080
-        timeout_ms: 10000
-routing:
-  signals:
-    safety:
-    - name: unsafe-content
-      deployment: content-safety-binary
-      threshold: 0.5
-    - name: unsafe-privacy
-      deployment: content-safety-binary
-      threshold: 0.5
-      hazard:
-        deployment: content-safety-hazard
-        labels:
-        - violence
-        - criminal_activity
-        - sexual_content
-        - child_exploitation
-        - hate
-        - harassment_abuse
-        - regulated_substances
-        - weapons
-        - self_harm
-        - privacy
-        - specialized_advice
-        - misinformation
-        categories:
-        - privacy
-        threshold: 0.6
-  decisions:
-  - name: unsafe-privacy-content
-    description: Apply a privacy-specific refusal only when the binary model also
-      detects unsafe content.
-    priority: 310
-    rules:
-      operator: AND
-      on_unknown: fail_request
-      conditions:
-      - type: safety
-        name: unsafe-privacy
-    modelRefs:
-    - model: default-model
-    plugins:
-    - type: fast_response
-      configuration:
-        message: I cannot help with this request involving unsafe use of personal
-          information.
-  - name: unsafe-content
-    description: Route content risks to a safety-capable backend, including supportive
-      responses to people in crisis.
-    priority: 300
-    rules:
-      operator: AND
-      on_unknown: fail_request
-      conditions:
-      - type: safety
-        name: unsafe-content
-    modelRefs:
-    - model: default-model
+# Merge into a canonical config. A rule without labels asks whether the request
+# is harmful; a rule with labels asks which hazard categories apply, and more
+# than one can.
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      safety:
+        - name: unsafe-content
+          predicate: {gte: 0.5}
+        - name: unsafe-hazard
+          labels:
+            - Violence
+            - Criminal Planning/Confessions
+            - Sexual
+            - Sexual (minor)

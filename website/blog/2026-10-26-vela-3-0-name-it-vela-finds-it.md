@@ -5,6 +5,7 @@ description: "Six open routing models, 0.3B to 27B, that answer the router's dec
 authors: [adaamko, Xunzhuo]
 tags: [vela, routing-models, zero-shot, ner, relation-extraction, classification, semantic-router]
 image: /img/blog/vela-3-0/launch-poster.jpg
+featured: true
 ---
 
 import { ArticleChartGallery, ArticleFigure, ArticleMetrics, ArticleVideo } from '@site/src/components/ArticleMedia';
@@ -437,7 +438,7 @@ The [Vela 3.0 Studio](https://huggingface.co/spaces/vllm-sr/vela3-studio) runs t
 
 ## In vLLM Semantic Router
 
-vela3-fast is the router's default decision model. It plugs in as a `model_runtime` deployment, as Vela 2.0 did: one deployment answers the built-in signals and the decision and span questions a recipe defines, in one call, and the model runtime runs the package's backbone and adapters itself, with the package's own answers on a CPU, bit for bit (see `config/fragments/signal/decision/vela3-labels-spans.yaml` and [Choose a model](/docs/next/model-runtime/choose-a-model)). The other Vela 3.0 sizes and vela3-fast-vision run through their own packages for now, as shown above.
+vela3-fast is the router's default decision model. It plugs in as a `model_runtime` deployment, as Vela 2.0 did: one deployment answers the built-in signals and the decision and span questions a recipe defines, in one call, and the model runtime runs the package's backbone and adapters itself, with the package's own answers on a CPU, bit for bit (see `config/fragments/signal/decision/vela3-labels-spans.yaml` and [Choose a model](/docs/model-runtime/get-started/choose-a-model)). The other Vela 3.0 sizes and vela3-fast-vision run through their own packages for now, as shown above.
 
 ## Towards open foundation routing models
 

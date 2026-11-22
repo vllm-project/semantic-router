@@ -10,6 +10,10 @@ inputs:
     description: Move Docker's data root and temporary files to /mnt.
     required: false
     default: "false"
+  min-free-gb:
+    description: Skip the disk cleanup when the root disk already has this many GB free; 0 always cleans.
+    required: false
+    default: "0"
 
 runs:
   using: composite
@@ -19,6 +23,7 @@ runs:
       with:
         show-usage: ${{ inputs.show-usage }}
         relocate-docker: ${{ inputs.relocate-docker }}
+        min-free-gb: ${{ inputs.min-free-gb }}
 
     - name: Install Kind
       shell: bash
@@ -31,9 +36,13 @@ runs:
           aarch64) KIND_ARCH="arm64" ;;
           *) echo "unsupported arch: $ARCH" && exit 1 ;;
         esac
-        curl --retry 5 --retry-delay 5 --retry-all-errors \
+        # --fail keeps an HTTP error page out of the binary: without it curl
+        # saves the body, chmod marks it executable, and the failure only shows
+        # up later as "Exec format error: kind" inside the E2E harness.
+        curl --fail --retry 5 --retry-delay 5 --retry-all-errors \
           -Lo ./kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-${KIND_ARCH}"
         chmod +x ./kind
+        ./kind version
         sudo mv ./kind /usr/local/bin/kind
 
     - name: Pre-pull Kind node image

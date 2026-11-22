@@ -1,0 +1,24 @@
+plugin:
+  type: router_replay
+  configuration:
+    enabled: true
+    # Each candidate's outcome joins this request's replay record.
+    shadow:
+      # One to eight distinct logical models with backends in providers.models.
+      models: [candidate-a, candidate-b]
+      # Sample once for the group. Omit for 1.0; 0 disables dispatch.
+      sample_rate: 0.05
+      execution:
+        max_concurrency: 2
+        max_queue_size: 8
+        # Queue wait and all candidate calls share this deadline (at most 5m).
+        timeout: 30s
+      budget:
+        # Group total, divided before dispatch; at least two bytes per model.
+        max_response_bytes: 2097152
+      capture:
+        enabled: false
+        # Group total for response excerpts, divided among candidates.
+        max_bytes: 8192
+      # Allowlisted decision header mutations. Credential headers stay on the primary path.
+      forward_headers: []

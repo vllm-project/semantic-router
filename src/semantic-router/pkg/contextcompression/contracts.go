@@ -43,9 +43,19 @@ type TokenCounter interface {
 	CountRequest(model string, request *RequestIR) (tokens int, source string)
 }
 
+// RelevanceScorer scores how much each text matters to the query, the
+// latest user message: the lowest-scored targets shrink first. Without one,
+// targets are scored by the query terms they contain.
 type RelevanceScorer interface {
-	Score(ctx context.Context, modelRef string, query string, texts []string) ([]float64, error)
+	Score(ctx context.Context, query string, texts []string) ([]float64, error)
 }
+
+// The prefixes of the tool calls the context plugin injects its documents
+// and memories under.
+const (
+	RAGToolCallPrefix    = "rag_"
+	MemoryToolCallPrefix = "memory_"
+)
 
 type RecoveryStore interface {
 	Put(ctx context.Context, entry RecoveryEntry, ttl time.Duration) error
@@ -92,11 +102,6 @@ type Targets struct {
 	Memory      TargetPolicy
 }
 
-type Scoring struct {
-	Method            string
-	EmbeddingModelRef string
-}
-
 type RecoveryPolicy struct {
 	Enabled            bool
 	TTL                time.Duration
@@ -109,17 +114,16 @@ type Policy struct {
 	Mode        Mode
 	Budget      Budget
 	Targets     Targets
-	Scoring     Scoring
 	Recovery    RecoveryPolicy
 	FailureMode FailureMode
 }
 
 type Provenance struct {
 	// ProtectedMessages is trusted router metadata, never inferred from user text.
-	ProtectedMessages    map[int]Protection
-	OriginalHistory      *HistorySnapshot
-	RAGToolCallIDs       map[string]struct{}
-	MemoryMessageIndexes map[int]struct{}
+	ProtectedMessages map[int]Protection
+	OriginalHistory   *HistorySnapshot
+	RAGToolCallIDs    map[string]struct{}
+	MemoryToolCallIDs map[string]struct{}
 }
 
 type Request struct {

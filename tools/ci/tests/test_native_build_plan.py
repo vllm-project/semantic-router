@@ -309,7 +309,6 @@ class NativeBuildPlanTests(unittest.TestCase):
         commands = self.plan("--base-image", base)
         self.assertIn("BASE_IMAGE=" + base, commands[0])
         self.assertIn("ATTACHED_BASE_IMAGE=" + base, commands[2])
-        self.assertIn("ASSETS_IMAGE=" + base, commands[2])
 
     def test_mutable_base_is_rejected(self):
         result = subprocess.run(

@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
 
 // FrontendModels retains a generation's native model clients independently of
@@ -13,8 +14,29 @@ import (
 // generations keep references, so toggling routing does not restart workers.
 // A provider alias that names a systemone deployment forwards to its API.
 type FrontendModels struct {
-	lease  *modelservice.Lease
-	remote *modelservice.RemoteSystemOne
+	lease    *modelservice.Lease
+	remote   *modelservice.RemoteSystemOne
+	listings systemone.BackendListings
+}
+
+// Card is a deployment's current card: the one a systemone deployment's API
+// lists, or the one its ready workers reported. It neither waits nor calls.
+func (m *FrontendModels) Card(deployment string) (modelservice.ModelCard, bool) {
+	if m == nil {
+		return modelservice.ModelCard{}, false
+	}
+	if m.remote.Serves(deployment) {
+		return m.remote.ListedCard(deployment)
+	}
+	return m.lease.CurrentCard(deployment)
+}
+
+// Listings are what the generation's systemone backends list.
+func (m *FrontendModels) Listings() *systemone.BackendListings {
+	if m == nil {
+		return nil
+	}
+	return &m.listings
 }
 
 func (m *FrontendModels) Close(context.Context) error {

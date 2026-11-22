@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-import styles from './PlaygroundPage.module.css'
-import AnimatedBackground from '../components/AnimatedBackground'
+import { PageContainer } from '../ui'
 import ChatComponent from '../components/ChatComponent'
 import { isPlaygroundInvocation } from '../types/playgroundInvocation'
+import { InsightsDataProviders } from './insightsModelLabelSupport'
 
 const PlaygroundPage = () => {
   const location = useLocation()
@@ -24,17 +24,16 @@ const PlaygroundPage = () => {
   }, [location.hash, location.pathname, location.search, navigate])
 
   return (
-    <div className={styles.container}>
-      <AnimatedBackground speed="slow" />
-      <div className={styles.chatWrapper}>
+    <PageContainer width="full">
+      <InsightsDataProviders>
         <ChatComponent
           endpoint="/api/router/v1/chat/completions"
-          feedbackInsightsBasePath="/insights"
+          feedbackInsightsBasePath="/observe/requests"
           invocation={invocation}
           onInvocationConsumed={handleInvocationConsumed}
         />
-      </div>
-    </div>
+      </InsightsDataProviders>
+    </PageContainer>
   )
 }
 

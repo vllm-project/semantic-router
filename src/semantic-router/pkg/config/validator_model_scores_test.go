@@ -79,16 +79,17 @@ func TestValidateDomainContractsAllowsBoundaryModelScores(t *testing.T) {
 
 func TestParseYAMLBytesRejectsNaNModelScore(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-routing:
-  signals:
-    domains:
-      - name: math
-        model_scores:
-          - model: model-a
-            score: .nan
-          - model: model-b
-            score: 0.9
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: math
+          model_scores:
+            - model: model-a
+              score: .nan
+            - model: model-b
+              score: 0.9
 `))
 	if err == nil {
 		t.Fatal("expected NaN model score to be rejected at load")
@@ -100,14 +101,15 @@ routing:
 
 func TestParseYAMLBytesRejectsOutOfBandModelScore(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-routing:
-  signals:
-    domains:
-      - name: math
-        model_scores:
-          - model: model-a
-            score: 1.5
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: math
+          model_scores:
+            - model: model-a
+              score: 1.5
 `))
 	if err == nil {
 		t.Fatal("expected out-of-band model score to be rejected at load")

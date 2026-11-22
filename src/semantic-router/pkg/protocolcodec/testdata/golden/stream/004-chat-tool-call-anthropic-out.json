@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "response_tool_1",
+          "id": "msg_2c6ab78c69bbbcc057c1cec2",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,
@@ -40,7 +40,7 @@
       "event": "content_block_start",
       "data": {
         "content_block": {
-          "id": "call_1",
+          "id": "toolu_74196fe72e4cdc135c1033e0",
           "input": {},
           "name": "lookup",
           "type": "tool_use"

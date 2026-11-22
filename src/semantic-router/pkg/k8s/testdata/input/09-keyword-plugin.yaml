@@ -50,10 +50,10 @@ spec:
         - model: "llama-3.3-70b"
           use_reasoning: false
       plugins:
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.95
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.95}}}
         - type: "header_mutation"
           configuration:
             add:

@@ -12,9 +12,7 @@ units and the span decoder.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -42,12 +40,13 @@ from ..vela2.encoder_layout import (
     SequenceQuestion,
     option_text,
 )
-from ..vela2.layout import Row, SchemaTooLongError, Tokens, fail_unscanned, read_parts
+from ..vela2.layout import Row, SchemaTooLongError, fail_unscanned, read_parts
 from ..vela2.raw import RawRow
 from ..vela2.request import Plan as PartsPlan
-from ..vela3_shared import PRESETS, text
-from .answers import Answerer
-from .network import DECISION_BUDGET, Call, Networks, Output, Vela3Item
+from ..vela3_answers import Answerer
+from ..vela3_calls import DECISION_BUDGET, Call, Output, Vela3Item
+from ..vela3_shared import PRESETS, layout, text, tokens
+from .network import Networks
 from .package import (
     BACKBONE_FILE,
     ENCODER,
@@ -62,10 +61,9 @@ from .request import DECISION, ROUTER, Asked, Read, Reader
 from .routing import SPAN_BUDGET, SPAN_ROWS, Router
 
 QUESTION_TYPES = ("choice", "noul", "span")
-TOKEN_CACHE = 8192
 # A question reads a part whole up to this many windows' worth of tokens by
 # default (``max_scan_tokens``); a request may set another budget. A question
-# that truncates reads one window.
+# that truncates reads one window of its route: 32,768 tokens for evidence.
 SCAN_INPUTS = {"cpu": 4, "gpu": 32}
 LICENCE = {"spdx": "apache-2.0"}
 GOLDEN_STATE = {
@@ -108,44 +106,6 @@ GOLDEN_QUESTIONS = {
         "over": "answer",
     },
 }
-
-
-def _tokens(package: Vela3Package) -> Tokens:
-    """The base UltraBERT tokenizer without marker tokens, so text never creates one."""
-    from tokenizers import Tokenizer
-
-    markers = set(package.config["decision"]["marker_ids"])
-    data = json.loads((package.root / "tokenizer.json").read_text(encoding="utf-8"))
-    data["added_tokens"] = [
-        token
-        for token in data.get("added_tokens", [])
-        if token["content"] not in markers
-    ]
-    tokenizer = Tokenizer.from_str(json.dumps(data))
-    tokenizer.no_padding()
-    tokenizer.no_truncation()
-    cached = lru_cache(maxsize=TOKEN_CACHE)(
-        lambda value: tuple(tokenizer.encode(value, add_special_tokens=False).ids)
-    )
-    return Tokens(
-        encode=lambda value: tokenizer.encode(value, add_special_tokens=False),
-        ids=lambda value: list(cached(value)) if value else [],
-        tokenizer=tokenizer,
-    )
-
-
-def _layout(package: Vela3Package, window: int, overlap: int) -> EncoderLayout:
-    config = package.config
-    return EncoderLayout(
-        {
-            "marker_ids": config["decision"]["marker_ids"],
-            "bos_token_id": config["bos_token_id"],
-            "eos_token_id": config["eos_token_id"],
-            "pad_token_id": config["pad_token_id"],
-            "max_length": window,
-            "window_overlap": overlap,
-        }
-    )
 
 
 class Vela3Family(ModelFamily):
@@ -221,7 +181,14 @@ class Vela3Family(ModelFamily):
         return ModelSpec(
             name=package.model_name,
             backbone=backbone,
-            dtype=DtypePolicy(autocast=None, bf16_resident=False),
+            # docs/records/cpu-zentorch-linear-vela3.md: zentorch's FP32 linear
+            # changed no decision and no span set, so it runs on CPUs where
+            # opted in; other CPU slots and GPUs keep exact kernels.
+            dtype=DtypePolicy(
+                autocast=None,
+                bf16_resident=False,
+                approximate_cpu_kernels=frozenset({"linear"}),
+            ),
             max_input_tokens=details.max_input_tokens,
             encoder=True,
         )
@@ -315,13 +282,14 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         self.package = package
         self.networks = networks
         self.router = router
-        self.reader = Reader(router)
+        self.reader = Reader(router, render31=package.render31)
         self.answerer = Answerer(router)
-        self.tokens = _tokens(package)
+        self.tokens = tokens(package.root)
         self.scan_tokens = scan_tokens
-        self.truncate_tokens = router.window
-        self.layout = _layout(package, router.window, router.overlap)
-        self.evidence_layout = _layout(package, router.evidence_window, router.overlap)
+        self.layout = layout(package.config, router.window, router.overlap)
+        self.evidence_layout = layout(
+            package.config, router.evidence_window, router.overlap
+        )
         config = package.config
         self.markers = {k: int(v) for k, v in config["decision"]["marker_ids"].items()}
         self.bos, self.eos = int(config["bos_token_id"]), int(config["eos_token_id"])
@@ -414,7 +382,10 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         if not asked or request.state is None:
             return
         budget = max(scan or self.scan_tokens or 0, self.router.window)
-        cut = self.truncate_tokens
+        cut = max(
+            (self._layout_of(a).max_len for a in asked if a.question.truncate),
+            default=0,
+        )
         parts_plan = PartsPlan(
             request.state, request.question_ids, [a.question for a in asked]
         )
@@ -429,7 +400,6 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         kept = {question.id for question in whole} | {
             a.question.id for a in asked if a.question.truncate
         }
-        cut_parts = [part.cut(cut) for part in parts]
         groups: dict[tuple[Any, ...], list[Asked]] = {}
         for entry in asked:
             if entry.question.id not in kept:
@@ -453,18 +423,25 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         turns: dict[tuple[str, int], int] = {}
         for key, members in groups.items():
             first = members[0]
-            row = Row(
-                [entry.question for entry in members],
-                cut_parts if first.question.truncate else parts,
-            )
+            layout = self._layout_of(first)
+            row = Row([entry.question for entry in members], parts)
+            if first.question.truncate:
+                # Only the parts the row reads get its layout's window: the
+                # others stay at the router window, as they would on any row.
+                read = row.read_roles()
+                row.parts = [
+                    part.cut(
+                        layout.max_len if part.role in read else self.layout.max_len
+                    )
+                    for part in parts
+                ]
             if key[0] == ROUTER:
                 assert first.router is not None
                 _, adapters = self.router.router_adapters(first.router.id)
-                layout, budget_tokens = self.layout, SPAN_BUDGET
+                budget_tokens = SPAN_BUDGET
             else:
                 assert first.route is not None
                 adapters = (first.route.adapter,)
-                layout = self.evidence_layout if first.route.evidence else self.layout
                 budget_tokens = max(first.route.window, SPAN_BUDGET)
             try:
                 sequences = layout.sequences(
@@ -490,6 +467,13 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
                 plan.rows[question.id] = placed
                 if question.require_full_input:
                     plan.complete.add(question.id)
+
+    def _layout_of(self, asked: Asked) -> EncoderLayout:
+        """The layout a row question reads in: evidence spans one long window."""
+        evidence = (
+            asked.path != ROUTER and asked.route is not None and asked.route.evidence
+        )
+        return self.evidence_layout if evidence else self.layout
 
     # -- answers -------------------------------------------------------------
 

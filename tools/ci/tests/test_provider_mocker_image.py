@@ -146,6 +146,7 @@ class FixturePublicationTests(unittest.TestCase):
                     ["e2e/testing/run_memory_integration.sh"],
                     source_sha="c" * 40,
                     profile=profile,
+                    full=profile == "main",
                     publish=profile == "main",
                 )
                 with patch(
@@ -223,7 +224,7 @@ class FixturePublicationTests(unittest.TestCase):
         for profile, full in (
             ("pr", False),
             ("pr", True),
-            ("main", False),
+            ("main", True),
             ("nightly", False),
             ("release", False),
         ):
@@ -253,6 +254,7 @@ class FixturePublicationTests(unittest.TestCase):
                 ],
                 source_sha="c" * 40,
                 profile=profile,
+                full=profile == "main",
                 publish=profile == "main",
             )
             self.assertNotIn(mocker.IMAGE, plan["build_images"])
@@ -264,6 +266,7 @@ class FixturePublicationTests(unittest.TestCase):
                 [mocker.CONTEXT + "/provider_mocker/app.py"],
                 source_sha="c" * 40,
                 profile=profile,
+                full=profile == "main",
                 publish=profile == "main",
             )
             self.assertIn(mocker.IMAGE, plan["build_images"])

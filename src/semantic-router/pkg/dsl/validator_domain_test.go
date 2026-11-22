@@ -17,30 +17,19 @@ PROJECTION partition domain_partition {
 ROUTE r1 { PRIORITY 100 WHEN domain("balance_demo_compact") MODEL "m1" }
 `
 	diags, _ := Validate(input)
-	if !hasConstraintContaining(diags, "supported routing domain name") {
-		t.Fatalf("expected supported routing domains constraint, got %v", diags)
+	if !hasConstraintContaining(diags, "is not a domain") {
+		t.Fatalf("expected a constraint naming the domain labels, got %v", diags)
 	}
 }
 
-func TestValidateDomainSignalRejectsUnsupportedMMLUCategory(t *testing.T) {
+func TestValidateDomainSignalRejectsALabelThatIsNotADomain(t *testing.T) {
 	input := `
-SIGNAL domain compact { mmlu_categories: ["computer_science"] }
+SIGNAL domain compact { labels: ["computer_science"] }
 ROUTE r1 { PRIORITY 100 WHEN domain("compact") MODEL "m1" }
 `
 	diags, _ := Validate(input)
 	if !hasConstraintContaining(diags, "computer_science") {
-		t.Fatalf("expected unsupported mmlu_categories constraint, got %v", diags)
-	}
-}
-
-func TestCompileDomainSignalRejectsUnsupportedMMLUCategory(t *testing.T) {
-	input := `
-SIGNAL domain compact { mmlu_categories: ["computer_science"] }
-ROUTE r1 { PRIORITY 100 WHEN domain("compact") MODEL "m1" }
-`
-	_, errs := Compile(input)
-	if len(errs) == 0 {
-		t.Fatal("expected compile error for unsupported mmlu category")
+		t.Fatalf("expected unsupported labels constraint, got %v", diags)
 	}
 }
 
@@ -63,7 +52,7 @@ ROUTE r1 { PRIORITY 100 WHEN domain("balance_demo_compact") MODEL "m1" }
 
 func TestCompileDomainSignalAllowsAliasWithSupportedMMLUCategory(t *testing.T) {
 	input := `
-SIGNAL domain compact { mmlu_categories: ["computer science"] }
+SIGNAL domain compact { labels: ["computer science"] }
 ROUTE r1 { PRIORITY 100 WHEN domain("compact") MODEL "m1" }
 `
 	cfg, errs := Compile(input)

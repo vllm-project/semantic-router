@@ -1,24 +1,15 @@
-// hooks/useTheme.ts - Theme management hook (Dark mode only)
+import { useTheme as useShellTheme, type ResolvedTheme } from '../shell/theme'
 
-import { useEffect } from 'react'
+export type Theme = ResolvedTheme
 
-export type Theme = 'dark' | 'light'
-
+/** Resolved light or dark theme for components that draw their own canvases or editors. */
 export function useTheme() {
-  // Always use dark theme
-  const theme: Theme = 'dark'
-
-  // Apply dark theme to document on mount
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'dark')
-    document.documentElement.style.colorScheme = 'dark'
-  }, [])
-
+  const { resolved, setPreference, toggle } = useShellTheme()
   return {
-    theme,
-    setTheme: () => {}, // No-op
-    toggleTheme: () => {}, // No-op
-    isDark: true,
-    isLight: false,
+    theme: resolved,
+    setTheme: (theme: Theme) => setPreference(theme),
+    toggleTheme: () => toggle(),
+    isDark: resolved === 'dark',
+    isLight: resolved === 'light',
   }
 }

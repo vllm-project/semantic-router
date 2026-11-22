@@ -29,6 +29,12 @@ type SetupStateResponse struct {
 	HasModels    bool   `json:"hasModels"`
 	HasDecisions bool   `json:"hasDecisions"`
 	CanActivate  bool   `json:"canActivate"`
+	// PublicBaseURL is the gateway address clients use, as the deployment
+	// declares it in VLLM_SR_PUBLIC_BASE_URL; omitted when it declares none.
+	PublicBaseURL string `json:"publicBaseUrl,omitempty"`
+	// PublicRequiresKey reports VLLM_SR_PUBLIC_REQUIRES_KEY: clients of the
+	// public address send an API key.
+	PublicRequiresKey bool `json:"publicRequiresKey,omitempty"`
 }
 
 // unreadableConfigReason is used when this handler cannot decode the router
@@ -78,6 +84,7 @@ type setupConfigSummary struct {
 }
 
 func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) http.HandlerFunc {
+	public := publicEndpointFromEnv()
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -101,22 +108,26 @@ func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) htt
 				reason = unreadableConfigReason
 			}
 			writeSetupStateResponse(w, SetupStateResponse{
-				SetupMode: resolution.Active,
-				Reason:    reason,
+				SetupMode:         resolution.Active,
+				Reason:            reason,
+				PublicBaseURL:     public.baseURL,
+				PublicRequiresKey: public.requiresKey,
 			})
 			return
 		}
 
 		summary := summarizeSetupConfig(&configFile.CanonicalConfig)
 		resp := SetupStateResponse{
-			SetupMode:    resolution.Active,
-			Reason:       resolution.Reason,
-			ListenerPort: firstListenerPort(configFile),
-			Models:       summary.Models,
-			Decisions:    summary.Decisions,
-			HasModels:    summary.Models > 0,
-			HasDecisions: summary.Decisions > 0,
-			CanActivate:  summary.Models > 0 && summary.Decisions > 0,
+			SetupMode:         resolution.Active,
+			Reason:            resolution.Reason,
+			ListenerPort:      firstListenerPort(configFile),
+			Models:            summary.Models,
+			Decisions:         summary.Decisions,
+			HasModels:         summary.Models > 0,
+			HasDecisions:      summary.Decisions > 0,
+			CanActivate:       summary.Models > 0 && summary.Decisions > 0,
+			PublicBaseURL:     public.baseURL,
+			PublicRequiresKey: public.requiresKey,
 		}
 
 		writeSetupStateResponse(w, resp)
@@ -142,7 +153,7 @@ func SetupValidateHandler(configPath string, setupResolver *setupmode.Resolver) 
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		candidate, err = realizeSetupCandidateConfig(configPath, candidate, true)
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
 			return
@@ -202,7 +213,7 @@ func SetupActivateHandler(
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		candidate, err = realizeSetupCandidateConfig(configPath, candidate, false)
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
 			return
@@ -240,7 +251,7 @@ func SetupActivateHandler(
 			return
 		}
 
-		if auth.RejectRevokedMutation(w, r) {
+		if rejectKeyReferenceRedirect(w, r, previousData, yamlData) || auth.RejectRevokedMutation(w, r) {
 			return
 		}
 		if _, freshErr := checkConfigMapMutationFresh(configPath); freshErr != nil {
@@ -253,8 +264,8 @@ func SetupActivateHandler(
 			return
 		}
 
-		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
-			writeConfigPersistenceError(w, writeErr)
+		if yamlData, _, err = persistConfig(configPath, yamlData); err != nil {
+			writeConfigPersistenceError(w, err)
 			return
 		}
 		if configActivationDeferred() {
@@ -488,9 +499,6 @@ func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
 		len(parsed.Listeners) == 0 &&
 		len(parsed.Providers.Models) == 0 &&
 		parsed.Global == nil &&
-		len(parsed.Routing.ModelCards) == 0 &&
-		len(parsed.Routing.Decisions) == 0 &&
-		countCanonicalSignals(parsed.Routing.Signals) == 0 &&
 		len(parsed.Entrypoints) == 0 &&
 		len(parsed.Recipes) == 0 {
 		return nil, fmt.Errorf("remote config is empty")
@@ -563,14 +571,6 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 		patch.Providers.Defaults.DefaultReasoningEffort != "" {
 		merged.Providers = patch.Providers
 	}
-	if len(patch.Routing.ModelCards) > 0 ||
-		len(patch.Routing.Decisions) > 0 ||
-		countCanonicalSignals(patch.Routing.Signals) > 0 ||
-		len(patch.Routing.Projections.Partitions) > 0 ||
-		len(patch.Routing.Projections.Scores) > 0 ||
-		len(patch.Routing.Projections.Mappings) > 0 {
-		merged.Routing = patch.Routing
-	}
 	if len(patch.Entrypoints) > 0 {
 		merged.Entrypoints = patch.Entrypoints
 	}
@@ -579,6 +579,9 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 	}
 	if patch.Global != nil {
 		merged.Global = patch.Global
+	}
+	if patch.Evaluation != nil {
+		merged.Evaluation = patch.Evaluation
 	}
 	return merged
 }

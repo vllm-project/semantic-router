@@ -15,6 +15,7 @@ OS_NAME=""
 SELECTED_RUNTIME=""
 LAUNCH_PLATFORM=""
 AUTO_LAUNCH_RAN="0"
+AUTO_LAUNCH_WAITING="0"
 STYLE_BOLD=""
 COLOR_RESET=""
 COLOR_ORANGE=""
@@ -1014,6 +1015,7 @@ launch_first_session() {
   if [ "$setup_waiting" = "1" ]; then
     disown "$serve_pid" 2>/dev/null || true
     AUTO_LAUNCH_RAN="1"
+    AUTO_LAUNCH_WAITING="1"
     done_step "First-time serve flow is waiting for setup"
   elif wait "$serve_pid"; then
     rm -f "$serve_log_file"
@@ -1093,7 +1095,11 @@ print_next_steps() {
     if [ -n "$primary_ip" ] && dashboard_published_beyond_loopback; then
       printf '  network      http://%s:%s\n' "$primary_ip" "$DASHBOARD_PORT"
     fi
-    printf '  stop         vllm-sr stop\n'
+    if [ "$AUTO_LAUNCH_WAITING" = "1" ]; then
+      printf '  stop         vllm-sr stop (ends the background setup wait)\n'
+    else
+      printf '  stop         vllm-sr stop\n'
+    fi
     if [ -n "$LAUNCH_PLATFORM" ]; then
       printf '  restart      vllm-sr serve --platform %s' "$LAUNCH_PLATFORM"
     else

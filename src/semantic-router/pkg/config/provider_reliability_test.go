@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 
 func TestProviderReliabilityRoundTripsCanonicalConfig(t *testing.T) {
 	parsed, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: model-a
@@ -28,22 +29,21 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: model-a
-  decisions:
-    - name: default
-      rules:
-        operator: AND
-      modelRefs:
-        - model: model-a
+recipes:
+  - name: default
+    decisions:
+      - name: default
+        rules:
+          operator: AND
+        modelRefs:
+          - model: model-a
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes: %v", err)
 	}
 	reliability := parsed.ModelConfig["model-a"].Reliability
 	if reliability.LBPolicy != ProviderLBPolicyLeastRequest ||
-		reliability.RetryCount != 2 ||
+		reliability.Retries() != 2 ||
 		reliability.Consecutive5xx != 5 ||
 		reliability.BaseEjectionTime != "45s" ||
 		reliability.MaxEjectionPercent != 25 ||
@@ -54,7 +54,7 @@ routing:
 
 func TestProviderReliabilityTimeoutsAndRetriesRoundTrip(t *testing.T) {
 	const doc = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: model-a
@@ -76,10 +76,11 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing: {}
+recipes:
+  - name: default
 `
 	want := ProviderReliability{
-		RetryCount: 2, ConnectTimeout: "3s", TotalTimeout: "0s", IdleTimeout: "45s", PerTryTimeout: "20s",
+		RetryCount: intPtr(2), ConnectTimeout: "3s", TotalTimeout: "0s", IdleTimeout: "45s", PerTryTimeout: "20s",
 		FirstByteTimeout: "5s", RetriableStatusCodes: []int{429, 503}, RetryBackOffBase: "50ms",
 		RetryBackOffMax: "1s", RetryAfterMax: "30s", RetryBudgetPercent: 25, RetryBudgetMinConcurrency: 4,
 	}
@@ -103,8 +104,75 @@ routing: {}
 	}
 }
 
+// retryBlockDoc is a one-model configuration whose reliability block holds
+// the given lines.
+const retryBlockDoc = `
+version: v0.5
+providers:
+  models:
+    - name: model-a
+      provider_model_id: model-a
+      api_format: openai
+      reliability:
+        lb_policy: round_robin
+        %s
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
+recipes:
+  - name: default
+`
+
+// A block that names no retries gets the default ones, and an explicit
+// retry_count: 0, which turns them off, survives the export.
+func TestProviderReliabilityRetriesByDefaultUnlessTurnedOff(t *testing.T) {
+	for block, want := range map[string]int{
+		"":                DefaultProviderRetryCount,
+		"retry_count: 0":  0,
+		"retry_count: 3":  3,
+		"retry_on: reset": 0,
+	} {
+		parsed, err := ParseYAMLBytes([]byte(fmt.Sprintf(retryBlockDoc, block)))
+		if err != nil {
+			t.Fatalf("%q: ParseYAMLBytes: %v", block, err)
+		}
+		exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(parsed))
+		if err != nil {
+			t.Fatal(err)
+		}
+		reparsed, err := ParseYAMLBytes(exported)
+		if err != nil {
+			t.Fatalf("%q: re-import: %v", block, err)
+		}
+		for stage, cfg := range map[string]*RouterConfig{"parsed": parsed, "exported": reparsed} {
+			if got := cfg.ModelConfig["model-a"].Reliability.Retries(); got != want {
+				t.Errorf("%q %s: %d retries, want %d", block, stage, got, want)
+			}
+		}
+	}
+}
+
+// retry_on without retry_count retries nothing, so it turns the default
+// retries off; the load says so instead of dropping them without a word.
+func TestRetryOnWithoutACountWarnsThatItTurnsRetriesOff(t *testing.T) {
+	for block, warns := range map[string]bool{
+		"retry_on: 5xx":                         true,
+		"retry_count: 1\n        retry_on: 5xx": false,
+		"retry_count: 0":                        false,
+		"":                                      false,
+	} {
+		cfg, err := ParseYAMLBytes([]byte(fmt.Sprintf(retryBlockDoc, block)))
+		if err != nil {
+			t.Fatalf("%q: ParseYAMLBytes: %v", block, err)
+		}
+		if got := warningCodes(cfg)["retry_on_without_count"] > 0; got != warns {
+			t.Errorf("%q: retry_on_without_count warning = %v, want %v: %+v", block, got, warns, Warnings(cfg))
+		}
+	}
+}
+
 func TestProviderReliabilityDefaultsRetryOnLikeTheCLI(t *testing.T) {
-	if err := validateProviderReliability("model-a", ProviderReliability{RetryCount: 2}); err != nil {
+	if err := validateProviderReliability("model-a", ProviderReliability{RetryCount: intPtr(2)}); err != nil {
 		t.Fatalf("retries without retry_on must take the default %q: %v", DefaultProviderRetryOn, err)
 	}
 }
@@ -131,7 +199,7 @@ func TestProviderReliabilityRejectsInvalidTimeoutsAndRetries(t *testing.T) {
 func TestProviderReliabilityRejectsUnsafeValues(t *testing.T) {
 	err := validateProviderReliability("model-a", ProviderReliability{
 		LBPolicy:   "random",
-		RetryCount: 8,
+		RetryCount: intPtr(8),
 	})
 	if err == nil {
 		t.Fatal("invalid reliability config must be rejected")

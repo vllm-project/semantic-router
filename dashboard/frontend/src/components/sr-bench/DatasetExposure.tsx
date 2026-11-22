@@ -1,7 +1,8 @@
 import { benchmarkTitle, evaluationRoleTitle } from './datasetPresentation'
 import { number } from './model'
 import type { DatasetPreparation } from './types'
-import styles from './SrBench.module.css'
+import { Notice } from './benchUi'
+import { benchText } from './benchStyles'
 
 export default function DatasetExposure({
   preparation,
@@ -19,7 +20,7 @@ export default function DatasetExposure({
   if (compact) {
     const roles = entries.map(([, entry]) => evaluationRoleTitle(entry?.evaluation_role ?? null))
     return (
-      <p className={styles.muted}>
+      <p className={benchText.muted}>
         {['Holdout', 'Retest', 'Role unspecified']
           .flatMap((role) => {
             const count = roles.filter((value) => value === role).length
@@ -32,7 +33,7 @@ export default function DatasetExposure({
     )
   }
   const families = (
-    <ul>
+    <ul className="grid gap-1 [&_strong]:font-medium [&_strong]:text-foreground">
       {entries.map(([family, entry]) => (
         <li key={family}>
           <strong>{benchmarkTitle(family)}</strong>:{' '}
@@ -53,7 +54,7 @@ export default function DatasetExposure({
     </ul>
   )
   return (
-    <section className={styles.notice} aria-label="Dataset evaluation roles">
+    <Notice tone="neutral" as="section" aria-label="Dataset evaluation roles">
       <h3>Evaluation roles</h3>
       {families}
       {entries.some(([, entry]) => entry?.evaluation_role === 'retest') && (
@@ -65,6 +66,6 @@ export default function DatasetExposure({
           is not ruled out.
         </p>
       )}
-    </section>
+    </Notice>
   )
 }

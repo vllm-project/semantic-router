@@ -54,18 +54,19 @@ func testDecisionPriority(ctx context.Context, client *kubernetes.Clientset, opt
 	}
 	defer stopPortForward()
 
-	// Define test cases inline
+	// Define test cases inline. The fake System One answers the domain
+	// question, so each query pins its domain with a marker.
 	testCases := []DecisionPriorityCase{
 		// No urgency word: the baseline profile's urgent_request outranks thinking.
 		{
-			Query:             "Think carefully about this business decision",
+			Query:             "__SYSTEMONE_CHOICE__ business Think carefully about this business decision",
 			ExpectedDecision:  "thinking_decision",
 			ExpectedPriority:  15,
 			MatchingDecisions: []string{"thinking_decision", "business_decision"},
 			Description:       "Query matches both thinking (priority 15) and business (priority 10) - should select higher priority",
 		},
 		{
-			Query:             "I need to think about complex math problems",
+			Query:             "__SYSTEMONE_CHOICE__ math I need to think about complex math problems",
 			ExpectedDecision:  "thinking_decision",
 			ExpectedPriority:  15,
 			MatchingDecisions: []string{"thinking_decision", "math_decision"},
@@ -74,14 +75,14 @@ func testDecisionPriority(ctx context.Context, client *kubernetes.Clientset, opt
 		// No digits: Vela 2.0 can read a bare number as a DATE_TIME span, which a
 		// profile that denies every PII type blocks before any domain decision.
 		{
-			Query:             "How do I solve a quadratic equation?",
+			Query:             "__SYSTEMONE_CHOICE__ math How do I solve a quadratic equation?",
 			ExpectedDecision:  "math_decision",
 			ExpectedPriority:  10,
 			MatchingDecisions: []string{"math_decision"},
 			Description:       "Simple math query should match math decision (priority 10)",
 		},
 		{
-			Query:             "Tell me about cellular biology",
+			Query:             "__SYSTEMONE_CHOICE__ biology Tell me about cellular biology",
 			ExpectedDecision:  "biology_decision",
 			ExpectedPriority:  10,
 			MatchingDecisions: []string{"biology_decision"},

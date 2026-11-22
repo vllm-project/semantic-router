@@ -38,8 +38,8 @@ const (
 // FusionQuorumFailurePolicy selects what Fusion does when the usable panel
 // response count is below the configured quorum (min_successful_responses).
 //
-// It is independent of OnError, which only decides whether panel collection
-// continues after a single child call fails. Quorum failure is a panel-level
+// It is independent of the algorithm's on_error, which only decides whether
+// panel collection continues after a single child call fails. Quorum failure is a panel-level
 // quality decision, so the two stay separate.
 //
 // The policy is recipe-owned. It is intentionally absent from
@@ -90,7 +90,6 @@ type FusionAlgorithmConfig struct {
 	MinSuccessfulResponses       int                       `yaml:"min_successful_responses,omitempty" json:"min_successful_responses,omitempty"`
 	Temperature                  *float64                  `yaml:"temperature,omitempty" json:"temperature,omitempty"`
 	IncludeAnalysis              *bool                     `yaml:"include_analysis,omitempty" json:"include_analysis,omitempty"`
-	OnError                      string                    `yaml:"on_error,omitempty" json:"on_error,omitempty"`
 	QuorumFailurePolicy          FusionQuorumFailurePolicy `yaml:"quorum_failure_policy,omitempty" json:"quorum_failure_policy,omitempty"`
 	QuorumFallbackTarget         string                    `yaml:"quorum_fallback_target,omitempty" json:"quorum_fallback_target,omitempty"`
 	AnalysisTemplate             string                    `yaml:"analysis_template,omitempty" json:"analysis_template,omitempty"`
@@ -158,14 +157,28 @@ func (c *RouterConfig) HasFusionDecision() bool {
 	return false
 }
 
+// GroundingFusionDecision is the first of the scope's decisions whose fusion
+// grounds its panel. Grounding asks the hallucination preset of the
+// deployment the scope's hallucination rules that name none resolve to.
+func (c *RouterConfig) GroundingFusionDecision() (string, bool) {
+	if c == nil {
+		return "", false
+	}
+	for _, decision := range c.Decisions {
+		algorithm := decision.Algorithm
+		if algorithm != nil && algorithm.Type == DecisionAlgorithmFusion &&
+			algorithm.Fusion != nil && algorithm.Fusion.Grounding != nil && algorithm.Fusion.Grounding.Enabled {
+			return decision.Name, true
+		}
+	}
+	return "", false
+}
+
 func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {
 	if cfg == nil {
 		return nil
 	}
 	if err := validateFusionAnalysisMode(cfg.AnalysisMode, cfg.AnalysisTemplate); err != nil {
-		return err
-	}
-	if err := validateFusionOnError(cfg.OnError); err != nil {
 		return err
 	}
 	if err := validateFusionQuorumFailure(cfg.QuorumFailurePolicy, cfg.QuorumFallbackTarget); err != nil {

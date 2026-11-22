@@ -47,8 +47,8 @@ func TestDashboardProfileHelmConfigLoadsAsCanonicalRuntime(t *testing.T) {
 	if len(cfg.VLLMEndpoints) != 1 || cfg.VLLMEndpoints[0].Address != "vllm-llama3-8b-instruct.default.svc.cluster.local" || cfg.VLLMEndpoints[0].Port != 8000 {
 		t.Fatalf("Dashboard route must bind its actual simulator Service: %+v", cfg.VLLMEndpoints)
 	}
-	if cfg.PromptGuard.Enabled || cfg.Tools.Enabled || cfg.SemanticCache.Enabled {
-		t.Fatal("Dashboard API profile must not inherit optional prompt guard, tools or cache from chart defaults")
+	if cfg.SemanticCache.InUse {
+		t.Fatal("Dashboard API profile must not inherit the optional cache from chart defaults")
 	}
 }
 

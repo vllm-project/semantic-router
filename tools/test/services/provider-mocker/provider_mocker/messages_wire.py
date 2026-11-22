@@ -4,6 +4,8 @@ import json
 from collections.abc import Iterator
 from typing import Any
 
+from .mock_tools import mock_tool_name
+
 
 def contains_text(value: Any, marker: str) -> bool:
     if isinstance(value, str):
@@ -43,7 +45,7 @@ def build_message(body: dict) -> dict:
             {
                 "type": "tool_use",
                 "id": "call_mock_lookup",
-                "name": "lookup",
+                "name": mock_tool_name(body["messages"]),
                 "input": {"query": "weather"},
                 "caller": {"type": "direct"},
             }

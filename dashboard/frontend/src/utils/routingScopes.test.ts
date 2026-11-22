@@ -30,7 +30,7 @@ const recipeConfig: RoutingScopedConfigLike = {
           scores: [{ name: 'balanced-score' }],
           mappings: [{ name: 'balanced-map' }],
         },
-        decisions: [{ name: 'balanced-route', plugins: [{ type: 'semantic-cache' }] }],
+        decisions: [{ name: 'balanced-route', plugins: [{ type: 'response_cache' }] }],
       },
     },
     {

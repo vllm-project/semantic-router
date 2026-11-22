@@ -1,0 +1,1 @@
+recipes[default].decisions[text-and-image]: removed_field: a decision's output no longer follows the modality of its models; run `vllm-sr config migrate` (nothing: migrate drops the decision, since a model it references cannot answer in text and generate images; reference models on api_format: responses that do both, with output: {kind: [text, image], action: generate})

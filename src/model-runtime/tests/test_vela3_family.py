@@ -24,7 +24,7 @@ from vllm_srun.families.vela3.family import (
     GOLDEN_STATE,
     Vela3Family,
 )
-from vllm_srun.families.vela3.network import Call, Vela3Item, batches
+from vllm_srun.families.vela3_calls import Call, Vela3Item, batches
 from vllm_srun.plugins.base import DEADLINE, EngineOptions, PackageRef, SurfacePlan
 from vllm_srun.runtime import Runtime
 from vllm_srun.testing.vela3 import write_encoder_package
@@ -90,6 +90,34 @@ def test_detects_and_verifies_only_vela3_packages(package, tmp_path) -> None:
     (copy / "router_questions.json").write_text("{}")
     with pytest.raises(PackageError, match="SHA256SUMS"):
         family.verify(PackageRef(copy))
+
+
+def test_typed_added_tokens_are_text(model, package) -> None:
+    """A typed added token (the fixture's <|endoftext|>) reads as its characters: the layouts place BOS, EOS and the
+    markers by ID, and no text becomes one."""
+    from tokenizers import Tokenizer
+
+    full = Tokenizer.from_file(str(package / "tokenizer.json"))
+    special = full.token_to_id("<|endoftext|>")
+    typed = "a <|endoftext|> b"
+    assert full.encode(typed, add_special_tokens=False).ids.count(special) == 1
+    assert special not in model.tokens.ids(typed)
+    plain = "Hi, I'm Tom Baker (tom.baker@example.com)."
+    assert model.tokens.ids(plain) == full.encode(plain, add_special_tokens=False).ids
+
+
+def test_span_labels_that_are_not_strings_are_refused(model) -> None:
+    questions = {
+        "null": {"type": "span", "criteria": [None, "PERSON"], "over": "user"},
+        "object": {"type": "span", "criteria": [{"a": 1}], "over": "user"},
+        "names": {"type": "span", "criteria": ["PERSON"], "over": "user"},
+    }
+    request = model.reader.read(STATE, questions)
+    for key in ("null", "object"):
+        error = request.errors[key]
+        assert error["error"] == "invalid_question", error
+        assert "labels as strings" in error["message"]
+    assert [asked.question.id for asked in request.asked] == ["names"]
 
 
 def test_a_missing_adapter_routes_off(package, tmp_path) -> None:
@@ -269,6 +297,77 @@ def test_pii_threshold_missing_bucket_raises_value_error(model) -> None:
         ]
         with pytest.raises(ValueError, match="no PII threshold bucket covers"):
             model.router.span_threshold(route, 2)
+    finally:
+        model.router.span["pii_buckets"] = original_buckets
+
+
+def test_span_threshold_without_pii_buckets_serves_non_pii_routes(model) -> None:
+    """A package whose span block carries no ``pii_buckets`` still answers every non-PII span question.
+
+    Only a PII question reads that field, so a generic Span route must not fail
+    on a package that verifies and loads without it.
+    """
+    generic = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set=None,
+        evidence=False,
+        relation_wording=False,
+        text="Which spans are named entities of these types?",
+        labels=(("drug", "a medicine"),),
+        window=128,
+    )
+
+    original_buckets = model.router.span.pop("pii_buckets")
+    try:
+        threshold, temperature = model.router.span_threshold(generic, 2)
+        assert threshold == 0.6
+        assert temperature == 1.0
+    finally:
+        model.router.span["pii_buckets"] = original_buckets
+
+
+def test_span_set_threshold_without_pii_buckets_serves_non_pii_routes(model) -> None:
+    """The same holds when the ``span_set`` head has no buckets of its own."""
+    hallucinated = routing.SpanRoute(
+        adapter="span_set",
+        head="span_set",
+        label_set="halu",
+        evidence=False,
+        relation_wording=False,
+        text="Which spans of the answer are not supported by the context?",
+        labels=(("unsupported", ""),),
+        window=128,
+    )
+
+    original_buckets = model.router.span["set_adapter"].pop("pii_buckets")
+    try:
+        threshold, temperature = model.router.span_threshold(hallucinated, 2)
+        assert threshold == 0.4
+        assert temperature == 0.25
+    finally:
+        model.router.span["set_adapter"]["pii_buckets"] = original_buckets
+
+
+def test_pii_threshold_without_pii_buckets_still_reports_the_missing_field(
+    model,
+) -> None:
+    """A PII route over a package with no ``pii_buckets`` keeps failing, and only there."""
+    pii = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set="pii",
+        evidence=False,
+        relation_wording=False,
+        text="PII",
+        labels=(("email", ""),),
+        window=128,
+    )
+
+    original_buckets = model.router.span.pop("pii_buckets")
+    try:
+        with pytest.raises(KeyError, match="pii_buckets"):
+            model.router.span_threshold(pii, 2)
     finally:
         model.router.span["pii_buckets"] = original_buckets
 
@@ -491,6 +590,40 @@ def test_long_inputs_fail_decisions_and_window_spans(model) -> None:
     assert "error" not in answer["answers"]["names"]
 
 
+def test_truncating_spans_read_their_route_window(model) -> None:
+    text = "paracetamol dose " * 200
+    span = {"type": "span", "overflow": "truncate"}
+    plan = model.plan(
+        {"user": text},
+        {
+            "evidence": {**span, "criteria": {"evidence": None}},
+            "names": {**span, "criteria": {"drug": None}},
+        },
+    )
+    read = {q: len(plan.rows[q].row.part("user").ids) for q in plan.rows}
+    assert read == {"evidence": 512, "names": 256}
+
+
+def test_evidence_truncation_cuts_unread_parts_to_the_router_window(model) -> None:
+    # The unread answer at the evidence window would leave the context no room.
+    state = {
+        "user": "what dose",
+        "context": "paracetamol dose " * 400,
+        "answer": "take two " * 400,
+    }
+    question = {
+        "type": "span",
+        "overflow": "truncate",
+        "over": "context",
+        "criteria": {"evidence": None},
+    }
+    plan = model.plan(state, {"evidence": question})
+    assert plan.errors == {}
+    row = plan.rows["evidence"].row
+    assert len(row.part("context").ids) == 512
+    assert len(row.part("answer").ids) == 256
+
+
 def test_deadline_answers_every_question(model) -> None:
     plan = model.plan(STATE, {"q": {"type": "noul", "instructions": "Is it urgent?"}})
     expired = model.finish_surface(
@@ -643,6 +776,43 @@ def test_pii_missing_threshold_bucket_returns_invalid_model_output(model) -> Non
         }
     finally:
         overrides["pii_buckets"] = original_buckets
+
+
+def test_a_raised_span_threshold_keeps_the_packages_spans_whole(model) -> None:
+    """A threshold above the package's decodes words at the package's and keeps the spans that reach it, whole; one
+    below decodes at itself."""
+    from vllm_srun.families.vela2.words import split_words
+
+    text = "Card 4111 1111 1111 1111 expires soon."
+    words = np.asarray(split_words(text), dtype=np.int32)
+
+    def spans(threshold, card):
+        question = {"type": "span", "criteria": ["CARD"], "over": "user"}
+        request = model.reader.read(
+            {"user": text}, {"q": {**question, "threshold": threshold}}
+        )
+        (asked,) = request.asked
+        own, temperature = model.router.span_threshold(asked.route, len(words))
+        p = np.asarray([[card.get(i, 0.01)] for i in range(len(words))])
+        raw = RawRow(
+            span=RawSpan(
+                labels=["CARD"],
+                offsets=words,
+                logits=np.log(p / (1 - p)) * temperature,
+            ),
+            tokens={"user": len(words)},
+        )
+        response = {"answers": {}}
+        model.answerer.answer(
+            asked, logits=None, raw=raw, state=request.state, response=response
+        )
+        return own, [s["text"] for s in response["spans"]["q"]]
+
+    own, whole = spans(0.97, {1: 0.99, 2: 0.95, 3: 0.99, 4: 0.99})
+    assert own < 0.95 and whole == ["4111 1111 1111 1111"]
+    assert spans(0.985, {1: 0.99, 2: 0.95, 3: 0.99, 4: 0.99})[1] == []
+    lowered = spans(own - 0.2, {1: 0.99, 2: own - 0.1, 3: 0.99, 4: 0.99})[1]
+    assert lowered == ["4111 1111 1111 1111"]
 
 
 def test_pii_threshold_selects_matching_bucket(model):

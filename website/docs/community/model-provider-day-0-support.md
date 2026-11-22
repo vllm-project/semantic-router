@@ -7,7 +7,7 @@ description: Add a built-in model or provider once and generate every runtime an
 
 Built-in support is a validated resource graph, not a name added to several
 independent lists. The repository catalog under `config/catalog/` generates the
-runtime registry, built-in distribution, Dashboard Model Hub and Add Model cards, and the
+runtime registry, built-in distribution, Dashboard Model Hub and Connect model provider cards, and the
 public [Models page](/models).
 
 ## Choose the smallest change
@@ -38,7 +38,7 @@ surface. The generator enforces creator membership and minimum depth, while the
 human review decides recency and relevance.
 
 Provider support is independent. A new Provider ID may have no built-in model
-mapping and still be valuable for handwritten custom models in Add Model. Do
+mapping and still be valuable for handwritten custom models in Connect model. Do
 not add an obscure Model Card merely to make a provider card look populated.
 
 ## Add a model
@@ -52,7 +52,10 @@ not add an obscure Model Card merely to make a provider card look populated.
 2. Add a mapping under `config/catalog/resources/providers/<provider>.yaml`
    `models[]` when vLLM-SR should know a provider-native model ID, protocol
    restriction, price, or other provider-specific fact. Do not create a second
-   provider/model inventory.
+   provider/model inventory. A model ID that is billed but has no Model Card
+   yet takes only a `price_list[]` entry in the same file: its `id`, `pricing`
+   and a `verification.source`. It prices custom models that call that ID and
+   is never listed or selectable as a model.
 3. Reuse a reasoning family. Add a new family only when the request projection
    itself is new; do not duplicate a built-in family in user configuration.
 4. Add benchmark records under `evaluations/single/` only when the result is
@@ -220,7 +223,7 @@ Use Responses for Astra tool calls. A minimal routed configuration needs no
 handwritten Model Card or reasoning family:
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: astra
@@ -230,18 +233,18 @@ providers:
         - name: primary
           provider: openai
           auth: {api_key_env: OPENAI_API_KEY}
-
-routing:
-  decisions:
-    - name: astra_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: astra
-          use_reasoning: true
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 For a plain Chat Completions workload without tools, omit
@@ -275,7 +278,7 @@ A built-in card is selected with one optional `catalog` reference. The model
 catalog Provider ID:
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: production
@@ -289,12 +292,14 @@ providers:
           auth: {api_key_env: PROVIDER_API_KEY}
 ```
 
-Built-in cards do not require `routing.modelCards`. An intentional override
+Built-in cards do not require `providers.models`. An intentional override
 uses the canonical catalog identity as its card name:
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: organization/model
       tags: [production, approved]
 ```
@@ -343,7 +348,8 @@ providers:
         - name: lab
           provider: vllm
           endpoint: model-gateway.example:8000/v1
-
+      context_window_size: 131072
+      capabilities: [chat, tools, reasoning]
 evaluation:
   records:
     - model: private-reasoner
@@ -352,12 +358,8 @@ evaluation:
       reasoning_effort: high
       metrics:
         pass_rate: 0.82
-
-routing:
-  modelCards:
-    - name: private-reasoner
-      context_window_size: 131072
-      capabilities: [chat, tools, reasoning]
+recipes:
+  - name: default
 ```
 
 User-authored records intentionally have a small surface: `model`, `benchmark`,

@@ -1,9 +1,12 @@
 package extproc
 
 import (
+	"net/http"
+
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 // Each phase's reply is built here once and shared by every adapter: the
@@ -22,6 +25,7 @@ func (r *OpenAIRouter) requestHeadersReply(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }
@@ -38,13 +42,26 @@ func (r *OpenAIRouter) requestBodyReply(
 		var ok bool
 		if response, ok = r.processBodyRoutingError(err, ctx); !ok {
 			logging.Errorf("handleRequestBody failed: %v", err)
+			// The routed request's record ends with the failed phase.
+			r.openRoutedRouterReplay(ctx)
 			return nil, err
 		}
 	}
+	// A refusal after routing that came before any dispatch opens its replay
+	// record here, so its client gets the replay id as well.
+	if response.GetImmediateResponse().GetStatus().GetCode() >= http.StatusBadRequest {
+		r.openRoutedRouterReplay(ctx)
+	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
+	// A refusal after routing, or a failure of the Router's own, has a replay
+	// record that no response phase will end.
+	immediate := response.GetImmediateResponse()
+	status := int(immediate.GetStatus().GetCode())
+	r.failAnsweredRouterReplay(ctx, status, immediate.GetBody(), requestAnswerReason(ctx, status))
 	return response, nil
 }
 
@@ -58,6 +75,7 @@ func (r *OpenAIRouter) responseHeadersReply(
 		return nil, err
 	}
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }
@@ -73,13 +91,32 @@ func (r *OpenAIRouter) responseBodyReply(
 		return nil, err
 	}
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
+}
+
+// cutResponseBodyReply answers in place of an upstream body that ended before
+// it was whole, which no response-body phase reads: the 504 Envoy gives a
+// timeout, else the 502 that phase gives a body it cannot read.
+func (r *OpenAIRouter) cutResponseBodyReply(ctx *RequestContext, cause error) *ext_proc.ProcessingResponse {
+	recordSessionTurnOutcome(ctx, responseUsageMetrics{})
+	var response *ext_proc.ProcessingResponse
+	if upstream.KindOf(cause) == upstream.KindTimeout {
+		response = r.answerInPlaceOfUpstream(ctx, http.StatusGatewayTimeout, "The selected model did not answer in time", "upstream_timeout")
+	} else {
+		response = r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
+	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
+	r.bindBenchmarkConfigResponse(response, ctx)
+	return response
 }
 
 func responseHeadersReplySent(ctx *RequestContext, response *ext_proc.ProcessingResponse, endOfStream bool) {
 	finishImmediateResponseTrace(ctx, response)
 	if endOfStream {
+		ctx.responseComplete = true
 		finishRequestTrace(ctx, nil)
 	}
 }
@@ -87,6 +124,7 @@ func responseHeadersReplySent(ctx *RequestContext, response *ext_proc.Processing
 func responseBodyReplySent(ctx *RequestContext, response *ext_proc.ProcessingResponse, endOfStream bool) {
 	finishImmediateResponseTrace(ctx, response)
 	if endOfStream || ctx.StreamingComplete {
+		ctx.responseComplete = true
 		finishRequestTrace(ctx, nil)
 	}
 }

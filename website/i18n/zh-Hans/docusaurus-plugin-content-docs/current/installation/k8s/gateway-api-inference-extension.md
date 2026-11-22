@@ -21,7 +21,7 @@ Gateway API Inference Extension（GAIE）和 Semantic Router 解决路由的不�
 client
   -> Gateway
   -> Semantic Router ExtProc
-  -> HTTPRoute chosen by x-selected-model
+  -> HTTPRoute chosen by x-vsr-route-model
   -> InferencePool
   -> endpoint picker
   -> model replica
@@ -80,7 +80,7 @@ spec:
     - matches:
         - headers:
             - type: Exact
-              name: x-selected-model
+              name: x-vsr-route-model
               value: local/general
       backendRefs:
         - group: inference.networking.k8s.io
@@ -89,7 +89,7 @@ spec:
           port: 8000
 ```
 
-Router 在请求上写入 `x-selected-model`。它在响应上以 `x-vsr-selected-model` 向客户端暴露逻辑选择。GAIE 负责随后在 `general-pool` 内选择端点。
+Router 在请求上写入 `x-vsr-route-model`。它在响应上以 `x-vsr-selected-model` 向客户端暴露逻辑选择。GAIE 负责随后在 `general-pool` 内选择端点。
 
 ## 部署 Semantic Router
 
@@ -103,7 +103,7 @@ vllm-sr config validate --config config.yaml
 
 ## ExtProc 之后重新评估路由
 
-网关必须在下游请求路径中调用 Semantic Router，并在写入 `x-selected-model` 后重新评估路由。在规范配置中保持此 Router 设置启用：
+网关必须在下游请求路径中调用 Semantic Router，并在写入 `x-vsr-route-model` 后重新评估路由。在规范配置中保持此 Router 设置启用：
 
 ```yaml
 global:
@@ -143,7 +143,7 @@ kubectl get httproute general-pool -n inference \
   -o jsonpath='{.status.parents[*].conditions[*].type}{" "}{.status.parents[*].conditions[*].status}{"\n"}'
 ```
 
-响应的 `x-vsr-selected-model` 应匹配路由的 `x-selected-model` 值，且 endpoint picker 应报告该池中的就绪端点。仅有 HTTP 200 并不能证明语义选择和端点选择都已运行。
+响应的 `x-vsr-selected-model` 应匹配路由的 `x-vsr-route-model` 值，且 endpoint picker 应报告该池中的就绪端点。仅有 HTTP 200 并不能证明语义选择和端点选择都已运行。
 
 ## 按所有权排查
 

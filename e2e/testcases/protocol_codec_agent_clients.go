@@ -31,15 +31,6 @@ func init() {
 	})
 }
 
-func hasProtocolFieldDiagnostic(header, action, field string) bool {
-	for _, entry := range strings.Split(header, ",") {
-		if strings.HasPrefix(entry, action+";") && strings.HasSuffix(entry, ";"+field) {
-			return true
-		}
-	}
-	return false
-}
-
 func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	session, sessionErr := fixtures.OpenServiceSession(ctx, client, opts)
 	if sessionErr != nil {
@@ -100,7 +91,7 @@ func testProtocolCodecAzureIngress(ctx context.Context, client *kubernetes.Clien
 			if err := assertResponsesBody(result.Body, `"protocol":"chat_completions"`); err != nil {
 				return fmt.Errorf("%s response: %w", check.name, err)
 			}
-			if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
+			if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
 				return fmt.Errorf("%s did not report the dropped reasoning summary: %q", check.name, warnings)
 			}
 		} else if err := assertChatCompletionBody(result.Body, `"protocol":"chat_completions"`); err != nil {
@@ -232,7 +223,7 @@ func testProtocolCodecAgentClientFields(ctx context.Context, client *kubernetes.
 			if err := assertResponsesBody(result.Body, `"protocol":"chat_completions"`); err != nil {
 				return fmt.Errorf("%s response: %w", check.name, err)
 			}
-			if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
+			if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
 				return fmt.Errorf("%s did not report the dropped reasoning summary: %q", check.name, warnings)
 			}
 		} else if err := assertChatCompletionBody(result.Body, `"protocol":"chat_completions"`); err != nil {
@@ -286,7 +277,7 @@ func testProtocolCodecReasoningSummaryResponsesBackend(ctx context.Context, clie
 	if err := assertResponsesBody(result.Body, protocolCodecResponsesReply); err != nil {
 		return fmt.Errorf("native Responses summary response: %w", err)
 	}
-	if warnings := result.Headers.Get("x-vsr-protocol-warnings"); hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
+	if warnings := result.Headers.Get(warningsHeader); hasProtocolFieldDiagnostic(warnings, "dropped", "reasoning.summary") {
 		return fmt.Errorf("native Responses backend dropped reasoning.summary: %q", warnings)
 	}
 	raw, observationErr := lastProviderSimulatorRequest(ctx, provider, sessionID)

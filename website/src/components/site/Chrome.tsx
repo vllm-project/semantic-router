@@ -47,7 +47,7 @@ interface StatStripProps {
 }
 
 export function SectionLabel({ children, className }: SectionLabelProps): JSX.Element {
-  return <span className={clsx(styles.label, className)}>{children}</span>
+  return <span className={clsx(styles.label, 'site-label', className)}>{children}</span>
 }
 
 export function PillLink({

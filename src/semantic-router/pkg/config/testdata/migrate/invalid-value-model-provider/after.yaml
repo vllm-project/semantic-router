@@ -1,0 +1,32 @@
+# The candle, ONNX Runtime and OpenVINO providers are the model runtime: a
+# device keeps its accelerator (an OpenVINO GPU runs on CPU), a registry path
+# becomes its Hub repository and an earlier task model its Vela 1.0
+# replacement. The execution fields go, and the NLI explainer is retired.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      domain:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
+        device: cuda:1
+      guard:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
+        device: rocm:0
+      embedder:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+        device: cpu

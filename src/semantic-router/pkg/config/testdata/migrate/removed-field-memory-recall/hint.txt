@@ -1,0 +1,1 @@
+recipes[default].decisions[assistant].plugins[0]: removed_field: memory retrieval_limit is removed; run `vllm-sr config migrate` (match.recall.top_k)

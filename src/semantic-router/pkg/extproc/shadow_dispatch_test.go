@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -126,11 +125,10 @@ func newShadowTestRouter(t *testing.T, backend *shadowTestBackend) (*OpenAIRoute
 	return router, primaryModel
 }
 
-func shadowTestPluginConfig() *config.ShadowDispatchPluginConfig {
-	return &config.ShadowDispatchPluginConfig{
-		Enabled:        true,
-		Model:          shadowTestModel,
-		TimeoutSeconds: 5,
+func shadowTestPluginConfig() *config.RouterReplayShadowConfig {
+	return &config.RouterReplayShadowConfig{
+		Models:    []string{shadowTestModel},
+		Execution: config.ShadowExecutionConfig{Timeout: "5s"},
 	}
 }
 
@@ -145,7 +143,7 @@ func runShadowRequest(
 	t *testing.T,
 	router *OpenAIRouter,
 	primaryModel string,
-	pluginCfg *config.ShadowDispatchPluginConfig,
+	pluginCfg *config.RouterReplayShadowConfig,
 	mutate func(ctx *RequestContext),
 ) shadowRun {
 	t.Helper()
@@ -156,7 +154,7 @@ func runShadowRequestWithReasoning(
 	t *testing.T,
 	router *OpenAIRouter,
 	primaryModel string,
-	pluginCfg *config.ShadowDispatchPluginConfig,
+	pluginCfg *config.RouterReplayShadowConfig,
 	mutate func(ctx *RequestContext),
 	useReasoning bool,
 ) shadowRun {
@@ -179,10 +177,20 @@ func runShadowRequestWithReasoning(
 	}
 	ctx.RouterReplayID = replayID
 	ctx.RouterReplayRecorder = recorder
-	ctx.ShadowDispatchPluginConfig = pluginCfg
+	if pluginCfg != nil {
+		ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: pluginCfg}
+	}
 	if mutate != nil {
 		mutate(ctx)
 	}
+	t.Cleanup(func() {
+		waitForShadow(t, router)
+		if ctx.RouterReplayRecorder != nil {
+			if drainErr := ctx.RouterReplayRecorder.DrainOutcomes(); drainErr != nil {
+				t.Error(drainErr)
+			}
+		}
+	})
 	response, err := router.handleEntrypointModelRouting(
 		request, "virtual", decision.Name, entropy.ReasoningDecision{UseReasoning: useReasoning}, primaryModel, ctx,
 	)
@@ -206,6 +214,9 @@ func waitForShadow(t *testing.T, router *OpenAIRouter) {
 
 func shadowOutcomes(t *testing.T, run shadowRun) []routerreplay.Outcome {
 	t.Helper()
+	if err := run.recorder.DrainOutcomes(); err != nil {
+		t.Fatal(err)
+	}
 	record, ok := run.recorder.GetRecord(run.replayID)
 	if !ok {
 		t.Fatalf("replay record %q missing", run.replayID)
@@ -313,10 +324,12 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	router, primaryModel := newShadowTestRouter(t, backend)
 	cfg := shadowTestPluginConfig()
-	cfg.CaptureResponseBody = true
-	cfg.MaxCaptureBytes = 6
+	cfg.Capture.Enabled = true
+	cfg.Capture.MaxBytes = shadowTestInt(6)
 
-	run := runShadowRequest(t, router, primaryModel, cfg, nil)
+	run := runShadowRequest(t, router, primaryModel, cfg, func(ctx *RequestContext) {
+		ctx.RouterReplayPluginConfig.PromptCapture = config.PromptCaptureRaw
+	})
 	waitForShadow(t, router)
 
 	outcome := singleShadowOutcome(t, run)
@@ -328,14 +341,47 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 	}
 }
 
-func TestShadowDispatchUpstreamErrorIsIsolatedAndRetried(t *testing.T) {
+// Only raw capture keeps generated text, so the shadow's own
+// capture.enabled stores an excerpt of its answer under raw alone:
+// under none and verified the outcome keeps its sizes and hash only.
+func TestShadowDispatchKeepsAnExcerptOnlyUnderRawCapture(t *testing.T) {
+	for _, test := range []struct {
+		mode    string
+		excerpt bool
+	}{
+		{config.PromptCaptureNone, false},
+		{config.PromptCaptureVerified, false},
+		{config.PromptCaptureRaw, true},
+	} {
+		t.Run(test.mode, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primaryModel := newShadowTestRouter(t, backend)
+			cfg := shadowTestPluginConfig()
+			cfg.Capture.Enabled = true
+
+			run := runShadowRequest(t, router, primaryModel, cfg, func(ctx *RequestContext) {
+				ctx.RouterReplayPluginConfig.PromptCapture = test.mode
+			})
+			waitForShadow(t, router)
+
+			outcome := singleShadowOutcome(t, run)
+			if _, kept := outcome.Metadata["response_excerpt"]; kept != test.excerpt {
+				t.Fatalf("excerpt kept %v, want %v: %v", kept, test.excerpt, outcome.Metadata)
+			}
+			if outcome.Metadata["response_sha256"] == "" || outcome.Metadata["response_bytes"] == "" {
+				t.Fatalf("the outcome lost its sizes or hash: %v", outcome.Metadata)
+			}
+		})
+	}
+}
+
+func TestShadowDispatchUpstreamErrorIsIsolatedWithoutRetry(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	backend.setHandler(func(w http.ResponseWriter, _ []byte) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	})
 	router, primaryModel := newShadowTestRouter(t, backend)
 	cfg := shadowTestPluginConfig()
-	cfg.MaxRetries = 1
 
 	baseline := runShadowRequest(t, router, primaryModel, nil, nil)
 	run := runShadowRequest(t, router, primaryModel, cfg, nil)
@@ -344,14 +390,14 @@ func TestShadowDispatchUpstreamErrorIsIsolatedAndRetried(t *testing.T) {
 	}
 	waitForShadow(t, router)
 
-	if got := backend.requestCount(); got != 2 {
-		t.Fatalf("shadow attempts = %d, want 2", got)
+	if got := backend.requestCount(); got != 1 {
+		t.Fatalf("shadow attempts = %d, want 1", got)
 	}
 	outcome := singleShadowOutcome(t, run)
 	if outcome.Verdict != shadowVerdictFailed || outcome.Reason != shadowReasonUpstreamStatus {
 		t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
 	}
-	if outcome.Metadata["status_code"] != "500" || outcome.Metadata["attempts"] != "2" {
+	if outcome.Metadata["status_code"] != "500" || outcome.Metadata["attempts"] != "1" {
 		t.Fatalf("metadata = %v", outcome.Metadata)
 	}
 	if _, ok := outcome.Metadata["response_sha256"]; ok {
@@ -369,7 +415,7 @@ func TestShadowDispatchTimeoutIsBounded(t *testing.T) {
 	defer close(release)
 	router, primaryModel := newShadowTestRouter(t, backend)
 	cfg := shadowTestPluginConfig()
-	cfg.TimeoutSeconds = 1
+	cfg.Execution.Timeout = "1s"
 
 	started := time.Now()
 	run := runShadowRequest(t, router, primaryModel, cfg, nil)
@@ -388,7 +434,7 @@ func TestShadowDispatchRejectsOversizedResponse(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	router, primaryModel := newShadowTestRouter(t, backend)
 	cfg := shadowTestPluginConfig()
-	cfg.MaxResponseBytes = 16
+	cfg.Budget.MaxResponseBytes = shadowTestInt(16)
 
 	run := runShadowRequest(t, router, primaryModel, cfg, nil)
 	waitForShadow(t, router)
@@ -408,8 +454,8 @@ func TestShadowDispatchQueueFullDropsWithoutBlocking(t *testing.T) {
 	})
 	router, primaryModel := newShadowTestRouter(t, backend)
 	cfg := shadowTestPluginConfig()
-	cfg.MaxConcurrency = 1
-	cfg.MaxQueueDepth = 1
+	cfg.Execution.MaxConcurrency = shadowTestInt(1)
+	cfg.Execution.MaxQueueSize = shadowTestInt(1)
 
 	before := shadowCounter(shadowTestDecision, metrics.ShadowDispatchResultDropped, shadowReasonQueueFull)
 	first := runShadowRequest(t, router, primaryModel, cfg, nil)
@@ -448,16 +494,14 @@ func TestShadowDispatchSamplingAndSkipRules(t *testing.T) {
 	runShadowRequest(t, router, primaryModel, sampledOut, nil)
 
 	samePrimary := shadowTestPluginConfig()
-	samePrimary.Model = primaryModel
+	samePrimary.Models = []string{primaryModel}
 	runShadowRequest(t, router, primaryModel, samePrimary, nil)
 
 	runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
 		ctx.LooperRequest = true
 	})
 
-	disabled := shadowTestPluginConfig()
-	disabled.Enabled = false
-	runShadowRequest(t, router, primaryModel, disabled, nil)
+	runShadowRequest(t, router, primaryModel, nil, nil)
 
 	waitForShadow(t, router)
 	if got := backend.requestCount(); got != 0 {
@@ -469,7 +513,7 @@ func TestShadowDispatchUnknownModelRecordsBackendUnresolved(t *testing.T) {
 	backend := newShadowTestBackend(t)
 	router, primaryModel := newShadowTestRouter(t, backend)
 	cfg := shadowTestPluginConfig()
-	cfg.Model = "ghost-model"
+	cfg.Models = []string{"ghost-model"}
 
 	run := runShadowRequest(t, router, primaryModel, cfg, nil)
 	waitForShadow(t, router)
@@ -549,7 +593,7 @@ func TestShadowDispatchRendersShadowModelWhenPrimaryReplaysClientBytes(t *testin
 	}
 	ctx.RouterReplayID = replayID
 	ctx.RouterReplayRecorder = recorder
-	ctx.ShadowDispatchPluginConfig = shadowTestPluginConfig()
+	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: shadowTestPluginConfig()}
 
 	response, err := router.handleEntrypointModelRouting(
 		request, primaryModel, decision.Name, entropy.ReasoningDecision{}, primaryModel, ctx,
@@ -604,7 +648,7 @@ func TestShadowDispatchAppliesShadowReasoningAndDecisionHeaders(t *testing.T) {
 	}
 
 	pluginCfg := shadowTestPluginConfig()
-	pluginCfg.ForwardHeaders = []string{"x-tenant"}
+
 	runShadowRequestWithReasoning(t, router, primaryModel, pluginCfg, func(ctx *RequestContext) {
 		ctx.VSRSelectedDecision.Plugins = []config.DecisionPlugin{{
 			Type: config.DecisionPluginHeaderMutation,
@@ -627,8 +671,8 @@ func TestShadowDispatchAppliesShadowReasoningAndDecisionHeaders(t *testing.T) {
 	if wire.ReasoningEffort == "" {
 		t.Fatalf("shadow body lacks the shadow model's reasoning adaptation: %s", backend.bodies[0])
 	}
-	if got := backend.headers[0].Get("x-tenant"); got != "acme" {
-		t.Fatalf("x-tenant = %q, want decision header mutation applied", got)
+	if got := backend.headers[0].Get("x-tenant"); got != "" {
+		t.Fatalf("x-tenant = %q, want no decision header", got)
 	}
 }
 
@@ -665,7 +709,7 @@ func TestShadowDispatchUsesOnlyStaticCredentials(t *testing.T) {
 	}
 }
 
-func TestShadowDispatchTLSVerificationIsOptIn(t *testing.T) {
+func TestShadowDispatchTLSVerificationIsRequired(t *testing.T) {
 	backend := newShadowTestBackendWithTLS(t, true)
 	router, primaryModel := newShadowTestRouter(t, backend)
 
@@ -677,59 +721,6 @@ func TestShadowDispatchTLSVerificationIsOptIn(t *testing.T) {
 	}
 	if backend.requestCount() != 0 {
 		t.Fatal("verification failure must not reach the backend")
-	}
-
-	skip := shadowTestPluginConfig()
-	skip.TLSSkipVerify = true
-	skipped := runShadowRequest(t, router, primaryModel, skip, nil)
-	waitForShadow(t, router)
-	if outcome := singleShadowOutcome(t, skipped); outcome.Verdict != shadowVerdictCompleted {
-		t.Fatalf("tls_skip_verify verdict=%q reason=%q, want completed", outcome.Verdict, outcome.Reason)
-	}
-	if state := backend.server.TLS; state == nil || len(state.Certificates) == 0 {
-		t.Fatal("test backend did not serve TLS")
-	}
-	_ = tls.VersionTLS12
-}
-
-func TestShadowDispatchRetryDoesNotInheritEarlierStatus(t *testing.T) {
-	backend := newShadowTestBackend(t)
-	var attempts int
-	backend.setHandler(func(w http.ResponseWriter, _ []byte) {
-		backend.mu.Lock()
-		attempts++
-		current := attempts
-		backend.mu.Unlock()
-		if current == 1 {
-			http.Error(w, "busy", http.StatusServiceUnavailable)
-			return
-		}
-		hijacker, ok := w.(http.Hijacker)
-		if !ok {
-			http.Error(w, "no hijack", http.StatusInternalServerError)
-			return
-		}
-		conn, _, err := hijacker.Hijack()
-		if err == nil {
-			_ = conn.Close()
-		}
-	})
-	router, primaryModel := newShadowTestRouter(t, backend)
-	cfg := shadowTestPluginConfig()
-	cfg.MaxRetries = 1
-
-	run := runShadowRequest(t, router, primaryModel, cfg, nil)
-	waitForShadow(t, router)
-
-	outcome := singleShadowOutcome(t, run)
-	if outcome.Verdict != shadowVerdictFailed || outcome.Reason != shadowReasonTransportError {
-		t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
-	}
-	if status, ok := outcome.Metadata["status_code"]; ok {
-		t.Fatalf("transport failure carried stale status_code=%s", status)
-	}
-	if outcome.Metadata["attempts"] != "2" {
-		t.Fatalf("attempts = %q, want 2", outcome.Metadata["attempts"])
 	}
 }
 
@@ -790,7 +781,6 @@ func TestShadowDispatchRejectsCrossOriginRedirect(t *testing.T) {
 	shadowParams.AccessKeys = map[string]string{"openai": "shadow-key"}
 	router.Config.ModelConfig[shadowTestModel] = shadowParams
 	cfg := shadowTestPluginConfig()
-	cfg.MaxRetries = 2
 
 	baseline := runShadowRequest(t, router, primaryModel, nil, nil)
 	run := runShadowRequest(t, router, primaryModel, cfg, nil)
@@ -938,11 +928,10 @@ func TestShadowOutcomeSurvivesRouterAssignedReplayID(t *testing.T) {
 	}
 	ctx.VSRSelectedDecision = decision
 	ctx.VSRSelectedDecisionName = decision.Name
-	ctx.ShadowDispatchPluginConfig = shadowTestPluginConfig()
 	// The router assigns the id, the way it does in production, so the recorder
 	// is reached through the router rather than handed to the context.
 	router.ReplayRecorder = recorder
-	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true}
+	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: shadowTestPluginConfig()}
 
 	if _, err := router.handleEntrypointModelRouting(
 		request, "virtual", decision.Name, entropy.ReasoningDecision{}, primaryModel, ctx,
@@ -953,6 +942,9 @@ func TestShadowOutcomeSurvivesRouterAssignedReplayID(t *testing.T) {
 
 	if ctx.RouterReplayID == "" {
 		t.Fatal("the router did not start a replay record, so this proves nothing")
+	}
+	if err := recorder.DrainOutcomes(); err != nil {
+		t.Fatal(err)
 	}
 	record, ok := recorder.GetRecord(ctx.RouterReplayID)
 	if !ok {
@@ -968,3 +960,5 @@ func TestShadowOutcomeSurvivesRouterAssignedReplayID(t *testing.T) {
 		t.Fatalf("shadow outcomes = %d, want one on the record the router created", shadows)
 	}
 }
+
+func shadowTestInt(value int) *int { return &value }

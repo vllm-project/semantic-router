@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
-import styles from './CollapsibleSection.module.css'
+import { ChevronRight } from 'lucide-react'
+
+import { Badge, cn } from '../ui'
 
 interface CollapsibleSectionProps {
   id: string
@@ -16,7 +18,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   content,
   isTruncated = false,
   defaultExpanded = false,
-  onToggle
+  onToggle,
 }) => {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
 
@@ -27,27 +29,35 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   }
 
   return (
-    <div className={styles.container}>
+    <div className="w-full">
       <button
-        className={styles.header}
+        type="button"
+        id={`collapsible-header-${id}`}
+        className="flex w-full items-center gap-2 rounded-md border border-border bg-surface-subtle px-3 py-2 text-left text-[13px] font-medium text-foreground outline-none transition-colors hover:border-border-strong hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/40"
         onClick={handleToggle}
         aria-expanded={isExpanded}
         aria-controls={`collapsible-content-${id}`}
       >
-        <span className={`${styles.icon} ${isExpanded ? styles.iconExpanded : ''}`}>
-          ▶
-        </span>
-        <span className={styles.title}>
+        <ChevronRight
+          aria-hidden="true"
+          className={cn(
+            'size-3.5 shrink-0 text-subtle-foreground transition-transform duration-200',
+            isExpanded && 'rotate-90',
+          )}
+        />
+        <span className="flex-1">
           {isExpanded ? 'Hide' : 'Show'} {title}
         </span>
         {isTruncated && (
-          <span className={styles.truncatedBadge}>Truncated</span>
+          <Badge tone="warning" size="sm">
+            Truncated
+          </Badge>
         )}
       </button>
       {isExpanded && (
         <div
           id={`collapsible-content-${id}`}
-          className={styles.content}
+          className="mt-2 animate-in fade-in-0 slide-in-from-top-1 duration-200"
           role="region"
           aria-labelledby={`collapsible-header-${id}`}
         >

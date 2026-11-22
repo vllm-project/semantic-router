@@ -1,7 +1,7 @@
 import { KeyValueEditor } from '../components/KeyValueEditor'
 import { ObjectListEditor, type ObjectEditorField } from '../components/ObjectListEditor'
-import { StringListEditor } from '../components/StringListEditor'
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
+import { Badge, ChipInput } from '../ui'
 import type {
   BackendRefEntry,
   LoRAAdapter,
@@ -19,13 +19,49 @@ interface StructuredModelFieldProps {
   maskSensitive?: boolean
 }
 
-const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
+/** A backend ref as the editor shows it: its auth block as five fields. */
+type EditableBackendRef = Omit<BackendRefEntry, 'auth'> & {
+  auth_credential?: NonNullable<BackendRefEntry['auth']>['credential']
+  auth_header?: string
+  auth_prefix?: string
+  api_key_env?: string
+  api_key_file?: string
+}
+
+function editableBackendRef({ auth, ...backendRef }: BackendRefEntry): EditableBackendRef {
+  const editable: EditableBackendRef = { ...backendRef }
+  if (auth?.credential !== undefined) editable.auth_credential = auth.credential
+  if (auth?.header !== undefined) editable.auth_header = auth.header
+  if (auth?.prefix !== undefined) editable.auth_prefix = auth.prefix
+  if (auth?.api_key_env !== undefined) editable.api_key_env = auth.api_key_env
+  if (auth?.api_key_file !== undefined) editable.api_key_file = auth.api_key_file
+  return editable
+}
+
+function backendRefFromEditor({
+  auth_credential: credential,
+  auth_header: header,
+  auth_prefix: prefix,
+  api_key_env: apiKeyEnv,
+  api_key_file: apiKeyFile,
+  ...backendRef
+}: EditableBackendRef): BackendRefEntry {
+  const auth: NonNullable<BackendRefEntry['auth']> = {}
+  if (credential) auth.credential = credential
+  if (header?.trim()) auth.header = header.trim()
+  if (prefix !== undefined) auth.prefix = prefix.trim()
+  if (apiKeyEnv?.trim()) auth.api_key_env = apiKeyEnv.trim()
+  // A newly typed inline key replaces the stored file; saving moves it into a new one.
+  if (apiKeyFile?.trim() && !backendRef.api_key?.trim()) auth.api_key_file = apiKeyFile.trim()
+  return Object.keys(auth).length > 0 ? { ...backendRef, auth } : backendRef
+}
+
+const backendRefFields: ObjectEditorField<EditableBackendRef>[] = [
   { key: 'name', label: 'Reference name', placeholder: 'local-primary' },
-  { key: 'endpoint', label: 'Endpoint', placeholder: '127.0.0.1:8000', fullWidth: true },
   {
-    key: 'base_url',
-    label: 'Base URL',
-    placeholder: 'https://api.example.com/v1',
+    key: 'endpoint',
+    label: 'Endpoint',
+    placeholder: '127.0.0.1:8000 or https://api.example.com/v1',
     fullWidth: true,
   },
   { key: 'protocol', label: 'Protocol', type: 'select', options: ['http', 'https'] },
@@ -40,11 +76,26 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
     fullWidth: true,
   },
   {
-    key: 'api_key',
-    label: 'Inline API key',
-    type: 'password',
-    placeholder: 'Stored in configuration',
+    key: 'api_key_file',
+    label: 'API key file',
+    placeholder: '/run/secrets/openai-key',
     fullWidth: true,
+    helpText: 'An owner-only file the Router reads the key from at every load.',
+  },
+  {
+    key: 'api_key',
+    label: 'API key',
+    type: 'password',
+    placeholder: 'Saved to an owner-only key file',
+    fullWidth: true,
+  },
+  {
+    key: 'auth_credential',
+    label: 'Credential',
+    type: 'select',
+    options: ['delegated', 'caller'],
+    helpText:
+      "delegated sends the authenticated user's credential, caller the provider login the client sent. Either replaces the key.",
   },
   { key: 'auth_header', label: 'Authentication header', placeholder: 'Authorization' },
   {
@@ -55,11 +106,11 @@ const backendRefFields: ObjectEditorField<BackendRefEntry>[] = [
     helpText: 'An explicit empty value disables the provider catalog default prefix.',
   },
   {
-    key: 'extra_headers',
-    label: 'Extra headers',
+    key: 'headers',
+    label: 'Headers',
     type: 'key-value',
     fullWidth: true,
-    emptyValueLabel: 'No extra headers configured.',
+    emptyValueLabel: 'No headers configured.',
   },
 ]
 
@@ -194,7 +245,9 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     min: 0,
     max: 5,
     step: 1,
-    placeholder: '0',
+    placeholder: 'Default',
+    helpText:
+      'Empty retries a failed connection twice, or not at all when retry conditions are set.',
   },
   {
     key: 'retry_on',
@@ -266,18 +319,18 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
   },
 ]
 
-function backendRefLabel(item: BackendRefEntry, index: number): string {
+function backendRefLabel(item: EditableBackendRef, index: number): string {
   return item.name?.trim() || item.provider?.trim() || `Backend ${index + 1}`
 }
 
-function backendRefDescription(item: BackendRefEntry): string | undefined {
-  return item.endpoint?.trim() || item.base_url?.trim() || 'Target required'
+function backendRefDescription(item: EditableBackendRef): string | undefined {
+  return item.endpoint?.trim() || 'Target required'
 }
 
-function validateBackendRef(item: BackendRefEntry): string[] {
+function validateBackendRef(item: EditableBackendRef): string[] {
   const errors: string[] = []
-  if (!item.endpoint?.trim() && !item.base_url?.trim()) {
-    errors.push('Provide an endpoint or base URL.')
+  if (!item.endpoint?.trim()) {
+    errors.push('Provide an endpoint.')
   }
   if (item.protocol && item.protocol !== 'http' && item.protocol !== 'https') {
     errors.push('Protocol must be HTTP or HTTPS.')
@@ -288,50 +341,78 @@ function validateBackendRef(item: BackendRefEntry): string[] {
   return errors
 }
 
-export function ModelTagsEditor({
+const stringValues = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : normalizeStringList(value)
+
+function ChipListField({
   value,
   onChange,
   disabled,
   readOnly,
-}: StructuredModelFieldProps) {
-  const tagValues = Array.isArray(value)
-    ? value.filter((tag): tag is string => typeof tag === 'string')
-    : normalizeStringList(value)
-
+  label,
+  placeholder,
+  emptyLabel,
+}: StructuredModelFieldProps & { label: string; placeholder: string; emptyLabel: string }) {
+  const items = stringValues(value)
+  if (readOnly) {
+    return items.length ? (
+      <span className="flex flex-wrap gap-1.5">
+        {items.map((item) => (
+          <Badge key={item} tone="outline" className="font-mono">
+            {item}
+          </Badge>
+        ))}
+      </span>
+    ) : (
+      <span className="text-[13px] text-muted-foreground">{emptyLabel}</span>
+    )
+  }
   return (
-    <StringListEditor
-      value={tagValues}
+    <ChipInput
+      value={items}
       onChange={(nextValue) => onChange?.(nextValue)}
-      addLabel="Add tag"
-      emptyLabel="No tags configured. Add tags for filtering and policy targeting."
-      itemLabel="Tag"
-      placeholder="e.g. premium"
+      placeholder={placeholder}
       disabled={disabled}
-      readOnly={readOnly}
+      aria-label={label}
     />
   )
 }
 
-export function ModelCapabilitiesEditor({
-  value,
-  onChange,
-  disabled,
-  readOnly,
-}: StructuredModelFieldProps) {
-  const capabilities = Array.isArray(value)
-    ? value.filter((capability): capability is string => typeof capability === 'string')
-    : normalizeStringList(value)
-
+export function ModelTagsEditor(props: StructuredModelFieldProps) {
   return (
-    <StringListEditor
-      value={capabilities}
-      onChange={(nextValue) => onChange?.(nextValue)}
-      addLabel="Add capability"
+    <ChipListField
+      {...props}
+      label="Tags"
+      placeholder="premium, local, fast — press Enter after each"
+      emptyLabel="No tags configured."
+    />
+  )
+}
+
+export function ModelCapabilitiesEditor(props: StructuredModelFieldProps) {
+  return (
+    <ChipListField
+      {...props}
+      label="Capabilities"
+      placeholder="chat, reasoning, tool-use — press Enter after each"
       emptyLabel="No routing capabilities configured."
-      itemLabel="Capability"
-      placeholder="e.g. tool-use"
-      disabled={disabled}
-      readOnly={readOnly}
+    />
+  )
+}
+
+// Edits one direction of a model's modalities: the media it reads or writes.
+export function ModelModalitiesEditor({
+  label = 'Modalities',
+  ...props
+}: StructuredModelFieldProps & { label?: string }) {
+  return (
+    <ChipListField
+      {...props}
+      label={label}
+      placeholder="text, image, audio or video"
+      emptyLabel="Not declared: the model reads and writes text."
     />
   )
 }
@@ -422,6 +503,15 @@ export function ModelPricingEditor({
   )
 }
 
+// The retries the Router and the Envoy the CLI renders apply: the count,
+// else two by default unless retry conditions are set without one.
+function reliabilityDescription(item: ProviderReliability): string {
+  if (item.retry_count !== undefined) return `${item.retry_count} retries`
+  return item.retry_on?.trim()
+    ? '0 retries: retry conditions without a count'
+    : '2 retries by default'
+}
+
 export function ModelReliabilityEditor({
   value,
   onChange,
@@ -437,9 +527,7 @@ export function ModelReliabilityEditor({
       fields={reliabilityFields}
       createItem={() => ({})}
       itemLabel={() => 'Delivery policy'}
-      itemDescription={(item) =>
-        item.retry_count ? `${item.retry_count} retries` : 'Use platform defaults'
-      }
+      itemDescription={reliabilityDescription}
       minItems={1}
       maxItems={1}
       disabled={disabled}
@@ -455,20 +543,19 @@ export function ModelBackendRefsEditor({
   readOnly,
   maskSensitive,
 }: StructuredModelFieldProps) {
-  const backendRefs = normalizeModelBackendRefs(value)
+  const backendRefs = normalizeModelBackendRefs(value).map(editableBackendRef)
   const visibleBackendRefs =
     maskSensitive && readOnly
       ? backendRefs.map((backendRef) => ({
           ...backendRef,
           endpoint: backendRef.endpoint ? '••••••••' : undefined,
-          base_url: backendRef.base_url ? '••••••••' : undefined,
         }))
       : backendRefs
 
   return (
     <ObjectListEditor
       value={visibleBackendRefs}
-      onChange={(nextValue) => onChange?.(nextValue)}
+      onChange={(nextValue) => onChange?.(nextValue.map(backendRefFromEditor))}
       fields={backendRefFields}
       createItem={(index) => ({
         name: `endpoint-${index + 1}`,

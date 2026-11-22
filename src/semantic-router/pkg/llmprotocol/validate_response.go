@@ -22,8 +22,11 @@ func ValidateResponse(response Response, limits Limits) error {
 	blocks := 0
 	outputItems := 0
 	itemIDs := make(map[string]struct{})
-	for _, sequence := range append([][]OutputItem{response.Output}, response.Alternatives...) {
-		if err := validateOutputSequence(sequence, limits, &outputItems, &blocks, itemIDs); err != nil {
+	for index, sequence := range append([][]OutputItem{response.Output}, response.Alternatives...) {
+		// The stop reason is the primary output's, and a limit cuts only the
+		// content it ends on.
+		truncatable := index == 0 && StopsAtOutputLimit(response.StopReason)
+		if err := validateOutputSequence(sequence, limits, truncatable, &outputItems, &blocks, itemIDs); err != nil {
 			return err
 		}
 	}
@@ -92,7 +95,7 @@ func validateResponseStopReason(response Response) error {
 }
 
 func validateResponseOutputCardinality(response Response, limits Limits) error {
-	if len(response.Output) == 0 && response.StopReason != StopContentFilter {
+	if len(response.Output) == 0 && !StopAllowsEmptyOutput(response.StopReason) {
 		return NewError(ErrorUpstreamUnavailable, "empty_response_output", "successful upstream response has no primary output", nil)
 	}
 	if limits.Alternatives > 0 && len(response.Alternatives) > limits.Alternatives {
@@ -106,9 +109,54 @@ func validateResponseOutputCardinality(response Response, limits Limits) error {
 	return nil
 }
 
+// StopAllowsEmptyOutput reports a stop that explains a reply with no output: a
+// model that ended its turn with nothing to say, which Anthropic documents for
+// end_turn, a content filter, or an output limit spent before any output, such
+// as on reasoning the client asked to omit.
+func StopAllowsEmptyOutput(reason StopReason) bool {
+	return reason == StopEndTurn || reason == StopContentFilter || StopsAtOutputLimit(reason)
+}
+
+// StopsAtOutputLimit reports a stop at the output token limit or the end of the
+// context window, either of which can cut a reply in the middle of a call.
+func StopsAtOutputLimit(reason StopReason) bool {
+	return reason == StopMaxTokens || reason == StopContextWindow
+}
+
+// ToolCallStopAtOutputLimit reports a tool-call stop that the output token
+// limit made: the reply's output tokens reached limit, the output limit of the
+// request it answers, 0 for none. A backend can report a call that limit cut
+// as a tool-call stop, as vLLM's buffered Chat reply does whenever its tool
+// parser found a call, with the cut arguments closed or empty. Usage counts the
+// tokens of every choice, so only a reply with one choice can be judged by it.
+func ToolCallStopAtOutputLimit(reason StopReason, usage Usage, limit int64) bool {
+	return reason == StopToolCall && limit > 0 && usage.State == UsageAvailable &&
+		usage.OutputTotal.Value != nil && *usage.OutputTotal.Value >= limit
+}
+
+// TruncatedToolCall returns the function call an output limit cut short in the
+// response, the last content of its output: its arguments are the start of a
+// JSON object rather than a whole one. It returns nil for any other response.
+func TruncatedToolCall(response Response, maximumDepth int) *ToolCall {
+	if !StopsAtOutputLimit(response.StopReason) || len(response.Output) == 0 {
+		return nil
+	}
+	contents := response.Output[len(response.Output)-1].Content
+	if len(contents) == 0 {
+		return nil
+	}
+	call := contents[len(contents)-1].ToolCall
+	if call == nil || call.Kind != "" || ValidateJSONObject([]byte(call.Arguments), maximumDepth) == nil ||
+		!truncatedArguments(call.Arguments, maximumDepth) {
+		return nil
+	}
+	return call
+}
+
 func validateOutputSequence(
 	sequence []OutputItem,
 	limits Limits,
+	truncatable bool,
 	outputItems *int,
 	blocks *int,
 	itemIDs map[string]struct{},
@@ -118,7 +166,8 @@ func validateOutputSequence(
 		return NewError(ErrorUpstreamUnavailable, "output_items_limit", "upstream output item limit exceeded", nil)
 	}
 	for index, item := range sequence {
-		if err := validateOutputItem(item, index, limits, blocks, itemIDs); err != nil {
+		last := truncatable && index == len(sequence)-1
+		if err := validateOutputItem(item, index, limits, last, blocks, itemIDs); err != nil {
 			return err
 		}
 	}
@@ -129,6 +178,7 @@ func validateOutputItem(
 	item OutputItem,
 	index int,
 	limits Limits,
+	truncatable bool,
 	blocks *int,
 	itemIDs map[string]struct{},
 ) error {
@@ -148,21 +198,22 @@ func validateOutputItem(
 	if len(item.Content) == 0 {
 		return NewError(ErrorUpstreamUnavailable, "empty_output_item", fmt.Sprintf("upstream output item %d is empty", index), nil)
 	}
-	for _, content := range item.Content {
-		if err := validateOutputContent(item.Role, content, blocks, limits); err != nil {
+	for contentIndex, content := range item.Content {
+		last := truncatable && contentIndex == len(item.Content)-1
+		if err := validateOutputContent(item.Role, content, blocks, limits, last); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateOutputContent(role Role, content Content, blocks *int, limits Limits) error {
+func validateOutputContent(role Role, content Content, blocks *int, limits Limits, truncatable bool) error {
 	if role == RoleAssistant && content.Kind == ContentToolResult ||
 		role == RoleTool && content.Kind != ContentToolResult {
 		return NewError(ErrorUpstreamUnavailable, "invalid_output_role_content", "upstream output role and content do not match", nil)
 	}
 	(*blocks)++
-	if err := validateContent(content, blocks, limits, 0); err != nil {
+	if err := validateContentBlock(content, blocks, limits, 0, truncatable); err != nil {
 		return err
 	}
 	if content.Kind == ContentGeneratedImage && content.GeneratedImage.Status != ImageGenerationCompleted &&
@@ -341,7 +392,7 @@ func RequireCapabilities(format WireFormat, available, required CapabilitySet) e
 	}
 	return NewError(
 		ErrorUnsupportedFeature, "unsupported_capability",
-		fmt.Sprintf("wire format %q does not support: %s", format, strings.Join(missing, ", ")), nil,
+		fmt.Sprintf("the %s API does not support: %s", format.APIName(), strings.Join(missing, ", ")), nil,
 	)
 }
 

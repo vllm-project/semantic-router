@@ -155,7 +155,7 @@ vllm-sr serve
 
 If `config.yaml` does not exist yet in the current directory, the dashboard opens in **setup mode** at [http://localhost:8700](http://localhost:8700).
 
-On **Step 1 — Connect model**, register your Ollama model:
+On **Step 1 — Connect models**, register your Ollama model:
 
 | Field | Value |
 | --- | --- |
@@ -163,20 +163,22 @@ On **Step 1 — Connect model**, register your Ollama model:
 | **Provider** | **Ollama** |
 | **Base URL or host** | `host.docker.internal:11434` |
 | **Endpoint label** | `primary` (or any short label) |
-| **Default** | Select this model if it is your only backend |
+| **Default** | The first model is the default; choose **Make default** on another model to change it |
 
 The **Ollama** choice writes an Ollama backend reference and defaults to
 `host.docker.internal:11434` for the local container stack. The Router uses
 that provider identity to send output limits in the `max_tokens` field Ollama
 reads. You can replace the default address if Ollama runs on another host.
 
-Click **Next** when the model card validates.
+Click **Continue** when the model card validates.
 
 ## 6. Choose routing and activate
 
 On **Step 2 — Choose routing**, keep **From scratch** (one default catch-all route) if you only registered one Ollama model. You can import a preset or remote config later when you add more backends.
 
-On **Step 3 — Review & activate**, confirm the model summary, then click **Activate**.
+On **Step 3 — Decision model**, keep the recommended decision model.
+
+On **Step 4 — Review & activate**, confirm the model summary, then click **Activate router**.
 
 Activation writes the configuration and exits setup mode. The `vllm-sr serve` that is still waiting in your terminal then starts the Router, which serves port `8899` and routes requests to your Ollama backend.
 
@@ -211,8 +213,7 @@ A JSON chat completion response means Ollama is wired correctly.
 If you prefer to edit YAML directly instead of the dashboard, add a model entry like this:
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: llama3.2:3b
@@ -226,21 +227,24 @@ providers:
           protocol: http
           provider: ollama
           weight: 100
-
-routing:
-  modelCards:
-    - name: llama3.2:3b
-  decisions:
-    - name: default-route
-      description: Route all requests to the local Ollama model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: llama3.2:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: Route all requests to the local Ollama model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: llama3.2:3b
+            use_reasoning: false
 ```
+
+The backend takes no key. The Router sends none to an `ollama` backend, on
+routed requests and on its own calls such as shadow requests, and ignores an
+`api_key` or `auth.api_key_env` set on one. Use provider `openai-compatible`
+for a server behind a proxy that checks a key.
 
 Validate and serve:
 

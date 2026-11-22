@@ -92,15 +92,15 @@ func (m *mockStreamingCache) FindSimilarWithThreshold(
 	return nil, false, nil
 }
 
-func (m *mockStreamingCache) LookupSimilarWithThreshold(
+func (m *mockStreamingCache) LookupSimilar(
 	_ context.Context,
 	model string,
 	_ string,
-	_ float32,
-) (cache.LookupResult, error) {
+	_ cache.SimilarityBounds,
+) (cache.SimilarEntries, error) {
 	m.findSimilarCalled = true
 	m.findSimilarModel = model
-	return cache.LookupResult{}, nil
+	return cache.SimilarEntries{}, nil
 }
 
 func (m *mockStreamingCache) LastSimilarity() float32 { return 0 }
@@ -134,7 +134,7 @@ func (m *mockStreamingCache) GetStats() cache.CacheStats { return cache.CacheSta
 func cacheRouterForDecision(decision config.Decision) (*mockStreamingCache, *OpenAIRouter, *config.Decision) {
 	mockCache := &mockStreamingCache{}
 	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
+		SemanticCache: config.SemanticCache{InUse: true},
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{decision},
 		},
@@ -322,9 +322,9 @@ func TestUpdateResponseCache_StoresWhenDecisionCacheEnabled(t *testing.T) {
 
 func TestUpdateResponseCache_StoresWhenNoDecisionSelectedAndNoDecisionsConfigured(t *testing.T) {
 	mockCache := &mockStreamingCache{}
-	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
-	}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{
+		SemanticCache: config.SemanticCache{InUse: true},
+	}, testPlugin(config.DecisionPluginResponseCache, map[string]interface{}{"enabled": true, "scope": "global"}))
 	router := &OpenAIRouter{Cache: mockCache, Config: cfg}
 	ctx := &RequestContext{
 		RequestID:               "req-1",
@@ -333,15 +333,16 @@ func TestUpdateResponseCache_StoresWhenNoDecisionSelectedAndNoDecisionsConfigure
 		SemanticRequest:         testNeutralRequest("test", "hello"),
 		VSRSelectedDecisionName: "",
 	}
+	ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
 
 	router.updateResponseCache(ctx, []byte(`{"ok":true}`))
-	assert.True(t, mockCache.addEntryCalled, "should store response when no decision is selected (global cache applies)")
+	assert.True(t, mockCache.addEntryCalled, "should store response when no decision is selected (the global.plugins response_cache applies)")
 }
 
 func TestUpdateResponseCache_SkipsWhenNoDecisionSelectedButDecisionsConfigured(t *testing.T) {
 	mockCache := &mockStreamingCache{}
 	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{Enabled: true},
+		SemanticCache: config.SemanticCache{InUse: true},
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{
 				{

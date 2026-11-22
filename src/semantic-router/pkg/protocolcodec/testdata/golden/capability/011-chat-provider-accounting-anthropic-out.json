@@ -8,7 +8,7 @@
         "type": "text"
       }
     ],
-    "id": "chatcmpl_usage_1",
+    "id": "msg_2c05d5da4c4863912789e2ee",
     "model": "routed-model",
     "role": "assistant",
     "stop_details": null,

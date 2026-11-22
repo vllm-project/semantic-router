@@ -37,7 +37,8 @@ from cli.runtime_stack import MAX_PORT_OFFSET
 from runtime_http import HTTP_OK, call, page_requests, write_fixture
 
 QUICKSTART = (
-    Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
+    Path(__file__).resolve().parents[3]
+    / "website/docs/model-runtime/get-started/quickstart.md"
 )
 API_KEY = "engine-e2e-key"
 MANAGEMENT_KEY = "engine-e2e-management-key"
@@ -129,15 +130,20 @@ def png_data_url(width, height, seed):
 
 def engine_config():
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {
                 "name": "main",
                 "address": "0.0.0.0",
                 "port": 8899,
                 "api_keys": [API_KEY],
-                "models": ["vllm-sr/auto"],
-                "systemone": {"models": [PUBLIC_MODEL]},
+                "apis": {
+                    "openai": {"models": ["vllm-sr/auto"]},
+                    "systemone": {
+                        "schema": "vllm-sr/4.0",
+                        "models": [PUBLIC_MODEL],
+                    },
+                },
             }
         ],
         "providers": {
@@ -154,16 +160,19 @@ def engine_config():
                 }
             ]
         },
-        "routing": {
-            "decisions": [
-                {
-                    "name": "saved",
-                    "priority": 1,
-                    "rules": {"operator": "AND", "conditions": []},
-                    "modelRefs": [{"model": "answer"}],
-                }
-            ]
-        },
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {
+                        "name": "saved",
+                        "priority": 1,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": "answer"}],
+                    }
+                ],
+            }
+        ],
         "global": {
             "router": {"enabled": False},
             "model_catalog": {
@@ -473,11 +482,11 @@ class TestEngineModeEngineArgs(EngineStack):
 
 
 class TestEngineModeDeadlineLimit(EngineStack):
-    """The listener's systemone.max_deadline_ms bounds a request's deadline_ms."""
+    """The listener's apis.systemone.max_deadline_ms bounds a request's deadline_ms."""
 
     def serve(self, *, engine):
         config = engine_config()
-        config["listeners"][0]["systemone"]["max_deadline_ms"] = 1
+        config["listeners"][0]["apis"]["systemone"]["max_deadline_ms"] = 1
         self.config.write_text(yaml.safe_dump(config))
         super().serve(engine=engine)
 
@@ -567,7 +576,7 @@ class TestEngineModeImages(EngineStack):
         self.assertNotEqual(both["answers"], seen["answers"])
         status, failure = self.ask("/v1/systemone", ["data:image/png;base64,AAAA"])
         self.assertEqual(status, 400, failure)
-        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["code"], "invalid_media", failure)
         self.assertEqual(failure["error"]["message"], "malformed image", failure)
         status, clip = self.ask("/v1/systemone", videos=[TINY_MP4])
         self.assertEqual(status, 200, clip)
@@ -577,7 +586,7 @@ class TestEngineModeImages(EngineStack):
             "/v1/systemone", videos=["data:video/mp4;base64,AAAA"]
         )
         self.assertEqual(status, 400, failure)
-        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["code"], "invalid_media", failure)
         self.assertEqual(failure["error"]["message"], "malformed video", failure)
         body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
         body["model"] = PUBLIC_MODEL

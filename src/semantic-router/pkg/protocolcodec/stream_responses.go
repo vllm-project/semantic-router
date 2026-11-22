@@ -10,19 +10,19 @@ import (
 
 type responsesStreamDecoder struct {
 	streamState
-	framer                      sseFramer
-	nextAnnotationIndexes       map[streamContentKey]int
-	contentIndexes              map[responsesWireContentKey]int
-	nextContentIndex            map[int]int
-	contentLifecycle            map[responsesWireContentKey]*responsesDecodedContentLifecycle
-	nextWireContentIndex        map[responsesWireContentScopeKey]int
-	itemTypes                   map[int]string
-	toolArgumentsDone           map[int]bool
-	completedOutput             map[int]json.RawMessage
-	seenLifecycleEvents         map[string]bool
-	reportedProviderDecorations map[string]bool
-	wireSequence                uint64
-	wireSequenceSeen            bool
+	framer                 sseFramer
+	nextAnnotationIndexes  map[streamContentKey]int
+	contentIndexes         map[responsesWireContentKey]int
+	nextContentIndex       map[int]int
+	contentLifecycle       map[responsesWireContentKey]*responsesDecodedContentLifecycle
+	nextWireContentIndex   map[responsesWireContentScopeKey]int
+	itemTypes              map[int]string
+	toolArgumentsDone      map[int]bool
+	completedOutput        map[int]json.RawMessage
+	seenLifecycleEvents    map[string]bool
+	reportedProviderFields map[string]bool
+	wireSequence           uint64
+	wireSequenceSeen       bool
 }
 
 type responsesOutputKind string
@@ -37,6 +37,9 @@ const (
 type responsesOutputKey struct {
 	item int
 	kind responsesOutputKind
+	// segment numbers the outputs an item's content of one kind streams into:
+	// content that resumes after its output closed starts the next one.
+	segment int
 }
 
 type responsesContentScope string
@@ -77,6 +80,7 @@ type responsesStreamEncoder struct {
 	outputIndexes          map[responsesOutputKey]int
 	outputIDs              map[responsesOutputKey]string
 	outputStarted          map[responsesOutputKey]bool
+	outputDone             map[responsesOutputKey]bool
 	toolArgumentsEmitted   map[int]int
 	itemOutputKeys         map[int][]responsesOutputKey
 	neutralItemIDs         map[int]string
@@ -91,23 +95,43 @@ type responsesStreamEncoder struct {
 	completedOutput        map[int]json.RawMessage
 	imageProgressCompleted map[responsesOutputKey]bool
 	responseStarted        bool
-	wireSequence           uint64
+	createdAt              int64
+	// outputSegments is the latest segment of an item's outputs of one kind,
+	// keyed by the first of them; contentSegments is the segment each content
+	// block last streamed into.
+	outputSegments  map[responsesOutputKey]int
+	contentSegments map[streamContentKey]int
+	// openOutputs are the started outputs that are not done, in output order;
+	// activeOutput is the one the stream is in.
+	openOutputs     []responsesOutputKey
+	activeOutput    responsesOutputKey
+	hasActiveOutput bool
+	// heldMessage is the last completed message, whose done event waits for
+	// the next output or the end of the stream to show whether the output
+	// limit ended it.
+	heldMessage  *responsesHeldItem
+	wireSequence uint64
+}
+
+type responsesHeldItem struct {
+	outputIndex int
+	item        responsesItemWire
 }
 
 func (OpenAIResponsesCodec) NewDecoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamDecoder {
 	return &responsesStreamDecoder{
-		streamState:                 streamState{context: context, policy: policy},
-		framer:                      newSSEFramer(policy.Limits.SSEFrameBytes),
-		nextAnnotationIndexes:       make(map[streamContentKey]int),
-		contentIndexes:              make(map[responsesWireContentKey]int),
-		nextContentIndex:            make(map[int]int),
-		contentLifecycle:            make(map[responsesWireContentKey]*responsesDecodedContentLifecycle),
-		nextWireContentIndex:        make(map[responsesWireContentScopeKey]int),
-		itemTypes:                   make(map[int]string),
-		toolArgumentsDone:           make(map[int]bool),
-		completedOutput:             make(map[int]json.RawMessage),
-		seenLifecycleEvents:         make(map[string]bool),
-		reportedProviderDecorations: make(map[string]bool),
+		streamState:            streamState{context: context, policy: policy},
+		framer:                 newSSEFramer(policy.Limits.SSEFrameBytes),
+		nextAnnotationIndexes:  make(map[streamContentKey]int),
+		contentIndexes:         make(map[responsesWireContentKey]int),
+		nextContentIndex:       make(map[int]int),
+		contentLifecycle:       make(map[responsesWireContentKey]*responsesDecodedContentLifecycle),
+		nextWireContentIndex:   make(map[responsesWireContentScopeKey]int),
+		itemTypes:              make(map[int]string),
+		toolArgumentsDone:      make(map[int]bool),
+		completedOutput:        make(map[int]json.RawMessage),
+		seenLifecycleEvents:    make(map[string]bool),
+		reportedProviderFields: make(map[string]bool),
 	}
 }
 
@@ -117,6 +141,9 @@ func (OpenAIResponsesCodec) NewEncoder(context llmprotocol.StreamContext, policy
 		outputIndexes:          make(map[responsesOutputKey]int),
 		outputIDs:              make(map[responsesOutputKey]string),
 		outputStarted:          make(map[responsesOutputKey]bool),
+		outputDone:             make(map[responsesOutputKey]bool),
+		outputSegments:         make(map[responsesOutputKey]int),
+		contentSegments:        make(map[streamContentKey]int),
 		toolArgumentsEmitted:   make(map[int]int),
 		itemOutputKeys:         make(map[int][]responsesOutputKey),
 		neutralItemIDs:         make(map[int]string),
@@ -290,17 +317,13 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 	if len(wire.Item) > 0 {
 		decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1,
 			prefixedUnknownFieldPaths("output[]", responsesItemUnknownFields(wire.Item, decoder.policy)))
+		decoder.appendProviderFieldsOnce(&diagnostics, responsesItemMetadataDiagnostics(wire.Item, decoder.policy))
 	}
 	if wire.Response != nil {
 		decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1,
 			responsesOutputUnknownFields(wire.Response.Output, decoder.policy))
-		for _, diagnostic := range responsesProviderDecorationDiagnostics(*wire.Response, decoder.policy, "stream.response.") {
-			if decoder.reportedProviderDecorations[diagnostic.Field] {
-				continue
-			}
-			decoder.reportedProviderDecorations[diagnostic.Field] = true
-			diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{diagnostic}, decoder.policy.Limits.Diagnostics)
-		}
+		decoder.appendProviderFieldsOnce(&diagnostics,
+			responsesProviderDecorationDiagnostics(*wire.Response, decoder.policy, "stream.response."))
 	}
 	if wire.Type == "" {
 		wire.Type = eventType
@@ -311,6 +334,35 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 	events, eventDiagnostics, err := decoder.decodeResponsesEvent(wire, frame)
 	diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, decoder.policy.Limits.Diagnostics)
 	return events, diagnostics, err
+}
+
+// appendProviderFieldsOnce reports each dropped provider field once per stream:
+// an item's added and done events, and every response snapshot, repeat it.
+func (decoder *responsesStreamDecoder) appendProviderFieldsOnce(
+	diagnostics *llmprotocol.Diagnostics,
+	candidates llmprotocol.Diagnostics,
+) {
+	for _, diagnostic := range candidates {
+		if decoder.reportedProviderFields[diagnostic.Field] {
+			continue
+		}
+		decoder.reportedProviderFields[diagnostic.Field] = true
+		*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{diagnostic}, decoder.policy.Limits.Diagnostics)
+	}
+}
+
+// responsesItemMetadataDiagnostics reports the item metadata a streamed item
+// loses, as the buffered decoder does. A malformed item reports nothing here;
+// the event's own validation rejects it.
+func responsesItemMetadataDiagnostics(body json.RawMessage, policy llmprotocol.Policy) llmprotocol.Diagnostics {
+	var item responsesItemWire
+	if json.Unmarshal(body, &item) != nil {
+		return nil
+	}
+	var diagnostics llmprotocol.Diagnostics
+	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIResponsesV1,
+		responsesItemMetadataFields(item), responsesItemMetadataReason)
+	return diagnostics
 }
 
 func (decoder *responsesStreamDecoder) validateResponsesEventResource(wire responsesEventWire, body []byte) error {
@@ -513,7 +565,9 @@ func isSupportedResponsesEvent(eventType string) bool {
 		"response.function_call_arguments.delta", "response.function_call_arguments.done",
 		"response.custom_tool_call_input.delta", "response.custom_tool_call_input.done",
 		"response.image_generation_call.in_progress", "response.image_generation_call.generating",
-		"response.image_generation_call.partial_image", "response.image_generation_call.completed":
+		"response.image_generation_call.partial_image", "response.image_generation_call.completed",
+		// Not in the published inventory: ChatGPT's Codex backend sends it.
+		"response.metadata":
 		return true
 	default:
 		return false

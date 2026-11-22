@@ -1,5 +1,4 @@
 import { expect } from '@playwright/test'
-import path from 'node:path'
 
 import { mockAuthenticatedAppShell, test } from './support/compiler'
 
@@ -7,8 +6,8 @@ test.use({ screenshot: 'only-on-failure' })
 
 // These tests use the production Go compiler through its HTTP handler.
 // Only server data is a fixture; malformed config and DSL are parsed normally.
-const invalidConfig = 'version: v0.3\nrouting:\n  unknown_field: true\n'
-const validConfig = `version: v0.3
+const invalidConfig = 'version: v0.5\nrecipes:\n  - name: default\n    unknown_field: true\n'
+const validConfig = `version: v0.5
 providers:
   models:
     - name: model-a
@@ -16,21 +15,18 @@ providers:
         - name: local
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: model-a
-      modality: text
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs:
+          - model: model-a
 `
 
 test.beforeEach(async ({ page }) => {
   await mockAuthenticatedAppShell(page)
-  // Serve the pinned editor dependency locally so editing works without a CDN.
-  await page.route('https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/**', async (route) => {
-    const asset = new URL(route.request().url()).pathname.split('/min/vs/')[1]
-    await route.fulfill({
-      path: path.join(process.cwd(), 'node_modules/monaco-editor/min/vs', asset),
-    })
-  })
   await page.route('**/api/router/config/deploy/preview', async (route) => {
     await route.fulfill({ json: { current: validConfig, preview: validConfig } })
   })
@@ -91,15 +87,16 @@ test('shows a failed router request and recovers through Load from Router', asyn
   await expect(page.getByText('model-a', { exact: true }).first()).toBeVisible()
 })
 
-test('shows Format parser errors with output closed and clears them after correction', async ({
+test('shows Format parser errors in the DSL view and clears them after correction', async ({
   page,
 }) => {
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: validConfig }))
   await page.goto('/builder')
   await expect(page.getByText('model-a', { exact: true }).first()).toBeVisible()
-  await page.getByRole('button', { name: 'DSL', exact: true }).click()
+  await page.getByRole('radio', { name: 'DSL', exact: true }).click()
   const editor = page.getByRole('textbox', { name: 'Editor content', exact: true })
-  await expect(editor).toBeVisible()
+  // The editor chunk is large, and a cold dev server takes a while to serve it.
+  await expect(editor).toBeVisible({ timeout: 30_000 })
   // Monaco uses the emulated browser's platform, while ControlOrMeta uses the host OS.
   const selectAll = await page.evaluate(() =>
     navigator.userAgent.includes('Macintosh') ? 'Meta+A' : 'Control+A',
@@ -111,7 +108,6 @@ test('shows Format parser errors with output closed and clears them after correc
     await expect(page.locator('.monaco-editor .view-lines').first()).toHaveText(source)
   }
   await replaceSource('hello')
-  await page.getByTitle('Hide Output Panel').click()
   await test.info().attach('real-format-error', {
     body: await page.evaluate(async () =>
       (
@@ -130,11 +126,15 @@ test('shows Format parser errors with output closed and clears them after correc
   await expect(page.getByText('0 errors', { exact: true })).toHaveCount(0)
   await page.screenshot({ path: test.info().outputPath('format-error.png') })
 
-  await replaceSource('MODEL "repaired" {}')
+  // Format round-trips through the compiler, which keeps a model only when it declares something.
+  await replaceSource('MODEL "repaired" { description: "Fixed" }')
   await page.getByRole('button', { name: 'Format', exact: true }).click()
   await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0)
   await expect(page.getByText('0 errors', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Show Output Panel', exact: true })).toBeVisible()
-  await expect(page.getByTitle('Hide Output Panel')).toHaveCount(0)
+  // Formatting keeps the author in the DSL view.
+  await expect(page.getByRole('radio', { name: 'DSL', exact: true })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  )
   await expect(page.locator('.monaco-editor').first()).toContainText('repaired')
 })

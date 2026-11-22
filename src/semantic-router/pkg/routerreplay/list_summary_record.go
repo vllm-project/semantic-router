@@ -1,6 +1,10 @@
 package routerreplay
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+)
 
 // ListSummaryRecord returns a copy of rec with large captured fields cleared so
 // replay list responses are restricted in size.
@@ -13,6 +17,10 @@ func ListSummaryRecord(rec RoutingRecord) RoutingRecord {
 	out.ToolDefinitions = ""
 	out.ProjectionTrace = nil
 	out.ToolTrace = toolTraceNamesOnly(out.ToolTrace)
+	if out.Review != nil && out.Review.Action != nil {
+		out.Review = store.CloneReview(out.Review)
+		out.Review.Action.Arguments, out.Review.Action.ArgumentsTruncated = "", false
+	}
 	return out
 }
 

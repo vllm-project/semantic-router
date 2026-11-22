@@ -27,8 +27,6 @@ func TestSelectionCandidateEffortReachesProviderRequest(t *testing.T) {
 		toolLoop  bool
 	}{
 		{name: "multi_factor", algorithm: config.DecisionAlgorithmMultiFactor},
-		{name: "automix", algorithm: config.DecisionAlgorithmAutoMix},
-		{name: "hybrid", algorithm: config.DecisionAlgorithmHybrid},
 		{name: "protection_session", algorithm: config.DecisionAlgorithmMultiFactor, scope: config.RouterLearningScopeSession},
 		{name: "protection_conversation", algorithm: config.DecisionAlgorithmMultiFactor, scope: config.RouterLearningScopeConversation},
 		{name: "protection_tool_loop", algorithm: config.DecisionAlgorithmMultiFactor, scope: config.RouterLearningScopeConversation, toolLoop: true},
@@ -58,7 +56,7 @@ func TestSelectionCandidateEffortReachesProviderRequest(t *testing.T) {
 					})
 				}
 
-				selCtx := router.buildSelectionContext(decision.ModelRefs, decision.Name, "solve this", decision.Algorithm, "", nil, ctx)
+				selCtx := router.buildSelectionContext(decision.ModelRefs, decision.Name, "solve this", "", nil, ctx)
 				selector := router.selectorForDecisionMethod(router.getSelectionMethod(decision.Algorithm), decision.Algorithm, ctx)
 				require.NotNil(t, selector)
 				base, err := selector.Select(ctx.TraceContext, selCtx)
@@ -135,7 +133,7 @@ func TestSelectionProtectionRestoresExactSessionCandidate(t *testing.T) {
 			ctx.SessionID = "session-a"
 			ctx.VSRSelectedDecision = decision
 			ctx.VSRConversationFacts = classification.ConversationFacts{LastMessageToolResult: true}
-			selCtx := router.buildSelectionContext(decision.ModelRefs, decision.Name, "continue", decision.Algorithm, "", nil, ctx)
+			selCtx := router.buildSelectionContext(decision.ModelRefs, decision.Name, "continue", "", nil, ctx)
 			selected, _, err := router.selectModelFromCandidates(selCtx, decision.Algorithm, ctx)
 			require.NoError(t, err)
 			require.NotNil(t, selected)
@@ -190,23 +188,13 @@ func candidateEffortTestRouter(t *testing.T, algorithm, winningEffort string) (*
 	}
 	registry := selection.NewRegistry()
 	t.Cleanup(func() { require.NoError(t, registry.Close()) })
-	autoMixConfig := selection.DefaultAutoMixConfig()
-	autoMixConfig.CostAwareRouting = false
-	autoMixConfig.UsePOMDPRouter = false
-	autoMix := selection.NewAutoMixSelector(autoMixConfig)
-	autoMix.InitializeFromConfig(router.Config.ModelConfig)
-	registry.Register(selection.MethodAutoMix, autoMix)
 	router.ModelSelector = registry
 
-	switch algorithm {
-	case config.DecisionAlgorithmMultiFactor:
+	if algorithm == config.DecisionAlgorithmMultiFactor {
 		decision.Algorithm.MultiFactor = &config.MultiFactorSelectionConfig{
 			Weights: &config.MultiFactorWeightsConfig{Quality: 1},
 			Quality: &config.QualityEvidenceConfig{Index: index, OnMissing: config.QualityEvidenceOnMissingExclude},
 		}
-	case config.DecisionAlgorithmHybrid:
-		// Real AutoMix component, isolated from unrelated experience/embedding signals.
-		decision.Algorithm.Hybrid = &config.HybridSelectionConfig{AutoMixWeight: 1, NormalizeScores: true}
 	}
 	return router, decision
 }

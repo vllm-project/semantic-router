@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -31,6 +32,32 @@ import (
 // safeIdentifierPattern matches UUIDs, prefixed IDs (file_xxx, vs_xxx), and simple alphanumeric strings.
 // Used to prevent Milvus expression injection in filter values.
 var safeIdentifierPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-]+$`)
+
+// filterFileIDs are the files a search filter keeps chunks of: its file_id,
+// one id or a list of them. None keeps the chunks of every file.
+func filterFileIDs(filter map[string]interface{}) []string {
+	switch ids := filter["file_id"].(type) {
+	case string:
+		if ids != "" {
+			return []string{ids}
+		}
+	case []string:
+		return ids
+	}
+	return nil
+}
+
+// safeFilterFileIDs is filterFileIDs for a backend that writes them into a
+// query expression, which each must match safeIdentifierPattern for.
+func safeFilterFileIDs(filter map[string]interface{}) ([]string, error) {
+	ids := filterFileIDs(filter)
+	for _, id := range ids {
+		if !safeIdentifierPattern.MatchString(id) {
+			return nil, fmt.Errorf("invalid file_id filter: contains disallowed characters")
+		}
+	}
+	return ids, nil
+}
 
 // MilvusBackendConfig holds configuration for the Milvus backend.
 type MilvusBackendConfig struct {
@@ -267,13 +294,12 @@ func (m *MilvusBackend) Search(
 
 	// Build filter expression with injection prevention.
 	expr := ""
-	if filter != nil {
-		if fid, ok := filter["file_id"].(string); ok && fid != "" {
-			if !safeIdentifierPattern.MatchString(fid) {
-				return nil, fmt.Errorf("invalid file_id filter: contains disallowed characters")
-			}
-			expr = fmt.Sprintf("file_id == \"%s\"", fid)
-		}
+	fileIDs, err := safeFilterFileIDs(filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(fileIDs) > 0 {
+		expr = fmt.Sprintf("file_id in [\"%s\"]", strings.Join(fileIDs, `", "`))
 	}
 
 	sp, err := entity.NewIndexHNSWSearchParam(m.searchEf)

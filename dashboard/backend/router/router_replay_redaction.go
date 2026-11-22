@@ -31,7 +31,10 @@ func attachRouterReplayResponseRedaction(proxy *httputil.ReverseProxy) {
 			}
 		}
 
-		return redactRouterReplayResponse(resp)
+		if err := redactRouterReplayResponse(resp); err != nil {
+			return err
+		}
+		return compressRouterReplayResponse(resp)
 	}
 }
 

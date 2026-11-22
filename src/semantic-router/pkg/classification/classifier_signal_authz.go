@@ -34,13 +34,14 @@ type SignalEvaluationInput struct {
 
 // EvaluateAllSignalsWithHeaders evaluates the selected recipe's signals,
 // including authz role bindings. Authz errors are returned to the caller so a
-// missing identity cannot silently bypass policy.
+// missing identity cannot silently bypass policy. The roles are known before
+// the projections run, so a projection reads them like any other signal.
 func (c *Classifier) EvaluateAllSignalsWithHeaders(input SignalEvaluationInput) (*SignalResults, error) {
-	results := c.evaluateAllSignalsWithContext(input, nil, false)
+	results := c.evaluateBaseSignals(input, nil, false)
 	if err := c.appendAuthzFromHeaders(results, input.Headers, input.ForceEvaluateAll); err != nil {
 		return nil, err
 	}
-	return results, nil
+	return c.applyProjections(c.applySignalGroups(results)), nil
 }
 
 func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[string]string, forceEvaluateAll bool) error {

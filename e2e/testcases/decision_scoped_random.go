@@ -41,7 +41,7 @@ func testDecisionScopedRandom(
 		return err
 	}
 	decision := header.Get("x-vsr-selected-decision")
-	method := header.Get("x-vsr-selected-algorithm")
+	method := traceValue(header, "algorithm")
 	model := header.Get("x-vsr-selected-model")
 
 	if decision != wantDecision || method != wantMethod || !candidates[model] {

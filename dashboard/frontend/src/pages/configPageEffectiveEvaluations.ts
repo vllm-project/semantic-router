@@ -139,3 +139,25 @@ export function buildEffectiveEvaluationGroups(
     }
   })
 }
+
+export const evaluationSourceLabel = (record: EffectiveEvaluationRecord): string =>
+  record.origin === 'built_in' ? 'Built-in catalog' : 'Configured record'
+
+export function filterEvaluationDetails(records: EffectiveEvaluationRecord[], query: string) {
+  const search = query.trim().toLowerCase()
+  if (!search) return records
+  return records.filter((record) =>
+    [
+      record.evaluation.benchmark,
+      record.benchmark?.display_name,
+      record.evaluation.benchmark_profile,
+      record.evaluation.reasoning_effort,
+      record.evaluation.status,
+      record.evaluation.evidence.source,
+      record.evaluation.evidence.provenance,
+      record.evaluation.evidence.verification,
+      evaluationSourceLabel(record),
+      ...Object.keys(record.evaluation.metrics),
+    ].some((value) => value?.toLowerCase().includes(search)),
+  )
+}

@@ -6,11 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
@@ -48,7 +53,7 @@ func TestAnthropicAdaptiveRequestDispatchesToChatAndResponses(t *testing.T) {
 			if dispatch.targetFormat != target {
 				t.Fatalf("target = %q, want %q", dispatch.targetFormat, target)
 			}
-			if err = router.candidateCapabilityMismatch(config.ModelRef{Model: "chat"}, &request, nil, nil, nil); err != nil {
+			if err = router.candidateCapabilityMismatch(config.ModelRef{Model: "chat"}, &request, nil, nil, nil, true); err != nil {
 				t.Fatalf("selection disagrees with dispatch: %v", err)
 			}
 			body, err := router.encodeDispatchRequest(ctx)
@@ -236,7 +241,7 @@ func TestAnthropicMidConversationSystemMessagesBecomeUserTextOnlyWhenOptedIn(t *
 	}
 }
 
-func TestAnthropicCrossFormatProjectionRejectsMeaningfulEditsAndDisplay(t *testing.T) {
+func TestAnthropicCrossFormatProjectionRejectsMeaningfulEdits(t *testing.T) {
 	router := routingTestRouter("chat")
 	engine := protocolcodec.NewBuiltinEngine()
 	for _, test := range []struct {
@@ -244,8 +249,6 @@ func TestAnthropicCrossFormatProjectionRejectsMeaningfulEditsAndDisplay(t *testi
 	}{
 		{"clear_last", `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"last"}]}}`, "lossy_translation"},
 		{"unknown_edit_option", `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"all","new_option":true}]}}`, "lossy_translation"},
-		{"summarized", `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"summarized"}}`, "unsupported_reasoning_display"},
-		{"updates", `{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"updates"}}`, "unsupported_reasoning_display"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			request, _, _, err := engine.DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(test.body))
@@ -464,5 +467,296 @@ func TestAnthropicOmittedDisplayFiltersStreamingChatReasoning(t *testing.T) {
 	}
 	if bytes.Contains(public, []byte("private thinking")) || bytes.Contains(public, []byte("thinking_delta")) || !bytes.Contains(public, []byte("public answer")) {
 		t.Fatalf("stream leaked reasoning or lost answer: %s", public)
+	}
+}
+
+// TestSystemMessageProjectionKeepsTheCountOutOfTheMetricLabel sends requests
+// with one, two and three mid-conversation system messages. x-vsr-warnings
+// names each request's count, while llm_translation_lossy_total keeps one
+// series for the projection, so a conversation's length never adds a series.
+func TestSystemMessageProjectionKeepsTheCountOutOfTheMetricLabel(t *testing.T) {
+	router := routingTestRouter("chat")
+	router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldSystemMessageRole}
+	const label = "N system messages sent as user text in place"
+	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "approximated", label)
+	before := testutil.ToFloat64(counter)
+	for count := 1; count <= 3; count++ {
+		messages := []string{`{"role":"user","content":"Fix the build"}`}
+		for range count {
+			messages = append(messages, `{"role":"system","content":"Note: a file changed on disk."}`, `{"role":"user","content":"go on"}`)
+		}
+		request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1,
+			[]byte(`{"model":"chat","max_tokens":64,"messages":[`+strings.Join(messages, ",")+`]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+		ctx.ProtocolEnvelope = envelope
+		if _, err = router.prepareProviderDispatch(&request, "chat", "", false, ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = router.encodeDispatchRequest(ctx); err != nil {
+			t.Fatal(err)
+		}
+		want := fmt.Sprintf(`protocol;action=approximated;reason="%d system messages sent as user text in place";field="messages[].role"`, count)
+		if got := responseWarnings(ctx); got != want {
+			t.Fatalf("x-vsr-warnings = %s, want %s", got, want)
+		}
+	}
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if family.GetName() != "llm_translation_lossy_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, pair := range metric.GetLabel() {
+				if pair.GetName() == "reason" && strings.Contains(pair.GetValue(), "system messages") && pair.GetValue() != label {
+					t.Errorf("llm_translation_lossy_total has a per-request series reason=%q", pair.GetValue())
+				}
+			}
+		}
+	}
+	if got := testutil.ToFloat64(counter) - before; got != 3 {
+		t.Fatalf("llm_translation_lossy_total{reason=%q} rose by %v, want 3", label, got)
+	}
+}
+
+func TestAnthropicOmittedDisplaySurvivesReasoningOnForAnotherFormat(t *testing.T) {
+	for target, format := range map[llmprotocol.WireFormat]string{
+		llmprotocol.OpenAIResponsesV1: config.APIFormatResponses,
+		llmprotocol.OpenAIChatV1:      config.APIFormatChatCompletions,
+	} {
+		router := routingTestRouter("chat")
+		model := router.Config.ModelConfig["chat"]
+		model.APIFormat = format
+		model.ReasoningFamily = "reasoning"
+		router.Config.ModelConfig["chat"] = model
+		router.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
+			"reasoning": {
+				Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "reasoning_effort",
+				Levels: []string{"low", "medium", "high"}, Default: "high",
+				Modes: []string{config.ReasoningModeEnabled, config.ReasoningModeDisabled},
+			},
+		}
+		request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(adaptiveClaudeCodeRequest))
+		if err != nil {
+			t.Fatal(err)
+		}
+		decision := &config.Decision{Name: "route", ModelRefs: []config.ModelRef{{
+			Model:                 "chat",
+			ModelReasoningControl: config.ModelReasoningControl{UseReasoning: boolPtr(true), ReasoningEffort: "high"},
+		}}}
+		router.applySemanticReasoningMode(&request, "chat", target, true, decision)
+		ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+		// With reasoning on, the client's omitted display still keeps the
+		// backend's reasoning out of its response.
+		if !omitCrossFormatReasoning(ctx, target) {
+			t.Fatalf("%s: display = %q, want the client's omitted display kept", target, request.ReasoningDisplay)
+		}
+	}
+}
+
+// TestAnthropicThinkingDisplayOnChatAndResponsesBackends sends the summarized
+// and updates displays Claude Code asks for to backends that cannot shape
+// thinking. The backend's reasoning comes back as it does without a display,
+// reported as approximated only when the backend reasons.
+func TestAnthropicThinkingDisplayOnChatAndResponsesBackends(t *testing.T) {
+	const approximated = `protocol;action=approximated;reason="the backend's reasoning is returned as it is, not summarized";field="thinking.display"`
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
+		for _, display := range []string{"summarized", "updates"} {
+			for _, test := range []struct {
+				name              string
+				family, reasoning bool
+			}{{"reasoning_on", true, true}, {"reasoning_off", true, false}, {"no_family", false, true}} {
+				t.Run(fmt.Sprintf("%s/%s/%s", target, display, test.name), func(t *testing.T) {
+					router := routingTestRouter("chat")
+					model := router.Config.ModelConfig["chat"]
+					if target == llmprotocol.OpenAIResponsesV1 {
+						model.APIFormat = config.APIFormatResponses
+					}
+					if test.family {
+						model.ReasoningFamily = "qwen3"
+						router.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{"qwen3": {
+							Type: config.ReasoningFamilyTypeChatTemplateKwargs, Parameter: "enable_thinking",
+							Modes: []string{config.ReasoningModeEnabled, config.ReasoningModeDisabled},
+						}}
+					}
+					router.Config.ModelConfig["chat"] = model
+					profile := router.Config.ProviderProfiles["provider"]
+					profile.Type = "vllm"
+					router.Config.ProviderProfiles["provider"] = profile
+					request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(
+						`{"model":"chat","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"thinking":{"type":"adaptive","display":"`+display+`"}}`))
+					if err != nil {
+						t.Fatal(err)
+					}
+					ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+					ctx.ProtocolEnvelope = envelope
+					ctx.VSRSelectedDecision = &config.Decision{Name: "route", ModelRefs: []config.ModelRef{{
+						Model: "chat", ModelReasoningControl: config.ModelReasoningControl{UseReasoning: boolPtr(test.reasoning)},
+					}}}
+					dispatch, err := router.prepareProviderDispatch(&request, "chat", "route", test.reasoning, ctx)
+					if err != nil {
+						t.Fatalf("dispatch rejected the display: %v", err)
+					}
+					encoded, err := router.encodeDispatchRequest(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					adapted, err := router.adaptProviderRequest(encoded, dispatch, ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if bytes.Contains(adapted, []byte("display")) {
+						t.Fatalf("the display reached the backend: %s", adapted)
+					}
+					want := ""
+					if test.family && test.reasoning {
+						want = approximated
+					}
+					if got := responseWarnings(ctx); got != want {
+						t.Fatalf("x-vsr-warnings = %q, want %q", got, want)
+					}
+				})
+			}
+		}
+	}
+}
+
+// TestAnthropicOmittedDisplayKeepsAnAnswerThatIsAllReasoning sends an answer
+// whose output limit went to reasoning alone. With the reasoning omitted the
+// client gets an empty message with the backend's stop reason, not a 502.
+func TestAnthropicOmittedDisplayKeepsAnAnswerThatIsAllReasoning(t *testing.T) {
+	for target, body := range map[llmprotocol.WireFormat]string{
+		llmprotocol.OpenAIChatV1: `{"id":"response_1","model":"chat","choices":[{"index":0,"message":{"role":"assistant","reasoning":"private thinking","content":null},"finish_reason":"length"}],"usage":{"prompt_tokens":2,"completion_tokens":40,"total_tokens":42}}`,
+		llmprotocol.OpenAIResponsesV1: `{"id":"resp_1","model":"chat","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},
+			"output":[{"id":"rs_1","type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"private thinking"}]}],
+			"usage":{"input_tokens":2,"output_tokens":40,"total_tokens":42}}`,
+	} {
+		t.Run(string(target), func(t *testing.T) {
+			router := &OpenAIRouter{}
+			ctx := &RequestContext{
+				SourceFormat: llmprotocol.AnthropicMessagesV1, TargetFormat: target,
+				SemanticRequest: &llmprotocol.Request{ReasoningMode: llmprotocol.ReasoningModeAdaptive, ReasoningDisplay: "omitted"},
+			}
+			response, err := router.decodeClientResponse([]byte(body), ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			public, err := router.encodeClientResponse(*response, ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var message struct {
+				Content    []json.RawMessage `json:"content"`
+				StopReason string            `json:"stop_reason"`
+			}
+			if err := json.Unmarshal(public, &message); err != nil {
+				t.Fatal(err)
+			}
+			if message.Content == nil || len(message.Content) != 0 || message.StopReason != "max_tokens" {
+				t.Fatalf("want an empty message stopped at max_tokens, got %s", public)
+			}
+		})
+	}
+}
+
+// TestAnthropicOmittedDisplayStreamsAnAnswerThatIsAllReasoning streams the
+// same answer from Chat and Responses backends. Like the buffered reply, the
+// stream carries no content block, not even an empty one.
+func TestAnthropicOmittedDisplayStreamsAnAnswerThatIsAllReasoning(t *testing.T) {
+	chunk := `{"id":"response_1","object":"chat.completion.chunk","model":"chat","choices":[{"index":0,"delta":%s,"finish_reason":%s}]}`
+	item := `{"id":"rs_1","type":"reasoning","summary":[],"content":[]}`
+	done := `{"id":"rs_1","type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"private thinking"}]}`
+	resource := `{"id":"resp_1","object":"response","model":"chat","status":"%s","incomplete_details":%s,"output":%s,"usage":%s}`
+	usage := `{"input_tokens":2,"output_tokens":40,"total_tokens":42}`
+	for backend, events := range map[llmprotocol.WireFormat][]string{
+		llmprotocol.OpenAIChatV1: {
+			fmt.Sprintf(chunk, `{"role":"assistant"}`, "null"),
+			fmt.Sprintf(chunk, `{"reasoning":"private thinking"}`, "null"),
+			fmt.Sprintf(chunk, `{}`, `"length"`),
+			"[DONE]",
+		},
+		llmprotocol.OpenAIResponsesV1: {
+			`{"type":"response.created","sequence_number":0,"response":` + fmt.Sprintf(resource, "in_progress", "null", "[]", "null") + `}`,
+			`{"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":` + item + `}`,
+			`{"type":"response.content_part.added","sequence_number":2,"item_id":"rs_1","output_index":0,"content_index":0,"part":{"type":"reasoning_text","text":""}}`,
+			`{"type":"response.reasoning_text.delta","sequence_number":3,"item_id":"rs_1","output_index":0,"content_index":0,"delta":"private thinking"}`,
+			`{"type":"response.reasoning_text.done","sequence_number":4,"item_id":"rs_1","output_index":0,"content_index":0,"text":"private thinking"}`,
+			`{"type":"response.content_part.done","sequence_number":5,"item_id":"rs_1","output_index":0,"content_index":0,"part":{"type":"reasoning_text","text":"private thinking"}}`,
+			`{"type":"response.output_item.done","sequence_number":6,"output_index":0,"item":` + done + `}`,
+			`{"type":"response.incomplete","sequence_number":7,"response":` + fmt.Sprintf(resource, "incomplete", `{"reason":"max_output_tokens"}`, "["+done+"]", usage) + `}`,
+		},
+	} {
+		t.Run(string(backend), func(t *testing.T) {
+			ctx := &RequestContext{
+				SourceFormat: llmprotocol.AnthropicMessagesV1, TargetFormat: backend,
+				SemanticRequest: &llmprotocol.Request{ReasoningMode: llmprotocol.ReasoningModeAdaptive, ReasoningDisplay: "omitted"},
+			}
+			stream, err := protocolcodec.NewBuiltinEngine().NewStreamWithMutation(backend, llmprotocol.AnthropicMessagesV1,
+				llmprotocol.StreamContext{Context: t.Context()}, clientStreamMutation(ctx, backend))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var public []byte
+			for _, event := range events {
+				frames, _, _, pushErr := stream.Push([]byte("data: " + event + "\n\n"))
+				if pushErr != nil {
+					t.Fatal(pushErr)
+				}
+				public = append(public, bytes.Join(frames, nil)...)
+			}
+			frames, _, _, err := stream.Finalize(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			public = append(public, bytes.Join(frames, nil)...)
+			if bytes.Contains(public, []byte("content_block_start")) || bytes.Contains(public, []byte(`"error"`)) ||
+				!bytes.Contains(public, []byte(`"stop_reason":"max_tokens"`)) || !bytes.Contains(public, []byte("message_stop")) {
+				t.Fatalf("want a stream with no content stopped at max_tokens, got %s", public)
+			}
+		})
+	}
+}
+
+// Without a display the same Chat stream keeps its thinking block and text.
+func TestAnthropicChatReasoningStreamKeepsItsThinkingBlock(t *testing.T) {
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.AnthropicMessagesV1, TargetFormat: llmprotocol.OpenAIChatV1,
+		SemanticRequest: &llmprotocol.Request{ReasoningMode: llmprotocol.ReasoningModeAdaptive},
+	}
+	stream, err := protocolcodec.NewBuiltinEngine().NewStreamWithMutation(llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1,
+		llmprotocol.StreamContext{Context: t.Context()}, clientStreamMutation(ctx, llmprotocol.OpenAIChatV1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk := `data: {"id":"response_1","object":"chat.completion.chunk","model":"chat","choices":[{"index":0,"delta":%s,"finish_reason":%s}]}` + "\n\n"
+	var public []byte
+	for _, frame := range []string{
+		fmt.Sprintf(chunk, `{"role":"assistant"}`, "null"), fmt.Sprintf(chunk, `{"reasoning":"private thinking"}`, "null"),
+		fmt.Sprintf(chunk, `{"content":"ok"}`, "null"), fmt.Sprintf(chunk, `{}`, `"stop"`), "data: [DONE]\n\n",
+	} {
+		frames, _, _, pushErr := stream.Push([]byte(frame))
+		if pushErr != nil {
+			t.Fatal(pushErr)
+		}
+		public = append(public, bytes.Join(frames, nil)...)
+	}
+	frames, _, _, err := stream.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	public = append(public, bytes.Join(frames, nil)...)
+	for _, want := range []string{
+		`"content_block":{"signature":"","thinking":"","type":"thinking"}`, `"thinking":"private thinking"`,
+		`"delta":{"type":"signature_delta","signature":""}`,
+		`"content_block":{"text":"","type":"text"}`, `"text":"ok"`,
+	} {
+		if !bytes.Contains(public, []byte(want)) {
+			t.Fatalf("stream lost %s: %s", want, public)
+		}
 	}
 }
