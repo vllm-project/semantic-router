@@ -12,10 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 RUNTIME = ROOT / "src/model-runtime/vllm_srun"
+EDITORIAL = ROOT / "tools/docs/supported_models.yaml"
 OUTPUT = ROOT / "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json"
-BACKEND_OUTPUT = (
-    ROOT / "src/semantic-router/pkg/modelservice/decision_catalog.generated.json"
-)
+BACKEND_OUTPUT = ROOT / "src/semantic-router/pkg/config/decision_catalog.generated.json"
 RELEASE_OUTPUT = RUNTIME / "registry/releases.generated.json"
 
 
@@ -34,8 +33,9 @@ def release_literal(node, bindings):
     return ast.literal_eval(node)
 
 
-def release_projection():
-    """Project literal identities and factory arguments without importing runtime code."""
+def registry_releases():
+    """Every pinned release's literal facts, from literal identities and factory
+    arguments, without importing runtime code."""
     organization = assignment(RUNTIME / "registry/tables/common.py", "ORG")
     releases = {}
     for path in sorted((RUNTIME / "registry/tables").glob("*.py")):
@@ -53,9 +53,19 @@ def release_projection():
             constructor = model
             if model.func.id != "BuiltinModel":
                 factory = factories[model.func.id]
+                parameters = factory.args.args
+                defaults = factory.args.defaults
                 bindings.update(
                     (arg.arg, value)
-                    for arg, value in zip(factory.args.args, model.args, strict=False)
+                    for arg, value in zip(
+                        parameters[len(parameters) - len(defaults) :],
+                        defaults,
+                        strict=True,
+                    )
+                )
+                bindings.update(
+                    (arg.arg, value)
+                    for arg, value in zip(parameters, model.args, strict=False)
                 )
                 bindings.update((item.arg, item.value) for item in model.keywords)
                 constructor = next(
@@ -63,11 +73,24 @@ def release_projection():
                 )
             fields = {item.arg: item.value for item in constructor.keywords}
             repo = release_literal(fields["repo_id"], bindings)
-            revision = release_literal(fields["revision"], bindings)
             if repo in releases:
                 raise ValueError(f"duplicate release: {repo}")
-            releases[repo] = revision
+            releases[repo] = {
+                field: release_literal(fields[source], bindings)
+                for field, source in (
+                    ("revision", "revision"),
+                    ("family", "family"),
+                    ("backbone", "backbone"),
+                    ("minMemoryGiB", "min_device_memory_gib"),
+                    ("parameters", "loaded_parameters"),
+                )
+            }
     return dict(sorted(releases.items()))
+
+
+def release_projection():
+    """The pinned revision of every release."""
+    return {repo: facts["revision"] for repo, facts in registry_releases().items()}
 
 
 def assignment(path, name):
@@ -83,6 +106,38 @@ def assignment(path, name):
             )
         )
     )
+
+
+def descriptor_field(family, field):
+    """The ``field`` node of a family's ``descriptor()``, or None."""
+    family_tree = ast.parse((RUNTIME / f"families/{family}/family.py").read_text())
+    descriptor = next(
+        node
+        for node in ast.walk(family_tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "descriptor"
+    )
+    return next(
+        (
+            value
+            for node in ast.walk(descriptor)
+            if isinstance(node, ast.Dict)
+            for key, value in zip(node.keys, node.values, strict=True)
+            if isinstance(key, ast.Constant) and key.value == field
+        ),
+        None,
+    )
+
+
+def descriptor_question_types(family):
+    """The ``question_types`` node of a family's ``descriptor()``."""
+    return descriptor_field(family, "question_types")
+
+
+def descriptor_modalities(family):
+    """The input modalities a family's decisions requests may carry: its
+    descriptor's ``modalities``, else text only."""
+    modalities = descriptor_field(family, "modalities")
+    return ["text"] if modalities is None else list(ast.literal_eval(modalities))
 
 
 def projection():
@@ -105,19 +160,7 @@ def projection():
         ("decision2", None),
         ("decision3", None),
     ):
-        family_tree = ast.parse((RUNTIME / f"families/{family}/family.py").read_text())
-        descriptor = next(
-            node
-            for node in ast.walk(family_tree)
-            if isinstance(node, ast.FunctionDef) and node.name == "descriptor"
-        )
-        capabilities = next(
-            value
-            for node in ast.walk(descriptor)
-            if isinstance(node, ast.Dict)
-            for key, value in zip(node.keys, node.values, strict=True)
-            if isinstance(key, ast.Constant) and key.value == "question_types"
-        )
+        capabilities = descriptor_question_types(family)
         if expected:
             if not (
                 isinstance(capabilities, ast.Call)
@@ -153,13 +196,29 @@ def projection():
     return {"questionTypes": kinds, "models": models}
 
 
+def vela_entries(table):
+    """The ``_vela(...)`` release entries of a Vela table's ``MODELS``."""
+    entries = assignment(RUNTIME / f"registry/tables/{table}.py", "MODELS").elts
+    for entry in entries:
+        if (
+            not isinstance(entry, ast.Call)
+            or not isinstance(entry.func, ast.Name)
+            or entry.func.id != "_vela"
+        ):
+            raise ValueError("Vela release entries require an updated task projection")
+    return entries
+
+
 def backend_projection(data):
-    """The shared semantic task resolver consumes the same native facts."""
+    """The shared semantic task resolver consumes the same native facts, and
+    the Router's load checks the input modalities each model reads and the
+    span heads a model with span answers has."""
     models = [
         {
             "id": item["id"],
             "family": item["family"],
             "question_types": data["questionTypes"],
+            "modalities": descriptor_modalities(item["family"]),
         }
         for item in data["models"]
     ]
@@ -187,42 +246,150 @@ def backend_projection(data):
     organization = ast.literal_eval(
         assignment(RUNTIME / "registry/tables/common.py", "ORG")
     )
-    entries = assignment(RUNTIME / "registry/tables/vela2.py", "MODELS")
-    for entry in entries.elts:
-        if (
-            not isinstance(entry, ast.Call)
-            or not isinstance(entry.func, ast.Name)
-            or entry.func.id != "_vela"
-        ):
-            raise ValueError("Vela release entries require an updated task projection")
+    # A Vela 2.0 release has the broad span head when its package ships the
+    # head's file, and the router head always.
+    broad_file = ast.literal_eval(
+        assignment(RUNTIME / "families/vela2/package.py", "BROAD_HEAD_FILE")
+    )
+    for entry in vela_entries("vela2"):
         size = ast.literal_eval(entry.args[0])
+        files = ast.literal_eval(entry.args[7])
         models.append(
             {
                 "id": f"{organization}/Vela-2.0-{size}",
                 "family": "vela2",
                 "question_types": kinds,
+                "modalities": descriptor_modalities("vela2"),
+                "span_heads": (
+                    ["router", "broad"] if broad_file in files else ["router"]
+                ),
             }
         )
+    vela3_heads = list(
+        ast.literal_eval(assignment(RUNTIME / "families/vela3_shared.py", "SPAN_HEADS"))
+    )
     vela3_kinds = list(
         ast.literal_eval(
             assignment(RUNTIME / "families/vela3/family.py", "QUESTION_TYPES")
         )
     )
-    for entry in assignment(RUNTIME / "registry/tables/vela3.py", "MODELS").elts:
-        if (
-            not isinstance(entry, ast.Call)
-            or not isinstance(entry.func, ast.Name)
-            or entry.func.id != "_vela"
-        ):
-            raise ValueError("Vela release entries require an updated task projection")
+    for entry in vela_entries("vela3"):
+        # The vela3v image package answers none of the shared System One
+        # question kinds - its image serving path is not implemented - so the
+        # projection lists the text-encoder entries only; it gains its own
+        # kinds once image serving declares them.
+        if ast.literal_eval(entry.args[4]) != "ultrabert":
+            continue
         models.append(
             {
                 "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
                 "family": "vela3",
                 "question_types": vela3_kinds,
+                "modalities": descriptor_modalities("vela3"),
+                "span_heads": vela3_heads,
+            }
+        )
+    # The Vela 3.0 d3 sizes answer their base's System One kinds and span
+    # questions, and read what their d3 base reads.
+    d3_kinds = list(ast.literal_eval(descriptor_question_types("vela3_d3")))
+    for entry in vela_entries("vela3_d3"):
+        models.append(
+            {
+                "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
+                "family": "vela3_d3",
+                "question_types": d3_kinds,
+                "modalities": descriptor_modalities("decision3"),
+                "span_heads": vela3_heads,
+            }
+        )
+    # The Vela 3.1 picos answer the vela3 kinds on one network, text only.
+    pico_kinds = list(
+        ast.literal_eval(
+            assignment(RUNTIME / "families/vela3_pico/family.py", "QUESTION_TYPES")
+        )
+    )
+    for entry in vela_entries("vela3_pico"):
+        models.append(
+            {
+                "id": f"{organization}/{ast.literal_eval(entry.args[0])}",
+                "family": "vela3_pico",
+                "question_types": pico_kinds,
+                "modalities": descriptor_modalities("vela3_pico"),
+                "span_heads": vela3_heads,
             }
         )
     return {"models": models}
+
+
+# The Supported models YAML indents a family or model by two spaces and its
+# fields by four.
+EDITORIAL_ENTRY_INDENT = 2
+EDITORIAL_FIELD_INDENT = 4
+
+
+def editorial():
+    """The family labels and model summaries of the Supported models pages
+    (tools/docs/supported_models.yaml). Read without a YAML library: its
+    two-level block mappings hold plain scalars and folded (>-) summaries."""
+    sections = {"families": {}, "models": {}}
+    section = entry = folded = None
+    for line in EDITORIAL.read_text().splitlines():
+        text = line.strip()
+        if not text or text.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 0:
+            section = sections.get(text.removesuffix(":"))
+            entry = folded = None
+        elif section is None:
+            continue
+        elif indent == EDITORIAL_ENTRY_INDENT:
+            entry = section.setdefault(text.removesuffix(":"), {})
+            folded = None
+        elif indent == EDITORIAL_FIELD_INDENT and entry is not None:
+            key, _, value = text.partition(":")
+            value = value.strip()
+            folded = key if value in {">", ">-"} else None
+            entry[key] = "" if folded else value
+        elif folded and indent > EDITORIAL_FIELD_INDENT:
+            entry[folded] = f"{entry[folded]} {text}".strip()
+    return sections["families"], sections["models"]
+
+
+def dashboard_projection(data, backend):
+    """Every release of a family the Router's decision catalog serves: what the
+    catalog says it answers and reads (nothing for a release it leaves out,
+    such as vela3-fast-vision), the registry's facts and the editorial text."""
+    families, summaries = editorial()
+    served = {model["id"]: model for model in backend["models"]}
+    served_families = {model["family"] for model in backend["models"]}
+    models = []
+    for repo, facts in registry_releases().items():
+        if facts["family"] not in served_families:
+            continue
+        answers = served.get(repo, {})
+        editorial_entry = summaries.get(repo, {})
+        organization, _, name = repo.partition("/")
+        models.append(
+            {
+                "id": repo,
+                "name": name,
+                "provider": organization,
+                "family": facts["family"],
+                "familyLabel": editorial_entry.get("family_label")
+                or families.get(facts["family"], {}).get("label", ""),
+                "revision": facts.get("revision", ""),
+                "backbone": facts["backbone"],
+                "minMemoryGiB": facts["minMemoryGiB"],
+                "parameters": facts["parameters"],
+                "questionTypes": answers.get("question_types", []),
+                "modalities": answers.get("modalities", []),
+                "spanHeads": answers.get("span_heads", []),
+                "summary": editorial_entry.get("summary", ""),
+            }
+        )
+    models.sort(key=lambda model: model["id"])
+    return {"questionTypes": data["questionTypes"], "models": models}
 
 
 def main():
@@ -230,8 +397,9 @@ def main():
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     data = projection()
-    content = json.dumps(data, indent=2) + "\n"
-    backend = json.dumps(backend_projection(data), indent=2) + "\n"
+    backend_data = backend_projection(data)
+    content = json.dumps(dashboard_projection(data, backend_data), indent=2) + "\n"
+    backend = json.dumps(backend_data, indent=2) + "\n"
     releases = json.dumps(release_projection(), indent=2) + "\n"
     if args.check:
         if (

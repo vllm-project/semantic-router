@@ -1,6 +1,9 @@
 package llmprotocol
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type EventType string
 
@@ -51,17 +54,27 @@ type Event struct {
 	Error               *ProtocolError
 	Failure             FailureScope
 	Opaque              []byte
+	// CreatedAt is the response's creation time, on the first event of a
+	// stream whose source reports one.
+	CreatedAt time.Time
 }
 
 type StreamContext struct {
-	Context            context.Context
-	Source             WireFormat
-	Target             WireFormat
-	Options            StreamOptions
-	PublicModel        string
-	ProviderModel      string
-	ResponseID         string
-	PreviousResponseID string
+	Context        context.Context
+	Source         WireFormat
+	Target         WireFormat
+	Options        StreamOptions
+	PublicModel    string
+	ProviderModel  string
+	ResponseID     string
+	ResponseRender ResponseRenderContext
+	// PreferProviderModel names events with the model the provider's stream
+	// reports, once it reports one, and with PublicModel until then.
+	PreferProviderModel bool
+	// EstimatedInputTokens is the Router's own count of the request's input
+	// tokens, which an encoder that reports input usage before the provider
+	// does reports instead, as Messages message_start does. 0 reports none.
+	EstimatedInputTokens int64
 }
 
 type StreamDecoder interface {

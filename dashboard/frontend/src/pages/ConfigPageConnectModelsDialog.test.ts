@@ -171,7 +171,7 @@ describe('quick connect provider model payloads', () => {
       backend_refs: [
         {
           provider: 'microsoft-foundry',
-          base_url: 'https://foundry.example.test',
+          endpoint: 'https://foundry.example.test',
         },
       ],
     })

@@ -387,7 +387,7 @@ class TestBearerRecipeActivation(MockUpstreamMixin, ServeSessionMixin, CLITestBa
         env["VLLM_SR_DASHBOARD_IMAGE"] = self._dashboard_image_trusting(tls / "ca.crt")
         self.write_minimal_canonical_config(
             provider="openai",
-            base_url=f"http://{UPSTREAM}:{PROVIDER_MOCKER_PORT}/v1",
+            endpoint=f"http://{UPSTREAM}:{PROVIDER_MOCKER_PORT}/v1",
         )
 
         printed = self._serve(env)

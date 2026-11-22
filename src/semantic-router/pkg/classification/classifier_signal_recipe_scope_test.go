@@ -45,7 +45,7 @@ func TestRecipeClassifiersIsolateMetadataSignals(t *testing.T) {
 			},
 		},
 	}
-	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatalf("BuildRecipeClassifiers() error = %v", err)
 	}

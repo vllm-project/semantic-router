@@ -406,6 +406,9 @@ async def _terminal_job(request):
                 }
             ],
             "environment": {"type": "docker", "delete": True, "override_gpus": 0},
+            "verifier": {
+                "override_timeout_sec": request["config"].get("verifier_timeout_s"),
+            },
             "quiet": True,
         }
     )

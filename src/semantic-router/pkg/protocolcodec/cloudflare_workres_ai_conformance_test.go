@@ -60,11 +60,16 @@ func assertCloudflareDropped(t *testing.T, diagnostics llmprotocol.Diagnostics, 
 	t.Errorf("no dropped diagnostic for %q; diagnostics = %+v", field, diagnostics)
 }
 
-func TestCloudflareWorkersAiAcceptedEnvelopeRequiresTheCloudflareVendor(t *testing.T) {
+// A decorated Workers AI reply needs no vendor: its decorations are members the
+// Chat contract does not declare, which every backend drops and reports.
+func TestCloudflareWorkersAiAcceptedEnvelopeDecodesForEveryBackend(t *testing.T) {
 	body := cloudflareFixture(t, cloudflareAcceptedFixture, cloudflareAcceptedBytes)
 
-	if _, _, _, err := (OpenAIChatCodec{}).DecodeResponse(body, cloudflarePolicy("")); err == nil {
-		t.Fatal("strict canonical decode accepted a decorated Workors AI response")
+	if _, _, _, err := (OpenAIChatCodec{}).DecodeResponse(body, conformancePolicy()); err == nil {
+		t.Fatal("conformance decode accepted a decorated Workers AI response")
+	}
+	if _, _, _, err := (OpenAIChatCodec{}).DecodeResponse(body, cloudflarePolicy("")); err != nil {
+		t.Fatalf("DecodeResponse() without the vendor error = %v", err)
 	}
 
 	response, _, diagnostics, err := (OpenAIChatCodec{}).DecodeResponse(

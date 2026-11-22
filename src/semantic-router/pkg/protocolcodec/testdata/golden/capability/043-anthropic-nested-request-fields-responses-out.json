@@ -19,6 +19,7 @@
             {
               "content": [
                 {
+                  "detail": "auto",
                   "image_url": "data:image/png;base64,aW1hZ2U=",
                   "type": "input_image"
                 }
@@ -78,7 +79,7 @@
         "status": "error",
         "error": {
           "category": "unsupported_feature",
-          "code": "unsupported_content"
+          "code": "unsupported_capability"
         }
       }
     },

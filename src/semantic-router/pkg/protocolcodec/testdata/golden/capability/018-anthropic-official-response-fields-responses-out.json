@@ -460,7 +460,7 @@
               ],
               "id": "item_50fa17334b475f883a9970b7",
               "role": "assistant",
-              "status": "completed",
+              "status": "incomplete",
               "type": "message"
             }
           ],
@@ -651,6 +651,10 @@
           },
           {
             "field": "usage.service_tier",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.speed",
             "action": "dropped"
           },
           {

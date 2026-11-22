@@ -25,9 +25,11 @@ func stageAgenticSessionDecision(
 	}
 	policy := sessionPolicyMapForTelemetry(ctx, result)
 	activeToolLoop := false
+	released := false
 	previousModel := ctx.PreviousModel
 	if selCtx.AgenticSession != nil {
 		activeToolLoop = selCtx.AgenticSession.ActiveToolLoop
+		released = selCtx.AgenticSession.ReleaseHonored
 		previousModel = selCtx.AgenticSession.PreviousModel
 	}
 	ctx.pendingSessionDecision = &sessiontelemetry.SessionDecisionParams{
@@ -39,6 +41,8 @@ func stageAgenticSessionDecision(
 		DecisionName:      selectionDecisionStateKey(selCtx),
 		TurnIndex:         ctx.TurnIndex,
 		ActiveToolLoop:    activeToolLoop,
+		UserTurn:          !activeToolLoop,
+		Released:          released,
 		Policy:            policy,
 	}
 }
@@ -53,7 +57,7 @@ func commitAgenticSessionDecision(ctx *RequestContext) error {
 	if ctx != nil && ctx.pendingSessionDecision != nil {
 		ctx.pendingSessionDecision.Timestamp = time.Now()
 		sessiontelemetry.RecordSessionDecision(*ctx.pendingSessionDecision)
-		ctx.pendingSessionDecision = nil
+		ctx.committedSessionDecision, ctx.pendingSessionDecision = ctx.pendingSessionDecision, nil
 	}
 	return nil
 }

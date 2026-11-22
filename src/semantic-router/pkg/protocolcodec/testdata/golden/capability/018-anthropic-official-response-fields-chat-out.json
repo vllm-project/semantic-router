@@ -460,6 +460,10 @@
             "action": "dropped"
           },
           {
+            "field": "usage.speed",
+            "action": "dropped"
+          },
+          {
             "field": "usage.cache_creation",
             "action": "dropped"
           }

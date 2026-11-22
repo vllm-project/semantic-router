@@ -23,18 +23,22 @@ func (r *OpenAIRouter) handleLooperResponseBody(
 	}
 
 	response := buildResponseBodyContinueResponse(nil, nil)
-	if requiresClientResponseRewrite(ctx) {
+	rewrite := requiresClientResponseRewrite(ctx)
+	if rewrite || ctx.nativeFallbackResponse != nil {
 		semantic, err := r.decodeClientResponse(responseBody, ctx)
 		if err != nil {
-			return r.createErrorResponse(502, "The selected model returned an invalid response")
+			return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 		}
-		responseBody, err = r.encodeClientResponse(*semantic, ctx)
-		if err != nil {
-			return r.createErrorResponse(502, "The selected model returned an incompatible response")
+		if rewrite {
+			responseBody, err = r.encodeClientResponse(*semantic, ctx)
+			if err != nil {
+				return r.invalidUpstreamResponse(ctx, "The selected model returned an incompatible response")
+			}
+			setResponseBodyMutation(response, responseBody)
+			setResponseContentType(response, "application/json")
 		}
-		setResponseBodyMutation(response, responseBody)
-		setResponseContentType(response, "application/json")
 	}
+	r.finishNativeFallbackResponse(ctx, "")
 	// Same-wire Chat remains byte-preserving. An empty completion can still
 	// carry paid usage, which the calling algorithm classifies and accounts.
 	r.attachRouterReplayResponse(ctx, responseBody, true)
@@ -47,19 +51,24 @@ func (r *OpenAIRouter) handleLooperStreamingResponseBody(
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	if err := r.ensureSemanticResponseStream(ctx); err != nil {
-		return r.createErrorResponse(502, "The selected model returned an incompatible stream")
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an incompatible stream")
 	}
 	buffers := semanticStreamBuffers{}
 	buffers.push(responseBody, ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 		ctx.StreamingComplete = true
+		clean := buffers.streamErr == nil && !ctx.StreamingAborted
 		semantic, err := ctx.SemanticStreamState.response()
 		if err != nil {
 			ctx.StreamingAborted = true
 		} else if body, err := r.encodeClientResponse(*semantic, ctx); err == nil {
+			if !ctx.StreamingAborted {
+				r.finishNativeFallbackResponse(ctx, "")
+			}
 			r.attachRouterReplayResponse(ctx, body, true)
 		}
+		r.endStreamRouterReplay(ctx, clean)
 	}
 	return buffers.processingResponse(ctx)
 }

@@ -137,7 +137,7 @@ func testProtocolCodecResponsesVerbosityAnthropic(ctx context.Context, client *k
 		if err != nil {
 			return fmt.Errorf("messages stream=%t response: %w", stream, err)
 		}
-		if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "text.verbosity") {
+		if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "text.verbosity") {
 			return fmt.Errorf("messages stream=%t did not report dropped text.verbosity: %q", stream, warnings)
 		}
 		if err := verifyProviderSimulatorRequest(ctx, provider, sessionID, "anthropic.messages.v1", marker); err != nil {

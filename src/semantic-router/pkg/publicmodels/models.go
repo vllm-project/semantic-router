@@ -3,7 +3,12 @@
 // names, descriptions, and provider branding.
 package publicmodels
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+import (
+	"slices"
+	"sort"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
 
 const (
 	routerOwner           = "vllm-semantic-router"
@@ -24,12 +29,16 @@ const (
 // discovery. Display metadata and internal execution modes are not control
 // signals.
 type RoutingMetadata struct {
-	API          config.InferenceAPI     `json:"api"`
-	Source       config.EntrypointSource `json:"source,omitempty"`
-	Resolution   ResolutionKind          `json:"resolution"`
-	Selectable   bool                    `json:"selectable"`
-	DefaultRoute bool                    `json:"default_route,omitempty"`
-	Recipe       config.RecipeName       `json:"recipe,omitempty"`
+	API        config.InferenceAPI     `json:"api"`
+	Source     config.EntrypointSource `json:"source,omitempty"`
+	Resolution ResolutionKind          `json:"resolution"`
+	Selectable bool                    `json:"selectable"`
+	// Delegates holds memory, review or both for an entrypoint other ones send
+	// their memory calls or approval reviews to. Such an entrypoint is not
+	// offered for chat, unless it is the default entrypoint.
+	Delegates    []string          `json:"delegates,omitempty"`
+	DefaultRoute bool              `json:"default_route,omitempty"`
+	Recipe       config.RecipeName `json:"recipe,omitempty"`
 }
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response.
@@ -72,13 +81,20 @@ type modelListBuilder struct {
 }
 
 func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
+	defaultNames := cfg.DefaultEntrypointNames()
 	for _, entrypoint := range cfg.EffectiveEntrypoints(config.ChatAPI) {
 		description := "Entrypoint for the default routing recipe"
 		if cfg != nil {
 			description = cfg.EntrypointRecipeDescription(entrypoint.Recipe)
 		}
-		metadata := selectableVirtualRoute(entrypoint.Recipe, entrypoint.Recipe == config.DefaultRecipeName)
+		metadata := selectableVirtualRoute(entrypoint.Recipe, cfg.IsDefaultRecipe(entrypoint.Recipe))
 		metadata.API, metadata.Source = entrypoint.API, entrypoint.Source
+		if len(entrypoint.ModelNames) > 0 {
+			metadata.Delegates = cfg.DelegateRoles(config.ChatAPI, entrypoint.ModelNames[0])
+			// people chat on the default entrypoint whatever else it serves
+			isDefault := len(defaultNames) > 0 && slices.Contains(entrypoint.ModelNames, defaultNames[0])
+			metadata.Selectable = len(metadata.Delegates) == 0 || isDefault
+		}
 		b.appendAll(entrypoint.ModelNames, routerOwner, description, metadata)
 	}
 }
@@ -87,9 +103,20 @@ func (b *modelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
 	if cfg == nil || !cfg.ListBackendModels {
 		return
 	}
-	for _, model := range cfg.GetAllModels() {
-		if !cfg.IsSystemOneBackend(model) {
-			b.append(model, upstreamEndpointOwner, "", passthroughRoute())
+	// List, in a stable order, exactly the names a direct request is served
+	// for, LoRA adapters included.
+	names := make([]string, 0, len(cfg.ModelConfig))
+	for model, params := range cfg.ModelConfig {
+		names = append(names, model)
+		for _, adapter := range params.LoRAs {
+			names = append(names, adapter.Name)
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if !cfg.IsSystemOneBackend(name) &&
+			(cfg.RoutesModelToBackend(name) || cfg.UsesExternalGatewayDispatch(name)) {
+			b.append(name, upstreamEndpointOwner, "", passthroughRoute())
 		}
 	}
 }

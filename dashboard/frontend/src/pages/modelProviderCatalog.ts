@@ -8,7 +8,7 @@ export interface ModelProviderPreset {
   description: string
   category: 'Start here' | 'Model APIs' | 'Private runtimes'
   baseUrl: string
-  apiFormat: 'openai' | 'responses' | 'anthropic' | 'systemone'
+  apiFormat: 'chat_completions' | 'responses' | 'messages' | 'systemone'
   authStrategy: CatalogProvider['auth']['strategy']
   icon: string
   monogram: string
@@ -26,8 +26,8 @@ const categoryName = (category: CatalogProvider['category']): ModelProviderPrese
 }
 
 const apiFormat = (protocol: string): ModelProviderPreset['apiFormat'] => {
-  if (protocol === 'openai/chat-completions@1') return 'openai'
-  if (protocol === 'anthropic/messages@1') return 'anthropic'
+  if (protocol === 'openai/chat-completions@1') return 'chat_completions'
+  if (protocol === 'anthropic/messages@1') return 'messages'
   if (protocol === 'openai/responses@1') return 'responses'
   if (protocol === 'vllm-sr/systemone@1') return 'systemone'
   throw new Error(`unsupported default provider protocol: ${protocol}`)

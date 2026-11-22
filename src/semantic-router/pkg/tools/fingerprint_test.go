@@ -11,6 +11,8 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 
+func intPtr(v int) *int { return &v }
+
 func sampleTool(name string) llmprotocol.Tool {
 	return llmprotocol.Tool{
 		Name:        name,
@@ -140,83 +142,69 @@ func TestToolCatalogFingerprint_EmptyCatalog(t *testing.T) {
 }
 
 func TestToolPolicyFingerprint_Deterministic(t *testing.T) {
-	cfg := &config.ToolSelectionPluginConfig{Enabled: true, Mode: "add", TopK: 5}
-	first := ToolPolicyFingerprint(cfg)
-	second := ToolPolicyFingerprint(cfg)
+	spec := func() *config.ToolsSelectConfig {
+		judge := &config.MatchJudge{Preset: "tool_rank", TopK: 5}
+		return &config.ToolsSelectConfig{Mode: config.ToolsSelectModeAdd, ToolsDBPath: "tools.json", Match: &config.MatchConfig{Judge: judge}}
+	}
+	first, second := ToolPolicyFingerprint(spec()), ToolPolicyFingerprint(spec())
 	if first != second {
-		t.Fatal("policy fingerprint must be deterministic")
+		t.Fatal("same policy must fingerprint identically")
 	}
 }
 
 func TestToolPolicyFingerprint_NilConfig(t *testing.T) {
 	if got := ToolPolicyFingerprint(nil); got == "" {
-		t.Fatal("a nil plugin config must still produce a well-defined fingerprint")
+		t.Fatal("nil policy must still produce a fingerprint")
 	}
 }
 
-func TestToolPolicyFingerprint_SensitiveToModeChange(t *testing.T) {
-	add := &config.ToolSelectionPluginConfig{Enabled: true, Mode: "add"}
-	filter := &config.ToolSelectionPluginConfig{Enabled: true, Mode: "filter"}
-	if ToolPolicyFingerprint(add) == ToolPolicyFingerprint(filter) {
-		t.Fatal("a mode change must produce a distinct fingerprint")
+func TestToolPolicyFingerprint_SensitiveToSelection(t *testing.T) {
+	base := config.ToolsSelectConfig{Mode: config.ToolsSelectModeAdd}
+	need := 0.7
+	for name, edit := range map[string]func(*config.ToolsSelectConfig){
+		"mode": func(s *config.ToolsSelectConfig) { s.Mode = config.ToolsSelectModeFilter },
+		"judge": func(s *config.ToolsSelectConfig) {
+			s.Match = &config.MatchConfig{Judge: &config.MatchJudge{Preset: "tool_rank", TopK: 2}}
+		},
+		"need_threshold": func(s *config.ToolsSelectConfig) { s.NeedThreshold = &need },
+		"preserve_count": func(s *config.ToolsSelectConfig) { s.PreserveCount = 1 },
+		"history":        func(s *config.ToolsSelectConfig) { s.Input.History = true },
+	} {
+		changed := base
+		edit(&changed)
+		if ToolPolicyFingerprint(&base) == ToolPolicyFingerprint(&changed) {
+			t.Errorf("a %s change must change the fingerprint", name)
+		}
 	}
 }
 
 func TestToolPolicyFingerprint_ExplicitDefaultEqualsOmitted(t *testing.T) {
-	// StickyToolSelectionConfig{} (present, all zero) and no Sticky block
-	// at all both resolve to the same *effective* policy — the fingerprint
-	// covers effective policy, not raw YAML presence, so it must match.
-	explicitDefault := &config.ToolSelectionPluginConfig{
-		Enabled: true, Mode: "add",
-		Sticky: &config.StickyToolSelectionConfig{Enabled: true},
-	}
-	omitted := &config.ToolSelectionPluginConfig{
-		Enabled: true, Mode: "add",
+	// Defaults written out and defaults omitted are the same effective
+	// policy: the judge, the need threshold and the sticky bounds.
+	need := config.DefaultToolsNeedThreshold
+	explicitDefault := &config.ToolsSelectConfig{
+		Mode:          config.ToolsSelectModeAdd,
+		Match:         &config.MatchConfig{Judge: config.MatchToolsSelect.Default().Judge},
+		NeedThreshold: &need,
 		Sticky: &config.StickyToolSelectionConfig{
-			Enabled:            true,
 			MaxTools:           intPtr(config.StickyToolSelectionDefaultMaxTools),
 			MaxNewToolsPerTurn: intPtr(config.StickyToolSelectionDefaultMaxNewToolsPerTurn),
 			PinCalledTools:     boolPtr(true),
 		},
 	}
+	omitted := &config.ToolsSelectConfig{Mode: config.ToolsSelectModeAdd, Sticky: &config.StickyToolSelectionConfig{}}
 	if ToolPolicyFingerprint(explicitDefault) != ToolPolicyFingerprint(omitted) {
-		t.Fatal("an explicit value equal to the default must fingerprint the same as an omitted field")
+		t.Fatal("explicit defaults must fingerprint the same as omitted ones")
 	}
 }
 
 func TestToolPolicyFingerprint_SensitiveToStickyBoundChange(t *testing.T) {
-	base := &config.ToolSelectionPluginConfig{
-		Enabled: true, Mode: "add",
-		Sticky: &config.StickyToolSelectionConfig{Enabled: true, MaxTools: intPtr(16)},
-	}
-	changed := &config.ToolSelectionPluginConfig{
-		Enabled: true, Mode: "add",
-		Sticky: &config.StickyToolSelectionConfig{Enabled: true, MaxTools: intPtr(8)},
-	}
+	base := &config.ToolsSelectConfig{Mode: config.ToolsSelectModeAdd, Sticky: &config.StickyToolSelectionConfig{MaxTools: intPtr(16)}}
+	changed := &config.ToolsSelectConfig{Mode: config.ToolsSelectModeAdd, Sticky: &config.StickyToolSelectionConfig{MaxTools: intPtr(8)}}
 	if ToolPolicyFingerprint(base) == ToolPolicyFingerprint(changed) {
-		t.Fatal("a sticky bound change must produce a distinct fingerprint")
+		t.Fatal("sticky max_tools change must change the fingerprint")
 	}
 }
-
-func TestToolPolicyFingerprint_AllowBlockListsOrderInvariant(t *testing.T) {
-	forward := &config.ToolSelectionPluginConfig{
-		Enabled: true, Mode: "add",
-		AdvancedFiltering: &config.AdvancedToolFilteringConfig{
-			Enabled: true, AllowTools: []string{"a", "b", "c"},
-		},
-	}
-	reversed := &config.ToolSelectionPluginConfig{
-		Enabled: true, Mode: "add",
-		AdvancedFiltering: &config.AdvancedToolFilteringConfig{
-			Enabled: true, AllowTools: []string{"c", "b", "a"},
-		},
-	}
-	if ToolPolicyFingerprint(forward) != ToolPolicyFingerprint(reversed) {
-		t.Fatal("allow_tools order must not change the policy fingerprint — it is an unordered set")
-	}
-}
-
-func intPtr(v int) *int { return &v }
 
 func TestToolCapabilityFingerprint_Deterministic(t *testing.T) {
 	a := ToolCapabilityFingerprint([]string{"tools", "vision"}, "openai_responses")

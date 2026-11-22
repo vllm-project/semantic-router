@@ -4,6 +4,8 @@
  *   signalCompile, signalValidate, signalDecompile, signalFormat, signalParseAST
  */
 
+import type { RouterConfigWarning } from '../utils/configSaveWarnings'
+
 // ---------- Diagnostics ----------
 
 export type DiagLevel = 'error' | 'warning' | 'constraint'
@@ -53,7 +55,14 @@ export type BoolExprNode =
   | { type: 'and'; left: BoolExprNode; right: BoolExprNode; pos: ASTPosition }
   | { type: 'or'; left: BoolExprNode; right: BoolExprNode; pos: ASTPosition }
   | { type: 'not'; expr: BoolExprNode; pos: ASTPosition }
-  | { type: 'signal_ref'; signalType: string; signalName: string; pos: ASTPosition }
+  | {
+      type: 'signal_ref'
+      signalType: string
+      signalName: string
+      /** Condition qualifiers written in the reference, such as label or predicate. */
+      fields?: DSLFieldObject
+      pos: ASTPosition
+    }
 
 export interface ASTSignalDecl {
   signalType: string
@@ -74,8 +83,6 @@ export interface ASTProjectionPartitionDecl {
 export interface ASTProjectionScoreInput {
   signalType: string
   signalName: string
-  kb?: string
-  metric?: string
   weight: number
   valueSource?: string
   match?: number
@@ -173,6 +180,8 @@ export interface ASTTestBlockDecl {
 }
 
 export interface ASTEntrypointDecl {
+  reviewModel?: string
+  memoryModel?: string
   modelNames: string[]
   recipe: string
   pos: ASTPosition
@@ -252,10 +261,16 @@ export interface DeployProgress {
   message: string
 }
 
+/** How a saved deployment reached the running Router. */
+export type DeployOutcome = 'reloaded' | 'reload-unknown' | 'restart-required' | 'persisted'
+
 export interface DeployResult {
   status: 'success' | 'error'
   version?: string
   message: string
+  outcome?: DeployOutcome
+  /** The Router's warnings about the deployed configuration. */
+  warnings?: RouterConfigWarning[]
 }
 
 export interface ConfigVersion {

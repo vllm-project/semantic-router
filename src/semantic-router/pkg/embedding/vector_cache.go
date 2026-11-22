@@ -10,29 +10,21 @@ import (
 )
 
 // VectorKey addresses one embedding: a representation (model content and
-// numerics), an output view and the input bytes, hashed with SHA-256. The
+// numerics), an output view and the input text, hashed with SHA-256. The
 // input itself is never retained.
 type VectorKey [sha256.Size]byte
 
-// Input kinds, so equal bytes of different modalities never collide.
-const (
-	InputText byte = iota + 1
-	InputImage
-	InputAudio
-)
-
-// NewVectorKey derives the key of input under a representation and view.
-func NewVectorKey(representation string, options Options, kind byte, input []byte) VectorKey {
+// NewVectorKey derives the key of a text under a representation and view.
+func NewVectorKey(representation string, options Options, text []byte) VectorKey {
 	hash := sha256.New()
-	header := make([]byte, 0, 4*binary.MaxVarintLen64+1)
+	header := make([]byte, 0, 4*binary.MaxVarintLen64)
 	header = binary.AppendVarint(header, int64(len(representation)))
 	hash.Write(header)
 	hash.Write([]byte(representation))
 	header = binary.AppendVarint(header[:0], int64(options.Dimension))
 	header = binary.AppendVarint(header, int64(options.Layer))
-	header = append(header, kind)
 	hash.Write(header)
-	hash.Write(input)
+	hash.Write(text)
 	var key VectorKey
 	hash.Sum(key[:0])
 	return key

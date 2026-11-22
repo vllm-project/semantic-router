@@ -17,7 +17,6 @@ limitations under the License.
 package extproc
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -216,14 +215,17 @@ func TestRouterLearningProtectionOnlyCannotEscapeDecisionCandidates(t *testing.T
 		CandidateModels: []config.ModelRef{{Model: "cheap"}},
 	}, nil, ctx)
 
-	if selected != nil || !errors.Is(err, selection.ErrNoEligibleCandidates) {
-		t.Fatalf("protection-only ownership conflict must reject: selected=%+v err=%v", selected, err)
+	// Decision drift releases the tool-loop lock, so protection-only routing
+	// stays inside the drifted decision's own candidate set. Adaptation stays
+	// disabled, and the release must be attributed to the protection policy.
+	if err != nil || selected == nil || selected.Model != "cheap" {
+		t.Fatalf("protection-only routing left the drifted decision candidates: selected=%+v err=%v", selected, err)
 	}
 	if _, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodAdaptation); ok {
 		t.Fatalf("expected no adaptation policy when adaptation is disabled, got %#v", ctx.VSRLearningPolicies)
 	}
-	if _, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection); ok {
-		t.Fatalf("rejected selection must not claim a protection switch: %#v", ctx.VSRLearningPolicies)
+	if _, ok := ctx.VSRLearningPolicies.Policy(routerLearningMethodProtection); !ok {
+		t.Fatalf("expected the candidate-boundary release under the protection policy: %#v", ctx.VSRLearningPolicies)
 	}
 }
 

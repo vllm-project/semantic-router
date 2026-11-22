@@ -25,7 +25,7 @@ translation:
 
 证据标签显示最强的周期性检查：**PR CI** 运行端到端配置，**Contract** 在没有外部平台的情况下校验静态契约，**Manual** 需要可选环境。
 
-## 使用一套经过测试的版本
+## 使用一套经过测试的版本 {#use-one-tested-version-set}
 
 对于每个链接的选项：
 
@@ -79,7 +79,7 @@ translation:
 
 当前没有随附选项处于 **Deprecated** 状态。迁移指导见[升级与回滚](upgrade-rollback)。
 
-## 硬件叠加层
+## 硬件叠加层 {#hardware-overlays}
 
 硬件支持适用于部署栈；它不是单独的 Router 拓扑。Router 加速和后端模型服务也是分开的选择。
 

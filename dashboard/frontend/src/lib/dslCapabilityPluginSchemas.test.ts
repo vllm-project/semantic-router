@@ -1,39 +1,55 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { getPluginFieldSchema } from './dslSchemas'
+import { pluginFieldsFromRouterSchema } from './routerConfigSchema'
 
 describe('capability plugin field schemas', () => {
-  it('exposes the complete context compression contract', () => {
-    const fields = resolveCapabilityPluginFieldSchema('context_compression')
+  it('exposes the complete context contract', () => {
+    const fields = resolveCapabilityPluginFieldSchema('context')
     expect(fields?.map((field) => field.key)).toEqual([
       'enabled',
-      'mode',
+      'sources',
+      'compress',
       'budget',
+      'injection',
+    ])
+    const sources = fields?.find((field) => field.key === 'sources')
+    expect(sources?.type).toBe('object[]')
+    expect(sources?.fields?.map((field) => field.key)).toContain('match')
+    const compress = fields?.find((field) => field.key === 'compress')
+    expect(compress?.fields?.map((field) => field.key)).toEqual([
+      'mode',
       'targets',
-      'scoring',
+      'match',
       'recovery',
       'request_controls',
       'failure_mode',
+      'signals',
     ])
-    expect(fields?.find((field) => field.key === 'targets')?.type).toBe('object')
+    expect(resolveCapabilityPluginFieldSchema('context_compression')).toBeNull()
   })
 
-  it('exposes the shadow dispatch bounds', () => {
-    const fields = resolveCapabilityPluginFieldSchema('shadow_dispatch')
-    expect(fields?.map((field) => field.key)).toEqual([
-      'enabled',
-      'model',
-      'sample_rate',
-      'max_concurrency',
-      'max_queue_depth',
-      'timeout_seconds',
-      'max_response_bytes',
-      'max_retries',
-      'capture_response_body',
-      'max_capture_bytes',
-      'tls_skip_verify',
-      'forward_headers',
+  it('uses the generated Replay schema for the decision editor', () => {
+    expect(resolveCapabilityPluginFieldSchema('shadow_dispatch')).toBeNull()
+    const fields = getPluginFieldSchema('router_replay')
+    expect(fields).toEqual(pluginFieldsFromRouterSchema('router_replay'))
+    const shadow = fields.find((field) => field.key === 'shadow')?.fields
+    expect(shadow?.map(({ key, type }) => [key, type])).toEqual([
+      ['models', 'string[]'],
+      ['sample_rate', 'number'],
+      ['execution', 'object'],
+      ['budget', 'object'],
+      ['capture', 'object'],
+      ['forward_headers', 'string[]'],
     ])
+  })
+
+  it('lets router_replay name the model savings compare with', () => {
+    const baseline = getPluginFieldSchema('router_replay').find(
+      (field) => field.key === 'cost_baseline_model',
+    )
+    expect(baseline).toMatchObject({ type: 'string', label: 'Cost Baseline Model' })
   })
 
   it('exposes canonical response cache fields', () => {
@@ -42,12 +58,14 @@ describe('capability plugin field schemas', () => {
       'enabled',
       'mode',
       'scope',
-      'semantic',
       'ttl_seconds',
+      'semantic',
       'request_controls',
       'personalized',
       'revision',
     ])
+    const semantic = fields?.find((field) => field.key === 'semantic')
+    expect(semantic?.fields?.map((field) => field.key)).toEqual(['match'])
   })
 
   it('exposes the prompt cache marker contract', () => {

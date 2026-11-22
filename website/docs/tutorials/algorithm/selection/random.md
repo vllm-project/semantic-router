@@ -31,8 +31,8 @@ Use Random when running a routing experiment or evaluation that needs a
 control arm, when collecting unbiased samples across several models, or when
 candidates are genuinely interchangeable and any choice is acceptable. Prefer
 `static` when you want a deterministic, auditable choice, and `multi_factor`
-or `latency_aware` when you have quality, cost, or latency signals worth
-acting on.
+(weighted on latency alone for [latency-aware selection](./latency-aware)) when
+you have quality, cost, or latency signals worth acting on.
 
 ## Configuration
 

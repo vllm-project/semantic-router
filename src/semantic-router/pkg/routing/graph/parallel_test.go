@@ -143,6 +143,50 @@ func TestParallelSkipKeepsTheSuccesses(t *testing.T) {
 	}
 }
 
+func TestParallelSkipCannotHideRunCeilings(t *testing.T) {
+	tests := []struct {
+		name     string
+		limits   Limits
+		pricing  Pricing
+		wantErr  error
+		wantHops int
+	}{
+		{name: "token", limits: Limits{MaxTokens: 1}, wantErr: ErrTokenLimit, wantHops: 1},
+		{name: "cost", limits: Limits{MaxCost: 1}, pricing: pricePerToken{"first": 1, "second": 1}, wantErr: ErrCostLimit, wantHops: 1},
+		{name: "unknown cost", limits: Limits{MaxCost: 10}, pricing: pricePerToken{"first": 1}, wantErr: ErrCostUnknown, wantHops: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			program := &Program{
+				Steps: Sequence{
+					parallel("outer", &Parallel{
+						Branches: []Sequence{
+							{call("first", "first")},
+							{parallel("inner", &Parallel{Branches: branchesOf("second")})},
+						},
+						MaxConcurrency: 1,
+						MinSuccess:     1,
+						OnError:        OnErrorSkip,
+					}),
+					aggregate("join", Concat{Separator: ","}),
+					respond(),
+				},
+				Limits: tt.limits,
+			}
+			outcome, err := run(t, program, &fakeCaller{}, func(o *Options) { o.Pricing = tt.pricing })
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err %v, want %v", err, tt.wantErr)
+			}
+			if outcome.Response != nil {
+				t.Fatalf("response %+v", outcome.Response)
+			}
+			if outcome.Hops != tt.wantHops || outcome.Usage.TotalTokens != int64(tt.wantHops) {
+				t.Fatalf("hops %d usage %+v", outcome.Hops, outcome.Usage)
+			}
+		})
+	}
+}
+
 func TestParallelFailStopsAtTheFirstFailure(t *testing.T) {
 	var once sync.Once
 	sawCancel := make(chan struct{})

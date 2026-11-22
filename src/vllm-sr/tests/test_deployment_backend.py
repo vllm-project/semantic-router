@@ -74,9 +74,9 @@ class TestContainerBackend:
             "cli.container_backend.start_vllm_sr",
             lambda *a, **kw: captured.update(kw),
         )
+        acquire_lock = MagicMock(return_value=lifecycle_lock)
         monkeypatch.setattr(
-            "cli.container_backend.acquire_runtime_lifecycle_lock",
-            MagicMock(return_value=lifecycle_lock),
+            "cli.container_backend.acquire_runtime_lifecycle_lock", acquire_lock
         )
         monkeypatch.setattr(
             "cli.container_backend.get_container_runtime", lambda: "docker"
@@ -115,6 +115,7 @@ class TestContainerBackend:
         assert captured["enable_observability"] is False
         assert captured["runtime_config_lock"] is runtime_lock
         assert captured["startup_timeout"] == (startup_timeout or 1800)
+        assert acquire_lock.call_args.kwargs["take_over_waiting"] is False
         lifecycle_lock.__enter__.assert_called_once_with()
         lifecycle_lock.__exit__.assert_called_once()
 
@@ -134,7 +135,14 @@ class TestContainerBackend:
         )
         ContainerBackend().teardown()
         assert called
-        acquire_lock.assert_called_once_with(runtime="docker", stack_name="vllm-sr")
+        acquire_lock.assert_called_once_with(
+            runtime="docker",
+            stack_name="vllm-sr",
+            command="vllm-sr stop",
+            state="stopping",
+            heartbeat_path=None,
+            take_over_waiting=True,
+        )
         lifecycle_lock.__enter__.assert_called_once_with()
         lifecycle_lock.__exit__.assert_called_once()
 
@@ -295,25 +303,34 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "listeners": [{"port": 8899}],
                     "providers": {"models": [{"name": "provider-model"}]},
-                    "routing": {"decisions": [{"name": "default"}]},
-                    "recipes": [{"name": "custom-recipe"}],
+                    "recipes": [
+                        {"name": "default", "decisions": [{"name": "default"}]},
+                        {"name": "custom-recipe"},
+                    ],
                     "global": {
                         "services": {"management_api": {"auth": {"mode": "bearer"}}}
                     },
+                    "entrypoints": [
+                        {
+                            "model_names": ["vllm-sr/auto"],
+                            "recipe": "default",
+                            "default": True,
+                        }
+                    ],
                 }
             )
         )
 
         values = translate_config_to_helm_values(str(config))
         override = values["configOverride"]
-        assert override["version"] == "v0.3"
+        assert override["version"] == "v0.5"
         assert override["listeners"] == [{"port": 8899}]
         assert override["providers"]["models"] == [{"name": "provider-model"}]
-        assert override["routing"]["decisions"] == [{"name": "default"}]
-        assert override["recipes"] == [{"name": "custom-recipe"}]
+        assert override["recipes"][0]["decisions"] == [{"name": "default"}]
+        assert override["recipes"][1] == {"name": "custom-recipe"}
         assert (
             override["global"]["services"]["management_api"]["auth"]["mode"] == "bearer"
         )
@@ -372,7 +389,7 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "providers": {"models": [model]},
                 }
             ),
@@ -392,7 +409,7 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "listeners": [
                         {
                             "name": "public",
@@ -453,7 +470,7 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "providers": {"models": [credential_config]},
                 }
             ),
@@ -474,7 +491,7 @@ class TestConfigTranslator:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "listeners": [
                         {
                             "name": "public",
@@ -507,7 +524,7 @@ class TestConfigTranslator:
     ):
         config = tmp_path / "config.yaml"
         config.write_text(
-            yaml.safe_dump({"version": "v0.3", "api_key": credential}),
+            yaml.safe_dump({"version": "v0.5", "api_key": credential}),
             encoding="utf-8",
         )
 

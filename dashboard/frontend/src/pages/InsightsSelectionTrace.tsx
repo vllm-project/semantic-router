@@ -1,11 +1,25 @@
-import ProductIcon from '../components/ProductIcon'
+import { ChevronDown } from 'lucide-react'
+
 import type {
   SelectionCandidateRef,
   SelectionCandidateValue,
   SelectionObjectiveStage,
   SelectionTrace,
 } from '../types/selectionTrace'
-import styles from './InsightsRoutingEvidence.module.css'
+import {
+  CARD,
+  CHEVRON,
+  DETAIL,
+  DETAIL_BODY,
+  EVIDENCE,
+  INTRO,
+  METRICS,
+  MUTED,
+  PILL,
+  TABLE,
+  TABLE_WRAP,
+} from './insightsEvidenceStyles'
+import { ModelName } from './insightsModelLabelSupport'
 
 const factors: Record<string, string> = {
   quality: 'Quality',
@@ -84,24 +98,26 @@ export default function InsightsSelectionTrace({
   selectedModel?: string
 }) {
   return (
-    <div className={styles.evidence}>
-      <p className={styles.intro}>
+    <div className={EVIDENCE}>
+      <p className={INTRO}>
         These priority stages follow eligibility checks. Learning and session protection may choose
         among the remaining candidates. Only stages reached are shown.
       </p>
-      <dl className={styles.metrics}>
+      <dl className={METRICS}>
         <div>
           <dt>Actual selected model</dt>
-          <dd>{selectedModel || 'No backend selected'}</dd>
+          <dd>
+            <ModelName name={selectedModel} fallback="No backend selected" />
+          </dd>
         </div>
         <div>
           <dt>Candidates retained by the objective</dt>
           <dd>
             {trace.final_survivors.length ? (
-              <ul className={styles.selectionSurvivors}>
+              <ul className="flex flex-col gap-1 [&_small]:ml-1.5 [&_small]:text-[11px] [&_small]:font-normal [&_small]:text-subtle-foreground">
                 {trace.final_survivors.map((candidate, index) => (
                   <li key={index}>
-                    {candidate.Model}
+                    <ModelName name={candidate.Model} />
                     {candidateDetails(candidate) ? (
                       <small>{candidateDetails(candidate)}</small>
                     ) : null}
@@ -115,35 +131,33 @@ export default function InsightsSelectionTrace({
         </div>
       </dl>
       {trace.stages.length === 0 ? (
-        <p className={styles.muted}>No objective stages were recorded.</p>
+        <p className={MUTED}>No objective stages were recorded.</p>
       ) : null}
-      <ol className={styles.selectionStages}>
+      <ol className="flex flex-col gap-2.5">
         {trace.stages.map((stage, index) => {
           const title = factors[stage.factor] ?? stage.factor
           return (
-            <li className={styles.result} key={index}>
-              <div className={styles.resultHeading}>
-                <h3 className={styles.selectionStageTitle}>
+            <li className={CARD} key={index}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-[13px] font-semibold">
                   {index + 1}. {title}
                 </h3>
-                <div className={styles.outcome}>
-                  <span className={styles.badge}>
-                    {stage.action === 'skipped' ? 'Skipped' : 'Applied'}
-                  </span>
-                  <span className={styles.muted}>
+                <div className="flex items-center gap-2">
+                  <span className={PILL}>{stage.action === 'skipped' ? 'Skipped' : 'Applied'}</span>
+                  <span className={MUTED}>
                     {stage.available} / {stage.total}{' '}
                     {stage.factor === 'latency' ? 'measured' : 'values available'}
                   </span>
                 </div>
               </div>
-              <p className={styles.resultMeta}>{reasons[stage.reason]}</p>
-              <details className={styles.detail}>
+              <p className="text-xs text-muted-foreground">{reasons[stage.reason]}</p>
+              <details className={DETAIL}>
                 <summary>
                   <span>Inspect {title.toLowerCase()} candidates</span>
-                  <ProductIcon name="chevron-down" width={14} height={14} />
+                  <ChevronDown className={CHEVRON} />
                 </summary>
-                <div className={styles.detailBody}>
-                  <dl className={styles.metrics}>
+                <div className={DETAIL_BODY}>
+                  <dl className={METRICS}>
                     <div>
                       <dt>Metric</dt>
                       <dd>{metricLabel(stage)}</dd>
@@ -160,12 +174,12 @@ export default function InsightsSelectionTrace({
                     ) : null}
                   </dl>
                   {stage.factor === 'cost' ? (
-                    <p className={styles.muted}>
+                    <p className={MUTED}>
                       Configured-rate forecast, not a provider invoice or output-token limit.
                     </p>
                   ) : null}
-                  <div className={styles.tableScroll}>
-                    <table aria-label={`${title} candidate evidence`}>
+                  <div className={TABLE_WRAP}>
+                    <table className={TABLE} aria-label={`${title} candidate evidence`}>
                       <thead>
                         <tr>
                           <th scope="col">Candidate</th>
@@ -178,7 +192,7 @@ export default function InsightsSelectionTrace({
                         {stage.candidates.map((row, candidateIndex) => (
                           <tr key={candidateIndex}>
                             <th scope="row">
-                              {row.candidate.Model}
+                              <ModelName name={row.candidate.Model} compact />
                               {candidateDetails(row.candidate) ? (
                                 <small>{candidateDetails(row.candidate)}</small>
                               ) : null}

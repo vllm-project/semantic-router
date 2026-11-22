@@ -1,0 +1,371 @@
+import { Link } from 'react-router-dom'
+
+import type { ViewField, ViewSection } from '../components/ViewPanel'
+import { Badge, InlineCode, type Column } from '../ui'
+import { formatDateTime, formatSeconds } from '../utils/dateTime'
+import { formatInsightsCost } from '../utils/insightsCost'
+
+import { compactSessionId, displaySessionId, sessionParam } from './insightsAgentIdentity'
+import { ModelChip } from './insightsModelLabelSupport'
+import type { InsightsRecord } from './insightsPageTypes'
+import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
+import type { InsightsReview } from './insightsReviewTypes'
+
+export const REVIEW_REQUEST_KIND = 'codex_approval_review'
+
+export interface ReviewFilters {
+  session: string
+  result: string
+  risk: string
+  model: string
+}
+
+export const EMPTY_REVIEW_FILTERS: ReviewFilters = {
+  session: '',
+  result: 'all',
+  risk: 'all',
+  model: 'all',
+}
+
+// A result is the verdict of a completed review, else the review's status.
+export const REVIEW_RESULT_OPTIONS = [
+  { value: 'allow', label: 'Allowed' },
+  { value: 'deny', label: 'Denied' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'invalid', label: 'Invalid answer' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'tool_call', label: 'Tool check' },
+  { value: 'pending', label: 'In progress' },
+]
+
+export const REVIEW_RISK_OPTIONS = ['low', 'medium', 'high', 'critical']
+
+export function buildReviewQueryString(
+  filters: ReviewFilters,
+  pagination?: { limit: number; offset: number },
+) {
+  const params = new URLSearchParams({ request_kind: REVIEW_REQUEST_KIND })
+  if (pagination) {
+    params.set('limit', String(pagination.limit))
+    params.set('offset', String(pagination.offset))
+    params.set('showDetails', 'false')
+  }
+  const session = filters.session.trim()
+  if (session) params.set('session_id', session)
+  if (filters.result === 'allow' || filters.result === 'deny') {
+    params.set('review_outcome', filters.result)
+  } else if (filters.result !== 'all') {
+    params.set('review_status', filters.result)
+  }
+  if (filters.risk !== 'all') params.set('review_risk', filters.risk)
+  if (filters.model !== 'all') params.set('model', filters.model)
+  return `?${params.toString()}`
+}
+
+export function getReviewsPath(session?: string) {
+  const params = new URLSearchParams({ tab: 'reviews' })
+  if (session) params.set('session', sessionParam(session))
+  return `/observe/requests?${params.toString()}`
+}
+
+/** The request list filtered to one Codex turn: its calls, reviews and subagents' calls. */
+export function getTurnPath(turn: string) {
+  return `/observe/requests?${new URLSearchParams({ turn }).toString()}`
+}
+
+/** The request list filtered to one session. */
+export function getSessionRequestsPath(session: string) {
+  return `/observe/requests?${new URLSearchParams({ session: sessionParam(session) }).toString()}`
+}
+
+type ReviewTone = 'allow' | 'deny' | 'failed' | 'muted' | 'pending'
+
+export function reviewResult(review?: InsightsReview): { label: string; tone: ReviewTone } {
+  if (review?.status === 'completed' && review.assessment) {
+    return review.assessment.outcome === 'allow'
+      ? { label: 'Allowed', tone: 'allow' }
+      : { label: 'Denied', tone: 'deny' }
+  }
+  switch (review?.status) {
+    case 'failed':
+      return { label: 'Failed', tone: 'failed' }
+    case 'invalid':
+      return { label: 'Invalid answer', tone: 'failed' }
+    case 'cancelled':
+      return { label: 'Cancelled', tone: 'muted' }
+    case 'tool_call':
+      return { label: 'Tool check', tone: 'muted' }
+    case 'pending':
+      return { label: 'In progress', tone: 'pending' }
+    default:
+      return { label: 'Not recorded', tone: 'muted' }
+  }
+}
+
+const RESULT_BADGE_TONE = {
+  allow: 'success',
+  deny: 'danger',
+  failed: 'warning',
+  muted: 'neutral',
+  pending: 'info',
+} as const
+
+export function ReviewResultBadge({ review }: { review?: InsightsReview }) {
+  const result = reviewResult(review)
+  return (
+    <Badge tone={RESULT_BADGE_TONE[result.tone]} size="sm" dot data-tone={result.tone}>
+      {result.label}
+    </Badge>
+  )
+}
+
+const RISK_TONE = { low: 'neutral', medium: 'warning', high: 'danger', critical: 'danger' } as const
+
+export const compactID = (value: string) =>
+  value.length <= 20 ? value : `${value.slice(0, 8)}…${value.slice(-8)}`
+
+function reviewLatency(record: InsightsRecord) {
+  const latency = record.review?.latency_ms || record.duration_ms
+  return typeof latency === 'number' && latency > 0 ? formatSeconds(latency) : '-'
+}
+
+function reviewTokens(record: InsightsRecord) {
+  if (typeof record.prompt_tokens !== 'number' && typeof record.completion_tokens !== 'number') {
+    return typeof record.total_tokens === 'number' ? String(record.total_tokens) : '-'
+  }
+  return `${record.prompt_tokens ?? 0} in · ${record.completion_tokens ?? 0} out`
+}
+
+function reviewCost(record: InsightsRecord) {
+  return typeof record.actual_cost === 'number' && record.currency
+    ? formatInsightsCost(record.actual_cost, record.currency)
+    : 'Not priced'
+}
+
+// Tokens and cost share a cell, so the table fits beside the action.
+function ReviewUsage({ record }: { record: InsightsRecord }) {
+  return (
+    <span className="flex flex-col items-end gap-0.5">
+      <span className="font-mono text-xs tabular">{reviewCost(record)}</span>
+      <small className="font-mono text-[11px] text-subtle-foreground tabular">
+        {reviewTokens(record)}
+      </small>
+    </span>
+  )
+}
+
+function ActionCell({ review }: { review?: InsightsReview }) {
+  const action = review?.action
+  const summary = action?.summary || (review?.content_redacted ? 'Hidden from this viewer' : '')
+  return (
+    <span className="flex min-w-0 items-center gap-2" title={action?.summary || undefined}>
+      {action?.tool ? <InlineCode className="shrink-0">{action.tool}</InlineCode> : null}
+      <span className="truncate text-[13px] text-foreground/85">{summary}</span>
+    </span>
+  )
+}
+
+export function createReviewTableColumns(): Column<InsightsRecord>[] {
+  return [
+    {
+      id: 'timestamp',
+      header: 'Time',
+      width: '150px',
+      sortValue: (row) => Date.parse(row.timestamp),
+      cell: (row) => (
+        <Link
+          className="whitespace-nowrap text-xs text-muted-foreground hover:text-foreground hover:underline"
+          to={`/observe/requests/${encodeURIComponent(row.id)}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {formatDateTime(row.timestamp)}
+        </Link>
+      ),
+    },
+    {
+      id: 'result',
+      header: 'Result',
+      width: '120px',
+      cell: (row) => <ReviewResultBadge review={row.review} />,
+    },
+    {
+      id: 'risk',
+      header: 'Risk',
+      width: '80px',
+      cell: (row) => {
+        const risk = row.review?.assessment?.risk_level
+        return risk ? (
+          <Badge tone={RISK_TONE[risk]} size="sm" data-risk={risk}>
+            {risk}
+          </Badge>
+        ) : (
+          <span className="text-xs text-subtle-foreground">-</span>
+        )
+      },
+    },
+    {
+      id: 'action',
+      header: 'Action',
+      className: 'w-full max-w-0',
+      cell: (row) => <ActionCell review={row.review} />,
+    },
+    {
+      id: 'session_id',
+      header: 'Session',
+      hideBelow: 'lg',
+      cell: (row) =>
+        row.session_id ? (
+          <span
+            className="font-mono text-[12px] text-muted-foreground"
+            title={displaySessionId(row.session_id)}
+          >
+            {compactSessionId(row.session_id)}
+          </span>
+        ) : (
+          <span className="text-xs text-subtle-foreground">-</span>
+        ),
+    },
+    {
+      id: 'selected_model',
+      header: 'Model',
+      hideBelow: 'md',
+      cell: (row) => <ModelChip name={row.selected_model} className="max-w-[170px] text-[13px]" />,
+    },
+    {
+      id: 'latency',
+      header: 'Latency',
+      align: 'right',
+      hideBelow: 'sm',
+      cell: (row) => <span className="font-mono text-xs tabular">{reviewLatency(row)}</span>,
+    },
+    {
+      id: 'actual_cost',
+      header: 'Cost',
+      align: 'right',
+      cell: (record) => <ReviewUsage record={record} />,
+    },
+  ]
+}
+
+function hiddenOr(value: string | undefined, review: InsightsReview, missing: string) {
+  if (value) return value
+  return review.content_redacted ? 'Hidden from this viewer' : missing
+}
+
+function reviewActionFields(review: InsightsReview): ViewField[] {
+  const action = review.action
+  const fields: ViewField[] = [
+    { label: 'Tool', value: action?.tool || 'Not recorded' },
+    { label: 'Action', value: hiddenOr(action?.summary, review, 'Not recorded') },
+    { label: 'Working directory', value: hiddenOr(action?.cwd, review, 'Not recorded') },
+  ]
+  if (action?.arguments) {
+    fields.push({
+      label: 'Planned action',
+      fullWidth: true,
+      value: (
+        <pre className="max-h-72 overflow-auto rounded-lg border border-border bg-surface-sunken/60 px-3 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap break-all">
+          {action.arguments}
+          {action.arguments_truncated ? '\n… cut at the record limit' : ''}
+        </pre>
+      ),
+    })
+  }
+  return fields
+}
+
+/** The record detail section of an approval review, or null for other requests. */
+export function buildReviewSection(record: InsightsRecord): ViewSection | null {
+  const review = record.review
+  if (!review) return null
+  const assessment = review.assessment
+  const session = review.reviewed_session_id
+  return {
+    title: 'Approval Review',
+    fields: [
+      { label: 'Result', value: <ReviewResultBadge review={review} /> },
+      { label: 'Risk', value: assessment?.risk_level || 'Not reported' },
+      { label: 'User authorization', value: assessment?.user_authorization || 'Not reported' },
+      { label: 'Latency', value: reviewLatency(record) },
+      {
+        label: 'Rationale',
+        fullWidth: true,
+        value: assessment
+          ? `${hiddenOr(assessment.rationale, review, 'The reviewer gave none.')}${assessment.rationale_truncated ? ' …' : ''}`
+          : 'No verdict, so no rationale.',
+      },
+      ...reviewActionFields(review),
+      {
+        label: 'Reviewed session',
+        value: session ? (
+          <Link
+            className="font-mono text-[12.5px] text-primary hover:underline"
+            to={getReviewsPath(session)}
+          >
+            {compactID(displaySessionId(session))}
+          </Link>
+        ) : (
+          '-'
+        ),
+      },
+      { label: 'Reviewer thread', value: review.thread_id || '-' },
+      { label: 'Planned in turn', value: review.parent_turn_id || '-' },
+      {
+        label: 'Recognised by',
+        value:
+          review.identification_source === 'entrypoint'
+            ? 'Review entrypoint'
+            : "Codex's review request",
+      },
+    ],
+  }
+}
+
+/** Counts a session's settled reviews for its summary strip. */
+export function summarizeReviews(reviews: InsightsRecord[]) {
+  const summary = { total: 0, allowed: 0, denied: 0, failed: 0 }
+  for (const record of reviews) {
+    const status = record.review?.status
+    if (!status || status === 'pending' || status === 'tool_call') continue
+    summary.total += 1
+    const tone = reviewResult(record.review).tone
+    if (tone === 'allow') summary.allowed += 1
+    else if (tone === 'deny') summary.denied += 1
+    else if (tone === 'failed') summary.failed += 1
+  }
+  return summary
+}
+
+/**
+ * Places each review under the turn whose planned action it judged: the
+ * latest request of that Codex turn when the review names it, else the latest
+ * request of the session that started before it. A review that is itself one
+ * of the routes is marked as a review instead.
+ */
+export function assignReviewsToRoutes(
+  routes: InsightsTrajectoryRoute[],
+  reviews: InsightsRecord[],
+): Map<string, InsightsRecord[]> {
+  const reviewIDs = new Set(reviews.map((review) => review.id))
+  const turns = routes
+    .filter((route) => !reviewIDs.has(route.record_id))
+    .map((route) => ({
+      id: route.record_id,
+      turn: route.turn_id,
+      start: Date.parse(route.timestamp),
+    }))
+    .filter((turn) => Number.isFinite(turn.start))
+    .sort((left, right) => left.start - right.start)
+  const marks = new Map<string, InsightsRecord[]>()
+  for (const review of reviews) {
+    const start = Date.parse(review.timestamp)
+    const named = turns.filter(
+      (candidate) => candidate.turn && candidate.turn === review.parent_turn_id,
+    )
+    const pool = named.length > 0 ? named : turns
+    const turn = pool.filter((candidate) => candidate.start <= start).pop() ?? named[0]
+    if (!turn) continue
+    marks.set(turn.id, [...(marks.get(turn.id) ?? []), review])
+  }
+  return marks
+}

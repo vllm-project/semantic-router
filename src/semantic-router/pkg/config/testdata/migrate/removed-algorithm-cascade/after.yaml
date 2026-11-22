@@ -1,0 +1,64 @@
+# The native cascade is escalate: its stages and quality move under escalate,
+# each acceptance becomes accept.native with its bounds on each rule, a native
+# stage needs no kind, and the budget stays the executor's own.
+version: v0.5
+listeners:
+  - name: native
+    port: 8801
+    apis:
+      chat_completions: {}
+      responses: {}
+      messages: {}
+      images: {}
+      systemone:
+        schema: vllm-sr/4.0
+        models: [vllm-sr/auto]
+providers:
+  models:
+    - name: kai
+      api_format: systemone
+      deployment: local-kai
+    - name: strong
+      api_format: systemone
+      provider_model_id: vllm-sr/Decision-2.0-Nox-4B
+      backend_refs:
+        - provider: systemone-compatible
+          endpoint: http://127.0.0.1:8900/v1
+      schema: vllm-sr/5.0
+global:
+  model_catalog:
+    deployments:
+      local-kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        device: cpu
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+  - api: systemone
+    model_names: [vllm-sr/auto]
+    recipe: native-decisions
+recipes:
+  - name: default
+  - name: native-decisions
+    decisions:
+      - name: classify
+        rules: {}
+        modelRefs: [{model: kai}, {model: strong}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 3s, max_calls: 2}
+          escalate:
+            quality:
+              type: uncalibrated
+              accept:
+                native:
+                  - {question_type: choice, field: top_probability, gte: 0}
+            stages:
+              - name: fast
+                model: kai
+                accept:
+                  native:
+                    - {question_type: choice, field: top_probability, gte: 0.61}
+              - {name: strong, model: strong, timeout: 1s}

@@ -15,6 +15,9 @@ in its released forwards. Each task's answers are written in the suite's predict
 and ``score`` read: a signal's probabilities, and for PII the most probable span of a sensitive
 type (``{yes, no}``). Resumable: rows already written are skipped.
 
+A model whose card reports no scan budget (``limits.max_scan_tokens``) gets the truncating
+questions without ``overflow`` and reads them whole, as the Router sends them to it.
+
 ``--questions own`` asks each row only its own signal's question (prompt attack and harmful
 request together, which share a row). On a model whose rows of different adapters or reading
 policies never share a sequence or a forward (vela3-fast) the answers equal the bundle's; on a
@@ -29,6 +32,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -105,7 +109,7 @@ SIGNALS: dict[str, tuple[str, dict[str, Any], bool]] = {
 SHARED_ROWS = {"jailbreak": ("jailbreak", "safety"), "safety": ("jailbreak", "safety")}
 
 
-def bundle(task: str, own: bool) -> dict[str, Any]:
+def bundle(task: str, *, own: bool, truncate: bool) -> dict[str, Any]:
     """The questions the Router asks its default deployment about one row of ``task``.
 
     ``own`` keeps only the task's own question and the ones that share its row.
@@ -116,9 +120,13 @@ def bundle(task: str, own: bool) -> dict[str, Any]:
         if name not in keep or (name == "feedback" and task != "feedback"):
             continue
         questions[question_id] = (
-            question if whole else {**question, "overflow": "truncate"}
+            {**question, "overflow": "truncate"} if truncate and not whole else question
         )
     return questions
+
+
+def has_scan_budget(limits: Mapping[str, int]) -> bool:
+    return limits.get("max_scan_tokens", 0) > 0
 
 
 def scores(task: str, response: dict[str, Any]) -> dict[str, float] | None:
@@ -182,6 +190,7 @@ def main() -> None:
     assert served.model is not None and served.placement is not None
     execute = served.placement.accelerator.execute
     device = served.placement.device
+    truncate = has_scan_budget(served.model.info.limits)
     try:
         for task in args.tasks.split(","):
             for split in args.splits.split(","):
@@ -206,7 +215,9 @@ def main() -> None:
                     for row in rows:
                         if row["id"] in done:
                             continue
-                        questions = bundle(task, args.questions == "own")
+                        questions = bundle(
+                            task, own=args.questions == "own", truncate=truncate
+                        )
                         response = execute(
                             device,
                             lambda q=questions, t=row["text"]: ask(served.model, t, q),

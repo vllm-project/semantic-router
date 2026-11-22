@@ -52,8 +52,8 @@ func TestCompileAndDecompileRoutingScopes(t *testing.T) {
 	if len(cfg.Recipes) != 3 {
 		t.Fatalf("recipe count = %d, want default plus two named recipes", len(cfg.Recipes))
 	}
-	if len(cfg.Entrypoints) != 2 {
-		t.Fatalf("entrypoint count = %d, want 2", len(cfg.Entrypoints))
+	if len(cfg.Entrypoints) != 3 || !cfg.Entrypoints[0].Default || cfg.Entrypoints[0].Recipe != config.DefaultRecipeName {
+		t.Fatalf("entrypoints = %+v, want the default one first, then 2", cfg.Entrypoints)
 	}
 	alpha, ok := cfg.RecipeByName("alpha")
 	if !ok || alpha.Profile.Strategy != config.RoutingStrategyConfidence {
@@ -79,7 +79,7 @@ func TestCompileAndDecompileRoutingScopes(t *testing.T) {
 func TestEntrypointAPISurvivesRoundTrip(t *testing.T) {
 	source := `
 MODEL shared_model {}
-ENTRYPOINT { model_names: ["router/auto"] recipe: "alpha" }
+ENTRYPOINT { model_names: ["router/auto"] recipe: "alpha" default: true }
 ENTRYPOINT { api: "systemone" model_names: ["router/auto"] recipe: "native" }
 RECIPE alpha { ROUTE alpha_route { MODEL shared_model } }
 RECIPE native { ROUTE native_route { MODEL shared_model } }
@@ -160,12 +160,10 @@ SIGNAL keyword factual { keywords: ["verify"] }
 ROUTE factual_route {
   WHEN keyword("factual")
   MODEL model
-  PLUGIN semantic_cache { enabled: true, similarity_threshold: 0.9, ttl_seconds: 900 }
-  PLUGIN hallucination {
-    enabled: true
-    hallucination_action: "header"
-    unverified_factual_action: "header"
-    include_hallucination_details: true
+  PLUGIN response_cache { enabled: true, ttl_seconds: 900, semantic: { match: { recall: { top_k: 3, min_similarity: 0.9 } } } }
+  PLUGIN response_guard {
+    rules: [{ when: { type: "keyword", name: "factual" }, action: "annotate", details: true }]
+    on_unknown: "none"
   }
 }`
 	cfg, errs := Compile(input)
@@ -176,9 +174,53 @@ ROUTE factual_route {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"ttl_seconds: 900", `unverified_factual_action: "header"`, "include_hallucination_details: true"} {
+	for _, expected := range []string{"ttl_seconds: 900", "min_similarity: 0.9", `on_unknown: "none"`, "details: true"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("decompiled DSL is missing %q:\n%s", expected, text)
 		}
+	}
+}
+
+func TestDelegateModelRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		field string
+		ast   func(*EntrypointDeclJSON) string
+	}{
+		{"review_model", func(e *EntrypointDeclJSON) string { return e.ReviewModel }},
+		{"memory_model", func(e *EntrypointDeclJSON) string { return e.MemoryModel }},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			binding := tc.field + `: "router/beta-v2"`
+			source := strings.Replace(scopedRoutingDSL, "recipe: \"alpha\"", "recipe: \"alpha\"\n  "+binding, 1)
+			cfg, errs := Compile(source)
+			if len(errs) > 0 {
+				t.Fatalf("compile: %v", errs)
+			}
+			text, err := Decompile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(text, binding) {
+				t.Fatalf("%s lost: %s", tc.field, text)
+			}
+			next, errs := Compile(text)
+			if len(errs) > 0 {
+				t.Fatalf("recompile: %v", errs)
+			}
+			if !reflect.DeepEqual(cfg.Entrypoints, next.Entrypoints) {
+				t.Fatalf("entrypoints changed: %+v => %+v", cfg.Entrypoints, next.Entrypoints)
+			}
+			prog, parseErrs := Parse(source)
+			if len(parseErrs) > 0 {
+				t.Fatalf("parse: %v", parseErrs)
+			}
+			if got := tc.ast(ProgramToJSON(prog).Entrypoints[0]); got != "router/beta-v2" {
+				t.Fatalf("AST %s = %q", tc.field, got)
+			}
+			_, errs = Compile(strings.Replace(source, binding, tc.field+`: "missing"`, 1))
+			if len(errs) == 0 || !strings.Contains(errs[0].Error(), tc.field) {
+				t.Fatalf("invalid target accepted: %v", errs)
+			}
+		})
 	}
 }

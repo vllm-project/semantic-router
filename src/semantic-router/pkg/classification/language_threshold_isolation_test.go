@@ -13,25 +13,26 @@ func TestLanguageSignal_DefaultThresholdIsolation(t *testing.T) {
 		extra string
 	}{
 		{name: "single defaulted rule"},
-		{name: "higher English threshold", extra: "      - name: en\n        threshold: 1\n"},
+		{name: "higher English threshold", extra: "        - name: en\n          threshold: 1\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
-routing:
-  signals:
-    language:
-      - name: fr
-` + tt.extra + `  decisions:
-    - name: french
-      priority: 100
-      rules:
-        operator: OR
-        conditions: [{type: language, name: fr}]
-      modelRefs: [{model: local}]
-    - name: fallback
-      priority: 1
-      rules: {operator: AND}
-      modelRefs: [{model: local}]
+			cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+recipes:
+  - name: default
+    signals:
+      language:
+        - name: fr
+` + tt.extra + `    decisions:
+      - name: french
+        priority: 100
+        rules:
+          operator: OR
+          conditions: [{type: language, name: fr}]
+        modelRefs: [{model: local}]
+      - name: fallback
+        priority: 1
+        rules: {operator: AND}
+        modelRefs: [{model: local}]
 providers:
   models:
     - name: local

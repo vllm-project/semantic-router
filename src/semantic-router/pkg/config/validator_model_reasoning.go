@@ -108,7 +108,13 @@ func validateEnabledModelReasoningControl(
 	effort string,
 ) error {
 	if effort == "" {
-		return validateProviderReasoningControl(cfg, path, model, family, true, mode, "")
+		// The Router sends the deployment-wide default wherever the family
+		// lists it, so that is the effort the Provider binding must accept.
+		if def := cfg.DefaultReasoningEffort; def != "" && reasoningFamilyAllowsLevel(family, def) {
+			path += " via providers.defaults.reasoning_effort"
+			effort = def
+		}
+		return validateProviderReasoningControl(cfg, path, model, family, true, mode, effort)
 	}
 	if family.Type == ReasoningFamilyTypeReasoningMode || family.Type == ReasoningFamilyTypeChatTemplateKwargs {
 		return fmt.Errorf("%s: reasoning_effort cannot be used with this mode-only reasoning family", path)
@@ -213,6 +219,15 @@ func reasoningValueAllowed(values []string, candidate string) bool {
 		}
 	}
 	return false
+}
+
+// CanProjectReasoningOff reports whether every Provider binding of model can
+// send its reasoning family's off control, as a decision's use_reasoning:
+// false requires.
+func (c *RouterConfig) CanProjectReasoningOff(model string) bool {
+	family := c.GetModelReasoningFamily(model)
+	return reasoningFamilyCanDisableConfig(family) &&
+		validateProviderReasoningControl(c, "", model, family, false, "", "") == nil
 }
 
 func reasoningFamilyCanDisableConfig(family *ReasoningFamilyConfig) bool {

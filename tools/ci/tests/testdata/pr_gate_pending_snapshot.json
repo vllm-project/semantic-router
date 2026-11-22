@@ -1,0 +1,50 @@
+{
+  "recorded_date": "2026-11-16",
+  "scope": "Historical API topology; qualification receipts and identity in replay are synthetic. PR5745 subsequently merged another head.",
+  "pr": 5745,
+  "gate": {
+    "id": 125818102494,
+    "name": "PR Gate",
+    "head_sha": "ab8851efc6b12ef49cc8dd08a88ab037d3d61f36",
+    "status": "in_progress",
+    "conclusion": null,
+    "external_id": "semantic-router-ci:5745:41595697052:1",
+    "check_suite": {
+      "id": 112713712089
+    },
+    "app": {
+      "id": 15368
+    },
+    "output": {
+      "title": "Waiting for committer approval \u2014 /ci run",
+      "text": null
+    }
+  },
+  "latest_gate_ids": [],
+  "qualification": {
+    "id": 41595697052,
+    "head_sha": "ab8851efc6b12ef49cc8dd08a88ab037d3d61f36",
+    "run_attempt": 1,
+    "conclusion": "success",
+    "check_suite_id": 112713712670
+  },
+  "Community_attempts": [
+    {
+      "id": 41595696840,
+      "run_attempt": 1,
+      "conclusion": "failure",
+      "check_suite_id": 112713712089
+    },
+    {
+      "id": 41595696840,
+      "run_attempt": 2,
+      "conclusion": "success",
+      "check_suite_id": 112713712089
+    }
+  ],
+  "deferred_verifications": [
+    "e2e.streaming",
+    "e2e.provider-protocols",
+    "e2e.response-api"
+  ]
+}

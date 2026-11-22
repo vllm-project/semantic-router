@@ -9,8 +9,10 @@ UltraBERT backbone in ``model.safetensors``. An adapter whose file the package
 does not ship routes off, as the released runtime does. The family loads the
 two configs, the router questions, the tokenizer and the weights; every loaded
 byte must match the built-in table's digest for a pinned revision and the
-package's ``SHA256SUMS``; bundled Python is never read. The identity is the
-SHA-256 of the weight files' digests.
+package's ``SHA256SUMS``. A bundled ``render31.py`` is fingerprinted as data
+to select its question semantics, never imported or executed. ``config.json``
+names the eight markers by distinct token IDs inside the backbone's
+vocabulary. The identity is the SHA-256 of the weight files' digests.
 """
 
 from __future__ import annotations
@@ -21,13 +23,23 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
-from ...registry.artifacts import named_files, read_json, safe_relative, sha256_json
+from ...registry.artifacts import (
+    SUMS_FILE,
+    named_files,
+    read_json,
+    read_sums,
+    safe_relative,
+    sha256_json,
+)
+from ..vela3_shared import CONFIG_FILE, check_markers, config_file
 
 ENCODER = "vela3-encoder/1"
-CONFIG_FILE = "vela3_config.json"
-SUMS_FILE = "SHA256SUMS"
 BACKBONE_FILE = "model.safetensors"
 COMMON_FILES = ("config.json", CONFIG_FILE, "router_questions.json", "tokenizer.json")
+RENDER31_FILE = "render31.py"
+# Shared renderer shipped by vllm-sr/vela3.1-fast@0ed6ed301fbbf0c312f11a13ad17e3a6f8887262.
+# Its fingerprint selects semantics without importing or executing package code.
+RENDER31_SHA256 = "d0c8ebc0896c7d3b942f5eba98cdd247ef01e08d329237015bef4fc55009c8ad"
 LORA_TARGETS = (
     "q_proj",
     "k_proj",
@@ -37,6 +49,11 @@ LORA_TARGETS = (
     "up_proj",
     "down_proj",
 )
+# The vela3-fast-vision image package: a sibling format with its own config
+# file, recognized so pointing the runtime at its snapshot reports the missing
+# serving path instead of an unknown package.
+VELA3V_ENCODER = "vela3v-encoder/1"
+VELA3V_CONFIG_FILE = "vela3v_config.json"
 
 
 def member_of(root: Path) -> str | None:
@@ -48,6 +65,19 @@ def member_of(root: Path) -> str | None:
     if not isinstance(config, dict):
         return None
     return ENCODER if config.get("format") == ENCODER else None
+
+
+def member_of_vision(root: Path) -> str | None:
+    """The image package's format, read from its ``vela3v_config.json`` only."""
+    try:
+        config = json.loads(
+            (Path(root) / VELA3V_CONFIG_FILE).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return None
+    if not isinstance(config, dict):
+        return None
+    return VELA3V_ENCODER if config.get("format") == VELA3V_ENCODER else None
 
 
 @dataclass(frozen=True)
@@ -80,12 +110,6 @@ class Roster:
     router_tasks: dict[str, tuple[str, tuple[str, ...]]]
 
 
-def _file(value: Any, where: str) -> str:
-    if not isinstance(value, str) or not safe_relative(value):
-        raise PackageError(f"{CONFIG_FILE}: {where} must name a file in the package")
-    return value
-
-
 def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
     """The routing roster and every adapter's file, by adapter name; files the package lacks route off."""
     present = {name for name in _named(config) if (Path(root) / name).is_file()}
@@ -94,7 +118,7 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
     files: dict[str, str] = {}
 
     def take(name: str, value: Any, where: str) -> str | None:
-        file = _file(value, where)
+        file = config_file(value, where)
         if file not in present:
             return None
         files[name] = file
@@ -127,11 +151,19 @@ def roster(root: Path, config: dict[str, Any]) -> tuple[Roster, dict[str, str]]:
             f"router:{task}" if len(listed) == 1 else f"router:{task}:{index}"
             for index in range(len(listed))
         ]
-        if not all(_file(f, f"router.task_adapters.{task}") in present for f in listed):
+        if not all(
+            config_file(f, f"router.task_adapters.{task}") in present for f in listed
+        ):
             continue
         for name, file in zip(names, listed, strict=True):
             files[name] = file
         for question_id in entry.get("ids") or ():
+            owner = router_tasks.get(str(question_id))
+            if owner is not None and owner[0] != task:
+                raise PackageError(
+                    f"{CONFIG_FILE}: router.task_adapters question ID "
+                    f"{str(question_id)!r} is declared by both {owner[0]!r} and {task!r}"
+                )
             router_tasks[str(question_id)] = (task, tuple(names))
     return Roster(span, evidence, span_set, tasks, router, router_tasks), files
 
@@ -177,6 +209,7 @@ class Vela3Package:
     adapters: dict[str, Adapter]
     files: dict[str, str]
     model_sha256: str
+    render31: bool = False
 
     @property
     def max_input_tokens(self) -> int:
@@ -185,19 +218,6 @@ class Vela3Package:
     @property
     def weights(self) -> tuple[Path, ...]:
         return (self.root / BACKBONE_FILE,)
-
-
-def _sums(root: Path) -> dict[str, str]:
-    path = root / SUMS_FILE
-    if not path.is_file():
-        return {}
-    sums = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        digest, _, name = line.strip().partition(" ")
-        name = name.strip().lstrip("*")
-        if digest and name:
-            sums[name] = digest
-    return sums
 
 
 def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
@@ -211,7 +231,14 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
     vela3 = read_json(root / CONFIG_FILE, mapping=True)
     team, adapter_files = roster(root, vela3)
     weight_names = [BACKBONE_FILE, *sorted(set(adapter_files.values()))]
-    files = named_files(root, [*COMMON_FILES, *weight_names])
+    sums = read_sums(root)
+    render31 = RENDER31_FILE in sums or (root / RENDER31_FILE).exists()
+    names = [*COMMON_FILES, *weight_names]
+    if render31:
+        names.append(RENDER31_FILE)
+    files = named_files(root, names)
+    if render31 and files[RENDER31_FILE] != RENDER31_SHA256:
+        raise PackageError("unsupported Vela question renderer fingerprint")
     if expected is not None:
         wrong = sorted(
             name
@@ -220,17 +247,19 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
         )
         if wrong:
             raise PackageError(f"files differ from the pinned revision: {wrong[:5]}")
-    sums = _sums(root)
     mismatched = sorted(
         name for name, digest in files.items() if name in sums and sums[name] != digest
     )
     if mismatched:
         raise PackageError(f"files differ from {SUMS_FILE}: {mismatched[:5]}")
     config = read_json(root / "config.json", mapping=True)
-    if config.get("model_type") != "ultrabert" or "decision" not in config:
+    if config.get("model_type") != "ultrabert" or not isinstance(
+        config.get("decision"), dict
+    ):
         raise PackageError(
             "config.json does not describe the UltraBERT decision backbone"
         )
+    check_markers(config)
     questions = read_json(root / "router_questions.json", mapping=True).get("questions")
     if not isinstance(questions, dict):
         raise PackageError("router_questions.json lists no router questions")
@@ -248,4 +277,5 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
         adapters=adapters,
         files=files,
         model_sha256=sha256_json({name: files[name] for name in weight_names}),
+        render31=render31,
     )

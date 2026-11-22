@@ -79,7 +79,7 @@ func TestBuildClassifierUsesCalibratedContextCounter(t *testing.T) {
 				}},
 			},
 		},
-	}, nil, nil, nil)
+	})
 	if err != nil {
 		t.Fatalf("BuildClassifier returned error: %v", err)
 	}

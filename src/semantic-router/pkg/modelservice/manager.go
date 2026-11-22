@@ -41,6 +41,9 @@ type Manager struct {
 	closed          bool
 
 	dispatchSequence uint64
+	// ejecting serializes replica ejections across a deployment's
+	// generations. It is taken with no other lock held.
+	ejecting sync.Mutex
 
 	autoOnce sync.Once
 	auto     string
@@ -161,14 +164,15 @@ func (m *Manager) startGroupLocked(plan *processPlan) (*group, error) {
 		if m.attachedClients == nil {
 			m.attachedClients = make(map[string]*Client)
 		}
-		client := m.attachedClients[plan.endpoint]
+		key := plan.attachedClientKey()
+		client := m.attachedClients[key]
 		if client == nil {
 			var err error
-			client, err = NewClient(plan.endpoint)
+			client, err = NewAttachedClient(plan.endpoint, plan.connection)
 			if err != nil {
 				return nil, err
 			}
-			m.attachedClients[plan.endpoint] = client
+			m.attachedClients[key] = client
 		}
 		g := newGroup(plan, client, false)
 		g.start()

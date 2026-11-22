@@ -13,8 +13,7 @@ transport, pricing, and any restrictions known for that Provider.
 ## Configure the smallest binding
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: production
@@ -24,19 +23,138 @@ providers:
       backend_refs:
         - name: openai-primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
-
-routing: {}
+          auth: {api_key_env: OPENAI_API_KEY}
+recipes:
+  - name: default
 ```
 
 `production` is the local alias. The Router resolves the canonical card and the
 OpenAI-specific mapping from `catalog: openai/gpt-5.6-sol`; do not repeat its
 reasoning definition in YAML.
 
-Browse built-in identities and their Provider support in **Model Hub**, or
-choose a Provider in **Build → Routing → Models → Add Model**. The Dashboard labels
+Browse built-in identities and their Provider support in **Models → Model Hub**,
+or choose a Provider in **Models → Backend models → Connect model**. The Dashboard labels
 catalog choices as **Built-in** and saves both the local alias and canonical
 identity.
+
+## List prices
+
+A catalog-backed Model without `pricing` of its own takes its Provider
+mapping's list price, so cost and savings also work for a Model reached with a
+Claude or ChatGPT login (`auth.credential: caller`). The first-party Anthropic
+and OpenAI mappings carry USD input, output and cache-read rates and these
+cache writes:
+
+| Provider | Models | Cache writes |
+| --- | --- | --- |
+| `anthropic` | Claude Fable 5.2, Opus 5.5, Sonnet 5.5, Fable 5.1, Opus 5, Sonnet 5, Fable 5 and Opus 4.8 | 5-minute `cache_write_per_1m` and 1-hour `cache_write_1h_per_1m` |
+| `openai` | GPT-6 Astra, GPT-5.6 Sol, Terra and Luna, GPT-5.5, GPT-5.4 and GPT-5.4 mini | 30-minute `cache_write_per_1m` on GPT-6 Astra and GPT-5.6; the others price a write as input |
+
+The rates come from the [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing)
+and [OpenAI](https://developers.openai.com/api/docs/pricing) pricing pages and
+leave out long-context, data-residency, batch and service-tier adjustments.
+The Dashboard's **Requests** page marks such a cost as a list price estimate,
+and on a login it is what the tokens would cost at API prices, not what the
+plan charges. Set `pricing`
+on the alias to use other rates. A written `pricing` block always wins,
+whatever its rates, and its `currency` defaults to `USD`, so
+`pricing: {prompt_per_1m: 0, completion_per_1m: 0}` marks a Model free: its
+cost is 0.
+
+A Model without `pricing` that had no price before list prices has one now, so
+routing sees it after an upgrade: `max_cost_per_1m` can exclude it, the `cost`
+factor of
+[multi-factor selection](../tutorials/algorithm/selection/multi-factor#cost-and-slos)
+scores it, and the `cost` order of
+[Escalate](../tutorials/algorithm/looper/escalate) places it by price instead
+of last. A Model on a Claude or ChatGPT login is ranked at the API price, not
+the plan's. Set `pricing` on it to rank it at other rates, or free.
+
+A custom Model, one without `catalog`, takes the list price its backend's
+Provider gives the model ID the backend calls: its `external_model_ids` entry,
+else `provider_model_id`, else the name. Only the backend's own Provider is
+read, and only when the backend's endpoints are that Provider's API: the host
+of its default base URL (`api.anthropic.com`, `api.openai.com`), or
+`chatgpt.com`, which serves ChatGPT logins.
+`provider_model_id: claude-sonnet-5-5` on an `anthropic` backend is priced as
+Claude Sonnet 5.5, while a `vllm` backend serving the same ID, or an `openai`
+backend whose `endpoint` is an OpenAI-compatible server elsewhere, takes no
+price. Set `pricing` on a Model behind a proxy that bills at list price. Some
+model IDs have a list price but no Model Card yet: Claude Haiku 5.5
+(`claude-haiku-5-5`) and GPT-6.1 Sol, GPT-6.1 Terra, GPT-6 Sol and GPT-6 Luna
+(`gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-sol`, `gpt-6-luna`). A custom Model
+that calls one of them is priced at the standard rate, since a cost leaves out
+long-context rates such as Haiku 5.5's five-times rate over 100,000 prompt
+tokens. `catalog:` cannot name these IDs.
+
+## MiniMax M3.1 Flash
+
+`minimax/minimax-m3.1-flash` identifies the
+[official open weights](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/tree/262ae6830934f3512211081b8a3f16425b93a239)
+under the MiniMax Community License. The MiniMax API and an experimental vLLM
+mapping share that card. Both mappings currently declare Chat Completions.
+
+The card records the checkpoint's 1,048,576-token context window from its
+[pinned configuration](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/resolve/262ae6830934f3512211081b8a3f16425b93a239/config.json).
+The MiniMax API mapping separately records its 1,000,000-token service limit.
+
+```yaml
+version: v0.5
+providers:
+  models:
+    - name: flash
+      catalog: minimax/minimax-m3.1-flash
+      backend_refs:
+        - name: primary
+          provider: minimax
+          auth: {api_key_env: MINIMAX_API_KEY}
+recipes:
+  - name: default
+    decisions:
+      - name: flash_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: flash
+            use_reasoning: true
+            reasoning_effort: high
+```
+
+The model uses adaptive thinking and supports `low`, `medium`, `high`, `xhigh`,
+and `max`, with `max` as the catalog default. Disabling reasoning, selecting
+`reasoning_mode: enabled`, or requesting `reasoning_effort: none` is rejected.
+The Router sends the selected effort as a top-level field to MiniMax.
+The [API](https://platform.minimax.io/docs/api-reference/text-openai-api)
+supports a 1,000,000-token context and up to 524,288 output tokens, including
+thinking. It ignores sampling changes to `temperature` and `top_p`, using 1
+and 0.95; `service_tier` is unsupported. Preserve `reasoning_content` and
+tool-call IDs when returning assistant history in a tool conversation.
+
+For an existing self-hosted server, replace the backend above with:
+
+```yaml
+        - name: primary
+          provider: vllm
+          endpoint: http://127.0.0.1:8000/v1
+```
+
+The mapping resolves `MiniMaxAI/MiniMax-M3.1-Flash` and sends effort inside
+`chat_template_kwargs`. Follow the
+[vLLM recipe](https://recipes.vllm.ai/MiniMaxAI/MiniMax-M3.1-Flash): its reviewed
+version requires vLLM 0.33.0 nightly with the dedicated `minimax-m31-flash`
+image, `--block-size 128`, and `minimax_m3` reasoning/tool parsers. A stable pip
+installation is not sufficient. The Hopper example limits context to 262,144
+and disables video; set your served window and capabilities on the alias as
+described below. The mapping is experimental and does not
+certify a particular deployment.
+
+Five published benchmark records are attributed to the
+[pinned official model card](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md).
+Their reasoning effort is `unspecified`; they are vendor claims, not
+vLLM-SR reproductions. Terminal-Bench 4.0 remains separate from 2.1, and the
+selectable effort levels have no complete Intelligence 1.0 evidence.
 
 ## Supply a deployment name when required
 
@@ -52,27 +170,42 @@ providers:
       provider_model_id: my-production-deployment
       backend_refs:
         - provider: microsoft-foundry
-          base_url: https://example.services.ai.azure.com
-          api_key_env: FOUNDRY_API_KEY
+          endpoint: https://example.services.ai.azure.com
+          auth: {api_key_env: FOUNDRY_API_KEY}
 ```
 
 The Dashboard shows **Deployment name** or **Provider model ID** only when the
 selected mapping requires one. It is an upstream identifier, not a second
-catalog identity.
+catalog identity, so the mapping's pricing, reasoning transport, and effort
+limits still apply. Set it the same way when a self-hosted server serves the
+model under another name, such as vLLM's `--served-model-name`.
 
 ## Override only operator-owned metadata
 
-You can add local tags, descriptions, capabilities, or evaluations without
-forking the built-in card. The override must use the canonical `catalog` ID,
-not the local alias:
+You can set local tags, a description, a narrower capability list, or the
+served limits without forking the built-in card. Set them on the
+catalog-backed alias; each value replaces the card's value for that alias only:
 
 ```yaml
-routing:
-  modelCards:
-    - name: openai/gpt-5.6-sol
+version: v0.5
+providers:
+  models:
+    - name: production
+      catalog: openai/gpt-5.6-sol
       tags: [production, approved]
       description: Approved for production reasoning traffic.
+      backend_refs:
+        - name: openai-primary
+          provider: openai
+          auth: {api_key_env: OPENAI_API_KEY}
+recipes:
+  - name: default
 ```
+
+A separate `providers.models` entry named after the catalog ID, such as
+`name: openai/gpt-5.6-sol`, does not reach the alias: next to an alias that
+binds that card it is rejected as ambiguous, and on its own it declares a
+separate Model with no backend.
 
 Do not set `providers.models[].reasoning` on a catalog-backed Model. That
 combination is rejected so an alias cannot silently change a repository-owned
@@ -84,23 +217,16 @@ A built-in card declares the model's full context window. A vLLM server
 started with a smaller `--max-model-len` rejects longer requests, but the
 Router still uses the card's window to decide which candidates fit a request
 and how much input context compression may keep. To align them, start vLLM
-with a matching `--max-model-len`, or set the served window on the canonical
-card:
-
-```yaml
-routing:
-  modelCards:
-    - name: qwen/qwen3.6-27b
-      context_window_size: 32768
-```
+with a matching `--max-model-len`, or set the served window on the
+catalog-backed alias.
 
 For example, vLLM 0.11.1 derives a 32,768-token limit from the pinned
 [Hunyuan 7B Instruct config](https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/config.json)
 and rejects `max_model_len=262144`, although the model card and tokenizer
-advertise 256K. For that deployment, override the canonical card window:
+advertise 256K. For that deployment, set the window on the alias:
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: local-hunyuan
@@ -109,16 +235,15 @@ providers:
       catalog: tencent/hunyuan-7b-instruct
       backend_refs:
         - provider: vllm
-          base_url: http://127.0.0.1:8000/v1
-routing:
-  modelCards:
-    - name: tencent/hunyuan-7b-instruct
+          endpoint: http://127.0.0.1:8000/v1
       context_window_size: 32768
+recipes:
+  - name: default
 ```
 
-The override uses the canonical card ID, not `local-hunyuan`. Keep the published
-card unchanged, and revalidate the deployment limit after changing the serving
-runtime or model revision.
+The window applies to `local-hunyuan` only, and the published card stays
+unchanged. Revalidate the deployment limit after changing the serving runtime
+or model revision.
 
 When a configuration loads or reloads, the Router reads `max_model_len` from
 each `vllm` backend's `/v1/models` response. If a backend serves less than the

@@ -84,7 +84,7 @@ func TestSelectionTracePreviewAndLiveLatencyCoverage(t *testing.T) {
 				}
 				preview := router.SelectModelForEval(services.EvalModelSelectionInput{Decision: decision, ContextTokenCount: 128})
 				ctx := &RequestContext{VSRSelectedDecision: decision}
-				selCtx := router.buildSelectionContext(decision.ModelRefs, decision.Name, "", decision.Algorithm, "", nil, ctx)
+				selCtx := router.buildSelectionContext(decision.ModelRefs, decision.Name, "", "", nil, ctx)
 				selCtx.InputTokens = 128
 				selected, _, err := router.selectModelFromCandidates(selCtx, decision.Algorithm, ctx)
 				want := cheap

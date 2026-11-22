@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -10,6 +11,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
@@ -53,8 +55,7 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 		return nil, "", nil, err
 	}
 	if !streaming {
-		envelope := llmprotocol.Envelope{}
-		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+		envelope := llmprotocol.Envelope{ResponseRender: responseObjectRender(ctx)}
 		encoded, encodeErr := engine.EncodeResponse(format, *response, envelope)
 		if encodeErr != nil {
 			return nil, "", nil, encodeErr
@@ -67,7 +68,7 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 		Context: ctx.TraceContext, Source: format, Target: format,
 		Options:     clientStreamOptions(ctx),
 		PublicModel: response.Model, ResponseID: response.ID,
-		PreviousResponseID: responseObjectPreviousID(ctx),
+		ResponseRender: responseObjectRender(ctx),
 	})
 	if err != nil {
 		return nil, "", nil, err
@@ -90,7 +91,7 @@ func authoritativeZeroUsage() llmprotocol.Usage {
 }
 
 func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
-	return r.protocolEngineForVendor("")
+	return r.protocolEngineForReply("", nil)
 }
 
 // protocolEngineFor serves callers that hold only the registry and the
@@ -104,8 +105,10 @@ func protocolEngineFor(registry *protocolcodec.Registry, allowedLossyFields []st
 	return protocolcodec.NewEngine(registry, policy)
 }
 
-// protocolEngineForVendor creates an engine with the specified response vendor policy.
-func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor) (*protocolcodec.Engine, error) {
+// protocolEngineForReply decodes a backend's reply to request, the request as
+// the backend received it: vendor selects the backend's failure envelope, and
+// the request's output limit is the one a tool-call stop may have reached.
+func (r *OpenAIRouter) protocolEngineForReply(vendor llmprotocol.ResponseVendor, request *llmprotocol.Request) (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
@@ -115,8 +118,12 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 	}
 	policy := llmprotocol.DefaultPolicy()
 	policy.ResponseVendor = vendor
+	if request != nil && request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens > 0 {
+		policy.RequestOutputLimit = *request.Sampling.MaxOutputTokens
+	}
 	if r.Config != nil {
 		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
+		policy.AllowedRequestExtensions = r.Config.AllowRequestExtensionFields
 	}
 	return protocolcodec.NewEngine(registry, policy)
 }
@@ -124,10 +131,11 @@ func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor
 // protocolEngineForBackend permits extensions only for live provider responses.
 func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
 	var vendor llmprotocol.ResponseVendor
+	var request *llmprotocol.Request
 	if ctx != nil {
-		vendor = ctx.ResponseVendor
+		vendor, request = ctx.ResponseVendor, ctx.SemanticRequest
 	}
-	return r.protocolEngineForVendor(vendor)
+	return r.protocolEngineForReply(vendor, request)
 }
 
 // prepareProtocolRequest decodes every public wire format exactly once. The
@@ -145,14 +153,27 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
 	}
 	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
+	if err == nil {
+		err = llmprotocol.RefuseUnansweredToolCalls(request)
+	}
 	if err != nil {
 		return nil, r.ingressDecodeErrorResponse(ctx, err)
+	}
+	// Admission takes the model decoding parsed, which routing uses too,
+	// before any observer, stored object or session reads the request.
+	if refused := r.clientAdmissionRefusal(ctx, request.Model); refused != nil {
+		return nil, refused
 	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
-	ctx.SemanticRequest = &request
+	attachSemanticRequest(ctx, &request)
+	observeAgentTurn(ctx, body)
+	r.observeApprovalReview(ctx, body, &request)
+	observeSessionTitleRequest(ctx, &request)
 	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
+	ctx.unstatedReasoningOutputLimit = unstatedReasoningOutputLimit(request)
+	ctx.unstatedReasoningStopSequences = unstatedReasoningStopSequences(request)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream
@@ -186,8 +207,13 @@ func (r *OpenAIRouter) ingressDecodeErrorResponse(ctx *RequestContext, err error
 }
 
 func responseObjectStateHTTPStatus(protocolError *llmprotocol.ProtocolError) int {
-	if protocolError != nil && protocolError.Category == llmprotocol.ErrorNotFound {
+	switch {
+	case protocolError == nil:
+		return 503
+	case protocolError.Category == llmprotocol.ErrorNotFound:
 		return 404
+	case protocolError.Category == llmprotocol.ErrorUnsupportedFeature:
+		return 400
 	}
 	return 503
 }
@@ -225,6 +251,12 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		format = llmprotocol.OpenAIChatV1
 	}
 	dispatchRequest := *ctx.SemanticRequest
+	if ctx.structuredOutputPass != nil {
+		// A model server holds the whole completion to the format, so the
+		// tools are callable only without it.
+		dispatchRequest.OutputFormat = llmprotocol.OutputFormat{}
+		dispatchRequest.Generation++
+	}
 	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, format); policyErr != nil {
 		return nil, policyErr
 	}
@@ -234,18 +266,8 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	if format == llmprotocol.OpenAIChatV1 && dispatchRequest.Stream &&
-		!streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
-		// The Router always asks Chat backends for the final usage chunk so
-		// accounting observes authoritative tokens. Public stream rendering uses
-		// the original client preference retained in ctx.SemanticRequest.
-		includeUsage := true
-		dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
-		// Source bytes no longer describe the dispatch request, so retire the
-		// replay claim on them. Without this the encoder forwards the original
-		// client bytes and the forced flag never reaches the backend.
-		dispatchRequest.Generation++
-	}
+	requestBackendStreamUsage(format, &dispatchRequest)
+	r.requestUnstoredOnCallerLogin(format, &dispatchRequest)
 	encoded, err := engine.EncodeRequest(format, dispatchRequest, ctx.ProtocolEnvelope)
 	if err != nil {
 		return nil, err
@@ -257,6 +279,41 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, err
 	}
 	return encodeLooperEvidence(body, format, ctx)
+}
+
+// appendUnheldDiagnostics adds the losses another encode of the request
+// reports, past the copies the request already holds: two of the same loss
+// still count as two.
+func appendUnheldDiagnostics(ctx *RequestContext, diagnostics llmprotocol.Diagnostics) {
+	type loss struct{ action, field, reason string }
+	held := map[loss]int{}
+	for _, seen := range ctx.ProtocolDiagnostics {
+		held[loss{string(seen.Action), seen.Field, seen.Reason}]++
+	}
+	for _, diagnostic := range diagnostics {
+		if key := (loss{string(diagnostic.Action), diagnostic.Field, diagnostic.Reason}); held[key] > 0 {
+			held[key]--
+			continue
+		}
+		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
+	}
+}
+
+// requestBackendStreamUsage asks a Chat backend for the final usage chunk of
+// a streamed call, whatever the client asked, so accounting observes
+// authoritative tokens. Public stream rendering uses the original client
+// preference retained in ctx.SemanticRequest.
+func requestBackendStreamUsage(format llmprotocol.WireFormat, dispatchRequest *llmprotocol.Request) {
+	if format != llmprotocol.OpenAIChatV1 || !dispatchRequest.Stream ||
+		streamUsageAlreadyRequested(dispatchRequest.StreamOptions) {
+		return
+	}
+	includeUsage := true
+	dispatchRequest.StreamOptions.IncludeUsage = &includeUsage
+	// Source bytes no longer describe the dispatch request, so retire the
+	// replay claim on them. Without this the encoder forwards the original
+	// client bytes and the forced flag never reaches the backend.
+	dispatchRequest.Generation++
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {
@@ -289,8 +346,8 @@ func (r *OpenAIRouter) decodeClientResponse(
 	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
-	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
-	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(decoded.Diagnostics)
+	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired || len(decoded.Envelope.Response) > 0 && !bytes.Equal(decoded.Envelope.Response, body)
+	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
 }
@@ -328,6 +385,24 @@ func (r *OpenAIRouter) encodeClientResponse(
 	response llmprotocol.Response,
 	ctx *RequestContext,
 ) ([]byte, error) {
+	return r.encodeClientResponseWithReplay(response, ctx, true)
+}
+
+// encodeCanonicalClientResponse renders the client wire from the neutral
+// response without replaying the upstream bytes, which may carry members the
+// wire contract does not declare.
+func (r *OpenAIRouter) encodeCanonicalClientResponse(
+	response llmprotocol.Response,
+	ctx *RequestContext,
+) ([]byte, error) {
+	return r.encodeClientResponseWithReplay(response, ctx, false)
+}
+
+func (r *OpenAIRouter) encodeClientResponseWithReplay(
+	response llmprotocol.Response,
+	ctx *RequestContext,
+	replay bool,
+) ([]byte, error) {
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, err
@@ -339,7 +414,10 @@ func (r *OpenAIRouter) encodeClientResponse(
 			format = ctx.SourceFormat
 		}
 		envelope = ctx.ResponseEnvelope
-		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+		envelope.ResponseRender = responseObjectRender(ctx)
+	}
+	if !replay {
+		envelope.ResponseReencodeRequired = true
 	}
 	encoded, err := engine.EncodeResponse(format, response, envelope)
 	if err != nil {
@@ -353,12 +431,6 @@ func (r *OpenAIRouter) encodeClientResponse(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
-	// The Images wire predates the protocol catalog and is not registered
-	// there; keep its canonical path stable instead of falling back to the
-	// chat-completions default.
-	if format == llmprotocol.OpenAIImagesV1 {
-		return "/v1/images/generations"
-	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
 		return "/v1/chat/completions"
@@ -376,6 +448,8 @@ func requestWireProtocol(format llmprotocol.WireFormat) string {
 		return "openai/responses@1"
 	case llmprotocol.AnthropicMessagesV1:
 		return "anthropic/messages@1"
+	case llmprotocol.OpenAIImagesV1:
+		return "openai/images@1"
 	default:
 		return "openai/chat-completions@1"
 	}
@@ -406,6 +480,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 		protocolError := immediateProtocolError(status)
 		if ctx.ImmediateProtocolError != nil {
 			protocolError = ctx.ImmediateProtocolError
+			logProtocolRejection(ctx, protocolError, status)
 		}
 		if body, encodeErr := engine.EncodeError(format, protocolError); encodeErr == nil {
 			immediate.Body = body
@@ -476,4 +551,20 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 		response.Headers.SetHeaders,
 		newHeaderValueOption("content-type", value),
 	)
+}
+
+// logProtocolRejection records why the Router refused a request. Every refusal
+// that carries a protocol error leaves through encodeImmediateResponseForClient,
+// and the client's error body is otherwise the only trace of a refusal before
+// routing, which never reaches replay. Only the protocol error's own message
+// is logged, never the request body.
+func logProtocolRejection(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, status int) {
+	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      ctx.RequestModel,
+		"status":     status,
+		"code":       protocolError.Code,
+		"category":   string(protocolError.Category),
+		"message":    protocolError.Message,
+	})
 }

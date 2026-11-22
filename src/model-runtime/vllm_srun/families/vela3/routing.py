@@ -16,32 +16,19 @@ span adapter. Every rule and constant is the released runtime's.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any
 
+from ..vela3_shared import EVIDENCE_WORDING, RELATION_WORDING, normalize
 from .package import Roster
 
 ROUTER_TYPES = ("choice", "set")
-# vela3_encoder._REL_Q and _EV_Q, character for character.
-RELATION_WORDING = re.compile(
-    r"\bspans? (?:are|is) the .+ (?:of|for)\b|\brelat(?:ed|ion|ions|es|ing)?\b|\b(?:head|tail)\b|\bstands? in\b"
-    r"|\bwith respect to\b|\bcounterpart\b|\bsuch that\b|\brole of\b"
-)
-EVIDENCE_WORDING = re.compile(
-    r"\b(?:evidence|support(?:s|ing|ed)?|cite[sd]?|citations?)\b"
-)
 TRAINED_SETS = ("pii", "halu", "toxic")
 EVIDENCE = "evidence"
 WINDOW_TOKENS = 8192
 WINDOW_OVERLAP = 512
 SPAN_BUDGET = 32768
 SPAN_ROWS = 32
-
-
-def normalize(text: Any) -> str:
-    """Whitespace-normalised text (``vela3_encoder._norm``)."""
-    return " ".join(str(text or "").split())
 
 
 @dataclass(frozen=True)
@@ -189,14 +176,24 @@ class Router:
         span = self.span
         temperature = float(span["router_set_temperature"])
         thresholds = dict(span["thresholds_by_set"])
-        buckets = span["pii_buckets"]
+        bucket_source = span
         if route.head == "span_set":
             overrides = span["set_adapter"]
             temperature = float(overrides["router_set_temperature"])
             thresholds.update(overrides["thresholds_by_set"])
-            buckets = overrides["pii_buckets"]
+            bucket_source = overrides
         if route.label_set == "pii":
-            bucket = next(b for b in buckets if target_tokens <= b["max_tokens"])
+            # Only a PII question reads the buckets, so a package without them
+            # still serves every other span question.
+            buckets = bucket_source["pii_buckets"]
+            bucket = next(
+                (b for b in buckets if target_tokens <= b["max_tokens"]),
+                None,
+            )
+            if bucket is None:
+                raise ValueError(
+                    f"no PII threshold bucket covers {target_tokens} tokens"
+                )
             return float(bucket["threshold"]), temperature
         if route.label_set in ("halu", "toxic"):
             return float(thresholds[route.label_set]), temperature
@@ -204,8 +201,17 @@ class Router:
             evidence = span[EVIDENCE]
             if evidence.get("buckets"):
                 bucket = next(
-                    b for b in evidence["buckets"] if target_tokens <= b["max_tokens"]
+                    (
+                        b
+                        for b in evidence["buckets"]
+                        if target_tokens <= b["max_tokens"]
+                    ),
+                    None,
                 )
+                if bucket is None:
+                    raise ValueError(
+                        f"no evidence threshold bucket covers {target_tokens} tokens"
+                    )
                 return float(bucket["threshold"]), 1.0
             return float(evidence["threshold"]), 1.0
         if route.head == "relation":

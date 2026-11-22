@@ -19,7 +19,7 @@ func TestSameFormatOpenRouterBufferedReplyRemovesDroppedDecorations(t *testing.T
 		TargetFormat: llmprotocol.OpenAIChatV1,
 		TraceContext: t.Context(),
 	}
-	response := (&OpenAIRouter{}).handleNonStreamingResponseBody(body, ctx, 0)
+	response := (&OpenAIRouter{}).handleNonStreamingResponseBody(body, ctx, 0, false)
 	if response.GetImmediateResponse() != nil {
 		t.Fatalf("buffered reply failed: %+v", response.GetImmediateResponse())
 	}

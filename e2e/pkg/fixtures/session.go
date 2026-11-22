@@ -51,7 +51,6 @@ func OpenServiceSession(ctx context.Context, client *kubernetes.Clientset, opts 
 		return nil, fmt.Errorf("failed to start port forwarding: %w", err)
 	}
 
-	time.Sleep(2 * time.Second)
 	return newSession(localPort, stop), nil
 }
 
@@ -75,7 +74,6 @@ func OpenSemanticRouterMetricsSession(ctx context.Context, client *kubernetes.Cl
 		return nil, fmt.Errorf("metrics port-forward failed: %w", err)
 	}
 
-	time.Sleep(2 * time.Second)
 	return newSession(localPort, stop), nil
 }
 
@@ -99,7 +97,6 @@ func OpenRouterAPISession(ctx context.Context, client *kubernetes.Clientset, opt
 		return nil, fmt.Errorf("failed to start router API port forwarding: %w", err)
 	}
 
-	time.Sleep(2 * time.Second)
 	return newSession(localPort, stop), nil
 }
 
@@ -132,7 +129,6 @@ func OpenServiceEndpointSession(
 		return nil, fmt.Errorf("failed to start port forwarding to %s/%s: %w", namespace, service, err)
 	}
 
-	time.Sleep(2 * time.Second)
 	return newSession(localPort, stop), nil
 }
 

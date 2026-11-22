@@ -13,19 +13,17 @@ import (
 
 func init() {
 	pkgtestcases.Register("anthropic-messages-protocol-headers", pkgtestcases.TestCase{
-		Description: "Verify x-vsr-client-protocol/x-vsr-upstream-protocol markers and absence of lossiness warnings for clean /v1/messages requests",
+		Description: "Verify the trace names both wire protocols and x-vsr-warnings stays absent for clean /v1/messages requests",
 		Tags:        []string{"anthropic", "headers", "observability"},
 		Fn:          testAnthropicMessagesProtocolHeaders,
 	})
 }
 
-// testAnthropicMessagesProtocolHeaders asserts that the response of a clean
-// /v1/messages request carries the protocol-marker headers the router emits
-// for every translated request, and that no lossiness warnings are reported
-// when the request body uses only fields the router knows how to translate.
-// These headers are the operator-facing contract introduced by the warnings
-// PR; their presence is what makes a translation cell observable from the
-// outside without scraping internal logs.
+// testAnthropicMessagesProtocolHeaders asserts that the trace of a clean
+// /v1/messages request names both wire protocols, and that no warnings are
+// reported when the request body uses only fields the router knows how to
+// translate. The protocols are what makes a translation cell observable from
+// the outside without scraping internal logs.
 func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Anthropic] Verifying protocol marker headers on /v1/messages response")
@@ -66,9 +64,9 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	// router module (src/semantic-router/go.mod) and does not import
 	// pkg/headers. If a header name changes upstream, this test must
 	// be updated explicitly.
-	inbound := resp.Header.Get("x-vsr-client-protocol")
-	outbound := resp.Header.Get("x-vsr-upstream-protocol")
-	lossiness := resp.Header.Get("x-vsr-protocol-warnings")
+	inbound := traceValue(resp.Header, "client_protocol")
+	outbound := traceValue(resp.Header, "upstream_protocol")
+	lossiness := resp.Header.Get(warningsHeader)
 	responsePath := resp.Header.Get("x-vsr-response-path")
 	recipe := resp.Header.Get("x-vsr-selected-recipe")
 
@@ -87,7 +85,7 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 		return fmt.Errorf("protocol probe did not reach its upstream recipe: path=%q recipe=%q", responsePath, recipe)
 	}
 	if inbound != "anthropic" {
-		return fmt.Errorf("expected x-vsr-client-protocol=anthropic, got %q", inbound)
+		return fmt.Errorf("expected the trace's client_protocol=anthropic, got %q", inbound)
 	}
 	// Outbound protocol depends on the backend the router selected. In
 	// the kubernetes e2e profile the backend is OpenAI-shaped, so
@@ -95,10 +93,10 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	// at an Anthropic-native endpoint this assertion would tighten
 	// there.
 	if outbound != "openai" {
-		return fmt.Errorf("expected x-vsr-upstream-protocol=openai for kubernetes profile, got %q", outbound)
+		return fmt.Errorf("expected the trace's upstream_protocol=openai for kubernetes profile, got %q", outbound)
 	}
 	if lossiness != "" {
-		return fmt.Errorf("expected no x-vsr-protocol-warnings for clean request, got %q", lossiness)
+		return fmt.Errorf("expected no x-vsr-warnings for clean request, got %q", lossiness)
 	}
 
 	return nil

@@ -152,6 +152,32 @@ async def test_responses_tool_stream_omits_name_from_arguments_done(client):
 
 
 @pytest.mark.parametrize("stream", [False, True])
+async def test_responses_encrypted_reasoning_precedes_the_message(client, stream):
+    response = await client.post(
+        "/v1/responses",
+        json={
+            "model": "native-test",
+            "input": "__mock_responses_encrypted_reasoning__",
+            "stream": stream,
+        },
+    )
+    assert response.status_code == 200
+    if stream:
+        payloads = events(response.text)
+        done = [p for p in payloads if p["type"] == "response.output_item.done"]
+        assert [p["output_index"] for p in done] == [0, 1]
+        assert done[0]["item"]["encrypted_content"] == "mock-encrypted-reasoning"
+        added = next(p for p in payloads if p["type"] == "response.output_item.added")
+        assert "encrypted_content" not in added["item"]
+        output = payloads[-1]["response"]["output"]
+    else:
+        output = response.json()["output"]
+    assert [item["type"] for item in output] == ["reasoning", "message"]
+    assert output[0]["encrypted_content"] == "mock-encrypted-reasoning"
+    assert output[0]["summary"] == []
+
+
+@pytest.mark.parametrize("stream", [False, True])
 @pytest.mark.parametrize(
     "stops,expected,reason",
     [
@@ -254,13 +280,13 @@ async def test_observation_excludes_credentials(client):
     headers = {
         "Authorization": "Bearer fixture-secret",
         "x-api-key": "fixture-secret",
-        "x-vsr-e2e-trace": "kept",
+        "x-e2e-trace": "kept",
         "x-vsr-test-session-id": "safe-observation",
     }
     await client.post("/v1/messages", json=body(), headers=headers)
     observed = (await client.get("/debug/last-request", headers=headers)).json()
     assert observed["headers"] == {
-        "x-vsr-e2e-trace": "kept",
+        "x-e2e-trace": "kept",
         "x-vsr-test-session-id": "safe-observation",
     }
     assert "fixture-secret" not in json.dumps(observed)

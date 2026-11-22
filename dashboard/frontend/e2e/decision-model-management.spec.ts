@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
@@ -28,11 +29,8 @@ async function mockDecisionModelManager(
   })
   const global = {
     model_catalog: {
-      system: (options.defaultModel
-        ? {}
-        : { decision_model: { deployment: 'primary' }, pii_classifier: 'models/custom-pii' }) as {
+      system: (options.defaultModel ? {} : { decision_model: { deployment: 'primary' } }) as {
         decision_model?: { deployment: string }
-        pii_classifier?: string
       },
       deployments: (options.defaultModel
         ? {}
@@ -48,15 +46,18 @@ async function mockDecisionModelManager(
   let observed = options.defaultModel ? 'vela3-fast' : 'Vela-2.0-4B'
   let observedDeployment = 'primary'
   const config = {
-    version: 'v0.3',
+    version: 'v0.5',
     global,
     providers: { models: [] },
-    routing: {
-      signals: options.defaultModel
-        ? {}
-        : { decision: [{ name: 'task', question: { type: 'noul' } }] },
-      decisions: [],
-    },
+    recipes: [
+      {
+        name: 'default',
+        signals: options.defaultModel
+          ? {}
+          : { systemone: [{ name: 'task', question: { type: 'noul' } }] },
+        decisions: [],
+      },
+    ],
   }
   let pending = false
   let revision = 'active-config'
@@ -141,14 +142,14 @@ async function mockDecisionModelManager(
               {
                 task_id: 'pii_spans',
                 consumer: 'pii',
-                recipe: '',
+                recipe: 'default',
                 deployment: 'pii-specialist',
                 model: 'models/custom-pii',
-                source: 'module',
+                source: 'global',
                 ready: true,
-                editable: false,
-                path: [],
-                binding: { deployment: 'pii-specialist', contract: 'token_spans.v1' },
+                editable: true,
+                path: ['recipes', '0', 'model_bindings', 'pii'],
+                binding: 'pii-specialist',
               },
             ],
       }),
@@ -289,12 +290,55 @@ async function mockDecisionModelManager(
   }
 }
 
+const decisionCatalog = JSON.parse(
+  readFileSync(
+    new URL('../src/pages/decisionRuntimeCatalog.generated.json', import.meta.url),
+    'utf8',
+  ),
+) as {
+  models: Array<{
+    id: string
+    name: string
+    revision: string
+    questionTypes: string[]
+    pending: string
+  }>
+}
+const revisionOf = (id: string) => decisionCatalog.models.find((model) => model.id === id)!.revision
+const defaultCard = (page: Page) => page.getByRole('region', { name: 'Default decision model' })
+
+// The first visit compiles the page's modules in the dev server; wait for the tab, not a fixed delay.
+async function gotoDecisionModels(page: Page, path = '/models/decision') {
+  await page.goto(path)
+  const ready = path.includes('tab=monitoring')
+    ? page.getByRole('heading', { name: 'Model runtime deployments', exact: true })
+    : page.getByRole('heading', { name: 'Catalog', exact: true })
+  await expect(ready).toBeVisible({ timeout: 30_000 })
+}
+
+async function openDeployDialog(page: Page, label: string) {
+  await page.getByRole('button', { name: `Deploy ${label}`, exact: true }).click()
+  return page.getByRole('dialog')
+}
+
+async function deployAsDefault(page: Page, label: string) {
+  const dialog = await openDeployDialog(page, label)
+  await dialog.getByRole('radio', { name: /Default decision model/ }).click()
+  await dialog.getByRole('button', { name: 'Deploy and activate', exact: true }).click()
+  return dialog
+}
+
+async function deployAsDefaultAndClose(page: Page, label: string) {
+  const dialog = await deployAsDefault(page, label)
+  await expect(dialog).toBeHidden({ timeout: 15_000 })
+}
+
 test.describe('System One model management and monitoring', () => {
   test('shows measured runtime statistics and clears them when observation fails', async ({
     page,
   }) => {
     const fixture = await mockDecisionModelManager(page)
-    await page.goto('/decision-model/monitoring')
+    await gotoDecisionModels(page, '/models/decision?tab=monitoring')
     const deployment = page.getByRole('article', { name: 'primary', exact: true })
     const metric = (name: string) =>
       deployment
@@ -311,27 +355,24 @@ test.describe('System One model management and monitoring', () => {
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await expect(metric('Runtime calls / sec')).toContainText('Not reported')
     await expect(page.getByText(/Some model statistics are unavailable/)).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Decision Models', exact: true })).toHaveAttribute(
-      'href',
-      '/decision-model',
-    )
+    await expect(page.getByRole('tab', { name: 'Deploy' })).toBeVisible()
   })
 
   test('keeps the default vela3-fast model and shows absent samples as unknown without empty configuration clutter', async ({
     page,
   }) => {
     await mockDecisionModelManager(page, { defaultModel: true, metrics: 'empty' })
-    await page.goto('/decision-model')
-    await expect(page.getByRole('radio', { name: /Vela 3.0 fast/ })).toBeChecked()
+    await gotoDecisionModels(page, '/models/decision')
+    await expect(
+      defaultCard(page).getByRole('heading', { name: 'vela3-fast', exact: true }),
+    ).toBeVisible()
     await expect(page.getByRole('region', { name: 'Task bindings' })).toContainText(
       'No active task bindings in this configuration.',
     )
     await expect(page.getByRole('heading', { name: 'Custom model assignments' })).toHaveCount(0)
     await expect(page.getByRole('heading', { name: 'Custom questions' })).toHaveCount(0)
-    await expect(page.getByText('Default routing', { exact: true })).toHaveCount(0)
     await expect(page.getByText(/No custom questions configured/)).toHaveCount(0)
-    await expect(page.getByRole('heading', { name: 'Explicit signal overrides' })).toHaveCount(0)
-    await page.getByRole('link', { name: 'Decision Monitoring', exact: true }).click()
+    await page.getByRole('tab', { name: 'Monitoring' }).click()
     const stats = page
       .getByRole('article', { name: 'primary', exact: true })
       .locator('dl[aria-label="Model statistics"]')
@@ -342,18 +383,13 @@ test.describe('System One model management and monitoring', () => {
     page,
   }) => {
     const fixture = await mockDecisionModelManager(page, { lowTraffic: true })
-    await page.goto('/decision-model/monitoring')
+    await gotoDecisionModels(page, '/models/decision?tab=monitoring')
     const stats = page.locator('dl[aria-label="Model statistics"]')
     await expect(stats).toContainText('0.02')
-    await expect(
-      page.getByRole('region', { name: 'Traffic & reliability' }).locator('svg.recharts-surface'),
-    ).toHaveCount(1)
-    await expect(
-      page.getByRole('region', { name: 'Latency breakdown' }).locator('svg.recharts-surface'),
-    ).toHaveCount(1)
-    await expect(
-      page.getByRole('region', { name: 'Result cache efficiency' }).locator('svg.recharts-surface'),
-    ).toHaveCount(1)
+    for (const region of ['Traffic & reliability', 'Latency breakdown', 'Result cache efficiency'])
+      await expect(
+        page.getByRole('region', { name: region }).locator('svg.recharts-surface'),
+      ).toHaveCount(1)
     const rateTicks = page
       .getByRole('region', { name: 'Traffic & reliability' })
       .locator('.recharts-yAxis')
@@ -362,11 +398,8 @@ test.describe('System One model management and monitoring', () => {
     await expect
       .poll(async () => new Set(await rateTicks.allTextContents()).size)
       .toBeGreaterThan(1)
-    const windows = page.getByRole('group', { name: 'Monitoring time range' })
-    await expect(windows.getByRole('button', { name: '1h' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    const windows = page.getByRole('radiogroup', { name: 'Monitoring time range' })
+    await expect(windows.getByRole('radio', { name: '1h' })).toHaveAttribute('aria-checked', 'true')
     const checkRange = (seconds: number) => {
       const params = fixture.metricsRanges.at(-1)!
       expect(Number(params.get('end')) - Number(params.get('start'))).toBe(seconds)
@@ -374,13 +407,13 @@ test.describe('System One model management and monitoring', () => {
     }
     checkRange(3600)
     fixture.setMetrics('partial')
-    await windows.getByRole('button', { name: '6h' }).click()
+    await windows.getByRole('radio', { name: '6h' }).click()
     await expect(page.getByText(/Unavailable: Unsuccessful calls/)).toBeVisible()
     await expect(stats).toContainText('0.02')
     await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(1)
     checkRange(21600)
     fixture.setMetrics('empty')
-    await windows.getByRole('button', { name: '15m' }).click()
+    await windows.getByRole('radio', { name: '15m' }).click()
     await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(6)
     await expect(
       page
@@ -392,25 +425,28 @@ test.describe('System One model management and monitoring', () => {
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await expect(stats).toContainText('0.02')
     await expect(stats.getByText('Not reported', { exact: true })).toHaveCount(0)
-    await expect(
-      page.getByRole('link', { name: 'Decision Playground', exact: true }),
-    ).toHaveAttribute('href', '/decision-model/playground')
+    await expect(page.getByRole('tab', { name: 'Playground' })).toBeVisible()
   })
 
   test('keeps charts and model controls usable on a narrow viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await mockDecisionModelManager(page)
-    await page.goto('/decision-model/monitoring')
+    await gotoDecisionModels(page, '/models/decision?tab=monitoring')
     await expect(page.locator('dl[aria-label="Model statistics"]')).toContainText('2.50')
-    await expect(page.getByRole('button', { name: '6h', exact: true })).toBeVisible()
+    await expect(
+      page
+        .getByRole('radiogroup', { name: 'Monitoring time range' })
+        .getByRole('radio', { name: '6h' }),
+    ).toBeVisible()
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
     await page.getByRole('region', { name: 'Latency breakdown' }).scrollIntoViewIfNeeded()
     await expect(page.getByRole('region', { name: 'Latency breakdown' })).toBeInViewport()
-    await page.getByRole('link', { name: 'Decision Models', exact: true }).click()
-    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
-    await expect(page.getByRole('button', { name: 'Deploy selection' })).toBeEnabled()
+    await page.getByRole('tab', { name: 'Deploy' }).click()
+    await expect(
+      page.getByRole('button', { name: 'Deploy Vela 2.0 9B', exact: true }),
+    ).toBeEnabled()
   })
 
   test('isolates stalled monitoring requests from model management', async ({ page }) => {
@@ -420,18 +456,19 @@ test.describe('System One model management and monitoring', () => {
     await page.route('**/embedded/prometheus/api/v1/query_range?*', () => {
       queries += 1
     })
-    await page.goto('/decision-model')
-    await expect(page.getByRole('radio', { name: /Vela 2.0 9B/ })).toBeEnabled()
+    await gotoDecisionModels(page, '/models/decision')
+    await expect(
+      page.getByRole('button', { name: 'Deploy Vela 2.0 9B', exact: true }),
+    ).toBeEnabled()
     expect(queries).toBe(0)
-    await page.getByRole('link', { name: 'Decision Monitoring', exact: true }).click()
+    await page.getByRole('tab', { name: 'Monitoring' }).click()
     await expect.poll(() => queries).toBeGreaterThanOrEqual(6)
     await page.clock.fastForward(8_100)
     await expect(page.getByText(/Some model statistics are unavailable/)).toBeVisible()
-    await page.getByRole('link', { name: 'Decision Models', exact: true }).click()
-    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
-    await page.getByRole('button', { name: 'Deploy selection' }).click()
+    await page.getByRole('tab', { name: 'Deploy' }).click()
+    await deployAsDefaultAndClose(page, 'Vela 2.0 9B')
     await expect.poll(() => fixture.requests.length).toBe(1)
-    await expect(page.getByRole('button', { name: 'Deploy selection' })).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
   })
 
   test('renders saved controls before slow ancillary reads and avoids polling static configuration', async ({
@@ -449,10 +486,11 @@ test.describe('System One model management and monitoring', () => {
       configReads += 1
     })
     await page.route('**/api/router/api/v1/inventory/model-runtime', () => {})
-    await page.goto('/decision-model')
-    await expect(page.getByRole('heading', { name: 'Decision Models', exact: true })).toBeVisible()
-    await expect(page.getByRole('radio', { name: /Vela 2.0 4B/ })).toBeChecked()
-    await expect(page.getByRole('button', { name: 'Deploy selection' })).toBeEnabled()
+    await gotoDecisionModels(page, '/models/decision')
+    await expect(page.getByRole('heading', { name: 'Decision models', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Deploy Vela 2.0 9B', exact: true }),
+    ).toBeVisible()
     expect(globalReads).toBe(1)
     expect(configReads).toBe(1)
     expect(fixture.metricsRequests).toHaveLength(0)
@@ -484,7 +522,7 @@ test.describe('System One model management and monitoring', () => {
       configReads += 1
       await route.fallback()
     })
-    await page.goto('/decision-model')
+    await gotoDecisionModels(page, '/models/decision')
     await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
     await expect(page.getByText('Runtime unavailable.', { exact: false })).toContainText(
       'Observation unavailable (HTTP 503).',
@@ -510,15 +548,13 @@ test.describe('System One model management and monitoring', () => {
       if (path === '/api/router/config/all' || path === '/api/router/config/global')
         configRequests.push(path)
     })
-    await page.goto('/decision-model/monitoring')
-    await expect(
-      page.getByRole('heading', { name: 'Decision Monitoring', exact: true }),
-    ).toBeVisible()
+    await gotoDecisionModels(page, '/models/decision?tab=monitoring')
+    await expect(page.getByRole('heading', { name: 'Decision models', exact: true })).toBeVisible()
     await expect(page.locator('dl[aria-label="Model statistics"]')).toContainText('2.50')
     expect(configRequests).toEqual([])
   })
 
-  test('refreshes externally changed saved configuration while preserving an unsaved selection', async ({
+  test('refreshes externally changed saved configuration while preserving an open deploy draft', async ({
     page,
   }) => {
     await page.clock.install()
@@ -533,30 +569,26 @@ test.describe('System One model management and monitoring', () => {
       configReads += 1
       await route.fallback()
     })
-    await page.goto('/decision-model')
+    await gotoDecisionModels(page, '/models/decision')
     await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
     expect([globalReads, configReads]).toEqual([1, 1])
     fixture.changeExternally('Vela-2.0-9B', 'external-change-1')
     await page.clock.fastForward(10_100)
-    const status = page
-      .getByRole('region')
-      .filter({ has: page.getByText('Current deployment', { exact: true }) })
-    await expect(status).toContainText('Vela-2.0-9B')
-    await expect(page.getByRole('radio', { name: /Vela 2.0 9B/ })).toBeChecked()
-    await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
+    await expect(
+      defaultCard(page).getByRole('heading', { name: 'Vela-2.0-9B', exact: true }),
+    ).toBeVisible()
     expect([globalReads, configReads]).toEqual([2, 2])
 
-    await page.getByRole('radio', { name: /Vela 2.0 0.3B/ }).check()
+    const dialog = await openDeployDialog(page, 'Vela 2.0 0.3B')
+    await dialog.getByRole('radio', { name: /Default decision model/ }).click()
     fixture.changeExternally('Vela-2.0-4B', 'external-change-2')
     await page.clock.fastForward(10_100)
-    await expect(status).toContainText('Vela-2.0-4B')
-    await expect(page.getByRole('radio', { name: /Vela 2.0 0.3B/ })).toBeChecked()
-    await expect(page.getByText('Selected · not deployed', { exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
-    expect([globalReads, configReads]).toEqual([3, 3])
+    await expect(dialog.getByRole('radio', { name: /Default decision model/ })).toBeChecked()
+    await expect(dialog.getByLabel('Deployment', { exact: true })).toHaveValue('vela-2-0-0-3b')
+    await expect.poll(() => [globalReads, configReads]).toEqual([3, 3])
     await page.clock.fastForward(30_100)
-    await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
     expect([globalReads, configReads]).toEqual([3, 3])
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
     expect(fixture.requests).toEqual([])
   })
 
@@ -572,48 +604,44 @@ test.describe('System One model management and monitoring', () => {
       }
       await route.fallback()
     })
-    await page.goto('/decision-model')
-    await expect(page.getByRole('radio', { name: /Vela 2.0 9B/ })).toBeEnabled()
+    await gotoDecisionModels(page, '/models/decision')
+    await expect(
+      page.getByRole('button', { name: 'Deploy Vela 2.0 9B', exact: true }),
+    ).toBeEnabled()
     stallInventory = true
     await page.clock.fastForward(10_100)
     await expect.poll(() => stalledReads).toBe(1)
 
-    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
-    await page.getByRole('button', { name: 'Deploy selection' }).click()
+    await deployAsDefaultAndClose(page, 'Vela 2.0 9B')
     await expect.poll(() => fixture.requests.length).toBe(1)
     await page.clock.fastForward(10_100)
     await expect.poll(() => stalledReads).toBe(2)
     await page.clock.fastForward(10_100)
-    await expect(page.getByRole('button', { name: 'Deploy selection' })).toBeEnabled()
+    await expect(
+      page.getByRole('button', { name: 'Deploy Vela 2.0 0.3B', exact: true }),
+    ).toBeEnabled()
     await expect(
       page.getByRole('status').filter({ hasText: /^Runtime last observed/ }),
     ).toContainText('The request timed out. Please retry.')
-    await expect(page.getByText('Restart required', { exact: true })).toBeVisible()
+    await expect(
+      defaultCard(page).getByText('Restart required', { exact: true }).first(),
+    ).toBeVisible()
   })
 
-  test('opens from System One and keeps management and runtime details on separate pages', async ({
-    page,
-  }) => {
+  test('keeps management and runtime details on separate tabs', async ({ page }) => {
     await mockDecisionModelManager(page)
-    await page.goto('/status')
-    await page.getByRole('button', { name: 'Build', exact: true }).click()
-    const menu = page.getByRole('navigation', { name: 'Build' })
-    await menu.getByRole('tab', { name: /System One/ }).click()
-    await menu.getByRole('link', { name: 'Decision Models', exact: true }).click()
-    await expect(page).toHaveURL('/decision-model')
-    await expect(page.getByRole('heading', { name: 'Decision Models', exact: true })).toBeVisible()
-    await expect(page.getByRole('radio')).toHaveCount(6)
-    await expect(page.getByRole('radio', { name: /Vela 2.0 4B/ })).toBeChecked()
-    const status = page
-      .getByRole('region')
-      .filter({ has: page.getByText('Current deployment', { exact: true }) })
-    await expect(status.getByText('Ready', { exact: true })).toBeVisible()
-    await expect(status).toContainText('Router mode')
+    await gotoDecisionModels(page, '/models/decision')
+    await expect(page.getByRole('heading', { name: 'Decision models', exact: true })).toBeVisible()
+    const card = defaultCard(page)
+    await expect(card.getByRole('heading', { name: 'Vela-2.0-4B', exact: true })).toBeVisible()
+    await expect(card.getByText('Ready', { exact: true })).toBeVisible()
+    await expect(card).toContainText('Router mode')
     const bindings = page.getByRole('region', { name: 'Task bindings' })
     await expect(bindings).toContainText('PII extraction')
     await expect(bindings).toContainText('models/custom-pii')
-    await expect(bindings).toContainText('Specialist binding')
-    await page.getByRole('link', { name: 'Decision Monitoring', exact: true }).click()
+    await expect(bindings).toContainText('Global binding')
+    await page.getByRole('tab', { name: 'Monitoring' }).click()
+    await expect(page).toHaveURL(/\/models\/decision\?tab=monitoring$/)
     const deployments = page.getByRole('region', { name: 'Model runtime deployments' })
     await deployments.getByText('Deployment details', { exact: true }).click()
     for (const value of ['revision-123', 'rocm:0', 'torch', 'exact', 'model-runtime-1', 'safety']) {
@@ -624,19 +652,15 @@ test.describe('System One model management and monitoring', () => {
   test('keeps saved and observed models separate until a restart is observed', async ({ page }) => {
     await page.clock.install()
     const fixture = await mockDecisionModelManager(page)
-    await page.goto('/decision-model')
-    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
-    await page.getByRole('button', { name: 'Deploy selection' }).click()
-    await expect(page.getByText('Restart required', { exact: true })).toBeVisible()
+    await gotoDecisionModels(page, '/models/decision')
+    await deployAsDefaultAndClose(page, 'Vela 2.0 9B')
+    await expect(page.getByRole('status').filter({ hasText: 'Run vllm-sr serve' })).toBeVisible()
     expect(fixture.requests).toEqual([
       {
         ...fixture.config,
         global: {
           model_catalog: {
-            system: {
-              decision_model: { deployment: 'vela-2-0-9b' },
-              pii_classifier: 'models/custom-pii',
-            },
+            system: { decision_model: { deployment: 'vela-2-0-9b' } },
             deployments: {
               primary: {
                 provider: 'model_runtime',
@@ -646,6 +670,7 @@ test.describe('System One model management and monitoring', () => {
               'vela-2-0-9b': {
                 provider: 'model_runtime',
                 artifact: 'vllm-sr/Vela-2.0-9B',
+                revision: revisionOf('vllm-sr/Vela-2.0-9B'),
                 device: 'auto',
               },
             },
@@ -653,57 +678,54 @@ test.describe('System One model management and monitoring', () => {
         },
       },
     ])
-    const status = page
-      .getByRole('region')
-      .filter({ has: page.getByText('Current deployment', { exact: true }) })
-    await expect(status.getByRole('heading', { name: 'Vela-2.0-4B' })).toBeVisible()
-    await status.getByText('Deployment diagnostics', { exact: true }).click()
-    await expect(status).toContainText('Saved model: Vela 2.0 9B')
+    const card = defaultCard(page)
+    await expect(card.getByRole('heading', { name: 'Vela-2.0-9B', exact: true })).toBeVisible()
+    await expect(card).toContainText('Still serving Vela-2.0-4B on primary')
+    await expect(card.getByText('Restart required', { exact: true }).first()).toBeVisible()
+    await card.getByText('Deployment diagnostics', { exact: true }).click()
+    await expect(card).toContainText('Saved model: Vela 2.0 9B')
     await expect(page.getByRole('region', { name: 'Task bindings' })).toContainText(
       'models/custom-pii',
     )
     fixture.activate()
     await page.clock.fastForward(10_100)
-    await expect(status.getByText('Ready', { exact: true })).toBeVisible()
-    await expect(status.getByRole('heading', { name: 'Vela-2.0-9B' })).toBeVisible()
-    await expect(status).toContainText('Active')
+    await expect(card.getByText('Ready', { exact: true })).toBeVisible()
+    await expect(card).not.toContainText('Still serving')
+    await expect(card).toContainText('Router configuration active')
   })
 
   test('shows a ConfigMap save as requiring rollout', async ({ page }) => {
     await mockDecisionModelManager(page, { applyStatus: 'persisted' })
-    await page.goto('/decision-model')
-    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
-    await page.getByRole('button', { name: 'Deploy selection' }).click()
+    await gotoDecisionModels(page, '/models/decision')
+    await deployAsDefaultAndClose(page, 'Vela 2.0 9B')
     await expect(page.getByRole('status').filter({ hasText: 'Saved to ConfigMap' })).toContainText(
       'roll out Router and Envoy',
     )
-    await expect(page.getByRole('heading', { name: 'Vela-2.0-4B' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Vela-2.0-9B' })).toHaveCount(0)
+    await expect(defaultCard(page)).toContainText('Still serving Vela-2.0-4B')
   })
 
-  test('retains the selected model and refreshes the saved configuration after apply fails', async ({
+  test('keeps the deploy draft and reports the server error after apply fails', async ({
     page,
   }) => {
     await mockDecisionModelManager(page, { applyStatus: 'failed' })
-    await page.goto('/decision-model')
-    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
-    await page.getByRole('button', { name: 'Deploy selection' }).click()
-    await expect(page.getByRole('alert')).toContainText('GPU memory unavailable')
-    await expect(page.getByRole('radio', { name: /Vela 2.0 9B/ })).toBeChecked()
-    await page.getByText('Deployment diagnostics', { exact: true }).click()
+    await gotoDecisionModels(page, '/models/decision')
+    const dialog = await deployAsDefault(page, 'Vela 2.0 9B')
+    await expect(dialog.getByRole('alert')).toContainText('GPU memory unavailable')
+    await expect(dialog.getByRole('radio', { name: /Default decision model/ })).toBeChecked()
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await defaultCard(page).getByText('Deployment diagnostics', { exact: true }).click()
     await expect(page.getByText('Saved model: Vela 2.0 9B', { exact: true })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Vela-2.0-4B' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Deploy selection' })).toBeEnabled()
   })
 
   test('keeps management observable but disables writes for config readers', async ({ page }) => {
     const fixture = await mockDecisionModelManager(page, { readonly: true })
-    await page.goto('/decision-model')
-    await expect(page.getByRole('heading', { name: 'Decision Models', exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Deploy selection' })).toBeDisabled()
-    await expect(page.getByRole('radio').first()).toBeDisabled()
+    await gotoDecisionModels(page, '/models/decision')
+    await expect(page.getByRole('heading', { name: 'Decision models', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Deploy Vela 2.0 9B', exact: true }),
+    ).toBeDisabled()
     await expect(page.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled()
-    await page.getByRole('link', { name: 'Decision Monitoring', exact: true }).click()
+    await page.getByRole('tab', { name: 'Monitoring' }).click()
     await expect(
       page.getByText(/Viewing model statistics requires observability read access/),
     ).toBeVisible()
@@ -717,10 +739,9 @@ test.describe('System One model management and monitoring', () => {
       if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/instance/deploy')
         modeWrites.push(request.url())
     })
-    await page.goto('/decision-model')
+    await gotoDecisionModels(page, '/models/decision')
     await expect(page.getByText('Engine mode', { exact: true })).toBeVisible()
-    await page.getByRole('radio', { name: /Vela 2.0 9B/ }).check()
-    await page.getByRole('button', { name: 'Deploy selection' }).click()
+    await deployAsDefaultAndClose(page, 'Vela 2.0 9B')
     await expect.poll(() => fixture.requests.length).toBe(1)
     await expect(page.getByText('Engine mode', { exact: true })).toBeVisible()
     await expect(page.getByRole('group', { name: 'Instance mode', exact: true })).toHaveCount(0)
@@ -739,10 +760,10 @@ async function mockDecisionRuntimeCatalog(
 ) {
   const fixture = await mockDecisionModelManager(page, options)
   const config = {
-    ...fixture.config,
+    version: 'v0.5',
     global: {
       model_catalog: {
-        system: { decision_model: { deployment: 'primary' }, pii_classifier: 'models/custom-pii' },
+        system: { decision_model: { deployment: 'primary' } },
         deployments: {
           primary: { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-4B', device: 'rocm:0' },
           existing: {
@@ -760,46 +781,53 @@ async function mockDecisionRuntimeCatalog(
       },
       services: { opaque_secret: 'test-preserved-secret' },
     },
-    providers: { models: [{ name: 'answer', api_key: 'test-provider-secret' }] },
-    routing: {
-      signals: {
-        decision: options.noConsumers
-          ? []
-          : [{ name: 'task', question: { type: 'noul', instructions: 'Is this coding?' } }],
-      },
-      decisions: [],
-      replay: { opaque_future_flag: true },
+    providers: {
+      models: [
+        {
+          name: 'answer',
+          backend_refs: [
+            { name: 'primary', endpoint: 'answer.example.com', api_key: 'test-provider-secret' },
+          ],
+        },
+      ],
     },
     recipes: [
       {
-        name: 'research',
-        routing: {
-          model_bindings: {
-            complexity: { deployment: 'existing', contract: 'decision.v1' },
-            model_selection: { deployment: 'existing', contract: 'decision.v1' },
-          } as Record<string, { deployment: string; contract: string }>,
-          signals: {
-            complexity: options.noConsumers ? [] : [{ name: 'difficulty', threshold: 0.5 }],
-          },
-          decisions: options.noConsumers
+        name: 'default',
+        signals: {
+          systemone: options.noConsumers
             ? []
-            : [
-                {
-                  name: 'pick',
-                  algorithm: {
-                    type: 'decision',
-                    decision: {
-                      instructions: 'Which model?',
-                      candidates: { answer: 'General model' },
-                    },
-                  },
-                  modelRefs: [{ model: 'answer' }],
-                },
-              ],
+            : [{ name: 'task', question: { type: 'noul', instructions: 'Is this coding?' } }],
         },
+        decisions: [],
+      },
+      {
+        name: 'research',
+        model_bindings: { complexity: 'existing' } as Record<string, string>,
+        signals: {
+          complexity: options.noConsumers ? [] : [{ name: 'difficulty' }],
+        },
+        decisions: options.noConsumers
+          ? []
+          : [
+              {
+                name: 'pick',
+                algorithm: {
+                  type: 'systemone',
+                  systemone: {
+                    instructions: 'Which model?',
+                    candidates: { answer: 'General model' },
+                  },
+                },
+                modelRefs: [{ model: 'answer' }],
+              },
+            ],
       },
     ],
-    entrypoints: [{ model_names: ['research'], recipe: 'research' }],
+    entrypoints: [
+      { model_names: ['vllm-sr/auto'], recipe: 'default', default: true },
+      { model_names: ['research'], recipe: 'research' },
+    ],
   }
   const requests: (typeof config)[] = []
   let ready = false
@@ -838,26 +866,41 @@ async function mockDecisionRuntimeCatalog(
         })),
       }),
     )
-    const bindings = options.noConsumers
-      ? []
-      : ['complexity', 'model_selection'].map((task_id) => {
-          const binding = config.recipes[0]?.routing.model_bindings[task_id] ?? {
-            deployment: 'primary',
-            contract: 'decision.v1',
-          }
-          return {
-            task_id,
-            consumer: task_id === 'complexity' ? 'difficulty' : 'pick',
-            recipe: 'research',
-            deployment: binding.deployment,
-            model: config.global.model_catalog.deployments[binding.deployment]?.artifact,
-            source: 'recipe',
-            ready: binding.deployment === 'primary' || ready,
-            editable: true,
-            path: ['recipes', '0', 'routing', 'model_bindings', task_id],
-            binding,
-          }
-        })
+    // The Router lists a recipe's complexity rules once, under their signal
+    // type, and a selector with no path, since its decision writes it.
+    const index = config.recipes.findIndex((recipe) => recipe.name === 'research')
+    const bound = (config.recipes[index] as { model_bindings?: Record<string, string> } | undefined)
+      ?.model_bindings?.complexity
+    const deployment = bound ?? 'primary'
+    const bindings =
+      options.noConsumers || index < 0
+        ? []
+        : [
+            {
+              task_id: 'complexity',
+              consumer: 'complexity',
+              recipe: 'research',
+              deployment,
+              model: config.global.model_catalog.deployments[deployment]?.artifact,
+              source: bound ? 'recipe' : 'default',
+              ready: deployment === 'primary' || ready,
+              editable: true,
+              path: ['recipes', String(index), 'model_bindings', 'complexity'],
+              binding: deployment,
+            },
+            {
+              task_id: 'selector',
+              consumer: 'selector.pick',
+              recipe: 'research',
+              deployment: 'primary',
+              model: config.global.model_catalog.deployments.primary.artifact,
+              source: 'default',
+              ready: true,
+              editable: false,
+              path: null,
+              binding: 'primary',
+            },
+          ]
     return route.fulfill({
       json: {
         default_deployment: config.global.model_catalog.system.decision_model.deployment,
@@ -897,7 +940,7 @@ async function mockDecisionRuntimeCatalog(
 }
 
 test.describe('Decision model catalog and deployment bindings', () => {
-  test('browses all released families with logos and filters capabilities without loading Model Hub', async ({
+  test('lists every family from the registry projection, filters capabilities and serves the Vela 3.1 releases, without loading Model Hub', async ({
     page,
   }, testInfo) => {
     const fixture = await mockDecisionRuntimeCatalog(page)
@@ -905,34 +948,46 @@ test.describe('Decision model catalog and deployment bindings', () => {
     page.on('request', (request) => {
       if (request.url().includes('/api/models/catalog')) catalogRequests.push(request.url())
     })
-    await page.goto('/decision-model')
-    await expect(page.getByRole('radio', { name: /Vela 2.0 4B/ })).toBeChecked()
-    const pagination = page.getByRole('navigation', { name: 'Decision model pagination' })
-    await expect(pagination).toContainText('of 17')
-    const names = new Set<string>()
-    for (let index = 0; index < 3; index++) {
-      for (const value of await page
-        .getByRole('radio')
-        .evaluateAll((inputs) => inputs.map((input) => (input as HTMLInputElement).value)))
-        names.add(value)
-      if (index < 2) await pagination.getByRole('button', { name: 'Next', exact: true }).click()
-    }
-    expect(names.size).toBe(17)
-    expect(names.has('Decision-2.0-Kai-0.6B')).toBe(true)
-    expect(names.has('Decision-1.0-Lex-0.6B')).toBe(true)
-    await page.getByRole('button', { name: 'Decision 1.0', exact: true }).click()
-    await expect(pagination).toContainText('of 7')
-    await page.getByLabel('Search models').fill('Lex')
-    await expect(page.getByRole('radio')).toHaveCount(1)
-    await expect(page.getByRole('radio', { name: /Decision 1.0 Lex 0.6B/ })).toBeVisible()
-    await expect(page.getByRole('img', { name: 'vLLM Semantic Router', exact: true })).toBeVisible()
-    await page.getByLabel('Search models').clear()
-    await page.getByRole('button', { name: 'All families', exact: true }).click()
-    await page.getByRole('combobox', { name: 'Question capability' }).click()
-    await page.getByRole('option', { name: 'span', exact: true }).click()
-    await expect(page.getByRole('radio')).toHaveCount(4)
-    for (const radio of await page.getByRole('radio').all())
-      await expect(radio).toHaveValue(/^Vela-/)
+    await gotoDecisionModels(page, '/models/decision')
+    const catalog = page.locator('#decision-catalog')
+    await expect(catalog).toContainText(
+      `${decisionCatalog.models.length} of ${decisionCatalog.models.length} models`,
+    )
+    for (const name of [
+      'vela3-fast',
+      'vela3-lite',
+      'vela3-mini',
+      'vela3-flash',
+      'vela3-turbo',
+      'vela3-fast-vision',
+      'd3-ultra',
+      'd3-turbo',
+      'Vela-2.0-0.3B',
+      'Decision-2.0-Kai-0.6B',
+    ])
+      await expect(catalog.getByText(name, { exact: true })).toBeVisible()
+    const vela31 = catalog.getByRole('region', { name: 'Vela 3.1 models' })
+    await expect(vela31.getByRole('article')).toHaveCount(3)
+    for (const label of ['Vela 3.1 fast', 'Vela 3.1 pico 150M', 'Vela 3.1 pico 380M'])
+      await expect(
+        vela31.getByRole('button', { name: `Deploy ${label}`, exact: true }),
+      ).toBeVisible()
+    await expect(vela31.getByText('Not servable yet')).toHaveCount(0)
+    await catalog.getByRole('radio', { name: 'Decision 1.0', exact: true }).click()
+    await expect(catalog.getByRole('article')).toHaveCount(7)
+    await page.getByPlaceholder('Search decision models…').fill('Lex')
+    await expect(catalog.getByRole('article')).toHaveCount(1)
+    await expect(catalog.getByRole('article', { name: 'Decision 1.0 Lex 0.6B' })).toBeVisible()
+    await page.getByPlaceholder('Search decision models…').clear()
+    await catalog.getByRole('radio', { name: 'All', exact: true }).click()
+    await catalog.getByRole('button', { name: 'Answers' }).click()
+    await page.getByRole('menuitemcheckbox', { name: /^Span/ }).click()
+    await page.keyboard.press('Escape')
+    const spanModels = decisionCatalog.models.filter((model) =>
+      model.questionTypes.includes('span'),
+    )
+    await expect(catalog.getByRole('article')).toHaveCount(spanModels.length)
+    await expect(catalog.getByText('Recommended for CPU')).toHaveCount(0)
     await page.screenshot({
       path: testInfo.outputPath('decision-catalog-desktop.png'),
       fullPage: true,
@@ -949,12 +1004,12 @@ test.describe('Decision model catalog and deployment bindings', () => {
       embeddings: { provider: 'model_runtime', artifact: 'team/embedding-model' },
       reranker: { provider: 'model_runtime', artifact: 'team/reranker-model' },
     })
-    await page.goto('/decision-model')
+    await gotoDecisionModels(page, '/models/decision')
     const row = page.getByRole('row').filter({ hasText: 'Task difficulty' })
     await expect(row).toContainText('team/custom-decision-model')
-    await expect(row).toContainText('research · difficulty')
-    await row.getByRole('button', { name: 'Change' }).click()
-    await row.getByRole('combobox', { name: 'Model for Task difficulty' }).click()
+    await expect(row).toContainText('research · complexity')
+    await row.click()
+    await page.getByRole('combobox', { name: 'Model for Task difficulty' }).click()
     await expect(page.getByRole('option', { name: /team\/custom-decision-model/ })).toBeVisible()
     await expect(
       page.getByRole('option', { name: /team\/(embedding|reranker)-model/ }),
@@ -966,27 +1021,27 @@ test.describe('Decision model catalog and deployment bindings', () => {
     page,
   }) => {
     const fixture = await mockDecisionRuntimeCatalog(page)
-    await page.goto('/decision-model')
-    await page.getByLabel('Search models').fill('Decision 2.0 Kai')
-    await page.getByRole('radio', { name: /Decision 2.0 Kai 0.6B/ }).check()
+    await gotoDecisionModels(page, '/models/decision')
+    await page.getByPlaceholder('Search decision models…').fill('Decision 2.0 Kai')
+    const dialog = await openDeployDialog(page, 'Decision 2.0 Kai 0.6B')
+    await expect(dialog.getByLabel('Deployment', { exact: true })).toHaveValue(
+      'decision-2-0-kai-0-6b',
+    )
+    await dialog.getByRole('radio', { name: /Default decision model/ }).click()
     fixture.config.global.services.opaque_secret = 'test-updated-secret'
     const previous = structuredClone(fixture.config)
-    await page.getByRole('button', { name: 'Deploy selection' }).click()
+    await dialog.getByRole('button', { name: 'Deploy and activate', exact: true }).click()
     await expect(
       page.getByRole('status').filter({ hasText: 'Configuration applied.' }),
     ).toBeVisible()
     expect(fixture.runtimeRequests).toHaveLength(1)
-    const payload = fixture.runtimeRequests[0]
-    expect(payload).toEqual({
+    expect(fixture.runtimeRequests[0]).toEqual({
       ...previous,
       global: {
         ...previous.global,
         model_catalog: {
           ...previous.global.model_catalog,
-          system: {
-            decision_model: { deployment: 'decision-2-0-kai-0-6b' },
-            pii_classifier: 'models/custom-pii',
-          },
+          system: { decision_model: { deployment: 'decision-2-0-kai-0-6b' } },
           deployments: {
             ...previous.global.model_catalog.deployments,
             'decision-2-0-kai-0-6b': {
@@ -999,58 +1054,66 @@ test.describe('Decision model catalog and deployment bindings', () => {
         },
       },
     })
-    await expect(page.getByRole('heading', { name: 'Vela-2.0-4B', exact: true })).toBeVisible()
-    const replicas = page.getByRole('region', { name: 'Model replicas' })
-    await expect(replicas).toContainText('Not observed')
+    await expect(
+      defaultCard(page).getByRole('heading', { name: 'Decision-2.0-Kai-0.6B', exact: true }),
+    ).toBeVisible()
+    await page.goto('/models/decision?deployment=decision-2-0-kai-0-6b')
+    const replicas = page.getByRole('region', { name: 'Replicas' })
+    await expect(replicas).toContainText('Not observed', { timeout: 30_000 })
     fixture.activateRuntime()
-    await page.getByRole('button', { name: 'Refresh', exact: true }).click()
-    await expect(replicas).toContainText('ready')
+    await page.goto('/models/decision?deployment=decision-2-0-kai-0-6b')
+    await expect(page.getByRole('region', { name: 'Replicas' })).toContainText('ready', {
+      timeout: 30_000,
+    })
   })
 
-  test('saves a Decision 1.0 default without claiming a new runtime is ready when no tasks are bound', async ({
+  test('makes an existing Decision 1.0 deployment the default without claiming a new runtime is ready', async ({
     page,
   }) => {
     const fixture = await mockDecisionRuntimeCatalog(page, {
       noConsumers: true,
       applyStatus: 'restart_required',
     })
-    await page.goto('/decision-model')
-    await page.getByLabel('Search models').fill('Decision 1.0 Lex')
-    await page.getByRole('radio', { name: /Decision 1.0 Lex 0.6B/ }).check()
-    await page.getByRole('button', { name: 'Deploy selection' }).click()
+    await gotoDecisionModels(page, '/models/decision')
+    await page.getByPlaceholder('Search decision models…').fill('Decision 1.0 Lex')
+    await page.getByRole('button', { name: 'Open deployment lex' }).click()
+    const sheet = page.getByRole('dialog')
+    await sheet.getByRole('button', { name: 'Make default' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Bind consumers to lex' })
+    await expect(dialog.getByRole('radio', { name: /Default decision model/ })).toBeChecked()
+    await dialog.getByRole('button', { name: 'Save and activate', exact: true }).click()
     await expect(
       page.getByRole('status').filter({ hasText: 'Configuration saved. Restart' }),
     ).toBeVisible()
-    expect(fixture.runtimeRequests[0].routing.signals.decision).toEqual([])
+    expect(fixture.runtimeRequests[0].recipes[0].signals.systemone).toEqual([])
+    expect(fixture.runtimeRequests[0].global.model_catalog.system).toEqual({
+      decision_model: { deployment: 'lex' },
+    })
+    expect(fixture.runtimeRequests[0].global.model_catalog.deployments).toEqual(
+      fixture.config.global.model_catalog.deployments,
+    )
     await expect(page.getByRole('region', { name: 'Task bindings' })).toContainText(
       'No active task bindings',
     )
-    await expect(page.getByRole('heading', { name: 'Vela-2.0-4B', exact: true })).toBeVisible()
-    await expect(page.getByRole('region', { name: 'Model replicas' })).toContainText('Not observed')
-    await expect(
-      page.getByRole('link', { name: 'Decision Playground', exact: true }),
-    ).toHaveAttribute('href', '/decision-model/playground')
+    await expect(defaultCard(page)).toContainText('Still serving Vela-2.0-4B')
   })
 
-  test('binds a decision selector task while preserving the default and exposes deferred activation honestly', async ({
+  test('binds the complexity task in its recipe while preserving the default and exposes deferred activation honestly', async ({
     page,
   }) => {
     const fixture = await mockDecisionRuntimeCatalog(page, { applyStatus: 'restart_required' })
-    await page.goto('/decision-model')
-    const row = page.getByRole('row').filter({ hasText: 'Choose a candidate model' })
-    await row.getByRole('button', { name: 'Change' }).click()
-    await row.getByRole('combobox', { name: 'Model for Choose a candidate model' }).click()
+    await gotoDecisionModels(page, '/models/decision')
+    const row = page.getByRole('row').filter({ hasText: 'Task difficulty' })
+    await row.click()
+    await page.getByRole('combobox', { name: 'Model for Task difficulty' }).click()
     await page.getByRole('option', { name: /Decision-1.0-Lex-0.6B/ }).click()
     const previous = structuredClone(fixture.config)
-    await row.getByRole('button', { name: 'Apply', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Apply', exact: true }).click()
     await expect(
       page.getByRole('status').filter({ hasText: 'Configuration saved. Restart' }),
     ).toBeVisible()
     expect(fixture.runtimeRequests).toHaveLength(1)
-    previous.recipes[0].routing.model_bindings.model_selection = {
-      deployment: 'lex',
-      contract: 'decision.v1',
-    }
+    Object.assign(previous.recipes[1], { model_bindings: { complexity: 'lex' } })
     expect(fixture.runtimeRequests[0]).toEqual(previous)
     await page.getByRole('button', { name: 'Refresh', exact: true }).click()
     await expect(row).toContainText('vllm-sr/Decision-1.0-Lex-0.6B')
@@ -1064,14 +1127,14 @@ test.describe('Decision model catalog and deployment bindings', () => {
     page,
   }) => {
     const fixture = await mockDecisionRuntimeCatalog(page)
-    await page.goto('/decision-model')
-    const row = page.getByRole('row').filter({ hasText: 'Task difficulty' })
-    await row.getByRole('button', { name: 'Change' }).click()
-    await row.getByRole('combobox', { name: 'Model for Task difficulty' }).click()
+    await gotoDecisionModels(page, '/models/decision')
+    await page.getByRole('row').filter({ hasText: 'Task difficulty' }).click()
+    await page.getByRole('combobox', { name: 'Model for Task difficulty' }).click()
     await page.getByRole('option', { name: /Vela-2.0-4B/ }).click()
     fixture.config.recipes = []
-    await row.getByRole('button', { name: 'Apply', exact: true }).click()
-    await expect(row.getByRole('alert')).toContainText('This recipe was removed')
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: 'Apply', exact: true }).click()
+    await expect(dialog.getByRole('alert')).toContainText('This recipe was removed')
     expect(fixture.runtimeRequests).toHaveLength(0)
   })
 
@@ -1079,16 +1142,19 @@ test.describe('Decision model catalog and deployment bindings', () => {
     page,
   }) => {
     const fixture = await mockDecisionRuntimeCatalog(page, { readonly: true })
-    await page.goto('/decision-model')
-    await page.getByLabel('Search models').fill('Decision 2.0 Kai')
-    await expect(page.getByRole('radio', { name: /Decision 2.0 Kai 0.6B/ })).toBeDisabled()
-    await expect(page.getByRole('button', { name: 'Deploy selection' })).toBeDisabled()
+    await gotoDecisionModels(page, '/models/decision')
+    await page.getByPlaceholder('Search decision models…').fill('Decision 2.0 Kai')
+    await expect(
+      page.getByRole('button', { name: 'Deploy Decision 2.0 Kai 0.6B', exact: true }),
+    ).toBeDisabled()
     const bindings = page.getByRole('region', { name: 'Task bindings' })
     await expect(bindings).toContainText('Task difficulty')
-    await expect(bindings.getByRole('button', { name: 'Change' })).toHaveCount(0)
-    const replicas = page.getByRole('region', { name: 'Model replicas' })
-    await replicas.getByText('Configure replicas', { exact: true }).click()
-    await expect(replicas.getByLabel('Device', { exact: true })).toBeDisabled()
+    await expect(bindings.getByRole('button', { name: 'Row actions' })).toHaveCount(0)
+    await page.goto('/models/decision?deployment=primary')
+    const replicas = page.getByRole('region', { name: 'Replicas' })
+    await expect(replicas.getByLabel('Replica 1 device', { exact: true })).toBeDisabled({
+      timeout: 30_000,
+    })
     await expect(replicas.getByRole('button', { name: 'Add replica' })).toBeDisabled()
     expect(fixture.runtimeRequests).toHaveLength(0)
   })
@@ -1098,37 +1164,35 @@ test.describe('Decision model catalog and deployment bindings', () => {
   }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 })
     const fixture = await mockDecisionRuntimeCatalog(page)
-    await page.goto('/decision-model')
-    await page.getByRole('button', { name: 'Decision 2.0', exact: true }).click()
-    await page.getByRole('radio', { name: /Decision 2.0 Kai 0.6B/ }).check()
+    await gotoDecisionModels(page, '/models/decision')
+    await page
+      .locator('#decision-catalog')
+      .getByRole('radio', { name: 'Decision 2.0', exact: true })
+      .click()
+    await expect(
+      page.getByRole('button', { name: 'Deploy Decision 2.0 Kai 0.6B', exact: true }),
+    ).toBeVisible()
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
-    const row = page.getByRole('row').filter({ hasText: 'Task difficulty' })
-    await row.getByRole('button', { name: 'Change' }).click()
-    const consumer = row.getByRole('combobox', { name: 'Model for Task difficulty' })
+    await page.getByRole('row').filter({ hasText: 'Task difficulty' }).click()
+    const consumer = page.getByRole('combobox', { name: 'Model for Task difficulty' })
     await consumer.click()
+    // Escape closes the open list, not the dialog; the list owns Escape once it holds focus.
+    await expect(page.locator('[role="listbox"]:focus-within')).toBeVisible()
     await page.keyboard.press('Escape')
+    await expect(page.getByRole('listbox')).toHaveCount(0)
     await expect(consumer).toBeFocused()
     await expect(consumer).toHaveAttribute('aria-expanded', 'false')
     await consumer.click()
-    await page.mouse.wheel(0, -120)
-    await expect(consumer).toHaveAttribute('aria-expanded', 'true')
-    await page.getByRole('heading', { name: 'Task bindings', exact: true }).click()
-    await expect(consumer).toHaveAttribute('aria-expanded', 'false')
-    await consumer.focus()
-    await page.keyboard.press('Home')
-    await page.keyboard.press('Enter')
-    await expect(consumer).toContainText('vllm-sr/Vela-2.0-4B')
-    await consumer.click()
     await page.getByRole('option', { name: /Decision-1.0-Lex-0.6B/ }).click()
-    await row.getByRole('button', { name: 'Apply', exact: true }).scrollIntoViewIfNeeded()
-    await expect(row.getByRole('button', { name: 'Apply', exact: true })).toBeInViewport()
+    const apply = page.getByRole('dialog').getByRole('button', { name: 'Apply', exact: true })
+    await expect(apply).toBeInViewport()
     await page.screenshot({
       path: testInfo.outputPath('decision-catalog-mobile.png'),
       fullPage: true,
     })
-    await row.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(consumer).toHaveCount(0)
     expect(fixture.runtimeRequests).toEqual([])
   })

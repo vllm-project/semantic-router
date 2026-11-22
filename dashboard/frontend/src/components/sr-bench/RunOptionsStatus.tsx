@@ -1,7 +1,6 @@
-import ProductLoadingState from '../ProductLoadingState'
-import ProductIcon from '../ProductIcon'
-import styles from './SrBench.module.css'
-import controls from './BenchControls.module.css'
+import { ChevronDown, RefreshCw } from 'lucide-react'
+import { Button } from '../../ui'
+import { BenchLoading, Notice } from './benchUi'
 
 export default function RunOptionsStatus({
   loading,
@@ -25,23 +24,25 @@ export default function RunOptionsStatus({
   return (
     <>
       {scanLimited && (
-        <p className={styles.notice}>
+        <Notice tone="warning" as="p">
           Some saved evidence exceeded the verification limit. Only verified combinations are shown.
-        </p>
+        </Notice>
       )}
-      {loading && <ProductLoadingState compact label={`Loading ${label}…`} />}
+      {loading && <BenchLoading label={`Loading ${label}…`} />}
       {error && (
-        <div role="alert" className={styles.error}>
+        <Notice tone="danger" role="alert">
           <p>{error}</p>
-          <button className={controls.compactButton} disabled={loading} onClick={onRetry}>
-            <ProductIcon name="refresh" /> Retry {label}
-          </button>
-        </div>
+          <div>
+            <Button variant="outline" size="xs" disabled={loading} onClick={onRetry}>
+              <RefreshCw aria-hidden="true" className="size-[15px]" /> Retry {label}
+            </Button>
+          </div>
+        </Notice>
       )}
       {loaded && next && !error && (
-        <button className={controls.compactButton} disabled={loading} onClick={onMore}>
-          Load more {label} <ProductIcon name="chevron-down" />
-        </button>
+        <Button variant="outline" size="xs" className="my-1" disabled={loading} onClick={onMore}>
+          Load more {label} <ChevronDown aria-hidden="true" />
+        </Button>
       )}
     </>
   )

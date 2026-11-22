@@ -27,7 +27,7 @@ spec:
   # ====================
   # Configure model backends that semantic router routes to after classification.
   # The operator renders these into canonical providers.models[].backend_refs
-  # and routing.modelCards entries in config.yaml.
+  # with the facts routing reads about each model in config.yaml.
   vllmEndpoints:
     # Example 1: KServe InferenceService (RHOAI 3)
     - name: kserve-llama3-8b
@@ -138,11 +138,6 @@ spec:
   # Semantic Router Configuration
   # ====================
   config:
-    embedding_models:
-      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
-      use_cpu: true
-
-    # Semantic cache for latency/token optimization
     response_cache:
       enabled: true
       backend_type: memory  # or milvus
@@ -150,24 +145,6 @@ spec:
       max_entries: 10000
       ttl_seconds: 3600  # 1 hour
       eviction_policy: lru  # fifo, lru, or lfu
-      embedding_model: mmbert
-
-    # Tools auto-selection based on semantic similarity
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: "0.2"
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
-
-    # Prompt guard (jailbreak detection)
-    prompt_guard:
-      enabled: true
-      model_id: models/vela3-fast
-      threshold: "0.88"
-      use_cpu: true
-
-    # Domain and PII classifiers use the Vela 2.0 0.3B defaults.
 
     # Reasoning families configuration
     reasoning_effort: medium  # low, medium, high
@@ -176,8 +153,6 @@ spec:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           enabled: true
           detailed_goroutine_tracking: true

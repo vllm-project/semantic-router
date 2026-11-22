@@ -1,0 +1,954 @@
+{
+  "cases": [
+    {
+      "name": "content_block:server_tool_use",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "message": {
+                  "container": null,
+                  "content": [],
+                  "id": "message_0",
+                  "model": "public-model",
+                  "role": "assistant",
+                  "stop_details": null,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "type": "message",
+                  "usage": {
+                    "cache_creation": {
+                      "ephemeral_1h_input_tokens": 0,
+                      "ephemeral_5m_input_tokens": 0
+                    },
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "inference_geo": "global",
+                    "input_tokens": 1,
+                    "output_tokens": 0,
+                    "output_tokens_details": {
+                      "thinking_tokens": 0
+                    },
+                    "server_tool_use": {
+                      "web_fetch_requests": 0,
+                      "web_search_requests": 0
+                    },
+                    "service_tier": "standard"
+                  }
+                },
+                "type": "message_start"
+              },
+              "event": "message_start"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "id": "srvtoolu_1",
+                  "input": {},
+                  "name": "web_search",
+                  "type": "server_tool_use"
+                },
+                "index": 0,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "delta": {
+                  "partial_json": "{\"query\":\"go release\"}",
+                  "type": "input_json_delta"
+                },
+                "index": 0,
+                "type": "content_block_delta"
+              },
+              "event": "content_block_delta"
+            },
+            {
+              "data": {
+                "index": 0,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "delta": {
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null
+                },
+                "type": "message_delta",
+                "usage": {
+                  "cache_creation_input_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "input_tokens": 1,
+                  "output_tokens": 3,
+                  "output_tokens_details": {
+                    "thinking_tokens": 0
+                  },
+                  "server_tool_use": {
+                    "web_fetch_requests": 0,
+                    "web_search_requests": 0
+                  }
+                }
+              },
+              "event": "message_delta"
+            },
+            {
+              "data": {
+                "type": "message_stop"
+              },
+              "event": "message_stop"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "content_block:bash_code_execution_tool_result",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "message": {
+                  "container": null,
+                  "content": [],
+                  "id": "message_1",
+                  "model": "public-model",
+                  "role": "assistant",
+                  "stop_details": null,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "type": "message",
+                  "usage": {
+                    "cache_creation": {
+                      "ephemeral_1h_input_tokens": 0,
+                      "ephemeral_5m_input_tokens": 0
+                    },
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "inference_geo": "global",
+                    "input_tokens": 1,
+                    "output_tokens": 0,
+                    "output_tokens_details": {
+                      "thinking_tokens": 0
+                    },
+                    "server_tool_use": {
+                      "web_fetch_requests": 0,
+                      "web_search_requests": 0
+                    },
+                    "service_tier": "standard"
+                  }
+                },
+                "type": "message_start"
+              },
+              "event": "message_start"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "id": "srvtoolu_1",
+                  "input": {},
+                  "name": "tool",
+                  "type": "server_tool_use"
+                },
+                "index": 0,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 0,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "content": {
+                    "content": [],
+                    "return_code": 0,
+                    "stderr": "",
+                    "stdout": "ok",
+                    "type": "bash_code_execution_result"
+                  },
+                  "tool_use_id": "srvtoolu_1",
+                  "type": "bash_code_execution_tool_result"
+                },
+                "index": 1,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 1,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "delta": {
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null
+                },
+                "type": "message_delta",
+                "usage": {
+                  "cache_creation_input_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "input_tokens": 1,
+                  "output_tokens": 3,
+                  "output_tokens_details": {
+                    "thinking_tokens": 0
+                  },
+                  "server_tool_use": {
+                    "web_fetch_requests": 0,
+                    "web_search_requests": 0
+                  }
+                }
+              },
+              "event": "message_delta"
+            },
+            {
+              "data": {
+                "type": "message_stop"
+              },
+              "event": "message_stop"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "content_block:code_execution_tool_result",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "message": {
+                  "container": null,
+                  "content": [],
+                  "id": "message_2",
+                  "model": "public-model",
+                  "role": "assistant",
+                  "stop_details": null,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "type": "message",
+                  "usage": {
+                    "cache_creation": {
+                      "ephemeral_1h_input_tokens": 0,
+                      "ephemeral_5m_input_tokens": 0
+                    },
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "inference_geo": "global",
+                    "input_tokens": 1,
+                    "output_tokens": 0,
+                    "output_tokens_details": {
+                      "thinking_tokens": 0
+                    },
+                    "server_tool_use": {
+                      "web_fetch_requests": 0,
+                      "web_search_requests": 0
+                    },
+                    "service_tier": "standard"
+                  }
+                },
+                "type": "message_start"
+              },
+              "event": "message_start"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "id": "srvtoolu_2",
+                  "input": {},
+                  "name": "tool",
+                  "type": "server_tool_use"
+                },
+                "index": 0,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 0,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "content": {
+                    "content": [],
+                    "return_code": 0,
+                    "stderr": "",
+                    "stdout": "ok",
+                    "type": "code_execution_result"
+                  },
+                  "tool_use_id": "srvtoolu_2",
+                  "type": "code_execution_tool_result"
+                },
+                "index": 1,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 1,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "delta": {
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null
+                },
+                "type": "message_delta",
+                "usage": {
+                  "cache_creation_input_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "input_tokens": 1,
+                  "output_tokens": 3,
+                  "output_tokens_details": {
+                    "thinking_tokens": 0
+                  },
+                  "server_tool_use": {
+                    "web_fetch_requests": 0,
+                    "web_search_requests": 0
+                  }
+                }
+              },
+              "event": "message_delta"
+            },
+            {
+              "data": {
+                "type": "message_stop"
+              },
+              "event": "message_stop"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "content_block:text_editor_code_execution_tool_result",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "message": {
+                  "container": null,
+                  "content": [],
+                  "id": "message_3",
+                  "model": "public-model",
+                  "role": "assistant",
+                  "stop_details": null,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "type": "message",
+                  "usage": {
+                    "cache_creation": {
+                      "ephemeral_1h_input_tokens": 0,
+                      "ephemeral_5m_input_tokens": 0
+                    },
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "inference_geo": "global",
+                    "input_tokens": 1,
+                    "output_tokens": 0,
+                    "output_tokens_details": {
+                      "thinking_tokens": 0
+                    },
+                    "server_tool_use": {
+                      "web_fetch_requests": 0,
+                      "web_search_requests": 0
+                    },
+                    "service_tier": "standard"
+                  }
+                },
+                "type": "message_start"
+              },
+              "event": "message_start"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "id": "srvtoolu_3",
+                  "input": {},
+                  "name": "tool",
+                  "type": "server_tool_use"
+                },
+                "index": 0,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 0,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "content": {
+                    "content": "ok",
+                    "file_type": "text",
+                    "type": "text_editor_code_execution_view_result"
+                  },
+                  "tool_use_id": "srvtoolu_3",
+                  "type": "text_editor_code_execution_tool_result"
+                },
+                "index": 1,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 1,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "delta": {
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null
+                },
+                "type": "message_delta",
+                "usage": {
+                  "cache_creation_input_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "input_tokens": 1,
+                  "output_tokens": 3,
+                  "output_tokens_details": {
+                    "thinking_tokens": 0
+                  },
+                  "server_tool_use": {
+                    "web_fetch_requests": 0,
+                    "web_search_requests": 0
+                  }
+                }
+              },
+              "event": "message_delta"
+            },
+            {
+              "data": {
+                "type": "message_stop"
+              },
+              "event": "message_stop"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "content_block:tool_search_tool_result",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "message": {
+                  "container": null,
+                  "content": [],
+                  "id": "message_4",
+                  "model": "public-model",
+                  "role": "assistant",
+                  "stop_details": null,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "type": "message",
+                  "usage": {
+                    "cache_creation": {
+                      "ephemeral_1h_input_tokens": 0,
+                      "ephemeral_5m_input_tokens": 0
+                    },
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "inference_geo": "global",
+                    "input_tokens": 1,
+                    "output_tokens": 0,
+                    "output_tokens_details": {
+                      "thinking_tokens": 0
+                    },
+                    "server_tool_use": {
+                      "web_fetch_requests": 0,
+                      "web_search_requests": 0
+                    },
+                    "service_tier": "standard"
+                  }
+                },
+                "type": "message_start"
+              },
+              "event": "message_start"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "id": "srvtoolu_4",
+                  "input": {},
+                  "name": "tool",
+                  "type": "server_tool_use"
+                },
+                "index": 0,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 0,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "content": {
+                    "tool_references": [],
+                    "type": "tool_search_tool_search_result"
+                  },
+                  "tool_use_id": "srvtoolu_4",
+                  "type": "tool_search_tool_result"
+                },
+                "index": 1,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 1,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "delta": {
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null
+                },
+                "type": "message_delta",
+                "usage": {
+                  "cache_creation_input_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "input_tokens": 1,
+                  "output_tokens": 3,
+                  "output_tokens_details": {
+                    "thinking_tokens": 0
+                  },
+                  "server_tool_use": {
+                    "web_fetch_requests": 0,
+                    "web_search_requests": 0
+                  }
+                }
+              },
+              "event": "message_delta"
+            },
+            {
+              "data": {
+                "type": "message_stop"
+              },
+              "event": "message_stop"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "content_block:web_fetch_tool_result",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "message": {
+                  "container": null,
+                  "content": [],
+                  "id": "message_5",
+                  "model": "public-model",
+                  "role": "assistant",
+                  "stop_details": null,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "type": "message",
+                  "usage": {
+                    "cache_creation": {
+                      "ephemeral_1h_input_tokens": 0,
+                      "ephemeral_5m_input_tokens": 0
+                    },
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "inference_geo": "global",
+                    "input_tokens": 1,
+                    "output_tokens": 0,
+                    "output_tokens_details": {
+                      "thinking_tokens": 0
+                    },
+                    "server_tool_use": {
+                      "web_fetch_requests": 0,
+                      "web_search_requests": 0
+                    },
+                    "service_tier": "standard"
+                  }
+                },
+                "type": "message_start"
+              },
+              "event": "message_start"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "id": "srvtoolu_5",
+                  "input": {},
+                  "name": "tool",
+                  "type": "server_tool_use"
+                },
+                "index": 0,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 0,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "content": {
+                    "content": {
+                      "source": {
+                        "data": "Example",
+                        "media_type": "text/plain",
+                        "type": "text"
+                      },
+                      "type": "document"
+                    },
+                    "type": "web_fetch_result",
+                    "url": "https://example.com"
+                  },
+                  "tool_use_id": "srvtoolu_5",
+                  "type": "web_fetch_tool_result"
+                },
+                "index": 1,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 1,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "delta": {
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null
+                },
+                "type": "message_delta",
+                "usage": {
+                  "cache_creation_input_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "input_tokens": 1,
+                  "output_tokens": 3,
+                  "output_tokens_details": {
+                    "thinking_tokens": 0
+                  },
+                  "server_tool_use": {
+                    "web_fetch_requests": 0,
+                    "web_search_requests": 0
+                  }
+                }
+              },
+              "event": "message_delta"
+            },
+            {
+              "data": {
+                "type": "message_stop"
+              },
+              "event": "message_stop"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "content_block:web_search_tool_result",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "message": {
+                  "container": null,
+                  "content": [],
+                  "id": "message_6",
+                  "model": "public-model",
+                  "role": "assistant",
+                  "stop_details": null,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "type": "message",
+                  "usage": {
+                    "cache_creation": {
+                      "ephemeral_1h_input_tokens": 0,
+                      "ephemeral_5m_input_tokens": 0
+                    },
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "inference_geo": "global",
+                    "input_tokens": 1,
+                    "output_tokens": 0,
+                    "output_tokens_details": {
+                      "thinking_tokens": 0
+                    },
+                    "server_tool_use": {
+                      "web_fetch_requests": 0,
+                      "web_search_requests": 0
+                    },
+                    "service_tier": "standard"
+                  }
+                },
+                "type": "message_start"
+              },
+              "event": "message_start"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "id": "srvtoolu_6",
+                  "input": {},
+                  "name": "tool",
+                  "type": "server_tool_use"
+                },
+                "index": 0,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 0,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "content": [
+                    {
+                      "encrypted_content": "EqQBCioIBxgC",
+                      "page_age": null,
+                      "title": "Example",
+                      "type": "web_search_result",
+                      "url": "https://example.com"
+                    }
+                  ],
+                  "tool_use_id": "srvtoolu_6",
+                  "type": "web_search_tool_result"
+                },
+                "index": 1,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "index": 1,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "delta": {
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null
+                },
+                "type": "message_delta",
+                "usage": {
+                  "cache_creation_input_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "input_tokens": 1,
+                  "output_tokens": 3,
+                  "output_tokens_details": {
+                    "thinking_tokens": 0
+                  },
+                  "server_tool_use": {
+                    "web_fetch_requests": 0,
+                    "web_search_requests": 0
+                  }
+                }
+              },
+              "event": "message_delta"
+            },
+            {
+              "data": {
+                "type": "message_stop"
+              },
+              "event": "message_stop"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "content_delta:citations_delta",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "message": {
+                  "container": null,
+                  "content": [],
+                  "id": "message_9",
+                  "model": "public-model",
+                  "role": "assistant",
+                  "stop_details": null,
+                  "stop_reason": null,
+                  "stop_sequence": null,
+                  "type": "message",
+                  "usage": {
+                    "cache_creation": {
+                      "ephemeral_1h_input_tokens": 0,
+                      "ephemeral_5m_input_tokens": 0
+                    },
+                    "cache_creation_input_tokens": 0,
+                    "cache_read_input_tokens": 0,
+                    "inference_geo": "global",
+                    "input_tokens": 1,
+                    "output_tokens": 0,
+                    "output_tokens_details": {
+                      "thinking_tokens": 0
+                    },
+                    "server_tool_use": {
+                      "web_fetch_requests": 0,
+                      "web_search_requests": 0
+                    },
+                    "service_tier": "standard"
+                  }
+                },
+                "type": "message_start"
+              },
+              "event": "message_start"
+            },
+            {
+              "data": {
+                "content_block": {
+                  "citations": [],
+                  "text": "",
+                  "type": "text"
+                },
+                "index": 0,
+                "type": "content_block_start"
+              },
+              "event": "content_block_start"
+            },
+            {
+              "data": {
+                "delta": {
+                  "citation": {
+                    "cited_text": "Example",
+                    "encrypted_index": "Eo8BCioI",
+                    "title": "Example",
+                    "type": "web_search_result_location",
+                    "url": "https://example.com"
+                  },
+                  "type": "citations_delta"
+                },
+                "index": 0,
+                "type": "content_block_delta"
+              },
+              "event": "content_block_delta"
+            },
+            {
+              "data": {
+                "delta": {
+                  "text": "Example.",
+                  "type": "text_delta"
+                },
+                "index": 0,
+                "type": "content_block_delta"
+              },
+              "event": "content_block_delta"
+            },
+            {
+              "data": {
+                "index": 0,
+                "type": "content_block_stop"
+              },
+              "event": "content_block_stop"
+            },
+            {
+              "data": {
+                "delta": {
+                  "stop_reason": "end_turn",
+                  "stop_sequence": null
+                },
+                "type": "message_delta",
+                "usage": {
+                  "cache_creation_input_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "input_tokens": 1,
+                  "output_tokens": 3,
+                  "output_tokens_details": {
+                    "thinking_tokens": 0
+                  },
+                  "server_tool_use": {
+                    "web_fetch_requests": 0,
+                    "web_search_requests": 0
+                  }
+                }
+              },
+              "event": "message_delta"
+            },
+            {
+              "data": {
+                "type": "message_stop"
+              },
+              "event": "message_stop"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

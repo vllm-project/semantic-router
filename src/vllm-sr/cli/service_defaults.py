@@ -328,8 +328,6 @@ def inject_local_store_runtime_defaults(
 def _inject_response_cache_milvus_defaults(
     stores: dict[str, object], stack_layout: RuntimeStackLayout
 ) -> bool:
-    if "response_cache" not in stores and "semantic_cache" in stores:
-        stores["response_cache"] = stores.pop("semantic_cache")
     cache_config = stores.get("response_cache")
     if cache_config is None:
         cache_mapping: dict[str, object] = {}

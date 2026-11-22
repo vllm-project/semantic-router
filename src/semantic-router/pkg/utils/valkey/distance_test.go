@@ -28,9 +28,13 @@ func TestDistanceToSimilarity(t *testing.T) {
 		distance float64
 		expected float64
 	}{
+		// COSINE distance is 1 - cos(u, v), so the similarity is the cosine
+		// itself, on the same [-1, 1] scale Milvus, Qdrant and the in-memory
+		// backends report and min_similarity is written in.
 		{"COSINE identical", "COSINE", 0.0, 1.0},
-		{"COSINE orthogonal", "COSINE", 1.0, 0.5},
-		{"COSINE opposite", "COSINE", 2.0, 0.0},
+		{"COSINE cosine 0.6", "COSINE", 0.4, 0.6},
+		{"COSINE orthogonal", "COSINE", 1.0, 0.0},
+		{"COSINE opposite", "COSINE", 2.0, -1.0},
 		// IP distance is 1 - u*v, so identical normalized vectors are at
 		// distance 0 and must score 1.0, not 0.0.
 		{"IP identical", "IP", 0.0, 1.0},
@@ -40,7 +44,7 @@ func TestDistanceToSimilarity(t *testing.T) {
 		{"L2 squashes", "L2", 1.0, 0.5},
 		// Metric types are normalized, so a config using lowercase resolves to
 		// the same branch as the canonical spelling.
-		{"lowercase cosine", "cosine", 1.0, 0.5},
+		{"lowercase cosine", "cosine", 0.4, 0.6},
 		{"lowercase ip", "ip", 0.75, 0.25},
 		{"lowercase l2", "l2", 1.0, 0.5},
 		{"unknown metric falls back", "EUCLIDEAN", 0.25, 0.75},

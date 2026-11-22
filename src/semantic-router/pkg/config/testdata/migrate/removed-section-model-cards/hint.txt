@@ -1,0 +1,1 @@
+routing.modelCards: removed_section: routing.modelCards is removed; run `vllm-sr config migrate` (each card's fields on the providers.models[] entry of the same name)

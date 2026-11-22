@@ -9,23 +9,20 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestPolicySignalsAndClassifierLeafRoundTrip(t *testing.T) {
+func TestPolicySignalsAndSystemOneLeafRoundTrip(t *testing.T) {
 	input := `
 SIGNAL metadata "canary" {
   key: "cohort"
   predicate: { equals: "canary" }
 }
 
-SIGNAL classifier "risk" {
-  type: "local"
-  model_path: "models/risk"
-  labels: ["SAFE", "RISKY"]
-  use_cpu: true
+SIGNAL systemone "risk" {
+  question: { type: "choice", instructions: "Is the request risky?", choices: [{ key: "SAFE" }, { key: "RISKY" }] }
 }
 
 ROUTE "policy-route" (on_unknown = "fail_request") {
   PRIORITY 100
-  WHEN metadata("canary") AND classifier(
+  WHEN metadata("canary") AND systemone(
     "risk",
     label: "RISKY",
     predicate: { gte: 0.8 }
@@ -37,7 +34,7 @@ ROUTE "policy-route" (on_unknown = "fail_request") {
 	if cfg.Decisions[0].Rules.OnUnknown != "fail_request" {
 		t.Fatalf("on_unknown = %q", cfg.Decisions[0].Rules.OnUnknown)
 	}
-	assertPolicyClassifierLeaf(t, cfg.Decisions[0].Rules.Conditions[1])
+	assertPolicySystemOneLeaf(t, cfg.Decisions[0].Rules.Conditions[1])
 
 	source, err := Decompile(cfg)
 	if err != nil {
@@ -48,68 +45,10 @@ ROUTE "policy-route" (on_unknown = "fail_request") {
 	if roundTrip.Decisions[0].Rules.OnUnknown != "fail_request" {
 		t.Fatalf("round-trip on_unknown = %q", roundTrip.Decisions[0].Rules.OnUnknown)
 	}
-	assertPolicyClassifierLeaf(
+	assertPolicySystemOneLeaf(
 		t,
 		roundTrip.Decisions[0].Rules.Conditions[1],
 	)
-}
-
-func TestPIISourceRoundTrip(t *testing.T) {
-	input := `
-SIGNAL pii "tool-data" {
-  source: "tool_result"
-}
-
-ROUTE "tool-route" {
-  PRIORITY 100
-  WHEN pii("tool-data")
-  MODEL "model-a"
-}`
-
-	cfg := mustCompilePolicyDSL(t, input)
-	if len(cfg.PIIRules) != 1 || cfg.PIIRules[0].Source != config.PIISourceToolResult {
-		t.Fatalf("PII rules = %#v, want source %q", cfg.PIIRules, config.PIISourceToolResult)
-	}
-
-	source, err := Decompile(cfg)
-	if err != nil {
-		t.Fatalf("decompile error: %v", err)
-	}
-	if !strings.Contains(source, `source: "tool_result"`) {
-		t.Fatalf("decompiled DSL missing PII source:\n%s", source)
-	}
-
-	roundTrip := mustCompilePolicyDSL(t, source)
-	if len(roundTrip.PIIRules) != 1 || roundTrip.PIIRules[0].Source != config.PIISourceToolResult {
-		t.Fatalf("round-trip PII rules = %#v, want source %q", roundTrip.PIIRules, config.PIISourceToolResult)
-	}
-}
-
-func TestClassifierRationaleRoundTrip(t *testing.T) {
-	for _, disabled := range []bool{false, true} {
-		t.Run(fmt.Sprintf("disabled_%t", disabled), func(t *testing.T) {
-			cfg := &config.RouterConfig{}
-			cfg.ClassifierRules = []config.ClassifierSignalRule{{
-				Name:             "risk",
-				Type:             config.ClassifierSignalTypeLLM,
-				Model:            "judge",
-				Labels:           []string{"SAFE", "RISKY"},
-				Instructions:     "Classify the input.",
-				DisableRationale: disabled,
-			}}
-			source, err := Decompile(cfg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if strings.Contains(source, "disable_rationale: true") != disabled {
-				t.Fatalf("rationale setting changed in DSL:\n%s", source)
-			}
-			roundTrip := mustCompilePolicyDSL(t, source)
-			if !reflect.DeepEqual(cfg.ClassifierRules, roundTrip.ClassifierRules) {
-				t.Fatalf("classifier changed after round trip: %#v", roundTrip.ClassifierRules)
-			}
-		})
-	}
 }
 
 func TestPolicySignalsRoundTripInsideIsolatedRecipes(t *testing.T) {
@@ -121,15 +60,12 @@ RECIPE alpha {
     key: "tenant"
     predicate: { equals: "alpha" }
   }
-  SIGNAL classifier "risk" {
-    type: "local"
-    model_path: "models/risk"
-    labels: ["SAFE", "RISKY"]
-    use_cpu: true
+  SIGNAL systemone "risk" {
+    question: { type: "choice", instructions: "Is the request risky?", choices: [{ key: "SAFE" }, { key: "RISKY" }] }
   }
   ROUTE "policy-route" {
     PRIORITY 100
-    WHEN metadata("cohort") AND classifier(
+    WHEN metadata("cohort") AND systemone(
       "risk",
       label: "RISKY",
       predicate: { gte: 0.8 },
@@ -144,11 +80,8 @@ RECIPE beta {
     key: "tenant"
     predicate: { equals: "beta" }
   }
-  SIGNAL classifier "risk" {
-    type: "local"
-    model_path: "models/risk"
-    labels: ["SAFE", "RISKY"]
-    use_cpu: true
+  SIGNAL systemone "risk" {
+    question: { type: "choice", instructions: "Is the request risky?", choices: [{ key: "SAFE" }, { key: "RISKY" }] }
   }
   ROUTE "policy-route" {
     PRIORITY 100
@@ -202,23 +135,23 @@ func assertPolicySignals(t *testing.T, cfg *config.RouterConfig) {
 		cfg.MetadataRules[0].Key != "cohort" {
 		t.Fatalf("metadata rules = %#v", cfg.MetadataRules)
 	}
-	if len(cfg.ClassifierRules) != 1 ||
-		cfg.ClassifierRules[0].Labels[1] != "RISKY" {
-		t.Fatalf("classifier rules = %#v", cfg.ClassifierRules)
+	if len(cfg.SystemOneRules) != 1 ||
+		cfg.SystemOneRules[0].Question.Choices[1].Key != "RISKY" {
+		t.Fatalf("systemone rules = %#v", cfg.SystemOneRules)
 	}
 }
 
-func assertPolicyClassifierLeaf(
+func assertPolicySystemOneLeaf(
 	t *testing.T,
-	classifierLeaf config.RuleNode,
+	leaf config.RuleNode,
 ) {
 	t.Helper()
-	if classifierLeaf.Label != "RISKY" ||
-		classifierLeaf.Predicate == nil ||
-		classifierLeaf.Predicate.GTE == nil ||
-		*classifierLeaf.Predicate.GTE != 0.8 ||
-		classifierLeaf.OnError != "" {
-		t.Fatalf("classifier leaf = %#v", classifierLeaf)
+	if leaf.Label != "RISKY" ||
+		leaf.Predicate == nil ||
+		leaf.Predicate.GTE == nil ||
+		*leaf.Predicate.GTE != 0.8 ||
+		leaf.OnError != "" {
+		t.Fatalf("systemone leaf = %#v", leaf)
 	}
 }
 
@@ -248,11 +181,8 @@ ROUTE "x" (on_unknown = "allow") {
 
 func TestValidateOnUnknownOnErrorConflict(t *testing.T) {
 	const signals = `
-SIGNAL classifier "risk" {
-  type: "local"
-  model_path: "models/risk"
-  labels: ["SAFE", "RISKY"]
-  use_cpu: true
+SIGNAL systemone "risk" {
+  question: { type: "choice", instructions: "Is the request risky?", choices: [{ key: "SAFE" }, { key: "RISKY" }] }
 }
 SIGNAL keyword "hack" {
   operator: "contains"
@@ -263,12 +193,12 @@ SIGNAL keyword "hack" {
 		route string
 		want  bool
 	}{
-		"flat":             {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, true},
-		"nested and":       {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, true},
-		"nested or not":    {`ROUTE "r" (on_unknown = "match") { PRIORITY 1 WHEN keyword("hack") OR NOT classifier("risk", label: "RISKY", on_error: "match") MODEL "m" }`, true},
-		"empty on_error":   {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "") MODEL "m" }`, false},
-		"on_error alone":   {`ROUTE "r" { PRIORITY 1 WHEN classifier("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, false},
-		"on_unknown alone": {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND classifier("risk", label: "RISKY") MODEL "m" }`, false},
+		"flat":             {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN systemone("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, true},
+		"nested and":       {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND systemone("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, true},
+		"nested or not":    {`ROUTE "r" (on_unknown = "match") { PRIORITY 1 WHEN keyword("hack") OR NOT systemone("risk", label: "RISKY", on_error: "match") MODEL "m" }`, true},
+		"empty on_error":   {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN systemone("risk", label: "RISKY", on_error: "") MODEL "m" }`, false},
+		"on_error alone":   {`ROUTE "r" { PRIORITY 1 WHEN systemone("risk", label: "RISKY", on_error: "no_match") MODEL "m" }`, false},
+		"on_unknown alone": {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 WHEN keyword("hack") AND systemone("risk", label: "RISKY") MODEL "m" }`, false},
 		"match all":        {`ROUTE "r" (on_unknown = "no_match") { PRIORITY 1 MODEL "m" }`, false},
 	}
 	for name, tc := range cases {
@@ -297,7 +227,7 @@ func assertPolicyDSLSource(t *testing.T, source string) {
 	t.Helper()
 	for _, expected := range []string{
 		`SIGNAL metadata canary`,
-		`SIGNAL classifier risk`,
+		`SIGNAL systemone risk`,
 		`label: "RISKY"`,
 		`predicate: { gte: 0.8 }`,
 		`on_unknown = "fail_request"`,
