@@ -32,6 +32,11 @@ type ConversationFacts struct {
 	LastUserAfterToolResult   bool
 	// FailedToolResults is ToolFailureCount.Failed for the request.
 	FailedToolResults int
+	// InvalidToolCalls counts tool calls in the last assistant message whose
+	// arguments miss a required property of the tool they name, or are not a
+	// JSON object at all. The client resends the history every turn, so the
+	// count needs no session state and reads the same on every replica.
+	InvalidToolCalls int
 }
 
 // toolFailureRecoveryRun is how many consecutive successful tool results
@@ -244,6 +249,8 @@ func resolveConversationRawCount(feature config.ConversationFeature, facts Conve
 		return conversationBoolCount(facts.LastMessageFlowToolResult)
 	case "failed_tool_result":
 		return facts.FailedToolResults
+	case "invalid_tool_call":
+		return facts.InvalidToolCalls
 	default:
 		return 0
 	}
