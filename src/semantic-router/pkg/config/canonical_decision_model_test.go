@@ -74,7 +74,7 @@ func TestDecisionsThatAnswerWithoutAModelNeedNoFallback(t *testing.T) {
 			Type:          DecisionPluginFastResponse,
 			Configuration: MustStructuredPayload(FastResponsePluginConfig{Message: "Blocked."}),
 		}}},
-		"route":         {Action: &DecisionAction{Type: DecisionActionRoute, Destination: "general"}},
+		"route": {Action: &DecisionAction{Type: DecisionActionRoute, Destination: "general"}},
 	}
 	for name, decision := range answers {
 		if !canonicalDecisionNamesAModel(decision) {
