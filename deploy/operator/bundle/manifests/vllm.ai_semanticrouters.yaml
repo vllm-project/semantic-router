@@ -3416,7 +3416,11 @@ spec:
                     type: object
                 type: object
               persistence:
-                description: Persistence configuration
+                default: {}
+                description: |-
+                  Persistence configuration. When omitted it defaults to an empty object,
+                  so enabled, storageClassName, accessMode and size still take their
+                  defaults.
                 properties:
                   accessMode:
                     default: ReadWriteOnce
@@ -4036,7 +4040,10 @@ spec:
                     type: string
                 type: object
               serviceAccount:
-                description: ServiceAccount configuration
+                default: {}
+                description: |-
+                  ServiceAccount configuration. When omitted it defaults to an empty object,
+                  so create still takes its default.
                 properties:
                   annotations:
                     additionalProperties:
