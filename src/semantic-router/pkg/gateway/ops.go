@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 // Probe paths the gateway answers itself, before API keys and routing.
@@ -71,9 +72,11 @@ func newAccessRecord(r *http.Request) AccessRecord {
 	}
 }
 
-// exchange is the state one request accumulates for its access record.
+// exchange is the state one request accumulates: its access record and, when
+// no backend answered, the local reply the client got.
 type exchange struct {
 	record AccessRecord
+	local  *routing.LocalReply
 }
 
 func (h *Handler) logAccess(x *exchange, w *countingWriter) {

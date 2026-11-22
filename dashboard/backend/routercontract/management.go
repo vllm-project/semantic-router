@@ -50,7 +50,7 @@ func buildManagementPolicies() []ManagementPolicy {
 		"/api/v1/observability/plugins/context/compression/stats")
 	add(http.MethodGet, configWrite, false, "/api/v1/inventory/classifier")
 	add(http.MethodGet, replayRead, false,
-		"/api/v1/observability/replays", "/api/v1/observability/replays/aggregate", "/api/v1/observability/replays/trajectory", "/api/v1/observability/replays/{id}", "/api/v1/observability/audit")
+		"/api/v1/observability/replays", "/api/v1/observability/replays/aggregate", "/api/v1/observability/replays/trajectory", "/api/v1/observability/replays/runs", "/api/v1/observability/replays/run", "/api/v1/observability/replays/models", "/api/v1/observability/replays/{id}", "/api/v1/observability/audit")
 	add(http.MethodPost, feedbackSubmit, true, "/api/v1/observability/outcomes")
 	add(http.MethodPost, configRead, false,
 		"/api/v1/plugins/system_prompt/preview", "/api/v1/plugins/request_params/preview", "/api/v1/plugins/header_mutation/preview", "/api/v1/plugins/fast_response/preview")

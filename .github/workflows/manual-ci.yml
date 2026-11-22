@@ -62,11 +62,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
-      group: requested-ci-${{ needs.authorize.outputs.pr_run_id }}
+      group: ci-status-${{ needs.authorize.outputs.pr_run_id }}
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
       actions: write
+      statuses: write
       issues: write
       pull-requests: write
     steps:

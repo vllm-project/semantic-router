@@ -1,0 +1,34 @@
+{
+  "operation": "request",
+  "cases": [
+    {
+      "name": "parameters_omitted",
+      "body": {
+        "model": "client-model",
+        "input": "What time is it?",
+        "tools": [
+          {
+            "type": "function",
+            "name": "get_time",
+            "strict": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "parameters_null",
+      "body": {
+        "model": "client-model",
+        "input": "What time is it?",
+        "tools": [
+          {
+            "type": "function",
+            "name": "get_time",
+            "parameters": null,
+            "strict": false
+          }
+        ]
+      }
+    }
+  ]
+}

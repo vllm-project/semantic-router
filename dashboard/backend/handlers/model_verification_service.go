@@ -87,7 +87,7 @@ func newModelVerificationService(configPath string, options modelVerificationOpt
 	}
 	loadConfig := options.loadConfig
 	if loadConfig == nil {
-		loadConfig = routerconfig.Parse
+		loadConfig = ReadPersistedRouterConfig
 	}
 	timeout := options.timeout
 	if timeout <= 0 || timeout > modelVerificationTimeout {

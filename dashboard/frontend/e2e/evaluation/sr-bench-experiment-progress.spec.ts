@@ -117,21 +117,21 @@ for (const viewport of [
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     const state = await fixture(page, [run('run-reference')], viewport.reader)
-    await page.goto(`/evaluation?view=experiments&experiment=${experimentID}`)
-    const workspace = page.getByRole('region', { name: 'Evaluation experiments', exact: true })
+    await page.goto(`/observe/evaluations?view=experiments&experiment=${experimentID}`)
+    const workspace = page.getByRole('region', { name: 'Experiment', exact: true })
     await expect(
       workspace.getByRole('heading', { name: 'Reference evaluation in progress' }),
     ).toBeVisible()
     const progress = workspace.getByRole('region', { name: 'Active evaluation', exact: true })
     await expect(progress).toContainText('3 / 36 attempts completed')
     await expect(progress).toContainText('1 failed')
-    await expect(progress.getByText('running', { exact: true })).toBeVisible()
-    await expect(workspace.locator('button[class*="_primary_"]')).toHaveAccessibleName('Open run')
+    await expect(progress.getByText('Running', { exact: true })).toBeVisible()
+    await expect(workspace.locator('button[data-primary-action]')).toHaveAccessibleName('Open run')
     await expect(workspace.getByRole('button', { name: 'Run single models' })).toHaveCount(0)
     await expect(
       workspace.getByRole('heading', { name: 'Choose your reference results' }),
     ).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Create evaluation', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'New evaluation', exact: true })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: testInfo.outputPath('active-reference.png') })
     await progress.getByRole('button', { name: 'Open run', exact: true }).click()
@@ -154,15 +154,15 @@ for (const role of ['candidate', 'recovery']) {
       completed('run-initial', 'initial'),
       run('run-active', role),
     ])
-    await page.goto(`/evaluation?view=experiments&experiment=${experimentID}`)
-    const workspace = page.getByRole('region', { name: 'Evaluation experiments', exact: true })
+    await page.goto(`/observe/evaluations?view=experiments&experiment=${experimentID}`)
+    const workspace = page.getByRole('region', { name: 'Experiment', exact: true })
     await expect(
       workspace.getByRole('heading', { name: 'Evaluation in progress', exact: true }),
     ).toBeVisible()
     await expect(workspace.getByRole('region', { name: 'Active evaluation' })).toContainText(
       role === 'recovery' ? 'Recovery attempt' : 'Recipe version',
     )
-    await expect(workspace.locator('button[class*="_primary_"]')).toHaveAccessibleName('Open run')
+    await expect(workspace.locator('button[data-primary-action]')).toHaveAccessibleName('Open run')
     for (const name of ['Compare results', 'Test another recipe', 'Check routing first'])
       await expect(workspace.getByRole('button', { name, exact: true })).toBeEnabled()
     await workspace.getByRole('button', { name: 'Test another recipe', exact: true }).click()
@@ -184,7 +184,7 @@ test('uses complete membership and lets the user choose among active runs withou
   ])
   state.members = ['run-version', 'run-reference', 'run-recovery']
   state.splitMembership = true
-  await page.goto(`/evaluation?view=experiments&experiment=${experimentID}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${experimentID}`)
   const progress = page.getByRole('region', { name: 'Active evaluation', exact: true })
   const select = progress.getByRole('combobox', { name: 'Active run', exact: true })
   await expect(select).toContainText('Saved baseline run-reference')
@@ -194,7 +194,7 @@ test('uses complete membership and lets the user choose among active runs withou
   await expect(page.getByRole('option', { name: /run-outside/ })).toHaveCount(0)
   await page.getByRole('option', { name: /Saved recovery run-recovery/ }).click()
   await expect(progress).toContainText('Recovery attempt')
-  await expect(progress.getByText('queued', { exact: true })).toBeVisible()
+  await expect(progress.getByText('Queued', { exact: true })).toBeVisible()
   await progress.getByRole('button', { name: 'Open run', exact: true }).click()
   await expect(page).toHaveURL(/view=runs.*run=run-recovery/)
   expect(state.writes).toEqual([])
@@ -207,7 +207,7 @@ test('uses existing inventory polling to advance from active reference to recipe
   state.members = ['run-reference']
   await page.clock.install({ time: new Date(created) })
   await page.clock.pauseAt(new Date(created))
-  await page.goto(`/evaluation?view=experiments&experiment=${experimentID}`)
+  await page.goto(`/observe/evaluations?view=experiments&experiment=${experimentID}`)
   await expect(page.getByRole('region', { name: 'Active evaluation' })).toBeVisible()
   const membershipReads = state.membershipReads
   state.runs[0].status = 'completed'
@@ -217,8 +217,8 @@ test('uses existing inventory polling to advance from active reference to recipe
     page.getByRole('heading', { name: 'Test a recipe on the same questions' }),
   ).toBeVisible()
   await expect(page.getByRole('region', { name: 'Active evaluation' })).toHaveCount(0)
-  await expect(page.getByText('1 saved run', { exact: true })).toBeVisible()
-  await expect(page.getByText('1 saved run · 1 active', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('1 run in this experiment', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /\d+ running$/ })).toHaveCount(0)
   await expect(
     page.getByRole('button', { name: 'Evaluate starting recipe', exact: true }),
   ).toBeEnabled()

@@ -16,6 +16,11 @@ import (
 // generates does not yet, so behind Envoy every model would stay reachable.
 const CapabilityListenerModels = "listener_models"
 
+// CapabilityListenerUnservedModels is the route policy of a listener's LLM
+// API for models it does not serve, which only the standalone gateway
+// applies.
+const CapabilityListenerUnservedModels = "listener_unserved_models"
+
 // DefaultSystemOneMaxDeadlineMs is the longest a listener's System One API
 // waits for a model when its apis.systemone.max_deadline_ms is omitted: 10
 // minutes.
@@ -40,6 +45,25 @@ func init() {
 			return uses
 		},
 		Unserved: "is unsupported with --gateway extproc, whose Envoy listener does not enforce it; " +
+			"serve with --gateway standalone or remove it",
+	})
+	GatewayCapabilities.MustRegister(CapabilityListenerUnservedModels, GatewayCapability{
+		Modes: []GatewayMode{GatewayStandalone},
+		Uses: func(cfg *RouterConfig) []CapabilityUse {
+			var uses []CapabilityUse
+			for _, listener := range cfg.Listeners {
+				for _, name := range listener.ServedAPIs() {
+					if listener.APIs[name].UnservedModels != nil {
+						uses = append(uses, CapabilityUse{
+							Path:    listenerPath(listener, "apis."+name+".unserved_models"),
+							Subject: fmt.Sprintf("listener '%s': apis.%s.unserved_models", listener.Name, name),
+						})
+					}
+				}
+			}
+			return uses
+		},
+		Unserved: "is unsupported with --gateway extproc, whose Envoy listener does not apply it; " +
 			"serve with --gateway standalone or remove it",
 	})
 }

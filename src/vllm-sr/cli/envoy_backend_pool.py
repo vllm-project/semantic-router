@@ -375,4 +375,6 @@ def _credential_identity(backend: BackendRef) -> tuple[str, str]:
         return ("inline", backend.api_key)
     if backend.auth is not None and backend.auth.api_key_env:
         return ("environment", backend.auth.api_key_env)
+    if backend.auth is not None and backend.auth.api_key_file:
+        return ("file", backend.auth.api_key_file)
     return ("", "")

@@ -28,7 +28,7 @@ import {
 | 组件 | 端口 | 作用 |
 | --- | --- | --- |
 | **Router** | 8899 | 自己提供 OpenAI 兼容 API（standalone 模式，默认）。 |
-| **Dashboard** | 8700 | 设置、模型、路由和洞察。 |
+| **Dashboard** | 8700 | 设置、路由、模型和可观测性。 |
 | **[模型运行时](../model-runtime/get-started/overview.md)** | 内部 | 运行 Router 自己的决策模型；召回功能需要时，还运行嵌入模型。 |
 
 回答用户的模型在别处运行，例如 Ollama、vLLM 服务或托管 API。你在 Dashboard 中接入它们。
@@ -109,9 +109,10 @@ vllm-sr serve --platform rocm   # AMD GPUs
 打开 [http://localhost:8700](http://localhost:8700)。Dashboard 监听 `127.0.0.1`；在远程主机上，请先运行 `ssh -L 8700:127.0.0.1:8700 <host>`。
 
 1. **创建第一个管理员：** 名字、邮箱和密码。
-2. **接入模型：** 模型名、提供方（vLLM、Ollama、OpenAI Compatible 或 Anthropic），以及 Router 容器看到的地址，例如同一主机上的 Ollama 用 `host.docker.internal:11434`。第一个本地模型可按[使用 Ollama 配置模型](ollama)操作。
+2. **接入模型：** 模型名、提供方（vLLM、Ollama、OpenAI Compatible 或 Anthropic），以及 Router 容器看到的地址，例如同一主机上的 Ollama 用 `host.docker.internal:11434`。第一个模型即为默认模型。第一个本地模型可按[使用 Ollama 配置模型](ollama)操作。
 3. **选择路由：** **From scratch** 会生成一条到该模型的默认路由。
-4. **检查并 Activate。**
+4. **决策模型：** 保留推荐的模型，它负责回答 Router 的信号和决策问题。
+5. **检查并激活：** 确认后选择 **Activate router**。
 
 设置期间 `vllm-sr serve` 会保持等待。你激活后，它用该配置启动 Router，打印各端点后退出。如果你先停止了它，请再运行一次 `vllm-sr serve`；在此之前，`vllm-sr status` 会报告设置已完成。
 

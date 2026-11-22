@@ -140,6 +140,15 @@ This is the entry for `vllm-sr/auto`:
 }
 ```
 
+An entrypoint that others name as their `review_model` or `memory_model` is
+listed with `"delegates"`: `["review"]`, `["memory"]`, or `["memory", "review"]`
+when it serves both. It is listed with `"selectable": false`, so a client does
+not offer it for chat, except the default entrypoint, which stays selectable so
+the Dashboard playground and the VS Code picker keep it. It takes requests all the same,
+and a Dashboard recipe probe resolves to it when no selectable entrypoint serves
+its recipe. To keep another entrypoint offered for chat, point `review_model` or
+`memory_model` at a name of its own that maps the same recipe.
+
 Coding agents and other clients that size a request before sending it need
 these values in their own configuration. Any turn of a session can reach any
 model the recipe can select, including `providers.defaults.model`, so

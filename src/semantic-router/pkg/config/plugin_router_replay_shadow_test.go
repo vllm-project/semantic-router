@@ -1,152 +1,197 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
 
-func TestRouterReplayShadowDefaults(t *testing.T) {
-	cfg := RouterReplayShadowConfig{Model: " candidate "}.WithDefaults()
-	defaults := DefaultRouterReplayShadowConfig()
-	if cfg.Model != "candidate" {
-		t.Fatalf("model = %q, want trimmed", cfg.Model)
+func TestRouterReplayShadowConfigDefaults(t *testing.T) {
+	c := RouterReplayShadowConfig{Models: []string{" candidate ", "other"}}.WithDefaults()
+	if c.Models[0] != "candidate" || *c.Execution.MaxConcurrency != 2 || *c.Execution.MaxQueueSize != 8 || c.Execution.Timeout != "30s" || *c.Budget.MaxResponseBytes != 2<<20 || *c.Capture.MaxBytes != 8192 || c.EffectiveSampleRate() != 1 {
+		t.Fatalf("unexpected defaults: %+v", c)
 	}
-	if cfg.MaxConcurrency != defaults.MaxConcurrency ||
-		cfg.MaxQueueDepth != defaults.MaxQueueDepth ||
-		cfg.TimeoutSeconds != defaults.TimeoutSeconds ||
-		cfg.MaxResponseBytes != defaults.MaxResponseBytes ||
-		cfg.MaxCaptureBytes != defaults.MaxCaptureBytes {
-		t.Fatalf("defaults not applied: %+v", cfg)
-	}
-	if cfg.EffectiveSampleRate() != 1 {
-		t.Fatalf("effective sample rate = %v, want 1", cfg.EffectiveSampleRate())
-	}
-	explicit := RouterReplayShadowConfig{MaxQueueDepth: 1, MaxConcurrency: 4}.WithDefaults()
-	if explicit.MaxQueueDepth != 1 || explicit.MaxConcurrency != 4 {
-		t.Fatalf("explicit bounds overwritten: %+v", explicit)
+	original := RouterReplayShadowConfig{Models: []string{" candidate "}}
+	_ = original.WithDefaults()
+	if original.Models[0] != " candidate " {
+		t.Fatal("defaults mutated source models")
 	}
 }
 
-func TestRouterReplayShadowPayloadValidation(t *testing.T) {
-	half := 0.5
-	tooHigh := 1.5
-	shadow := func(fields map[string]interface{}) map[string]interface{} {
-		return map[string]interface{}{"enabled": true, "shadow": fields}
-	}
-	cases := []struct {
-		name    string
-		payload map[string]interface{}
-		wantErr string
-	}{
-		{name: "valid", payload: shadow(map[string]interface{}{"model": "candidate", "sample_rate": half, "max_retries": 3})},
-		{name: "no shadow", payload: map[string]interface{}{"enabled": true}},
-		{name: "missing model", payload: shadow(map[string]interface{}{"sample_rate": half}), wantErr: "shadow: model is required"},
-		{name: "sample rate out of range", payload: shadow(map[string]interface{}{"model": "m", "sample_rate": tooHigh}), wantErr: "sample_rate"},
-		{name: "negative bound", payload: shadow(map[string]interface{}{"model": "m", "max_concurrency": -1}), wantErr: "max_concurrency cannot be negative"},
-		{name: "too many retries", payload: shadow(map[string]interface{}{"model": "m", "max_retries": 4}), wantErr: "max_retries cannot exceed"},
-		{name: "unknown shadow field", payload: shadow(map[string]interface{}{"model": "m", "bogus": 1}), wantErr: "bogus"},
-		{name: "unknown replay field", payload: map[string]interface{}{"enabled": true, "bogus": 1}, wantErr: "bogus"},
-		{name: "forward headers allowlist", payload: shadow(map[string]interface{}{"model": "m", "forward_headers": []string{"x-tenant", "X-Request-Source"}})},
-		{name: "forward headers reject credentials", payload: shadow(map[string]interface{}{"model": "m", "forward_headers": []string{"x-tenant", "Authorization"}}), wantErr: "forward_headers cannot include credential header"},
-		{name: "forward headers reject user keys", payload: shadow(map[string]interface{}{"model": "m", "forward_headers": []string{"X-User-OpenAI-Key"}}), wantErr: "forward_headers cannot include credential header"},
-		{name: "forward headers reject pseudo headers", payload: shadow(map[string]interface{}{"model": "m", "forward_headers": []string{":authority"}}), wantErr: "pseudo-header"},
-		{name: "forward headers reject blanks", payload: shadow(map[string]interface{}{"model": "m", "forward_headers": []string{" "}}), wantErr: "cannot be empty"},
-	}
-	for _, tc := range cases {
+func TestRouterReplayShadowPayload(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"missing models", `{}`, "models is required"},
+		{"legacy", `{"model":"a"}`, "unknown field"},
+		{"blank", `{"models":[" "]}`, "empty"},
+		{"duplicate", `{"models":["a"," a "]}`, "duplicate"},
+		{"fractional", `{"budget":{"max_response_bytes":2.5}}`, "cannot unmarshal"},
+		{"budget type", `{"budget":"bad"}`, "cannot unmarshal"},
+		{"unknown budget field", `{"budget":{"max_tokens":1}}`, "unknown field"},
+		{"unknown execution field", `{"execution":{"extra":1}}`, "unknown field"},
+		{"unknown capture field", `{"capture":{"extra":1}}`, "unknown field"},
+		{"invalid timeout", `{"execution":{"timeout":"0s"}}`, "timeout"},
+		{"empty timeout", `{"execution":{"timeout":""}}`, "timeout"},
+		{"null timeout", `{"execution":{"timeout":null}}`, "timeout"},
+		{"null execution", `{"execution":null}`, "execution"},
+		{"null budget", `{"budget":null}`, "budget"},
+		{"null capture", `{"capture":null}`, "capture"},
+		{"allowlisted header", `{"forward_headers":["x-tenant"]}`, ""},
+		{"credential header", `{"forward_headers":["Authorization"]}`, "credential header"},
+		{"pseudo-header", `{"forward_headers":[":authority"]}`, "pseudo-header"},
+		{"timeout exceeds maximum", `{"execution":{"timeout":"5m1ms"}}`, "timeout"},
+		{"aggregate bytes too low", `{"models":["a","b"],"budget":{"max_response_bytes":3}}`, "two bytes"},
+
+		{"integer floats", `{"execution":{"max_concurrency":2.0,"max_queue_size":8.0},"budget":{"max_response_bytes":4096.0},"capture":{"max_bytes":4096.0}}`, ""},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := DecodeDecisionPluginAt(PluginAt{Decision: "route", Type: DecisionPluginRouterReplay}, DecisionPlugin{
-				Type:          DecisionPluginRouterReplay,
-				Configuration: MustStructuredPayload(tc.payload),
-			})
-			if tc.wantErr == "" {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				return
+			var fields map[string]interface{}
+			if err := json.Unmarshal([]byte(tc.body), &fields); err != nil {
+				t.Fatal(err)
 			}
-			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("error = %v, want containing %q", err, tc.wantErr)
+			if tc.name != "missing models" && fields["models"] == nil {
+				fields["models"] = []string{"a"}
+			}
+			payload := MustStructuredPayload(map[string]interface{}{"enabled": true, "shadow": fields})
+			_, err := DecodeDecisionPluginAt(PluginAt{Decision: "route", Type: DecisionPluginRouterReplay}, DecisionPlugin{Type: DecisionPluginRouterReplay, Configuration: payload})
+			if tc.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want %s", err, tc.want)
 			}
 		})
 	}
 }
 
-func TestRouterReplayShadowModelMustHaveBackend(t *testing.T) {
-	cfg := &RouterConfig{
-		BackendModels: BackendModels{
-			ModelConfig: map[string]ModelParams{
-				"primary":   {PreferredEndpoints: []string{"ep"}},
-				"candidate": {PreferredEndpoints: []string{"ep"}},
-			},
-			VLLMEndpoints: []VLLMEndpoint{{Name: "ep", Address: "127.0.0.1", Port: 8000}},
-		},
-	}
-	replay := func(model string) []DecisionPlugin {
-		return []DecisionPlugin{{
-			Type: DecisionPluginRouterReplay,
-			Configuration: MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
-				"shadow":  map[string]interface{}{"model": model},
-			}),
-		}}
-	}
-	decision := &Decision{Name: "route", ModelRefs: []ModelRef{{Model: "primary"}}, Plugins: replay("candidate")}
-	if err := validateDecisionReplayShadow(cfg, decision); err != nil {
-		t.Fatalf("configured shadow model rejected: %v", err)
-	}
-	if got := cfg.EffectiveRouterReplayConfig(decision); got == nil || got.Shadow == nil || got.Shadow.Model != "candidate" {
-		t.Fatalf("EffectiveRouterReplayConfig = %+v", got)
-	}
-
-	decision.Plugins = replay("unknown")
-	err := validateDecisionReplayShadow(cfg, decision)
-	if err == nil || !strings.Contains(err.Error(), "no configured backend") {
-		t.Fatalf("error = %v, want unknown backend rejection", err)
-	}
-
-	decision.Plugins = replay("candidate")
-	decision.Algorithm = &AlgorithmConfig{Type: DecisionAlgorithmRatings}
-	err = validateDecisionReplayShadow(cfg, decision)
-	if err == nil || !strings.Contains(err.Error(), "executor algorithm") {
-		t.Fatalf("error = %v, want executor rejection", err)
+func TestRouterReplayShadowCanonicalRecipe(t *testing.T) {
+	for _, tc := range []struct{ name, candidate, algorithm, want string }{
+		{"trimmed models and null limits", " candidate ", "static", ""},
+		{"unknown second candidate", "unknown", "static", `router_replay shadow model "unknown" has no configured backend`},
+		{"looper", "candidate", "ratings", "executor algorithm"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{
+			  "version":"v0.5",
+			  "providers":{"defaults":{"model":"primary"},"models":[
+			    {"name":"primary","backend_refs":[{"endpoint":"127.0.0.1:8000","provider":"vllm"}]},
+			    {"name":"candidate","backend_refs":[{"endpoint":"127.0.0.1:8001","provider":"vllm"}]}
+			  ]},
+			  "recipes":[{"name":"private","decisions":[{
+			    "name":"shadow-route", "rules":{"operator":"AND","conditions":[]},
+			    "modelRefs":[{"model":"primary"}], "algorithm":{"type":%q},
+			    "plugins":[{"type":"router_replay","configuration":{"enabled":true,"shadow":{
+			      "models":[" primary ",%q],"sample_rate":null,
+			      "execution":{"max_concurrency":null,"max_queue_size":null},
+			      "budget":{"max_response_bytes":null},"capture":{"max_bytes":null}
+			    }}}]
+			  }]}]
+			}`, tc.algorithm, tc.candidate)
+			cfg, err := ParseYAMLBytes([]byte(body))
+			if tc.want != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("got %v, want %s", err, tc.want)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, recipe := range cfg.Recipes {
+				if recipe.Name == "private" {
+					shadow := recipe.Profile.Decisions[0].GetRouterReplayConfig().Shadow.WithDefaults()
+					if strings.Join(shadow.Models, ",") != "primary,candidate" || shadow.Execution.Timeout != "30s" || *shadow.Execution.MaxConcurrency != 2 || *shadow.Execution.MaxQueueSize != 8 || *shadow.Budget.MaxResponseBytes != 2<<20 || *shadow.Capture.MaxBytes != 8192 || shadow.EffectiveSampleRate() != 1 {
+						t.Fatalf("unexpected parsed defaults: %+v", shadow)
+					}
+					return
+				}
+			}
+			t.Fatal("private recipe missing")
+		})
 	}
 }
 
 func TestRouterReplayShadowValidateSharedWithConverter(t *testing.T) {
-	cfg := RouterReplayShadowConfig{Model: "m", MaxRetries: 4}
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "max_retries cannot exceed") {
-		t.Fatalf("Validate = %v, want retries cap", err)
+	zero := 0
+	c := RouterReplayShadowConfig{Models: []string{"m"}, Budget: ShadowBudgetConfig{MaxResponseBytes: &zero}}
+	if err := c.Validate(); err == nil {
+		t.Fatal("explicit zero must fail")
 	}
-	var nilCfg *RouterReplayShadowConfig
-	if err := nilCfg.Validate(); err != nil {
-		t.Fatalf("nil Validate = %v", err)
+	var absent *RouterReplayShadowConfig
+	if err := absent.Validate(); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestRouterReplayShadowForwardsHeaderIsAllowlistOnly(t *testing.T) {
-	var nilCfg *RouterReplayShadowConfig
-	if nilCfg.ForwardsHeader("x-tenant") {
-		t.Fatal("nil config must forward nothing")
-	}
-	empty := &RouterReplayShadowConfig{}
-	if empty.ForwardsHeader("x-tenant") {
-		t.Fatal("empty allowlist must forward nothing")
-	}
-	cfg := &RouterReplayShadowConfig{ForwardHeaders: []string{" X-Tenant "}}
-	if !cfg.ForwardsHeader("x-tenant") || !cfg.ForwardsHeader("X-TENANT") {
-		t.Fatal("allowlist must match case-insensitively and ignore surrounding whitespace")
-	}
-	if cfg.ForwardsHeader("x-tenant-id") {
-		t.Fatal("allowlist must match whole names only")
-	}
-	for _, name := range []string{"Authorization", "x-api-key", "API-KEY", "Cookie", "x-user-openai-key", " proxy-authorization "} {
+func TestShadowCredentialHeaders(t *testing.T) {
+	for _, name := range []string{"Authorization", "x-api-key", "Cookie", "x-user-openai-key"} {
 		if !IsShadowCredentialHeader(name) {
-			t.Errorf("IsShadowCredentialHeader(%q) = false, want true", name)
+			t.Errorf("not recognized: %s", name)
 		}
 	}
-	for _, name := range []string{"x-tenant", "traceparent", "x-authorization-hint"} {
-		if IsShadowCredentialHeader(name) {
-			t.Errorf("IsShadowCredentialHeader(%q) = true, want false", name)
+	if IsShadowCredentialHeader("traceparent") {
+		t.Fatal("traceparent is not a credential")
+	}
+}
+
+func TestRouterReplayShadowValidatesAllCandidatesInEveryLayer(t *testing.T) {
+	for _, layer := range []string{"global", "recipe", "decision"} {
+		for _, target := range []string{"candidate", "unknown", "delegated", "caller"} {
+			t.Run(layer+"/"+target, func(t *testing.T) {
+				var doc map[string]interface{}
+				if err := json.Unmarshal([]byte(`{"version":"v0.5","providers":{"defaults":{"model":"primary"},"models":[
+				{"name":"primary","backend_refs":[{"endpoint":"127.0.0.1:8000"}]},
+				{"name":"candidate","backend_refs":[{"endpoint":"127.0.0.1:8001"}]},
+				{"name":"delegated","backend_refs":[{"endpoint":"127.0.0.1:8002","auth":{"credential":"delegated"}}]}
+				]},"global":{"services":{"authz":{"delegated_credential":{"enabled":true}}}},
+				"recipes":[{"name":"default","decisions":[{"name":"chat","rules":{"operator":"AND","conditions":[]},"modelRefs":[{"model":"primary"}]}]}]}`), &doc); err != nil {
+					t.Fatal(err)
+				}
+				if target == "caller" {
+					providers := doc["providers"].(map[string]interface{})
+					providers["models"] = []map[string]interface{}{shadowCallerBackend("primary"), shadowCallerBackend("caller")}
+				}
+				plugin := map[string]interface{}{"type": "router_replay", "configuration": map[string]interface{}{"enabled": true, "shadow": map[string]interface{}{"models": []string{"primary", target}}}}
+				recipe := doc["recipes"].([]interface{})[0].(map[string]interface{})
+				owner := doc["global"].(map[string]interface{})
+				if layer == "recipe" {
+					owner = recipe
+				}
+				if layer == "decision" {
+					owner = recipe["decisions"].([]interface{})[0].(map[string]interface{})
+				}
+				owner["plugins"] = []interface{}{plugin}
+				body, err := json.Marshal(doc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, err = ParseYAMLBytes(body)
+				switch target {
+				case "candidate":
+					if err != nil {
+						t.Fatal(err)
+					}
+				case "unknown":
+					if err == nil || !strings.Contains(err.Error(), `model "unknown" has no configured backend`) {
+						t.Fatalf("unknown second candidate: %v", err)
+					}
+				case "delegated", "caller":
+					if err == nil || !strings.Contains(err.Error(), "auth.credential: "+target) || !strings.Contains(err.Error(), "call it as the Router") {
+						t.Fatalf("%s shadow candidate: %v", target, err)
+					}
+				}
+			})
 		}
+	}
+}
+
+func shadowCallerBackend(name string) map[string]interface{} {
+	return map[string]interface{}{
+		"name": name, "provider_model_id": "claude-haiku-5-5", "api_format": "anthropic",
+		"backend_refs": []map[string]interface{}{{
+			"name": "anthropic", "provider": "anthropic", "endpoint": "https://api.anthropic.com",
+			"auth": map[string]string{"credential": CredentialCaller},
+		}},
 	}
 }

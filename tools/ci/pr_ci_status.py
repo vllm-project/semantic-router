@@ -4,37 +4,77 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
 import subprocess
 from pathlib import Path
-from urllib.parse import urlencode
 
 from manual_ci import (
     MERGE_EVIDENCE_UNAVAILABLE,
     PAGE_SIZE,
+    PR_QUALIFICATION_CONTEXT,
     GitHubClient,
     ManualCIError,
     api_failure,
+    latest_qualification_status,
     main_contains,
-    merge_revision_matches,
+    pending_rerun_status,
     plan_for_run,
-    read_artifact,
+    qualification_status_url,
     source_identity,
+    trusted_queue_pull,
+    write_qualification_status,
 )
+from pr_ci_events import resolve_event
+from pr_ci_pending import fingerprint, provenance, recover_pending, repair
+from pr_ci_shared import (
+    APP_ID,
+    CAPABILITIES,
+    CHECK,
+    COMMENT_ITEM_LIMIT,
+    IDENTIFIER,
+    MARKER,
+    MAX_IDENTIFIERS,
+    MAX_PAGES,
+    PREFIX,
+    SHA,
+    artifact,
+    current_pull,
+    identifiers,
+    latest_run,
+    owned_checks,
+    pages,
+    presentation,
+    publisher_ready,
+    validate_plan,
+    verdict,
+)
+from pr_ci_status_suites import read_rollup, read_suites, successful
 
-CHECK = "PR Gate"
-MARKER = "<!-- semantic-router-ci-status:v1 -->"
-PREFIX = "semantic-router-ci:"
-APP_ID = 15368  # GitHub Actions; also the branch-protection check owner.
-SHA = re.compile(r"[0-9a-f]{40}")
-IDENTIFIER = re.compile(r"[a-zA-Z0-9_.-]{1,160}")
-CAPABILITIES = (".github/workflows/ci-status.yml", "tools/ci/pr_ci_status.py")
-MAX_PAGES = 100
-MAX_IDENTIFIERS = 1000
-COMMENT_ITEM_LIMIT = 30
+# Preserve the existing module-level evidence helper API.
+__all__ = [
+    "APP_ID",
+    "CAPABILITIES",
+    "CHECK",
+    "COMMENT_ITEM_LIMIT",
+    "IDENTIFIER",
+    "MARKER",
+    "MAX_IDENTIFIERS",
+    "MAX_PAGES",
+    "PREFIX",
+    "SHA",
+    "artifact",
+    "current_pull",
+    "identifiers",
+    "latest_run",
+    "owned_checks",
+    "pages",
+    "presentation",
+    "publisher_ready",
+    "validate_plan",
+    "verdict",
+]
 
 
 class StatusClient(GitHubClient):
@@ -50,303 +90,59 @@ class StatusClient(GitHubClient):
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 
-def pages(client, endpoint: str, key: str | None = None):
-    separator = "&" if "?" in endpoint else "?"
-    for page in range(1, MAX_PAGES + 1):
-        response = client.request(
-            f"{endpoint}{separator}per_page={PAGE_SIZE}&page={page}"
-        )
-        items = response[key] if key else response
-        if not isinstance(items, list):
-            raise ManualCIError("Invalid GitHub collection response.")
-        yield from items
-        if len(items) < PAGE_SIZE:
-            return
-    raise ManualCIError("GitHub collection exceeds the reconciliation limit.")
-
-
-def current_pull(client, repo: str, run: dict) -> dict | None:
-    # Both workflow_run.pull_requests and commits/{sha}/pulls can be empty for
-    # fork commits. Resolve by source owner/branch, then bind the exact SHA.
-    source_repo = (run.get("head_repository") or {}).get("full_name", "")
-    if not isinstance(source_repo, str) or source_repo.count("/") != 1:
-        raise ManualCIError("Invalid pull-request source repository.")
-    query = urlencode(
-        {
-            "state": "open",
-            "base": "main",
-            "head": f"{source_repo.split('/')[0]}:{run['head_branch']}",
-        }
-    )
-    candidates = pages(client, f"repos/{repo}/pulls?{query}")
-    matches = []
-    for candidate in candidates:
-        if candidate.get("state") != "open":
-            continue
-        pull = client.request(f"repos/{repo}/pulls/{int(candidate['number'])}")
-        head, base = pull.get("head", {}), pull.get("base", {})
-        if (
-            pull.get("state") == "open"
-            and base.get("ref") == "main"
-            and (base.get("repo") or {}).get("full_name") == repo
-            and head.get("sha") == run["head_sha"]
-            and head.get("ref") == run.get("head_branch")
-            and (head.get("repo") or {}).get("full_name")
-            == (run.get("head_repository") or {}).get("full_name")
-        ):
-            matches.append(pull)
-    if len(matches) > 1:
-        raise ManualCIError(
-            "The CI run is associated with multiple open pull requests."
-        )
-    return matches[0] if matches else None
-
-
-def latest_run(client, repo: str, run: dict) -> bool:
-    query = urlencode({"event": "pull_request", "head_sha": run["head_sha"]})
-    candidates = [
-        item
-        for item in pages(
-            client,
-            f"repos/{repo}/actions/workflows/pr.yml/runs?{query}",
-            "workflow_runs",
-        )
-        if item.get("head_branch") == run.get("head_branch")
-        and (item.get("head_repository") or {}).get("full_name")
-        == (run.get("head_repository") or {}).get("full_name")
-    ]
+def qualifies_for_merge(repo: str, pull: dict, plan: dict | None) -> bool:
+    # A new Ready event must not promote the old draft run's receipt.
     return (
-        bool(candidates)
-        and max(candidates, key=lambda item: (item["created_at"], item["id"]))["id"]
-        == run["id"]
+        plan is not None
+        and plan.get("draft") is False
+        and (pull.get("draft") is False or trusted_queue_pull(pull, repo))
     )
 
 
-def artifact(client, repo: str, run: dict, name: str, filename: str, limit: int):
-    items = list(
-        pages(
-            client,
-            f"repos/{repo}/actions/runs/{run['id']}/artifacts?name={name}",
-            "artifacts",
-        )
-    )
-    matches = [
-        item for item in items if item.get("name") == name and not item.get("expired")
-    ]
-    if len(matches) != 1:
-        raise ManualCIError(f"Missing or ambiguous {name} evidence.")
-    return read_artifact(client, repo, matches[0], filename, limit)
-
-
-def identifiers(value) -> list[str]:
+def current_publication_pull(client, repo: str, pull: dict, run: dict) -> dict | None:
+    fresh = client.request(f"repos/{repo}/actions/runs/{run['id']}")
+    current = client.request(f"repos/{repo}/pulls/{pull['number']}")
     if (
-        not isinstance(value, list)
-        or len(value) > MAX_IDENTIFIERS
-        or any(
-            not isinstance(item, str) or not IDENTIFIER.fullmatch(item)
-            for item in value
-        )
-        or len(set(value)) != len(value)
+        current.get("state") != "open"
+        or current["head"]["sha"] != run["head_sha"]
+        or current.get("merge_commit_sha") != pull.get("merge_commit_sha")
+        or current.get("base", {}).get("sha") != pull.get("base", {}).get("sha")
+        or fresh.get("run_attempt") != run["run_attempt"]
+        or fresh.get("status") != run["status"]
+        or not latest_run(client, repo, run)
     ):
-        raise ManualCIError("Invalid qualification inventory.")
-    return value
+        return None
+    return current
 
 
-def validate_plan(client, repo: str, run: dict, plan: dict) -> None:
-    unsigned = {key: value for key, value in plan.items() if key != "plan_sha256"}
-    digest = hashlib.sha256(
-        json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    if plan.get("schema_version") != 1 or plan.get("plan_sha256") != digest:
-        raise ManualCIError("Invalid qualification plan digest.")
-    if any(
-        not isinstance(plan.get(key), str) or not SHA.fullmatch(plan[key])
-        for key in ("source_sha", "base_sha")
+def publish_qualification_status(client, repo, pull, run, plan, result) -> dict:
+    payload = result["qualification_status"]
+    head = run["head_sha"]
+    try:
+        previous = latest_qualification_status(client, repo, head)
+        fence = pending_rerun_status(repo, run["id"], run["run_attempt"])
+        if all(previous.get(key) == value for key, value in fence.items()):
+            result["qualification_status_ignored"] = "waiting for rerun"
+            return result
+        current = current_publication_pull(client, repo, pull, run)
+        if current is None or (
+            payload["state"] == "success"
+            and not qualifies_for_merge(repo, current, plan)
+        ):
+            result["qualification_status_ignored"] = "superseded"
+            return result
+        if any(previous.get(key) != value for key, value in payload.items()):
+            write_qualification_status(client, repo, head, payload)
+    except (
+        ManualCIError,
+        KeyError,
+        TypeError,
+        OSError,
+        ValueError,
+        subprocess.TimeoutExpired,
     ):
-        raise ManualCIError("Invalid qualification source revision.")
-    if not merge_revision_matches(
-        client, repo, plan["source_sha"], plan["base_sha"], run["head_sha"]
-    ):
-        raise ManualCIError(
-            "Qualification plan does not belong to this PR merge revision."
-        )
-    selected = identifiers(plan.get("expected_verification_ids"))
-    deferred = identifiers(plan.get("deferred_verifications"))
-    required = identifiers(plan.get("required_verification_ids"))
-    identifiers(plan.get("deferred_images"))
-    if set(selected) & set(deferred) or set(required) != set(selected) | set(deferred):
-        raise ManualCIError("Qualification inventories do not partition the plan.")
-
-
-def publisher_ready(client, repo: str, base: str) -> bool:
-    tree = client.request(f"repos/{repo}/git/trees/{base}?recursive=1")
-    if tree.get("truncated"):
-        raise ManualCIError("Cannot establish the trusted base's status publisher.")
-    paths = {
-        item.get("path") for item in tree.get("tree", []) if item.get("type") == "blob"
-    }
-    return set(CAPABILITIES) <= paths
-
-
-def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
-    """A successful automatic workflow is not necessarily full qualification."""
-    if run.get("conclusion") != "success" or any(
-        job.get("conclusion") not in {"success", "skipped"} for job in jobs
-    ):
-        return "failure"
-    by_name = {job.get("name"): job for job in jobs}
-    if any(
-        by_name.get(name, {}).get("conclusion") != "success"
-        for name in ("CI / Gate", "CI Execution")
-    ):
-        raise ManualCIError("Required CI reconciliation jobs did not succeed.")
-    expected = {
-        "schema_version": 1,
-        "source_sha": plan["source_sha"],
-        "base_sha": plan["base_sha"],
-        "plan_sha256": plan["plan_sha256"],
-        "run_id": int(run["id"]),
-        "run_attempt": int(run["run_attempt"]),
-        "required_verification_ids": plan["required_verification_ids"],
-        "deferred_verifications": plan["deferred_verifications"],
-        "deferred_images": plan["deferred_images"],
-    }
-    if (
-        any(report.get(key) != value for key, value in expected.items())
-        or report.get("errors") != []
-    ):
-        raise ManualCIError(
-            "CI reconciliation receipt is missing, stale or inconsistent."
-        )
-    waiting = bool(plan["deferred_verifications"] or plan["deferred_images"])
-    expected_status = "awaiting-approval" if waiting else "success"
-    if report.get("status") != expected_status:
-        raise ManualCIError("CI receipt does not match the remaining qualification.")
-    return expected_status
-
-
-def presentation(
-    state: str,
-    repo: str,
-    pull: dict,
-    run: dict,
-    plan: dict | None,
-    reason: str | None = None,
-) -> tuple[str, str]:
-    url = f"https://github.com/{repo}/actions/runs/{run['id']}"
-    titles = {
-        "running": "CI is running",
-        "awaiting-approval": "Waiting for committer approval — /ci run",
-        "stale": "Update the branch before requesting CI",
-        "failure": "CI failed — inspect the failing checks",
-        "success": "All required CI qualification passed",
-        "legacy": "Waiting for committer approval — /ci run",
-    }
-    if reason == MERGE_EVIDENCE_UNAVAILABLE:
-        titles["failure"] = "CI source evidence unavailable"
-    lines = [f"**{titles[state]}**", ""]
-    if state in {"awaiting-approval", "legacy"}:
-        lines += [
-            (
-                "Automatic checks passed. Required expensive checks have not run yet; this is not a test failure."
-                if state == "awaiting-approval"
-                else "This older run has required checks awaiting approval. Its existing Gate remains authoritative; inspect that run for any additional evidence failures."
-            ),
-            "",
-            "A committer with repository **write, maintain or admin** permission can start the required checks by commenting:",
-            "",
-            "```text",
-            "/ci run",
-            "```",
-            "",
-            "Contributors without that permission do not need to request authorization themselves.",
-        ]
-        if state == "legacy":
-            lines += [
-                "",
-                "This run uses the older gate display. Update the branch from main to use the waiting status, then request CI after its Plan job finishes.",
-            ]
-    elif state == "stale":
-        lines += [
-            "The tested merge revision is no longer current. Update the branch from main, wait for the new Plan job, then ask a committer to comment `/ci run`."
-        ]
-    elif state == "failure":
-        lines += [
-            (
-                "The original planned merge commit could not be read. Qualification stays blocked because its source equivalence could not be verified. Retain the Plan and run evidence for investigation."
-                if reason == MERGE_EVIDENCE_UNAVAILABLE
-                else "A check failed or its required evidence could not be verified. Open the run below for the failure; approval alone does not turn a failed test green."
-            )
-        ]
-        if plan and plan.get("deferred_verifications"):
-            lines += [
-                "After fixing the failure, a committer must also comment `/ci run` to authorize the remaining qualification."
-            ]
-    elif state == "running":
-        lines += [
-            "The current CI attempt is running. This check will update when its results are available."
-        ]
-    else:
-        lines += [
-            "All selected and required checks have completed successfully for this revision."
-        ]
-    if (
-        plan
-        and plan.get("deferred_verifications")
-        and state not in {"running", "success"}
-    ):
-        lines += [
-            "",
-            "Pending qualification: "
-            + ", ".join(
-                f"`{item}`"
-                for item in plan["deferred_verifications"][:COMMENT_ITEM_LIMIT]
-            )
-            + (
-                f" (and {len(plan['deferred_verifications']) - COMMENT_ITEM_LIMIT} more; see the CI plan)"
-                if len(plan["deferred_verifications"]) > COMMENT_ITEM_LIMIT
-                else ""
-            )
-            + ".",
-        ]
-    if plan and plan.get("deferred_images") and state not in {"running", "success"}:
-        images = plan["deferred_images"]
-        lines += [
-            "",
-            "Pending image builds: "
-            + ", ".join(f"`{item}`" for item in images[:COMMENT_ITEM_LIMIT])
-            + (
-                f" (and {len(images) - COMMENT_ITEM_LIMIT} more; see the CI plan)"
-                if len(images) > COMMENT_ITEM_LIMIT
-                else ""
-            )
-            + ".",
-        ]
-    lines += [
-        "",
-        f"Revision `{pull['head']['sha'][:12]}` · [CI run, attempt {run['run_attempt']}]({url})",
-    ]
-    if state in {"awaiting-approval", "legacy", "stale"}:
-        lines += [
-            "",
-            "Approval applies to this revision only. New commits require fresh qualification.",
-        ]
-    return titles[state], "\n".join(lines)
-
-
-def owned_checks(client, repo: str, pull: dict, *, latest=False) -> list[dict]:
-    check_filter = "latest" if latest else "all"
-    return [
-        item
-        for item in pages(
-            client,
-            f"repos/{repo}/commits/{pull['head']['sha']}/check-runs?check_name=PR%20Gate&filter={check_filter}",
-            "check_runs",
-        )
-        if item.get("name") == CHECK
-        and item.get("app", {}).get("id") == APP_ID
-        and str(item.get("external_id", "")).startswith(f"{PREFIX}{pull['number']}:")
-    ]
+        result["qualification_status_error"] = "Could not publish PR Qualification"
+    return result
 
 
 def publish(
@@ -361,6 +157,8 @@ def publish(
     dry_run=False,
     reason: str | None = None,
 ) -> dict:
+    if state == "success" and not qualifies_for_merge(repo, pull, plan):
+        return {"ignored": "draft CI does not qualify this revision for merge"}
     title, summary = presentation(state, repo, pull, run, plan, reason)
     external = f"{PREFIX}{pull['number']}:{run['id']}:{run['run_attempt']}"
     payload = {
@@ -394,6 +192,13 @@ def publish(
             else None
         ),
     }
+    if state != "legacy":
+        result["qualification_status"] = {
+            "context": PR_QUALIFICATION_CONTEXT,
+            "state": state if state in {"success", "failure"} else "pending",
+            "target_url": qualification_status_url(repo, run["id"], run["run_attempt"]),
+            "description": title[:140],
+        }
     if reason == MERGE_EVIDENCE_UNAVAILABLE:
         result["reason_codes"] = [reason]
     if dry_run:
@@ -403,19 +208,45 @@ def publish(
     )
     # Recheck after reading artifacts/comments; an old completion must never
     # overwrite the status of a newer run, attempt, or contributor commit.
-    fresh = client.request(f"repos/{repo}/actions/runs/{run['id']}")
-    current = client.request(f"repos/{repo}/pulls/{pull['number']}")
-    if (
-        current.get("state") != "open"
-        or current["head"]["sha"] != run["head_sha"]
-        or current.get("merge_commit_sha") != pull.get("merge_commit_sha")
-        or current.get("base", {}).get("sha") != pull.get("base", {}).get("sha")
-        or fresh.get("run_attempt") != run["run_attempt"]
-        or fresh.get("status") != run["status"]
-        or not latest_run(client, repo, run)
-    ):
+    current = current_publication_pull(client, repo, pull, run)
+    if current is None:
         return {"ignored": "superseded while preparing status"}
+    if state == "success" and not qualifies_for_merge(repo, current, plan):
+        return {"ignored": "PR became draft while preparing its Gate"}
     if state != "legacy":
+        fresh_checks = owned_checks(client, repo, pull)
+        current_checks = [c for c in fresh_checks if c.get("external_id") == external]
+        if payload["status"] == "in_progress" and any(
+            c.get("external_id") == external and c.get("status") == "completed"
+            for c in [*checks, *fresh_checks, *visible_checks]
+        ):
+            return {"ignored": "current completed verdict cannot return to pending"}
+        visible_current = [
+            c for c in visible_checks if c.get("external_id") == external
+        ]
+        if (
+            state == "awaiting-approval"
+            and current_checks
+            and (not visible_current or any(provenance(c) for c in current_checks))
+        ):
+            try:
+                recovered = repair(
+                    client, repo, run["id"], (run["id"], run["run_attempt"])
+                )
+            except (
+                ManualCIError,
+                KeyError,
+                ValueError,
+                TypeError,
+                OSError,
+                subprocess.TimeoutExpired,
+            ):
+                return {
+                    "ignored": "pending publication evidence unavailable or changed"
+                }
+            return publish_qualification_status(
+                client, repo, pull, run, plan, {**result, **recovered}
+            )
         # PATCH cannot move a check into a rerun's attempt. Only reuse a
         # visible check for this exact attempt, including when repairing an
         # external_id that the old publisher rewrote on a superseded check.
@@ -424,6 +255,13 @@ def publish(
         ]
         current_id = max((item["id"] for item in existing), default=None)
         if existing:
+            if payload["status"] == "in_progress":
+                target = max(existing, key=lambda item: item["id"])
+                observed = client.request(f"repos/{repo}/check-runs/{current_id}")
+                if observed.get("status") == "completed" or fingerprint(
+                    observed
+                ) != fingerprint(target):
+                    return {"ignored": "pending publication target changed"}
             update = dict(payload)
             update.pop("head_sha")
             client.write(
@@ -471,6 +309,8 @@ def publish(
             client.write(
                 f"repos/{repo}/issues/{pull['number']}/comments", {"body": comment_body}
             )
+    if state != "legacy":
+        return publish_qualification_status(client, repo, pull, run, plan, result)
     return result
 
 
@@ -775,6 +615,9 @@ def diagnose(
             "requiredness_complete": False,
         },
         "checks": {"all": [], "latest": []},
+        "suites": [],
+        "run_suite_id": None,
+        "rollup_state": None,
     }
 
     def finish(state, reason):
@@ -789,6 +632,8 @@ def diagnose(
     ):
         return finish("ignored", "invalid_identity")
     snapshots = {}
+    suite_snapshot = None
+    rollup_snapshot = None
     try:
         run = client.request(f"repos/{repo}/actions/runs/{run_id}")
         workflow = client.request(f"repos/{repo}/actions/workflows/pr.yml")
@@ -811,6 +656,9 @@ def diagnose(
         if not bound or bound.get("number") != number:
             return finish("ignored", "pull_mismatch")
         snapshots[run_id] = run
+        suite_id = run.get("check_suite_id")
+        if type(suite_id) is int and suite_id > 0:
+            result["run_suite_id"] = suite_id
         source_snapshot = None
         raw = {}
         for check_filter in ("all", "latest"):
@@ -920,6 +768,29 @@ def diagnose(
                 state, reason = "failed", "current_qualification_failed"
             elif evidence["full_qualification"]:
                 try:
+                    suite_ids = [
+                        run.get("check_suite_id"),
+                        *(
+                            check.get("check_suite", {}).get("id")
+                            for check in replacements
+                        ),
+                    ]
+                    suite_snapshot = read_suites(client, repo, head, suite_ids, APP_ID)
+                    rollup_snapshot = read_rollup(client, repo, head)
+                    result["suites"] = list(suite_snapshot.values())
+                    result["rollup_state"] = rollup_snapshot
+                except (
+                    ManualCIError,
+                    KeyError,
+                    ValueError,
+                    TypeError,
+                    OSError,
+                    subprocess.TimeoutExpired,
+                ):
+                    # Missing health evidence must not skip source revalidation.
+                    suite_snapshot = None
+                    result["reason_codes"].append("check_state_evidence_unavailable")
+                try:
                     identity = source_identity(client, repo, number)
                     source_snapshot = plan_for_run(client, repo, run, identity)
                     evidence["current_source"] = source_snapshot is not None
@@ -950,6 +821,42 @@ def diagnose(
                     state, reason = (
                         "healthy" if green else "uncertain"
                     ), "no_competing_native_failure"
+                    if green:
+                        visible = {check["id"] for check in raw["latest"]}
+                        required_green = [
+                            check
+                            for check in replacements
+                            if required.get(check["id"]) is True
+                            and check["id"] in visible
+                        ]
+                        if not complete or suite_snapshot is None:
+                            state, reason = (
+                                "evidence_unavailable",
+                                "health_evidence_incomplete",
+                            )
+                        elif not required_green:
+                            state, reason = (
+                                "uncertain",
+                                "current_required_gate_not_visible",
+                            )
+                        elif not successful(suite_snapshot[run["check_suite_id"]]):
+                            state, reason = (
+                                "uncertain",
+                                "qualification_suite_not_successful",
+                            )
+                        elif any(
+                            not successful(suite_snapshot[check["check_suite"]["id"]])
+                            for check in required_green
+                        ):
+                            state, reason = (
+                                "suite_mismatch",
+                                "required_gate_suite_not_successful",
+                            )
+                        elif rollup_snapshot != "SUCCESS":
+                            state, reason = (
+                                "rollup_blocked",
+                                "commit_rollup_not_successful",
+                            )
         except (ManualCIError, KeyError, ValueError, TypeError) as error:
             if (
                 isinstance(error, ManualCIError)
@@ -1014,6 +921,14 @@ def diagnose(
             for key in ("number", "state", "head", "base", "merge_commit_sha")
         ) or not latest_run(client, repo, run):
             return finish("stale", "snapshot_changed")
+        if suite_snapshot is not None:
+            if (
+                read_suites(client, repo, head, suite_snapshot, APP_ID)
+                != suite_snapshot
+            ):
+                return finish("stale", "check_suite_changed")
+            if read_rollup(client, repo, head) != rollup_snapshot:
+                return finish("stale", "commit_rollup_changed")
         if source_snapshot is not None:
             try:
                 fresh_identity = source_identity(client, repo, number)
@@ -1047,10 +962,44 @@ def main() -> int:
     parser.add_argument("--pr", type=int)
     parser.add_argument("--head")
     parser.add_argument("--attempt", type=int)
+    parser.add_argument("--resolve-event", action="store_true")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--mode", choices=("publish", "pending"))
     args = parser.parse_args()
+    if args.resolve_event:
+        if not args.event or args.diagnose or args.run_id or args.mode or args.dry_run:
+            parser.error("--resolve-event requires only --event and optional --output")
+        try:
+            event = json.loads(args.event.read_text(encoding="utf-8"))
+            result = resolve_event(
+                StatusClient(), os.environ["GITHUB_REPOSITORY"], event
+            )
+        except (
+            ManualCIError,
+            KeyError,
+            ValueError,
+            TypeError,
+            OSError,
+            subprocess.TimeoutExpired,
+        ):
+            result = {"ignored": "no verified qualification identity for this event"}
+        if args.output:
+            with args.output.open("a", encoding="utf-8") as stream:
+                stream.write(
+                    f"run_id={result.get('run_id', '')}\nmode={result.get('mode', '')}\n"
+                )
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.output:
+        parser.error("--output requires --resolve-event")
     if args.diagnose:
-        if args.event or any(
-            value is None for value in (args.pr, args.head, args.run_id, args.attempt)
+        if (
+            args.event
+            or args.mode
+            or any(
+                value is None
+                for value in (args.pr, args.head, args.run_id, args.attempt)
+            )
         ):
             parser.error(
                 "--diagnose requires --pr, --head, --run-id and --attempt; not --event"
@@ -1068,7 +1017,22 @@ def main() -> int:
     if any(value is not None for value in (args.pr, args.head, args.attempt)):
         parser.error("--pr, --head and --attempt require --diagnose")
     try:
-        event = json.loads(args.event.read_text()) if args.event else {}
+        event = json.loads(args.event.read_text(encoding="utf-8")) if args.event else {}
+        community = (event.get("workflow_run") or {}).get("path") == (
+            ".github/workflows/community.yml"
+        )
+        if args.mode == "pending" or (community and args.mode is None):
+            result = recover_pending(
+                StatusClient(),
+                os.environ["GITHUB_REPOSITORY"],
+                event,
+                args.run_id,
+                dry_run=args.dry_run,
+            )
+            print(json.dumps(result, indent=2))
+            return 0
+        if community:
+            raise ManualCIError("Community events require pending-only publication.")
         run_id = args.run_id or int(
             event.get("inputs", {}).get("run_id") or event["workflow_run"]["id"]
         )
@@ -1078,6 +1042,8 @@ def main() -> int:
             run_id,
             dry_run=args.dry_run,
         )
+        if "qualification_status_error" in result:
+            print("::warning::Could not publish PR Qualification")
         print(json.dumps(result, indent=2))
         return 0
     except (

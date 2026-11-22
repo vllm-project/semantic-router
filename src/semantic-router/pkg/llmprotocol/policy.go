@@ -1,6 +1,9 @@
 package llmprotocol
 
-import "slices"
+import (
+	"encoding/json"
+	"slices"
+)
 
 type UnknownFieldPolicy string
 
@@ -20,9 +23,9 @@ const (
 // OpenAI request formats cannot carry.
 const LossyFieldToolResultError = "tool_result.is_error"
 
-// LossyFieldSystemMessageRole names the role of Anthropic system messages
-// inside the conversation, which ProjectAnthropicSystemMessages sends to Chat
-// and Responses backends as user text.
+// LossyFieldSystemMessageRole names the role of system and developer
+// messages, which ProjectSystemMessages sends a Chat backend as one leading
+// system message and, inside the conversation, as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
 // LossyFieldUnreadableFile names files in the conversation when the selected
@@ -116,9 +119,19 @@ type Policy struct {
 	// terminal. TranslateResponse and NewStreamWithMutation set it only when
 	// the target wire format can carry a matched stop sequence.
 	ProviderStopSequences bool
+	// RequestOutputLimit is the output token limit the backend received with
+	// the request whose reply this policy decodes, 0 when the request set
+	// none. A reply that stopped for its tool calls once its output reached
+	// the limit decodes as stopped at the limit (ToolCallStopAtOutputLimit).
+	RequestOutputLimit int64
 	// AllowedLossyFields are translated with a diagnostic even under
 	// LossyReject. Entries come from OptInLossyFields.
 	AllowedLossyFields []string
+	// AllowedRequestExtensions names top-level request members the wire
+	// format does not declare that the Router nevertheless captures at
+	// ingress and merges back on same-format dispatch. Entries come from
+	// operator configuration; every member not listed keeps failing closed.
+	AllowedRequestExtensions []string
 }
 
 type Limits struct {
@@ -160,6 +173,10 @@ type Limits struct {
 	UnfinishedArguments  int
 	Events               int
 	Diagnostics          int
+	// RequestExtensionBytes bounds the total captured extension member
+	// value bytes; RequestExtensionMembers bounds their count.
+	RequestExtensionBytes   int
+	RequestExtensionMembers int
 }
 
 func DefaultPolicy() Policy {
@@ -181,6 +198,7 @@ func DefaultPolicy() Policy {
 			MediaReferenceBytes: 16 << 10, MediaDataBytes: 48 << 20,
 			SSEFrameBytes: 1 << 20, UnfinishedArguments: 4 << 20,
 			Events: 1_000_000, Diagnostics: 64,
+			RequestExtensionBytes: 256 << 10, RequestExtensionMembers: 16,
 		},
 	}
 }
@@ -209,6 +227,10 @@ type Diagnostics []Diagnostic
 // provider state.
 type ResponseRenderContext struct {
 	PreviousResponseID string
+	// RequestEcho is a JSON object of the request members, as the client sent
+	// them, that the request format's response object repeats. The request
+	// codec writes it, and only the same format's response encoder reads it.
+	RequestEcho json.RawMessage
 }
 
 // Envelope is bounded, ephemeral wire fidelity and rendering state. It must
@@ -221,6 +243,10 @@ type Envelope struct {
 	ResponseReencodeRequired bool // Provider decorations must not be replayed to a same-format client.
 	SourceStop               string
 	ResponseRender           ResponseRenderContext
+	// OutputLimitField is the member a Chat request set its output limit with,
+	// max_tokens or max_completion_tokens, so an error about the limit names
+	// the one the client sent.
+	OutputLimitField string
 }
 
 func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy Policy, response bool) bool {
@@ -232,7 +258,7 @@ func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy 
 		if envelope.ResponseReencodeRequired {
 			return false
 		}
-		if envelope.ResponseRender.PreviousResponseID != "" {
+		if envelope.ResponseRender.PreviousResponseID != "" || len(envelope.ResponseRender.RequestEcho) > 0 {
 			return false
 		}
 		return len(envelope.Response) > 0

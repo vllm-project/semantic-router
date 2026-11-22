@@ -25,6 +25,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/vsr.py\" stop",
+            "timeout": 5,
+            "statusMessage": "vSR: which models served this turn"
+          }
+        ]
+      }
     ]
   }
 }

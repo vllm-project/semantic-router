@@ -79,7 +79,7 @@ func TestACallerPoolRefusesWhatWouldSendTheLoginElsewhere(t *testing.T) {
 			"https://claude-relay.example.com", "", "",
 			"so the backend is https://api.anthropic.com, or an endpoint on this machine",
 		},
-		"listener keys": {"https://api.anthropic.com", "", "", "api_keys authenticate clients"},
+		"listener keys": {"https://api.anthropic.com", "", "", "api_keys and api_key_files authenticate clients"},
 		"response cache": {"https://api.anthropic.com", "", `    plugins:
       - type: response_cache
         configuration: {enabled: true}
@@ -107,11 +107,39 @@ func TestACallerPoolRefusesWhatWouldSendTheLoginElsewhere(t *testing.T) {
 	}
 }
 
+// An entrypoint's client key and a person's provider login would both arrive
+// as the Authorization header, so a configuration has one or the other.
+func TestACallerPoolRefusesEntrypointClientKeys(t *testing.T) {
+	cfg, err := loadCallerConfig("https://api.anthropic.com", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Entrypoints = []EntrypointMapping{{
+		ModelNames: []string{"company/claude"}, Recipe: DefaultRecipeName,
+		ClientAuth: &EntrypointClientAuth{Type: ClientAuthBearerAPIKey, APIKeyEnvs: []string{"CLAUDE_KEY"}},
+	}}
+	if err := validateCallerUpstreams(cfg); err == nil || !strings.Contains(err.Error(), "entrypoints[0].client_auth authenticates clients with the Authorization header") {
+		t.Fatalf("validateCallerUpstreams() = %v, want the client keys refused", err)
+	}
+	cfg.Entrypoints[0].ClientAuth = nil
+	if err := validateCallerUpstreams(cfg); err != nil {
+		t.Fatalf("a public entrypoint beside caller backends: %v", err)
+	}
+}
+
 func TestACallerPoolKeepsOnePayerAndOneIssuer(t *testing.T) {
-	mixed := strings.Replace(callerConfig, "          auth: {credential: caller%s}\n", "          api_key: server-key%s\n", 1)
-	mixed = strings.Replace(strings.Replace(strings.Replace(mixed, "%s", "https://api.anthropic.com", 1), "%s", "", 1), "%s", "", 1)
-	if _, err := ParseYAMLBytes([]byte(mixed)); err == nil || !strings.Contains(err.Error(), "every backend takes auth.credential: caller") {
-		t.Errorf("a pool that mixes payers: %v", err)
+	// A model with a key of its own may sit beside the caller's models.
+	keyed := strings.Replace(callerConfig, "          auth: {credential: caller%s}\n", "          api_key: server-key%s\n", 1)
+	keyed = strings.Replace(strings.Replace(strings.Replace(keyed, "%s", "https://api.anthropic.com", 1), "%s", "", 1), "%s", "", 1)
+	if _, err := ParseYAMLBytes([]byte(keyed)); err != nil {
+		t.Errorf("a keyed model beside caller models: %v", err)
+	}
+	// One model's backends keep one payer, so failing over between them does
+	// not change who pays.
+	split := strings.Replace(callerConfig, "          auth: {credential: caller%s}\n", "          auth: {credential: caller%s}\n        - name: anthropic-key\n          provider: anthropic\n          endpoint: https://api.anthropic.com\n          api_key: server-key\n", 1)
+	split = strings.Replace(strings.Replace(strings.Replace(split, "%s", "https://api.anthropic.com", 1), "%s", "", 1), "%s", "", 1)
+	if _, err := ParseYAMLBytes([]byte(split)); err == nil || !strings.Contains(err.Error(), "credential source differ") {
+		t.Errorf("a model that mixes payers: %v", err)
 	}
 	other := strings.Replace(callerConfig, "provider: anthropic\n          endpoint: %s", "provider: anthropic-compatible\n          endpoint: %s", 1)
 	other = strings.Replace(strings.Replace(strings.Replace(other, "%s", "https://claude-proxy.example.com", 1), "%s", "", 1), "%s", "", 1)
@@ -175,5 +203,75 @@ func TestADeploymentCannotTakeTheCallersLogin(t *testing.T) {
 	auth := &DeploymentAuth{Credential: CredentialCaller}
 	if err := auth.validate(); err == nil || !strings.Contains(err.Error(), "applies to providers.models[].backend_refs") {
 		t.Fatalf("deployment auth: %v", err)
+	}
+}
+
+// mixedCallerConfig routes hard turns to a Claude model on the client's login
+// and easy ones to a local model; %s is the plugins of each decision.
+const mixedCallerConfig = `version: v0.5
+listeners:
+  - name: http
+    port: 8899
+providers:
+  models:
+    - name: claude-opus
+      provider_model_id: claude-opus-5-5
+      api_format: anthropic
+      backend_refs:
+        - name: anthropic
+          provider: anthropic
+          endpoint: https://api.anthropic.com
+          auth: {credential: caller}
+    - name: local-easy
+      provider_model_id: qwen3
+      api_format: openai
+      backend_refs:
+        - name: local
+          provider: vllm
+          endpoint: http://127.0.0.1:8000/v1
+recipes:
+  - name: default
+    decisions:
+      - name: hard
+        priority: 200
+        rules: {}
+        modelRefs: [{model: claude-opus}]
+%s      - name: easy
+        priority: 100
+        rules: {}
+        modelRefs: [{model: local-easy}]
+%s`
+
+// The rules that keep a login on the client's own request bind only the
+// decisions that can send it to a caller model.
+func TestAMixedPoolBindsTheLoginRulesToCallerDecisions(t *testing.T) {
+	const prompt = `        plugins:
+          - type: system_prompt
+            configuration: {enabled: true, mode: insert, system_prompt: "Answer briefly."}
+`
+	document := strings.Replace(strings.Replace(mixedCallerConfig, "%s", "", 1), "%s", prompt, 1)
+	if _, err := ParseYAMLBytes([]byte(document)); err != nil {
+		t.Fatalf("a system prompt on the local decision: %v", err)
+	}
+	document = strings.Replace(strings.Replace(mixedCallerConfig, "%s", prompt, 1), "%s", "", 1)
+	if _, err := ParseYAMLBytes([]byte(document)); err == nil || !strings.Contains(err.Error(), "recipes[default].decisions[hard].plugins: system_prompt") {
+		t.Fatalf("a system prompt on the caller decision: %v", err)
+	}
+}
+
+// A decision whose own models take no login still may not call a caller
+// model in process, as a Fusion judge, since the hop has no login to send.
+func TestALocalDecisionMayNotCallACallerModelInProcess(t *testing.T) {
+	cfg, err := ParseYAMLBytes([]byte(strings.Replace(strings.Replace(mixedCallerConfig, "%s", "", 1), "%s", "", 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fusion := &AlgorithmConfig{Type: "fusion", Fusion: &FusionAlgorithmConfig{Model: "claude-opus", AnalysisModels: []string{"local-easy"}}}
+	if err := cfg.validateCallerDecision("recipes[default].decisions[easy]", looperDecision(fusion, "local-easy")); err == nil || !strings.Contains(err.Error(), `calls "claude-opus" in process`) {
+		t.Fatalf("a local Fusion judged by a caller model: %v", err)
+	}
+	local := &AlgorithmConfig{Type: "fusion", Fusion: &FusionAlgorithmConfig{Model: "local-easy", AnalysisModels: []string{"local-easy"}}}
+	if err := cfg.validateCallerDecision("recipes[default].decisions[easy]", looperDecision(local, "local-easy")); err != nil {
+		t.Fatalf("a local Fusion: %v", err)
 	}
 }

@@ -415,7 +415,7 @@ func encodeCachedSemanticStream(
 	body, emitted, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Options: clientStreamOptions(ctx),
 		PublicModel: response.Model, ResponseID: response.ID,
-		PreviousResponseID: responseObjectPreviousID(ctx),
+		ResponseRender: responseObjectRender(ctx),
 	})
 	return body, append(diagnostics, emitted...), err
 }

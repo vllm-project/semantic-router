@@ -3,18 +3,17 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import {
-  ModelStepPanel,
-  RoutingStarterPanel,
-  SetupWizardStepper,
-} from './SetupWizardPanels'
+import { TooltipProvider } from '../ui'
+import { ModelStepPanel, RoutingStarterPanel, SetupWizardStepRail } from './SetupWizardPanels'
 import { createModelDraft, createSetupConfigCounts } from './setupWizardSupport'
 
 describe('setup wizard panels', () => {
   it('renders a current-aware keyboard stepper with controlled regions', () => {
     const markup = renderToStaticMarkup(
-      createElement(SetupWizardStepper, {
+      createElement(SetupWizardStepRail, {
         currentStep: 1,
+        finished: false,
+        summaries: ['1 model connected', 'From scratch', 'Vela 3.0 fast', 'Writes config.yaml'],
         onGoToStep: () => true,
       }),
     )
@@ -24,7 +23,8 @@ describe('setup wizard panels', () => {
     expect(markup).toContain('aria-current="step"')
     expect(markup).toContain('aria-controls="setup-step-1-panel"')
     expect(markup).toContain('tabindex="0"')
-    expect(markup).toContain('Step 1: Connect model, complete')
+    expect(markup).toContain('Step 1: Connect models, complete')
+    expect(markup).toContain('Step 4: Review &amp; activate')
   })
 
   it('bounds a large model collection and exposes search, count, and paging', () => {
@@ -35,21 +35,24 @@ describe('setup wizard panels', () => {
       baseUrl: `vllm:${8000 + index}`,
     }))
     const markup = renderToStaticMarkup(
-      createElement(ModelStepPanel, {
-        currentRouteLabel: 'From scratch',
-        models,
-        defaultModelId: 'model-1',
-        shouldShowStepOneIssues: false,
-        stepOneErrors: [],
-        stepOneAttempted: false,
-        draftBuildError: null,
-        removedModel: null,
-        onAddModel: vi.fn(),
-        onUpdateModel: vi.fn(),
-        onRemoveModel: vi.fn(),
-        onUndoRemoveModel: vi.fn(),
-        onSelectDefaultModel: vi.fn(),
-      }),
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(ModelStepPanel, {
+          models,
+          defaultModelId: 'model-1',
+          shouldShowStepOneIssues: false,
+          stepOneErrors: [],
+          stepOneAttempted: false,
+          draftBuildError: null,
+          removedModel: null,
+          onAddModel: vi.fn(),
+          onUpdateModel: vi.fn(),
+          onRemoveModel: vi.fn(),
+          onUndoRemoveModel: vi.fn(),
+          onSelectDefaultModel: vi.fn(),
+        }),
+      ),
     )
 
     expect(markup).toContain('type="search"')
@@ -63,7 +66,6 @@ describe('setup wizard panels', () => {
   it('makes remote and preset async failures recoverable', () => {
     const markup = renderToStaticMarkup(
       createElement(RoutingStarterPanel, {
-        currentRouteLabel: 'From remote',
         routingMode: 'remote',
         remoteConfigUrl: 'https://example.com/config.yaml',
         remoteImportState: 'error',

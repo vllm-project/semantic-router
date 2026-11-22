@@ -448,8 +448,9 @@ its retrieval calls.
 When the Router cannot route a request, it answers the request itself and calls
 no backend. The error uses the client's protocol. In OpenAI Chat Completions and
 Responses errors, `error.code` is a stable reason code and `error.message` a
-short message. Apart from the budget and context-length errors, the message
-names no model, decision, or request content:
+short message. Apart from the budget and context-length errors, and the model
+errors, which name the model the client sent, the message names no model,
+decision, or request content:
 
 ```json
 {"error":{"type":"invalid_request_error","code":"no_route","message":"no route matched the request","param":null}}
@@ -457,7 +458,8 @@ names no model, decision, or request content:
 
 | Code | Status | `error.type` | Meaning |
 | --- | --- | --- | --- |
-| `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
+| `model_not_found` | 404 | `invalid_request_error` | The request names a model this Router does not serve on any listener: no entrypoint name, provider model or LoRA adapter. The message is OpenAI's, ``The model `x` does not exist or you do not have access to it.``, which OpenAI SDKs read as an unknown model. Anthropic Messages clients get `not_found_error`. |
+| `model_not_allowed` | 403 | `permission_error` | The listener's [model allow-list](../installation/gateway-modes#model-allow-list) leaves out a model the Router serves on other listeners. The message names the model. |
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
 | `context_length_exceeded` | 400 | `invalid_request_error` | The Router's count puts the request beyond the band around the `context_window_size` of every model that could serve it (3% with a model's own tokenizer, 30% with the proxy tokenizer): beside the signals, for every model the request can reach, which cancels the signals still running, or after the decision, for its candidates. `param` is `messages`, and the message names the widest window and the request's estimated count, as OpenAI's does: `This model's maximum context length is 1048576 tokens. However, your request has an estimated 1100000 input tokens. Please reduce the length of the input.` Anthropic Messages clients get `prompt is too long: 1100000 tokens > 1048576 maximum`. See [the context window check](../installation/model-configuration#check-prompts-against-the-context-window). The [request budget check](#request-budget-errors) answers the same code. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
@@ -467,6 +469,8 @@ names no model, decision, or request content:
 | `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
 | `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |
 | `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
+| `budget_exceeded` | 429 | `rate_limit_error` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) does not cover the call's estimated cost, or has nothing left. The message names the budget, its limit, what it has left and the estimate, as `x-vsr-budget-scope` and `x-vsr-budget-remaining` do. A user budget's refusal carries `Retry-After` until its window starts again. |
+| `budget_unpriced` | 403 | `permission_error` | The selected model has no price in the spend budgets' currency, and `budgets.unpriced` is `refuse`. |
 
 The Router logs each of these failures at `WARN`, under the request's
 `x-request-id`, with the code and its own reason: the model the request named,
@@ -505,14 +509,33 @@ failures retain their selection-error behavior, `no_eligible_model`. Budget chec
 truncate requests by themselves; opt into
 [context compression](../tutorials/plugin/context.md#compression-and-budget) when appropriate.
 
-These counts are estimates. A backend can still reject a request; its valid
-HTTP status and meaningful message are retained. vLLM integer codes are exposed
-as strings in OpenAI-compatible errors: `BadRequestError` with `code: 400`
-becomes `invalid_request_error` with `code: "400"`. A backend's refusal of a
-prompt longer than its window (vLLM's `param: input_tokens`, or a message about
-the context length, window or size, or Anthropic's `prompt is too long`) gets
-the code `context_length_exceeded` instead, and keeps the backend's message,
-which names its window and the prompt's count.
+These counts are estimates. A backend can still reject a request. Its HTTP
+status is kept, and a `4xx` error reaches the client in the client's error
+format and in the Router's terms:
+
+- **Beyond the window.** A refusal of a prompt or an output limit beyond the
+  backend's window gets `context_length_exceeded`: vLLM's `param:
+  input_tokens`, its `'max_tokens' or 'max_completion_tokens' is too large`
+  and `max_completion_tokens=... cannot be greater than max_model_len=...`
+  errors, a message about the context length, window or size, or Anthropic's
+  `prompt is too long`.
+- **Other refusals.** Any other `400` gets `invalid_request`. Another `4xx`
+  keeps the backend's code, except vLLM's integer status, which becomes the
+  Router's code for that status, such as `not_found`. A `5xx` is passed on as
+  it is.
+- **The client's names.** `param` and the message name the member the client
+  sent: `max_tokens`, `max_completion_tokens` or `max_output_tokens` for the
+  output limit, although the Router sends a Chat backend
+  `max_completion_tokens`, and `messages` or `input` for the prompt. The
+  message keeps the backend's numbers and drops its own setting names, such as
+  `max_model_len`, and vLLM's `(parameter=..., value=...)` suffix.
+
+A Chat request with `max_tokens: 5000000` to a model with a 262,144-token
+window gets:
+
+```json
+{"error":{"type":"invalid_request_error","code":"context_length_exceeded","message":"max_tokens is too large: 5000000. This model's maximum context length is 262144 tokens, and your request has 12 input tokens. Please request fewer output tokens.","param":"max_tokens"}}
+```
 
 A streaming request rejected before generation receives the same non-2xx JSON
 error, not a successful SSE stream. When Replay is enabled, it records the
@@ -525,22 +548,23 @@ Router Replay records routing decisions and selected request lifecycle data.
 It is useful for debugging, evaluation, and Router Learning, but it does not
 change routing merely because a record is read.
 
-Replay is disabled unless a `router_replay` plugin enables it:
+Without a `router_replay` plugin, Replay records each request's routing data,
+and no request or response text, in the `file` store, which
+[keeps records across restarts](../tutorials/plugin/router-replay#keep-records-across-restarts). A `router_replay`
+plugin in `global.plugins` replaces that default, and `enabled: false` turns
+Replay off:
 
 ```yaml
 global:
-  services:
-    router_replay:
-      store_backend: memory
   plugins:
     - type: router_replay
       configuration:
-        enabled: true
+        enabled: false
 ```
 
-The in-memory backend is suitable for local inspection. Use a configured
-persistent backend when records must survive process restarts, and set
-retention appropriate to the data being captured.
+The `memory` backend is suitable for local inspection. Use a configured
+persistent backend when records that keep text must survive process restarts,
+and set retention appropriate to the data being captured.
 
 Replay queries go to the management API:
 
@@ -555,11 +579,60 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays/{id}` | Read one record |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
+| `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session |
+| `GET` | `/api/v1/observability/replays/run?session_id=...` | Read one agent run as a tree of its agents and calls |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models with the label the Dashboard's **Requests** page shows for each |
+
+The runs list takes the list's filters, `limit` and `offset`; a run reads every
+recipe of its session. See
+[Agent runs](../tutorials/plugin/router-replay#agent-runs) for both responses
+and [Model labels](../tutorials/plugin/router-replay#model-labels) for the
+labels.
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
-`model`, `session_id`, `cache_status`, and `search`. Pagination uses `limit`
+`model`, `session_id`, `turn_id`, `cache_status`, and `search`, and, for agent
+approval reviews, `request_kind=codex_approval_review`, `review_status`,
+`review_outcome`, and `review_risk`. `turn_id` matches a record's `turn_id` or
+`parent_turn_id`: the calls one Codex turn sent, and the approval reviews and
+subagent calls it started. `has_session=true` keeps the records that belong to
+a session, the ones the runs list folds into agent runs, so totals can cover
+exactly what a sessions view lists. `since` keeps the records at or after an RFC 3339
+timestamp, such as `2026-11-15T15:00:00Z` (send an offset's `+` as `%2B`), so
+the list and the aggregate cover one window; [`vllm-sr usage`](../tutorials/plugin/router-replay#usage-in-the-terminal)
+reads both that way. Pagination uses `limit`
 and `offset`; `limit` is capped at 100. `showDetails=true` requests large body
-fields, so use it only when those fields are needed.
+fields, so use it only when those fields are needed. See
+[Agent approval reviews](../tutorials/plugin/router-replay#agent-approval-reviews)
+for the review record and the aggregate's `reviews` summary.
+
+`harness` keeps the records sent by the harnesses it lists, comma-separated:
+`claude_code`, `codex`, `opencode`, `deepseek_harness`, `cursor`, `openclaw`, and `api_client` for
+the requests no harness sent, such as a script calling the API directly; a
+record's harness is its `agent.harness`, described in
+[Agent runs](../tutorials/plugin/router-replay#agent-runs). The list response
+carries `harness_counts`, the records every other filter selects counted by
+harness, such as `{"api_client": 51234, "claude_code": 1820, "codex": 977}`,
+so a page of one harness's records still shows how many each harness sent.
+
+With `since`, the aggregate also takes `interval`, a duration of at least `1m`
+such as `5m` or `1h` that splits the window into at most 1,000 intervals. The
+response then carries `traffic`: `since`, `interval_seconds`,
+`latency_p50_ms` and `latency_p95_ms` over the window's completed requests
+(estimated from 1,024 samples in a busier window), and `buckets` from `since`
+to now, oldest first and empty intervals included. Each bucket
+has its `start`, `requests`, `cached`, and `failed` (failed or aborted)
+counts, `latency_p50_ms` and `latency_p95_ms` over its completed requests
+(absent without one, and estimated from 256 samples in a busier interval),
+and `cost`, its spend per currency in the shape of `by_currency`. Without
+`interval` the response is unchanged.
+
+The aggregate and the runs list read the whole retained history. A Router
+answers each filter combination from one scan, shared by the requests that
+arrive while it runs, and keeps the answer for 30 seconds, so a record written
+in that time counts from the next scan. A read stops when its client
+disconnects, and after 25 seconds at the most. A PostgreSQL store applies the
+filters itself, so a filtered aggregate, such as one `since` window, reads only
+the records it counts.
 
 Trajectory queries use the exact recipe name. Omitting `recipe` is supported
 only when the session's records belong to one recipe; an ambiguous session
@@ -570,9 +643,11 @@ multiple requests at the same turn index.
 Records, trajectory routes, and messages include `conversation_id` when an
 explicit conversation identity is available. Messages are grouped by conversation
 and turn, so separate conversations in one session can each start at turn zero.
-Insights shows their boundaries and complete IDs.
+The Dashboard's **Requests** page shows their boundaries and complete IDs. Records and trajectory routes
+also carry a Codex request's `turn_id` and `parent_turn_id`; see
+[Agent turns](../tutorials/plugin/router-replay#agent-turns).
 
-Dashboard Insights shows these routes alongside recorded signals, projections,
+The Dashboard's **Requests** page shows these routes alongside recorded signals, projections,
 candidate scores, and session-switch reasons. In `observe` mode, candidate and
 hold explanations describe what protection would have done; the selected model
 and route history still describe actual dispatch. Protection's `candidate_models`
@@ -627,19 +702,62 @@ as the record's `route_diagnostics` do.
 
 ### Configured-rate cost estimates
 
-Insights uses recorded token usage and configured input, cached-input,
+The Dashboard's **Requests** page uses recorded token usage and configured input, cached-input,
 cache-write, and output rates. These are estimates, not invoices or GPU running
 costs; infrastructure charges and billing adjustments are excluded.
 
 | Field | Meaning |
 | --- | --- |
 | `actual_cost` | Estimated cost of the selected model for the recorded usage. |
-| `baseline_cost` | Highest same-currency estimate in the selected recipe's model pool, using that same usage. |
+| `baseline_cost` | The baseline model's estimate for that same usage: `cost_baseline_model` when the request's `router_replay` plugin sets one, else the highest same-currency estimate in the selected recipe's model pool. |
 | `baseline_model` | The model used for that comparison. Equal costs use model-name order. |
-| `cost_savings` | The difference between the baseline and actual estimate. |
+| `cost_savings` | The difference between the baseline and actual estimate. It is negative when the baseline costs less. |
 | `currency` | Currency of the recorded estimate; no exchange-rate conversion is applied. |
+| `cost_accounting` | Where the figures came from and what they leave out (below). |
 
-The baseline covers the recipe's models across all its decisions: model
+`cost_accounting` labels each new record:
+
+| Field | Meaning |
+| --- | --- |
+| `pricing_source` | `configured` for the model's `providers.models[].pricing`, or `catalog_list_price` when none is set and the built-in catalog lists a price for the model's provider. A list price is an estimate. |
+| `caller_login` | The model's backends take the client's own login (`auth.credential: caller`). Its cost is what the tokens would cost at API prices, not what the client's plan charges. |
+| `unpriced_reason` | Why `actual_cost` is missing: `no_usage`, `pricing_not_configured`, or `counted_in_parent` for a Looper hop's own record. |
+| `partial_usage` | The usage is what a stream reported before it was cut short, by its client or its backend: the prompt in full, as Anthropic counts it in `message_start`, and the output only as far as the stream had counted it. `actual_cost` prices that much, the record counts as priced in `summary.coverage` and in the run view, and a spend budget charges that price (`settlement: partial_usage`). A stream that reported no usage before its end, as an OpenAI stream sends it last, keeps none. |
+| `baseline_source` | `configured_model`, `recipe_most_expensive` (the default), or `selected_model` for a direct request. |
+| `baseline_unavailable` | Why a priced record has no baseline: `pricing_not_configured` or `currency_mismatch`. A configured baseline that cannot be used never falls back to the default. |
+| `router_calls` | Model calls the Router made itself to answer the request, entries by task `kind` and `model`. |
+| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls, and the `settlement`: `usage`, `partial_usage` for a stream cut short, charged the usage it reported (`partial_usage` above), `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
+
+A Looper request's cost is its calls, so its record has no `actual_cost` and one
+`router_calls` entry of kind `looper`: `calls`, the request's `prompt_tokens`
+and `completion_tokens`, `cost` and `currency` for the calls that have a price,
+and `unpriced_calls` with `unpriced_reasons` for the others. A call is unpriced
+when its model has no price, it reported no usage or incomplete usage, it is in
+another currency than the first priced call, or no attempt trace kept it
+(`attempt_not_traced`: a call past the trace's bound of 100 calls or 64 KiB).
+Every Looper algorithm traces its calls, so each one is priced at its own
+model's rates. An unpriced call is never counted as free.
+
+Request-scoped runtime calls also appear here: `decision_model` for native
+questions and selections, `systemone` for remote System One exchanges, and
+`embeddings`, `classify` or `rerank` for other model tasks. These entries include
+`model`, input (`prompt_tokens`) and output (`completion_tokens`) usage. Each
+dispatched task counts once, including fused tasks; result-cache hits, startup,
+warmup and background work do not add request spend. Usage returned with a
+failed decision is retained. Aggregate router call spend and coverage include
+these calls even when the request fails. Aggregate savings are net of the
+calls made for the completed requests they compare (below); a record's own
+`cost_savings` stays the model comparison alone.
+
+Deployment pricing is `global.model_catalog.deployments.<name>.pricing`, with
+the same per-million-token rates as provider model pricing. An explicit block
+wins (an empty block means zero rates); otherwise a deployment's `model` may
+name a priced provider model, and a `model_runtime` deployment with neither
+costs nothing. Currency defaults to USD. Calls without usage or rates carry
+`no_usage` or `pricing_not_configured`, respectively. Local compute costs are
+not measured by these token-rate estimates.
+
+The default baseline covers the recipe's models across all its decisions: model
 references, explicit candidate-iteration models, and route destinations. A
 permitted default-model fallback is included only for decisions that can use it;
 auxiliary planners and judges do not enlarge the pool. Other recipes, unpriced
@@ -648,7 +766,7 @@ compare against themselves. Alternative-model eligibility and tokenization are
 not re-evaluated; this is a rate comparison, not another inference.
 
 Missing usage, price, currency, or baseline stays unknown, with the reason shown
-in Insights. Explicitly configured free rates remain zero. Cache hits have zero
+on the Dashboard's **Requests** page. Explicitly configured free rates remain zero. Cache hits have zero
 additional model-inference cost; cache storage and lookup costs are excluded.
 Existing records keep their captured prices and baseline. **Price not recorded**
 means the historical record has no price; configuring rates today does not
@@ -657,7 +775,7 @@ backfill it.
 ### Provider prompt-cache breakdown
 
 New Replay records expose `provider_cache` in both the list and detail APIs.
-Dashboard Insights shows it under **Provider Prompt Cache**, separately from
+The Dashboard's **Requests** page shows it under **Provider Prompt Cache**, separately from
 Router response-cache hits and model-routing savings.
 
 Each of `uncached_input`, `cache_read`, `cache_write`, and `output` contains
@@ -690,19 +808,61 @@ are `-0.00035`. The input total remains 100; the tier counts partition the
 
 Partial, unavailable, or invalid usage does not produce a no-cache estimate or
 cache savings. A Router response-cache hit makes no new provider request, so
-its record has no `provider_cache`; Insights identifies it separately instead
+its record has no `provider_cache`; the **Requests** page identifies it separately instead
 of showing replayed provider usage as new provider savings.
 
 Aggregates use `summary.by_currency`, a sorted array with `currency`,
-`total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count` for each
-currency. With one currency, the flat summary fields mirror that group. With
-multiple currencies, flat `currency` is omitted and flat amounts are zero
+`total_saved`, `gross_saved`, `netted_router_call_spend`, `baseline_spend`,
+`actual_spend`, `router_call_spend`, `total_spend`, and `cost_record_count` for
+each currency. With one currency, the flat summary fields mirror that group.
+With multiple currencies, flat `currency` is omitted and flat amounts are zero
 placeholders: use `by_currency`, not those placeholders. There is no combined
 cross-currency total.
 
-`cost_record_count` counts complete estimates. `excluded_record_count` includes
-non-completed requests and records missing the data needed for a complete
-estimate; it does not imply that every excluded request lacks pricing.
+`gross_saved`, `baseline_spend`, and `actual_spend` cover the
+`cost_record_count` completed records compared with a baseline. `gross_saved`
+is `baseline_spend - actual_spend`, the saving of the model choice alone.
+`total_saved`, the saving the Dashboard shows, is net of the calls the Router made
+itself for those same records: `total_saved = gross_saved -
+netted_router_call_spend`. For example, a request whose selected model costs
+`0.00010` against a `0.00100` baseline saves `0.00090` gross; a System One call
+priced at `0.00012` for it leaves `0.00078` net.
+
+Every `router_calls` kind of a compared record is netted, and
+`coverage.netted_router_calls` counts them by kind. A Looper request is never
+compared with a baseline, since it has no selected-model cost: its calls are
+its answer and stay in `router_call_spend`. Codex approval reviews and memory
+requests sent to a `review_model` or `memory_model` entrypoint are not Router
+calls: the client sends them, and each is a record compared with a baseline
+like any other request. A record with a Router call that has no price, or a
+price in another currency, is left out of savings, gross and net, and counted
+in `coverage.net_unavailable`: an unknown cost is never netted as zero. A call
+priced at zero rates is netted at zero.
+
+`total_spend` adds every priced cost, with or without a baseline, including
+`router_call_spend`, the priced calls the Router made itself. A request that
+failed or has not finished still counts the calls it paid for, such as the
+attempts of an escalation that then failed.
+`excluded_record_count` includes non-completed requests and records missing the
+data needed for a savings comparison; it does not imply that every excluded
+request lacks pricing.
+
+`summary.coverage` says how much the amounts leave out:
+
+| Field | Meaning |
+| --- | --- |
+| `priced_records` | Records whose every cost has a price. |
+| `partly_priced_records` | Records with some costs priced, such as a Looper request with an unpriced call. |
+| `unpriced_records` | Records with no price at all. |
+| `unpriced_reasons` | The partly priced and unpriced records by the reason of their first missing price, for example `pricing_not_configured`, `no_usage`, `not_completed` for a request that failed or has not finished, which is never fully priced unless it is a stream cut short whose usage is priced (`cost_accounting.partial_usage`), or `price_not_recorded` for a record written before the Router recorded why. |
+| `looper_hop_records` | Records of Looper hops, left out of the three counts because the record of the request that made each hop counts its call. |
+| `list_price_records` | Priced records whose rate is a catalog list price. |
+| `caller_login_records` | Records served on a client's own login, priced or not. |
+| `router_calls`, `unpriced_router_calls` | Calls the Router made itself, and how many have no price. |
+| `baseline_sources` | The records compared with a baseline, by `baseline_source` (`unrecorded` for older records). |
+| `baseline_unavailable` | Priced completed records without a baseline, by why. |
+| `netted_router_calls` | The Router calls netted out of savings, by `kind`. |
+| `net_unavailable` | Records with a baseline left out of savings because a Router call they made has no price in their currency, by the reason of the first one, such as `pricing_not_configured`, `no_usage` or `currency_mismatch`. |
 
 ### Net provider prompt-cache saving
 
@@ -740,12 +900,27 @@ Replay lifecycle values describe what the recorder observed:
 
 - `in_progress`: no terminal response frame has been recorded yet.
 - `completed`: the response finished normally.
-- `failed`: routing or the upstream response failed.
+- `failed`: the Router refused the request, the Router failed, or the
+  upstream response failed. The record keeps the status the client received,
+  and `terminal_reason` says why, as in the table below.
 - `aborted`: the stream ended without a valid terminal frame, for example
-  after a disconnect or timeout.
+  after a disconnect or timeout, or, behind Envoy, after a local reply of
+  Envoy's own, which the Router never sees.
 
 An HTTP `200` response header alone does not make a streaming record
-`completed`.
+`completed`. A stream that reached its terminal frame does, even when the
+record cannot keep its answer, such as one that was all thinking the client
+asked to omit.
+
+| `terminal_reason` of a `failed` record | When |
+| --- | --- |
+| `request_rejected` | The Router refused the request after routing it, with a `4xx`: before it sent the request to a backend, such as for a capability the selected model's wire format lacks or a `fast_response` that sets `block: true`, or in place of the answer, such as a `response_guard` block. A stream's refusal, held or of a Looper answer, arrives as its error event and keeps the `200`. A guard overload is a refusal its client retries, whether as `429` or as `529`, and so is a fallback candidate that needs a delegated credential the request does not carry. |
+| `request_budget_exceeded` | The request does not fit the [request budget](#request-budget-errors) of any candidate. |
+| `budget_exceeded`, `budget_unpriced` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) refused the call before it was sent. |
+| `request_processing_failed` | The Router failed after routing. It answered with its own `5xx`, such as for a failed RAG retrieval, context compression that fails closed, a cached answer it cannot serve, a fast response it cannot encode, or a failed context recovery follow-up, or the request failed with an internal error. In standalone mode the record of such an error keeps the gateway's `500`. Behind Envoy, the ext_proc filter's `failure_mode_allow` decides what the client gets, so the record has no status. |
+| `upstream_invalid_response` | The Router cannot read or pass on the upstream answer, such as a cut body or one with no output whose stop does not explain it (an answer that ended its turn with nothing to say is an empty completion; see [Empty answers](../installation/protocol-compatibility#empty-answers)), and answers `502` in place of the upstream's `200`, also to a streaming client whose backend answered with one body instead of a stream. In standalone mode that includes a body the backend closes before its declared length; behind Envoy, Envoy answers such a body with its own `502` before the Router reads it, so that record ends `aborted`. A held stream it read to its end but could not rebuild an answer from ends this way too, under its `200`. |
+| `upstream_error_response` | The upstream answered with an error status, or its stream carried an error event, which keeps the `200` the stream began with. A fallback chain that ends without a success keeps the answer of its last attempt, in both modes. |
+| `upstream_<failure>` | No backend answered: in standalone mode, the gateway's `503` or `504` local reply, such as `upstream_connect_failure` or `upstream_reset`, once the fallback chain has tried its candidates, and, in both modes, a fallback chain whose last candidate, which the Router calls itself, did not answer. In standalone mode a buffered answer that a timeout stops partway ends `upstream_timeout` with the Router's `504`. Behind Envoy no candidate follows a first attempt that got no answer: the client gets Envoy's local reply, which the Router never sees, and the record ends `aborted` with `stream_ended_before_terminal_response` and no status, as for a client that left before the answer began. |
 
 ## Which port should I use?
 

@@ -424,12 +424,12 @@ func TestMaskText_PlaceholderExemptionDoesNotSkipRealValues(t *testing.T) {
 
 	text = "call 415-555-0134 now"
 	start, end = byteRange(t, text, "415-555-0134")
-	cfg := &config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "{index}", "PHONE_NUMBER": "#{index}"}}
+	cfg := &config.MaskingPluginConfig{Placeholders: map[string]string{"PHONE_NUMBER": "#{index}#"}}
 	got, _, err = MaskText(text, []Span{{EntityType: "PHONE_NUMBER", Start: start, End: end, Confidence: 0.9}}, nil, NewAllocator(cfg))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if want := "call #0 now"; got != want {
+	if want := "call #0# now"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
@@ -540,8 +540,8 @@ func TestMaskText_ClientPlaceholderIsNotReissued(t *testing.T) {
 			"[PERSON_0]! then Alice", "PERSON", "Alice", "[PERSON_0]! then [PERSON_1]!",
 		},
 		{
-			&config.MaskingPluginConfig{Placeholders: map[string]string{"PHONE_NUMBER": "#{index}"}},
-			"keep #0, call 415-555-0134", "PHONE_NUMBER", "415-555-0134", "keep #0, call #1",
+			&config.MaskingPluginConfig{Placeholders: map[string]string{"PHONE_NUMBER": "#{index}#"}},
+			"keep #0#, call 415-555-0134", "PHONE_NUMBER", "415-555-0134", "keep #0#, call #1#",
 		},
 		{
 			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "__NAME{index}__"}},
@@ -585,15 +585,21 @@ func TestMaskText_OverlappingIssuedPlaceholdersStayExempt(t *testing.T) {
 	}
 }
 
-// Case: a template that starts with its index reads a long run of digits
-// once. Only indexes Placeholder can write count, so the run holds the nine
-// that end at x, not one per digit.
-func TestMaskText_LongDigitRunHoldsFewPlaceholders(t *testing.T) {
-	a := NewAllocator(&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "{index}x"}})
-	if _, _, err := MaskText(strings.Repeat("1", 100_000)+"x", nil, nil, a); err != nil {
+// Case: only an index Placeholder can write makes a placeholder: no leading
+// zero and at most nine digits. Text shaped like one otherwise, such as
+// [PERSON_007] or a ten-digit index, exempts no detector span.
+func TestMaskText_IndexPlaceholderCannotWriteIsNoPlaceholder(t *testing.T) {
+	text := "Hi [PERSON_007] and [PERSON_1234567890]"
+	var spans []Span
+	for _, inside := range []string{"PERSON_007", "PERSON_1234567890"} {
+		start, end := byteRange(t, text, inside)
+		spans = append(spans, Span{EntityType: "PERSON", Start: start, End: end, Confidence: 1})
+	}
+	got, _, err := MaskText(text, spans, nil, NewAllocator(defaultCfg()))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(a.reserved) != 9 || !a.reserved["111111111x"] || !a.reserved["1x"] {
-		t.Fatalf("reserved %d placeholders, want the nine that end at x", len(a.reserved))
+	if want := "Hi [[PERSON_0]] and [[PERSON_1]]"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }

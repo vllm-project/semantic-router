@@ -270,6 +270,10 @@ def _build_common_runtime_env(
     common_env["VLLM_SR_SOURCE_CONFIG_PATH"] = runtime_container_config
     common_env["VLLM_SR_STATE_ROOT_DIR"] = "/app"
     common_env["VLLM_SR_CONFIG_BASE_DIR"] = "/app"
+    # Keys a save moves out of the config are files the Router writes as root;
+    # the Dashboard reads them through the group its entrypoint gives the state
+    # directory (STATE_GID in dashboard/backend/entrypoint.sh).
+    common_env["VLLM_SR_KEY_FILE_GROUP"] = "65532"
     common_env[PORT_OFFSET_ENV] = str(stack_layout.port_offset)
     if recipe_store_dir:
         common_env["VLLM_SR_RECIPE_STORE_DIR"] = recipe_store_dir
@@ -871,6 +875,7 @@ def _build_dashboard_runtime_env(
         "DASHBOARD_ADMIN_EMAIL",
         "DASHBOARD_ADMIN_PASSWORD",
         "DASHBOARD_ADMIN_NAME",
+        "DASHBOARD_ALLOWED_ORIGINS",
     ):
         value = os.getenv(name)
         if value:

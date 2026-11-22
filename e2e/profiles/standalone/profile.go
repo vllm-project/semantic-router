@@ -131,6 +131,7 @@ func (p *Profile) GetTestCases() []string {
 		"standalone-streaming",
 		"standalone-models",
 		"standalone-fallback",
+		"standalone-h2c-body-limit",
 		"standalone-debug-headers-default-off",
 		"routing-error-codes",
 		"standalone-decision-model",

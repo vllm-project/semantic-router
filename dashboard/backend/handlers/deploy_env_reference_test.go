@@ -207,7 +207,7 @@ func TestDeployHandler_LeavesEnvironmentReferencesToRouter(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			DeployHandler(configPath, false, tempDir)(w, req)
+			asSecretReader(DeployHandler(configPath, false, tempDir))(w, req)
 
 			if w.Code != http.StatusOK {
 				t.Fatalf("Expected 200, got %d. Body: %s", w.Code, w.Body.String())

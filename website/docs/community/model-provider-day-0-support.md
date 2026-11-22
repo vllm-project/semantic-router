@@ -7,7 +7,7 @@ description: Add a built-in model or provider once and generate every runtime an
 
 Built-in support is a validated resource graph, not a name added to several
 independent lists. The repository catalog under `config/catalog/` generates the
-runtime registry, built-in distribution, Dashboard Model Hub and Add Model cards, and the
+runtime registry, built-in distribution, Dashboard Model Hub and Connect model provider cards, and the
 public [Models page](/models).
 
 ## Choose the smallest change
@@ -38,7 +38,7 @@ surface. The generator enforces creator membership and minimum depth, while the
 human review decides recency and relevance.
 
 Provider support is independent. A new Provider ID may have no built-in model
-mapping and still be valuable for handwritten custom models in Add Model. Do
+mapping and still be valuable for handwritten custom models in Connect model. Do
 not add an obscure Model Card merely to make a provider card look populated.
 
 ## Add a model
@@ -52,7 +52,10 @@ not add an obscure Model Card merely to make a provider card look populated.
 2. Add a mapping under `config/catalog/resources/providers/<provider>.yaml`
    `models[]` when vLLM-SR should know a provider-native model ID, protocol
    restriction, price, or other provider-specific fact. Do not create a second
-   provider/model inventory.
+   provider/model inventory. A model ID that is billed but has no Model Card
+   yet takes only a `price_list[]` entry in the same file: its `id`, `pricing`
+   and a `verification.source`. It prices custom models that call that ID and
+   is never listed or selectable as a model.
 3. Reuse a reasoning family. Add a new family only when the request projection
    itself is new; do not duplicate a built-in family in user configuration.
 4. Add benchmark records under `evaluations/single/` only when the result is
