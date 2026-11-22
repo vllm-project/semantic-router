@@ -79,6 +79,8 @@ class PendingClient(status.Client):
         return super().request(endpoint, **options)
 
     def write(self, endpoint, payload, **options):
+        if "/statuses/" in endpoint:
+            return super().write(endpoint, payload, **options)
         assert "/check-runs" in endpoint, "Pending recovery must not write comments"
         if endpoint.endswith("/check-runs"):
             self.post_attempts += 1
