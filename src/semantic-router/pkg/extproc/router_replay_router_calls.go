@@ -9,7 +9,8 @@ import (
 // looperRouterCalls costs the calls a Looper request made, the model calls
 // the Router made itself to answer it. The priced attempts in the first
 // priced attempt's currency are summed. An attempt without rates or usage, in
-// another currency, or that no trace kept counts as unpriced, never free.
+// another currency, or that no trace kept counts as unpriced, never free. An
+// attempt a spend budget refused called no model and counts as no call.
 // calls is how many calls the algorithm reports, for a run that kept no trace.
 // The tokens are the request's, which already sum every call.
 func looperRouterCalls(diagnostics *routerreplay.LooperDiagnostics, usage looper.TokenUsage, calls int) store.RouterCallCost {
@@ -26,6 +27,10 @@ func looperRouterCalls(diagnostics *routerreplay.LooperDiagnostics, usage looper
 	}
 	cost := 0.0
 	for _, attempt := range diagnostics.Attempts {
+		if looperAttemptRefused(attempt) {
+			// A spend budget refused it: no model was called.
+			continue
+		}
 		if reason := looperAttemptUnpricedReason(attempt, call.Currency); reason != "" {
 			addUnpricedRouterCalls(&call, reason, 1)
 			continue
@@ -41,6 +46,11 @@ func looperRouterCalls(diagnostics *routerreplay.LooperDiagnostics, usage looper
 		addUnpricedRouterCalls(&call, store.UnpricedAttemptNotTraced, diagnostics.DroppedAttemptCount)
 	}
 	return call
+}
+
+func looperAttemptRefused(attempt routerreplay.LooperAttempt) bool {
+	reason := looper.AttemptReason(attempt.Reason)
+	return reason == looper.AttemptReasonBudgetExceeded || reason == looper.AttemptReasonBudgetUnpriced
 }
 
 func looperAttemptUnpricedReason(attempt routerreplay.LooperAttempt, currency string) string {
