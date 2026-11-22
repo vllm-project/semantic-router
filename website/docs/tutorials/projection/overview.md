@@ -115,7 +115,7 @@ not reference partition or score names directly.
 
 The DSL exposes the same three concepts through `PROJECTION partition`,
 `PROJECTION score`, and `PROJECTION mapping` blocks. The Dashboard exposes them
-under **Config > Projections**.
+under **Routing → Projections**.
 
 ## Dependencies and Limitations
 

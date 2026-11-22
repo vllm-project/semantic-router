@@ -123,7 +123,7 @@ func TestReportedMatchesListRulesAndTheChoicesOfRulesWithoutLabels(t *testing.T)
 		cfg.JailbreakRules = []config.JailbreakRule{{Name: "attack", Deployment: "kai"}}
 		other := map[string]string{"benign": "jailbreak", "jailbreak": "benign"}[test.choice]
 		decider := newFakeDecider(map[string]modelservice.Answer{
-			presetQuestionID(presets.Jailbreak): {Type: "choice", Choice: test.choice, Probabilities: map[string]float64{test.choice: 0.97, other: 0.03}},
+			presetQuestionID(presets.Jailbreak): {Type: "choice", Choice: test.choice, Probabilities: map[string]float64{test.choice: 0.97, other: 0.03}, InputCoverage: "complete"},
 		})
 		results := evaluateApplicationType(t, cfg, decider, config.SignalTypeJailbreak, "hello")
 		if reported := results.ReportedMatches(config.SignalTypeJailbreak); !slices.Equal(reported, test.want) {

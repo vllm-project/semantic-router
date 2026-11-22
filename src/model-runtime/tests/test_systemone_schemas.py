@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from vllm_srun.api import schemas
+from vllm_srun.errors import QuestionError
 from vllm_srun.families.vela2.request import read_state
 from vllm_srun.families.vela3_d3 import spans
 from vllm_srun.systemone import (
@@ -114,6 +115,31 @@ def test_media_leading_a_five_state_is_read_in_front_of_it() -> None:
         "assets": {"img": body["assets"]["img"]},
     }
     assert read(FIVE, schemas.PATH_SYSTEMONE, inline).body["assets"] == inline["assets"]
+
+
+@pytest.mark.parametrize(
+    "name,mime",
+    [
+        ("mp4", "video/mp4"),
+        ("webm", "video/webm"),
+        ("mov", "video/quicktime"),
+        ("mkv", "video/x-matroska"),
+        ("ts", "video/mp2t"),
+    ],
+)
+def test_a_five_video_asset_is_read_as_the_data_url_of_its_format(
+    name: str, mime: str
+) -> None:
+    body = {
+        "state": ["clip", "What happens?"],
+        "questions": NOUL,
+        "assets": {"clip": {"type": "video", "format": name, "data_base64": "AAAA"}},
+    }
+    internal = read(FIVE, schemas.PATH_SYSTEMONE, body).body
+    assert internal["videos"] == [f"data:{mime};base64,AAAA"]
+    body["assets"]["clip"]["format"] = "avi"
+    with pytest.raises(schemas.ReadError, match="mp4, webm, mov, mkv or ts"):
+        read(FIVE, schemas.PATH_SYSTEMONE, body)
 
 
 def test_a_batch_is_named_requests_on_either_schema() -> None:
@@ -269,7 +295,8 @@ def test_roles_that_name_what_the_keys_imply_read_the_state_as_before() -> None:
 @pytest.mark.parametrize("case", IMPLICIT_CASES)
 def test_roles_a_router_writes_for_a_four_request_read_as_it_was_written(case) -> None:
     """The Router gives a 4.0 request's keys the roles the runtime's implicit roles give them, whatever their case;
-    roles equal to them are the implicit roles, so every family (a vela3_d3 span's target too) reads the state as before.
+    roles equal to them are the implicit roles, so every family (a vela3_d3 span's target too) reads the state as
+    the implicit roles do.
     """
     state, roles = case["state"], case["roles"]
     assert implicit_roles(state) == roles
@@ -277,12 +304,17 @@ def test_roles_a_router_writes_for_a_four_request_read_as_it_was_written(case) -
     assert read is IMPLICIT_ROLES
     implicit, explicit = typed(state, IMPLICIT_ROLES), typed(state, read)
     assert (explicit.parts, explicit.fields) == (implicit.parts, implicit.fields)
+    # A span's target: the answer part, else the user part, else the only part; several parts with neither name none.
+    wanted = [key for role in ("answer", "user") for key in state if roles[key] == role]
     token = REQUEST_ROLES.set(read)
     try:
-        target = spans.default_target(list(state))
+        if wanted or len(state) == 1:
+            assert spans.default_target(list(state)) == (wanted or list(state))[0]
+        else:
+            with pytest.raises(QuestionError, match="name the part with over"):
+                spans.default_target(list(state))
     finally:
         REQUEST_ROLES.reset(token)
-    assert target == ("answer" if "answer" in state else list(state)[-1])
 
 
 def test_roles_other_than_the_implicit_ones_stay_explicit() -> None:
@@ -330,11 +362,35 @@ def test_a_span_reads_the_answer_its_roles_name() -> None:
     finally:
         REQUEST_ROLES.reset(token)
     assert spans.default_target(["request", "answer"]) == "answer"
+    assert spans.default_target(["Response", "user"]) == "Response"
     token = REQUEST_ROLES.set(None)
     try:
         assert spans.parts_of({"a": "x", "b": "y"}) == [
             ("user", '{"a": "x", "b": "y"}')
         ]
+    finally:
+        REQUEST_ROLES.reset(token)
+
+
+def test_a_span_without_an_answer_reads_the_user_part_never_the_last_by_position() -> (
+    None
+):
+    # The contract's default: the answer part, else the user part, else the only part, whatever the key order.
+    assert spans.default_target(["user", "channel"]) == "user"
+    assert spans.default_target(["notes", "Request", "channel"]) == "Request"
+    assert spans.default_target(["notes"]) == "notes"
+    token = REQUEST_ROLES.set({"message": "user", "channel": "context"})
+    try:
+        assert spans.default_target(["message", "channel"]) == "message"
+    finally:
+        REQUEST_ROLES.reset(token)
+    # Several parts with neither: no part is picked for the question.
+    with pytest.raises(QuestionError, match="name the part with over"):
+        spans.default_target(["notes", "channel"])
+    token = REQUEST_ROLES.set({"a": "context", "b": "context"})
+    try:
+        with pytest.raises(QuestionError, match=r"one of \['a', 'b'\]"):
+            spans.default_target(["a", "b"])
     finally:
         REQUEST_ROLES.reset(token)
 

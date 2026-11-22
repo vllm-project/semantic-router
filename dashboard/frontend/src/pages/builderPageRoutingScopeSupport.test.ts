@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import { validateTree } from '@/components/ExpressionBuilderSupport'
 import { updateSignal } from '@/lib/dslMutations'
 import type { ASTProgram } from '@/types/dsl'
 import {
@@ -217,10 +216,7 @@ describe('listReferenceableSignals', () => {
     ])
 
     expect(available).toEqual([{ signalType: 'authz', name: 'admin' }])
-    expect(validateTree({ signalType: 'authz', signalName: 'admin' }, available)).toEqual([])
-    expect(validateTree({ signalType: 'authz', signalName: 'admins' }, available)).toEqual([
-      'Signal authz("admins") is not defined',
-    ])
+    expect(available.some((signal) => signal.name === 'admins')).toBe(false)
   })
 
   it('expands complexity levels and projection outputs', () => {

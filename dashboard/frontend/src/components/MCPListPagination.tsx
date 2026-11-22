@@ -1,4 +1,6 @@
-import styles from './MCPConfigPanel.module.css'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
+
+import { Button } from '../ui'
 import { getMCPPageCount, getMCPVisibleRange } from './mcpConfigPanelUtils'
 
 interface MCPListPaginationProps {
@@ -21,51 +23,62 @@ export function MCPListPagination({
   const range = getMCPVisibleRange(itemCount, safePage, pageSize)
 
   return (
-    <nav className={styles.pagination} aria-label={`${itemLabel} pagination`}>
-      <span className={styles.pageRange} aria-live="polite">
-        {range.start}–{range.end} of {itemCount} {itemLabel}
+    <nav
+      className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"
+      aria-label={`${itemLabel} pagination`}
+    >
+      <span aria-live="polite">
+        <span className="tabular">
+          {range.start}–{range.end}
+        </span>{' '}
+        of <span className="tabular">{itemCount}</span> {itemLabel}
+        {pageCount > 1 ? (
+          <span className="ml-2 text-subtle-foreground">· {pageSize} per page</span>
+        ) : null}
       </span>
-      <div className={styles.pageControls}>
-        <button
-          type="button"
-          className={styles.pageBtn}
-          onClick={() => onPageChange(1)}
-          disabled={safePage === 1}
-          aria-label={`First ${itemLabel} page`}
-        >
-          «
-        </button>
-        <button
-          type="button"
-          className={styles.pageBtn}
-          onClick={() => onPageChange(safePage - 1)}
-          disabled={safePage === 1}
-          aria-label={`Previous ${itemLabel} page`}
-        >
-          ‹
-        </button>
-        <span className={styles.pageInfo}>
-          Page {safePage} of {pageCount}
+      {pageCount > 1 ? (
+        <span className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => onPageChange(1)}
+            disabled={safePage === 1}
+            aria-label={`First ${itemLabel} page`}
+          >
+            <ChevronsLeft />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => onPageChange(safePage - 1)}
+            disabled={safePage === 1}
+            aria-label={`Previous ${itemLabel} page`}
+          >
+            <ChevronLeft />
+          </Button>
+          <span className="px-1 tabular">
+            Page {safePage} of {pageCount}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => onPageChange(safePage + 1)}
+            disabled={safePage === pageCount}
+            aria-label={`Next ${itemLabel} page`}
+          >
+            <ChevronRight />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => onPageChange(pageCount)}
+            disabled={safePage === pageCount}
+            aria-label={`Last ${itemLabel} page`}
+          >
+            <ChevronsRight />
+          </Button>
         </span>
-        <button
-          type="button"
-          className={styles.pageBtn}
-          onClick={() => onPageChange(safePage + 1)}
-          disabled={safePage === pageCount}
-          aria-label={`Next ${itemLabel} page`}
-        >
-          ›
-        </button>
-        <button
-          type="button"
-          className={styles.pageBtn}
-          onClick={() => onPageChange(pageCount)}
-          disabled={safePage === pageCount}
-          aria-label={`Last ${itemLabel} page`}
-        >
-          »
-        </button>
-      </div>
+      ) : null}
     </nav>
   )
 }

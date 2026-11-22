@@ -21,8 +21,7 @@ func TestAnthropicTextCitationsNullability(t *testing.T) {
 		{"null", `,"citations":null`, true},
 		{"whitespace_null", ",\"citations\": \n null \t", true},
 		{"string_null", `,"citations":"null"`, false},
-		{"empty_array", `,"citations":[]`, false},
-		{"citation_array", `,"citations":[{"type":"char_location"}]`, false},
+		{"empty_array", `,"citations":[]`, true},
 		{"object", `,"citations":{}`, false},
 	} {
 		body := json.RawMessage(`{"type":"text","text":"hello"` + tc.field + `}`)
@@ -39,10 +38,21 @@ func TestAnthropicTextCitationsNullability(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if content.Text != "hello" || len(content.Citations) != 0 {
+				if content.Text != "hello" || len(content.Citations) != 0 || content.Raw != nil {
 					t.Fatalf("text without citations changed: %+v", content)
 				}
 			})
+		}
+	}
+	// A server tool's citations travel with their text as written.
+	body := json.RawMessage(`{"type":"text","text":"hello","citations":[{"type":"web_search_result_location","url":"https://go.dev"}]}`)
+	for name, decode := range map[string]anthropicContentBlockDecoder{
+		"request":  decodeAnthropicRequestContentBlock,
+		"response": decodeAnthropicResponseContentBlock,
+	} {
+		content, err := decode(body, llmprotocol.DefaultPolicy())
+		if err != nil || content.Text != "hello" || string(content.Raw) != `[{"type":"web_search_result_location","url":"https://go.dev"}]` {
+			t.Fatalf("%s: cited text decoded as %+v, %v", name, content, err)
 		}
 	}
 }
@@ -331,7 +341,7 @@ func pushResponsesCitationPrefix(t *testing.T, stream *StreamEngine) {
 		{
 			Type: "response.created", Sequence: 0,
 			Response: func() *responsesResponseWire {
-				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, "")
+				response := newResponsesResponseWire("response_1", "source-model", "in_progress", 1, llmprotocol.ResponseRenderContext{})
 				return &response
 			}(),
 		},

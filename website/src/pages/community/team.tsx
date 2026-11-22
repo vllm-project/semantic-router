@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Layout from '@theme/Layout'
+import Translate, { translate } from '@docusaurus/Translate'
 import React from 'react'
 import CommunityLayout from '@site/src/components/community/CommunityLayout'
 import CommunityMemberCard from '@site/src/components/community/CommunityMemberCard'
@@ -15,50 +16,66 @@ import styles from './team.module.css'
 export default function Team(): ReactNode {
   return (
     <Layout
-      title="Project Team"
-      description="Maintainers, committers, and emeritus committers of vLLM Semantic Router"
+      title={translate({ id: 'community.team.pageTitle', message: 'Project Team' })}
+      description={translate({
+        id: 'community.team.pageDescription',
+        message: 'Maintainers, committers, and emeritus committers of vLLM Semantic Router',
+      })}
     >
       <CommunityLayout
         activeKey="team"
-        title="Project Team"
-        description="The people responsible for the health, quality, and continuity of vLLM Semantic Router."
+        title={<Translate id="community.team.title">Project Team</Translate>}
+        description={(
+          <Translate id="community.team.description">
+            The people responsible for the health, quality, and continuity of vLLM Semantic Router.
+          </Translate>
+        )}
       >
         <div className={styles.roster}>
           <RosterSection
             index="01"
-            title="Maintainers"
-            description="Project-wide owners who set engineering direction, approve releases, resolve technical escalations, and steward repository access."
+            title={<Translate id="community.team.maintainers.title">Maintainers</Translate>}
+            description={(
+              <Translate id="community.team.maintainers.description">
+                Project-wide owners who set engineering direction, approve releases, resolve technical escalations, and steward repository access.
+              </Translate>
+            )}
             members={maintainerMembers}
             variant="featured"
           />
 
           <RosterSection
             index="02"
-            title="Committers"
-            description="Active trusted contributors who review changes, own implementation areas, triage issues, and keep the project moving."
+            title={<Translate id="community.team.committers.title">Committers</Translate>}
+            description={(
+              <Translate id="community.team.committers.description">
+                Active trusted contributors who review changes, own implementation areas, triage issues, and keep the project moving.
+              </Translate>
+            )}
             members={committerMembers}
           />
 
           <RosterSection
             index="03"
-            title="Emeritus Committers"
+            title={<Translate id="community.team.emeritus.title">Emeritus Committers</Translate>}
             description={(
-              <>
-                Former active committers recognized for their contributions.
-                This roster is refreshed from GitHub activity over the rolling
-                three-month window from
-                {' '}
-                <time dateTime={committerActivityWindow.cutoffDate}>
-                  {committerActivityWindow.cutoffDate}
-                </time>
-                {' '}
-                to
-                {' '}
-                <time dateTime={committerActivityWindow.generatedAt}>
-                  {committerActivityWindow.generatedAt}
-                </time>
-                .
-              </>
+              <Translate
+                id="community.team.emeritus.description"
+                values={{
+                  fromDate: (
+                    <time dateTime={committerActivityWindow.cutoffDate}>
+                      {committerActivityWindow.cutoffDate}
+                    </time>
+                  ),
+                  toDate: (
+                    <time dateTime={committerActivityWindow.generatedAt}>
+                      {committerActivityWindow.generatedAt}
+                    </time>
+                  ),
+                }}
+              >
+                {'Former active committers recognized for their contributions. This roster is refreshed from GitHub activity over the rolling three-month window from {fromDate} to {toDate}.'}
+              </Translate>
             )}
             members={emeritusCommitterMembers}
             variant="muted"
@@ -77,7 +94,7 @@ function RosterSection({
   variant = 'default',
 }: {
   index: string
-  title: string
+  title: ReactNode
   description: ReactNode
   members: TeamMember[]
   variant?: 'default' | 'featured' | 'muted'

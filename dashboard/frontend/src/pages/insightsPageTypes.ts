@@ -100,16 +100,46 @@ export interface ProjectionTrace {
   mappings?: ProjectionTraceMapping[]
 }
 
+/**
+ * The agent of its run that sent a request (routerreplay/store/agent.go). An
+ * absent id is the run's main agent and a present one a subagent; redaction
+ * keeps an id or parent_id as an empty string. kind is the subagent kind Codex
+ * names, such as collab_spawn or review.
+ */
+export interface InsightsAgentIdentity {
+  harness?: string
+  id?: string
+  parent_id?: string
+  kind?: string
+  /** The subagent type the harness names, such as Claude Code's Explore. */
+  type?: string
+  /** The request class the agent signal reads: main, subagent, workflow, compaction or auxiliary. */
+  request_class?: string
+}
+
 export interface InsightsRecord {
   provider_cache?: ProviderCacheAccounting
   conversation_id?: string
   id: string
   timestamp: string
   request_id?: string
-  /** codex_approval_review for an agent approval review; absent otherwise. */
+  /**
+   * codex_approval_review for an agent approval review, session_title for the
+   * call a harness makes to title its session; absent otherwise.
+   */
   request_kind?: string
   review?: InsightsReview
   session_id?: string
+  /** The name the harness gave the session, on the call that named it. */
+  session_name?: string
+  agent?: InsightsAgentIdentity | null
+  /** The client request a Looper hop was made for. */
+  parent_request_id?: string
+  previous_response_id?: string
+  reasoning_effort?: string
+  prompt?: string
+  prompt_truncated?: boolean
+  cached_prompt_tokens?: number
   /**
    * The Codex thread and turn that sent the request. parent_turn_id is the
    * turn that started the thread, such as the turn a review judges or a
@@ -125,6 +155,12 @@ export interface InsightsRecord {
   decision_priority: number
   category?: string
   original_model?: string
+  /** A client's own model name that its listener routed to original_model. */
+  requested_model?: string
+  /** Image parts in the request's newest turn, after its last assistant message. */
+  image_count?: number
+  /** Image parts in the earlier messages of the request. */
+  history_image_count?: number
   selected_model?: string
   reasoning_mode?: string
   confidence_score?: number | null
@@ -292,6 +328,8 @@ export interface InsightsListResponse {
   offset?: number
   has_more?: boolean
   next_offset?: number
+  /** Records by harness under every filter but harness: a harness id, or api_client for none. */
+  harness_counts?: Record<string, number> | null
   data: InsightsRecord[]
 }
 
@@ -435,4 +473,25 @@ export interface InsightsAggregateResponse {
   available_models: string[]
   reviews?: InsightsReviewAggregate
   available_review_models?: string[]
+  /** Present when the aggregate was asked for an interval along with since. */
+  traffic?: InsightsTrafficSeries
+}
+
+/** The aggregate's records in contiguous intervals from since to the query, oldest first. */
+export interface InsightsTrafficSeries {
+  since: string
+  interval_seconds: number
+  latency_p50_ms?: number
+  latency_p95_ms?: number
+  buckets: InsightsTrafficBucket[]
+}
+
+export interface InsightsTrafficBucket {
+  start: string
+  requests: number
+  cached: number
+  failed: number
+  latency_p50_ms?: number
+  latency_p95_ms?: number
+  cost: InsightsAggregateCurrencySummary[]
 }

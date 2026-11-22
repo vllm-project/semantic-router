@@ -4,7 +4,9 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
+	"testing/iotest"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/stretchr/testify/require"
@@ -15,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/parity"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 // chatChunk is one Chat Completions stream event of the upstream answer.
@@ -194,6 +197,22 @@ func TestHeldStreamReplayKeepsWhatTheClientGot(t *testing.T) {
 	}
 }
 
+// A held Responses stream whose backend answered one body the Router cannot
+// read gets the 502 a buffered client gets, since nothing reached the client.
+func TestHeldStreamUnreadableBodyReplay(t *testing.T) {
+	router, ctx := guardedStreamingRouter(t, 0.01, config.ResponseGuardBlock, llmprotocol.OpenAIResponsesV1)
+	startResponseStageReplay(t, router, ctx)
+	streamingClient(ctx, llmprotocol.OpenAIResponsesV1)
+
+	answerHeaders(t, router, ctx, "application/json")
+	require.NotNil(t, ctx.ResponseGuardHold, "the guard does not hold the stream")
+	client, _ := answerBody(t, router, ctx, [][]byte{[]byte("this is not json")})
+	require.NoError(t, router.handleProcessReceiveError(ctx, io.EOF))
+
+	require.Contains(t, client, "The selected model returned an invalid response")
+	requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "upstream_invalid_response", http.StatusBadGateway)
+}
+
 // A Looper hop's stream ends its record as the main stream does: complete
 // when it reached its terminal event, though the Router could not rebuild
 // its answer, and failed when it carried the upstream's error event.
@@ -264,4 +283,73 @@ func TestRoutedProcessingErrorReplayFails(t *testing.T) {
 			require.Equal(t, "general-small", records[0].SelectedModel)
 		})
 	}
+}
+
+// A buffered upstream body that ends before its declared length reaches the
+// standalone client as the 502 of an answer the Router cannot read, and one a
+// timeout stopped as the 504 Envoy gives it, with the replay id, and the
+// record is that failure. Behind Envoy the processor never sees the cut: Envoy
+// answers it with its own local reply, and the record ends as an abort when
+// the stream is reset.
+func TestCutUpstreamBodyReplay(t *testing.T) {
+	_, cfg := loadParityCorpus(t)
+	request := parity.Case{Name: "cut-body", Request: parity.CaseRequest{
+		Method: http.MethodPost, Path: "/v1/chat/completions",
+		Headers: [][]string{{"content-type", "application/json"}},
+		Body:    `{"model":"general-small","messages":[{"role":"user","content":"Hello."}]}`,
+	}}
+	cut := func(err error) *routing.UpstreamResponse {
+		return &routing.UpstreamResponse{
+			Status: http.StatusOK, Header: routing.Header{{Name: "content-type", Value: "application/json"}},
+			Body: io.MultiReader(strings.NewReader(`{"id":"x","object":"chat.completion","choices":[{"index":0,"message":{"role":"assi`),
+				iotest.ErrReader(err)),
+		}
+	}
+	for name, tc := range map[string]struct {
+		err     error
+		status  int
+		reason  string
+		message string
+	}{
+		"closed early": {io.ErrUnexpectedEOF, http.StatusBadGateway, "upstream_invalid_response", "returned an invalid response"},
+		"timed out": {
+			&upstream.Error{Kind: upstream.KindTimeout, Err: context.DeadlineExceeded},
+			http.StatusGatewayTimeout, "upstream_timeout", "did not answer in time",
+		},
+	} {
+		t.Run("routing session, "+name, func(t *testing.T) {
+			router := newParityRouter(t, cfg)
+			engine := routing.NewEngine(router, routing.DefaultOptions)
+			plan, err := engine.Plan(context.Background(), request.GatewayRequest())
+			require.NoError(t, err)
+
+			response, err := engine.Respond(context.Background(), plan, cut(tc.err))
+			require.NoError(t, err)
+			plan.Finish(nil)
+
+			require.Equal(t, tc.status, response.Status)
+			require.Contains(t, string(response.Body), tc.message)
+			records := router.ReplayRecorder.ListAllRecords()
+			require.Len(t, records, 1)
+			require.Equal(t, records[0].ID, response.Header.Get("x-vsr-replay-id"))
+			require.Equal(t, routerreplay.LifecycleFailed, records[0].LifecycleState)
+			require.Equal(t, tc.reason, records[0].TerminalReason)
+			require.Equal(t, tc.status, records[0].ResponseStatus)
+		})
+	}
+	t.Run("ext_proc stream", func(t *testing.T) {
+		router := newParityRouter(t, cfg)
+		engine := routing.NewEngine(&extprocStreamProcessor{router: router}, routing.DefaultOptions)
+		plan, err := engine.Plan(context.Background(), request.GatewayRequest())
+		require.NoError(t, err)
+
+		_, err = engine.Respond(context.Background(), plan, cut(io.ErrUnexpectedEOF))
+		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+		plan.Finish(err)
+
+		records := router.ReplayRecorder.ListAllRecords()
+		require.Len(t, records, 1)
+		require.Equal(t, routerreplay.LifecycleAborted, records[0].LifecycleState)
+		require.Equal(t, http.StatusOK, records[0].ResponseStatus)
+	})
 }

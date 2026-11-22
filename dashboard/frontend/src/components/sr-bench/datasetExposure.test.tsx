@@ -1,13 +1,28 @@
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import DatasetDetails from './DatasetDetails'
 import DatasetExposure from './DatasetExposure'
-import DatasetInventory from './DatasetInventory'
-import RunDetails from './RunDetails'
-import { useRunEvidence } from './useRunEvidence'
+import DatasetsView from './DatasetsView'
+import { TooltipProvider } from '../../ui'
+import RunResults from './RunResults'
 import type { Dataset, DatasetDetail, DatasetPreparation, Report, Run } from './types'
 
-vi.mock('./useRunEvidence', () => ({ useRunEvidence: vi.fn() }))
+vi.mock('../../ui/patterns/detail-sheet', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../ui/patterns/detail-sheet')>()
+  const Passthrough = ({ children }: { children?: ReactNode }) => <div>{children}</div>
+  return {
+    ...actual,
+    DetailSheetHeader: ({ title, description }: { title: ReactNode; description?: ReactNode }) => (
+      <header>
+        <h2>{title}</h2>
+        {description}
+      </header>
+    ),
+    DetailSheetBody: Passthrough,
+    DetailSheetFooter: Passthrough,
+  }
+})
 
 const mixed: DatasetPreparation = {
   scicode: {
@@ -40,7 +55,24 @@ function dataset(preparation?: DatasetPreparation): Dataset {
 
 function inventory(value: Dataset): string {
   return renderToStaticMarkup(
-    <DatasetInventory datasets={[value]} runs={[]} canRun={false} onUse={() => {}} />,
+    <TooltipProvider>
+      <DatasetsView
+        datasets={[value]}
+        loaded
+        runs={[]}
+        runsLoaded={false}
+        catalog={null}
+        canRun={false}
+        writeDisabledReason={null}
+        accessRefreshing={false}
+        onRefreshAccess={() => {}}
+        onSelectDataset={() => {}}
+        prepareOpen={false}
+        onPrepareOpen={() => {}}
+        onUse={() => {}}
+        onInventoryChanged={() => {}}
+      />
+    </TooltipProvider>,
   )
 }
 
@@ -82,37 +114,8 @@ function runDetails(preparation?: DatasetPreparation, reportPreparation?: Datase
     limitations: ['General scoring limitation.', 'Later unstructured limitation.'],
     provenance: { dataset: dataset(reportPreparation) },
   }
-  const page = { total: 0, nextCursor: null, loading: false, error: '' }
-  vi.mocked(useRunEvidence).mockReturnValue({
-    run,
-    report,
-    reportRead: { loading: false, error: '' },
-    readAt: null,
-    results: [],
-    events: [],
-    calls: [],
-    resultsPage: page,
-    eventsPage: page,
-    callsPage: page,
-    loadMoreResults: async () => {},
-    loadMoreEvents: async () => {},
-    loadMoreCalls: async () => {},
-    error: '',
-  })
-  const html = renderToStaticMarkup(
-    <RunDetails
-      id={run.id}
-      actorID="synthetic-viewer"
-      canRun={false}
-      onSectionChange={() => {}}
-      onChanged={() => {}}
-      onRecovered={() => {}}
-      onCandidate={() => {}}
-    />,
-  )
-  return html.slice(
-    html.indexOf('id="run-panel-results"'),
-    html.indexOf('id="run-panel-questions"'),
+  return renderToStaticMarkup(
+    <RunResults run={run} report={report} reportRead={{ loading: false, error: '' }} visible />,
   )
 }
 

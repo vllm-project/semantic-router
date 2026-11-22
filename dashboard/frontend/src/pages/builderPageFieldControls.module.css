@@ -1,0 +1,361 @@
+/* Field controls shared with the router settings edit dialogs. Design tokens only. */
+
+.toolbarBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2rem;
+  padding: 0 0.75rem;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+  white-space: nowrap;
+}
+
+.toolbarBtn:hover {
+  background: var(--accent);
+  border-color: var(--border-strong);
+}
+
+.toolbarBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.fieldDescription {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.booleanControl {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.25rem;
+  padding: 0.375rem 0.75rem;
+  color: var(--foreground);
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 150ms;
+}
+
+.booleanControl:hover {
+  border-color: var(--border-strong);
+}
+
+.fieldInput {
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 12.5px;
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+  font-family: var(--font-mono);
+}
+
+textarea.fieldInput {
+  height: auto;
+  padding: 0.5rem 0.75rem;
+}
+
+.fieldInput:hover {
+  border-color: var(--border-strong);
+}
+
+.fieldInput:focus {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent);
+}
+
+.customSelect {
+  position: relative;
+  width: 100%;
+}
+
+.customSelectTrigger,
+.customSelectTriggerOpen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  color: var(--foreground);
+  background: var(--surface);
+  border: 1px solid var(--input);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.customSelectTrigger:hover {
+  border-color: var(--border-strong);
+}
+
+.customSelectTriggerOpen {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent);
+}
+
+.customSelectChevron {
+  width: 12px;
+  height: 12px;
+  color: var(--subtle-foreground);
+  flex-shrink: 0;
+  transition: transform 150ms;
+}
+
+.customSelectChevronOpen {
+  transform: rotate(180deg);
+}
+
+.customSelectDropdown {
+  z-index: 60;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.customSelectOption,
+.customSelectOptionActive {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  color: var(--foreground);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+.customSelectOption:hover,
+.customSelectOptionActive:hover {
+  background: var(--accent);
+}
+
+.customSelectOptionActive {
+  color: var(--primary);
+}
+
+.customSelectCheck {
+  width: 14px;
+  height: 14px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.customSelectPlaceholder {
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.structuredFieldHeader,
+.structuredCardHeader,
+.ruleConditionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.structuredRequired {
+  color: var(--destructive-foreground);
+}
+
+.structuredDescription,
+.structuredEmpty {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.structuredSurface,
+.ruleNode {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.structuredList,
+.structuredCardBody,
+.ruleConditions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.structuredCard,
+.ruleCondition {
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.structuredCardHeader,
+.ruleConditionHeader {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.structuredCardHeader > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.structuredCardHeader h4 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.structuredIndex {
+  flex: 0 0 auto;
+  color: var(--subtle-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.structuredClearButton,
+.structuredRemoveButton,
+.structuredAddButton {
+  min-height: 1.75rem;
+  padding: 0 0.625rem;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition:
+    color 150ms,
+    background-color 150ms,
+    border-color 150ms;
+}
+
+.structuredClearButton,
+.structuredRemoveButton {
+  color: var(--destructive-foreground);
+}
+
+.structuredAddButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+  border-style: dashed;
+}
+
+.structuredClearButton:hover:not(:disabled),
+.structuredRemoveButton:hover:not(:disabled) {
+  background: var(--destructive-soft);
+}
+
+.structuredAddButton:hover:not(:disabled) {
+  color: var(--foreground);
+  background: var(--accent);
+  border-color: var(--border-strong);
+}
+
+.structuredClearButton:disabled,
+.structuredRemoveButton:disabled,
+.structuredAddButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.structuredClearButton:focus-visible,
+.structuredRemoveButton:focus-visible,
+.structuredAddButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 40%, transparent);
+}
+
+.structuredErrors {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  color: var(--destructive-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.structuredMiniLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ruleLeafGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .ruleLeafGrid {
+    grid-template-columns: 1fr;
+  }
+}
