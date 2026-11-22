@@ -6852,6 +6852,9 @@
         "tool_results": {
           "type": "boolean"
         },
+        "max_state_bytes": {
+          "type": "integer"
+        },
         "request": {
           "type": "boolean"
         },

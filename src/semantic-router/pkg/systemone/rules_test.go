@@ -38,7 +38,7 @@ func listedRules(t *testing.T, cfg *config.RouterConfig, listener *config.Listen
 	request := httptest.NewRequest(http.MethodGet, "/v1/systemone/models", nil)
 	request.Header.Set("Authorization", "Bearer secret")
 	response := httptest.NewRecorder()
-	Handler(cfg, listener, nil)(response, request)
+	Handler(cfg, listener, nil, ClientAuth{})(response, request)
 	var listed struct {
 		VSR struct {
 			Rules map[string]any `json:"rules"`
@@ -117,7 +117,7 @@ func TestTheRulesEndpointServesTheListenersRules(t *testing.T) {
 		grant.Schema = schema
 		listener.APIs["systemone"] = grant
 		evaluator := &fakeRules{}
-		handler := HandlerWithRules(cfg, listener, nil, evaluator)
+		handler := HandlerWithRules(cfg, listener, nil, evaluator, ClientAuth{})
 		response := askRules(handler, guard, "secret")
 		var answered struct {
 			Revision string           `json:"revision"`
@@ -134,7 +134,7 @@ func TestTheRulesEndpointServesTheListenersRules(t *testing.T) {
 
 	cfg, listener := rulesConfig(`prod-db\.internal`, "required")
 	evaluator := &fakeRules{}
-	handler := HandlerWithRules(cfg, listener, nil, evaluator)
+	handler := HandlerWithRules(cfg, listener, nil, evaluator, ClientAuth{})
 	many := make([]string, maxRuleParts+1)
 	for i := range many {
 		many[i] = fmt.Sprintf(`{"id":"p%d","text":"x"}`, i)
@@ -147,7 +147,7 @@ func TestTheRulesEndpointServesTheListenersRules(t *testing.T) {
 	}{
 		{"no key", guard, "", handler, http.StatusUnauthorized, "invalid_api_key"},
 		{"wrong key", guard, "other", handler, http.StatusUnauthorized, "invalid_api_key"},
-		{"no evaluator", guard, "secret", Handler(cfg, listener, nil), http.StatusNotFound, "rules_not_published"},
+		{"no evaluator", guard, "secret", Handler(cfg, listener, nil, ClientAuth{}), http.StatusNotFound, "rules_not_published"},
 		{"an app that takes no rules", `{"app":"shield","parts":[{"id":"p","text":"x"}]}`, "secret", handler, http.StatusBadRequest, "invalid_request"},
 		{"no parts", `{"app":"guard","parts":[]}`, "secret", handler, http.StatusBadRequest, "invalid_request"},
 		{"repeated id", `{"app":"guard","parts":[{"id":"p","text":"a"},{"id":"p","text":"b"}]}`, "secret", handler, http.StatusBadRequest, "invalid_request"},
@@ -173,7 +173,7 @@ func TestTheRulesEndpointServesTheListenersRules(t *testing.T) {
 
 	unbound, listenerWithoutRedact := rulesConfig(`prod-db\.internal`, "")
 	listenerWithoutRedact.APIs["systemone"].VSR.Rules.Redact = nil
-	if response := askRules(HandlerWithRules(unbound, listenerWithoutRedact, nil, evaluator), `{"app":"redact","parts":[{"id":"p","text":"x"}]}`, "secret"); response.Code != http.StatusNotFound {
+	if response := askRules(HandlerWithRules(unbound, listenerWithoutRedact, nil, evaluator, ClientAuth{}), `{"app":"redact","parts":[{"id":"p","text":"x"}]}`, "secret"); response.Code != http.StatusNotFound {
 		t.Fatalf("redact with no rules: %d %s", response.Code, response.Body.String())
 	}
 
@@ -190,7 +190,7 @@ func TestTheRulesEndpointServesTheListenersRules(t *testing.T) {
 	}
 
 	// The evaluator's error names the request's text; the answer must not.
-	failing := HandlerWithRules(cfg, listener, nil, &fakeRules{err: errors.New("could not read psql --host=prod-db.internal")})
+	failing := HandlerWithRules(cfg, listener, nil, &fakeRules{err: errors.New("could not read psql --host=prod-db.internal")}, ClientAuth{})
 	if response := askRules(failing, guard, "secret"); response.Code != http.StatusServiceUnavailable || strings.Contains(response.Body.String(), "prod-db") {
 		t.Fatalf("an evaluator error answered %d %s", response.Code, response.Body.String())
 	}

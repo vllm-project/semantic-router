@@ -92,7 +92,7 @@ func TestChatPublicStreamFilterAddsNullUsageAndKeepsTheBackendsBytes(t *testing.
 	input := []byte(first + finish + usage + done)
 	want := string(withNullUsage([]byte(first))) + finish + usage + done
 	for _, size := range []int{len(input), 7, 1} {
-		filter := NewChatPublicStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, true)
+		filter := NewChatPublicStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, true, llmprotocol.DefaultPolicy().Limits.JSONDepth)
 		var output []byte
 		for offset := 0; offset < len(input); offset += size {
 			chunk, err := filter.Push(input[offset:min(offset+size, len(input))])
