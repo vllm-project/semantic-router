@@ -25,7 +25,27 @@ presentation:
   featured: true
 conformance:
   status: unverified
+# Existing models stay on default_base_url. qwen4-max calls should set the
+# backend endpoint to the caller's workspace host, including /compatible-mode/v1:
+#   Beijing  https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
+#   Singapore https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+#   Virginia https://{WorkspaceId}.us-east-1.maas.aliyuncs.com/compatible-mode/v1
+#   Hong Kong https://{WorkspaceId}.cn-hongkong.maas.aliyuncs.com/compatible-mode/v1
+#   Tokyo    https://{WorkspaceId}.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1
+# The API key must be created in that same region. Chat Completions inherits
+# this provider's top_level_effort transport: reasoning_effort is low, high,
+# or xhigh, and the declared default is high.
 models:
+- catalog: qwen/qwen4-max
+  relationship: first_party
+  id: qwen4-max
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope
 - catalog: qwen/qwen3.7-max
   relationship: first_party
   id: qwen3.7-max

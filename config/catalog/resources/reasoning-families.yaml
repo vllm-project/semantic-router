@@ -41,6 +41,15 @@
   default: xhigh
   modes: [enabled]
   default_mode: enabled
+# Chat Completions reasoning_effort. Model Studio maps minimal to low, medium
+# to high, and max to xhigh; those aliases are not selectable levels.
+- id: qwen4
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, high, xhigh]
+  default: high
+  modes: [enabled]
+  default_mode: enabled
 - id: glm
   type: chat_template_kwargs
   parameter: enable_thinking

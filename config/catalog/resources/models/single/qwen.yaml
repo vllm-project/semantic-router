@@ -1,3 +1,46 @@
+- id: qwen/qwen4-max
+  display_name: Qwen4 Max
+  description: Alibaba Cloud flagship Qwen model for multimodal reasoning, coding, and agentic work.
+  kind: physical
+  publisher: Alibaba / Qwen
+  presentation:
+    logo: package:qwen
+    monogram: Q
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://help.aliyun.com/en/model-studio/qwen4-max
+  family: qwen4
+  lifecycle: active
+  limits:
+    context_window_size: 1000000
+    max_output_tokens: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  reasoning_family: qwen4
+  verification:
+    authority: Alibaba Cloud
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://help.aliyun.com/en/model-studio/qwen4-max
+  tags:
+  - proprietary
+  - multimodal
+  - frontier
+  - agentic
+  released_at: '2026-11-16'
 - id: qwen/qwen3.8-max
   display_name: Qwen3.8 Max
   description: Alibaba Cloud current frontier Qwen model for multimodal reasoning and agents.

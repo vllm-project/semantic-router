@@ -34,6 +34,47 @@ recipes:
 
 在 **Models → Model Hub** 中浏览内置身份及其 Provider 支持，或在 **Models → Backend models → Connect model** 中选择 Provider。控制面板将目录选项标记为 **Built-in**，并同时保存本地别名和 canonical 身份。
 
+## Qwen4 Max
+
+`dashscope` 将 `qwen/qwen4-max` 映射到原生模型 ID `qwen4-max`，协议为 [Chat Completions](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope)。Provider 声明的传输在请求顶层发送 `reasoning_effort`。Model Studio 接受 `low`、`high` 和 `xhigh`，声明的默认值为 `high`。`minimal`、`medium` 和 `max` 是这些档位的提供方别名，不是目录中的独立档位。思考保持开启；该传输不发送 `enable_thinking`。
+
+Provider 的默认主机仍是 `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`，供已经映射到那里的模型使用。调用 Qwen4-Max 时，应将 `endpoint` 设为签发 API key 的地域所对应的工作空间主机。把 `{WorkspaceId}` 换成 Model Studio 控制台中的业务空间 ID：
+
+| 地域 | `endpoint` |
+| --- | --- |
+| 中国（北京） | `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+| 新加坡 | `https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` |
+| 美国（弗吉尼亚） | `https://{WorkspaceId}.us-east-1.maas.aliyuncs.com/compatible-mode/v1` |
+| 中国（香港） | `https://{WorkspaceId}.cn-hongkong.maas.aliyuncs.com/compatible-mode/v1` |
+| 日本（东京） | `https://{WorkspaceId}.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1` |
+
+```yaml
+version: v0.5
+providers:
+  models:
+    - name: qwen4
+      catalog: qwen/qwen4-max
+      backend_refs:
+        - name: primary
+          provider: dashscope
+          endpoint: https://ws-example.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+          auth: {api_key_env: DASHSCOPE_API_KEY}
+recipes:
+  - name: default
+    decisions:
+      - name: qwen4_xhigh
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: qwen4
+            use_reasoning: true
+            reasoning_effort: xhigh
+```
+
+该卡片使用已公布的 1,000,000 token 上下文窗口。思考模式接受 983,616 个输入 token 和 262,144 个输出 token，后者即卡片上的输出上限。五条导入的 [Artificial Analysis](https://artificialanalysis.ai/models/qwen4-max) 记录都是 `xhigh`：GDP.pdf All-pass、Terminal-Bench 4.0 pass@1、带 95% 区间的 AA-Briefcase v1.1 Elo、AA-Omniscience v1.1 的 Accuracy、Net Score 与 Hallucination Rate，以及覆盖全部 1,000 题的 HLE-Diamond pass@1。`low` 和 `high` 仍无测量。这些带版本的基准不替代 Intelligence 1.0，分数也不是 Router 本地复现的结果。
+
 ## MiniMax M3.1 Flash
 
 `minimax/minimax-m3.1-flash` 对应采用 MiniMax Community License 的[官方公开权重](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/tree/262ae6830934f3512211081b8a3f16425b93a239)。MiniMax API 与实验性的 vLLM 映射共用该模型卡，两条映射目前均声明支持 Chat Completions。
