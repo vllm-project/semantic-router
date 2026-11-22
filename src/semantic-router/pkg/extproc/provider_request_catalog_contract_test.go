@@ -407,6 +407,18 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			}},
 		},
 		{
+			name: "Reflection Beam max effort", catalog: "reflection/beam-1.0", provider: "reflection",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "max",
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning_effort": "max"},
+		},
+		{
+			name: "Reflection Beam low effort", catalog: "reflection/beam-1.0", provider: "reflection",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "low",
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning_effort": "low"},
+		},
+		{
 			name: "Novita top-level switch", catalog: "xiaomi/mimo-v2-flash", provider: "novita",
 			enabled: false, mode: config.ReasoningModeDisabled,
 			wantTransport: modelcatalog.ReasoningTransportTopLevelBoolean,

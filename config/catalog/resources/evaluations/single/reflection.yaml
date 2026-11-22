@@ -1,0 +1,115 @@
+- id: reflection/beam-1.0-model-card-deep-swe@1.0.0
+  model: reflection/beam-1.0
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: DeepSWE v1.1
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    effort_source: evaluation_guide_recommended_max
+  metrics:
+    resolved: 0.433
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
+- id: reflection/beam-1.0-model-card-swe-bench-pro@1.0.0
+  model: reflection/beam-1.0
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: SWE Bench Pro v1
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    effort_source: evaluation_guide_recommended_max
+  metrics:
+    resolved: 0.661
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
+- id: reflection/beam-1.0-model-card-terminal-bench-2-1@1.0.0
+  model: reflection/beam-1.0
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: Terminal Bench v2.1
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    effort_source: evaluation_guide_recommended_max
+  metrics:
+    resolved: 0.801
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
+- id: reflection/beam-1.0-model-card-swe-bench-verified@1.0.0
+  model: reflection/beam-1.0
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: SWEBench Verified
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    effort_source: evaluation_guide_recommended_max
+  metrics:
+    resolved: 0.816
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
+- id: reflection/beam-1.0-model-card-gpqa-diamond@1.0.0
+  model: reflection/beam-1.0
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: GPQA Diamond
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    effort_source: evaluation_guide_recommended_max
+  metrics:
+    accuracy: 0.906
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true

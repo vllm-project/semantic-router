@@ -145,7 +145,8 @@ a candidate is mainstream and which recent lines are representative remains a
 review decision rather than a mechanical release-date ranking.
 A creator may carry a reviewed `min_representatives` below the default when it
 has fewer current, separately selectable product lines and the alternative
-would be reviving a retired or deprecated product. Thinking Machines Lab holds
+would be reviving a retired or deprecated product, or when it has only ever
+published one separately selectable line. Thinking Machines Lab holds
 a two-representative exception. Writer holds a one-representative exception:
 its first-party catalog, reviewed on 2026-09-20, lists Palmyra X6 as the only
 line not on a deprecation path, since Palmyra X5 and Palmyra X4 are both
@@ -153,6 +154,11 @@ scheduled for deprecation on 2026-12-14 with migration to X6. The Palmyra X5
 card stays in the catalog with `lifecycle: deprecated` so its mapping and
 evidence remain visible until Writer removes the model, but it is not a
 representative.
+Reflection holds a one-representative exception: its Hugging Face inventory,
+reviewed on 2026-11-22, has one separately selectable model, Beam 1.0. Its FP8
+and NVFP4 repositories are numerics of the same model and its DFlash2
+repository is a speculative-decoding draft, so none of them is a card. Revisit
+the exception when Reflection ships a second model line.
 
 ## User configuration boundary
 

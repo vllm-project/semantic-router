@@ -114,6 +114,10 @@ inventory:
           - openai/gpt-6-astra
           - openai/gpt-5.6-sol
           - openai/gpt-5.5
+      - publisher: Reflection
+        min_representatives: 1
+        representative_models:
+          - reflection/beam-1.0
       - publisher: StepFun
         representative_models:
           - stepfun/step-3.7-flash
