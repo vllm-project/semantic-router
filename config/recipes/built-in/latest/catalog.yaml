@@ -2180,9 +2180,9 @@ providers:
     - openai/chat-completions@1
     pricing:
       currency: USD
-      prompt_per_1m: 0.417
-      cached_input_per_1m: 0.021
-      completion_per_1m: 1.2505
+      prompt_per_1m: 0.834
+      cached_input_per_1m: 0.042
+      completion_per_1m: 2.501
     lifecycle: experimental
     verification:
       status: claimed
@@ -2195,9 +2195,9 @@ providers:
     - openai/chat-completions@1
     pricing:
       currency: USD
-      prompt_per_1m: 0.035
-      cached_input_per_1m: 0.0015
-      completion_per_1m: 0.1405
+      prompt_per_1m: 0.07
+      cached_input_per_1m: 0.003
+      completion_per_1m: 0.281
     lifecycle: experimental
     verification:
       status: claimed
@@ -9273,7 +9273,7 @@ models:
     license: Tencent-Hy-License-1.0
   family: hy4
   parameter_size: 220B (12B active)
-  reasoning_family: hunyuan-hy4
+  reasoning_family: hunyuan
   lifecycle: active
   limits:
     context_window_size: 1048576
@@ -38047,7 +38047,7 @@ evaluations:
   model: tencent/hy4-flash
   benchmark: datacurve/deep-swe@1.1.0
   benchmark_profile: published-agent
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
@@ -38068,7 +38068,7 @@ evaluations:
   model: tencent/hy4-flash
   benchmark: harbor/terminal-bench@4.0.0
   benchmark_profile: published-agent
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
@@ -38091,7 +38091,7 @@ evaluations:
   model: tencent/hy4-flash
   benchmark: mercor/apex-agents@1.1.0
   benchmark_profile: published-loop-250-steps
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
@@ -38113,7 +38113,7 @@ evaluations:
   model: tencent/hy4-flash
   benchmark: zapier/automation-bench@1.0.6
   benchmark_profile: published-agent
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
@@ -38134,7 +38134,7 @@ evaluations:
   model: tencent/hy4-flash
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: with-tools
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest

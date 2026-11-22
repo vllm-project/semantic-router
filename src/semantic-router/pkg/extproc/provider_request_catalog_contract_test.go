@@ -431,10 +431,10 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": false}},
 		},
 		{
-			name: "OpenRouter Hy4 flash high effort reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",
-			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			name: "OpenRouter Hy4 flash toggle-only reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled,
 			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
-			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "high"}},
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": true}},
 		},
 		{
 			name: "OpenRouter Hy4 flash disabled reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",

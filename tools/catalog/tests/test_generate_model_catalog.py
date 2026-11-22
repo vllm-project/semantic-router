@@ -540,8 +540,10 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         self.assertEqual(
             buckets,
             {
-                (model_id, "high", "vendor_claimed"): published_benchmarks
-                for model_id in hy4_models
+                ("tencent/hy4", "high", "vendor_claimed"): published_benchmarks,
+                ("tencent/hy4-flash", "enabled", "vendor_claimed"): (
+                    published_benchmarks
+                ),
             },
         )
         apex_records = [
@@ -882,7 +884,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "xai/grok-4.7": "grok-4.6",
             "tencent/hy4-preview": "hunyuan-hy4",
             "tencent/hy4": "hunyuan-hy4",
-            "tencent/hy4-flash": "hunyuan-hy4",
+            "tencent/hy4-flash": "hunyuan",
             "moonshot/kimi-k3": "kimi-k3",
             "moonshot/kimi-k2.7-code": "kimi-k2-always-on",
             "minimax/minimax-m3": "minimax-m3",

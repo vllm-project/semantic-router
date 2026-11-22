@@ -101,7 +101,7 @@
     license: Tencent-Hy-License-1.0
   family: hy4
   parameter_size: 220B (12B active)
-  reasoning_family: hunyuan-hy4
+  reasoning_family: hunyuan
   lifecycle: active
   limits:
     context_window_size: 1048576

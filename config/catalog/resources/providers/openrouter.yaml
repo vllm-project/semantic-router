@@ -79,9 +79,9 @@ models:
   - openai/chat-completions@1
   pricing:
     currency: USD
-    prompt_per_1m: 0.417
-    cached_input_per_1m: 0.021
-    completion_per_1m: 1.2505
+    prompt_per_1m: 0.834
+    cached_input_per_1m: 0.042
+    completion_per_1m: 2.501
   lifecycle: experimental
   verification:
     status: claimed
@@ -94,9 +94,9 @@ models:
   - openai/chat-completions@1
   pricing:
     currency: USD
-    prompt_per_1m: 0.035
-    cached_input_per_1m: 0.0015
-    completion_per_1m: 0.1405
+    prompt_per_1m: 0.07
+    cached_input_per_1m: 0.003
+    completion_per_1m: 0.281
   lifecycle: experimental
   verification:
     status: claimed

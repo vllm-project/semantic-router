@@ -35206,7 +35206,7 @@ const builtInCatalogJSON = `{
       },
       "model": "tencent/hy4-flash",
       "observed_at": "2026-11-21",
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "reasoning_effort": "highest",
@@ -35232,7 +35232,7 @@ const builtInCatalogJSON = `{
       },
       "model": "tencent/hy4-flash",
       "observed_at": "2026-11-21",
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "max_turns": 500,
@@ -35260,7 +35260,7 @@ const builtInCatalogJSON = `{
       },
       "model": "tencent/hy4-flash",
       "observed_at": "2026-11-21",
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "benchmark_revision": "unspecified_by_source",
@@ -35287,7 +35287,7 @@ const builtInCatalogJSON = `{
       },
       "model": "tencent/hy4-flash",
       "observed_at": "2026-11-21",
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "harness": "official AutomationBench method",
@@ -35313,7 +35313,7 @@ const builtInCatalogJSON = `{
       },
       "model": "tencent/hy4-flash",
       "observed_at": "2026-11-21",
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "status": "available",
       "subject": {
         "hle_mode": "full_with_tools",
@@ -89086,7 +89086,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/general@1.0.0",
       "model": "tencent/hy4-flash",
       "provenance": [],
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -89121,7 +89121,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "tencent/hy4-flash",
       "provenance": [],
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -89156,7 +89156,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/coding@1.0.0",
       "model": "tencent/hy4-flash",
       "provenance": [],
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -89179,7 +89179,7 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/agentic@1.0.0",
       "model": "tencent/hy4-flash",
       "provenance": [],
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
       "score": null,
       "status": "missing"
     },
@@ -89218,7 +89218,162 @@ const builtInCatalogJSON = `{
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "tencent/hy4-flash",
       "provenance": [],
-      "reasoning_effort": "high",
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tencent/hy4-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tencent/hy4-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tencent/hy4-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tencent/hy4-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tencent/hy4-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
     },
@@ -106805,7 +106960,7 @@ const builtInCatalogJSON = `{
         "monogram": "Hy"
       },
       "publisher": "Tencent / Hunyuan",
-      "reasoning_family": "hunyuan-hy4",
+      "reasoning_family": "hunyuan",
       "released_at": "2026-11-16",
       "tags": [
         "open_weights",
@@ -111390,10 +111545,10 @@ const builtInCatalogJSON = `{
           "id": "tencent/hy4",
           "lifecycle": "experimental",
           "pricing": {
-            "cached_input_per_1m": 0.021,
-            "completion_per_1m": 1.2505,
+            "cached_input_per_1m": 0.042,
+            "completion_per_1m": 2.501,
             "currency": "USD",
-            "prompt_per_1m": 0.417
+            "prompt_per_1m": 0.834
           },
           "protocols": [
             "openai/chat-completions@1"
@@ -111410,10 +111565,10 @@ const builtInCatalogJSON = `{
           "id": "tencent/hy4-flash",
           "lifecycle": "experimental",
           "pricing": {
-            "cached_input_per_1m": 0.0015,
-            "completion_per_1m": 0.1405,
+            "cached_input_per_1m": 0.003,
+            "completion_per_1m": 0.281,
             "currency": "USD",
-            "prompt_per_1m": 0.035
+            "prompt_per_1m": 0.07
           },
           "protocols": [
             "openai/chat-completions@1"

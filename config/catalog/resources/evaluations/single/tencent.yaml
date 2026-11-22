@@ -287,7 +287,7 @@
   model: tencent/hy4-flash
   benchmark: datacurve/deep-swe@1.1.0
   benchmark_profile: published-agent
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
@@ -308,7 +308,7 @@
   model: tencent/hy4-flash
   benchmark: harbor/terminal-bench@4.0.0
   benchmark_profile: published-agent
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
@@ -331,7 +331,7 @@
   model: tencent/hy4-flash
   benchmark: mercor/apex-agents@1.1.0
   benchmark_profile: published-loop-250-steps
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
@@ -353,7 +353,7 @@
   model: tencent/hy4-flash
   benchmark: zapier/automation-bench@1.0.6
   benchmark_profile: published-agent
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
@@ -374,7 +374,7 @@
   model: tencent/hy4-flash
   benchmark: cais/humanitys-last-exam@1.0.0
   benchmark_profile: with-tools
-  reasoning_effort: high
+  reasoning_effort: enabled
   subject:
     variant: Hy4 flash
     reasoning_effort: highest
