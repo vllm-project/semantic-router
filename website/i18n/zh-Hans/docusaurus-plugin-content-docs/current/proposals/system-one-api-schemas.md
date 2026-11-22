@@ -186,4 +186,4 @@ type Deviation interface {
 - **5.0 会破坏依赖隐式角色、第二种写法或 `/v1/systemone` 上 `states` 的外部客户端；** 4.0 listener 让它们继续工作。
 - **批量拆分会增加上游调用；** `max_concurrency` 和截止时间对其加以限制。
 - **后续：** 运行时仍要求 choice 和 score 至少两个选项，noul 需要 instructions 或带描述的 criteria，而标准允许一个选项和裸 noul。
-- **后续：** `vllm-sr/auto` 按能力路由 `box` 和 `set` 问题；`span` 和 `track` 的答案因模型家族而异（`spans`），auto 会在后续改动中校验并路由它们。
+- **后续：** `vllm-sr/auto` 按能力路由 `box` 问题；`set`、`span` 和 `track` 的答案因模型家族而异（`sets`、`spans`），auto 会在后续改动中校验并路由它们。

@@ -109,7 +109,7 @@ Escalate 执行会创建一个 `looper.execute` trace span，并为每次分派�
 
 - Kai 回答原始请求，escalate 先检查这个回答，再决定是否调用 Vega。
 - 不需要单独的、强制的 Kai 分类调用，配方也不会在第一个回答之后重新运行。
-- 它支持 `choice`、`score`、`noul`、`box` 和 `set` 请求，并保持原始问题包完整。只有当阶段的模型能回答请求所需的一切时，该阶段才会运行；参见[按模型能回答的内容路由](#route-by-what-each-model-answers)。
+- 它支持 `choice`、`score`、`noul` 和 `box` 请求，并保持原始问题包完整。只有当阶段的模型能回答请求所需的一切时，该阶段才会运行；参见[按模型能回答的内容路由](#route-by-what-each-model-answers)。
 
 #### 连接模型 {#connect-the-models}
 
@@ -324,11 +324,7 @@ global:
           modalities: [text, image]
 ```
 
-`box` 答案的框位于图像之内时才算完整。接受规则可以用 `{question_type: box, field: confidence, gte: ...}` 对它把关。经过校准的策略永远不会接受它，因为校准只覆盖 `choice`、`score` 和 `noul`。
-
-auto 要求 `set` 问题在 `criteria` 中列出它的标签。当 `sets` 为每个标签给出概率、只选中这些标签，并且与各标签自己的 `<question>.<label>` 答案一致时，`set` 答案才算完整。一个标签都不选也是完整的答案。接受规则可以用 `{question_type: set, field: probability_margin, gte: ...}` 对它把关。经过校准的策略同样永远不会接受它。
-
-auto 目前还不路由 `span` 或 `track` 问题：它们的答案因模型家族而异，因此带这类问题的请求会以 `400` 被拒绝。
+`box` 答案的框位于图像之内时才算完整。接受规则可以用 `{question_type: box, field: confidence, gte: ...}` 对它把关。经过校准的策略永远不会接受它，因为校准只覆盖 `choice`、`score` 和 `noul`。auto 目前还不路由 `set`、`span` 或 `track` 问题：它们的答案因模型家族而异，因此带这类问题的请求会以 `400` 被拒绝。
 
 #### 添加路由信号 {#add-routing-signals}
 
@@ -356,7 +352,7 @@ auto 目前还不路由 `span` 或 `track` 问题：它们的答案因模型家�
 | --- | --- |
 | `top_probability` | 原生回答分布中的最大概率；对 `noul` 为 `max(p, 1-p)` |
 | `confidence` | 原生模型报告的置信度（如果有）：System One 为 Choice 和 Score 发布的统计量（见 [Decisions](https://vllm-sr.ai/docs/model-runtime/reference/http-api#decisions)）；自运行时约定 3.2.0 起其取值与早期版本不同，请重新检查阈值 |
-| `probability_margin` | 对 `noul` 为 `2 × abs(p - 0.5)`；自信的真和自信的假回答都有较大的间隔。对 `set` 为其各标签中最小的这一间隔 |
+| `probability_margin` | 对 `noul` 为 `2 × abs(p - 0.5)`；自信的真和自信的假回答都有较大的间隔 |
 
 - **边界。** 规则用 `gt`、`gte`、`lt` 或 `lte` 限定它的字段，取值在 `[0, 1]` 内。
 - **目标。** 规则可以针对 `question_type`、具名的 `question` 或两者，还可以针对具名的 `state`。每个必需的回答都需要规则覆盖。
