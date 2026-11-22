@@ -15,6 +15,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("protocol-codec-defer-loading-per-entrypoint", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "One gateway accepts Claude Code's deferred tools on its entrypoint and refuses them on an entrypoint that accepts no loss",
 		Tags:        []string{"protocol-codec", "anthropic", "agents"},
 		Fn:          testProtocolCodecDeferLoadingPerEntrypoint,
