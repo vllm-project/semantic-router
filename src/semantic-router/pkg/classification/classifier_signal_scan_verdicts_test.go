@@ -55,11 +55,18 @@ func TestAGrowingConversationRereadsTextThatBecameHistory(t *testing.T) {
 	evaluateTurnAfter(classifier, nil, first)
 	read := len(guardStates(fake))
 
-	results := evaluateTurnAfter(classifier, []string{first}, "And the minutes of the week after?")
+	second := "And the minutes of the week after?"
+	results := evaluateTurnAfter(classifier, []string{first}, second)
 	again := len(guardStates(fake)) - read
 	if again < read || guarded(results) || results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull {
 		t.Fatalf("the second turn read %d windows (the first read %d), guarded %t, coverage %v",
 			again, read, guarded(results), results.ScanCoverage)
+	}
+
+	results = evaluateTurnAfter(classifier, []string{first, second}, "Include the totals for the month.")
+	fresh := len(guardStates(fake)) - read - again
+	if fresh == 0 || fresh > 2 || guarded(results) || results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull {
+		t.Fatalf("the third turn read %d fresh windows, guarded %t, coverage %v", fresh, guarded(results), results.ScanCoverage)
 	}
 }
 
