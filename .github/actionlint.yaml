@@ -8,3 +8,7 @@ paths:
     ignore:
       # The assignment command queue also uses the GitHub queue: max option.
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/manual-ci.yml:
+    ignore:
+      # The rerun job shares the qualification publisher's queue.
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
