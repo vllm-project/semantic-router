@@ -69,12 +69,22 @@ func adminAuditLogsHandler(svc *Service) http.HandlerFunc {
 			return
 		}
 
-		respondJSON(w, AuditLogPageResponse{
+		response := AuditLogPageResponse{
 			Logs:  logs,
 			Total: total,
 			Page:  page,
 			Limit: options.Limit,
-		})
+		}
+		if r.URL.Query().Get("facets") == "1" {
+			facets, err := svc.store.AuditLogFacets(r.Context())
+			if err != nil {
+				log.Printf("failed to summarize audit logs: %v", err)
+				http.Error(w, "failed to query audit logs", http.StatusInternalServerError)
+				return
+			}
+			response.Facets = &facets
+		}
+		respondJSON(w, response)
 	}
 }
 

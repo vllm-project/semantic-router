@@ -524,8 +524,13 @@ func toolStreamFixture(format llmprotocol.WireFormat) []byte {
 
 func assertStreamToolCall(t *testing.T, events []llmprotocol.Event) {
 	t.Helper()
+	assertStreamToolCallID(t, events, "call_1")
+}
+
+func assertStreamToolCallID(t *testing.T, events []llmprotocol.Event, id string) {
+	t.Helper()
 	completed, terminal := collectStreamToolCall(t, events)
-	if completed == nil || completed.ID != "call_1" || completed.Name != "lookup" || completed.Arguments != `{"protocol":"source"}` {
+	if completed == nil || completed.ID != id || completed.Name != "lookup" || completed.Arguments != `{"protocol":"source"}` {
 		t.Fatalf("completed tool call = %+v", completed)
 	}
 	if terminal != 1 {

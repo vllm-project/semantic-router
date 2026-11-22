@@ -60,6 +60,18 @@ var (
 		[]string{"signal"},
 	)
 
+	// SignalScanWindowsTotal counts the windows of long inputs that guard
+	// rules read, by where their answers came from: read by the deployment's
+	// model, or kept from an earlier request that read the same input up to
+	// the window's end.
+	SignalScanWindowsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_scan_windows_total",
+			Help: "Windows of long inputs guard signal rules read, by source: read by the model, or kept from an earlier request with the same input up to the window",
+		},
+		[]string{"deployment", "source"},
+	)
+
 	// SignalScanDecidedTotal counts the guard rules a window decided before
 	// every window of their input was read: its answer made the rule match.
 	SignalScanDecidedTotal = promauto.NewCounterVec(
@@ -218,6 +230,15 @@ func RecordSignalScanCoverageRatio(signal string, ratio float64) {
 		signal = consts.UnknownLabel
 	}
 	SignalScanCoverageRatio.WithLabelValues(signal).Observe(ratio)
+}
+
+// RecordSignalScanWindow records a window of a long input a guard scan on
+// deployment read: source is "read" or "kept".
+func RecordSignalScanWindow(deployment, source string) {
+	if deployment == "" {
+		deployment = consts.UnknownLabel
+	}
+	SignalScanWindowsTotal.WithLabelValues(deployment, source).Inc()
 }
 
 // RecordSignalScanDecided records a guard rule, "type:name", that a window

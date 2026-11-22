@@ -85,7 +85,7 @@ global:
 		return result.Status, result.Body, err
 	}
 	listener := &cfg.Listeners[0]
-	handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, nil, local, nil, models))
+	handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, nil, local, nil, models), systemone.ClientAuth{})
 	const question = `"questions":{"tool":{"type":"noul","instructions":"Does the request need a tool?"}}`
 	for _, tc := range []struct {
 		name, request, state string
@@ -268,7 +268,7 @@ recipes:
 	}
 	defer remote.Close(context.Background())
 	listener := &cfg.Listeners[0]
-	handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, nil, nil, remote, nil))
+	handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, nil, nil, remote, nil), systemone.ClientAuth{})
 	for _, tc := range fixture.Cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			tc.Request["model"] = json.RawMessage(`"five"`)

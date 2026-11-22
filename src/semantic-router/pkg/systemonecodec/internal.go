@@ -170,7 +170,7 @@ func decodeInternalRequest(value systemoneprotocol.Value, allowed map[string]boo
 			request.Extensions = append(request.Extensions, member)
 		}
 	}
-	return request, nil
+	return request, checkState(request, at)
 }
 
 func decodeQuestions(value systemoneprotocol.Value, allowed map[string]bool, at string) ([]systemoneprotocol.NamedQuestion, error) {

@@ -9,7 +9,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "gen-openrouter-1",
                   "incomplete_details": null,
@@ -33,7 +33,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "gen-openrouter-1",
                   "incomplete_details": null,
@@ -71,10 +71,24 @@
             {
               "data": {
                 "content_index": 0,
+                "item_id": "item_4b8abe746dedebe24ff91fb6",
+                "output_index": 0,
+                "part": {
+                  "text": "",
+                  "type": "reasoning_text"
+                },
+                "sequence_number": 3,
+                "type": "response.content_part.added"
+              },
+              "event": "response.content_part.added"
+            },
+            {
+              "data": {
+                "content_index": 0,
                 "delta": "The user is asking for the current weather in Paris and explicitly requests to",
                 "item_id": "item_4b8abe746dedebe24ff91fb6",
                 "output_index": 0,
-                "sequence_number": 3,
+                "sequence_number": 4,
                 "type": "response.reasoning_text.delta"
               },
               "event": "response.reasoning_text.delta"
@@ -85,47 +99,35 @@
                 "delta": " use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
                 "item_id": "item_4b8abe746dedebe24ff91fb6",
                 "output_index": 0,
-                "sequence_number": 4,
+                "sequence_number": 5,
                 "type": "response.reasoning_text.delta"
               },
               "event": "response.reasoning_text.delta"
             },
             {
               "data": {
-                "item": {
-                  "arguments": "",
-                  "call_id": "call_2",
-                  "id": "item_0aa2f5f05ce975eae264a2d9",
-                  "name": "get_weather",
-                  "status": "in_progress",
-                  "type": "function_call"
-                },
-                "output_index": 1,
-                "sequence_number": 5,
-                "type": "response.output_item.added"
-              },
-              "event": "response.output_item.added"
-            },
-            {
-              "data": {
-                "delta": "{\"city\":\"Paris\"}",
-                "item_id": "item_0aa2f5f05ce975eae264a2d9",
-                "output_index": 1,
+                "content_index": 0,
+                "item_id": "item_4b8abe746dedebe24ff91fb6",
+                "output_index": 0,
                 "sequence_number": 6,
-                "type": "response.function_call_arguments.delta"
+                "text": "The user is asking for the current weather in Paris and explicitly requests to use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
+                "type": "response.reasoning_text.done"
               },
-              "event": "response.function_call_arguments.delta"
+              "event": "response.reasoning_text.done"
             },
             {
               "data": {
                 "content_index": 0,
                 "item_id": "item_4b8abe746dedebe24ff91fb6",
                 "output_index": 0,
+                "part": {
+                  "text": "The user is asking for the current weather in Paris and explicitly requests to use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
+                  "type": "reasoning_text"
+                },
                 "sequence_number": 7,
-                "text": "The user is asking for the current weather in Paris and explicitly requests to use the tool. I should call the `get_weather` tool with the argument `city=\"Paris\"`.",
-                "type": "response.reasoning_text.done"
+                "type": "response.content_part.done"
               },
-              "event": "response.reasoning_text.done"
+              "event": "response.content_part.done"
             },
             {
               "data": {
@@ -149,11 +151,37 @@
             },
             {
               "data": {
+                "item": {
+                  "arguments": "",
+                  "call_id": "call_2",
+                  "id": "item_0aa2f5f05ce975eae264a2d9",
+                  "name": "get_weather",
+                  "status": "in_progress",
+                  "type": "function_call"
+                },
+                "output_index": 1,
+                "sequence_number": 9,
+                "type": "response.output_item.added"
+              },
+              "event": "response.output_item.added"
+            },
+            {
+              "data": {
+                "delta": "{\"city\":\"Paris\"}",
+                "item_id": "item_0aa2f5f05ce975eae264a2d9",
+                "output_index": 1,
+                "sequence_number": 10,
+                "type": "response.function_call_arguments.delta"
+              },
+              "event": "response.function_call_arguments.delta"
+            },
+            {
+              "data": {
                 "arguments": "{\"city\":\"Paris\"}",
                 "item_id": "item_0aa2f5f05ce975eae264a2d9",
                 "name": "get_weather",
                 "output_index": 1,
-                "sequence_number": 9,
+                "sequence_number": 11,
                 "type": "response.function_call_arguments.done"
               },
               "event": "response.function_call_arguments.done"
@@ -169,7 +197,7 @@
                   "type": "function_call"
                 },
                 "output_index": 1,
-                "sequence_number": 10,
+                "sequence_number": 12,
                 "type": "response.output_item.done"
               },
               "event": "response.output_item.done"
@@ -177,7 +205,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "gen-openrouter-1",
                   "incomplete_details": null,
@@ -226,7 +254,7 @@
                     "total_tokens": 112
                   }
                 },
-                "sequence_number": 11,
+                "sequence_number": 13,
                 "type": "response.completed"
               },
               "event": "response.completed"

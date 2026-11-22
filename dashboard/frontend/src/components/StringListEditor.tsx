@@ -1,6 +1,7 @@
 import { useId } from 'react'
+import { Plus, X } from 'lucide-react'
 
-import styles from './StructuredFieldEditors.module.css'
+import { Badge, Button, Input } from '../ui'
 
 interface StructuredEditorStateProps {
   disabled?: boolean
@@ -42,86 +43,92 @@ export function StringListEditor({
 
   if (readOnly) {
     return normalizedValue.length > 0 ? (
-      <div className={styles.chipList} aria-label={`${itemLabel} values`}>
+      <div className="flex flex-wrap gap-1.5" aria-label={`${itemLabel} values`}>
         {normalizedValue.map((item, index) => (
-          <span key={`${item}-${index}`} className={styles.chip}>
+          <Badge key={`${item}-${index}`} tone="neutral" className="font-mono font-normal">
             {item}
-          </span>
+          </Badge>
         ))}
       </div>
     ) : (
-      <p className={styles.emptyCompact}>{emptyLabel}</p>
+      <p className="text-xs text-muted-foreground">{emptyLabel}</p>
     )
   }
 
   return (
-    <div className={styles.editor}>
-      <div className={styles.rows}>
-        {normalizedValue.map((item, index) => {
-          const normalized = item.trim().toLocaleLowerCase()
-          const isEmpty = !item.trim()
-          const isDuplicate = Boolean(normalized && (normalizedCounts.get(normalized) ?? 0) > 1)
-          const structuralError = isEmpty
-            ? `${itemLabel} cannot be empty.`
-            : isDuplicate
-              ? `${itemLabel} must be unique.`
-              : null
-          const error = structuralError ?? validateItem?.(item, index) ?? null
-          const inputId = `${editorId}-${index}`
-          const errorId = `${inputId}-error`
+    <div className="flex flex-col gap-2">
+      {normalizedValue.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {normalizedValue.map((item, index) => {
+            const normalized = item.trim().toLocaleLowerCase()
+            const isEmpty = !item.trim()
+            const isDuplicate = Boolean(normalized && (normalizedCounts.get(normalized) ?? 0) > 1)
+            const structuralError = isEmpty
+              ? `${itemLabel} cannot be empty.`
+              : isDuplicate
+                ? `${itemLabel} must be unique.`
+                : null
+            const error = structuralError ?? validateItem?.(item, index) ?? null
+            const inputId = `${editorId}-${index}`
+            const errorId = `${inputId}-error`
 
-          return (
-            <div key={index} className={styles.stringRow}>
-              <div className={styles.inputStack}>
-                <label className={styles.visuallyHidden} htmlFor={inputId}>
-                  {itemLabel} {index + 1}
-                </label>
-                <input
-                  id={inputId}
-                  className={styles.input}
-                  value={item}
-                  onChange={(event) => {
-                    const next = [...normalizedValue]
-                    next[index] = event.target.value
-                    onChange(next)
-                  }}
-                  placeholder={placeholder}
+            return (
+              <div key={index} className="grid grid-cols-[minmax(0,1fr)_1.75rem] items-start gap-2">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <label className="sr-only" htmlFor={inputId}>
+                    {itemLabel} {index + 1}
+                  </label>
+                  <Input
+                    id={inputId}
+                    className="h-8"
+                    value={item}
+                    onChange={(event) => {
+                      const next = [...normalizedValue]
+                      next[index] = event.target.value
+                      onChange(next)
+                    }}
+                    placeholder={placeholder}
+                    disabled={disabled}
+                    aria-invalid={error ? 'true' : undefined}
+                    aria-describedby={error ? errorId : undefined}
+                  />
+                  {error ? (
+                    <span id={errorId} className="text-xs text-destructive-foreground">
+                      {error}
+                    </span>
+                  ) : null}
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="mt-0.5 hover:bg-destructive-soft hover:text-destructive-foreground"
+                  onClick={() =>
+                    onChange(normalizedValue.filter((_, itemIndex) => itemIndex !== index))
+                  }
                   disabled={disabled}
-                  aria-invalid={error ? 'true' : undefined}
-                  aria-describedby={error ? errorId : undefined}
-                />
-                {error ? (
-                  <span id={errorId} className={styles.inlineError}>
-                    {error}
-                  </span>
-                ) : null}
+                  aria-label={`Remove ${itemLabel.toLocaleLowerCase()} ${index + 1}`}
+                >
+                  <X />
+                </Button>
               </div>
-              <button
-                type="button"
-                className={styles.removeButton}
-                onClick={() =>
-                  onChange(normalizedValue.filter((_, itemIndex) => itemIndex !== index))
-                }
-                disabled={disabled}
-                aria-label={`Remove ${itemLabel.toLocaleLowerCase()} ${index + 1}`}
-              >
-                Remove
-              </button>
-            </div>
-          )
-        })}
-      </div>
-
-      {normalizedValue.length === 0 ? <p className={styles.empty}>{emptyLabel}</p> : null}
-      <button
+            )
+          })}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+      )}
+      <Button
         type="button"
-        className={styles.addButton}
+        variant="outline"
+        size="xs"
+        className="self-start"
         onClick={() => onChange([...normalizedValue, ''])}
         disabled={!canAdd}
       >
-        <span aria-hidden="true">+</span>
+        <Plus />
         {addLabel}
-      </button>
+      </Button>
     </div>
   )
 }

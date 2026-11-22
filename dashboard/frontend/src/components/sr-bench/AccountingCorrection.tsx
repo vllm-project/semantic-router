@@ -1,17 +1,24 @@
+import { Badge } from '../../ui'
 import { money, number } from './model'
 import type { Report } from './types'
-import styles from './SrBench.module.css'
+import { Disclosure, Notice } from './benchUi'
+import { codeBlockClass, factsClass, identityClass } from './benchStyles'
 
 export default function AccountingCorrection({ report }: { report: Report | null }) {
   const correction = report?.provenance.accounting_correction
   if (!correction) return null
   return (
-    <aside className={styles.notice} role="note" aria-label="Accounting correction">
-      <div className={styles.sectionHeading}>
+    <Notice
+      tone={correction.qualified ? 'info' : 'warning'}
+      as="aside"
+      role="note"
+      aria-label="Accounting correction"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h4>Accounting correction recorded</h4>
-        <span className={styles.badge}>
+        <Badge tone={correction.qualified ? 'success' : 'warning'} size="sm">
           {correction.qualified ? 'Accounting verified' : 'Partial accounting'}
-        </span>
+        </Badge>
       </div>
       <p>
         Summary and comparison metrics use accounting reconciled from saved model responses.{' '}
@@ -22,7 +29,7 @@ export default function AccountingCorrection({ report }: { report: Report | null
           ? ''
           : 'Unverifiable usage remains unknown; known spend is not a complete bill.'}
       </p>
-      <dl className={styles.facts}>
+      <dl className={factsClass}>
         <div>
           <dt>Corrected calls</dt>
           <dd>{number(correction.corrected_call_count)}</dd>
@@ -46,9 +53,8 @@ export default function AccountingCorrection({ report }: { report: Report | null
           <dd>{number(correction.model_requests)}</dd>
         </div>
       </dl>
-      <details className={styles.details}>
-        <summary>Accounting correction receipt</summary>
-        <dl className={styles.identity}>
+      <Disclosure summary="Accounting correction receipt" bare className="my-0">
+        <dl className={identityClass}>
           <dt>Version</dt>
           <dd>{correction.version}</dd>
           <dt>Recorded</dt>
@@ -60,8 +66,8 @@ export default function AccountingCorrection({ report }: { report: Report | null
             <code>{correction.evidence_sha256}</code>
           </dd>
         </dl>
-        <pre>{JSON.stringify(correction, null, 2)}</pre>
-      </details>
-    </aside>
+        <pre className={codeBlockClass}>{JSON.stringify(correction, null, 2)}</pre>
+      </Disclosure>
+    </Notice>
   )
 }
