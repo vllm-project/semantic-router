@@ -32,15 +32,17 @@ conformance:
 #   Virginia https://{WorkspaceId}.us-east-1.maas.aliyuncs.com/compatible-mode/v1
 #   Hong Kong https://{WorkspaceId}.cn-hongkong.maas.aliyuncs.com/compatible-mode/v1
 #   Tokyo    https://{WorkspaceId}.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1
-# The API key must be created in that same region. Chat Completions inherits
-# this provider's top_level_effort transport: reasoning_effort is low, high,
-# or xhigh, and the declared default is high.
+# The API key must be created in that same region. qwen4-max Chat Completions
+# uses top_level_effort_boolean_switch: reasoning_effort is low, high, or
+# xhigh (declared default high), and enable_thinking is the on/off switch.
+# A disabled decision sends enable_thinking: false.
 models:
 - catalog: qwen/qwen4-max
   relationship: first_party
   id: qwen4-max
   protocols:
   - openai/chat-completions@1
+  reasoning_transport: top_level_effort_boolean_switch
   lifecycle: active
   verification:
     status: claimed

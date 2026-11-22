@@ -91,11 +91,13 @@ tokens. `catalog:` cannot name these IDs.
 
 `dashscope` maps `qwen/qwen4-max` to the native model ID `qwen4-max` on
 [Chat Completions](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope).
-The provider's declared transport sends top-level `reasoning_effort`. Model
-Studio accepts `low`, `high`, and `xhigh`, and the declared default is `high`.
+This binding reuses `top_level_effort_boolean_switch`. An enabled decision
+sends top-level `reasoning_effort` and `enable_thinking: true`. Model Studio
+accepts `low`, `high`, and `xhigh`, and the declared default is `high`.
 `minimal`, `medium`, and `max` are provider aliases for those levels, not
-separate catalog levels. Thinking stays on; this transport does not send
-`enable_thinking`.
+separate catalog levels. A disabled decision sends `enable_thinking: false`
+and leaves `reasoning_effort` off the request, matching Alibaba's
+[Chat Completions example](https://www.alibabacloud.com/help/en/model-studio/multi-round-conversation).
 
 The provider default host stays `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
 for the models already mapped there. Qwen4-Max calls should set `endpoint` to

@@ -36,7 +36,7 @@ recipes:
 
 ## Qwen4 Max
 
-`dashscope` 将 `qwen/qwen4-max` 映射到原生模型 ID `qwen4-max`，协议为 [Chat Completions](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope)。Provider 声明的传输在请求顶层发送 `reasoning_effort`。Model Studio 接受 `low`、`high` 和 `xhigh`，声明的默认值为 `high`。`minimal`、`medium` 和 `max` 是这些档位的提供方别名，不是目录中的独立档位。思考保持开启；该传输不发送 `enable_thinking`。
+`dashscope` 将 `qwen/qwen4-max` 映射到原生模型 ID `qwen4-max`，协议为 [Chat Completions](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope)。该绑定复用 `top_level_effort_boolean_switch`：开启推理的决策在请求顶层发送 `reasoning_effort` 和 `enable_thinking: true`。Model Studio 接受 `low`、`high` 和 `xhigh`，声明的默认值为 `high`。`minimal`、`medium` 和 `max` 是这些档位的提供方别名，不是目录中的独立档位。关闭推理的决策发送 `enable_thinking: false`，请求中不带 `reasoning_effort`，与阿里云的 [Chat Completions 示例](https://www.alibabacloud.com/help/en/model-studio/multi-round-conversation) 一致。
 
 Provider 的默认主机仍是 `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`，供已经映射到那里的模型使用。调用 Qwen4-Max 时，应将 `endpoint` 设为签发 API key 的地域所对应的工作空间主机。把 `{WorkspaceId}` 换成 Model Studio 控制台中的业务空间 ID：
 

@@ -109848,6 +109848,7 @@ const builtInCatalogJSON = `{
           "protocols": [
             "openai/chat-completions@1"
           ],
+          "reasoning_transport": "top_level_effort_boolean_switch",
           "relationship": "first_party",
           "verification": {
             "source": "https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope",
@@ -114782,6 +114783,7 @@ const builtInCatalogJSON = `{
       "type": "reasoning_effort"
     },
     {
+      "activation_parameter": "enable_thinking",
       "default": "high",
       "default_mode": "enabled",
       "id": "qwen4",
@@ -114791,7 +114793,8 @@ const builtInCatalogJSON = `{
         "xhigh"
       ],
       "modes": [
-        "enabled"
+        "enabled",
+        "disabled"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"

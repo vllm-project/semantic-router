@@ -22,13 +22,18 @@ class Qwen4CatalogTests(unittest.TestCase):
         )
         self.assertEqual(dashscope["reasoning_transport"], "top_level_effort")
         binding = next(
-            item
-            for item in dashscope["models"]
-            if item["catalog"] == "qwen/qwen4-max"
+            item for item in dashscope["models"] if item["catalog"] == "qwen/qwen4-max"
         )
         self.assertEqual(binding["id"], "qwen4-max")
         self.assertEqual(binding["protocols"], ["openai/chat-completions@1"])
-        self.assertNotIn("reasoning_transport", binding)
+        self.assertEqual(
+            binding["reasoning_transport"], "top_level_effort_boolean_switch"
+        )
+        families = {item["id"]: item for item in self.snapshot["reasoning_families"]}
+        self.assertEqual(families["qwen4"]["activation_parameter"], "enable_thinking")
+        self.assertEqual(families["qwen4"]["levels"], ["low", "high", "xhigh"])
+        self.assertEqual(families["qwen4"]["default"], "high")
+        self.assertEqual(families["qwen4"]["modes"], ["enabled", "disabled"])
         model = next(
             item for item in self.snapshot["models"] if item["id"] == "qwen/qwen4-max"
         )

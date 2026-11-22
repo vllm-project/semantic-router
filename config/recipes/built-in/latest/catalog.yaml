@@ -923,6 +923,7 @@ providers:
     id: qwen4-max
     protocols:
     - openai/chat-completions@1
+    reasoning_transport: top_level_effort_boolean_switch
     lifecycle: active
     verification:
       status: claimed
@@ -4574,6 +4575,7 @@ reasoning_families:
 - id: qwen4
   type: reasoning_effort
   parameter: reasoning_effort
+  activation_parameter: enable_thinking
   levels:
   - low
   - high
@@ -4581,6 +4583,7 @@ reasoning_families:
   default: high
   modes:
   - enabled
+  - disabled
   default_mode: enabled
 - id: glm
   type: chat_template_kwargs
