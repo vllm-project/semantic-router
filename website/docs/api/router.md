@@ -379,8 +379,13 @@ before the backend is called.
 The response is the backend's audio bytes and response headers, forwarded
 unchanged. It is not a JSON completion. Response-side policy, the response
 cache, token limits and cost estimates do not apply, and the request completes
-with zero token usage. Request-text checks still run. A non-2xx JSON error
-keeps the existing error path, including the backend's message.
+with zero token usage. A non-2xx JSON error keeps the existing error path,
+including the backend's message.
+
+Request-text checks, such as PII detection and masking, still run, on `input`
+only. `input` is the text the Router decodes into the request and encodes back,
+so a masking rewrite reaches the backend. `instructions`, `ref_text` and the
+other fields are forwarded as sent and are not checked.
 
 `stream: true` and any `stream_format` are rejected. An unknown top-level field
 is a `400`. Named fields, including the vLLM-Omni extension object
