@@ -102,3 +102,84 @@ the original SWE-bench analysis.
 
 Absolute resolve rates on SWE-bench Verified are inflated by contamination.
 Compare policies on the same tasks rather than reading them as model quality.
+
+## Candidate routing from per-candidate estimates
+
+`candidate_eval.py` replays the routing rules of CONCUR
+([CONCUR: A Framework for Continual Constrained and Unconstrained
+Routing](https://arxiv.org/abs/2512.09386), Chen, Li, Roth, Cafarella, Madden,
+Andreas; [project page](https://peterbaile.github.io/concur/),
+[code](https://github.com/peterbaile/concur)) on the same rows. Each candidate
+is a model with a reasoning setting, and each has two estimates per task: the
+probability that it answers correctly and its cost. It is the offline
+evaluation step of
+[per-request strategy routing](../../../../website/docs/proposals/concur-strategy-routing.md)
+(#6772) and needs NumPy only.
+
+Estimates are JSONL, one line per row and candidate:
+
+```json
+{"id": "q-0017", "candidate": "qwen3-8b-high", "success_probability": 0.86,
+ "estimated_cost": 0.00041, "expected_output_tokens": 1180}
+```
+
+`expected_output_tokens` is optional; the token error is reported when it and
+the rows' `output_tokens` are both present. Candidates are estimated
+independently, so a file per candidate can be concatenated. A repeated id and
+candidate pair is an error naming the file and line. Rows missing any
+candidate's outcome or estimate are skipped and counted in the report.
+
+| Policy | What runs |
+| --- | --- |
+| utility | per task, the candidate with the highest `v x p - c` on the estimates (CONCUR's unconstrained rule) |
+| local | per task, the highest `p` among candidates with `c <= b`, or the lowest `c` when none fits (CONCUR's local constrained rule) |
+| global | the assignment with the highest total `p` whose total `c` is at most `b` per task over a batch of tasks (CONCUR's global constrained rule, a dynamic program) |
+| oracle | any candidate per task, knowing every outcome; an upper bound at every budget |
+
+The report gives:
+
+- Each candidate alone, and the static mix of all candidates and `--baselines`
+  (for example a recorded MoM target), as in `policy_eval.py`.
+- Per candidate: the Brier score and expected calibration error of
+  `success_probability`, its AUROC for solving, and the mean absolute error and
+  bias of `estimated_cost`.
+- The utility policy's resolve rate at each mean budget per task, sweeping `v`,
+  and its utility `V x resolved - cost` minus the best single model's, with `v`
+  set to `V` (plug-in, which assumes calibrated estimates) and with `v` chosen
+  by task-grouped cross-validation.
+- The local and global policies at each budget. Both apply the budget to
+  estimated cost, so the report also gives the mean recorded cost and, for
+  local, the share of tasks whose recorded cost exceeds the budget.
+
+The global dynamic program keeps each task's cheapest estimate exact and rounds
+what another candidate adds to it up to units of `budget / --dp-resolution`, so
+the chosen assignment never exceeds the budget on the estimates. Rounding can
+rule out an upgrade that would otherwise fit, so the choice can fall short of
+the best assignment within the budget. Whether a batch fits at all is decided
+before any rounding, with a tolerance for floating-point error that does not
+depend on `--dp-resolution`: the report counts a batch as infeasible only when
+its cheapest estimates alone exceed the budget, and such a batch takes the
+cheapest estimate on every task. Rows are solved in consecutive batches of `--dp-batch` rows in file
+order. Batching on the request path is out of scope for the Router; this is
+offline evaluation only.
+
+### From sr-bench
+
+Register one target per candidate, with its reasoning setting frozen in the
+target's `request_params`, and run them on the same quick/dev tasks in a priced
+live run (`cost_policy: require_priced`, the default). Then:
+
+```bash
+vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
+python prepare_sr_bench.py --export training-matrix.json --out rows.jsonl
+python candidate_eval.py --rows rows.jsonl --estimates estimates.jsonl
+```
+
+A row is one case, and its attempts are keyed by target id; an unpriced target
+is an error rather than free. The same rows work with `policy_eval.py`. Export
+accepts dev runs only, so these results guide tuning: a quality or savings
+claim still needs the live holdout comparison sr-bench prescribes.
+
+The repository ships no estimates. Running with a subset of `--candidates` and
+then the full set shows what adding a candidate changes; since each candidate
+is estimated on its own, the other candidates' estimates stay the same.

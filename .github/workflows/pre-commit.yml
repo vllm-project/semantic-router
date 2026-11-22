@@ -84,7 +84,7 @@ jobs:
         run: python -m pip install -r tools/docs/requirements.txt
       # Verify committed references before website builds consume them.
       - name: Check Generated References
-        run: make docs-generated-check docs-cli-test docs-community-test docs-check-translation-coverage
+        run: make docs-generated-check docs-cli-test docs-community-test docs-i18n-shell-test docs-check-translation-coverage
       - name: Check Changed Source
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -101,6 +101,11 @@ jobs:
           # Committed references were checked above; build them only once.
           npm run sync:install
           npx --no-install docusaurus build
+      # The shell locale test renders the page component, so it needs the
+      # dependencies installed above. It skips itself in the offline gate.
+      - name: Check Localized Page Shells
+        if: inputs.website
+        run: make docs-i18n-shell-test
       - name: Record Quality Evidence
         if: inputs.verifications != '[]'
         env:

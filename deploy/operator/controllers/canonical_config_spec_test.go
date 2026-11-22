@@ -40,7 +40,7 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 }
 
 func TestOperatorResponseCacheConfigNormalizesLegacyAndRejectsConflict(t *testing.T) {
-	legacy := &vllmv1alpha1.SemanticCacheConfig{Enabled: true}
+	legacy := &vllmv1alpha1.SemanticCacheConfig{Enabled: ptr.To(true)}
 	got, err := operatorResponseCacheConfig(vllmv1alpha1.ConfigSpec{SemanticCache: legacy})
 	if err != nil || got != legacy {
 		t.Fatalf("legacy response cache = %v, %v", got, err)
