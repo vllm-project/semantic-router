@@ -26,7 +26,8 @@ func answerThroughFallback(t *testing.T, native bool, recorder *routerreplay.Rec
 		session.router.startRouterReplay(session.ctx, "auto", "model-primary", "chat_fallback_decision")
 		_, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
 		require.NoError(t, err)
-		session.fallback.succeeded(http.StatusOK)
+		session.fallback.beginResponse(http.StatusOK)
+		session.router.finishNativeFallbackResponse(session.ctx, "")
 		return session.ctx
 	}
 	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
@@ -55,6 +56,9 @@ func TestFeedbackAfterFallbackCreditsTheModelThatAnswered(t *testing.T) {
 			t.Cleanup(func() { _ = recorder.Close() })
 			ctx := answerThroughFallback(t, native, recorder)
 			require.Equal(t, "model-fallback-1", ctx.VSRSelectedModel, "the client is told the fallback answered")
+			record, found := recorder.GetRecord(ctx.RouterReplayID)
+			require.True(t, found)
+			require.Equal(t, "model-fallback-1", record.SelectedModel, "the record names the model that answered")
 
 			rt := newRouterLearningRuntime(nil, recorder, nil)
 			feedback := func(targetRef string) routerruntime.RouterOutcomeResult {

@@ -99,7 +99,8 @@ func TestNativeFallbackSendsACandidateWithReasoningOn(t *testing.T) {
 				require.Equal(t, "medium", kwargs["reasoning_effort"])
 				require.Equal(t, stream, strings.Contains(string(step.Call.Request.Body), `"stream":true`))
 
-				session.fallback.succeeded(http.StatusOK)
+				session.fallback.beginResponse(http.StatusOK)
+				session.router.finishNativeFallbackResponse(session.ctx, "")
 				require.Equal(t, "model-fallback-1", ctx.VSRSelectedModel)
 				require.Equal(t, "succeeded", ctx.FallbackRecord.FinalStatus)
 				require.Len(t, ctx.FallbackRecord.Attempts, 2)
