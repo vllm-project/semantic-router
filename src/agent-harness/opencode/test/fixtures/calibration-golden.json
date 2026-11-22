@@ -1,0 +1,115 @@
+[
+  {
+    "kind": "escalate",
+    "goal": "fewer-false-alarms",
+    "current": [0.6, 0.42],
+    "items": [
+      { "scores": [0.82, 0.09], "label": "yes" },
+      { "scores": [0.91, 0.21], "label": "yes" },
+      { "scores": [0.43, 0.07], "label": "yes" },
+      { "scores": [0.55, 0.06], "label": "yes" },
+      { "scores": [0.95, 0.63], "label": "yes" },
+      { "scores": [0.58, 0.4], "label": "yes" },
+      { "scores": [0.05, 0.86], "label": "no" },
+      { "scores": [0.42, 0.54], "label": "no" },
+      { "scores": [0.56, 0.68], "label": "yes" },
+      { "scores": [0.58, 0.64], "label": "no" },
+      { "scores": [0.1, 0.71], "label": "yes" },
+      { "scores": [0.62, 0.5], "label": "no" }
+    ],
+    "python": [0.63, 0.57]
+  },
+  {
+    "kind": "router",
+    "goal": "fewer-false-alarms",
+    "current": [0.87, 1.55, 0.51],
+    "items": [
+      { "level": 1.24, "confidence": 0.68, "tier": 0, "label": "right" },
+      { "level": 1.8, "confidence": 0.78, "tier": 2, "label": "too-high" },
+      { "level": 0.78, "confidence": 0.4, "tier": 0, "label": "right" },
+      { "level": 1.27, "confidence": 0.06, "tier": 0, "label": "too-low" },
+      { "level": 0.88, "confidence": 0.11, "tier": 2, "label": "too-low" },
+      { "level": 0.2, "confidence": 0.57, "tier": 2, "label": "too-low" },
+      { "level": 1.9, "confidence": 0.61, "tier": 0, "label": "too-low" },
+      { "level": 1.23, "confidence": 0.15, "tier": 1, "label": "right" },
+      { "level": 1.2, "confidence": 0.47, "tier": 0, "label": "right" },
+      { "level": 1.99, "confidence": 0.47, "tier": 1, "label": "right" },
+      { "level": 0.17, "confidence": 0.1, "tier": 1, "label": "too-high" },
+      { "level": 0.53, "confidence": 0.83, "tier": 0, "label": "too-high" },
+      { "level": 0.05, "confidence": 0.95, "tier": 2, "label": "right" },
+      { "level": 0.29, "confidence": 0.54, "tier": 0, "label": "too-high" },
+      { "level": 0.6, "confidence": 0.64, "tier": 0, "label": "too-high" },
+      { "level": 1.69, "confidence": 0.52, "tier": 0, "label": "right" },
+      { "level": 1.54, "confidence": 0.53, "tier": 2, "label": "right" },
+      { "level": 1.27, "confidence": 0.61, "tier": 0, "label": "too-low" }
+    ],
+    "python": [1.02, 1.54, 0.53]
+  },
+  {
+    "kind": "guard",
+    "goal": "balanced",
+    "current": [0.88],
+    "items": [
+      { "scores": [0.31], "label": "no" },
+      { "scores": [0.18], "label": "no" },
+      { "scores": [0.38], "label": "no" },
+      { "scores": [0.28], "label": "yes" },
+      { "scores": [0.25], "label": "yes" },
+      { "scores": [0.09], "label": "yes" },
+      { "scores": [0.14], "label": "yes" },
+      { "scores": [0.39], "label": "no" },
+      { "scores": [0.3], "label": "yes" }
+    ],
+    "python": [0.73]
+  },
+  {
+    "kind": "guard",
+    "goal": "balanced",
+    "current": [0.89],
+    "items": [
+      { "scores": [0.44], "label": "no" },
+      { "scores": [0.19], "label": "no" },
+      { "scores": [0.79], "label": "no" },
+      { "scores": [0.88], "label": "no" },
+      { "scores": [0.91], "label": "yes" },
+      { "scores": [0.72], "label": "yes" },
+      { "scores": [0.93], "label": "no" },
+      { "scores": [0.45], "label": "yes" },
+      { "scores": [0.64], "label": "no" },
+      { "scores": [0.49], "label": "yes" },
+      { "scores": [0.17], "label": "no" },
+      { "scores": [0.34], "label": "no" },
+      { "scores": [0.26], "label": "no" },
+      { "scores": [0.41], "label": "yes" },
+      { "scores": [0.3], "label": "no" }
+    ],
+    "python": [0.89]
+  },
+  {
+    "kind": "escalate",
+    "goal": "balanced",
+    "current": [0.79, 0.7],
+    "items": [
+      { "scores": [0.51, 0.39], "label": "yes" },
+      { "scores": [0.25, 0.06], "label": "yes" },
+      { "scores": [0.48, 0.54], "label": "yes" },
+      { "scores": [0.98, 0.88], "label": "yes" },
+      { "scores": [0.26, 0.08], "label": "yes" },
+      { "scores": [0.42, 0.99], "label": "no" },
+      { "scores": [0.17, 0.13], "label": "no" },
+      { "scores": [0.62, 0.67], "label": "yes" },
+      { "scores": [0.78, 0.29], "label": "no" },
+      { "scores": [0.57, 0.37], "label": "no" },
+      { "scores": [0.2, 0.25], "label": "yes" },
+      { "scores": [0.24, 0.28], "label": "yes" },
+      { "scores": [0.33, 0.4], "label": "yes" },
+      { "scores": [0.51, 0.23], "label": "yes" },
+      { "scores": [0.65, 0.99], "label": "yes" },
+      { "scores": [0.0, 0.88], "label": "yes" },
+      { "scores": [0.84, 0.91], "label": "yes" },
+      { "scores": [0.88, 0.23], "label": "yes" },
+      { "scores": [0.19, 0.97], "label": "yes" }
+    ],
+    "python": [0.79, 0.7]
+  }
+]

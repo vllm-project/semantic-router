@@ -1,0 +1,42 @@
+{
+  "name": "@vllm-sr/opencode",
+  "version": "0.1.0-dev.0",
+  "description": "vLLM Semantic Router decision-runtime integration for OpenCode",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.17.0"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./rpc": "./src/rpc.ts",
+    "./tui": "./src/tui.tsx"
+  },
+  "files": [
+    "src",
+    "skills",
+    "!skills/**/test_*.py",
+    "!**/__pycache__",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "check": "tsc --noEmit && prettier --check src test package.json tsconfig.json *.md",
+    "format": "prettier --write src test package.json tsconfig.json *.md",
+    "test:integration": "node --experimental-strip-types --test test/integration/*.test.ts"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.0"
+  },
+  "devDependencies": {
+    "@opentui/solid": "0.7.0",
+    "@types/node": "22.15.30",
+    "prettier": "3.5.3",
+    "solid-js": "1.9.12",
+    "typescript": "5.8.3"
+  },
+  "overrides": {
+    "seroval": "1.6.10"
+  }
+}
