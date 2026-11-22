@@ -64,9 +64,6 @@ answers recorded for its revision. They are recorded for:
 - Ascend NPU (`npu`)
 - AMD GPU (ROCm) (`rocm`)
 
-Where a hardware reference and its device class's are both recorded, the
-hardware one is checked.
-
 [Choose a model](model-runtime/get-started/choose-a-model.md#hardware) lists the
 validated hardware.
 

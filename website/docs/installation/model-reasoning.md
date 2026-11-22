@@ -139,6 +139,8 @@ fields, sends no control, and the backend runs the model's default mode
 whatever `use_reasoning` says. A pass-through Model keeps the client's
 reasoning fields as sent, and the routing log, metrics and trace report no
 effort for it: its `routing_decision` log line says `reasoning_projected: false`.
+Its Router Replay record has no `reasoning_mode` and keeps an effort only when
+the client sent one.
 
 On an `api_format: anthropic` backend, `enabled` thinking needs a
 `budget_tokens` value. When the client sent none, an `enabled` mode reaches the

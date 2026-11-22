@@ -186,7 +186,11 @@ func imageAsset(url string) (systemoneprotocol.Value, error) {
 }
 
 var videoFormats = []struct{ mime, format string }{
-	{"video/mp4", "mp4"}, {"video/webm", "webm"}, {"video/quicktime", "mov"}, {"video/x-matroska", "mkv"},
+	{"video/mp4", "mp4"},
+	{"video/webm", "webm"},
+	{"video/quicktime", "mov"},
+	{"video/x-matroska", "mkv"},
+	{"video/mp2t", "ts"},
 }
 
 // videoAsset is a base64 video data URL as a vllm-sr/5.0 video asset.
@@ -204,7 +208,7 @@ func videoAsset(url string) (systemoneprotocol.Value, error) {
 			), nil
 		}
 	}
-	return systemoneprotocol.Value{}, fmt.Errorf("a video must be an MP4, WebM, QuickTime or Matroska data URL")
+	return systemoneprotocol.Value{}, fmt.Errorf("a video must be an MP4, WebM, QuickTime, Matroska or MPEG-TS data URL")
 }
 
 // DecodesImage reports whether the codec reads this data URL as an image.
@@ -233,7 +237,7 @@ func assetDataURL(kind string, asset systemoneprotocol.Value) (string, error) {
 				return "data:" + known.mime + ";base64," + data, nil
 			}
 		}
-		return "", fmt.Errorf("a video asset needs its format: mp4, webm, mov or mkv")
+		return "", fmt.Errorf("a video asset needs its format: mp4, webm, mov, mkv or ts")
 	}
 	switch format {
 	case "png":

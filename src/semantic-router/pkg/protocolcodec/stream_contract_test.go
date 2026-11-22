@@ -13,7 +13,7 @@ import (
 
 func TestStreamFinalizeClassifiesCancellation(t *testing.T) {
 	state := newTestStreamState()
-	events, err := state.finalize(context.Canceled)
+	events, _, err := state.finalize(context.Canceled)
 	if err != nil || len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed ||
 		events[0].Error == nil || !errors.Is(events[0].Error, context.Canceled) || events[0].Error.Code != "stream_canceled" {
 		t.Fatalf("Finalize(canceled) = %+v, %v", events, err)
@@ -22,7 +22,7 @@ func TestStreamFinalizeClassifiesCancellation(t *testing.T) {
 
 func TestStreamFinalizeClassifiesDeadline(t *testing.T) {
 	state := newTestStreamState()
-	events, err := state.finalize(context.DeadlineExceeded)
+	events, _, err := state.finalize(context.DeadlineExceeded)
 	if err != nil || len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed ||
 		events[0].Error == nil || !errors.Is(events[0].Error, context.DeadlineExceeded) || events[0].Error.Code != "stream_timeout" {
 		t.Fatalf("Finalize(deadline) = %+v, %v", events, err)

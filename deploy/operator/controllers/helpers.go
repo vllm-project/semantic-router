@@ -131,7 +131,7 @@ func (r *SemanticRouterReconciler) resolveSemanticCacheSecrets(
 
 // validateSemanticCacheConfig validates cache configuration consistency
 func validateSemanticCacheConfig(cache *vllmv1alpha1.SemanticCacheConfig) error {
-	if cache == nil || !cache.Enabled {
+	if !responseCacheEnabled(cache) {
 		return nil
 	}
 

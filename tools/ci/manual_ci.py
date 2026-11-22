@@ -22,6 +22,11 @@ CONTROLLER = ".github/workflows/manual-ci.yml"
 AUTHORIZE_JOB = "Authorize requested CI"
 # Public immutable GitHub identity: https://api.github.com/users/mergify%5Bbot%5D
 MERGIFY_BOT_ID = 37929162
+GITHUB_ACTIONS_BOT_ID = 41898282
+PR_QUALIFICATION_CONTEXT = "PR Qualification"
+PUBLISHER_FILES = frozenset(
+    (".github/workflows/ci-status.yml", "tools/ci/pr_ci_status.py")
+)
 SCOPES = frozenset(
     {"affected", "models", "storage", "product", "e2e", "operator", "performance"}
 )
@@ -31,6 +36,9 @@ MERGE_PARENT_COUNT = 2
 MERGE_EVIDENCE_UNAVAILABLE = "planned_merge_unavailable"
 NO_AUTHORIZATION = {"authorized": False, "scopes": [], "full": False}
 PAGE_SIZE = 100
+MAX_QUALIFICATION_STATUS_PAGES = 10
+MAX_PAGES = 100
+STATUS_READBACK_DELAYS = (0, 1, 2, 4)
 AUTHORIZATION_LIMIT = 65536
 PLAN_LIMIT = 16 * 1024 * 1024
 ERROR_STATUS_TAIL_LIMIT = 256
@@ -676,31 +684,153 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
     }
 
 
-def rerun(client, record: dict, *, wait_seconds: int = 900) -> None:
+def pages(client, endpoint: str, key: str | None = None):
+    separator = "&" if "?" in endpoint else "?"
+    for page in range(1, MAX_PAGES + 1):
+        response = client.request(
+            f"{endpoint}{separator}per_page={PAGE_SIZE}&page={page}"
+        )
+        items = response[key] if key else response
+        if not isinstance(items, list):
+            raise ManualCIError("Invalid GitHub collection response.")
+        yield from items
+        if len(items) < PAGE_SIZE:
+            return
+    raise ManualCIError("GitHub collection exceeds the reconciliation limit.")
+
+
+def latest_run(client, repo: str, run: dict) -> bool:
+    query = urlencode({"event": "pull_request", "head_sha": run["head_sha"]})
+    candidates = [
+        item
+        for item in pages(
+            client,
+            f"repos/{repo}/actions/workflows/pr.yml/runs?{query}",
+            "workflow_runs",
+        )
+        if item.get("head_branch") == run.get("head_branch")
+        and (item.get("head_repository") or {}).get("full_name")
+        == (run.get("head_repository") or {}).get("full_name")
+    ]
+    return (
+        bool(candidates)
+        and max(candidates, key=lambda item: (item["created_at"], item["id"]))["id"]
+        == run["id"]
+    )
+
+
+def status_publisher_available(client, repo: str, base: str) -> bool:
+    tree = client.request(f"repos/{repo}/git/trees/{base}?recursive=1")
+    if tree.get("truncated"):
+        raise ManualCIError("Cannot establish the trusted base's status publisher.")
+    paths = {
+        item.get("path") for item in tree.get("tree", []) if item.get("type") == "blob"
+    }
+    return paths >= PUBLISHER_FILES
+
+
+def qualification_status_url(repo: str, run_id: int, attempt: int) -> str:
+    return f"https://github.com/{repo}/actions/runs/{run_id}/attempts/{attempt}"
+
+
+def pending_rerun_status(repo: str, run_id: int, attempt: int) -> dict:
+    return {
+        "context": PR_QUALIFICATION_CONTEXT,
+        "state": "pending",
+        "target_url": qualification_status_url(repo, run_id, attempt + 1),
+        "description": "Waiting for authorized CI rerun",
+    }
+
+
+def latest_qualification_status(client, repo: str, head: str) -> dict:
+    # GitHub lists commit statuses newest first. Ignore same-name statuses
+    # published by accounts other than the trusted GitHub Actions bot.
+    for page in range(1, MAX_QUALIFICATION_STATUS_PAGES + 1):
+        statuses = client.request(
+            f"repos/{repo}/commits/{head}/statuses?per_page={PAGE_SIZE}&page={page}"
+        )
+        if not isinstance(statuses, list):
+            raise ManualCIError("Invalid GitHub commit status response.")
+        for status in statuses:
+            creator = status.get("creator") or {}
+            if (
+                status.get("context") == PR_QUALIFICATION_CONTEXT
+                and creator.get("id") == GITHUB_ACTIONS_BOT_ID
+                and creator.get("login") == "github-actions[bot]"
+            ):
+                return status
+        if len(statuses) < PAGE_SIZE:
+            return {}
+    raise ManualCIError(
+        "Could not establish the latest PR Qualification commit status."
+    )
+
+
+def write_qualification_status(client, repo: str, head: str, payload: dict) -> None:
+    posted = client.write(f"repos/{repo}/statuses/{head}", payload)
+    if posted and type(posted.get("id")) is int:
+        # A new status can take a few seconds to appear in the commit rollup.
+        # Retry the read, so replication lag does not cause duplicate writes.
+        for delay in STATUS_READBACK_DELAYS:
+            if delay:
+                time.sleep(delay)
+            observed = latest_qualification_status(client, repo, head)
+            if observed.get("id") == posted["id"] and all(
+                observed.get(key) == value for key, value in payload.items()
+            ):
+                return
+    raise ManualCIError("Could not confirm the published PR Qualification status.")
+
+
+def checked_rerun(client, record: dict) -> dict:
     repo, number, run_id = (
         record["repository"],
         record["pr_number"],
         record["pr_run_id"],
     )
+    identity = source_identity(client, repo, number)
+    run = client.request(f"repos/{repo}/actions/runs/{run_id}")
+    if (
+        not main_contains(client, repo, record["base_sha"])
+        or not matching_authorization(client, repo, number, run, identity, record)
+        or not merge_source_matches(
+            client, repo, record.get("source_sha"), record.get("base_sha"), identity
+        )
+    ):
+        raise ManualCIError(
+            "The PR revision or authorization changed; post a new /ci run request.",
+            reason="expired",
+        )
+    return run
+
+
+def rerun(client, record: dict, *, wait_seconds: int = 900) -> None:
+    repo, run_id = record["repository"], record["pr_run_id"]
     deadline = time.monotonic() + wait_seconds
     while True:
-        identity = source_identity(client, repo, number)
-        if not main_contains(client, repo, record["base_sha"]):
-            raise ManualCIError(
-                "The PR revision or authorization changed; post a new /ci run request.",
-                reason="expired",
-            )
-        run = client.request(f"repos/{repo}/actions/runs/{run_id}")
-        if not matching_authorization(
-            client, repo, number, run, identity, record
-        ) or not merge_source_matches(
-            client, repo, record.get("source_sha"), record.get("base_sha"), identity
-        ):
-            raise ManualCIError(
-                "The PR revision or authorization changed; post a new /ci run request.",
-                reason="expired",
-            )
+        run = checked_rerun(client, record)
         if run.get("status") == "completed":
+            if status_publisher_available(client, repo, record["base_sha"]):
+                if not latest_run(client, repo, run):
+                    raise ManualCIError(
+                        "The current PR CI run changed; post a new /ci run request.",
+                        reason="expired",
+                    )
+                attempt = run.get("run_attempt")
+                if type(attempt) is not int or attempt < 1:
+                    raise ManualCIError("Cannot determine the next CI attempt.")
+                head = run["head_sha"]
+                pending = pending_rerun_status(repo, run_id, attempt)
+                write_qualification_status(client, repo, head, pending)
+                current = checked_rerun(client, record)
+                if (
+                    current.get("run_attempt") != attempt
+                    or current["status"] != "completed"
+                    or not latest_run(client, repo, current)
+                ):
+                    raise ManualCIError(
+                        "The CI attempt changed before rerun.", reason="expired"
+                    )
             client.request(f"repos/{repo}/actions/runs/{run_id}/rerun", method="POST")
             return
         if time.monotonic() >= deadline:
