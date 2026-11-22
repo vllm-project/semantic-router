@@ -576,7 +576,7 @@ class TestEngineModeImages(EngineStack):
         self.assertNotEqual(both["answers"], seen["answers"])
         status, failure = self.ask("/v1/systemone", ["data:image/png;base64,AAAA"])
         self.assertEqual(status, 400, failure)
-        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["code"], "invalid_media", failure)
         self.assertEqual(failure["error"]["message"], "malformed image", failure)
         status, clip = self.ask("/v1/systemone", videos=[TINY_MP4])
         self.assertEqual(status, 200, clip)
@@ -586,7 +586,7 @@ class TestEngineModeImages(EngineStack):
             "/v1/systemone", videos=["data:video/mp4;base64,AAAA"]
         )
         self.assertEqual(status, 400, failure)
-        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["code"], "invalid_media", failure)
         self.assertEqual(failure["error"]["message"], "malformed video", failure)
         body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
         body["model"] = PUBLIC_MODEL

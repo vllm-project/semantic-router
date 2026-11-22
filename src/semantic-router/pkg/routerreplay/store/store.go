@@ -500,6 +500,7 @@ type Storage interface {
 	Writer
 	Reader
 	Enricher
+	ServedModelWriter
 	ReviewWriter
 	io.Closer
 }
