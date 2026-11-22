@@ -516,6 +516,42 @@ func TestMediaLeadingTheStateRoundTrips(t *testing.T) {
 	}
 }
 
+// Each video container the model runtime decodes is an asset of its own
+// format, and reads back as the data URL it was sent as. An MPEG transport
+// stream segment is one of them.
+func TestEveryVideoContainerRoundTripsAsAnAsset(t *testing.T) {
+	for mime, format := range map[string]string{
+		"video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "video/x-matroska": "mkv", "video/mp2t": "ts",
+	} {
+		url := "data:" + mime + ";base64,AAAA"
+		if !DecodesVideo(url) {
+			t.Fatalf("%s is not read as a video", url)
+		}
+		state, assets, err := placeMedia(systemoneprotocol.String("Describe it."), nil, []string{url}, nil)
+		if err != nil || len(assets) != 1 {
+			t.Fatalf("%s: placed %v %v", mime, assets, err)
+		}
+		if got := textOf(mustGet(assets[0].Value, "format")); got != format {
+			t.Fatalf("%s: format %q, want %q", mime, got, format)
+		}
+		_, _, videos, _, ok, err := UnplaceMedia(state, assets)
+		if err != nil || !ok || len(videos) != 1 || videos[0] != url {
+			t.Fatalf("%s: unplaced %v %v %v", mime, videos, ok, err)
+		}
+	}
+	if DecodesVideo("data:video/avi;base64,AAAA") {
+		t.Fatal("AVI is not a container the model runtime decodes")
+	}
+	avi := systemoneprotocol.Object(
+		systemoneprotocol.Member{Key: "type", Value: systemoneprotocol.String("video")},
+		systemoneprotocol.Member{Key: "format", Value: systemoneprotocol.String("avi")},
+		systemoneprotocol.Member{Key: "data_base64", Value: systemoneprotocol.String("AAAA")},
+	)
+	if _, err := assetDataURL("video", avi); err == nil || !strings.Contains(err.Error(), "mp4, webm, mov, mkv or ts") {
+		t.Fatalf("an unknown format answered %v", err)
+	}
+}
+
 func TestQuestionErrorsFollowTheirReasons(t *testing.T) {
 	for reason, want := range map[string]string{
 		"scan_budget": "scan_budget_exceeded", "question_tokens": "max_length_exceeded", "input_malformed": "invalid_input",

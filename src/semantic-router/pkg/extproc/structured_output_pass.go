@@ -16,8 +16,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-// structuredOutputCallTimeout bounds the second call of a turn whose decision
-// and model set no timeout: the route timeout of a listener that sets none.
+// structuredOutputCallTimeout is the second call's fallback timeout. The
+// upstream route deadline can bound it further.
 const structuredOutputCallTimeout = 300 * time.Second
 
 // structuredOutputPass is a turn with callable tools and a JSON output format
@@ -28,6 +28,7 @@ const structuredOutputCallTimeout = 300 * time.Second
 type structuredOutputPass struct {
 	dispatch *providerDispatch
 	body     []byte
+	deadline time.Time
 	// answered reports that the second call's answer replaced the first.
 	answered bool
 }
@@ -154,7 +155,15 @@ func (r *OpenAIRouter) sendStructuredOutputCall(ctx *RequestContext, pass *struc
 	if callCtx == nil {
 		callCtx = context.Background()
 	}
+	if !pass.deadline.IsZero() {
+		var cancel context.CancelFunc
+		callCtx, cancel = context.WithDeadline(callCtx, pass.deadline)
+		defer cancel()
+	}
 	dispatch := pass.dispatch
+	if err := callCtx.Err(); err != nil {
+		return nil, &structuredOutputCallError{attempt: failedCandidateAttempt(dispatch, 0, nil, err)}
+	}
 	body, status, err := r.dispatchProviderHTTP(callCtx, ctx, dispatch, providerCall{
 		name:    "structured_output_pass",
 		body:    pass.body,
