@@ -4,6 +4,10 @@ paths:
       # actionlint 1.7.12 lacks queue support (rhysd/actionlint#657).
       # The workflow policy requires queue: max for this job.
       - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
+  .github/workflows/community.yml:
+    ignore:
+      # The assignment command queue also uses the GitHub queue: max option.
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'
   .github/workflows/manual-ci.yml:
     ignore:
       # The rerun job shares the qualification publisher's queue.

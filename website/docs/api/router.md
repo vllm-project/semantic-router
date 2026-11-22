@@ -508,8 +508,8 @@ decision, or request content:
 | `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
 | `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |
 | `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
-| `budget_exceeded` | 429 | `rate_limit_error` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) does not cover the call's estimated cost, or has nothing left. The message names the budget, its limit, what it has left and the estimate, as `x-vsr-budget-scope` and `x-vsr-budget-remaining` do. A user budget's refusal carries `Retry-After` until its window starts again. |
-| `budget_unpriced` | 403 | `permission_error` | The selected model has no price in the spend budgets' currency, and `budgets.unpriced` is `refuse`. |
+| `budget_exceeded` | 429 | `rate_limit_error` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) does not cover the call's estimated cost, or has nothing left. The message names the budget and its limit, what it has left for the call now, as `x-vsr-budget-scope` and `x-vsr-budget-remaining` do, then what the budget spent and what calls in flight hold, and the call's estimate. When what the budget spent leaves no room, the message starts `out of budget` and the reply carries `x-should-retry: false`, with `Retry-After` until a user budget's window starts again; on the Responses API `error.type` is then `usage_limit_reached`, with `resets_at`, and on the Messages API the reply carries `anthropic-ratelimit-unified-overage-disabled-reason: budget_exceeded`. When only calls in flight hold the room, the reply asks for a retry with `Retry-After: 5` and `x-should-retry: true`. |
+| `budget_unpriced` | 403 | `permission_error` | The selected model has no price in the spend budgets' currency, and `budgets.unpriced` is `refuse`. The reply carries `x-should-retry: false`. |
 
 The Router logs each of these failures at `WARN`, under the request's
 `x-request-id`, with the code and its own reason: the model the request named,
@@ -765,7 +765,7 @@ costs; infrastructure charges and billing adjustments are excluded.
 | `baseline_source` | `configured_model`, `recipe_most_expensive` (the default), or `selected_model` for a direct request. |
 | `baseline_unavailable` | Why a priced record has no baseline: `pricing_not_configured` or `currency_mismatch`. A configured baseline that cannot be used never falls back to the default. |
 | `router_calls` | Model calls the Router made itself to answer the request, entries by task `kind` and `model`. |
-| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls, and the `settlement`: `usage`, `partial_usage` for a stream cut short, charged the usage it reported (`partial_usage` above), `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
+| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls (a Looper request's with every call of its run, a hop's with its own), and the `settlement`: `usage`, `partial_usage` for a stream cut short, charged the usage it reported (`partial_usage` above), `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
 
 A Looper request's cost is its calls, so its record has no `actual_cost` and one
 `router_calls` entry of kind `looper`: `calls`, the request's `prompt_tokens`
@@ -775,7 +775,10 @@ when its model has no price, it reported no usage or incomplete usage, it is in
 another currency than the first priced call, or no attempt trace kept it
 (`attempt_not_traced`: a call past the trace's bound of 100 calls or 64 KiB).
 Every Looper algorithm traces its calls, so each one is priced at its own
-model's rates. An unpriced call is never counted as free.
+model's rates. An unpriced call is never counted as free. An attempt a
+[spend budget](../tutorials/global/api-and-observability.md#spend-budgets)
+refused reached no model: its trace reason is `budget_exceeded` or
+`budget_unpriced`, and it is not counted in `calls`.
 
 Request-scoped runtime calls also appear here: `decision_model` for native
 questions and selections, `systemone` for remote System One exchanges, and
