@@ -44,6 +44,9 @@ type streamState struct {
 	// a tool call whose arguments ended before forming a JSON object; only a
 	// max_tokens stop explains one, which the terminal event decides
 	cutToolArguments bool
+	// the streamed arguments a close replaced when a stream ended mid-call,
+	// kept for the encoders that already sent the fragments as deltas
+	closedToolArguments map[int]string
 }
 
 // appendStreamUnknownFields reports each unknown upstream member once per

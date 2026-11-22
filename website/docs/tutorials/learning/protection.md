@@ -106,6 +106,15 @@ protection:
   after `codex exec resume`, so protection holds the root and each child on
   their own models for the whole session. `codex exec review` starts a new
   session, so its review child gets its own key either way.
+- **Claude Code side requests**, such as its session title and its
+  compactions, carry the session ID of the agent they serve. With
+  `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1` Claude Code also sends
+  `x-claude-code-request-class`, and a request whose class is not `main`,
+  `subagent` or `workflow` is held under a key of its own class beside its
+  agent's. Each class keeps the model its first request got, and a side
+  request never sets or moves its agent's model or replaces its cache
+  receipt, even when the title request is the session's first call. Route
+  them with the `agent` signal's `request_classes`.
 - **OpenCode** sends its session in `x-session-id` on every request. A
   subagent runs in a child session of its own and also sends the session that
   spawned it in `x-parent-session-id`. Unless the request pins a session in
@@ -229,6 +238,11 @@ underpowered:
   outcome, though its signals can change the matched decision.
 - **Not failover.** Rescue needs another eligible proposal and enough
   evidence; it is not immediate backend failover.
+- **After a fallback.** When a decision's
+  [fallback](../../installation/model-configuration#fall-back-to-another-model)
+  candidate answers in place of the failed model, the key passes to the
+  candidate, so the next request is held on the model that answered and holds
+  its cache, not sent to the failing model again.
 
 Rescue boundaries:
 
@@ -330,10 +344,12 @@ missing, the switch guard decides as before and replay records why:
 | `currency_mismatch` | The two models are priced in different currencies. |
 
 The economics do not apply to an honored release, a rescue switch or a hard
-lock. Under `scope: session` the current model is held before the switch guard
-runs, so the economics apply once the idle timeout has released it; per-agent
-keys and `scope: conversation` are priced on every switch. Long-context price
-tiers are not modeled.
+lock. Under `scope: session` the session, each subagent and each side request
+are held on their current model before the switch guard runs, as
+[Agents that delegate to subagents](#agents-that-delegate-to-subagents)
+describes, so the economics apply once the idle timeout has released the
+hold. Under `scope: conversation` every proposed switch is priced, the
+subagents' included. Long-context price tiers are not modeled.
 
 Replay records the proposed switch in `session_policy.cache_economics`, and
 each priced candidate in `session_policy.candidate_traces.<model>.cache_economics`:

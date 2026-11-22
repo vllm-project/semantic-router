@@ -19936,6 +19936,9 @@
                               "caller_login": {
                                 "type": "boolean"
                               },
+                              "partial_usage": {
+                                "type": "boolean"
+                              },
                               "pricing_source": {
                                 "type": "string"
                               },
@@ -27679,6 +27682,9 @@
                           ]
                         },
                         "caller_login": {
+                          "type": "boolean"
+                        },
+                        "partial_usage": {
                           "type": "boolean"
                         },
                         "pricing_source": {
