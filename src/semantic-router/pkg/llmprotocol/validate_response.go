@@ -95,7 +95,7 @@ func validateResponseStopReason(response Response) error {
 }
 
 func validateResponseOutputCardinality(response Response, limits Limits) error {
-	if len(response.Output) == 0 && response.StopReason != StopContentFilter {
+	if len(response.Output) == 0 && !StopAllowsEmptyOutput(response.StopReason) {
 		return NewError(ErrorUpstreamUnavailable, "empty_response_output", "successful upstream response has no primary output", nil)
 	}
 	if limits.Alternatives > 0 && len(response.Alternatives) > limits.Alternatives {
@@ -109,10 +109,29 @@ func validateResponseOutputCardinality(response Response, limits Limits) error {
 	return nil
 }
 
+// StopAllowsEmptyOutput reports a stop that explains a reply with no output: a
+// model that ended its turn with nothing to say, which Anthropic documents for
+// end_turn, a content filter, or an output limit spent before any output, such
+// as on reasoning the client asked to omit.
+func StopAllowsEmptyOutput(reason StopReason) bool {
+	return reason == StopEndTurn || reason == StopContentFilter || StopsAtOutputLimit(reason)
+}
+
 // StopsAtOutputLimit reports a stop at the output token limit or the end of the
 // context window, either of which can cut a reply in the middle of a call.
 func StopsAtOutputLimit(reason StopReason) bool {
 	return reason == StopMaxTokens || reason == StopContextWindow
+}
+
+// ToolCallStopAtOutputLimit reports a tool-call stop that the output token
+// limit made: the reply's output tokens reached limit, the output limit of the
+// request it answers, 0 for none. A backend can report a call that limit cut
+// as a tool-call stop, as vLLM's buffered Chat reply does whenever its tool
+// parser found a call, with the cut arguments closed or empty. Usage counts the
+// tokens of every choice, so only a reply with one choice can be judged by it.
+func ToolCallStopAtOutputLimit(reason StopReason, usage Usage, limit int64) bool {
+	return reason == StopToolCall && limit > 0 && usage.State == UsageAvailable &&
+		usage.OutputTotal.Value != nil && *usage.OutputTotal.Value >= limit
 }
 
 // TruncatedToolCall returns the function call an output limit cut short in the
@@ -373,7 +392,7 @@ func RequireCapabilities(format WireFormat, available, required CapabilitySet) e
 	}
 	return NewError(
 		ErrorUnsupportedFeature, "unsupported_capability",
-		fmt.Sprintf("wire format %q does not support: %s", format, strings.Join(missing, ", ")), nil,
+		fmt.Sprintf("the %s API does not support: %s", format.APIName(), strings.Join(missing, ", ")), nil,
 	)
 }
 

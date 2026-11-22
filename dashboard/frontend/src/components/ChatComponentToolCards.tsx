@@ -1,19 +1,20 @@
 import { useMemo } from 'react'
 import { ThinkingOrb } from 'thinking-orbs'
+import { ChevronDown, Wrench } from 'lucide-react'
 
+import { Badge, cn } from '../ui'
 import type { ToolCall, ToolResult } from '../tools'
 
-import styles from './ChatComponent.module.css'
 import { OpenWebCard, WebSearchCard } from './ChatComponentWebToolCards'
 import { getToolDisplayName, getToolStatusLabel, getToolSummary } from './chatToolCardPresentation'
 
-const TOOL_STATUS_CLASS_NAMES: Record<ToolCall['status'], string> = {
-  pending: styles.toolStatusPending,
-  running: styles.toolStatusRunning,
-  completed: styles.toolStatusCompleted,
-  failed: styles.toolStatusFailed,
-  skipped: styles.toolStatusSkipped,
-}
+const TOOL_STATUS_TONES = {
+  pending: 'neutral',
+  running: 'info',
+  completed: 'success',
+  failed: 'danger',
+  skipped: 'outline',
+} as const satisfies Record<ToolCall['status'], string>
 
 function buildResultPreview(toolResult?: ToolResult) {
   if (!toolResult || toolResult.error) {
@@ -81,67 +82,54 @@ export const ToolCard = ({
   }
 
   return (
-    <div className={styles.webSearchCard}>
+    <div className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-xs">
       <button
         type="button"
-        className={styles.webSearchHeader}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left outline-none transition-colors hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/40"
         onClick={onToggle}
         aria-expanded={isExpanded}
         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${displayToolName}`}
       >
-        <div className={styles.webSearchIcon}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-          </svg>
-        </div>
-        <div className={styles.webSearchInfo}>
-          <div className={styles.toolCardHeadingRow}>
-            <span className={styles.webSearchTitle}>{displayToolName}</span>
-          </div>
-          <span className={styles.webSearchQuery}>{summary}</span>
-        </div>
-        <div className={styles.webSearchStatus}>
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-border bg-surface-subtle text-muted-foreground">
+          <Wrench className="size-4" />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[13px] font-medium">{displayToolName}</span>
+          <span className="truncate font-mono text-xs text-subtle-foreground">{summary}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
           {toolCall.status === 'running' || toolCall.status === 'pending' ? (
-            <span className={styles.toolActivity} aria-label={statusLabel}>
-              <ThinkingOrb state="working" size={20} theme="dark" />
+            <span
+              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+              aria-label={statusLabel}
+            >
+              <ThinkingOrb state="working" size={20} />
               {statusLabel}
             </span>
           ) : (
-            <span
-              className={`${styles.toolStatusPill} ${TOOL_STATUS_CLASS_NAMES[toolCall.status]}`}
-            >
+            <Badge size="sm" tone={TOOL_STATUS_TONES[toolCall.status]}>
               {statusLabel}
-            </span>
+            </Badge>
           )}
-          <svg
-            className={`${styles.webSearchChevron} ${isExpanded ? styles.expanded : ''}`}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </div>
+          <ChevronDown
+            className={cn(
+              'size-4 text-subtle-foreground transition-transform duration-200',
+              isExpanded && 'rotate-180',
+            )}
+            aria-hidden
+          />
+        </span>
       </button>
       {isExpanded && toolCall.status === 'failed' && toolResult?.error && (
-        <div className={styles.webSearchResults}>
-          <div className={styles.sourceDetails}>
-            <div className={styles.sourceItem}>
-              <p className={styles.sourceItemSnippet} style={{ color: 'var(--color-error)' }}>
-                {toolResult.error}
-              </p>
-            </div>
-          </div>
+        <div className="border-t border-border bg-surface-subtle/50 px-3 py-3">
+          <p className="text-xs leading-relaxed text-destructive-foreground">{toolResult.error}</p>
         </div>
       )}
       {isExpanded && toolCall.status === 'completed' && resultPreview && (
-        <div className={styles.webSearchResults}>
-          <div className={styles.sourceDetails}>
-            <div className={styles.sourceItem}>
-              <pre className={styles.openWebContent}>{resultPreview}</pre>
-            </div>
-          </div>
+        <div className="border-t border-border bg-surface-subtle/50 px-3 py-3">
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-surface px-2.5 py-2 font-mono text-[11.5px] leading-relaxed text-foreground/85">
+            {resultPreview}
+          </pre>
         </div>
       )}
     </div>

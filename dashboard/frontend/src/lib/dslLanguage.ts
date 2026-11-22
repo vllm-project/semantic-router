@@ -167,61 +167,6 @@ export const monarchTokens: monacoNs.languages.IMonarchLanguage = {
   },
 }
 
-// ---------- Theme ----------
-
-export function defineTheme(monaco: typeof monacoNs): void {
-  monaco.editor.defineTheme('signal-dsl-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [
-      { token: 'comment', foreground: '858991', fontStyle: 'italic' },
-      { token: 'keyword', foreground: 'F4F4F5', fontStyle: 'bold' },
-      { token: 'keyword.operator', foreground: 'A1A1AA', fontStyle: 'bold' },
-      { token: 'type', foreground: 'C9CBD0' },
-      { token: 'type.plugin', foreground: 'B7BAC0' },
-      { token: 'type.algorithm', foreground: 'D4D4D8' },
-      { token: 'string', foreground: 'B8BBC2' },
-      { token: 'string.escape', foreground: 'F0444A' },
-      { token: 'number', foreground: '9CA3AF' },
-      { token: 'number.float', foreground: '9CA3AF' },
-      { token: 'constant.language', foreground: 'F0444A' },
-      { token: 'variable.field', foreground: 'D4D4D8' },
-      { token: 'identifier', foreground: 'E4E4E7' },
-      { token: 'delimiter', foreground: '777B82' },
-    ],
-    colors: {
-      'editor.background': '#050505',
-      'editor.foreground': '#e4e4e7',
-      'editorGutter.background': '#050505',
-      'editor.lineHighlightBackground': '#111113',
-      'editor.lineHighlightBorder': '#00000000',
-      'editor.selectionBackground': '#5f636a55',
-      'editor.inactiveSelectionBackground': '#5f636a32',
-      'editorCursor.foreground': '#e31b23',
-      'editorLineNumber.foreground': '#52525b',
-      'editorLineNumber.activeForeground': '#d4d4d8',
-      'editorIndentGuide.background1': '#252528',
-      'editorIndentGuide.activeBackground1': '#5f636a',
-      'editorBracketHighlight.foreground1': '#e31b23',
-      'editorBracketHighlight.foreground2': '#d4d4d8',
-      'editorBracketHighlight.foreground3': '#a1a1aa',
-      'editorBracketHighlight.foreground4': '#777b82',
-      'editorBracketHighlight.foreground5': '#e31b23',
-      'editorBracketHighlight.foreground6': '#a1a1aa',
-      'editorBracketHighlight.unexpectedBracket.foreground': '#e31b23',
-      'editorWidget.background': '#111113',
-      'editorWidget.border': '#2b2b2f',
-      'editorSuggestWidget.selectedBackground': '#202024',
-      'editorHoverWidget.background': '#111113',
-      'editorHoverWidget.border': '#2b2b2f',
-      'minimap.background': '#050505',
-      'scrollbarSlider.background': '#5f636a40',
-      'scrollbarSlider.hoverBackground': '#777b8260',
-      'scrollbarSlider.activeBackground': '#a1a1aa70',
-    },
-  })
-}
-
 // ---------- Completion Provider ----------
 
 const KEYWORD_SUGGESTIONS = [
@@ -294,7 +239,10 @@ const PLUGIN_TYPE_SUGGESTIONS = [
   { label: 'tools', detail: 'Route-local tool policy and decision-model tool selection plugin' },
   { label: 'fast_response', detail: 'Short-circuit fixed response plugin' },
   { label: 'request_params', detail: 'Request parameter mutation plugin' },
-  { label: 'response_guard', detail: 'Block or annotate answers on the signals they are checked with' },
+  {
+    label: 'response_guard',
+    detail: 'Block or annotate answers on the signals they are checked with',
+  },
   { label: 'prompt_cache', detail: 'Route-local Anthropic prompt-cache marker injection' },
   { label: 'masking', detail: 'Provider-bound PII masking plugin' },
 ]
@@ -612,5 +560,4 @@ export function registerDSLLanguage(
       createCodeActionProvider(monaco, getDiagnostics),
     )
   }
-  defineTheme(monaco)
 }

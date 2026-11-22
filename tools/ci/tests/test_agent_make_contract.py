@@ -252,7 +252,7 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertNotIn("docs_only", job.get("if", ""))
         commands = [step.get("run", "") for step in job["steps"]]
         self.assertIn(
-            "make docs-generated-check docs-cli-test docs-community-test docs-check-translation-coverage",
+            "make docs-generated-check docs-cli-test docs-community-test docs-i18n-shell-test docs-check-translation-coverage",
             commands,
         )
         self.assertFalse(any("pip install -e" in command for command in commands))

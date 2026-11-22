@@ -10,12 +10,36 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemoneprotocol"
 )
 
-// mediaProblem refuses an image or video a codec cannot carry as a runtime
-// refuses it: invalid_request with reason image_format or video_format.
+// mediaCodes are the public codes of the image and video refusals that the
+// public API names apart from invalid_request: media that is not a data URL of
+// a format the model reads is unsupported_media_type, and media whose data does
+// not decode is invalid_media. Every other media reason (a size, pixel,
+// aspect-ratio, duration or video-token limit, or a model that reads no images)
+// stays invalid_request.
+var mediaCodes = map[string]string{
+	"image_format":    "unsupported_media_type",
+	"video_format":    "unsupported_media_type",
+	"image_malformed": "invalid_media",
+	"video_malformed": "invalid_media",
+}
+
+// PublicCode is the public code of a request-level refusal with code and
+// reason: the mediaCodes code of an invalid_request refusal for one of those
+// reasons, else code. The refusal keeps its status (400) and its reason.
+func PublicCode(code, reason string) string {
+	if media, ok := mediaCodes[reason]; ok && code == "invalid_request" {
+		return media
+	}
+	return code
+}
+
+// mediaProblem refuses an image or video a codec cannot carry as a runtime's
+// refusal reads: unsupported_media_type with reason image_format or
+// video_format.
 func mediaProblem(kind, detail string) *systemoneprotocol.Problem {
 	return &systemoneprotocol.Problem{
 		Status: http.StatusBadRequest, Kind: systemoneprotocol.ProblemRejected,
-		Code: "invalid_request", Reason: kind + "_format", Detail: detail,
+		Code: PublicCode("invalid_request", kind+"_format"), Reason: kind + "_format", Detail: detail,
 	}
 }
 
@@ -162,7 +186,11 @@ func imageAsset(url string) (systemoneprotocol.Value, error) {
 }
 
 var videoFormats = []struct{ mime, format string }{
-	{"video/mp4", "mp4"}, {"video/webm", "webm"}, {"video/quicktime", "mov"}, {"video/x-matroska", "mkv"},
+	{"video/mp4", "mp4"},
+	{"video/webm", "webm"},
+	{"video/quicktime", "mov"},
+	{"video/x-matroska", "mkv"},
+	{"video/mp2t", "ts"},
 }
 
 // videoAsset is a base64 video data URL as a vllm-sr/5.0 video asset.
@@ -180,7 +208,19 @@ func videoAsset(url string) (systemoneprotocol.Value, error) {
 			), nil
 		}
 	}
-	return systemoneprotocol.Value{}, fmt.Errorf("a video must be an MP4, WebM, QuickTime or Matroska data URL")
+	return systemoneprotocol.Value{}, fmt.Errorf("a video must be an MP4, WebM, QuickTime, Matroska or MPEG-TS data URL")
+}
+
+// DecodesImage reports whether the codec reads this data URL as an image.
+func DecodesImage(url string) bool {
+	_, err := imageAsset(url)
+	return err == nil
+}
+
+// DecodesVideo reports whether the codec reads this data URL as a video.
+func DecodesVideo(url string) bool {
+	_, err := videoAsset(url)
+	return err == nil
 }
 
 // assetDataURL is an image or video asset as the data URL vllm-sr/4.0 and the
@@ -197,7 +237,7 @@ func assetDataURL(kind string, asset systemoneprotocol.Value) (string, error) {
 				return "data:" + known.mime + ";base64," + data, nil
 			}
 		}
-		return "", fmt.Errorf("a video asset needs its format: mp4, webm, mov or mkv")
+		return "", fmt.Errorf("a video asset needs its format: mp4, webm, mov, mkv or ts")
 	}
 	switch format {
 	case "png":

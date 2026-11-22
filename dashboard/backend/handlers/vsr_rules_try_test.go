@@ -76,3 +76,45 @@ func TestVSRRulesTryForwardsWithTheListenersKey(t *testing.T) {
 		}
 	}
 }
+
+// A save moves the listener's key out of the config (api_key_files in a
+// standalone stack, an environment reference on Kubernetes); Try it still
+// sends the key the Router reads.
+func TestVSRRulesTrySendsTheKeyTheRouterReads(t *testing.T) {
+	var forwarded systemone.ForwardRequest
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded = systemone.ForwardRequest{}
+		_ = json.NewDecoder(r.Body).Decode(&forwarded)
+		_, _ = io.WriteString(w, `{"revision":"r1","parts":[]}`)
+	}))
+	defer upstream.Close()
+	data, err := os.ReadFile(writeKeyedListenerConfig(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := "    apis:\n      systemone:\n        vsr:\n          rules:\n            recipe: default\n            guard:\n              - {type: keyword, name: prod_database}\n"
+	t.Setenv("TRY_GATEWAY_KEY", "try-env-key")
+	for name, tc := range map[string]struct{ keys, want string }{
+		"moved to a key file":      {"      - " + listenerKeyFixture + "\n", listenerKeyFixture},
+		"an environment reference": {"      - ${TRY_GATEWAY_KEY}\n", "try-env-key"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("VLLM_SR_GATEWAY", "standalone")
+			document := strings.Replace(string(data), "      - "+listenerKeyFixture+"\n", tc.keys+rules, 1)
+			configPath := filepath.Join(t.TempDir(), "config.yaml")
+			if err := os.WriteFile(configPath, []byte(document), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := persistConfig(configPath, []byte(document)); err != nil {
+				t.Fatal(err)
+			}
+			body := `{"listener":"public","request":{"app":"guard","parts":[{"id":"try","text":"x"}]}}`
+			response := httptest.NewRecorder()
+			VSRRulesTryHandler(configPath, upstream.URL, decisionModelCredentialProvider{token: "trusted-management"})(
+				response, httptest.NewRequest(http.MethodPost, "/api/vsr/rules/try", strings.NewReader(body)))
+			if response.Code != http.StatusOK || forwarded.Authorization != "Bearer "+tc.want {
+				t.Fatalf("try answered %d, forwarded authorization %q", response.Code, forwarded.Authorization)
+			}
+		})
+	}
+}

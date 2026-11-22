@@ -147,6 +147,21 @@
         }
       }
     },
+    "priceListEntry": {
+      "description": "The list price of a provider model ID that has no Model Card. It prices the model ID a backend calls and is never a model: not selectable, not listed, and without evaluations.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "pricing", "verification"],
+      "properties": {
+        "id": {"$ref": "#/$defs/nonEmptyString"},
+        "pricing": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {"type": ["number", "string", "boolean"]}
+        },
+        "verification": {"$ref": "#/$defs/modelBinding/properties/verification"}
+      }
+    },
     "distribution": {
       "type": "object",
       "additionalProperties": false,
@@ -286,6 +301,11 @@
             "type": "array",
             "uniqueItems": true,
             "items": {"$ref": "#/$defs/modelBinding"}
+          },
+          "price_list": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/priceListEntry"}
           }
         }
       }

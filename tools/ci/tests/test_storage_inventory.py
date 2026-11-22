@@ -54,8 +54,14 @@ class StorageInventoryTests(unittest.TestCase):
         self.assertCountEqual(
             inventory,
             [
+                "TestPostgresHarnessQueriesIntegration",
                 "TestPostgresMetadataIntegration",
                 "TestPostgresProviderCacheIntegration",
                 "TestPostgresQueryBeyondTenThousandIntegration",
+                "TestPostgresQueryRunIntegration",
+                "TestPostgresReviewMetadataScanIntegration",
+                "TestPostgresReviewQueriesIntegration",
+                "TestPostgresServedModelIntegration",
+                "TestPostgresTurnQueriesIntegration",
             ],
         )

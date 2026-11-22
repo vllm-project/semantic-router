@@ -116,7 +116,7 @@ func (r *OpenAIRouter) injectContext(ctx *RequestContext, plugin *config.Context
 			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
 		}}}},
 	}
-	request.Messages = slices.Insert(request.Messages, at, exchange...)
+	llmprotocol.InsertMessages(request, at, exchange...)
 	request.Generation++
 	if sourceType == config.ContextSourceRAG {
 		ctx.HasToolsForFactCheck = true

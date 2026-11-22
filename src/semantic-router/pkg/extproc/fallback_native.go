@@ -37,9 +37,9 @@ func (s *routingSession) Fallback() routing.Fallback {
 // the sending moves to the caller. Like the session's phases, its methods run
 // on the request's goroutine.
 //
-// As in the response-phase fallback, the request context switches to a
-// candidate only once the candidate succeeds; a chain that ends without
-// success leaves the primary's context and the primary's failed response.
+// Successful headers switch the response context to the candidate so the
+// body phases can decode and account for its answer. Those phases decide
+// whether the candidate actually served the request.
 type sessionFallback struct {
 	session *routingSession
 	// primary is the context's dispatch state before the first candidate,
@@ -94,7 +94,7 @@ func (f *sessionFallback) Next(callCtx context.Context, outcome routing.Outcome)
 			if record.FinalStatus == "" {
 				record.FinalStatus = fallbackHaltStatus(err)
 			}
-			return f.refusal(f.endAfter(failed, outcome))
+			return f.refusal(failed, outcome)
 		}
 	}
 }
@@ -119,13 +119,15 @@ func (f *sessionFallback) endAfter(failed *fallbackCandidate, outcome routing.Ou
 
 // refusal answers a chain that ended at a candidate refused for want of the
 // request's delegated credential with the request's 401, as the
-// response-phase fallback answers it; any other end keeps step.
-func (f *sessionFallback) refusal(step routing.FallbackStep) (routing.FallbackStep, error) {
+// response-phase fallback answers it; any other halt ends after the failed
+// call.
+func (f *sessionFallback) refusal(failed *fallbackCandidate, outcome routing.Outcome) (routing.FallbackStep, error) {
 	r, ctx := f.session.router, f.session.ctx
-	refused := r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
+	refused := r.fallbackCredentialRefusal(ctx)
 	if refused == nil {
-		return step, nil
+		return f.endAfter(failed, outcome), nil
 	}
+	step := f.end()
 	appendConfigVersionToImmediateResponse(refused, ctx)
 	appendRoutedResponseHeaders(refused, ctx)
 	effect, err := routingEffect(refused)
@@ -272,6 +274,7 @@ func (f *sessionFallback) failedAttempt(outcome routing.Outcome) fallback.Attemp
 		Model:      f.model(),
 		Backend:    f.backend(),
 		StatusCode: outcome.Status,
+		LocalReply: outcome.Local,
 		Duration:   outcome.Duration,
 		Discarded:  true,
 	}
@@ -295,20 +298,28 @@ func (f *sessionFallback) failedAttempt(outcome routing.Outcome) fallback.Attemp
 	return attempt
 }
 
-// succeeded switches the request to the in-flight candidate once its
-// successful response arrives, and closes the record.
-func (f *sessionFallback) succeeded(status int) {
+type nativeFallbackResponse struct {
+	candidate *fallbackCandidate
+	status    int
+	duration  time.Duration
+}
+
+// beginResponse sets up decoding and accounting for the candidate's body.
+func (f *sessionFallback) beginResponse(status int) {
 	candidate := f.current
 	if candidate == nil {
 		return
 	}
 	f.current, f.primary = nil, nil
-	r, ctx := f.session.router, f.session.ctx
+	ctx := f.session.ctx
 	if ctx.InflightToken != 0 {
 		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 	}
 	ctx.SemanticRequest = candidate.request
+	// A candidate's request carries its output format: only the primary
+	// dispatch held it back.
+	ctx.structuredOutputPass = nil
 	ctx.TargetFormat = candidate.dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(candidate.dispatch.profile)
 	ctx.RequestModel = candidate.model
@@ -316,17 +327,34 @@ func (f *sessionFallback) succeeded(status int) {
 	// The response phases credit this success to the request's backend.
 	ctx.primaryBackendName = candidate.dispatch.backendName
 	ctx.ResponsePath = headers.ResponsePathFallback
+	ctx.nativeFallbackResponse = &nativeFallbackResponse{candidate: candidate, status: status, duration: time.Since(f.sent)}
+}
 
-	orch := r.fallbackOrchestratorForContext(ctx)
-	if orch == nil || ctx.FallbackRecord == nil {
+// finishNativeFallbackResponse closes the pending attempt once. A failure
+// after headers keeps the provider's HTTP status and the reason the Router
+// could not deliver its answer.
+func (r *OpenAIRouter) finishNativeFallbackResponse(ctx *RequestContext, failure string) {
+	if ctx == nil || ctx.nativeFallbackResponse == nil {
 		return
 	}
+	pending := ctx.nativeFallbackResponse
+	ctx.nativeFallbackResponse = nil
+	record := ctx.FallbackRecord
+	candidate := pending.candidate
 	attempt := fallback.AttemptOutcome{
 		Model: candidate.model, Backend: candidate.dispatch.backendName,
-		StatusCode: status, Duration: time.Since(f.sent),
+		StatusCode: pending.status, Duration: pending.duration,
 	}
-	if orch.EvaluateAttempt(ctx.TraceContext, ctx.FallbackRecord, attempt, fallbackCommitState(ctx)).Succeeded {
-		metrics.RecordModelRouting(ctx.FallbackRecord.InitialModel, candidate.model)
+	if failure != "" {
+		attempt.ErrorMessage, attempt.Discarded = failure, true
+		record.Attempts = append(record.Attempts, attempt)
+		record.TotalDuration = time.Since(record.StartTime)
+		record.FinalStatus = failure
+	} else if orch := r.fallbackOrchestratorForContext(ctx); orch != nil {
+		if orch.EvaluateAttempt(ctx.TraceContext, record, attempt, fallbackCommitState(ctx)).Succeeded {
+			r.recordServedFallback(ctx, candidate)
+			metrics.RecordModelRouting(record.InitialModel, candidate.model)
+		}
 	}
 	r.recordFallbackExecution(ctx)
 }
@@ -366,11 +394,13 @@ func (r *OpenAIRouter) fallbackBackendName(ctx *RequestContext, model string) st
 	return model
 }
 
+// fallbackCommitState is what a failed attempt leaves for the next candidate.
+// No attempt runs a tool: a request carries only tools its client runs, and a
+// tool result in its history ran on the client before the request, so a
+// candidate gets it as history and runs nothing again. Once any of the answer,
+// such as a streamed tool call, has reached the client, nothing falls back.
 func fallbackCommitState(ctx *RequestContext) fallback.CommitState {
-	return fallback.CommitState{
-		HasNonIdempotentSideEffects: ctx.hasNonIdempotentToolExecution(),
-		BodyReplayable:              ctx.SemanticRequest != nil,
-	}
+	return fallback.CommitState{BodyReplayable: ctx.SemanticRequest != nil}
 }
 
 // candidateCall builds the upstream request for a prepared candidate from the

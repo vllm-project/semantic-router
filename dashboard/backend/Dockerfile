@@ -83,6 +83,7 @@ COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
 COPY src/semantic-router/pkg/admission/ /app/src/semantic-router/pkg/admission/
 COPY src/semantic-router/pkg/apiregistry/ /app/src/semantic-router/pkg/apiregistry/
 COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
+COPY src/semantic-router/pkg/clientauth/ /app/src/semantic-router/pkg/clientauth/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
 COPY src/semantic-router/pkg/consts/ /app/src/semantic-router/pkg/consts/
@@ -102,6 +103,7 @@ COPY src/semantic-router/pkg/presets/ /app/src/semantic-router/pkg/presets/
 COPY src/semantic-router/pkg/principal/ /app/src/semantic-router/pkg/principal/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
 COPY src/semantic-router/pkg/routing/ /app/src/semantic-router/pkg/routing/
+COPY src/semantic-router/pkg/spendbudget/ /app/src/semantic-router/pkg/spendbudget/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 COPY src/semantic-router/pkg/trainingcontract/ /app/src/semantic-router/pkg/trainingcontract/
 COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
@@ -111,6 +113,7 @@ COPY src/semantic-router/pkg/tokencount/tokenizerspec/ /app/src/semantic-router/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/utils/contentcoding/ /app/src/semantic-router/pkg/utils/contentcoding/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
+COPY src/semantic-router/pkg/websearch/ /app/src/semantic-router/pkg/websearch/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/

@@ -316,12 +316,20 @@ func (q *QdrantStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 		r.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 		r.Currency = cloneStringPtr(usage.Currency)
 		r.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		r.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 	})
 }
 
 func (q *QdrantStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	return q.updateRecord(ctx, id, func(r *Record) {
 		r.ToolTrace = cloneToolTrace(&trace)
+	})
+}
+
+// UpdateReview replaces the approval review of a record.
+func (q *QdrantStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	return q.updateRecord(ctx, id, func(r *Record) {
+		r.Review = CloneReview(&review)
 	})
 }
 

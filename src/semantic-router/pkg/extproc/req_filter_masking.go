@@ -2,12 +2,16 @@ package extproc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/maskingregistry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -60,7 +64,11 @@ func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
 	if ctx.Masking == nil {
 		// Once per request, never per dispatch: a later dispatch continues the
 		// index sequence instead of reusing _0 for a different value (D5).
-		ctx.Masking = masking.NewAllocator(cfg)
+		allocator, err := r.newMaskingAllocator(ctx, cfg)
+		if err != nil {
+			return &maskingDispatchError{cause: err}
+		}
+		ctx.Masking = allocator
 	}
 	scan := spanScannerFor(ctx.embeddingContext(), finder, cfg)
 	result, err := masking.Apply(ctx.SemanticRequest, ctx.Masking, scan)
@@ -131,4 +139,46 @@ func spanScannerFor(requestCtx context.Context, finder ruleSpans, cfg *config.Ma
 		}
 		return spans, nil
 	}
+}
+
+// newMaskingAllocator returns the request's allocator. In registry mode it
+// takes indexes from the plugin's identity namespace in the request's scope:
+// the user a trusted authenticator named, or the installation without one,
+// and the root session when the namespace separates sessions. A Looper hop
+// keeps the scope of the request it serves.
+func (r *OpenAIRouter) newMaskingAllocator(ctx *RequestContext, cfg *config.MaskingPluginConfig) (*masking.Allocator, error) {
+	if !cfg.RegistryMode() {
+		return masking.NewAllocator(cfg), nil
+	}
+	identity := r.maskingIdentities[cfg.IdentityNamespace]
+	if identity == nil {
+		return nil, fmt.Errorf("identity namespace %q is not open", cfg.IdentityNamespace)
+	}
+	scope, ok := masking.RequestScope(ctx.TraceContext)
+	if !ok {
+		scope.RootSession = ctx.SessionID
+		if ctx.AuthenticatedPrincipal != "" {
+			// The gateway strips authentication results a peer it does not
+			// trust sent, so these name a user the deployment verified.
+			principal, _ := json.Marshal([]string{headerValueCI(ctx, headers.AuthzTenantID), ctx.AuthenticatedPrincipal})
+			scope.Principal = string(principal)
+		}
+		ctx.TraceContext = masking.WithRequestScope(ctx.TraceContext, scope)
+	}
+	return masking.NewRegistryAllocator(cfg, identity, scope.Principal, scope.RootSession)
+}
+
+// openMaskingIdentities opens every configured identity namespace, so a key or
+// registry that is missing or does not match stops the Router before it
+// serves rather than failing each request.
+func openMaskingIdentities(cfg *config.RouterConfig) (map[string]*maskingregistry.Identity, error) {
+	identities := map[string]*maskingregistry.Identity{}
+	for _, name := range cfg.MaskingIdentity.MaskingNamespaceNames() {
+		identity, err := maskingregistry.Open(name, cfg.MaskingIdentity.Namespaces[name])
+		if err != nil {
+			return nil, fmt.Errorf("global.services.masking_identity.namespaces.%s: %w", name, err)
+		}
+		identities[name] = identity
+	}
+	return identities, nil
 }

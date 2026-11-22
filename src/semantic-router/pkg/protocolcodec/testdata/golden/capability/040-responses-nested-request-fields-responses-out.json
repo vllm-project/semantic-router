@@ -219,15 +219,17 @@
       "outcome": {
         "status": "ok",
         "body": {
-          "input": [],
+          "input": [
+            {
+              "content": [],
+              "encrypted_content": "encrypted",
+              "id": "reasoning_1",
+              "summary": [],
+              "type": "reasoning"
+            }
+          ],
           "model": "routed-model"
-        },
-        "diagnostics": [
-          {
-            "field": "input[].encrypted_content",
-            "action": "dropped"
-          }
-        ]
+        }
       }
     },
     {

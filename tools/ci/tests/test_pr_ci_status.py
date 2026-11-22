@@ -10,9 +10,10 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from manual_ci import ManualCIError
+from manual_ci import MERGIFY_BOT_ID, ManualCIError
 from pr_ci_status import (
     APP_ID,
     CAPABILITIES,
@@ -47,6 +48,7 @@ class Client:
         self.pull = {
             "number": 3,
             "state": "open",
+            "draft": False,
             "merge_commit_sha": MERGE,
             "head": {
                 "sha": HEAD,
@@ -57,6 +59,7 @@ class Client:
         }
         self.plan = {
             "schema_version": 1,
+            "draft": False,
             "source_sha": MERGE,
             "base_sha": BASE,
             "expected_verification_ids": ["quality"],
@@ -93,7 +96,7 @@ class Client:
             ]
         }
         self.report.update(
-            run_id=101,
+            run_id=self.run["id"],
             run_attempt=self.run["run_attempt"],
             errors=[],
             status=(
@@ -107,6 +110,7 @@ class Client:
         prefix = f"repos/{REPO}/"
         self.assert_prefix(endpoint, prefix)
         path = endpoint[len(prefix) :]
+        run_path = f"actions/runs/{self.run['id']}"
         if path == "git/ref/heads/main":
             return {
                 "ref": "refs/heads/main",
@@ -116,7 +120,7 @@ class Client:
             if self.compare_error is not None:
                 raise self.compare_error
             return {"merge_base_commit": {"sha": self.base_ancestor}}
-        if path == "actions/runs/101":
+        if path == run_path:
             return copy.deepcopy(self.run)
         if path == "actions/workflows/pr.yml":
             return {"id": 2}
@@ -125,10 +129,21 @@ class Client:
             if self.newer_run:
                 runs.append({**self.run, "id": 102})
             return {"workflow_runs": runs}
-        if path.startswith("pulls?state=open&base=main&head=contributor%3Afeature"):
+        source_owner = self.run["head_repository"]["full_name"].split("/")[0]
+        pull_query = urlencode(
+            {
+                "state": "open",
+                "base": "main",
+                "head": f"{source_owner}:{self.run['head_branch']}",
+            }
+        )
+        if path.startswith(f"pulls?{pull_query}"):
             return [copy.deepcopy(self.pull)]
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
+        if path.startswith("check-runs/"):
+            identity = int(path.rsplit("/", 1)[1])
+            return copy.deepcopy(next(c for c in self.checks if c["id"] == identity))
         if path.startswith(f"commits/{HEAD}/check-runs?"):
             checks = self.checks
             if "filter=latest" in path:
@@ -139,7 +154,7 @@ class Client:
                     == self.run["run_attempt"]
                 ]
             return {"check_runs": copy.deepcopy(checks)}
-        if path.startswith("actions/runs/101/attempts/"):
+        if path.startswith(f"{run_path}/attempts/"):
             return {
                 "jobs": [
                     copy.deepcopy(item)
@@ -148,7 +163,7 @@ class Client:
                     == self.run["run_attempt"]
                 ]
             }
-        if path.startswith("actions/runs/101/artifacts?"):
+        if path.startswith(f"{run_path}/artifacts?"):
             gate = "name=ci-gate" in path
             if gate and self.missing_report:
                 return {"artifacts": []}
@@ -219,6 +234,85 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_draft_receipt_cannot_qualify_the_same_head_after_ready(self):
+        client = Client()
+        ready_plan = client.plan.copy()
+        client.plan.update(
+            draft=True,
+            expected_verification_ids=[],
+            required_verification_ids=[],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        for draft in (True, False):
+            with self.subTest(draft=draft):
+                client.pull["draft"] = draft
+                self.assertIsNone(reconcile(client, REPO, 101).get("check"))
+                self.assertEqual(client.writes, [])
+
+        client.run["id"] = 102  # ready_for_review run on the same head and base.
+        client.plan = ready_plan
+        client.refresh_report()
+        waiting = reconcile(client, REPO, 102)
+        self.assertEqual(waiting["state"], "awaiting-approval")
+        self.assertEqual(waiting["check"]["status"], "in_progress")
+        self.assertIn("/ci run", waiting["comment"])
+
+        client.run["run_attempt"] = 2  # Completed attempt after authorized /ci run.
+        client.plan.update(
+            expected_verification_ids=client.plan["required_verification_ids"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        green = reconcile(client, REPO, 102)["check"]
+        self.assertEqual(green["external_id"], f"{PREFIX}3:102:2")
+        self.assertEqual(green["head_sha"], HEAD)
+        self.assertEqual(green["conclusion"], "success")
+
+    def test_completed_draft_check_requires_trusted_mergify_identity(self):
+        for author_id in (MERGIFY_BOT_ID, 42):
+            with self.subTest(author_id=author_id):
+                client = Client()
+                ref = "mergify/merge-queue/test"
+                client.run.update(head_branch=ref, head_repository={"full_name": REPO})
+                client.pull["head"].update(ref=ref, repo={"full_name": REPO})
+                client.pull.update(
+                    draft=True,
+                    user={"id": author_id, "login": "mergify[bot]", "type": "Bot"},
+                )
+                client.plan.update(
+                    expected_verification_ids=client.plan["required_verification_ids"],
+                    deferred_verifications=[],
+                    deferred_images=[],
+                )
+                client.refresh_report()
+                result = reconcile(client, REPO, 101)
+                if author_id == MERGIFY_BOT_ID:
+                    self.assertEqual(result["check"]["conclusion"], "success")
+                else:
+                    self.assertIsNone(result.get("check"))
+                    self.assertEqual(client.writes, [])
+
+    def test_publish_rechecks_draft_before_marking_success(self):
+        class ConvertedToDraft(Client):
+            def request(self, endpoint, **kwargs):
+                result = super().request(endpoint, **kwargs)
+                if endpoint.startswith(f"repos/{REPO}/issues/3/comments?"):
+                    self.pull["draft"] = True
+                return result
+
+        client = ConvertedToDraft()
+        client.plan.update(
+            expected_verification_ids=client.plan["required_verification_ids"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        self.assertIsNone(reconcile(client, REPO, 101).get("check"))
+        self.assertEqual(client.writes, [])
+
     def test_fork_waiting_is_pending_with_actionable_comment(self):
         client = Client()
         result = reconcile(client, REPO, 101)
@@ -698,6 +792,42 @@ class DiagnosticClient(Client):
         self.mutate_on_final = None
         self.run_reads = {}
         self.live_base = BASE
+        self.rollup = {"oid": HEAD, "state": "SUCCESS"}
+        self.suites = {
+            identity: {
+                "id": identity,
+                "head_sha": HEAD,
+                "app": {"id": APP_ID},
+                "status": "completed",
+                "conclusion": conclusion,
+            }
+            for identity, conclusion in ((19, "cancelled"), (20, "success"))
+        }
+
+    def gh(self, arguments, *, read, text):
+        assert read and text and arguments[:3] == ["gh", "api", "graphql"]
+        assert f"head={HEAD}" in arguments
+        return type(
+            "Response",
+            (),
+            {
+                "returncode": 0,
+                "stdout": json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "object": {
+                                    "oid": self.rollup["oid"],
+                                    "statusCheckRollup": {
+                                        "state": self.rollup["state"]
+                                    },
+                                }
+                            }
+                        }
+                    }
+                ),
+            },
+        )()
 
     def advance_main_unrelated(self):
         self.live_base = "d" * 40
@@ -724,6 +854,8 @@ class DiagnosticClient(Client):
         assert kwargs.get("method", "GET") == "GET"
         self.reads.append(endpoint)
         path = endpoint.removeprefix(f"repos/{REPO}/")
+        if path.startswith("check-suites/"):
+            return copy.deepcopy(self.suites[int(path.rsplit("/", 1)[1])])
         if path.startswith(f"commits/{HEAD}/check-runs?"):
             checks = self.checks
             if "filter=latest" in path:
@@ -774,6 +906,7 @@ class DiagnosticTests(unittest.TestCase):
     def test_healthy_without_native_failure_does_not_claim_recovery(self):
         client = DiagnosticClient()
         client.checks.pop()
+        client.checks[0]["check_suite"]["id"] = 20
         result = self.diagnose(client)
         self.assertEqual(result["state"], "healthy")
         self.assertFalse(result["evidence"]["competition"])

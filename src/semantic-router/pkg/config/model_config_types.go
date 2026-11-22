@@ -84,6 +84,20 @@ type ModelPricing struct {
 	CacheWrite1hPer1M *float64 `yaml:"cache_write_1h_per_1m,omitempty"`
 }
 
+// UnmarshalYAML reads a written pricing block without a currency as USD, as a
+// deployment's is, so a block of zero rates prices a model free instead of
+// leaving it for the catalog's list price.
+func (p *ModelPricing) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain ModelPricing
+	if err := unmarshal((*plain)(p)); err != nil {
+		return err
+	}
+	if p.Currency == "" {
+		p.Currency = "USD"
+	}
+	return nil
+}
+
 type ModelParams struct {
 	Deployment string `yaml:"deployment,omitempty"`
 	// Schema is the version of its API the model's backends speak, as the
@@ -114,7 +128,8 @@ type ModelParams struct {
 	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
 	Modalities           modelcatalog.Modalities                        `yaml:"modalities,omitempty"`
 	// UnsupportedCapabilities are the request capabilities the model's
-	// backends reject; the Router leaves their fields out for this model.
+	// backends lack; the Router leaves their fields out for this model, or
+	// sends its developer messages as system messages.
 	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
 	// Tokenizer counts the model's prompts for the context window check;
 	// empty counts them with the tokenizer of HubRepo, else with the proxy

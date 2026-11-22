@@ -1,6 +1,7 @@
 package publicmodels
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -104,7 +105,7 @@ func assertPublicModel(
 	}
 	wantRouting.API = config.ChatAPI
 	wantRouting.Source = model.Routing.Source
-	if model.Routing != wantRouting {
+	if !reflect.DeepEqual(model.Routing, wantRouting) {
 		t.Fatalf("%s routing metadata = %+v, want %+v", model.ID, model.Routing, wantRouting)
 	}
 	if model.Description != wantDescription {
@@ -175,5 +176,73 @@ recipes:
 		"    list_backend_models: true\n    model_selection: {enabled: false}\nlisteners: []\n", 1)
 	if got, want := listed(external), "vllm-sr/auto,alpha,notes-only,only-alpha,zeta"; got != want {
 		t.Fatalf("external-gateway listing = %s, want %s", got, want)
+	}
+}
+
+// An entrypoint another one sends its reviews or memory calls to is listed for
+// those callers, under its role, but not offered for chat.
+func TestDelegateEntrypointsAreNotOfferedForChat(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.5
+providers:
+  models:
+    - name: m
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.1:8000"}]
+entrypoints:
+  - {model_names: [vllm-sr/auto], recipe: default, default: true, review_model: vllm-sr/review, memory_model: vllm-sr/memory}
+  - {model_names: [vllm-sr/review], recipe: default}
+  - {model_names: [vllm-sr/memory, memory-alias], recipe: default}
+recipes:
+  - name: default
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]RoutingMetadata{}
+	for _, model := range NewOpenAIModelList(cfg, 0).Data {
+		got[model.ID] = model.Routing
+	}
+	for id, want := range map[string]string{"vllm-sr/auto": "", "vllm-sr/review": "review", "vllm-sr/memory": "memory", "memory-alias": "memory"} {
+		roles := strings.Join(got[id].Delegates, ",")
+		if roles != want || got[id].Selectable != (want == "") {
+			t.Errorf("%s routing = %+v, want delegates %q", id, got[id], want)
+		}
+	}
+}
+
+// The default entrypoint stays offered for chat when another entrypoint sends
+// its memory calls there, marked default or not, and a target given both roles
+// lists both.
+func TestTheDefaultEntrypointStaysSelectableAsADelegate(t *testing.T) {
+	for _, marked := range []string{", default: true", ""} {
+		cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.5
+providers:
+  models:
+    - name: m
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.1:8000"}]
+entrypoints:
+  - {model_names: [vllm-sr/auto], recipe: default` + marked + `}
+  - {model_names: [coding], recipe: default, memory_model: vllm-sr/auto, review_model: helper}
+  - {model_names: [agent], recipe: default, memory_model: helper}
+  - {model_names: [helper], recipe: default}
+recipes:
+  - name: default
+`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]RoutingMetadata{}
+		for _, model := range NewOpenAIModelList(cfg, 0).Data {
+			got[model.ID] = model.Routing
+		}
+		for id, want := range map[string]struct {
+			roles      string
+			selectable bool
+		}{"vllm-sr/auto": {"memory", true}, "coding": {"", true}, "helper": {"memory,review", false}} {
+			if roles := strings.Join(got[id].Delegates, ","); roles != want.roles || got[id].Selectable != want.selectable {
+				t.Errorf("default%q: %s routing = %+v, want delegates %q selectable %v", marked, id, got[id], want.roles, want.selectable)
+			}
+		}
 	}
 }

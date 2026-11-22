@@ -2,7 +2,9 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import styles from './ReMoMResponsesDisplay.module.css'
+import { ChevronDown, Layers } from 'lucide-react'
+
+import { Badge, cn } from '../ui'
 
 interface ReMoMIntermediateResp {
   model: string
@@ -22,13 +24,26 @@ interface ReMoMResponsesDisplayProps {
   rounds: ReMoMRoundResponse[]
 }
 
+function Section({ label, content }: { label: string; content: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-[11px] font-medium text-subtle-foreground">{label}</div>
+      <div className="max-h-72 overflow-y-auto text-[13px] leading-relaxed text-foreground/90 [&_code]:font-mono [&_code]:text-[12px] [&_p]:my-1.5 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-border [&_pre]:bg-surface-sunken [&_pre]:p-2.5">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+          {content}
+        </ReactMarkdown>
+      </div>
+    </div>
+  )
+}
+
 const ReMoMResponsesDisplay = ({ rounds }: ReMoMResponsesDisplayProps) => {
   // Track expanded state for each response
   const [expandedResponses, setExpandedResponses] = useState<Set<string>>(new Set())
 
   const toggleResponse = (roundIndex: number, responseIndex: number) => {
     const key = `${roundIndex}-${responseIndex}`
-    setExpandedResponses(prev => {
+    setExpandedResponses((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(key)) {
         newSet.delete(key)
@@ -48,94 +63,67 @@ const ReMoMResponsesDisplay = ({ rounds }: ReMoMResponsesDisplayProps) => {
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5z" />
-          <path d="M2 17l10 5 10-5" />
-          <path d="M2 12l10 5 10-5" />
-        </svg>
-        <span>ReMoM Test-Time Scaling</span>
-        <span className={styles.badge}>{rounds.length} round{rounds.length > 1 ? 's' : ''}</span>
+    <div className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+      <div className="flex items-center gap-2 border-b border-border bg-surface-subtle/70 px-3.5 py-2.5 text-[13px] font-medium">
+        <Layers className="size-4 text-chart-3" />
+        <span>ReMoM test-time scaling</span>
+        <Badge size="sm" tone="violet" className="ml-auto">
+          {rounds.length} round{rounds.length > 1 ? 's' : ''}
+        </Badge>
       </div>
 
-      <div className={styles.rounds}>
+      <div className="flex flex-col divide-y divide-border">
         {rounds.map((round, roundIndex) => (
-          <div key={roundIndex} className={styles.round}>
-            <div className={styles.roundHeader}>
-              <span className={styles.roundTitle}>Round {round.round}</span>
-              <span className={styles.roundBreadth}>{round.breadth} parallel explore{round.breadth > 1 ? 's' : ''}</span>
+          <div key={roundIndex} className="flex flex-col gap-2 px-3.5 py-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium">Round {round.round}</span>
+              <span className="text-subtle-foreground">
+                {round.breadth} parallel explore{round.breadth > 1 ? 's' : ''}
+              </span>
             </div>
 
-            <div className={styles.responses}>
+            <div className="flex flex-col gap-1.5">
               {round.responses.map((response, responseIndex) => {
                 const expanded = isExpanded(roundIndex, responseIndex)
                 return (
-                  <div key={responseIndex} className={styles.responseCard}>
+                  <div
+                    key={responseIndex}
+                    className="overflow-hidden rounded-lg border border-border bg-surface-subtle/50"
+                  >
                     <button
-                      className={styles.responseHeader}
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/40"
+                      aria-expanded={expanded}
                       onClick={() => toggleResponse(roundIndex, responseIndex)}
                     >
-                      <div className={styles.responseInfo}>
-                        <span className={styles.modelName}>{response.model}</span>
-                        {response.token_count && (
-                          <span className={styles.tokenCount}>{response.token_count} tokens</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs font-medium">
+                        {response.model}
+                      </span>
+                      {response.token_count ? (
+                        <span className="shrink-0 text-[11px] text-subtle-foreground tabular">
+                          {response.token_count} tokens
+                        </span>
+                      ) : null}
+                      <ChevronDown
+                        className={cn(
+                          'size-4 shrink-0 text-subtle-foreground transition-transform duration-200',
+                          expanded && 'rotate-180',
                         )}
-                      </div>
-                      <svg
-                        className={`${styles.expandIcon} ${expanded ? styles.expanded : ''}`}
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
+                        aria-hidden
+                      />
                     </button>
 
                     {expanded && (
-                      <div className={styles.responseContent}>
-                        {response.compacted_content && (
-                          <div className={styles.contentSection}>
-                            <div className={styles.contentLabel}>Compacted Content</div>
-                            <div className={styles.contentText}>
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                rehypePlugins={[rehypeHighlight]}
-                              >
-                                {response.compacted_content}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
-                        {response.reasoning && (
-                          <div className={styles.contentSection}>
-                            <div className={styles.contentLabel}>Reasoning</div>
-                            <div className={styles.contentText}>
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                rehypePlugins={[rehypeHighlight]}
-                              >
-                                {response.reasoning}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
-                        {response.content && !response.compacted_content && (
-                          <div className={styles.contentSection}>
-                            <div className={styles.contentLabel}>Full Content</div>
-                            <div className={styles.contentText}>
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm]}
-                                rehypePlugins={[rehypeHighlight]}
-                              >
-                                {response.content}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
+                      <div className="flex flex-col gap-3 border-t border-border bg-card px-3 py-2.5">
+                        {response.compacted_content ? (
+                          <Section label="Compacted content" content={response.compacted_content} />
+                        ) : null}
+                        {response.reasoning ? (
+                          <Section label="Reasoning" content={response.reasoning} />
+                        ) : null}
+                        {response.content && !response.compacted_content ? (
+                          <Section label="Full content" content={response.content} />
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -150,4 +138,3 @@ const ReMoMResponsesDisplay = ({ rounds }: ReMoMResponsesDisplayProps) => {
 }
 
 export default ReMoMResponsesDisplay
-

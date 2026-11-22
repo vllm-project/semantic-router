@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import ProductIcon from '../ProductIcon'
-import ProductLoadingState from '../ProductLoadingState'
+import { Activity } from 'lucide-react'
+import { StatusDot } from '../../ui'
 import BenchPagination from './BenchPagination'
 import { active, number } from './model'
 import { duration, elapsedSeconds, responseBytes } from './activityPresentation'
 import { useActiveCalls } from './useActiveCalls'
 import { useActivityClock } from './useActivityClock'
+import { BenchBlock, BenchLoading, Notice } from './benchUi'
+import { benchText } from './benchStyles'
 import type { CallActivity, CallRecord, Run } from './types'
-import styles from './RunActivity.module.css'
 
 const phases: Record<CallActivity['phase'], string> = {
   preparing: 'Preparing request',
@@ -40,44 +41,54 @@ export default function RunActivity({ run, revision }: { run: Run; revision: num
   const currentPage = Math.min(page, Math.max(0, Math.ceil((calls?.length ?? 0) / 5) - 1))
   if (!enabled) return null
   return (
-    <section className={styles.section} aria-label="Current activity">
-      <div className={styles.heading}>
-        <h3>
-          <ProductIcon name="trace" width={16} height={16} /> Current activity{' '}
-          {calls !== null && <small>· {number(calls.length)} in progress</small>}
+    <BenchBlock className="mt-4" aria-label="Current activity">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className={`${benchText.h3} flex flex-wrap items-center gap-2`}>
+          <Activity aria-hidden="true" className="size-4 text-info" />
+          Current activity{' '}
+          {calls !== null && (
+            <small className="text-xs font-normal text-muted-foreground">
+              · {number(calls.length)} in progress
+            </small>
+          )}
         </h3>
         {readAt && (
-          <small>
+          <small className="text-xs text-subtle-foreground">
             Last checked <time dateTime={readAt}>{new Date(readAt).toLocaleTimeString()}</time>
           </small>
         )}
       </div>
-      <p className={styles.description}>
+      <p className={`${benchText.muted} mt-1`}>
         Response activity only; tokens and cost remain unknown until usage is recorded.
       </p>
       {error && (
-        <p role="alert" className={styles.error}>
+        <Notice tone="danger" as="p" role="alert">
           Activity could not be refreshed. {error}{' '}
           {calls !== null && 'Showing the last observed calls below.'}
-        </p>
+        </Notice>
       )}
       {calls === null ? (
         error ? (
-          <p>Current activity is unavailable.</p>
+          <p className={`${benchText.body} mt-3`}>Current activity is unavailable.</p>
         ) : (
-          <ProductLoadingState compact label="Reading current activity…" />
+          <BenchLoading label="Reading current activity…" />
         )
       ) : calls.length === 0 ? (
-        <p>No model call was in progress at the last check. The run is still {run.status}.</p>
+        <p className={`${benchText.body} mt-3`}>
+          No model call was in progress at the last check. The run is still {run.status}.
+        </p>
       ) : (
-        <ul className={styles.calls}>
+        <ul className="mt-3 divide-y divide-border border-t border-border">
           {calls.slice(currentPage * 5, currentPage * 5 + 5).map((call) => (
-            <li key={call.id}>
-              <div className={styles.identity}>
-                <strong>{call.selected_model ?? call.model ?? 'Model not recorded'}</strong>
-                <span>{callLabel(run, call)}</span>
+            <li key={call.id} className="py-3">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 break-words">
+                <StatusDot tone="info" pulse />
+                <strong className="text-[13px] font-medium text-foreground">
+                  {call.selected_model ?? call.model ?? 'Model not recorded'}
+                </strong>
+                <span className="text-xs text-muted-foreground">{callLabel(run, call)}</span>
               </div>
-              <dl>
+              <dl className="mt-2.5 grid grid-cols-2 gap-3 md:grid-cols-4 [&_dd]:mt-0.5 [&_dd]:break-words [&_dd]:text-[13px] [&_dd]:text-foreground [&_dd]:tabular-nums [&_dt]:text-xs [&_dt]:text-muted-foreground">
                 <div>
                   <dt>Phase</dt>
                   <dd>{call.activity ? phases[call.activity.phase] : 'Activity not recorded'}</dd>
@@ -116,6 +127,6 @@ export default function RunActivity({ run, revision }: { run: Run; revision: num
           onChange={setPage}
         />
       )}
-    </section>
+    </BenchBlock>
   )
 }

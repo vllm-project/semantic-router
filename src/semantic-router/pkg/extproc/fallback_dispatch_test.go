@@ -418,33 +418,41 @@ func TestFallbackSafetyGateStreamingCommitted(t *testing.T) {
 	}
 }
 
-func TestFallbackSafetyGateNonIdempotentTools(t *testing.T) {
+// A tool result in the history ran on the client before the request. The
+// next candidate gets it as history and runs nothing again, so the chain goes
+// on to it.
+func TestFallbackResendsAToolResultInTheHistory(t *testing.T) {
 	policy := fallback.DefaultEnabledPolicy()
 	router, _ := setupFallbackTestRouter(t, policy)
 
 	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
 	ctx.UpstreamStatusCode = 503
-	// Add tool result message representing non-idempotent executed side-effect
-	ctx.SemanticRequest.Messages = append(ctx.SemanticRequest.Messages, llmprotocol.Message{
-		Role: llmprotocol.RoleTool,
-		Content: []llmprotocol.Content{{
-			Kind: llmprotocol.ContentToolResult,
-			Text: `{"transaction_id": "tx_123", "status": "debited"}`,
-		}},
-	})
+	ctx.SemanticRequest.Tools = []llmprotocol.Tool{{Name: "debit", InputSchema: json.RawMessage(`{"type":"object"}`)}}
+	ctx.SemanticRequest.Messages = append(ctx.SemanticRequest.Messages,
+		llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "debit", Arguments: `{}`},
+		}}},
+		llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_1", Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentText, Text: `{"transaction_id": "tx_123", "status": "debited"}`,
+			}}},
+		}}},
+	)
 
 	fallbackInvoked := false
 	router.fallbackCaller = func(callCtx context.Context, model string, body []byte, headers map[string]string) ([]byte, int, error) {
 		fallbackInvoked = true
-		return nil, 200, nil
+		return []byte(`{"id":"c1","object":"chat.completion","created":1,"model":"model-fallback-1",
+			"choices":[{"index":0,"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}],
+			"usage":{"prompt_tokens":5,"completion_tokens":1,"total_tokens":6}}`), http.StatusOK, nil
 	}
 
 	resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx)
-	if fallbackInvoked {
-		t.Fatal("fallbackCaller must NOT be invoked when non-idempotent tool side-effects exist")
+	if !fallbackInvoked {
+		t.Fatal("a tool result in the history stopped the fallback")
 	}
-	if resp == nil || resp.GetImmediateResponse() != nil {
-		t.Fatalf("expected standard error translation, got: %#v", resp)
+	if resp.GetImmediateResponse() == nil || ctx.FallbackRecord.FinalStatus != "succeeded" {
+		t.Fatalf("the candidate's answer did not reach the client: %#v, status %q", resp, ctx.FallbackRecord.FinalStatus)
 	}
 }
 
@@ -2584,8 +2592,8 @@ func guardedFallbackAnswer(t *testing.T, streaming bool, server *responseStageDe
 
 func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 	imm, _, responseCache := guardedFallbackAnswer(t, false, newJailbreakDecider(0.95))
-	if imm.GetStatus().GetCode() != typev3.StatusCode_Forbidden {
-		t.Fatalf("expected HTTP 403 Forbidden due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
+	if imm.GetStatus().GetCode() != typev3.StatusCode_BadRequest {
+		t.Fatalf("expected HTTP 400 Bad Request due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
 	}
 	bodyStr := string(imm.GetBody())
 	if !strings.Contains(bodyStr, "Response blocked: jailbreak content detected in LLM output") {
@@ -3540,17 +3548,17 @@ func TestFallbackBlockedResponseNotCached(t *testing.T) {
 	}
 
 	imm := resp.GetImmediateResponse()
-	if imm.GetStatus().GetCode() != typev3.StatusCode_Forbidden {
-		t.Fatalf("expected HTTP 403 Forbidden due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
+	if imm.GetStatus().GetCode() != typev3.StatusCode_BadRequest {
+		t.Fatalf("expected HTTP 400 Bad Request due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
 	}
 
-	// Verify that Router Replay recorded the terminal blocked response as HTTP 403 (not HTTP 200)
+	// Verify that Router Replay recorded the terminal blocked response as HTTP 400 (not HTTP 200)
 	rec, ok := recorder.GetRecord(ctx.RouterReplayID)
 	if !ok {
 		t.Fatal("expected replay record to be found")
 	}
-	if rec.ResponseStatus != http.StatusForbidden {
-		t.Errorf("expected replay response status %d (Forbidden), got %d", http.StatusForbidden, rec.ResponseStatus)
+	if rec.ResponseStatus != http.StatusBadRequest {
+		t.Errorf("expected replay response status %d (Bad Request), got %d", http.StatusBadRequest, rec.ResponseStatus)
 	}
 	if ctx.FallbackRecord == nil || ctx.FallbackRecord.FinalStatus != "policy_blocked" {
 		t.Fatalf("expected policy_blocked fallback status, got %+v", ctx.FallbackRecord)

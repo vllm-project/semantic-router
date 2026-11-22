@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"sort"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -117,6 +118,13 @@ type chatChunkWire struct {
 type chatUsageChunkWire struct {
 	chatChunkWire
 	Choices []chatChunkChoiceWire `json:"choices"`
+}
+
+// chatNullUsageChunkWire is any other chunk of a stream whose client asked for
+// usage, which OpenAI sends with "usage": null.
+type chatNullUsageChunkWire struct {
+	chatChunkWire
+	Usage *chatUsageWire `json:"usage"`
 }
 
 // vllmServingMetadata is chatResponseWire.vllmServingMetadata for a chunk.
@@ -615,7 +623,11 @@ func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
 func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	events := make([]llmprotocol.Event, 0, 8)
 	if !decoder.started {
-		event, nextErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseStarted, ResponseID: chunk.ID, Model: chunk.Model})
+		start := llmprotocol.Event{Type: llmprotocol.EventResponseStarted, ResponseID: chunk.ID, Model: chunk.Model}
+		if chunk.Created > 0 {
+			start.CreatedAt = time.Unix(chunk.Created, 0).UTC()
+		}
+		event, nextErr := decoder.next(start)
 		if nextErr != nil {
 			return nil, nil, nextErr
 		}
@@ -902,12 +914,19 @@ func (decoder *chatStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, l
 	if frameErr != nil {
 		return events, diagnostics, frameErr
 	}
-	terminalEvents, err := decoder.finalize(reason)
+	terminalEvents, finalizeDiagnostics, err := decoder.finalize(reason)
 	events = append(events, terminalEvents...)
+	diagnostics = appendDiagnostics(diagnostics, finalizeDiagnostics, decoder.policy.Limits.Diagnostics)
 	return events, diagnostics, err
 }
 
 func (encoder *chatStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.Content != nil {
+		if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, []llmprotocol.Content{*event.Content}); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	if encoder.terminal {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
 	}
@@ -1142,6 +1161,9 @@ func encodeChatStreamFrame(context llmprotocol.StreamContext, chunk chatChunkWir
 		return nil, err
 	}
 	chunk.Obfuscation = obfuscation
+	if streamUsageRequested(context) {
+		return encodeSSE("", chatNullUsageChunkWire{chatChunkWire: chunk})
+	}
 	return encodeSSE("", chunk)
 }
 
