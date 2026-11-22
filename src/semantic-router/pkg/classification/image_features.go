@@ -89,7 +89,8 @@ func measureGrayFeatures(gray []float64, w, h int) imageFeatures {
 		}
 	}
 	n := float64((w - 2) * (h - 2))
-	variance := lapSquares/n - math.Pow(lapSum/n, 2)
+	mean := lapSum / n
+	variance := lapSquares/n - mean*mean
 	edge := (dx/float64(h*(w-1)) + dy/float64(w*(h-1))) / (2 * 255)
 	return imageFeatures{blur: min(1, max(0, 1-variance/180)), edgeDensity: min(1, edge/0.025)}
 }

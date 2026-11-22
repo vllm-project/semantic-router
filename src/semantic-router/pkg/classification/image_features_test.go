@@ -10,12 +10,12 @@ import (
 	"testing"
 )
 
-func encodeFeatureTestImage(t *testing.T, pixel func(int) uint8) string {
+func encodeFeatureTestImage(t *testing.T, pixel func(uint8) uint8) string {
 	t.Helper()
 	im := image.NewGray(image.Rect(0, 0, 256, 256))
 	for y := range 256 {
 		for x := range 256 {
-			im.SetGray(x, y, color.Gray{Y: pixel(x)})
+			im.SetGray(x, y, color.Gray{Y: pixel(uint8(x & 0xff))})
 		}
 	}
 	var buf bytes.Buffer
@@ -28,12 +28,12 @@ func encodeFeatureTestImage(t *testing.T, pixel func(int) uint8) string {
 func TestInlineImageFeatures(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
-		pixel func(int) uint8
+		pixel func(uint8) uint8
 		want  imageFeatures
 	}{
-		{"sharp simple", func(x int) uint8 { return uint8(x / 128 * 255) }, imageFeatures{edgeDensity: 1.0 / 255 / 2 / 0.025}},
-		{"sharp dense", func(x int) uint8 { return uint8(x % 2 * 255) }, imageFeatures{edgeDensity: 1}},
-		{"smooth", func(x int) uint8 { return uint8(x) }, imageFeatures{blur: 1, edgeDensity: 1.0 / 255 / 2 / 0.025}},
+		{"sharp simple", func(x uint8) uint8 { return x / 128 * 255 }, imageFeatures{edgeDensity: 1.0 / 255 / 2 / 0.025}},
+		{"sharp dense", func(x uint8) uint8 { return x % 2 * 255 }, imageFeatures{edgeDensity: 1}},
+		{"smooth", func(x uint8) uint8 { return x }, imageFeatures{blur: 1, edgeDensity: 1.0 / 255 / 2 / 0.025}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, ok := extractInlineImageFeatures(encodeFeatureTestImage(t, tc.pixel))

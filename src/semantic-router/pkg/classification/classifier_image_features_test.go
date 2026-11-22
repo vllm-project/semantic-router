@@ -27,9 +27,9 @@ func TestImageFeaturesRecipeDecisions(t *testing.T) {
 			{Name: "image-fallback", Priority: 10, Rules: config.RuleNode{Type: "input_modality", Name: "has-image"}},
 		},
 	}}}
-	simple := encodeFeatureTestImage(t, func(x int) uint8 { return uint8(x / 128 * 255) })
-	dense := encodeFeatureTestImage(t, func(x int) uint8 { return uint8(x % 2 * 255) })
-	blurry := encodeFeatureTestImage(t, func(x int) uint8 { return uint8(x) })
+	simple := encodeFeatureTestImage(t, func(x uint8) uint8 { return x / 128 * 255 })
+	dense := encodeFeatureTestImage(t, func(x uint8) uint8 { return x % 2 * 255 })
+	blurry := encodeFeatureTestImage(t, func(x uint8) uint8 { return x })
 	for _, tc := range []struct {
 		name, want string
 		images     []string
