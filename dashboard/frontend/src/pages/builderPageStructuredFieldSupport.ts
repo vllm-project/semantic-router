@@ -1,4 +1,5 @@
 import type { FieldSchema } from '@/lib/dslMutations'
+import { requiredFieldErrors } from '@/lib/schemaFieldValidation'
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
 export function parseLegacyStructuredValue(value: unknown): unknown {
@@ -76,16 +77,7 @@ export function requiredStructuredFieldErrors(
   fields: readonly FieldSchema[],
   value: DSLFieldObject,
 ): string[] {
-  return fields.flatMap((field) => {
-    if (!field.required) return []
-    const fieldValue = value[field.key]
-    const missing =
-      fieldValue === undefined ||
-      fieldValue === null ||
-      fieldValue === '' ||
-      (Array.isArray(fieldValue) && fieldValue.length === 0)
-    return missing ? [`${field.label} is required.`] : []
-  })
+  return requiredFieldErrors(fields, value)
 }
 
 export function supportsSharedObjectList(fields: readonly FieldSchema[]): boolean {

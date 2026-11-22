@@ -63,7 +63,13 @@ describe('EvaluationAvailabilityRoute', () => {
   it('does not expose the workspace while capabilities load or a probe is pending', () => {
     for (const props of [
       { isLoading: true },
-      { capability: capability('unreachable', 'probe_pending', 'The first health check has not completed yet.') },
+      {
+        capability: capability(
+          'unreachable',
+          'probe_pending',
+          'The first health check has not completed yet.',
+        ),
+      },
     ]) {
       const markup = renderRoute(props)
       expect(markup).toContain('Checking Evaluation')

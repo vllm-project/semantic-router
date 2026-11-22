@@ -274,9 +274,9 @@ curl -sS http://localhost:8801/v1/systemone \
 
 在 Dashboard 中试用：
 
-1. 打开 **System One → Decision Playground**，在 **Automatic routes** 下选择 `vllm-sr/auto`。
+1. 打开 **Models → Decision models**，选择 **Playground** 标签页，在 **Automatic routes** 下选择 `vllm-sr/auto`。
 2. 加载你的配方支持的示例，或输入你自己的问题，然后选择 **Run**。Dashboard 使用你登录后的管理权限，因此不需要公共 API key。
-3. 打开 **Decision Monitoring**，查看阶段结果、请求速率和延迟。
+3. 打开 **Monitoring** 标签页，查看阶段结果、请求速率和延迟。
 
 这些视图描述的是线上执行；要衡量准确率，请单独评估带标签的请求。
 

@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest'
 /**
  * Collapsible section headers were plain `<div onClick>` elements, so keyboard
  * users could not expand or collapse those regions (#3515). These assertions
- * pin the headers to a real button with an expanded state, so a revert to a
- * static element fails here rather than in review.
+ * pin the headers to a real button with an expanded state that names the
+ * region it controls, so a revert to a static element fails here rather than
+ * in review.
  */
 
 const read = (relativePath: string): string =>
@@ -15,77 +16,53 @@ const read = (relativePath: string): string =>
 const collapsibleHeaders: ReadonlyArray<{
   name: string
   source: string
-  className: string
   expandedState: string
 }> = [
   {
     name: 'web search card',
     source: '../components/ChatComponentWebToolCards.tsx',
-    className: 'styles.webSearchHeader',
     expandedState: 'isExpanded',
   },
   {
-    name: 'expression builder toolbox',
-    source: '../components/ExpressionBuilderToolbox.tsx',
-    className: 'styles.toolboxHeader',
-    expandedState: '!collapsed',
-  },
-  {
-    name: 'builder sidebar section',
-    source: './builderPageDashboardViews.tsx',
-    className: 'styles.sidebarSectionToggle',
+    name: 'config editor outline group',
+    source: './editor/EditorOutline.tsx',
     expandedState: 'open',
   },
   {
-    name: 'builder validation panel',
-    source: './builderPageValidationPanel.tsx',
-    className: 'styles.validationHeader',
-    expandedState: 'validationOpen',
-  },
-  {
-    name: 'global settings safety section',
-    source: './builderPageGlobalSettingsSafetySection.tsx',
-    className: 'styles.gsSectionHeader',
+    name: 'DSL guide section',
+    source: '../components/DslGuide.tsx',
     expandedState: 'expanded',
   },
-  {
-    name: 'topology decision node rules',
-    source: './topology/components/CustomNodes/DecisionNode.tsx',
-    className: 'styles.rulesHeader',
-    expandedState: 'hasRuleDetail ? !rulesCollapsed : undefined',
-  },
 ]
+
+function openingTagWith(contents: string, attribute: string): string {
+  const index = contents.indexOf(attribute)
+  const start = contents.lastIndexOf('<', index)
+  const end = contents.indexOf('>', index)
+  return contents.slice(start, end)
+}
 
 describe('collapsible headers are keyboard operable', () => {
   it.each(collapsibleHeaders)(
     'renders the $name header as a button carrying its expanded state',
-    ({ source, className, expandedState }) => {
+    ({ source, expandedState }) => {
       const contents = read(source)
+      const attribute = `aria-expanded={${expandedState}}`
 
-      expect(contents).toContain(`className={${className}}`)
-      expect(contents).toContain(`aria-expanded={${expandedState}}`)
-      expect(contents).not.toMatch(
-        new RegExp(`<div[^>]*className=\\{${className.replace('.', '\\.')}\\}[^>]*onClick`)
-      )
-
-      // The button element itself must name the region it controls, so removing
-      // aria-controls fails here even when the id is still referenced elsewhere.
-      const buttonStart = contents.lastIndexOf('<button', contents.indexOf(`className={${className}}`))
-      const buttonEnd = contents.indexOf('>', contents.indexOf(`className={${className}}`))
-      const openingTag = contents.slice(buttonStart, buttonEnd)
-
+      expect(contents).toContain(attribute)
+      const openingTag = openingTagWith(contents, attribute)
+      expect(openingTag.startsWith('<button')).toBe(true)
+      // The button itself names the region it controls.
       expect(openingTag).toContain('aria-controls=')
-    }
+      expect(contents).not.toMatch(/<div[^>]*onClick=\{\(\) => set(Open|Expanded)/)
+    },
   )
 
   it('wires every generated id to a region and to a control', () => {
-    // Headers and their regions may live in different components once a file is
-    // split, so the durable invariant is the generated id itself: it must label
-    // a region and be referenced by something that points at it.
     for (const { source } of collapsibleHeaders) {
       const contents = read(source)
-      const generated = [...contents.matchAll(/const (\w+) = useId\(\)/g)].map(
-        (match) => match[1]
+      const generated = [...contents.matchAll(/const (\w+) = (?:React\.)?useId\(\)/g)].map(
+        (match) => match[1],
       )
 
       expect(generated.length).toBeGreaterThan(0)
@@ -96,33 +73,26 @@ describe('collapsible headers are keyboard operable', () => {
       }
     }
   })
+})
 
-  it('does not reintroduce a nested button inside the sidebar section toggle', () => {
-    const contents = read('./builderPageDashboardViews.tsx')
-    const toggleStart = contents.indexOf('className={styles.sidebarSectionToggle}')
+describe('config editor outline entries are keyboard operable', () => {
+  const contents = read('./editor/EditorOutline.tsx')
+
+  it('renders the overview and every entity entry as a button with its current state', () => {
+    expect(contents).not.toMatch(/<(div|li|span)\b[^>]*\bonClick=/)
+    const entries = contents.match(
+      /<button\s+type="button"[^>]*?aria-current=\{active \? 'page' : undefined\}/gs,
+    )
+    expect(entries?.length ?? 0).toBeGreaterThanOrEqual(1)
+    expect(contents).toContain("aria-current={active ? 'page' : undefined}")
+  })
+
+  it('keeps the add action outside the group toggle, so buttons never nest', () => {
+    const toggleStart = contents.indexOf('aria-expanded={open}')
     const toggleEnd = contents.indexOf('</button>', toggleStart)
 
     expect(toggleStart).toBeGreaterThan(-1)
     expect(contents.slice(toggleStart, toggleEnd)).not.toContain('<button')
-  })
-})
-
-describe('builder sidebar entries are keyboard operable', () => {
-  const contents = read('./builderPageVisualShell.tsx')
-
-  it('renders the dashboard entry and every entity entry as a button with its current state', () => {
-    expect(contents).not.toMatch(/<(div|li)\b[^>]*\bonClick=/)
-    expect(contents).toMatch(
-      /<button\s+type="button"\s+className=\{homeActive \? styles\.sidebarHomeActive : styles\.sidebarHome\}\s+aria-current=\{homeActive \? 'page' : undefined\}/
-    )
-    expect(contents).toMatch(
-      /<li>\s*<button\s+type="button"\s+className=\{active \? styles\.sidebarItemActive : styles\.sidebarItem\}\s+aria-current=\{active \? 'page' : undefined\}/
-    )
-  })
-
-  it('routes every entity section through the shared sidebar entry', () => {
-    const sections = contents.match(/\?\.map\(\(\w+\) => \(\s*<SidebarEntityItem\b/g) ?? []
-
-    expect(sections).toHaveLength(7)
+    expect(contents.slice(toggleStart, toggleEnd)).not.toContain('<AddButton')
   })
 })

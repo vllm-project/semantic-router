@@ -32,6 +32,9 @@ def fake_flash_gated_delta_rule(query, key, value, g=None, beta=None, scale=None
     return output, state
 
 
+MEASURED_SOCS = ("Ascend950DT", "Ascend910B1")
+
+
 @pytest.fixture
 def fake_wrapper(monkeypatch):
     """The fla_npu package import resolving to the stand-in wrapper."""
@@ -51,11 +54,12 @@ def test_package_import_wins_over_the_examples_path(fake_wrapper, monkeypatch):
     assert npu_fla.available_wrapper() is fake_flash_gated_delta_rule
 
 
-def test_chunk_registers_approximate_where_measured(fake_wrapper, monkeypatch):
-    """On the measured SoC, opted in, the slot carries the fla-npu kernel, dormant without consent."""
+@pytest.mark.parametrize("arch", MEASURED_SOCS)
+def test_chunk_registers_approximate_where_measured(fake_wrapper, monkeypatch, arch):
+    """On the measured SoCs, opted in, the slot carries the fla-npu kernel, dormant without consent."""
     monkeypatch.setenv("FLA_NPU_APPROXIMATE", "1")
     accelerator = NPUAccelerator()
-    kernels = accelerator.kernels(DEVICE)
+    kernels = accelerator.kernels(SimpleNamespace(label="npu:0", arch=arch))
     assert kernels.preferred_source("chunk_gated_delta_rule") == "fla-npu-ascendc"
     assert kernels.available["chunk_gated_delta_rule"][0].exact is False
     # without the family's consent the slot serves the reference (dormant)
@@ -76,20 +80,21 @@ def test_chunk_stays_off_by_default(fake_wrapper, monkeypatch):
     assert kernels.preferred_source("chunk_gated_delta_rule") == "torch-reference"
 
 
-def test_chunk_selects_under_consent(fake_wrapper, monkeypatch):
+@pytest.mark.parametrize("arch", MEASURED_SOCS)
+def test_chunk_selects_under_consent(fake_wrapper, monkeypatch, arch):
     """Opted in, with the family's approximate consent the slot selects the fla-npu kernel."""
     monkeypatch.setenv("FLA_NPU_APPROXIMATE", "1")
     accelerator = NPUAccelerator()
-    kernels = accelerator.kernels(DEVICE)
+    kernels = accelerator.kernels(SimpleNamespace(label="npu:0", arch=arch))
     kernels.allow_approximate = True
     assert kernels.select("chunk_gated_delta_rule").source == "fla-npu-ascendc"
 
 
 def test_chunk_stays_reference_on_unmeasured_socs(fake_wrapper, monkeypatch):
-    """Approximate was measured on the 950DT: other SoCs never register the fla-npu kernel."""
+    """Approximate was measured on the 950DT and 910B1: other SoCs never register it."""
     monkeypatch.setenv("FLA_NPU_APPROXIMATE", "1")
     accelerator = NPUAccelerator()
-    kernels = accelerator.kernels(SimpleNamespace(label="npu:0", arch="Ascend910B1"))
+    kernels = accelerator.kernels(SimpleNamespace(label="npu:0", arch="Ascend910B3"))
     assert kernels.preferred_source("chunk_gated_delta_rule") == "torch-reference"
 
 

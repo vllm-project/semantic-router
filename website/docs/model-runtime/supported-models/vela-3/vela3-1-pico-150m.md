@@ -1,7 +1,7 @@
 ---
 title: "vela3.1-pico-150m"
 sidebar_label: "vela3.1-pico-150m"
-sidebar_position: 7
+sidebar_position: 8
 description: "The smallest Vela 3.1 model, a 150M encoder for small CPU hosts, with the same questions and spans as vela3.1-pico-380m."
 custom_edit_url: null
 ---

@@ -231,7 +231,7 @@ recipes:
 				backendCalls++
 				return http.StatusOK, []byte(`{"answers":{}}`), nil
 			})
-		})
+		}, systemone.ClientAuth{})
 		request := httptest.NewRequest(http.MethodPost, "/v1/systemone", nil)
 		request.Body = io.NopCloser(&delayedReader{reader: strings.NewReader(`{"model":"vllm-sr/auto","state":"original task","questions":{"needs_reasoning":{"type":"noul"}}}`), delay: 250 * time.Millisecond})
 		response := httptest.NewRecorder()

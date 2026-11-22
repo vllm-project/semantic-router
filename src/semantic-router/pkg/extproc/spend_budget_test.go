@@ -168,8 +168,8 @@ func TestBudgetRefusalAnswers429AndNamesTheBudget(t *testing.T) {
 	}
 }
 
-// Unpriced calls never pass silently: refused by default, or admitted at
-// zero and counted.
+// Unpriced calls covered by a budget never pass silently: refused by
+// default, or admitted at zero and counted.
 func TestUnpricedCallsAreRefusedOrCounted(t *testing.T) {
 	refusing := spendTestRouter(config.BudgetsConfig{Run: &config.RunBudget{Limit: 1}})
 	refusal := refusing.reserveDispatchSpend(spendTestContext(t, "alice", "s1", ""), "unpriced", spendTestRequest(10))
@@ -205,5 +205,103 @@ func TestLooperHopSpendsItsClientRequestBudgets(t *testing.T) {
 	}
 	if refusal := router.reserveDispatchSpend(spendTestContext(t, "alice", "s1", ""), "priced", spendTestRequest(1000)); refusal == nil {
 		t.Fatal("the hop's reservation is not in alice's run")
+	}
+}
+
+func TestSpendBudgetsOnlyRefuseUnpricedCallsTheyCover(t *testing.T) {
+	userRule := config.UserBudget{Name: t.Name() + "-user", Match: config.BudgetMatch{User: "alice"}, Limit: 2, Window: "day"}
+	groupRule := config.UserBudget{Name: t.Name() + "-group", Match: config.BudgetMatch{Group: "engineering"}, Limit: 2, Window: "day"}
+	for _, tc := range []struct {
+		name        string
+		budgets     config.BudgetsConfig
+		user        string
+		groups      string
+		model       string
+		wantRefused bool
+	}{
+		{name: "disabled", user: "bob", model: "unpriced"},
+		{name: "unmatched user", budgets: config.BudgetsConfig{Users: []config.UserBudget{userRule}}, user: "bob", model: "unpriced"},
+		{name: "unmatched group", budgets: config.BudgetsConfig{Users: []config.UserBudget{groupRule}}, user: "bob", groups: "support", model: "unpriced"},
+		{name: "unmatched priced call", budgets: config.BudgetsConfig{Users: []config.UserBudget{userRule}}, user: "bob", model: "priced"},
+		{name: "matched user", budgets: config.BudgetsConfig{Users: []config.UserBudget{userRule}}, user: "alice", model: "unpriced", wantRefused: true},
+		{name: "matched group", budgets: config.BudgetsConfig{Users: []config.UserBudget{groupRule}}, user: "bob", groups: "support, engineering", model: "unpriced", wantRefused: true},
+		{name: "run covers unmatched user", budgets: config.BudgetsConfig{Run: &config.RunBudget{Limit: 2}, Users: []config.UserBudget{userRule}}, user: "bob", model: "unpriced", wantRefused: true},
+		{name: "unscoped rule covers all users", budgets: config.BudgetsConfig{Users: []config.UserBudget{{Name: t.Name() + "-all", Limit: 2, Window: "day"}}}, user: "bob", model: "unpriced", wantRefused: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := spendTestRouter(tc.budgets)
+			ctx := spendTestContext(t, tc.user, "scope", "")
+			ctx.Headers[headers.AuthzUserGroups] = tc.groups
+			if refusal := router.refuseExhaustedSpend(ctx); refusal != nil {
+				t.Fatal(refusal.message)
+			}
+			refusal := router.reserveDispatchSpend(ctx, tc.model, spendTestRequest(10))
+			if tc.wantRefused {
+				if refusal == nil || refusal.code != budgetUnpricedCode {
+					t.Fatalf("covered unpriced call: %+v, want budget_unpriced", refusal)
+				}
+				if status := router.budgetRefusalResponse(ctx, refusal).GetImmediateResponse().GetStatus().GetCode(); status != http.StatusForbidden {
+					t.Fatalf("status %d, want 403", status)
+				}
+				return
+			}
+			if refusal != nil {
+				t.Fatalf("uncovered call refused: %s", refusal.message)
+			}
+			var usage routerreplay.UsageCost
+			router.settleRequestSpend(ctx, &usage)
+			router.finishRequestSpend(ctx)
+			if usage.CostAccounting != nil && usage.CostAccounting.Budget != nil {
+				t.Fatalf("uncovered call acquired budget accounting: %+v", usage.CostAccounting.Budget)
+			}
+			if status, ok := spendStatus(ctx); ok {
+				t.Fatalf("uncovered call reports a budget: %+v", status)
+			}
+		})
+	}
+}
+
+// Both an empty and a matched client scope survive multiple in-process hops;
+// a hop's own identity must not replace its client's scope.
+func TestLooperHopKeepsTheClientBudgetScope(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		clientUser  string
+		hopUser     string
+		wantRefused bool
+	}{
+		{name: "uncovered client and covered hop", clientUser: "bob", hopUser: "alice"},
+		{name: "covered client and uncovered hop", clientUser: "alice", hopUser: "bob", wantRefused: true},
+		{name: "hop without inherited scope", hopUser: "alice", wantRefused: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := spendTestRouter(config.BudgetsConfig{Users: []config.UserBudget{{
+				Name: t.Name(), Match: config.BudgetMatch{User: "alice"}, Limit: 2, Window: "day",
+			}}})
+			parent := context.Background()
+			if tc.clientUser != "" {
+				client := spendTestContext(t, tc.clientUser, "", "")
+				if refusal := router.refuseExhaustedSpend(client); refusal != nil {
+					t.Fatal(refusal.message)
+				}
+				parent = client.TraceContext
+			}
+			for hopIndex := range 2 {
+				hop := spendTestContext(t, tc.hopUser, "", strconv.Itoa(hopIndex))
+				hop.TraceContext, hop.LooperRequest = parent, true
+				if refusal := router.refuseExhaustedSpend(hop); refusal != nil {
+					t.Fatal(refusal.message)
+				}
+				refusal := router.reserveDispatchSpend(hop, "unpriced", spendTestRequest(10))
+				if tc.wantRefused {
+					if refusal == nil || refusal.code != budgetUnpricedCode {
+						t.Fatalf("hop %d escaped its budget: %+v", hopIndex, refusal)
+					}
+				} else if refusal != nil {
+					t.Fatalf("hop %d acquired a budget absent from its client: %s", hopIndex, refusal.message)
+				}
+				parent = hop.TraceContext
+			}
+		})
 	}
 }

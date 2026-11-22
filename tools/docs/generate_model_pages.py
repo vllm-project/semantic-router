@@ -77,6 +77,23 @@ DEVICES = {
     "npu:Ascend950DT": "Ascend 950DT",
 }
 CLASSES = {"cpu": "a CPU", "rocm": "an AMD GPU", "cuda": "an NVIDIA GPU"}
+
+
+def device_class_key(key: str) -> str:
+    """``key``'s device-class reference key, keeping its ``--dtype`` suffix."""
+    device, at, dtype = key.partition("@")
+    return f"{device.split(':', 1)[0]}{at}{dtype}"
+
+
+def class_and_hardware(references: list[str]) -> bool:
+    """Whether a hardware reference and its device class's are both recorded."""
+    recorded = set(references)
+    return any(
+        key != device_class_key(key) and device_class_key(key) in recorded
+        for key in recorded
+    )
+
+
 REDUCED = {
     "float32-packed": "a pre-packed FP32 copy of its linear layers on x86 CPUs with oneDNN",
     "bfloat16": "a BF16 copy of its linear layers",
@@ -412,7 +429,7 @@ def load_models() -> list[Model]:
                 calibration=calibration.get(repo, {}),
                 editorial=text,
                 family_dir=family["dir"],
-                family_label=family["label"],
+                family_label=text.get("family_label", family["label"]),
                 trained=item["family"] in trained,
                 quantizable=item["family"] in quantizable,
                 records=text.get("records", []),
@@ -681,7 +698,7 @@ def render_page(model: Model) -> str:
                 ]
         classes = {key.split(":", 1)[0] for key in published}
         missing = [CLASSES[c] for c in CLASSES if c not in classes]
-        if any(":" in key for key in model.references):
+        if class_and_hardware(model.references):
             lines += [
                 "",
                 "Where a hardware reference and its device class's are both recorded, the",

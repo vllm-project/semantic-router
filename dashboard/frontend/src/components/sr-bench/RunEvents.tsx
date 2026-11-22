@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import ProductLoadingState from '../ProductLoadingState'
+import { Button, cn } from '../../ui'
 import type { Manifest, PageState, RunEvent } from './types'
 import BenchSelect from './BenchSelect'
 import BenchPagination from './BenchPagination'
 import { describeRunEvent } from './eventPresentation'
 import { targetName } from './targetPresentation'
-import styles from './SrBench.module.css'
+import { BenchLoading, EmptyNote, Notice } from './benchUi'
+import { benchText } from './benchStyles'
 
 export default function RunEvents({
   manifest,
@@ -28,20 +29,21 @@ export default function RunEvents({
     )
   const current = Math.min(page, Math.max(0, Math.ceil(rows.length / 25) - 1))
   return (
-    <section aria-labelledby="run-events">
-      <div className={styles.sectionHeading}>
-        <div>
-          <h3 id="run-events">
+    <section className="mt-6 min-w-0" aria-labelledby="run-events">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <h3 id="run-events" className={benchText.h3}>
             Run events ({events.length}
             {evidencePage.nextCursor !== null ? ' loaded' : ''})
           </h3>
-          <p className={styles.muted}>
+          <p className={cn(benchText.muted, 'max-w-3xl')}>
             Saved activity, oldest first. Filtering applies to loaded events. Refresh evidence for a
             new snapshot; run progress continues updating independently. Scores and costs are in
             Results.
           </p>
         </div>
         <BenchSelect
+          variant="toolbar"
           label="Event type"
           value={filter}
           onChange={(value) => {
@@ -57,28 +59,42 @@ export default function RunEvents({
           ]}
         />
       </div>
-      {loading && !events.length && (
-        <ProductLoadingState compact label="Loading saved run events…" />
-      )}
+      {loading && !events.length && <BenchLoading label="Loading saved run events…" lines={3} />}
       {error && (
-        <p role="alert" className={styles.error}>
+        <Notice tone="danger" as="p" role="alert">
           Run events are unavailable: {error}
-        </p>
+        </Notice>
       )}
-      <ol className={styles.eventList} aria-label="Saved run events">
+      <ol
+        className="my-2 min-w-0 divide-y divide-border rounded-lg border border-border bg-card empty:hidden"
+        aria-label="Saved run events"
+      >
         {rows.slice(current * 25, current * 25 + 25).map((row, index) => (
-          <li key={row.event.seq ?? row.event.sequence ?? current * 25 + index}>
-            <div className={styles.eventHeading}>
-              <strong className={row.attention ? styles.eventAttention : undefined}>
+          <li
+            key={row.event.seq ?? row.event.sequence ?? current * 25 + index}
+            className="break-words px-4 py-3"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <strong
+                className={cn(
+                  'text-[13px] font-medium',
+                  row.attention ? 'text-destructive-foreground' : 'text-foreground',
+                )}
+              >
                 {row.title}
               </strong>
               {row.timestamp && (
-                <time dateTime={row.timestamp}>{new Date(row.timestamp).toLocaleString()}</time>
+                <time
+                  dateTime={row.timestamp}
+                  className="text-[11px] text-subtle-foreground tabular-nums"
+                >
+                  {new Date(row.timestamp).toLocaleString()}
+                </time>
               )}
             </div>
-            <p>{row.description}</p>
+            <p className={`${benchText.body} mt-1`}>{row.description}</p>
             {(row.caseID || row.targetID || row.role) && (
-              <p className={styles.muted}>
+              <p className={`${benchText.muted} mt-1`}>
                 {[
                   row.caseID && `Case: ${row.caseID}`,
                   row.targetID && `Model: ${targetName(manifest, row.targetID)}`,
@@ -88,18 +104,22 @@ export default function RunEvents({
                   .join(' · ')}
               </p>
             )}
-            {row.reason && <p className={styles.eventAttention}>{row.reason}</p>}
-            {row.callID && <small className={styles.muted}>Call: {row.callID}</small>}
+            {row.reason && <p className="mt-1 text-xs text-destructive-foreground">{row.reason}</p>}
+            {row.callID && (
+              <small className="mt-1 block font-mono text-[11px] text-subtle-foreground">
+                Call: {row.callID}
+              </small>
+            )}
           </li>
         ))}
       </ol>
       {!rows.length && !loading && !error && (
-        <p className={styles.emptyState}>
+        <EmptyNote>
           {events.length ? 'No events match this filter.' : 'No events have been saved yet.'}
-        </p>
+        </EmptyNote>
       )}
       {evidencePage.nextCursor !== null && (
-        <p className={styles.muted}>
+        <p className={benchText.muted}>
           More events may be available. Load the next saved page to continue.
         </p>
       )}
@@ -111,9 +131,15 @@ export default function RunEvents({
         onChange={setPage}
       />
       {evidencePage.nextCursor !== null && (
-        <button disabled={loading} onClick={() => void loadMore()}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2"
+          disabled={loading}
+          onClick={() => void loadMore()}
+        >
           {loading ? 'Loading events…' : 'Load more events'}
-        </button>
+        </Button>
       )}
     </section>
   )

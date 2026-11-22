@@ -2,14 +2,13 @@ import React from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
-import AuthTransitionPage from '../pages/AuthTransitionPage'
 import AuthGate from './AuthGate'
 import AuthenticatedShell from './AuthenticatedShell'
 import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import SetupStatusPage from './SetupStatusPage'
 import ProductLoadingState from '../components/ProductLoadingState'
-import { loadInviteAcceptPage, loadLandingPage, loadLoginPage } from './routeLoaders'
+import { loadInviteAcceptPage, loadLoginPage } from './routeLoaders'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useCapabilities } from '../contexts/CapabilitiesContext'
 
@@ -47,10 +46,6 @@ const AppRouter: React.FC = () => {
     <BrowserRouter>
       <Routes>
         <Route
-          path="/"
-          element={<RecoverableLazyRoute loader={loadLandingPage} routeLabel="Landing page" />}
-        />
-        <Route
           path="/login"
           element={<RecoverableLazyRoute loader={loadLoginPage} routeLabel="Login" />}
         />
@@ -58,7 +53,6 @@ const AppRouter: React.FC = () => {
           path="/invite/:token"
           element={<RecoverableLazyRoute loader={loadInviteAcceptPage} routeLabel="Invitation" />}
         />
-        <Route path="/auth/transition" element={<AuthTransitionPage />} />
 
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>
