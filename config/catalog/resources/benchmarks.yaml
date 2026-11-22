@@ -292,6 +292,62 @@
       unit: proportion
       direction: higher_is_better
       range: [0, 1]
+- id: mathllm/math-vision@1.0.0
+  display_name: MATH-Vision
+  domain: multimodal_reasoning
+  source: https://github.com/mathllm/MATH-V
+  default_profile: published-standard
+  profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Vendor-published MATH-Vision accuracy; the evaluated split (full test or testmini) stays on the evaluation record.
+  metrics:
+    - id: accuracy
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: google/countbench@1.0.0
+  display_name: CountBench
+  domain: visual_reasoning
+  source: https://arxiv.org/abs/2302.12066
+  default_profile: published-standard
+  profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Vendor-published object-counting accuracy on CountBench with the prompt format retained on the evaluation record.
+  metrics:
+    - id: accuracy
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: moonshotai/worldvqa@1.0.0
+  display_name: WorldVQA
+  domain: visual_reasoning
+  source: https://huggingface.co/datasets/moonshotai/WorldVQA
+  default_profile: published-standard
+  profiles:
+    - id: published-standard
+      display_name: Published standard
+      description: Vendor-published WorldVQA accuracy on atomic vision-centric world knowledge; the category set evaluated stays on the evaluation record.
+  metrics:
+    - id: accuracy
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: minorjerry/webvoyager@1.0.0
+  display_name: WebVoyager
+  domain: computer_use
+  source: https://github.com/MinorJerry/WebVoyager
+  default_profile: published-agent
+  profiles:
+    - id: published-agent
+      display_name: Published agent
+      description: Vendor-published WebVoyager task success rate on live websites; the agent, judge and task subset stay on the evaluation record.
+  metrics:
+    - id: success_rate
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
 - id: mmmu-benchmark/mmmu-pro@1.0.0
   display_name: MMMU-Pro
   domain: multimodal_reasoning
@@ -304,6 +360,9 @@
     - id: standard-10-vision-average
       display_name: Standard and vision average
       description: Average of the Standard 10-option and vision-only evaluation settings.
+    - id: published-unspecified
+      display_name: Published setup unspecified
+      description: Vendor-published MMMU-Pro accuracy whose setting (Standard 10-option or the vision average) is not stated; visible as evidence but excluded from the default index.
   metrics:
     - id: accuracy
       unit: proportion

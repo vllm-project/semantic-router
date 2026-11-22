@@ -35,6 +35,32 @@ conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
+- catalog: inclusionai/ling-3.0-flash
+  relationship: self_hosted
+  id: inclusionAI/Ling-3.0-flash
+  protocols:
+  - openai/chat-completions@1
+  restrictions:
+    minimum_vllm_version: 0.28.0
+    trust_remote_code: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://github.com/vllm-project/vllm/releases/tag/v0.28.0
+- catalog: inclusionai/ling-3.0-flash-vl
+  relationship: self_hosted
+  id: inclusionAI/Ling-3.0-flash-VL
+  protocols:
+  - openai/chat-completions@1
+  restrictions:
+    minimum_vllm_version: 0.30.0
+    trust_remote_code: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://github.com/vllm-project/vllm/releases/tag/v0.30.0
 - catalog: baidu/ernie-4.5-300b-a47b
   relationship: self_hosted
   id: baidu/ERNIE-4.5-300B-A47B-PT

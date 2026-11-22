@@ -290,3 +290,8 @@
   default: medium
   modes: [enabled]
   default_mode: enabled
+- id: ling
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes: [enabled, disabled]
+  default_mode: enabled

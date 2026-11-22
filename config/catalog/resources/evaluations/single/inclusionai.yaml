@@ -1,0 +1,315 @@
+- id: inclusionai/ling-3.1-flash-model-card-terminal-bench-2-1@1.0.0
+  model: inclusionai/ling-3.1-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Ling-3.1-flash
+    source_kind: official_model_card
+    source_label: Terminal-Bench-2.1
+    source_column: Ling-3.1-flash
+  metrics:
+    resolved: 0.8118
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md
+    redistributable: true
+- id: inclusionai/ling-3.1-flash-model-card-terminal-bench-4-0@1.0.0
+  model: inclusionai/ling-3.1-flash
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Ling-3.1-flash
+    source_kind: official_model_card
+    source_label: Terminal-Bench-4.0
+    source_column: Ling-3.1-flash
+    terminal_harness: LingCode (customized from Pi)
+  metrics:
+    resolved: 0.4603
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md
+    redistributable: true
+- id: inclusionai/ling-3.1-flash-model-card-swe-bench-pro@1.0.0
+  model: inclusionai/ling-3.1-flash
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Ling-3.1-flash
+    source_kind: official_model_card
+    source_label: SWE-bench Pro
+    source_column: Ling-3.1-flash
+    swe_harness: LingCode (customized from Pi)
+  metrics:
+    resolved: 0.6874
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md
+    redistributable: true
+- id: inclusionai/ling-3.1-flash-model-card-humanitys-last-exam@1.0.0
+  model: inclusionai/ling-3.1-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Ling-3.1-flash
+    source_kind: official_model_card
+    source_label: HLE
+    source_column: Ling-3.1-flash
+  metrics:
+    accuracy: 0.3744
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md
+    redistributable: true
+- id: inclusionai/ling-3.1-flash-model-card-mcp-atlas@1.0.0
+  model: inclusionai/ling-3.1-flash
+  benchmark: scale/mcp-atlas@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: Ling-3.1-flash
+    source_kind: official_model_card
+    source_label: Mcp-altas
+    source_column: Ling-3.1-flash
+  metrics:
+    score: 0.83
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-model-card-swe-bench-pro@1.0.0
+  model: inclusionai/ling-3.0-flash
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash
+    source_kind: official_model_card
+    source_label: SWE-Bench Pro
+    source_column: Ling-3.0-flash
+    swe_harness: OpenHands
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    resolved: 0.566
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-model-card-terminal-bench-2-1@1.0.0
+  model: inclusionai/ling-3.0-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash
+    source_kind: official_model_card
+    source_label: Terminal-Bench 2.1
+    source_column: Ling-3.0-flash
+    terminal_harness: Terminus-2 (Artificial Analysis protocol)
+    trials: 3
+    sampling_temperature: 0.6
+    sampling_top_p: 1.0
+  metrics:
+    resolved: 0.57
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-model-card-mcp-atlas@1.0.0
+  model: inclusionai/ling-3.0-flash
+  benchmark: scale/mcp-atlas@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash
+    source_kind: official_model_card
+    source_label: MCP-Atlas
+    source_column: Ling-3.0-flash
+    harness: official v1 harness, 20-turn limit
+    task_count: 500
+    judge_model: Gemini-2.5-Pro
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    score: 0.655
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-model-card-livecodebench-v6@1.0.0
+  model: inclusionai/ling-3.0-flash
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash
+    source_kind: official_model_card
+    source_label: LiveCodeBench (2408-2505)
+    source_column: Ling-3.0-flash
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    pass_at_1: 0.828
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-model-card-humanitys-last-exam@1.0.0
+  model: inclusionai/ling-3.0-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash
+    source_kind: official_model_card
+    source_label: HLE
+    source_column: Ling-3.0-flash
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    accuracy: 0.227
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-vl-model-card-mmmu-pro@1.0.0
+  model: inclusionai/ling-3.0-flash-vl
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash-VL
+    source_kind: official_model_card
+    source_label: MMMU-Pro
+    source_column: Ling-3.0-flash-VL
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    accuracy: 0.79
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-vl-model-card-math-vision@1.0.0
+  model: inclusionai/ling-3.0-flash-vl
+  benchmark: mathllm/math-vision@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash-VL
+    source_kind: official_model_card
+    source_label: MathVision
+    source_column: Ling-3.0-flash-VL
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    accuracy: 0.8487
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-vl-model-card-countbench@1.0.0
+  model: inclusionai/ling-3.0-flash-vl
+  benchmark: google/countbench@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash-VL
+    source_kind: official_model_card
+    source_label: CountBench
+    source_column: Ling-3.0-flash-VL
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    accuracy: 0.9733
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-vl-model-card-worldvqa@1.0.0
+  model: inclusionai/ling-3.0-flash-vl
+  benchmark: moonshotai/worldvqa@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash-VL
+    source_kind: official_model_card
+    source_label: WorldVQA
+    source_column: Ling-3.0-flash-VL
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    accuracy: 0.4567
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md
+    redistributable: true
+- id: inclusionai/ling-3.0-flash-vl-model-card-webvoyager@1.0.0
+  model: inclusionai/ling-3.0-flash-vl
+  benchmark: minorjerry/webvoyager@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Ling-3.0-flash-VL
+    source_kind: official_model_card
+    source_label: WebVoyager
+    source_column: Ling-3.0-flash-VL
+    sampling_temperature: 0.6
+    sampling_top_p: 0.95
+  metrics:
+    success_rate: 0.9083
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md
+    redistributable: true

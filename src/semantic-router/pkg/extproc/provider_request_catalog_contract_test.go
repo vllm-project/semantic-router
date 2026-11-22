@@ -391,6 +391,22 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			}},
 		},
 		{
+			name: "SGLang Ling 3.1 Flash thinking switch", catalog: "inclusionai/ling-3.1-flash", provider: "sglang",
+			enabled: true, mode: config.ReasoningModeEnabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "vLLM Ling 3.0 Flash thinking disabled", catalog: "inclusionai/ling-3.0-flash", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
 			name: "Nemotron Cascade switch disabled", catalog: "nvidia/nemotron-cascade-2-30b-a3b", provider: "vllm",
 			enabled: false, mode: config.ReasoningModeDisabled,
 			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
