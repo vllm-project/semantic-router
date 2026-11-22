@@ -141,6 +141,11 @@ func (r *OpenAIRouter) finalizeResponsePolicy(
 	clientBody []byte,
 ) (*ext_proc.ProcessingResponse, []byte, []*core.HeaderValueOption) {
 	plan := r.prepareResponsePolicy(ctx, semanticResponse, clientBody)
+	if plan.blocked == nil {
+		r.finishNativeFallbackResponse(ctx, "")
+	} else {
+		r.finishNativeFallbackResponse(ctx, "policy_blocked")
+	}
 	plan.commit()
 	return plan.blocked, plan.finalBody, plan.headerOptions()
 }

@@ -287,18 +287,19 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	RouterEnabled          *bool                `yaml:"router_enabled,omitempty"`
-	ListBackendModels      bool                 `yaml:"list_backend_models,omitempty"`
-	ClearRouteCache        bool                 `yaml:"clear_route_cache"`
-	StreamedBodyMode       bool                 `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
-	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
-	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
-	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
-	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
-	ContextWindow          ContextWindowConfig  `yaml:"context_window,omitempty"`
-	DrainTimeoutSeconds    *int                 `yaml:"drain_timeout_seconds,omitempty"`
+	RouterEnabled               *bool                `yaml:"router_enabled,omitempty"`
+	ListBackendModels           bool                 `yaml:"list_backend_models,omitempty"`
+	ClearRouteCache             bool                 `yaml:"clear_route_cache"`
+	StreamedBodyMode            bool                 `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes        int64                `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec      int                  `yaml:"streamed_body_timeout_sec,omitempty"`
+	SkipProcessing              SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	AllowLossyTranslation       []string             `yaml:"allow_lossy_translation,omitempty"`
+	AllowRequestExtensionFields []string             `yaml:"allow_request_extension_fields,omitempty"`
+	RoutingInput                RoutingInputConfig   `yaml:"routing_input,omitempty"`
+	Headers                     RouterHeadersConfig  `yaml:"headers,omitempty"`
+	ContextWindow               ContextWindowConfig  `yaml:"context_window,omitempty"`
+	DrainTimeoutSeconds         *int                 `yaml:"drain_timeout_seconds,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

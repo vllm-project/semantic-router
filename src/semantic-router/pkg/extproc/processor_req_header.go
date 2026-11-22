@@ -21,9 +21,10 @@ import (
 func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_RequestHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	ctx.StartTime = time.Now()
 
-	// The skip-processing opt-out would bypass a listener's model allow-list,
-	// so a restricted listener does not honor it.
-	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
+	// The skip-processing opt-out would bypass a listener's model allow-list
+	// and an entrypoint's client keys, so a restricted listener and a
+	// configuration with client keys do not honor it.
+	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil && !r.clientKeysRequired())
 	r.captureDelegatedCredential(ctx)
 	r.captureCallerCredential(ctx)
 	if r.Config != nil {

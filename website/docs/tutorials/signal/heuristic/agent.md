@@ -178,7 +178,9 @@ Protection holds each subagent on the model its first request got, under its
 own key, so the subagent keeps it for its whole life. The agent headers come
 with every request of the subagent, so its requests keep matching the same
 decision; a decision of higher priority that matches one of them, such as a
-personal-data route, moves that request.
+personal-data route, moves that request. A compaction or side request is held
+under a key of its class beside its agent's, so the `housekeeping` decision
+never moves the model its agent is held on.
 
 ### Block a request
 

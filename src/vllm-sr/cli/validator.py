@@ -287,6 +287,10 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
             plugin_type = (
                 plugin.type.value if hasattr(plugin.type, "value") else str(plugin.type)
             )
+            if plugin_type == PluginType.ROUTER_REPLAY.value:
+                # Replay overrides are validated after global/recipe/decision
+                # layering by validate_inprocess_model_backends.
+                continue
             config_model = config_models.get(plugin_type)
             errors.extend(
                 _validate_single_plugin_configuration(
