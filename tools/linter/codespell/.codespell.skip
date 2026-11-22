@@ -16,6 +16,8 @@ website/node_modules/*
 website/package-lock.json
 dashboard/frontend/node_modules/*
 dashboard/frontend/package-lock.json
+src/agent-harness/opencode/node_modules/*
+src/agent-harness/opencode/package-lock.json
 vendor/*
 
 deploy/kubernetes/aibrix/aigw-resources/*
