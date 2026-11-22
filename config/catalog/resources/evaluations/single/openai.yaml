@@ -41,7 +41,7 @@
 - id: duellab/gpt-6-2-astra-xhigh-gamebench@2.0.0
   model: openai/gpt-6.2-astra
   benchmark: duellab/gamebench@2.0.0
-  benchmark_profile: public-games
+  benchmark_profile: public-games-bradley-terry
   reasoning_effort: xhigh
   subject:
     source_model: GPT-6.2 Astra
@@ -151,7 +151,7 @@
 - id: duellab/gpt-6-2-sol-xhigh-gamebench@2.0.0
   model: openai/gpt-6.2-sol
   benchmark: duellab/gamebench@2.0.0
-  benchmark_profile: public-games
+  benchmark_profile: public-games-bradley-terry
   reasoning_effort: xhigh
   subject:
     source_model: GPT-6.2 Sol

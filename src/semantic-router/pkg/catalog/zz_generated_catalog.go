@@ -358,9 +358,14 @@ const builtInCatalogJSON = `{
       ],
       "profiles": [
         {
-          "description": "Normalized standing across the public games for programs generated at the named reasoning setting; the immutable public-release identity remains on each evaluation record.",
-          "display_name": "Public games",
+          "description": "Public-game scores based on sequential Elo ratings for programs generated at the named reasoning setting.",
+          "display_name": "Public games (sequential Elo)",
           "id": "public-games"
+        },
+        {
+          "description": "Public-game scores based on fitted Bradley–Terry ratings for programs generated at the named reasoning setting.",
+          "display_name": "Public games (Bradley–Terry)",
+          "id": "public-games-bradley-terry"
         }
       ],
       "source": "https://benchmarks.duellab.org/methodology"
@@ -23458,7 +23463,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "duellab/gamebench@2.0.0",
-      "benchmark_profile": "public-games",
+      "benchmark_profile": "public-games-bradley-terry",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,
@@ -23593,7 +23598,7 @@ const builtInCatalogJSON = `{
     },
     {
       "benchmark": "duellab/gamebench@2.0.0",
-      "benchmark_profile": "public-games",
+      "benchmark_profile": "public-games-bradley-terry",
       "evidence": {
         "provenance": "third_party",
         "redistributable": true,

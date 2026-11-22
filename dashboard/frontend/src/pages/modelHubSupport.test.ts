@@ -143,6 +143,25 @@ describe('model hub presentation support', () => {
 })
 
 describe('model hub benchmark evidence', () => {
+  it('does not use August GameBench models to qualify November Astra and Sol scores', () => {
+    const gameBench = catalog.evaluations.filter(
+      (row) => row.benchmark === 'duellab/gamebench@2.0.0',
+    )
+    const august = gameBench.filter(
+      (row) => row.subject.benchmark_release === 'gb2-20260824-e05a1ff89a26',
+    )
+    const models = new Set(['openai/gpt-6.2-astra', 'openai/gpt-6.2-sol'])
+    const november = gameBench.filter(
+      (row) =>
+        models.has(row.model) && row.subject.benchmark_release === 'gb2-20261119-235af8c04037',
+    )
+    expect(new Set(november.map((row) => row.model))).toEqual(models)
+    expect(new Set(august.map((row) => row.model)).size).toBeGreaterThanOrEqual(10)
+
+    const visible = modelHubPublicEvaluations({ ...catalog, evaluations: [...august, ...november] })
+    expect(visible.map((row) => row.id)).toEqual(august.map((row) => row.id))
+  })
+
   it.each([
     ['gpt-6.2-astra', 'xhigh', 0.28],
     ['gpt-6.2-sol', 'xhigh', 0.284],

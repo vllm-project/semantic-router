@@ -17,7 +17,11 @@ class OpenAIExactEffortTests(unittest.TestCase):
                     "accuracy",
                     0.9583333333333334,
                 ),
-                "duellab/gamebench@2.0.0": ("public-games", "score", 97.146404),
+                "duellab/gamebench@2.0.0": (
+                    "public-games-bradley-terry",
+                    "score",
+                    97.146404,
+                ),
                 "harbor/terminal-bench@4.0.0": (
                     "independent-agent",
                     "resolved",
@@ -36,7 +40,11 @@ class OpenAIExactEffortTests(unittest.TestCase):
                     "accuracy",
                     0.8583333333333333,
                 ),
-                "duellab/gamebench@2.0.0": ("public-games", "score", 94.330527),
+                "duellab/gamebench@2.0.0": (
+                    "public-games-bradley-terry",
+                    "score",
+                    94.330527,
+                ),
                 "harbor/terminal-bench@4.0.0": (
                     "independent-agent",
                     "resolved",
