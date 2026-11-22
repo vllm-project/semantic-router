@@ -26,8 +26,8 @@ import (
 type semanticResponseStreamState struct {
 	responseID string
 	model      string
-	// sawContent marks the first event that carries an answer item, so TTFT
-	// and the session's latency keep ignoring keepalive frames.
+	// sawContent marks the first model content, including a choice held by
+	// the decoder for ordering. It ignores keepalive and metadata frames.
 	sawContent bool
 	createdAt  time.Time
 	stop       llmprotocol.StopReason
@@ -74,8 +74,8 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 		// The client gets what a buffered client gets for such a body.
 		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 	}
-	// TTFT waits for the first event that carries content: a keepalive or
-	// comment frame a gateway sends while it queues is not the model's answer.
+	// TTFT waits for the first upstream content: a keepalive or comment
+	// frame a gateway sends while it queues is not the model's answer.
 	// It is recorded before the stream settles, because the turn's session
 	// evidence is written there and takes the latency it has by then.
 	recordStreamingTTFT(ctx)
@@ -142,6 +142,9 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 			buffers.errorFrame = frame
 		}
 		observeProtocolStream(ctx, events, diagnostics)
+		if state := ctx.SemanticStreamState; err == nil && state != nil && ctx.ProtocolResponseStream.HasPendingContent() {
+			state.sawContent = true
+		}
 		buffers.recordError(ctx, err, true)
 	}
 }

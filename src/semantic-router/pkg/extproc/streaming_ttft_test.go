@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,75 @@ func TestStreamingTTFTWaitsForNonEmptyContent(t *testing.T) {
 				t.Fatal("the first content delta did not record TTFT")
 			}
 		})
+	}
+}
+
+// The upstream has answered as soon as the complete mixed Chat frame is
+// parsed, even though translation holds the choice to order its two parts.
+func TestStreamingTTFTRecordsBeforeMixedChatChoiceIsReleased(t *testing.T) {
+	const first = `data: {"id":"r1","model":"general","choices":[{"index":0,"delta":{"role":"assistant","content":"answer marker","reasoning_content":"reasoning marker"}}]}`
+	const next = `data: {"id":"r1","model":"general","choices":[{"index":0,"delta":{"content":" continues"}}]}` + "\n\n"
+	for _, format := range []llmprotocol.WireFormat{llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1} {
+		for _, path := range []string{"normal", "guarded"} {
+			t.Run(string(format)+"/"+path, func(t *testing.T) {
+				router := &OpenAIRouter{Config: &config.RouterConfig{}}
+				ctx := &RequestContext{
+					Headers: map[string]string{}, SourceFormat: format, TargetFormat: llmprotocol.OpenAIChatV1,
+					RequestModel: "general", ProcessingStartTime: time.Now().Add(-time.Second),
+				}
+				if path == "guarded" {
+					ctx.ResponseGuardHold = &responseGuardHold{guarded: true}
+				}
+				push := func(body string) string {
+					response := router.handleSemanticStreamingResponseBody([]byte(body), false, ctx)
+					if ctx.StreamingAborted {
+						t.Fatalf("stream aborted after %q", body)
+					}
+					out := string(clientStreamBytes(response, []byte(body)))
+					if hold := ctx.ResponseGuardHold; hold != nil {
+						if out != "" {
+							t.Fatal("the guarded stream emitted before release")
+						}
+						return string(hold.frames)
+					}
+					return out
+				}
+
+				push(first)
+				if ctx.TTFTRecorded {
+					t.Fatal("incomplete frame recorded TTFT")
+				}
+				opening := push("\n\n")
+				if !ctx.TTFTRecorded || ctx.TTFTSeconds <= 0 {
+					t.Fatal("complete mixed frame did not record TTFT while held")
+				}
+				if strings.Contains(opening, "reasoning marker") || strings.Contains(opening, "answer marker") {
+					t.Fatalf("held choice emitted before its order was known: %s", opening)
+				}
+				initial := ctx.TTFTSeconds
+				out := push(next)
+				reasoning, answer := strings.Index(out, "reasoning marker"), strings.Index(out, "answer marker")
+				if reasoning < 0 || answer <= reasoning {
+					t.Fatalf("translation must still emit reasoning before the answer: %s", out)
+				}
+				if ctx.TTFTSeconds != initial {
+					t.Fatalf("release changed TTFT from %v to %v", initial, ctx.TTFTSeconds)
+				}
+			})
+		}
+	}
+}
+
+func TestStreamingTTFTRejectsInvalidMixedChatFrame(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	ctx := &RequestContext{
+		Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "general", ProcessingStartTime: time.Now().Add(-time.Second),
+	}
+	body := `data: {"id":"r1","object":"invalid","model":"general","choices":[{"index":0,"delta":{"content":"answer","reasoning_content":"reasoning"}}]}` + "\n\n"
+	router.handleSemanticStreamingResponseBody([]byte(body), false, ctx)
+	if !ctx.StreamingAborted || ctx.TTFTRecorded {
+		t.Fatal("invalid mixed frame must abort without recording TTFT")
 	}
 }
 
