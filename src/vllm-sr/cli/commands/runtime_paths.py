@@ -73,7 +73,9 @@ def _chmod_directory_without_following(
     ``os.chmod(..., follow_symlinks=False)`` relies on glibc >= 2.32 emulating
     ``fchmodat(AT_SYMLINK_NOFOLLOW)`` and raises ``NotImplementedError`` on older
     glibc. Opening with ``O_NOFOLLOW`` and calling ``fchmod`` works everywhere
-    and changes exactly the inode that was inspected.
+    and changes exactly the inode that was inspected. The pathname is checked
+    again afterwards, while the descriptor still pins the inode, so a path
+    swapped during ``fchmod`` is refused instead of returned as secured.
     """
 
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -83,7 +85,11 @@ def _chmod_directory_without_following(
         if (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino):
             raise OSError(errno.ESTALE, "directory changed while hardening", directory)
         os.fchmod(fd, mode)
-        return os.fstat(fd)
+        secured = os.fstat(fd)
+        current = os.lstat(directory)
+        if (current.st_dev, current.st_ino) != (secured.st_dev, secured.st_ino):
+            raise OSError(errno.ESTALE, "directory changed while hardening", directory)
+        return secured
     finally:
         os.close(fd)
 
