@@ -123,6 +123,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 	result.CurrentUserImages = currentUserImageCandidates(request)
 	result.UserVideos = requestVideos(request)
 	result.ToolDefinitionCount = len(request.Tools)
+	result.InvalidToolCalls = countInvalidRecentToolCalls(request)
 	estimate := llmprotocol.EstimateInput(request)
 	result.ContextTokenFloor = estimate.Tokens
 	result.ContextTextBytes = estimate.TextBytes
