@@ -5134,6 +5134,7 @@
         "type": {
           "type": "string",
           "enum": [
+            "image_features",
             "keyword",
             "domain",
             "fact_check",
@@ -8286,6 +8287,7 @@
       }
     ],
     "projection_input_types": [
+      "image_features",
       "keyword",
       "domain",
       "fact_check",

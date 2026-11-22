@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // Projections contains derived routing constructs that coordinate or synthesize
 // routing outputs from base signals without redefining the detector surface.
 type Projections struct {
@@ -55,7 +57,15 @@ func ProjectionCatalog() []ProjectionCatalogEntry {
 	return append([]ProjectionCatalogEntry(nil), projectionCatalog...)
 }
 
+// ProjectionInputImageFeatures reads built-in current-turn image evidence.
+const ProjectionInputImageFeatures = "image_features"
+
+func IsImageFeatureProjectionInput(name, source string) bool {
+	return (name == "blur" || name == "edge_density") && strings.EqualFold(strings.TrimSpace(source), ProjectionValueSourceRaw)
+}
+
 var supportedProjectionInputTypes = []string{
+	ProjectionInputImageFeatures,
 	SignalTypeKeyword,
 	SignalTypeDomain,
 	SignalTypeFactCheck,

@@ -2,10 +2,28 @@ package extproc
 
 import (
 	"encoding/base64"
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
+
+func TestImageFeatureCandidatesAreCurrentTurnOnly(t *testing.T) {
+	inline := llmprotocol.Content{Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG}
+	remote := llmprotocol.Content{Kind: llmprotocol.ContentImage, URL: "https://example.com/image.png"}
+	request := userImageRequest(inline)
+	request.Messages = append(request.Messages,
+		llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{inline}},
+		llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{remote, inline, remote, remote, inline}},
+	)
+	if got := extractSemanticRequestSignals(request).CurrentUserImages; !slices.Equal(got, []string{"", "data:image/png;base64," + tinyPNG, "", ""}) {
+		t.Fatalf("unexpected current turn candidates: %v", got)
+	}
+	request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleAssistant})
+	if got := extractSemanticRequestSignals(request).CurrentUserImages; len(got) != 0 {
+		t.Fatal("an assistant continuation must not re-score historical images")
+	}
+}
 
 // A 1x1 PNG; small enough to inline and a valid image for the safety gate.
 var tinyPNG = base64.StdEncoding.EncodeToString([]byte{

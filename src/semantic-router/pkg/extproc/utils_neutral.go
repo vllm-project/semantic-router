@@ -120,6 +120,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 	}
 	result.RoutingInput = routing.Outcome()
 	result.Images = requestImages(request)
+	result.CurrentUserImages = currentUserImageCandidates(request)
 	result.UserVideos = requestVideos(request)
 	result.ToolDefinitionCount = len(request.Tools)
 	estimate := llmprotocol.EstimateInput(request)
@@ -292,6 +293,26 @@ func requestImages(request *llmprotocol.Request) []string {
 	}
 	for _, message := range request.Messages {
 		consume(message.Content)
+	}
+	return images
+}
+
+func currentUserImageCandidates(request *llmprotocol.Request) []string {
+	if len(request.Messages) == 0 {
+		return nil
+	}
+	message := request.Messages[len(request.Messages)-1]
+	if message.Role != llmprotocol.RoleUser {
+		return nil
+	}
+	var images []string
+	for _, content := range message.Content {
+		if content.Kind == llmprotocol.ContentImage {
+			images = append(images, neutralInlineImageDataURL(content))
+			if len(images) == classification.MaxImageFeatureCandidates {
+				break
+			}
+		}
 	}
 	return images
 }

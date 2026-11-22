@@ -14,8 +14,9 @@ import (
 // RequestFacts carries untrusted request-envelope facts used by signal
 // extraction. Trusted identity remains owned by the authz header path.
 type RequestFacts struct {
-	Metadata map[string]string
-	Context  context.Context
+	CurrentUserImages []string // Bounded list of current-turn inline image candidates.
+	Metadata          map[string]string
+	Context           context.Context
 
 	// Agent is the agent the request belongs to, read from its harness's
 	// headers for the agent signal.

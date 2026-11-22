@@ -77,6 +77,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			InputModality:          history.inputModality,
 			Turns:                  append([]classification.ConversationTurn(nil), history.turns...),
 			Images:                 append([]string(nil), history.images...),
+			CurrentUserImages:      history.currentUserImages,
 			Videos:                 append([]string(nil), history.userVideos...),
 		},
 	}

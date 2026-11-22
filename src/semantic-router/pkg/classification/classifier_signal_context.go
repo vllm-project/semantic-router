@@ -175,6 +175,7 @@ func (c *Classifier) evaluateBaseSignals(input SignalEvaluationInput, signalScop
 	stage, endScans := withScanStop(stage)
 	defer endScans()
 	input.RequestFacts.Context = stage
+	c.recordImageFeatureEvidence(stage, input.RequestFacts.CurrentUserImages, results)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	dispatchers := c.buildSignalDispatchers(input, results, &mu, textForSignal, usedSignals)
