@@ -30,7 +30,12 @@ const SECTION_PRESENTATION: Record<
     structured: true,
     description: 'Priority filters and measured candidate evidence',
   },
-  'Session Routing': { size: 'wide' },
+  'Session Routing': {
+    size: 'wide',
+    collapsible: true,
+    defaultExpanded: false,
+    description: 'Session identity, protection and the model the session held',
+  },
   'Protection Candidate Scores': { size: 'wide', collapsible: true, defaultExpanded: true },
   'Observed Candidate Scores': { size: 'wide', collapsible: true, defaultExpanded: true },
   'Adaptation Candidate Scores': { size: 'wide', collapsible: true, defaultExpanded: true },

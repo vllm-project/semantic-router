@@ -53,8 +53,8 @@ type budgetRefusal struct {
 	estimate float64
 }
 
-// requestSpend returns the request's spend state, nil when no budget is
-// configured. A client request marks its context with its budgets, so the
+// requestSpend returns the request's spend state, nil when no budget
+// applies. A client request marks its context with its budgets, so the
 // Looper hops it makes in process spend the same ones.
 func (r *OpenAIRouter) requestSpend(ctx *RequestContext) *requestSpend {
 	if ctx == nil || r == nil || r.Config == nil || !r.Config.Budgets.Enabled() {
@@ -71,6 +71,11 @@ func (r *OpenAIRouter) requestSpend(ctx *RequestContext) *requestSpend {
 			parent = context.Background()
 		}
 		ctx.TraceContext = spendbudget.WithLimits(parent, limits)
+	}
+	// Keep even an empty scope on the context: Looper hops must inherit it
+	// instead of resolving a new scope from their own identity.
+	if len(limits) == 0 {
+		return nil
 	}
 	ctx.spend = &requestSpend{limits: limits, currency: r.Config.Budgets.EffectiveCurrency()}
 	return ctx.spend
@@ -201,9 +206,10 @@ func (r *OpenAIRouter) settleRequestSpend(ctx *RequestContext, replayUsage *rout
 }
 
 // finishRequestSpend ends the request's part in the budgets: a call still
-// reserved is charged its estimate when a provider answered it, since its
-// usage never arrived, and released otherwise; Router model calls made
-// since the last charge are charged.
+// reserved is charged the usage a stream cut short reported, when it was
+// priced, else its estimate when a provider answered it, since its usage
+// never arrived, and released otherwise; Router model calls made since the
+// last charge are charged.
 func (r *OpenAIRouter) finishRequestSpend(ctx *RequestContext) {
 	if ctx == nil || ctx.spend == nil {
 		return
@@ -211,9 +217,12 @@ func (r *OpenAIRouter) finishRequestSpend(ctx *RequestContext) {
 	spend := ctx.spend
 	changed := r.chargeRouterModelCalls(ctx, spend)
 	if spend.hold != nil {
-		if ctx.UpstreamStatusCode >= http.StatusOK && ctx.UpstreamStatusCode < http.StatusMultipleChoices {
+		switch {
+		case ctx.RequestCostPriced && normalizeReplayCurrency(ctx.RequestCostCurrency) == spend.currency:
+			spend.settle(ctx.RequestCost, store.BudgetSettledPartialUsage)
+		case ctx.UpstreamStatusCode >= http.StatusOK && ctx.UpstreamStatusCode < http.StatusMultipleChoices:
 			spend.settle(spend.estimate, store.BudgetSettledEstimate)
-		} else {
+		default:
 			spend.settle(0, store.BudgetSettledReleased)
 		}
 		changed = true

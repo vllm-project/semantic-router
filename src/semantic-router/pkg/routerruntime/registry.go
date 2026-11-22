@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/clientauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
@@ -55,6 +56,7 @@ type Registry struct {
 	configActivation       ConfigActivation
 	configRejection        *ConfigActivation
 	configSnapshot         *configsnapshot.Snapshot
+	activeClientAuth       func() *clientauth.Policy
 	configLifecycle        *configsnapshot.Manager
 	configAttemptListeners []func(configsnapshot.Attempt)
 	instanceID             string
@@ -74,7 +76,10 @@ type AcquireClassification func() (release func(), ok bool)
 type RouterRuntimeSnapshot struct {
 	Config *config.RouterConfig
 	// ConfigSnapshot is the configuration snapshot Config was compiled into.
-	ConfigSnapshot        *configsnapshot.Snapshot
+	ConfigSnapshot *configsnapshot.Snapshot
+	// ActiveClientAuth reads the serving owner's current policy, which can
+	// advance before this management snapshot is published during a reload.
+	ActiveClientAuth      func() *clientauth.Policy
 	ClassificationService *services.ClassificationService
 	AcquireClassification AcquireClassification
 	MemoryStore           memory.Store
@@ -506,6 +511,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 		r.config = snapshot.Config
 	}
 	r.configSnapshot = snapshot.ConfigSnapshot
+	r.activeClientAuth = snapshot.ActiveClientAuth
 	r.classificationService = snapshot.ClassificationService
 	r.acquireGeneration = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore

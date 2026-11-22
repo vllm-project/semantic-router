@@ -263,7 +263,7 @@ and iTerm2 3.5 or later, and drawn in characters elsewhere (smooth wedge charact
 ### Set from the Router
 
 A Router listener can set the apps for every plugin pointed at it, in its config or as Default, On or Off
-in the Dashboard (Config › Global Config › vSR agent plugins):
+in the Dashboard (Settings › Router settings › vSR agent plugins):
 
 ```yaml
 listeners:

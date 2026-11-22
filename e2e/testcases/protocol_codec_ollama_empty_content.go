@@ -67,7 +67,7 @@ func testProtocolCodecOllamaEmptyContent(ctx context.Context, client *kubernetes
 	}
 	if message.StopReason != "tool_use" || len(message.Content) != 2 ||
 		message.Content[0].Type != "thinking" || message.Content[0].Thinking == "" ||
-		message.Content[1].Type != "tool_use" || message.Content[1].ID != "call_mock_lookup" ||
+		message.Content[1].Type != "tool_use" || message.Content[1].ID != anthropicClientToolUseID(false) ||
 		message.Content[1].Name != "lookup" || string(message.Content[1].Input) != `{"query":"weather"}` {
 		return fmt.Errorf("ollama empty content displaced thinking or tool use: %s",
 			truncateString(string(messagesResult.Body), 900))

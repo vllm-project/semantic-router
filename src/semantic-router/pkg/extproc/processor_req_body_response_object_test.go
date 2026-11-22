@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
@@ -131,26 +132,23 @@ func TestPrepareObjectStateRejectsUnavailableAndMissingPreviousResponse(t *testi
 }
 
 // TestPrepareObjectStateConversationMembershipIsStrictlyExplicit covers the
-// three ConversationID/SessionTrackingID sources: explicit conversation_id
-// (external membership + a namespaced tracking id), previous_response_id
+// ConversationID/SessionTrackingID sources: a conversation, which the Router
+// refuses because it keeps no Conversations objects; previous_response_id
 // only (lineage: no membership, but tracking continuity is preserved via a
-// separate internal key), and neither field (standalone: no membership, a
+// separate internal key); and neither field (standalone: no membership, a
 // fresh tracking id). Conversation and lineage must never blend: a
 // previous_response_id-only continuation of a conversation-tagged response
 // must not inherit that conversation's ID (see issue #2999 discussion on
 // why chain-only forks must not silently join a Conversation's history).
 func TestPrepareObjectStateConversationMembershipIsStrictlyExplicit(t *testing.T) {
-	t.Run("explicit conversation_id is external membership and namespaces the tracking id", func(t *testing.T) {
-		filter := NewResponseAPIFilter(NewMockResponseStore())
-		state, err := filter.PrepareObjectState(t.Context(), llmprotocol.Request{ConversationID: "conv_y"}, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if state.ConversationID != "conv_y" {
-			t.Fatalf("ConversationID = %q, want explicit value", state.ConversationID)
-		}
-		if state.SessionTrackingID != "respapi:conversation:conv_y" {
-			t.Fatalf("SessionTrackingID = %q", state.SessionTrackingID)
+	t.Run("a conversation is refused with or without a store", func(t *testing.T) {
+		for _, filter := range []*ResponseAPIFilter{nil, NewResponseAPIFilter(NewMockResponseStore())} {
+			state, err := filter.PrepareObjectState(t.Context(), llmprotocol.Request{ConversationID: "conv_y"}, nil)
+			assertResponseObjectStateError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_conversation")
+			var protocolError *llmprotocol.ProtocolError
+			if !errors.As(err, &protocolError) || protocolError.Parameter != "conversation" || state != nil {
+				t.Fatalf("error = %v, state = %+v; want the conversation named", err, state)
+			}
 		}
 	})
 
@@ -509,6 +507,46 @@ func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// With messages[].role listed, a Chat backend receives the instructions that
+// lead the retained conversation as one system message, and the developer
+// item of the current input as user text after the history it follows.
+func TestPreviousResponseSendsTheCurrentDeveloperItemsInPlace(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldSystemMessageRole}
+	router.ResponseAPIFilter = NewResponseAPIFilter(NewMockResponseStore())
+	first := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-1", TraceContext: t.Context()}
+	dispatchTestTurn(t, router, model, first, `{"model":"`+model+`","instructions":"Old instructions.","input":[`+
+		`{"type":"message","role":"developer","content":"Always answer in French."},`+
+		`{"type":"message","role":"user","content":"What is 2+2?"}]}`)
+	if reply := router.handleNonStreamingResponseBody(extProcResponseFixture(llmprotocol.OpenAIChatV1), first, 0, false); reply.GetImmediateResponse() != nil {
+		t.Fatalf("turn 1 reply was replaced: %s", reply.GetImmediateResponse().GetBody())
+	}
+	second := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-2", TraceContext: t.Context()}
+	body := dispatchTestTurn(t, router, model, second, `{"model":"`+model+`","instructions":"Be brief.","previous_response_id":"`+
+		first.ResponseObjectState.GeneratedResponseID+`","input":[{"type":"message","role":"developer","content":"Now answer in digits."},`+
+		`{"type":"message","role":"user","content":"And 3+3?"}]}`)
+	var sent struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &sent); err != nil {
+		t.Fatalf("%v: %s", err, body)
+	}
+	var got []string
+	for _, message := range sent.Messages {
+		got = append(got, message.Role+": "+message.Content)
+	}
+	want := []string{
+		"system: Be brief.\n\nAlways answer in French.", "user: What is 2+2?", "assistant: hello",
+		"user: Now answer in digits.", "user: And 3+3?",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("backend conversation = %q, want %q", got, want)
 	}
 }
 

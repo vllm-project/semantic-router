@@ -1,230 +1,485 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Bot, Copy, Info, ListTree, PanelRightOpen } from 'lucide-react'
 
-import type { Column } from '../components/DataTable'
-import { DataTable } from '../components/DataTable'
-import TableHeader from '../components/TableHeader'
-import { formatDateTime } from '../utils/dateTime'
+import {
+  Button,
+  Card,
+  DataTable,
+  DataToolbar,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  EmptyState,
+  FilterPill,
+  Segmented,
+  StatusLabel,
+  Tooltip,
+  cn,
+  toast,
+  type Column,
+  type FilterOption,
+} from '../ui'
+import { formatInsightsCount } from '../utils/insightsCost'
 
-import configStyles from './ConfigPage.module.css'
-import styles from './InsightsPage.module.css'
-import runStyles from './InsightsRun.module.css'
-import { isInsightsReplayUnavailableError } from './insightsPageApi'
-import { fetchAbortableInsightsJSON, isAbortError } from './insightsPageRequestSupport'
-import { ModelName } from './insightsModelLabelSupport'
+import { runEventCounts } from './insightsAgentEvents'
+import { AgentEventChips } from './InsightsAgentEvents'
+import { compactSessionId, displaySessionId } from './insightsAgentIdentity'
+import { formatLatency, useNow } from './insightsDisplayFormat'
+import {
+  InsightsLoadError,
+  InsightsUnavailable,
+  LiveToggle,
+  Pager,
+  RelativeTime,
+} from './InsightsDisplay'
+import { HarnessLogo } from './InsightsHarness'
+import { API_CLIENT_LABEL, harnessInfo, PRIMARY_HARNESSES, sortHarnessIds } from './insightsHarness'
+import { readPage, readPageSize, writePage } from './insightsListData'
+import { ModelChip, modelText, useModelLabels } from './insightsModelLabelSupport'
+import { RANGE_TEXT, REQUEST_RANGES } from './insightsRequestsData'
+import { getSessionRequestsPath } from './insightsReviewSupport'
+import {
+  API_RUN_FILTER,
+  hasRunClientFilters,
+  readRunFilters,
+  RUN_WINDOW_SIZE,
+  runHarnessValue,
+  useRunsData,
+  writeRunFilters,
+  type RunFilters,
+} from './insightsRunsData'
 import {
   countText,
   formatRunCost,
-  formatRunDuration,
   getRunPath,
-  HARNESS_LABELS,
-  modelHue,
-  RUN_MARKER_GLYPHS,
-  RUN_MARKER_LABELS,
+  oneLine,
   RUN_OUTCOME_LABELS,
-  runAgentTreeText,
-  runTitle,
+  RUN_STATUS_TONES,
+  runHeadline,
 } from './insightsRunSupport'
-import type { RunListResponse, RunSummary } from './insightsRunTypes'
+import type { RunSummary } from './insightsRunTypes'
 
-const runPageSize = 25
-
-export function RunOutcomeBadge({ run }: { run: RunSummary }) {
+export function RunStatus({ run }: { run: Pick<RunSummary, 'outcome'> }) {
   const status = run.outcome.status
   return (
-    <span className={runStyles.outcome} data-status={status}>
+    <StatusLabel tone={RUN_STATUS_TONES[status] ?? 'neutral'} pulse={status === 'in_progress'}>
       {RUN_OUTCOME_LABELS[status] ?? status}
-    </span>
+    </StatusLabel>
   )
 }
 
+/** A run's events worth a look, in the shared event vocabulary, each with its count. */
 export function RunEvents({ events }: { events?: Record<string, number> }) {
-  const entries = Object.entries(events ?? {})
-  if (entries.length === 0) return null
-  return (
-    <span className={runStyles.events}>
-      {entries.map(([marker, count]) => (
-        <span
-          key={marker}
-          className={runStyles.marker}
-          data-marker={marker}
-          title={`${RUN_MARKER_LABELS[marker] ?? marker}: ${count}`}
-        >
-          {RUN_MARKER_GLYPHS[marker] ?? '•'} {count}
-        </span>
-      ))}
-    </span>
-  )
+  const counts = runEventCounts({ events })
+  if (counts.length === 0) return null
+  return <AgentEventChips events={counts} compact />
 }
 
-function createRunColumns(): Column<RunSummary>[] {
-  return [
+function copy(value: string, label: string) {
+  void navigator.clipboard?.writeText(value).catch(() => undefined)
+  toast.success(`${label} copied`, { description: value })
+}
+
+function countBy<T>(rows: T[], valueOf: (row: T) => string) {
+  const counts = new Map<string, number>()
+  for (const row of rows) counts.set(valueOf(row), (counts.get(valueOf(row)) ?? 0) + 1)
+  return counts
+}
+
+// The task a run was given, when its title is the session's name, for the row's tooltip.
+function taskHint(run: RunSummary): string | undefined {
+  const task = run.prompt?.trim()
+  return run.session_name && task ? oneLine(task, 280) : undefined
+}
+
+// One row per agent run, the session a harness names: its title, harness,
+// agents, models, what it cost and took, and how it ended. The runs load
+// when this tab opens, a page at a time, bounded by the time range.
+export default function InsightsRunsView() {
+  const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const labels = useModelLabels()
+  const now = useNow(30_000)
+  const filters = useMemo(() => readRunFilters(params), [params])
+  const page = readPage(params)
+  const pageSize = readPageSize(params)
+  const [draft, setDraft] = useState(filters.search)
+  const [live, setLive] = useState(true)
+  const [held, setHeld] = useState(false)
+  const [facets, setFacets] = useState(false)
+  const data = useRunsData({ filters, page, pageSize, live, held, withWindow: facets })
+  const clientMode = hasRunClientFilters(filters)
+  const wantFacets = () => setFacets(true)
+
+  const update = (patch: Partial<RunFilters>) =>
+    setParams((current) => writeRunFilters(current, patch), { replace: true })
+
+  const timer = useRef<number>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+  useEffect(() => {
+    setDraft((current) => (current.trim() === filters.search ? current : filters.search))
+  }, [filters.search])
+  const onSearch = (value: string) => {
+    setDraft(value)
+    window.clearTimeout(timer.current)
+    timer.current = window.setTimeout(() => update({ search: value.trim() }), 300)
+  }
+
+  const pages = Math.max(1, Math.ceil(data.total / pageSize))
+  useEffect(() => {
+    if (!data.loading && !data.stale && data.total > 0 && page > pages) {
+      setParams((current) => writePage(current, pages), { replace: true })
+    }
+  }, [data.loading, data.stale, data.total, page, pages, setParams])
+
+  const counted = data.windowLoaded
+  const harnessCounts = useMemo(() => countBy(data.window, runHarnessValue), [data.window])
+  const statusCounts = useMemo(
+    () => countBy(data.window, (run) => run.outcome.status),
+    [data.window],
+  )
+  const harnessOptions: FilterOption[] = useMemo(() => {
+    const seen = counted ? [...harnessCounts.keys()] : [...PRIMARY_HARNESSES, API_RUN_FILTER]
+    const shown = new Set([...seen, ...filters.harness])
+    const options: FilterOption[] = sortHarnessIds(
+      [...shown].filter((id) => id !== API_RUN_FILTER),
+    ).map((id) => ({
+      value: id,
+      label: harnessInfo(id)?.label ?? id,
+      icon: <HarnessLogo harness={id} size={14} />,
+      count: counted ? (harnessCounts.get(id) ?? 0) : undefined,
+    }))
+    if (shown.has(API_RUN_FILTER)) {
+      options.push({
+        value: API_RUN_FILTER,
+        label: API_CLIENT_LABEL,
+        icon: <HarnessLogo size={14} />,
+        count: counted ? (harnessCounts.get(API_RUN_FILTER) ?? 0) : undefined,
+      })
+    }
+    return options
+  }, [counted, filters.harness, harnessCounts])
+  const statusOptions: FilterOption[] = Object.entries(RUN_OUTCOME_LABELS).map(
+    ([value, label]) => ({
+      value,
+      label,
+      count: counted ? (statusCounts.get(value) ?? 0) : undefined,
+    }),
+  )
+
+  const columns: Column<RunSummary>[] = [
     {
-      key: 'task',
-      header: 'Run',
-      width: '300px',
-      render: (run) => (
-        <Link className={runStyles.runTask} to={getRunPath(run.session_id)}>
-          <strong title={run.session_name ? run.prompt : undefined}>{runTitle(run)}</strong>
-          <span>
-            {formatDateTime(run.started_at)} · {formatRunDuration(run.duration_ms)} ·{' '}
-            {countText(run.calls, 'call')}
+      id: 'session',
+      header: 'Session',
+      className: 'w-full max-w-0',
+      sortValue: (run) => runHeadline(run),
+      cell: (run) => {
+        const info = harnessInfo(run.harness)
+        return (
+          <div className="flex min-w-0 items-center gap-3">
+            <HarnessLogo harness={run.harness} size={16} framed />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate font-medium" title={taskHint(run)}>
+                {runHeadline(run)}
+              </span>
+              <span className="truncate text-xs text-subtle-foreground">
+                {info?.label ?? API_CLIENT_LABEL} ·{' '}
+                <span className="font-mono text-[11.5px]" title={displaySessionId(run.session_id)}>
+                  {compactSessionId(run.session_id)}
+                </span>
+              </span>
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      id: 'agents',
+      header: 'Agents',
+      align: 'right',
+      sortValue: (run) => run.agents.length,
+      cell: (run) => (
+        <Tooltip
+          content={
+            run.agents.length > 6
+              ? `${countText(run.agents.length, 'agent')}: the main agent and ${countText(run.agents.length - 1, 'subagent')}`
+              : run.agents
+                  .map(
+                    (agent) =>
+                      `${agent.label}${agent.kind ? ` (${agent.kind})` : ''} · ${countText(agent.calls, 'call')}`,
+                  )
+                  .join('  ·  ')
+          }
+        >
+          <span className="inline-flex items-center gap-1.5 text-[13px]">
+            <Bot className="size-3.5 text-subtle-foreground" />
+            <span className="tabular">{run.agents.length}</span>
           </span>
-        </Link>
+        </Tooltip>
       ),
     },
     {
-      key: 'harness',
-      header: 'Harness',
-      width: '110px',
-      render: (run) => HARNESS_LABELS[run.harness ?? ''] ?? 'Client',
+      id: 'calls',
+      header: 'Calls',
+      align: 'right',
+      sortValue: (run) => run.calls,
+      cell: (run) => (
+        <span className="font-mono text-xs tabular">{run.calls.toLocaleString()}</span>
+      ),
     },
-    { key: 'agents', header: 'Agents', width: '150px', render: runAgentTreeText },
     {
-      key: 'models',
+      id: 'models',
       header: 'Models',
-      width: '180px',
-      render: (run) => (
-        <span className={runStyles.models}>
-          {run.models.map((model) => (
-            <span key={model.name} title={`${model.value} calls`}>
-              <i style={{ background: modelHue(run.models, model.name) }} />
-              <ModelName name={model.name} compact />
-            </span>
-          ))}
+      hideBelow: 'lg',
+      cell: (run) => (
+        <Tooltip
+          content={
+            run.models
+              .map(
+                (model) => `${modelText(labels, model.name)} · ${countText(model.value, 'call')}`,
+              )
+              .join(', ') || 'No model answered'
+          }
+        >
+          <span className="flex min-w-0 max-w-[220px] flex-col gap-0.5">
+            {run.models.slice(0, 1).map((model) => (
+              <ModelChip key={model.name} name={model.name} className="text-[13px]" />
+            ))}
+            {run.models.length > 1 ? (
+              <span className="text-[11px] text-subtle-foreground">
+                +{run.models.length - 1} more
+              </span>
+            ) : null}
+            {run.models.length === 0 ? (
+              <span className="text-xs text-subtle-foreground">—</span>
+            ) : null}
+          </span>
+        </Tooltip>
+      ),
+    },
+    {
+      id: 'cost',
+      header: 'Cost',
+      align: 'right',
+      hideBelow: 'md',
+      sortValue: (run) => run.cost.by_currency?.[0]?.total ?? -1,
+      cell: (run) => <span className="font-mono text-xs tabular">{formatRunCost(run.cost)}</span>,
+    },
+    {
+      id: 'duration',
+      header: 'Duration',
+      align: 'right',
+      hideBelow: 'sm',
+      sortValue: (run) => run.duration_ms,
+      cell: (run) => (
+        <span className="font-mono text-xs tabular text-muted-foreground">
+          {formatLatency(run.duration_ms)}
         </span>
       ),
     },
     {
-      key: 'outcome',
-      header: 'Outcome',
-      width: '190px',
-      render: (run) => (
-        <span className={runStyles.events}>
-          <RunOutcomeBadge run={run} />
+      id: 'status',
+      header: 'Status',
+      width: '150px',
+      cell: (run) => (
+        <span className="flex flex-col items-start gap-1">
+          <RunStatus run={run} />
           <RunEvents events={run.events} />
         </span>
       ),
     },
     {
-      key: 'cost',
-      header: 'Cost',
-      width: '110px',
-      align: 'right',
-      render: (run) => formatRunCost(run.cost),
+      id: 'active',
+      header: 'Last call',
+      width: '96px',
+      hideBelow: 'md',
+      sortValue: (run) => Date.parse(run.ended_at),
+      cell: (run) => (
+        <RelativeTime iso={run.ended_at} now={now} className="text-xs text-muted-foreground" />
+      ),
     },
   ]
-}
 
-function useRuns(search: string, page: number) {
-  const [state, setState] = useState<{ runs: RunSummary[]; total: number; error: string | null }>({
-    runs: [],
-    total: 0,
-    error: null,
-  })
-  const abortRef = useRef<AbortController | null>(null)
-  const refresh = useCallback(async () => {
-    abortRef.current?.abort()
-    const abort = new AbortController()
-    abortRef.current = abort
-    const query = new URLSearchParams({
-      limit: String(runPageSize),
-      offset: String((page - 1) * runPageSize),
-    })
-    if (search.trim()) query.set('search', search.trim())
-    try {
-      const list = await fetchAbortableInsightsJSON<RunListResponse>(
-        `/api/router/api/v1/observability/replays/runs?${query.toString()}`,
-        'agent runs',
-        abort.signal,
-      )
-      setState({ runs: list.data || [], total: list.total, error: null })
-    } catch (err) {
-      if (isAbortError(err)) return
-      const message = err instanceof Error ? err.message : 'Unknown error'
-      setState({
-        runs: [],
-        total: 0,
-        error: isInsightsReplayUnavailableError(err) ? null : message,
-      })
-    }
-  }, [page, search])
-  useEffect(() => {
-    void refresh()
-    return () => abortRef.current?.abort()
-  }, [refresh])
-  return { ...state, refresh }
-}
+  if (data.unavailable) {
+    return (
+      <Card className="border-dashed shadow-none">
+        <InsightsUnavailable reason={data.unavailable} noun="agent runs" onRetry={data.refresh} />
+      </Card>
+    )
+  }
 
-// One row per agent run: the task, the harness, its agents, the models that
-// answered, how it ended, what it cost and took, and what to look at.
-export default function InsightsRunsView() {
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
-  const { runs, total, error, refresh } = useRuns(search, page)
-  const columns = useMemo(() => createRunColumns(), [])
-  const totalPages = Math.max(1, Math.ceil(total / runPageSize))
+  const range = RANGE_TEXT[filters.range]
+  const quiet = !data.loading && !data.error && data.total === 0 && !filters.search && !clientMode
+  const clientNote = !clientMode
+    ? null
+    : !counted
+      ? `Harness and status filters run in your browser over the latest ${RUN_WINDOW_SIZE} runs ${range}.`
+      : data.windowTotal > data.window.length
+        ? `Harness and status filters run in your browser over the latest ${formatInsightsCount(data.window.length)} of ${formatInsightsCount(data.windowTotal)} runs ${range}. Narrow the time range to cover them all.`
+        : `Harness and status filters run in your browser over all ${formatInsightsCount(data.windowTotal)} runs ${range}.`
+
   return (
     <>
-      {error ? <div className={styles.error}>{error}</div> : null}
-      <div className={configStyles.sectionPanel}>
-        <section className={configStyles.sectionTableBlock}>
-          <div className={styles.toolbar}>
-            <div>
-              <h2 className={styles.sectionTitle}>Runs</h2>
-              <p className={styles.sectionSubtitle}>
-                One row per agent run, the session a harness names. Open a run for its timeline.
-              </p>
-            </div>
-            <div className={styles.toolbarActions}>
-              <button type="button" onClick={() => void refresh()} className={styles.refreshButton}>
-                Refresh
-              </button>
-            </div>
-          </div>
-          <TableHeader
-            title="Agent Runs"
-            count={total}
-            searchPlaceholder="Search by session ID..."
-            searchValue={search}
-            onSearchChange={(value) => {
-              setSearch(value)
-              setPage(1)
-            }}
-            variant="embedded"
-          />
-          <DataTable
-            columns={columns}
-            data={runs}
-            keyExtractor={(run) => run.session_id}
-            emptyMessage="No runs recorded yet"
-            className={styles.insightsTable}
-          />
-        </section>
-      </div>
-      {total > runPageSize ? (
-        <div className={styles.pagination}>
-          <button
-            type="button"
-            className={styles.paginationButton}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={page === 1}
-          >
-            Previous
-          </button>
-          <span className={styles.paginationInfo}>
-            Page {page} of {totalPages} ({total} runs)
-          </span>
-          <button
-            type="button"
-            className={styles.paginationButton}
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            disabled={page === totalPages}
-          >
-            Next
-          </button>
-        </div>
+      {data.error ? (
+        <InsightsLoadError
+          title="Agent runs could not load"
+          message={data.error}
+          onRetry={data.refresh}
+        />
       ) : null}
+      <DataToolbar
+        search={draft}
+        onSearchChange={onSearch}
+        placeholder="Search sessions…"
+        filters={
+          <div
+            role="group"
+            aria-label="Harness and status filters"
+            className="flex items-center gap-2"
+            onPointerOver={wantFacets}
+            onFocus={wantFacets}
+          >
+            <FilterPill
+              label="Harness"
+              options={harnessOptions}
+              selected={filters.harness}
+              onChange={(harness) => update({ harness })}
+            />
+            <FilterPill
+              label="Status"
+              options={statusOptions}
+              selected={filters.status}
+              onChange={(status) => update({ status })}
+            />
+          </div>
+        }
+        actions={
+          <>
+            <Segmented
+              aria-label="Time range"
+              value={filters.range}
+              onValueChange={(next) => update({ range: next })}
+              options={REQUEST_RANGES}
+            />
+            <LiveToggle
+              live={live}
+              held={held}
+              every="every minute"
+              onLiveChange={(next) => {
+                setLive(next)
+                if (next) data.refresh()
+              }}
+            />
+          </>
+        }
+      />
+      {clientNote ? (
+        <p className="mb-3 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <Info className="size-3.5 shrink-0 text-subtle-foreground" />
+          <span className="min-w-0">{clientNote}</span>
+        </p>
+      ) : null}
+      <div
+        onPointerEnter={() => setHeld(true)}
+        onPointerLeave={() => setHeld(false)}
+        aria-busy={data.stale || undefined}
+        className={cn('transition-opacity duration-200', data.stale && 'opacity-60')}
+      >
+        <DataTable
+          data={data.rows}
+          columns={columns}
+          getRowId={(run) => run.session_id}
+          loading={data.loading && data.rows.length === 0}
+          onRowClick={(run) => navigate(getRunPath(run.session_id))}
+          rowActions={(run) => (
+            <>
+              <DropdownMenuItem onSelect={() => navigate(getRunPath(run.session_id))}>
+                <PanelRightOpen />
+                Open run
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => navigate(getSessionRequestsPath(run.session_id))}>
+                <ListTree />
+                Show its requests
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => copy(displaySessionId(run.session_id), 'Session ID')}
+              >
+                <Copy />
+                Copy session ID
+              </DropdownMenuItem>
+            </>
+          )}
+          empty={
+            quiet && filters.range !== 'all' ? (
+              <EmptyState
+                compact
+                icon={Bot}
+                tone="blue"
+                title={`No agent runs ${range}`}
+                description="No agent harness made a call through the gateway in this range. Older runs are under a longer range."
+                actions={
+                  <Button size="sm" variant="outline" onClick={() => update({ range: 'all' })}>
+                    Show all time
+                  </Button>
+                }
+              />
+            ) : quiet ? (
+              <EmptyState
+                compact
+                icon={Bot}
+                tone="blue"
+                title="No agent runs yet"
+                description="Point Claude Code, Codex, OpenCode or DeepSeek Harness at the gateway and each session shows up here as one run, its subagents under it."
+                actions={
+                  <Button size="sm" variant="outline" asChild>
+                    <a
+                      href="https://vllm-sr.ai/docs/installation/agent-harness"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Connect an agent harness
+                    </a>
+                  </Button>
+                }
+              />
+            ) : (
+              <EmptyState
+                compact
+                icon={Bot}
+                tone="blue"
+                title="No agent runs match"
+                description="Clear the search or the filters, or widen the time range."
+                actions={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setDraft('')
+                      setParams({ tab: 'runs' }, { replace: true })
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                }
+              />
+            )
+          }
+        />
+      </div>
+      <Pager
+        page={Math.min(page, pages)}
+        pageSize={pageSize}
+        total={data.total}
+        noun="run"
+        note={
+          filters.range === 'all' || data.total === 0
+            ? undefined
+            : `Calls, cost and duration count what each run did ${range}.`
+        }
+        onPage={(next) => setParams((current) => writePage(current, next))}
+        onPageSize={(size) => setParams((current) => writePage(current, 1, size))}
+      />
     </>
   )
 }

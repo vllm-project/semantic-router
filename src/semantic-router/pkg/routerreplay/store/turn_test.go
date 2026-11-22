@@ -112,7 +112,7 @@ func TestPostgresTurnQueriesIntegration(t *testing.T) {
 		t.Fatalf("review turn = %+v", review)
 	}
 	scanned := map[string]Record{}
-	if err = postgres.ScanMetadata(ctx, func(record Record) error {
+	if err = postgres.ScanMetadata(ctx, QueryFilters{}, func(record Record) error {
 		scanned[record.RequestID] = record
 		return nil
 	}); err != nil {

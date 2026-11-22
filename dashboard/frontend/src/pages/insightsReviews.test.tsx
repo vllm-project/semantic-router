@@ -112,9 +112,9 @@ describe('Insights reviews', () => {
     ]) {
       expect(html).toContain(text)
     }
-    expect(html).toContain('href="/insights/review-deny"')
-    expect(html).toContain('<option value="tool_call">Tool check</option>')
-    expect(html).toContain('<option value="codex-auto-review">codex-auto-review</option>')
+    expect(html).toContain('href="/observe/requests/review-deny"')
+    // The result, risk and review model filters; their options open in a popover.
+    for (const filter of ['Result', 'Risk', 'Review model']) expect(html).toContain(`>${filter}<`)
     expect(html).not.toContain('No approval reviews yet')
   })
 
@@ -133,8 +133,8 @@ describe('Insights reviews', () => {
         />
       </ModelLabelsContext.Provider>,
     )
-    expect(html).toContain('<option value="codex-auto-review">GPT Review (codex-auto-review)</option>')
-    expect(html).toContain('title="Configured as codex-auto-review">GPT Review</span>')
+    expect(html).toContain('title="GPT Review · configured as codex-auto-review"')
+    expect(html).toContain('>GPT Review</span>')
   })
 
   it('shows an empty state when no review was recorded', () => {
@@ -151,7 +151,7 @@ describe('Insights reviews', () => {
       />,
     )
     expect(html).toContain('No approval reviews yet')
-    expect(html).toMatch(/aria-label="Review model"[^>]*disabled/)
+    expect(html).not.toContain('Review model')
   })
 
   it('summarizes verdicts apart from failures and keeps unknown cost unpriced', () => {
@@ -191,7 +191,8 @@ describe('Insights reviews', () => {
         reviews={{ ...reviews, approval_rate: undefined, cost: [], latency_p50_ms: undefined }}
       />,
     )
-    expect(none).toContain('N/A')
+    expect(none).toContain('—')
+    expect(none).not.toContain('N/A')
     expect(none).toContain('Not priced')
   })
 
@@ -207,7 +208,7 @@ describe('Insights reviews', () => {
     )
     expect(html).toContain('Deletes build output.')
     expect(html).toContain('{&quot;command&quot;:[&quot;rm&quot;]}')
-    expect(html).toContain('href="/insights?view=reviews&amp;session=agent-session"')
+    expect(html).toContain('href="/observe/requests?tab=reviews&amp;session=agent-session"')
 
     const hidden = reviewRecord('hidden', denied.timestamp, {
       content_redacted: true,
@@ -266,8 +267,8 @@ describe('Insights reviews', () => {
       <InsightsSessionRoutes trajectory={trajectory} reviews={[denied, failed]} />,
     )
     expect(html).toContain('<dt>Reviews</dt>')
-    expect(html).toContain('href="/insights/review-deny"')
-    expect(html).toContain('href="/insights/review-failed"')
+    expect(html).toContain('href="/observe/requests/review-deny"')
+    expect(html).toContain('href="/observe/requests/review-failed"')
     expect(render(<InsightsSessionRoutes trajectory={trajectory} />)).not.toContain(
       '<dt>Reviews</dt>',
     )
@@ -321,7 +322,7 @@ describe('Insights reviews', () => {
     }
     const html = render(<InsightsSessionRoutes trajectory={trajectory} reviews={reviews} />)
     expect(html).toContain('>101</a> · 101 allowed')
-    expect(html).toContain('href="/insights/review-0"')
+    expect(html).toContain('href="/observe/requests/review-0"')
     expect(html).not.toContain('older reviews not shown')
 
     let offset = 0
