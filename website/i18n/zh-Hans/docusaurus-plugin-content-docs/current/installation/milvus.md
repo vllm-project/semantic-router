@@ -170,6 +170,10 @@ vllm-sr config validate --config config.yaml
 
 对于开发，设置 `development.auto_create_collection: true`。在受控生产环境中，预先创建 collection 并禁用自动创建。确保 schema 和向量维度与 Router 配置匹配。
 
+### 现有 collection 的向量维度不匹配
+
+启动时，响应缓存和 Router Memory 会检查现有 collection 的向量字段维度是否与实际使用的嵌入维度一致。不一致时，错误会指出 collection 名称、当前维度和预期维度。请为新维度使用新的 collection，或迁移现有数据并重新生成嵌入。此检查不会修改 collection。
+
 ### 连接超时
 
 检查 Service 和端点、Router 命名空间的 DNS、NetworkPolicy，以及配置的数据库：
