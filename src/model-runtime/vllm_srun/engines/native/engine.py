@@ -195,14 +195,22 @@ class NativeEngineModel(EngineModel):
             }
         )
         self.kernels = accelerator.kernels(device_info)
-        # Consent is per device class: a record on one says nothing about the other.
+        # Consent is per device class: a record on one says nothing about the
+        # other, and a frozenset consents to some slots only. The accelerator
+        # scope narrows consent further when a record covers only some of the
+        # device class's accelerators.
         consents = (
             spec.dtype.approximate_cpu_kernels
             if self.device.type == "cpu"
             else spec.dtype.approximate_kernels
         )
-        self.kernels.allow_approximate = not options.exact_kernels_only and bool(
-            consents
+        self.kernels.allow_approximate = (
+            not options.exact_kernels_only
+            and bool(consents)
+            and (
+                spec.dtype.approximate_accelerators is None
+                or accelerator.name in spec.dtype.approximate_accelerators
+            )
         )
         # A family may consent to some slots only (DtypePolicy.approximate_cpu_kernels).
         self.kernels.approximate_slots = (
