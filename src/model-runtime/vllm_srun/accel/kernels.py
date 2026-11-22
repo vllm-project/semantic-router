@@ -35,12 +35,23 @@ class Kernel:
 
 @dataclass
 class KernelSet:
-    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants."""
+    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants.
+
+    ``approximate_slots`` narrows ``allow_approximate`` to the named slots, for a family
+    whose records cover only some of the device's approximate kernels; None allows every slot.
+    """
 
     device: str
     available: dict[str, list[Kernel]] = field(default_factory=dict)
     allow_approximate: bool = False
+    approximate_slots: frozenset[str] | None = None
     variants: dict[str, str] = field(default_factory=dict)
+
+    def allows(self, name: str) -> bool:
+        """Whether this slot may run an approximate kernel."""
+        return self.allow_approximate and (
+            self.approximate_slots is None or name in self.approximate_slots
+        )
 
     def register(self, kernel: Kernel) -> None:
         self.available.setdefault(kernel.name, []).insert(0, kernel)
@@ -53,9 +64,7 @@ class KernelSet:
         candidates = self.available.get(name, [])
         for variant in dict.fromkeys((self.variants.get(name), None)):
             for kernel in candidates:
-                if kernel.variant == variant and (
-                    kernel.exact or self.allow_approximate
-                ):
+                if kernel.variant == variant and (kernel.exact or self.allows(name)):
                     return kernel
         raise KeyError(f"no kernel registered for {name!r} on {self.device}")
 

@@ -625,7 +625,7 @@ type DecisionRequest struct {
 	States *map[string]DecisionState `json:"states,omitempty"`
 
 	// Videos Videos every question of the state sees, after its images, for models whose card lists the `video`
-	// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+	// modality: base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data URLs (`data:video/mp4;base64,...`), each at most
 	// `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
 	// pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
 	// `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
@@ -692,7 +692,7 @@ type DecisionState struct {
 	State interface{} `json:"state"`
 
 	// Videos Videos every question of the state sees, after its images, for models whose card lists the `video`
-	// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+	// modality: base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data URLs (`data:video/mp4;base64,...`), each at most
 	// `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
 	// pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
 	// `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;
@@ -724,7 +724,7 @@ type DecisionStateResponse struct {
 }
 
 // DecisionVideos Videos every question of the state sees, after its images, for models whose card lists the `video`
-// modality: base64 MP4, WebM, QuickTime or Matroska data URLs (`data:video/mp4;base64,...`), each at most
+// modality: base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data URLs (`data:video/mp4;base64,...`), each at most
 // `limits.video_max_bytes` bytes, `limits.video_max_seconds` seconds and `limits.video_source_max_pixels`
 // pixels per frame. The model reads `limits.video_fps` frames per second, at least 4 and at most
 // `limits.video_max_frames` spread over the whole video, each at up to `limits.video_max_pixels` pixels;

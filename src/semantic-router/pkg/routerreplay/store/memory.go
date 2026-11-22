@@ -123,21 +123,26 @@ func (m *MemoryStore) UpdateLifecycle(
 	durationMS int64,
 	reason string,
 ) error {
+	_, err := m.updateLifecycle(id, state, endedAt, durationMS, reason)
+	return err
+}
+
+func (m *MemoryStore) updateLifecycle(id, state string, endedAt time.Time, durationMS int64, reason string) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	rec, ok := m.byID[id]
 	if !ok {
-		return fmt.Errorf("record with ID %s not found", id)
+		return false, fmt.Errorf("record with ID %s not found", id)
 	}
 	if rec.LifecycleState != "" && rec.LifecycleState != LifecycleInProgress {
-		return nil
+		return false, nil
 	}
 	rec.LifecycleState = state
 	rec.EndedAt = cloneTimePtr(&endedAt)
 	rec.DurationMS = durationMS
 	rec.TerminalReason = reason
-	return nil
+	return true, nil
 }
 
 // AttachRequest updates the request body for a record.

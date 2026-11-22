@@ -31,6 +31,15 @@ type Session interface {
 	Close(err error)
 }
 
+// CutBodySession is a Session that answers for a buffered upstream body the
+// gateway could not read whole, such as one whose backend closed before the
+// declared length. Envoy answers such a response with its own local reply,
+// which no phase sees; the engine lets this session answer it instead.
+type CutBodySession interface {
+	Session
+	ResponseBodyCut(err error) (*Effect, error)
+}
+
 // LocalReply is the Close error of a request no backend answered: the client
 // got the gateway's local reply, which the response phases never see.
 type LocalReply struct {

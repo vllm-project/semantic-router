@@ -9,6 +9,35 @@ import (
 
 func ptrFloat(v float64) *float64 { return &v }
 
+func TestConversation_InvalidToolCallCount(t *testing.T) {
+	rule := config.ConversationRule{
+		Name: "invalid_tool_call",
+		Feature: config.ConversationFeature{
+			Type:   "count",
+			Source: config.ConversationSource{Type: "invalid_tool_call"},
+		},
+		Predicate: &config.NumericPredicate{GTE: ptrFloat(1)},
+	}
+
+	facts := ConversationFacts{InvalidToolCalls: 2}
+	val := resolveConversationValue(rule.Feature, facts)
+	if val != 2.0 {
+		t.Fatalf("expected 2.0, got %v", val)
+	}
+	if !conversationPredicateMatches(rule, val) {
+		t.Fatal("expected invalid_tool_call to match with 2 invalid calls")
+	}
+
+	factsClean := ConversationFacts{InvalidToolCalls: 0}
+	valClean := resolveConversationValue(rule.Feature, factsClean)
+	if valClean != 0.0 {
+		t.Fatalf("expected 0.0, got %v", valClean)
+	}
+	if conversationPredicateMatches(rule, valClean) {
+		t.Fatal("expected invalid_tool_call NOT to match with 0 invalid calls")
+	}
+}
+
 func TestConversation_MultiTurnActive(t *testing.T) {
 	rule := config.ConversationRule{
 		Name: "multi_turn_active",

@@ -290,6 +290,14 @@ class Decision3Family(ModelFamily):
                 # few of a quantized package's answers; BF16 packages keep exact
                 # kernels.
                 approximate_kernels=quantized is not None,
+                # docs/records/cpu-zentorch-d3.md: zentorch's FP32 linear changed
+                # no decision of the FP32 CPU answers. Its SDPA changed none either
+                # but added at most 2% over the linear, so the sdpa slot stays exact
+                # until a record shows it pays. Quantized packages have no CPU record
+                # and keep exact kernels; vela3_d3 shares this policy.
+                approximate_cpu_kernels=(
+                    frozenset({"linear"}) if quantized is None else False
+                ),
             ),
             max_input_tokens=package.max_input_tokens,
             kernel_variants=CONV_VARIANT,
@@ -728,16 +736,17 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             for question_id, kind, instructions, keys, texts, descriptions in read
         ]
         temperature = self.request_temperature(len(rendered))
-        encodings = self.prompts.encode_batch([entry[-1] for entry in rendered])
+        # A prompt holds one placeholder token for each image and video, where
+        # its length counts their visual tokens.
+        room = self.question_cap()[0] - visual + images + videos
+        encodings = self.prompts.read_batch([entry[-1] for entry in rendered], room)
         for (question_id, kind, keys, descriptions, _), encoding in zip(
             rendered, encodings, strict=True
         ):
-            ids = encoding.ids
-            length = len(ids) - images - videos + visual
-            refused = self.length_error(length)
-            if refused is not None:
-                errors[question_id] = question_error(kind, refused)
+            if encoding is None:
+                errors[question_id] = question_error(kind, self.over_cap())
                 continue
+            ids = encoding.ids
             if media:
                 ids = self._expand(ids, media)
             tokens += len(ids)
@@ -774,11 +783,13 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             return self.validated, True
         return self.limit, False
 
-    def length_error(self, length: int) -> QuestionError | None:
-        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+    def over_cap(self, length: int | None = None) -> QuestionError:
+        """Why a question prompt over ``question_cap`` is refused.
+
+        ``length`` is its token count. None is a prompt that was not tokenized
+        to its end, so its count is not known and the message names none.
+        """
         limit, capped = self.question_cap()
-        if length <= limit:
-            return None
         hint = (
             f"the length this model was validated at; long context "
             f"(options.long_context) reads up to "
@@ -786,12 +797,22 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             if capped
             else "the maximum context length"
         )
+        size = (
+            f"more than {limit} tokens"
+            if length is None
+            else f"{length} tokens, over {limit} tokens"
+        )
         return QuestionError(
             MAX_LENGTH_EXCEEDED,
-            f"the question prompt has {length} tokens, over {limit} tokens, {hint}; "
-            "nothing was truncated",
+            f"the question prompt has {size}, {hint}; nothing was truncated",
             "question_tokens",
         )
+
+    def length_error(self, length: int) -> QuestionError | None:
+        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+        if length <= self.question_cap()[0]:
+            return None
+        return self.over_cap(length)
 
     def _expand(self, ids: list[int], media: RequestMedia) -> list[int]:
         """Each image placeholder repeated once per input token of its image, and each video placeholder as its

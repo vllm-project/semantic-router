@@ -269,11 +269,30 @@ export function serverQuery(filters: RequestFilters, since: string | undefined):
 }
 
 /**
+ * A query kept to the records that belong to a session, as the Sessions view
+ * lists them; a Router that predates the filter ignores it.
+ */
+export function withSessionsOnly(query: string, sessionsOnly: boolean): string {
+  if (!sessionsOnly) return query
+  const params = new URLSearchParams(query)
+  params.set('has_session', 'true')
+  return `?${params.toString()}`
+}
+
+/**
  * The page the harness counts come from: one record under every server filter
  * but harness, so choosing a harness leaves the counts as they are.
  */
-export function harnessCountsQuery(filters: RequestFilters, since: string | undefined): string {
-  return withPage(serverQuery({ ...filters, harness: [] }, since), 1, 0)
+export function harnessCountsQuery(
+  filters: RequestFilters,
+  since: string | undefined,
+  sessionsOnly = false,
+): string {
+  return withPage(
+    withSessionsOnly(serverQuery({ ...filters, harness: [] }, since), sessionsOnly),
+    1,
+    0,
+  )
 }
 
 export interface RequestsData {
@@ -322,6 +341,8 @@ export function useRequestsData({
   rules,
   interval,
   withFacets = true,
+  paused = false,
+  sessionsOnly = false,
 }: {
   filters: RequestFilters
   page: number
@@ -332,31 +353,39 @@ export function useRequestsData({
   /** With a range, asks the aggregate for its traffic in intervals of this length, such as 1h. */
   interval?: string
   withFacets?: boolean
+  /** Reads nothing yet, as while a session filter is matched with its full id. */
+  paused?: boolean
+  /** Reads only the records that belong to a session, so the totals match the Sessions view. */
+  sessionsOnly?: boolean
 }): RequestsData {
   const [minute, setMinute] = useState(() => Math.floor(Date.now() / MINUTE))
   const since = requestRangeSince(filters.range, minute)
-  const baseQuery = serverQuery(filters, since)
-  const scope = `${serverQuery(filters, undefined)}|${filters.range}`
+  const baseQuery = withSessionsOnly(serverQuery(filters, since), sessionsOnly)
+  const scope = `${withSessionsOnly(serverQuery(filters, undefined), sessionsOnly)}|${filters.range}`
   const clientMode = hasClientFilters(filters)
 
   const listRead = useReplayRead<InsightsListResponse>(
-    clientMode ? null : `${REPLAYS}${withPage(baseQuery, pageSize, (page - 1) * pageSize)}`,
+    clientMode || paused
+      ? null
+      : `${REPLAYS}${withPage(baseQuery, pageSize, (page - 1) * pageSize)}`,
     'insight records',
     `${scope}|${page}|${pageSize}`,
   )
   const aggregateRead = useReplayRead<InsightsAggregateResponse>(
-    `${REPLAYS}/aggregate${withInterval(baseQuery, filters.range === 'all' ? undefined : interval)}`,
+    paused
+      ? null
+      : `${REPLAYS}/aggregate${withInterval(baseQuery, filters.range === 'all' ? undefined : interval)}`,
     'insight aggregates',
     `${scope}|${interval ?? ''}`,
   )
   const harnessRead = useReplayRead<InsightsListResponse>(
-    withFacets ? `${REPLAYS}${harnessCountsQuery(filters, since)}` : null,
+    withFacets && !paused ? `${REPLAYS}${harnessCountsQuery(filters, since, sessionsOnly)}` : null,
     'harness counts',
-    `${serverQuery({ ...filters, harness: [] }, undefined)}|${filters.range}`,
+    `${withSessionsOnly(serverQuery({ ...filters, harness: [] }, undefined), sessionsOnly)}|${filters.range}`,
   )
 
   const [windowQuery, releaseWindow] = useWindowQuery(
-    clientMode ? 'live' : withFacets ? 'counts' : 'off',
+    paused ? 'off' : clientMode ? 'live' : withFacets ? 'counts' : 'off',
     scope,
     baseQuery,
   )
@@ -445,11 +474,13 @@ export function useRequestsData({
     windowTotal: windowRead.total,
     windowLoaded: windowRead.loaded,
     windowLoading: windowRead.loading,
-    loading: clientMode
-      ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
-      : listRead.loading && (listResponse === null || listRead.stale),
+    loading:
+      paused ||
+      (clientMode
+        ? !windowRead.loaded && !windowRead.error && !windowRead.unavailable
+        : listRead.loading && (listResponse === null || listRead.stale)),
     stale: clientMode ? false : listRead.stale && listResponse !== null,
-    aggregateLoading: aggregateRead.loading,
+    aggregateLoading: paused || aggregateRead.loading,
     error: listError ?? aggregateError,
     listError,
     aggregateError,
