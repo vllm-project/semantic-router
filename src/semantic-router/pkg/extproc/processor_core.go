@@ -168,6 +168,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		// evidence that is no longer from the latest turns. The recorder is
 		// idempotent and empty usage stays non-attributable.
 		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
+		r.recordInterruptedStreamUsage(ctx)
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
 	r.recordHeldStreamOverMessageLimit(ctx, err)
