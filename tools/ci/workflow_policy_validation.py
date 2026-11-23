@@ -143,6 +143,7 @@ def validate_status_publisher(
             "contents": "read",
             "actions": "read",
             "checks": "write",
+            "statuses": "write",
             "issues": "write",
             "pull-requests": "write",
         },
