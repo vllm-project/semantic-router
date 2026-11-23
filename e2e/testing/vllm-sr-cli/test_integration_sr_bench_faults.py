@@ -41,7 +41,9 @@ class TestBenchmarkFaultIntegration(MockUpstreamMixin, ServeSessionMixin, CLITes
         config["recipes"][0]["decisions"][0]["modelRefs"].append(
             {"model": "fallback", "use_reasoning": False}
         )
-        config.setdefault("global", {}).setdefault("router", {})["fallback"] = {
+        router = config.setdefault("global", {}).setdefault("router", {})
+        router["headers"] = {"debug": "any"}
+        router["fallback"] = {
             "version": 1,
             "enabled": True,
             "max_attempts": 2,
@@ -141,19 +143,32 @@ class TestBenchmarkFaultIntegration(MockUpstreamMixin, ServeSessionMixin, CLITes
                 ],
                 timeout=75,
             )
-            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertEqual(
+                result.returncode,
+                2,
+                f"stderr={result.stderr}\nstdout={result.stdout}",
+            )
             report: dict[str, Any] = json.loads(result.stdout)
+            report_summary = json.dumps(report, sort_keys=True)
             faults = report["fault_summary"]
-            self.assertEqual(faults["faulted_tasks"]["total"], 3)
-            self.assertEqual(faults["unfaulted_tasks"]["completed"], 1)
+            self.assertEqual(faults["faulted_tasks"]["total"], 3, report_summary)
+            self.assertEqual(faults["unfaulted_tasks"]["completed"], 1, report_summary)
             tasks = {task["case_id"]: task for task in faults["faulted_tasks"]["tasks"]}
             status_call = tasks["a-status"]["faulted_calls"][0]
-            self.assertEqual(tasks["a-status"]["outcome"], "completed")
-            self.assertEqual(status_call["selected_model"], "fallback")
-            self.assertEqual(status_call["injected_fault"]["provider_model"], "primary")
-            self.assertEqual(status_call["injected_fault"]["status"], 503)
-            self.assertEqual(status_call["router_response"]["status"], 200)
-            self.assertEqual(tasks["b-cut"]["outcome"], "failed")
+            self.assertEqual(tasks["a-status"]["outcome"], "completed", report_summary)
+            self.assertEqual(status_call["selected_model"], "fallback", report_summary)
+            self.assertEqual(
+                status_call["injected_fault"]["provider_model"],
+                "primary",
+                report_summary,
+            )
+            self.assertEqual(
+                status_call["injected_fault"]["status"], 503, report_summary
+            )
+            self.assertEqual(
+                status_call["router_response"]["status"], 200, report_summary
+            )
+            self.assertEqual(tasks["b-cut"]["outcome"], "failed", report_summary)
             print(
                 json.dumps(
                     {
