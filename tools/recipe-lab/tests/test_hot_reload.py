@@ -305,6 +305,7 @@ def _candidate(path: Path, marker: str = "") -> Path:
         "  - name: http\n"
         "    address: 0.0.0.0\n"
         "    port: 8899\n"
+        "global: {services: {router_replay: {store_backend: memory}}}\n"
         f"x-candidate: {path.stem}\n"
     )
     if marker:
