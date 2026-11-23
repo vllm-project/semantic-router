@@ -57,6 +57,8 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 
 For pip, uv, or agent-driven installation, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
+To build a routing recipe for your own model pair and evaluate changes on graded tasks, see [Recipe Lab](tools/recipe-lab/README.md).
+
 ### Try it online
 
 Try [System Duo](https://app.vllm-sr.ai/#try): pick an example and it runs live in your browser, with a free key on first run.

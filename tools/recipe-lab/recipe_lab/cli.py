@@ -1291,7 +1291,7 @@ def cmd_record_draft(args: argparse.Namespace) -> int:
     ledger = Ledger(args.ledger)
     records = ledger.filter(tier="live", verdict="PASS")
     if not records:
-        raise SystemExit("no PASS live record in the ledger; nothing to draft")
+        _fail("no PASS live record in the ledger; nothing to draft")
     record = records[-1]
     draft = render_promotion_draft(record)
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)

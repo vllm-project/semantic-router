@@ -74,8 +74,10 @@ Go commands against that module's dependencies.
 
 ## Optional repository skills
 
-Choose a skill by the semantics of the task, not by an automatic path match:
+Choose from the [repository skill guide](tools/agent/skills/README.md) by task.
 
+- [Recipe Lab](tools/agent/skills/recipe-lab-loop/SKILL.md): build a recipe for two backends or tune an existing recipe against graded tasks
+- [Router operations](tools/agent/skills/vllm-sr-agent-operations/SKILL.md): configure a stack, inspect routing decisions and verify delivery
 - `router-contract-change`: request-visible config/signal/decision/algorithm/plugin changes
 - `routing-calibration`: live maintained-recipe probe and calibration work
 - `maintainer-ops`: reviewed issue, PR, release, or GitHub mutation workflows

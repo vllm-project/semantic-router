@@ -34,7 +34,7 @@ pip install -e '.[dev]'
 | `propose-rule-thresholds` | move every predicate site of one signal inside a decision's rule at once, with site provenance (C) |
 | `run` | replay-tier evaluation of candidate configs -> RANKED ledger records (A1/A5) |
 | `ledger` | inspect or append to the evidence ledger (`show` / `append` / `top`) |
-| `cases-to-srbench` | render the labeled case list as an sr-bench dataset; the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
+| `cases` | case-file utilities; `to-srbench` renders the labeled case list as an sr-bench dataset, and the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
 | `verify` | drive sr-bench end to end for one candidate: Preview routing, `--repetitions` AB/BA pairs, per-pair compare and the shared three-state verdict (I) |
 | `live-verdict` | compare two already-recorded sr-bench runs -> PASS / FAIL / INCONCLUSIVE with guard floors from `spec.gates` (A3) |
 
@@ -294,6 +294,17 @@ the latest attribution summary (read through the hash-verified
 `--diagnosis` and `--symptom` inputs join diagnosis highlights and casebook
 references - casebook entries are repository reference material, never
 measurements of this run. Frozen-test case content is never exported.
+
+## Agent-driven loop
+
+The [recipe-lab-loop skill](../../agent/skills/recipe-lab-loop/SKILL.md)
+packages this workflow for coding agents: read the evidence (`next`), propose
+one candidate, evaluate, record the verdict. A candidate the agent authored
+itself is submitted like any proposer output - pass the config through
+`--candidates` (a directory, a comma-separated list, or a single path) with
+`--proposer agent:<id>` (lowercase `[a-z0-9._-]`, e.g. `agent:claude-loop`);
+the tag is recorded verbatim in the ledger provenance and is filterable in
+`ledger show`.
 
 ## Scope of this slice
 
