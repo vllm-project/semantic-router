@@ -59,6 +59,9 @@ const (
 	shadowReasonRedirectRejected     = "redirect_rejected"
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
+	shadowReasonBudgetExhausted      = "budget_exhausted"
+	shadowReasonBudgetUnpriced       = "budget_unpriced"
+	shadowReasonBudgetUnbounded      = "budget_unbounded_output"
 
 	// shadowReasonBackendLacksCapability shares the plugin gate's typed reason.
 	shadowReasonBackendLacksCapability = string(pluginruntime.SkipBackendLacksCapability)
@@ -104,6 +107,8 @@ type shadowRequestEncoder func(request llmprotocol.Request, target *shadowTarget
 // worker never reads mutable request state after the primary path moves on.
 type shadowJob struct {
 	cfg             config.RouterReplayShadowConfig
+	prepared        *preparedShadowCall
+	spend           *shadowSpend
 	model           string
 	context         context.Context
 	responseLimit   int
@@ -523,6 +528,9 @@ func (d *shadowDispatcher) enqueueGroup(key string, jobs []*shadowJob, cancel co
 			}
 		}
 		defer func() { <-lane.groups }()
+		if limit := first.cfg.Budget.MaxEstimatedCost; limit != nil && !d.admitShadowGroup(jobs, *limit) {
+			return
+		}
 		var workers sync.WaitGroup
 		for _, job := range jobs {
 			workers.Add(1)
@@ -572,7 +580,11 @@ func (d *shadowDispatcher) execute(job *shadowJob) {
 	}
 	metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Inc()
 	defer metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Dec()
-	d.record(job, d.call(job.context, job))
+	result := d.call(job.context, job)
+	if job.spend != nil {
+		job.spend.account(result)
+	}
+	d.record(job, result)
 }
 
 // record persists the observation. Metrics always fire; the replay outcome
@@ -656,6 +668,12 @@ func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Dur
 	if result.err != "" {
 		metadata["error"] = result.err
 	}
+	if spend := job.spend; spend != nil {
+		metadata["budget_estimated_cost"] = strconv.FormatFloat(spend.estimate, 'f', -1, 64)
+		metadata["budget_accounted_cost"] = strconv.FormatFloat(spend.accounted, 'f', -1, 64)
+		metadata["budget_cost_source"] = spend.costSource
+		metadata["budget_currency"] = spend.currency
+	}
 	if result.verdict != shadowVerdictCompleted {
 		return metadata
 	}
@@ -668,7 +686,10 @@ func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Dur
 		metadata["output_tokens"] = strconv.FormatInt(result.outputTokens, 10)
 	}
 	metadata["usage_known"] = strconv.FormatBool(result.inputKnown && result.outputKnown)
-	if result.inputKnown && result.outputKnown && job.routerConfig != nil {
+	if spend := job.spend; spend != nil && spend.costSource == "usage" {
+		metadata["estimated_cost"] = metadata["budget_accounted_cost"]
+		metadata["cost_currency"] = spend.currency
+	} else if result.inputKnown && result.outputKnown && job.routerConfig != nil {
 		prompt, completion, currency, known := job.routerConfig.GetModelPricing(job.model)
 		if known {
 			metadata["estimated_cost"] = strconv.FormatFloat((float64(result.inputTokens)*prompt+float64(result.outputTokens)*completion)/1e6, 'g', -1, 64)
