@@ -34,6 +34,42 @@
   line-height: 1.7;
 }
 
+.guideCallout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  padding: 1.35rem;
+  border: 1px solid var(--site-border);
+  border-left: 3px solid var(--site-accent);
+  background: var(--site-surface);
+  min-width: 0;
+}
+
+.guideCallout > div {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.guideCallout h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+  line-height: 1.3;
+}
+
+.guideCallout p {
+  margin: 0.4rem 0 0;
+  color: var(--site-muted-bright);
+  line-height: 1.6;
+}
+
+.guideLink {
+  color: var(--site-accent-strong);
+  font-weight: var(--site-font-weight-semibold);
+  white-space: nowrap;
+}
+
 .grid,
 .contributeGrid,
 .enforcementGrid {

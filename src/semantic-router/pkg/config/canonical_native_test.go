@@ -135,6 +135,8 @@ func TestCanonicalNativeRoutingRejectsAmbiguousContracts(t *testing.T) {
 		{"raw score", "field: confidence", "field: value", "score value is not confidence"},
 		{"unsupported native type", "question_type: choice", "question_type: span", "question_type must be"},
 		{"a box rule on top probability", "question_type: choice, field: confidence", "question_type: box, field: top_probability", "a box answer has only a confidence"},
+		{"a set rule on confidence", "question_type: choice, field: confidence", "question_type: set, field: confidence", "a set answer has only a probability_margin"},
+		{"a choice rule on probability margin", "question_type: choice, field: confidence", "question_type: choice, field: probability_margin", "probability_margin applies only to noul and set"},
 		{"native Chat recipe", "api: systemone", "api: chat", "require an isolated native recipe"},
 	}
 	for _, test := range tests {
