@@ -4389,6 +4389,13 @@
         "max_retries": {
           "type": "integer"
         },
+        "fallbacks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
         "tls": {
           "$ref": "#/$defs/DeploymentTLS"
         },

@@ -299,10 +299,13 @@ func (a askedRule) questionID() string {
 // systemOneCall is the rules a stage asks one deployment about one state.
 // requestAlone is whether that state is the request text and nothing else.
 type systemOneCall struct {
-	deployment   string
-	request      modelservice.Request
-	rules        []askedRule
-	requestAlone bool
+	deployment string
+	// fallbackChain includes the primary and is set for configured System One
+	// signals only. Other consumers of the same deployment keep their call path.
+	fallbackChain []string
+	request       modelservice.Request
+	rules         []askedRule
+	requestAlone  bool
 	// scan is the guard scan a window call reads a window of, and window
 	// that window's index.
 	scan   *guardScan
@@ -331,6 +334,10 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 		}
 		asked.unread = reading.unread(asked.rule)
 		deployment := c.Config.SystemOneRuleDeployment(asked.rule)
+		var chain []string
+		if asked.signalType == config.SignalTypeSystemOne && len(c.Config.ModelDeployments[deployment].Fallbacks) != 0 {
+			chain = c.Config.DecisionDeploymentChain(deployment)
+		}
 		state := reading.state(asked.rule)
 		switch {
 		case guardScanned(asked):
@@ -343,10 +350,12 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 			state = boundedState(state, budget, headShare)
 		}
 		index := slices.IndexFunc(calls, func(call *systemOneCall) bool {
-			return call.scan == nil && call.deployment == deployment && sameState(call.request, state)
+			return call.scan == nil && call.deployment == deployment && sameState(call.request, state) &&
+				(len(call.fallbackChain) > 0) == (len(chain) > 0) &&
+				(len(chain) == 0 || call.rules[0].rule.FullCoverage() == asked.rule.FullCoverage())
 		})
 		if index < 0 {
-			calls = append(calls, &systemOneCall{deployment: deployment, request: state, requestAlone: state.Parts == nil && state.State == reading.request})
+			calls = append(calls, &systemOneCall{deployment: deployment, fallbackChain: chain, request: state, requestAlone: state.Parts == nil && state.State == reading.request})
 			index = len(calls) - 1
 		}
 		calls[index].rules = append(calls[index].rules, asked)
@@ -543,24 +552,8 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 	request := call.request
 	request.MaxTokens = c.Config.ModelDeployments[deployment].ScanBudget()
 	request.Questions = callQuestions(rules)
-	remote := c.Config.IsSystemOneDeployment(deployment)
 	started := time.Now()
-	// Each attempt has the rules' timeout of its own: a request that waits
-	// for capacity (on_signal_overload) waits within the stage's deadline.
-	response, waited, err := c.askUntilCapacity(ctx, deployment, func(asking context.Context) (modelservice.Response, error) {
-		callCtx, cancel := systemOneCallContext(asking, rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
-		defer cancel()
-		if remote {
-			return askSystemOneDeployment(callCtx, c.systemOne(), deployment, request)
-		}
-		if card, ok := c.decisionTaskCard(deployment); ok {
-			return modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
-		}
-		if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
-			return modelservice.Response{}, modelservice.ErrUnavailable
-		}
-		return c.decider().Decide(callCtx, deployment, request)
-	})
+	response, waited, err := c.sendSystemOneQuestions(ctx, call, request)
 	if waited && call.scan != nil {
 		call.scan.markWaited(err == nil)
 	}
@@ -568,6 +561,35 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
 	}
 	return response, time.Since(started).Seconds(), err
+}
+
+func (c *Classifier) sendSystemOneQuestions(ctx context.Context, call *systemOneCall, request modelservice.Request) (modelservice.Response, bool, error) {
+	if len(call.fallbackChain) > 0 {
+		response, err := c.sendSystemOneFailover(ctx, call, request)
+		return response, false, err
+	}
+	deployment := call.deployment
+	remote := c.Config.IsSystemOneDeployment(deployment)
+	// Each attempt has the rules' timeout of its own: a request that waits
+	// for capacity (on_signal_overload) waits within the stage's deadline.
+	return c.askUntilCapacity(ctx, deployment, func(asking context.Context) (modelservice.Response, error) {
+		callCtx, cancel := systemOneCallContext(asking, call.rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
+		defer cancel()
+		return c.askDecisionDeployment(callCtx, deployment, request)
+	})
+}
+
+func (c *Classifier) askDecisionDeployment(ctx context.Context, deployment string, request modelservice.Request) (modelservice.Response, error) {
+	if c.Config.IsSystemOneDeployment(deployment) {
+		return askSystemOneDeployment(ctx, c.systemOne(), deployment, request)
+	}
+	if card, ok := c.decisionTaskCard(deployment); ok {
+		return modelservice.ExecuteQuestions(ctx, c.decider(), deployment, card, request)
+	}
+	if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
+		return modelservice.Response{}, modelservice.ErrUnavailable
+	}
+	return c.decider().Decide(ctx, deployment, request)
 }
 
 // answersGivenUp reports a call cancelled because its answers are no longer
