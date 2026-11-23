@@ -299,19 +299,21 @@ func requestImages(request *llmprotocol.Request) []string {
 }
 
 func currentUserImageCandidates(request *llmprotocol.Request) []string {
-	if len(request.Messages) == 0 {
-		return nil
-	}
-	message := request.Messages[len(request.Messages)-1]
-	if message.Role != llmprotocol.RoleUser {
-		return nil
-	}
+	// Codecs can split a turn across messages or leave instructions at its
+	// end. Use the shared boundary but only read top-level user images.
+	messages := request.Messages[currentTurnStart(request.Messages):]
 	var images []string
-	for _, content := range message.Content {
-		if content.Kind == llmprotocol.ContentImage {
+	for _, message := range messages {
+		if message.Role != llmprotocol.RoleUser {
+			continue
+		}
+		for _, content := range message.Content {
+			if content.Kind != llmprotocol.ContentImage {
+				continue
+			}
 			images = append(images, neutralInlineImageDataURL(content))
 			if len(images) == classification.MaxImageFeatureCandidates {
-				break
+				return images
 			}
 		}
 	}

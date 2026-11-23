@@ -15,6 +15,7 @@ func TestImageFeatureCandidatesAreCurrentTurnOnly(t *testing.T) {
 	request.Messages = append(request.Messages,
 		llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{inline}},
 		llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{remote, inline, remote, remote, inline}},
+		llmprotocol.Message{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Use a concise answer."}}},
 	)
 	if got := extractSemanticRequestSignals(request).CurrentUserImages; !slices.Equal(got, []string{"", "data:image/png;base64," + tinyPNG, "", ""}) {
 		t.Fatalf("unexpected current turn candidates: %v", got)
@@ -22,6 +23,24 @@ func TestImageFeatureCandidatesAreCurrentTurnOnly(t *testing.T) {
 	request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleAssistant})
 	if got := extractSemanticRequestSignals(request).CurrentUserImages; len(got) != 0 {
 		t.Fatal("an assistant continuation must not re-score historical images")
+	}
+}
+
+func TestImageFeatureCandidatesKeepUserPartsAcrossSplitTurn(t *testing.T) {
+	inline := llmprotocol.Content{Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG}
+	remote := llmprotocol.Content{Kind: llmprotocol.ContentImage, URL: "https://example.com/other.png"}
+	request := userImageRequest(inline)
+	request.Messages = append(request.Messages,
+		llmprotocol.Message{Role: llmprotocol.RoleAssistant},
+		llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{remote}},
+		llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{Content: []llmprotocol.Content{inline}},
+		}}},
+		llmprotocol.Message{Role: llmprotocol.RoleDeveloper, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Summarize results."}}},
+		llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{inline}, WithToolResults: true},
+	)
+	if got := extractSemanticRequestSignals(request).CurrentUserImages; !slices.Equal(got, []string{"", "data:image/png;base64," + tinyPNG}) {
+		t.Fatalf("expected the current turn's two user image slots, not history or tool images; got %d slots", len(got))
 	}
 }
 

@@ -129,10 +129,12 @@ Opt in by referencing `image_features` in a recipe's projection score with
 
 These are heuristics, not calibrated quality scores. The router takes the
 maximum of each indicator independently across readable images. It considers
-the first four image parts in the current user message, accepts only inline
-base64 PNG or JPEG, and never fetches URLs. Each image is limited to 2 MiB of
-encoded image bytes after base64 decoding and 4,194,304 pixels, with dimensions
-of at least 3 × 3. The analysis reduces the long side to at most 384 pixels.
+the first four top-level image parts from user messages in the current turn.
+System and developer messages do not end the turn; tool results and earlier
+turns do not contribute images. It accepts only inline base64 PNG or JPEG and
+never fetches URLs. After base64 decoding, each image is limited to 2 MiB of
+image data and 4,194,304 pixels, with dimensions of at least 3 × 3. The
+analysis reduces the long side to at most 384 pixels.
 Unreadable images do not contribute. If none can be scored, the projection is
 unknown; a lower-priority image-presence decision can provide the fallback.
 

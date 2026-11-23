@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -64,5 +65,29 @@ func TestImageFeaturesRecipeDecisions(t *testing.T) {
 	got, err := c.EvaluateDecisionWithEngine(results)
 	if err != nil || got == nil || got.Decision.Name != "image-fallback" {
 		t.Fatalf("unconfigured recipe changed its image route: %+v, %v", got, err)
+	}
+	for _, key := range []string{"image_features:blur", "image_features:edge_density"} {
+		if _, measured := results.SignalValues[key]; measured || results.SignalErrors[key] != "" {
+			t.Fatalf("unconfigured recipe evaluated %s", key)
+		}
+	}
+}
+
+func TestImageFeaturesCanceledStageIsUnknown(t *testing.T) {
+	c := &Classifier{Config: &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{Projections: config.Projections{
+		Scores: []config.ProjectionScore{{Name: "image", Inputs: []config.ProjectionScoreInput{{
+			Type: config.ProjectionInputImageFeatures, Name: "blur", Weight: 1, ValueSource: "raw",
+		}}}},
+	}}}}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	image := encodeFeatureTestImage(t, func(x uint8) uint8 { return x })
+	results := c.evaluateBaseSignals(SignalEvaluationInput{RequestFacts: RequestFacts{
+		Context: ctx, CurrentUserImages: []string{image},
+	}}, nil, false)
+	for _, key := range []string{"image_features:blur", "image_features:edge_density"} {
+		if _, measured := results.SignalValues[key]; measured || results.SignalErrors[key] == "" {
+			t.Fatalf("%s must be unknown after cancellation", key)
+		}
 	}
 }

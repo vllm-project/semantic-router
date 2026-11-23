@@ -65,7 +65,8 @@ func TestImageFeatureRoutingSessionSelectsVisionModel(t *testing.T) {
 		{"disabled", imageRoutingTestURL(t, true), "general-small", "image-fallback", off},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			body := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":[{"type":"text","text":"Describe this image"},{"type":"image_url","image_url":{"url":"` + tc.url + `"}}]}]}`
+			body := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":[{"type":"text","text":"Describe this image"},{"type":"image_url","image_url":{"url":"` + tc.url + `"}}]},` +
+				`{"role":"system","content":"Use a concise answer."}]}`
 			record := tc.recorder.Run(context.Background(), parity.Case{
 				Name:     tc.name,
 				Request:  parity.CaseRequest{Method: "POST", Path: "/v1/chat/completions", Body: body, Headers: [][]string{{"content-type", "application/json"}}},
