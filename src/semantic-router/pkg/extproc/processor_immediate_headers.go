@@ -40,9 +40,10 @@ func appendConfigVersionToImmediateResponse(response *ext_proc.ProcessingRespons
 
 // appendRoutedResponseHeaders completes a routed response the Router answers
 // itself, one with a response path, such as a cache hit, a fast response, a
-// Looper answer or a refusal: it adds the public set the request recorded
-// and, for a caller allowed the debug headers, x-vsr-trace. A header the
-// response already carries is kept.
+// Looper answer or a refusal: it adds the public set the request recorded,
+// the spend budget the request belongs to and, for a caller allowed the
+// debug headers, x-vsr-trace. A header the response already carries is
+// kept.
 func appendRoutedResponseHeaders(response *ext_proc.ProcessingResponse, ctx *RequestContext) {
 	immediate := response.GetImmediateResponse()
 	if immediate == nil || ctx == nil {
@@ -59,6 +60,7 @@ func appendRoutedResponseHeaders(response *ext_proc.ProcessingResponse, ctx *Req
 		return
 	}
 	builder.addPublicRoutingHeaders(ctx)
+	builder.addBudget(ctx)
 	builder.addWarnings(ctx)
 	builder.addTrace(ctx)
 	if len(builder.setHeaders) == 0 {

@@ -40,7 +40,7 @@ A `systemone` rule, under `recipes[].signals.systemone`:
 | `predicate` | The bound the answer must meet: `gt`, `gte`, `lt`, `lte` |
 | `deployment` | The deployment that answers |
 | `stage` | `request` (default) or `response` |
-| `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `request` (`false` leaves the current user turn out), `answer`, `context`, `image`, `audio`, `video` |
+| `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `request` (`false` leaves the current user turn out), `answer`, `context`, `image`, `audio`, `video`; `max_state_bytes` caps each named part's bytes (0, the default, keeps every part whole) |
 | `coverage` | `truncate` (default) or `full` |
 | `on_unscanned` | With `coverage: full`: `match`, `no_match`, `unknown` (default) or `best_effort`; on `jailbreak` and `pii` rules, `best_effort` is the default |
 | `timeout_ms` | Up to 60,000 |

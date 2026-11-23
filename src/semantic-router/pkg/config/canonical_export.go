@@ -126,11 +126,12 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Learning:       cfg.RouterLearning,
 			Fallback:       cfg.RoutingDefaults.Fallback.Clone(),
 
-			AllowLossyTranslation: cfg.AllowLossyTranslation,
-			RoutingInput:          cfg.RoutingInput,
-			Headers:               cfg.Headers,
-			ContextWindow:         cfg.ContextWindow,
-			DrainTimeoutSeconds:   cfg.DrainTimeoutSeconds,
+			AllowLossyTranslation:       cfg.AllowLossyTranslation,
+			AllowRequestExtensionFields: cfg.AllowRequestExtensionFields,
+			RoutingInput:                cfg.RoutingInput,
+			Headers:                     cfg.Headers,
+			ContextWindow:               cfg.ContextWindow,
+			DrainTimeoutSeconds:         cfg.DrainTimeoutSeconds,
 		},
 		Services: CanonicalServiceGlobal{
 			API:             cfg.API,
