@@ -19,6 +19,26 @@ from dataclasses import replace
 from .plugins.base import Accelerator, DeviceInfo, DtypePolicy, ModelSpec
 
 
+def approximate_sources(
+    spec: ModelSpec, accelerator: Accelerator, device: DeviceInfo
+) -> tuple[str, ...]:
+    """Where the approximate CPU kernels ``spec`` consents to come from on ``device``, at ``auto``."""
+    kernels = accelerator.kernels(device)
+    kernels.consent(spec.dtype.consents_on(accelerator.name, True))
+    kernels.use_variants(spec.kernel_variants)
+    return kernels.approximate_sources()
+
+
+def with_kernels(key: str, sources: tuple[str, ...]) -> str:
+    """A CPU key that also names the approximate kernels its BF16 answers were computed with."""
+    return ":".join((key, *sources))
+
+
+def referenced(policy: DtypePolicy, key: str) -> bool:
+    """Whether ``key`` has a BF16 reference for every golden request (one seam, for the recorder)."""
+    return key in policy.cpu_bf16_references
+
+
 def on_host(
     spec: ModelSpec, dtype: str, accelerator: Accelerator, device: DeviceInfo
 ) -> ModelSpec:
@@ -27,19 +47,30 @@ def on_host(
     On a CPU that computes BF16 natively and whose golden reference key
     (``Accelerator.golden_reference``) has a BF16 reference for every golden
     request (``DtypePolicy.cpu_bf16_references``), ``auto`` holds BF16 as
-    ``--dtype bfloat16`` does, with no reduced copy or approximate CPU kernel:
-    those consents rest on records at the policy's own precision. Elsewhere,
-    and at any explicit ``--dtype``, ``spec`` is unchanged.
+    ``--dtype bfloat16`` does, without a reduced copy. A BF16 reference holds
+    one GEMM summation order, so the approximate CPU kernels the family
+    consents to stay only where the key that also names them
+    (``with_kernels``: ``cpu:…:amd:zentorch``) has references; with the
+    plain key's references the model runs exact kernels. Elsewhere, and at any
+    explicit ``--dtype``, ``spec`` is unchanged.
     """
     policy = spec.dtype
     if (
         dtype != "auto"
         or not device.bf16
         or policy.cpu_weights == "bfloat16"
-        or not policy.cpu_bf16_references
         or accelerator.torch_device(device).type != "cpu"
-        or accelerator.golden_reference(device) not in policy.cpu_bf16_references
     ):
+        return spec
+    key = accelerator.golden_reference(device)
+    if key is None:
+        return spec
+    sources = approximate_sources(spec, accelerator, device)
+    if sources and referenced(policy, with_kernels(key, sources)):
+        consents = policy.approximate_cpu_kernels
+    elif referenced(policy, key):
+        consents = False
+    else:
         return spec
     return replace(
         spec,
@@ -47,7 +78,7 @@ def on_host(
             policy,
             cpu_weights="bfloat16",
             reduced_cpu=None,
-            approximate_cpu_kernels=False,
+            approximate_cpu_kernels=consents,
         ),
     )
 
