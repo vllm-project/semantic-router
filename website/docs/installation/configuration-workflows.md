@@ -65,6 +65,9 @@ providers, global settings, and setup state when replacing its routing surface.
 Multi-recipe lifecycle changes are managed from **Routing → Recipes** or the
 management API so an editor change cannot silently discard another recipe.
 
+When a Dashboard save submits a full configuration with an unknown field, the
+Dashboard reports the field's path and leaves the saved configuration unchanged.
+
 ## Helm
 
 Direct Helm deployments place a complete canonical document under
