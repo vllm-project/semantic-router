@@ -57,40 +57,79 @@ recipes:
           - type: fast_response
             configuration:
               message: This request was blocked by the security policy.
+              block: true
 ```
+
+With `block: true` the client gets HTTP 400 with the message as an error in
+its own protocol, and Router Replay records the request as refused; see
+[Block a Request](../../plugin/fast-response.md#block-a-request).
 
 | Field | Meaning |
 | --- | --- |
 | `name` | The rule's name, which `{type: jailbreak, name: ...}` conditions and guard rules use |
 | `predicate` | The least probability of `jailbreak`; by default the model's calibrated threshold (0.88 on vela3-fast) at the request stage, else 0.5 |
 | `stage` | `request` (default) or `response`, which reads the model's answer |
-| `input.history` | Also read the earlier user and tool turns |
-| `on_unknown` | Request stage: what the rule reports when its model gives no answer, `no_match` (the default) or `match` |
+| `input.history` | Also read the earlier user turns |
+| `input.tool_results` | Also read the tool results returned in the current turn. Off by default |
+| `on_unscanned` | What the rule reports when it cannot read all of its input: `best_effort` (the default), `match`, `no_match` or `unknown` |
+| `min_coverage` | With `best_effort`, the share of the windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
+| `on_unknown` | Request stage: what the rule reports when its model gives no answer, `match` (the default) or `no_match` |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
 ### What it reads
 
-At the request stage, the question reads the consecutive user and tool
-messages that end the request, stopping at an assistant, system or developer
-message, so every textual tool result of the turn is read together. With
-`input.history`, it also reads the earlier user and tool text. System and
-developer instructions and assistant replies are not read as attack
-evidence. It also reads what `global.router.routing_input` removes from the
-routing text, so a fake memory block or runtime-context turn cannot hide an
-attack.
+At the request stage, the question reads the user's text of the current turn:
+the consecutive user and tool messages that end the request, stopping at an
+assistant message. A system message inside the conversation, which Claude Code
+inserts after the user's message or a tool result, does not end the turn. With
+`input.tool_results`, it also reads the textual tool results of the turn,
+where a fetched page or file can carry instructions; without it, the default,
+a turn that holds only tool results gives the rule nothing to read. With
+`input.history`, it also reads the earlier user text. System and developer
+instructions and assistant replies are not read as attack evidence. It also
+reads what `global.router.routing_input` removes from the routing text, so a
+fake memory block or runtime-context turn cannot hide an attack.
 
-The question reads its whole input, in windows when the input is longer than
-one forward. Text the model could not read counts as an attack, with the
-match type `unscanned`, so padding a prompt cannot carry an attack past the
-guard.
+The question reads its whole input. An input longer than one of the
+deployment's `scan_window`s, a long pasted document or a long tool output, is
+read in overlapping windows, the tail first, then the head, then the middle by
+halves, so the windows read by any moment are spread over the whole input. Any
+window that finds an attack flags the input, so padding a prompt cannot carry
+an attack past the guard. When a decision that refuses the request
+(`fast_response`) matches on the rule alone, the window that finds the attack
+ends the scan and the request is refused at once. See
+[Long inputs](../../../system-one/deploy/performance.md#long-inputs).
+
+### When only part of the input was read
+
+When the signals' deadline ends before every window is read and no window read
+found an attack, `on_unscanned` decides:
+
+- `best_effort` (the default) decides on the windows read, here no match. With
+  `min_coverage`, it decides only once that share of the windows was read:
+  below it the rule is unknown, for `on_unknown`;
+- `match` matches the request, with the match type `unscanned` (strict);
+- `no_match` does not match;
+- `unknown` leaves the rule unknown, for `on_unknown`.
+
+Non-text content in the user turns or tool results the rule reads is also
+unscanned, even if the model read all the accompanying text. `on_unscanned`
+applies even when there is no text to send to the model; `best_effort` then
+does not match. Content outside the rule's configured input does not affect
+its coverage.
+
+A read that found an attack matches whatever `on_unscanned` says: unread
+content cannot undo it. A request routed after a partial windowed scan carries
+`scan_partial` in `x-vsr-warnings`.
 
 ### When the model gives no answer
 
-A request-stage rule whose model gives no answer (it fails, is overloaded or
-misses its deadline) does not match, which keeps traffic flowing when the
-decision model is down. To fail closed instead, write `on_unknown: match`:
-the rule then matches such a request, with the match type `unavailable`. A
-decision's `rules.on_unknown` still decides how the decision treats it.
+A request-stage rule none of whose windows gets an answer (the model fails, is
+overloaded, or misses the deadline) matches, with the match type
+`unavailable` (`unscanned` when the model could not read the input): a guard
+whose model is down does not pass the request. To keep traffic flowing
+instead, write `on_unknown: no_match`. A decision's `rules.on_unknown` still
+decides how the decision treats such a match.
 
 ```yaml
 recipes:
@@ -98,7 +137,11 @@ recipes:
     signals:
       jailbreak:
         - name: strict_guard
-          on_unknown: match
+          on_unscanned: match
+        - name: half_read_guard
+          min_coverage: 0.5
+        - name: lenient_guard
+          on_unknown: no_match
 ```
 
 `on_unknown` is refused on a response-stage rule: the `response_guard`

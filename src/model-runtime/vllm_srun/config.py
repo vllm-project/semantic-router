@@ -191,7 +191,10 @@ class ServeConfig:
     max_queue: int = 256
     max_queued_tokens: int = 1 << 22
     engine_args: EngineArgs = field(default_factory=EngineArgs)
-    max_request_bytes: int = 8 << 20
+    max_request_bytes: int = 32 << 20
+    # The System One schema /v1/systemone and /v1/systemone/batch speak:
+    # vllm-sr/5.0, or vllm-sr/4.0 for clients of the earlier contract.
+    systemone_schema: str = "vllm-sr/5.0"
     max_bundle_tasks: int = 64
     load_attempts: int = 5
     load_retry_seconds: float = 5.0
@@ -208,6 +211,10 @@ class ServeConfig:
     shutdown_grace_seconds: float = 8.0
 
     def __post_init__(self) -> None:
+        if self.systemone_schema not in ("vllm-sr/5.0", "vllm-sr/4.0"):
+            raise ValueError(
+                f"systemone_schema is vllm-sr/5.0 or vllm-sr/4.0, not {self.systemone_schema!r}"
+            )
         if self.media_workers is not None and (
             isinstance(self.media_workers, bool)
             or not isinstance(self.media_workers, int)

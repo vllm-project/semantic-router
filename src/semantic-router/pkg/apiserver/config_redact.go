@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 const redactedConfigValue = "[REDACTED]"
@@ -15,10 +17,6 @@ const redactedConfigValue = "[REDACTED]"
 // sometimes appear inside parse/validation error strings.
 var sensitiveAssignmentPattern = regexp.MustCompile(
 	`(?i)((?:["']?(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?(?:key|token)|auth[_-]?(?:password|token)|refresh[_-]?token|client[_-]?secret|private[_-]?key|proxy[_-]?authorization|authorization|password|credential|secret|token)["']?)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^\s,}\]]+|[^\s,}\]]+)`,
-)
-
-var environmentReferencePattern = regexp.MustCompile(
-	`^\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$`,
 )
 
 // scrubSecretsInErrorMessage removes plaintext credential assignments from
@@ -88,9 +86,16 @@ func redactSensitiveConfigValue(value interface{}) interface{} {
 	}
 }
 
+// isPureEnvironmentReference reports a value that is exactly one $NAME or
+// ${NAME} the loader reads from the environment.
 func isPureEnvironmentReference(value interface{}) bool {
 	text, ok := value.(string)
-	return ok && environmentReferencePattern.MatchString(strings.TrimSpace(text))
+	if !ok {
+		return false
+	}
+	text = strings.TrimSpace(text)
+	names := config.EnvironmentReferenceNames(text)
+	return len(names) == 1 && (text == "$"+names[0] || text == "${"+names[0]+"}")
 }
 
 func isSensitiveConfigKey(key string) bool {

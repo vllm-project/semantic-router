@@ -102,6 +102,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Heuristic',
               items: [
+                'tutorials/signal/heuristic/agent',
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',
@@ -402,6 +403,7 @@ const sidebars: SidebarsConfig = {
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
             'proposals/success-constrained-selection',
+            'proposals/concur-strategy-routing',
             'proposals/prompt-classification-routing',
           ],
         },
@@ -428,6 +430,13 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
+          label: 'Evaluation & Quality',
+          items: [
+            'proposals/mom-first-class-evaluation',
+          ],
+        },
+        {
+          type: 'category',
           label: 'Configuration & Protocols',
           items: [
             'proposals/open-intelligence-index-and-model-arena',
@@ -435,6 +444,7 @@ const sidebars: SidebarsConfig = {
             'proposals/standalone-mode',
             'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
+            'proposals/system-one-api-schemas',
           ],
         },
         {
@@ -443,6 +453,13 @@ const sidebars: SidebarsConfig = {
           items: [
             'proposals/production-stack-integration',
             'proposals/nvidia-dynamo-integration',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Dashboard & Operator Experience',
+          items: [
+            'proposals/dashboard-ux-redesign',
           ],
         },
       ],
@@ -541,6 +558,15 @@ const sidebars: SidebarsConfig = {
         'community/documentation',
         'community/translation-guide',
         'community/code-style',
+        {
+          type: 'category',
+          label: 'System One schemas',
+          items: [
+            'community/system-one-schemas/adding-a-schema-codec',
+            'community/system-one-schemas/adding-a-deviation',
+            'community/system-one-schemas/adding-an-extension-field',
+          ],
+        },
       ],
     },
     'faq',

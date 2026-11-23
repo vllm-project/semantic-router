@@ -437,6 +437,9 @@ def settings_diff(plan: dict) -> str:
 
 
 def runtime_model(ctx: Context) -> str | None:
+    # The model vSR asks: the configured one on a runtime that serves several.
+    if ctx.options.get("runtimeModel"):
+        return ctx.options["runtimeModel"]
     return runtime.health(ctx.options["runtimeUrl"], ctx.token, timeout=2)["model"]
 
 

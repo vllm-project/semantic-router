@@ -94,7 +94,7 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 		userID:            userID,
 		userMessage:       currentUserMessage,
 		assistantResponse: currentAssistantResponse,
-		history:           history,
+		history:           historyBeforeCurrentTurn(history),
 	}
 	if r.memoryConsolidation != nil {
 		job.consolidate = r.memoryConsolidation
@@ -247,6 +247,9 @@ func memoryHistoryForExtractor(
 	if err != nil {
 		return nil, fmt.Errorf("encode history: %w", err)
 	}
+	// The extraction runs after the reply, so what the encode dropped, such
+	// as a Responses blob, is counted and logged rather than sent to a client.
+	recordProtocolDiagnostics(&RequestContext{TargetFormat: llmprotocol.OpenAIChatV1}, encoded.Diagnostics)
 	request, err := parseOpenAIRequest(encoded.Body)
 	if err != nil {
 		return nil, fmt.Errorf("parse encoded history: %w", err)

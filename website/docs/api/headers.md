@@ -28,16 +28,21 @@ Every response of the routing pipeline carries the headers that apply to it: ans
 | Header | Since | Description |
 | --- | --- | --- |
 | `x-vsr-schema-version` | v0.4 | Response-header contract revision; currently `3`. |
-| `x-vsr-response-path` | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. |
+| `x-vsr-response-path` | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. |
 | `x-vsr-config-version` | v0.5 | Version of the configuration snapshot that served the request. |
 | `x-vsr-config-hash` | v0.4 | SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`. |
-| `x-vsr-warnings` | v0.5 | Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. |
+| `x-vsr-warnings` | v0.5 | Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, `guard_overloaded` on the retryable error answered instead of a refusal or a forward that rules unread on an overloaded decision runtime decide, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. |
 | `x-vsr-selected-recipe` | v0.4 | Recipe the effective entrypoint selected; omitted for concrete backend models. |
 | `x-vsr-selected-decision` | v0.1 | Decision the decision engine selected; omitted when no decision matched. |
 | `x-vsr-selected-model` | v0.1 | Model alias the Router selected. |
 | `x-vsr-replay-id` | v0.2 | Router Replay record id, when the record was persisted. |
-| `x-vsr-cost` | v0.4 | Usage priced with the served model's configured pricing; buffered responses only. |
+| `x-vsr-cost` | v0.4 | Usage priced with the served model's configured pricing; buffered responses and Looper answers only. A Looper answer's cost is the sum of its calls, when every one has a price. |
 | `x-vsr-cost-currency` | v0.4 | Currency of `x-vsr-cost`, from `pricing.currency`. |
+| `x-vsr-budget-remaining` | v0.5 | What the tightest spend budget of the request has left, in `global.services.budgets.currency`, on every reply to a request a budget covers: after the call's actual cost on a buffered response and a Looper answer, after a failed call's reservation ends, and after its reservation on a stream and on a `budget_exceeded` refusal. |
+| `x-vsr-budget-scope` | v0.5 | The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`. |
+| `x-should-retry` | v0.5 | On a spend budget refusal, whether a retry may succeed: `false` on `budget_unpriced` and on a `budget_exceeded` no retry before the budget's window starts again can clear, `true` on one only calls in flight cause. OpenAI and Anthropic SDKs, Claude Code and Pi follow it. |
+| `x-codex-promo-message` | v0.5 | The message of an out-of-budget refusal on the Responses API, which Codex shows with the usage limit error it ends the turn on. |
+| `anthropic-ratelimit-unified-overage-disabled-reason` | v0.5 | `budget_exceeded` on an out-of-budget refusal on the Messages API, as Anthropic marks a spend limit refusal: Claude Code on a Claude login or a gateway login then shows the message as it is, rather than as a temporary limit that is not the user's. |
 | `x-ratelimit-limit` | v0.2 | Limit of the rate-limit window that rejected the request. |
 | `x-ratelimit-remaining` | v0.2 | Requests left in that window. |
 | `x-ratelimit-reset` | v0.2 | Unix time the window resets at. |
@@ -62,7 +67,7 @@ x-vsr-replay-id: replay_01J...
 
 - Read `x-vsr-schema-version` before parsing the other headers; the current value is `3`. Responses of the Router's own handlers never carry it, so its absence there is expected.
 - A request keeps the configuration version it started on, even when a hot reload activates another one while it runs. `x-vsr-config-version` counts the activations of one Router, which keeps its own configuration history; to check that replicas serve the same configuration, compare the `active_runtime_hash` that `GET /api/v1/config/hash` reports.
-- Recipe names scope local signal, projection, decision, cache, replay, metric, and learning or session identities. Use `x-vsr-selected-recipe` together with the local decision and signal names when correlating a response with Insights or metrics.
+- Recipe names scope local signal, projection, decision, cache, replay, metric, and learning or session identities. Use `x-vsr-selected-recipe` together with the local decision and signal names when correlating a response with the Dashboard's Requests page or metrics.
 
 ## The trace {#the-trace}
 
@@ -114,12 +119,14 @@ Highest priority first:
 | `on_unknown` | routing | Decisions whose unknown result `rules.on_unknown` resolved, each with its `policy`. |
 | `client_protocol` | protocol | Client wire protocol, such as `anthropic`. |
 | `upstream_protocol` | protocol | Provider wire protocol, such as `openai`. |
+| `requested_model` | listener | The model the client named when the listener's `unserved_models` routed the request to one of its own models. |
 | `effective_input_tokens` | automatic_output | Rendered input tokens of the final automatic-output dispatch, chat template included. |
 | `effective_max_output_tokens` | automatic_output | Output token limit of the final automatic-output dispatch, reasoning included. |
 | `signals` | signals | Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. |
+| `scan_coverage` | signals | Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. |
 | `context_tokens` | signals | Token count the `context` signal measured. |
 | `category` | classification | Domain category the classifier chose, such as `math`. |
-| `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`. |
+| `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off, and `reason=stop_sequences` when the request's stop sequences did. |
 | `modality` | routing | Output kinds of the selected decision's output contract, such as `(image)` or `(text image)`; omitted for a decision that declares none. |
 | `system_prompt` | system_prompt | Present when a `system_prompt` plugin injected text into the request. |
 | `cache_similarity` | response_cache | Similarity score of the response-cache lookup. |
@@ -133,7 +140,7 @@ Highest priority first:
 | `ranking` | routing | The matched decision the selected one beat, with the `reason` that settled it. |
 | `truncated` | response_contract | Present when members were left out to keep the trace within 4 KB. |
 
-- `confidence` is absent when the decision rests on policy leaves, aggregates several evidence leaves, or resolves through an error policy.
+- `confidence` is absent when the decision rests on policy leaves, aggregates several evidence leaves, resolves through an error policy, or is a catch-all.
 - `fallback_attempts` counts the same way in both gateway modes and is omitted when the primary answered.
 - `ranking` is omitted when only one decision matched; parse `decision_ranking` in Router Replay for the full ranking.
 - `learning` lists the Router Learning methods with their `action`. Show the actions as user-facing phrases such as `tool/protocol pinned`, `model switched`, or `learning bypassed`; fresh conversation or session-start diagnostics are usually useful only in debug views, as neutral status text.
@@ -150,6 +157,7 @@ Projection scores and full projection traces stay in the Router Replay record ra
 
 | Code | Meaning |
 | --- | --- |
+| `scan_partial` | A request-stage guard rule (`jailbreak`, `safety` or `pii`) read only some of a long input's windows, or none, and the request was routed on what it read. |
 | `hallucination` | A `response_guard` rule over a `hallucination` signal flagged the answer. |
 | `unverified_factual` | The answer was factual, but a `hallucination` rule had no context to check it against. |
 | `response_jailbreak` | A `response_guard` rule over a response-stage `jailbreak` signal flagged the answer. |
@@ -164,8 +172,17 @@ Clients send these to steer or identify a request. See [Session identification](
 | Header | Reaches providers | Since | Description |
 | --- | --- | --- | --- |
 | `x-vsr-session-id` | no | v0.5 | Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order. |
-| `x-session-id` | yes | v0.3 | Client session id `session_id_headers` accepts by default; providers receive it. |
+| `x-session-id` | yes | v0.3 | Client session id `session_id_headers` accepts by default, which OpenCode sends on every call; providers receive it. |
 | `x-claude-code-session-id` | yes | v0.3 | Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it. |
+| `x-claude-code-agent-id` | yes | v0.5 | Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it. |
+| `x-claude-code-agent-type` | yes | v0.5 | Subagent type Claude Code sends on a subagent's own turns when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: a built-in agent's name such as `Explore`, `Plan` or `general-purpose`, or `custom`, `teammate` or `fork`; `agent` signal rules match it as a type, and providers receive it. |
+| `x-claude-code-request-class` | yes | v0.5 | Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, protection holds a request of any class but `main`, `subagent` and `workflow` under a key of its class beside its agent's, Router Replay reads an `auxiliary` call asking for a JSON object of one `title` field as the session's title request and names its run with the answer, and providers receive it. |
+| `session-id` | yes | v0.5 | Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it. |
+| `thread-id` | yes | v0.5 | Thread id Codex sends on every call, which protection and Router Replay read as the agent when `identity.headers.agent` is unset, except on a root thread, where it equals `session-id`; providers receive it. |
+| `x-openai-subagent` | yes | v0.5 | Kind of child thread Codex sends a request for, `collab_spawn` for a `spawn_agent` child whatever its role and `review` for a review child, which `agent` signal rules match as a type and Router Replay records with the agent; providers receive it. |
+| `x-codex-turn-metadata` | yes | v0.5 | Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it. |
+| `x-codex-parent-thread-id` | yes | v0.5 | Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it. |
+| `x-parent-session-id` | yes | v0.5 | Session that spawned an OpenCode subagent's session, which OpenCode sends on every call of the child beside the child's own `x-session-id`; with `identity.headers` unset and no `x-vsr-session-id`, protection and Router Replay key the call by that session and the child as its agent, and the `agent` signal reads it as a subagent's; providers receive it. |
 | `x-conversation-id` | yes | v0.4 | Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it. |
 | `x-vsr-memory` | no | v0.5 | `off` keeps Router-managed memory out of the request. |
 | `x-vsr-skip-processing` | no | v0.3 | `true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set. |

@@ -16,6 +16,8 @@ var validConversationSourceTypes = map[string]bool{
 	"assistant_tool_cycle": true,
 	"active_tool_loop":     true,
 	"flow_tool_state":      true,
+	"failed_tool_result":   true,
+	"invalid_tool_call":    true,
 }
 
 var validConversationSourceRoles = map[string]bool{
@@ -49,7 +51,7 @@ func ValidateConversationRuleContract(rule ConversationRule) error {
 		return fmt.Errorf("unsupported feature.type %q; valid types: count, exists", rule.Feature.Type)
 	}
 	if !validConversationSourceTypes[rule.Feature.Source.Type] {
-		return fmt.Errorf("unsupported feature.source.type %q; valid types: message, tool_definition, tool_choice_required, tool_choice_none, assistant_tool_call, assistant_tool_cycle, active_tool_loop, flow_tool_state", rule.Feature.Source.Type)
+		return fmt.Errorf("unsupported feature.source.type %q; valid types: message, tool_definition, tool_choice_required, tool_choice_none, assistant_tool_call, assistant_tool_cycle, active_tool_loop, flow_tool_state, failed_tool_result, invalid_tool_call", rule.Feature.Source.Type)
 	}
 	if rule.Feature.Source.Role != "" {
 		if rule.Feature.Source.Type != "message" {
@@ -67,6 +69,9 @@ func ValidateConversationRuleContract(rule ConversationRule) error {
 
 func validateConversationPredicate(rule ConversationRule) error {
 	if rule.Predicate == nil {
+		if rule.Feature.Type == "count" {
+			return fmt.Errorf("feature.type \"count\" requires a predicate, such as gte: 1")
+		}
 		return nil
 	}
 	if err := validateNumericPredicateContract(rule.Predicate); err != nil {

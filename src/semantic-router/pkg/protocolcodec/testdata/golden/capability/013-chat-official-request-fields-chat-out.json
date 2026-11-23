@@ -131,10 +131,18 @@
     {
       "name": "logit_bias",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_logit_bias"
+        "status": "ok",
+        "body": {
+          "logit_bias": {
+            "42": 1
+          },
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
         }
       }
     },
@@ -220,11 +228,22 @@
     {
       "name": "modalities",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_modalities"
-        }
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "modalities",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
@@ -399,11 +418,22 @@
     {
       "name": "safety_identifier",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_safety_identifier"
-        }
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "safety_identifier",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
@@ -425,11 +455,22 @@
     {
       "name": "service_tier",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_service_tier"
-        }
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "service_tier",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

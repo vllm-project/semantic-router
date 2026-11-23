@@ -8,6 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // escalateAnswerChecks asks a System One deployment about an escalation's
@@ -58,7 +59,8 @@ func (c *escalateAnswerChecks) Refusal(ctx context.Context, request, answer stri
 
 func (c *escalateAnswerChecks) ask(ctx context.Context, task, request, answer string) (modelservice.Answer, error) {
 	definition, _ := modelservice.BuiltinTask(task)
-	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	// A check counts against the escalation's deadline but not its max_calls.
+	callCtx, cancel := context.WithTimeout(budget.Unmetered(ctx), c.timeout)
 	defer cancel()
 	return c.router.askSystemOneTask(callCtx, c.deployment, definition, definition.Question,
 		modelservice.Request{Parts: map[string]string{"request": request, "answer": answer}})

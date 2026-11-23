@@ -5,7 +5,7 @@
       "data": {
         "obfuscation": "\u003crandom\u003e",
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_1",
           "incomplete_details": null,
@@ -30,7 +30,7 @@
       "data": {
         "obfuscation": "\u003crandom\u003e",
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_1",
           "incomplete_details": null,
@@ -149,7 +149,7 @@
       "data": {
         "obfuscation": "\u003crandom\u003e",
         "response": {
-          "created_at": 0,
+          "created_at": 100,
           "error": null,
           "id": "response_1",
           "incomplete_details": null,
@@ -181,7 +181,7 @@
           "usage": {
             "input_tokens": 3,
             "input_tokens_details": {
-              "cached_tokens": null
+              "cached_tokens": 0
             },
             "output_tokens": 2,
             "output_tokens_details": {

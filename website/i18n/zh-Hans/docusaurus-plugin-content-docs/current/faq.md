@@ -42,7 +42,7 @@ vllm-sr serve vllm-sr/d3-edge -e
 
 ## Router 能否同时提供 System One？ {#can-router-also-expose-system-one}
 
-可以。通过 listener 的 `systemone.models` 授权发布原生模型，再调用
+可以。通过 listener 的 `apis.systemone.models` 授权发布原生模型，再调用
 `/v1/systemone`；`/v1/decisions` 是别名。原生模型发现使用
 `/v1/systemone/models`，Chat 模型发现使用 `/v1/models`。
 
@@ -102,7 +102,7 @@ Router 自身的 Serving Engine 也会在它所调用模型（决策模型和嵌
 
 在对话中切换模型可能造成前缀缓存损失、工具行为变化和连续性中断。应把切换作为明确的权衡，而不是默认优化：
 
-- **连续性重要时优先保持模型。** 会话范围的学习默认保护已有选择（内置初始化默认开启保护、关闭在线适应），前提是 Router 能识别对话。默认 `scope: conversation` 要求同时提供 `x-session-id` 和 `x-conversation-id`；只发送一个请求头不会保持模型。只有显式配置 `scope: session` 时，才只需 session 标识。
+- **连续性重要时优先保持模型。** 会话范围的学习默认保护已有选择（内置初始化默认开启保护、关闭在线适应），前提是客户端发送 `x-session-id`。在默认的 `scope: conversation` 下，`x-conversation-id` 为 session 中的每个对话命名；没有它时，Router 按对话的开头为其命名。没有 `x-session-id` 的请求不会保持模型。
 - **只按明确的升级策略切换。** 仅仅“更便宜”不足以成为迁移对话的理由。
 - **验证连续性，而不仅是请求送达。** 检查续接、工具完成、纠正、模型故障和对话重置时实际使用的模型。观测到的建议不等于已执行的保持策略。
 

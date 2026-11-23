@@ -167,7 +167,7 @@ async function fixture(page: Page) {
     }
     await route.fulfill({ json: body })
   })
-  await page.goto(`/evaluation?view=runs&run=${run.id}`)
+  await page.goto(`/observe/evaluations?view=runs&run=${run.id}`)
   await expect(page.getByRole('heading', { name: run.manifest.name, exact: true })).toBeVisible()
   await page.getByRole('tab', { name: 'Calls', exact: true }).click()
   return state

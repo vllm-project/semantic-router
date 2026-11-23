@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -54,7 +55,7 @@ func (p *replicaPool) Do(request *http.Request) (*http.Response, error) {
 	outcome = replicaFailed
 	response, err := physical.httpClient.Do(target)
 	if err != nil {
-		outcome = replicaTransportError(request.Context())
+		outcome = replicaTransportError(request.Context(), err)
 		return nil, err
 	}
 	// Hold the worker through network body consumption. Decode only transport
@@ -62,7 +63,7 @@ func (p *replicaPool) Do(request *http.Request) (*http.Response, error) {
 	defer response.Body.Close()
 	data, readErr := io.ReadAll(io.LimitReader(response.Body, ManagedRequestBytes+1))
 	if readErr != nil {
-		outcome = replicaTransportError(request.Context())
+		outcome = replicaTransportError(request.Context(), readErr)
 		return nil, readErr
 	}
 	if len(data) > ManagedRequestBytes {
@@ -85,12 +86,20 @@ func (p *replicaPool) Do(request *http.Request) (*http.Response, error) {
 	return response, nil
 }
 
-func replicaTransportError(ctx context.Context) replicaOutcome {
+// replicaTransportError classifies an exchange that broke off. Past the
+// caller's deadline is a timeout. Past the deployment's timeout_ms, which the
+// client enforces without the request's context seeing it, is a timeout
+// that also backs the replica off. A connection the dialer gave up on before
+// either deadline is a failure.
+func replicaTransportError(ctx context.Context, err error) replicaOutcome {
+	var dial *net.OpError
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return replicaTimeout
 	case errors.Is(ctx.Err(), context.Canceled):
 		return replicaCanceled
+	case errors.Is(err, context.DeadlineExceeded) && (!errors.As(err, &dial) || dial.Op != "dial"):
+		return replicaExpired
 	default:
 		return replicaFailed
 	}

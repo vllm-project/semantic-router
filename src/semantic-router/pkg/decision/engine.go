@@ -78,6 +78,7 @@ type SignalMatches struct {
 	ConversationRules  []string // Conversation-shape signal names matched
 	MetadataRules      []string // untrusted request metadata rule names matched
 	InputModalityRules []string // structural input-modality presence rule names matched
+	AgentRules         []string // agent rule names matched: the request's agent role, harness and type
 	SystemOneRules     []string
 	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
@@ -298,7 +299,7 @@ func (e *DecisionEngine) evaluateDecisionWithSignals(
 	policy config.UnknownPolicy,
 ) nodeEvaluation {
 	if decision.Rules.IsEmpty() {
-		return nodeEvaluation{state: evaluationTrue, scored: true}
+		return nodeEvaluation{state: evaluationTrue}
 	}
 	evaluation, _ := e.evalNode(decision.Rules, signals, policy, false)
 	return evaluation
@@ -594,6 +595,8 @@ func resolvePolicySignalRules(
 		return signals.MetadataRules, true
 	case config.SignalTypeInputModality:
 		return signals.InputModalityRules, true
+	case config.SignalTypeAgent:
+		return signals.AgentRules, true
 	case config.SignalTypeProjection:
 		return signals.ProjectionRules, true
 	default:
@@ -617,9 +620,9 @@ func signalConfidence(confidences map[string]float64, signalType string, name st
 }
 
 // evalAND returns true only when every child matches.
-// An empty conjunction acts as a catch-all/default route with zero confidence,
-// so it can serve as a fallback without outranking signal-backed decisions when
-// confidence-based selection is enabled.
+// An empty conjunction acts as a catch-all/default route: it matches with no
+// evidence, so its zero confidence is not a score, and it ranks after
+// signal-backed decisions.
 func (e *DecisionEngine) evalAND(
 	children []config.RuleNode,
 	signals *SignalMatches,
@@ -627,7 +630,7 @@ func (e *DecisionEngine) evalAND(
 	withTrace bool,
 ) (nodeEvaluation, *TraceNode) {
 	trace := newTraceNode("AND", withTrace)
-	evaluation := nodeEvaluation{state: evaluationTrue, scored: true}
+	evaluation := nodeEvaluation{state: evaluationTrue}
 	if len(children) == 0 {
 		trace.finish(evaluation)
 		return evaluation, trace
@@ -662,10 +665,11 @@ func (e *DecisionEngine) evalAND(
 		evaluation.onError = evaluation.onError || childEvaluation.onError
 		evaluation.matchedRules = append(evaluation.matchedRules, childEvaluation.matchedRules...)
 	}
-	if evaluation.state == evaluationUnknown {
+	switch evaluation.state {
+	case evaluationUnknown:
 		evaluation.scored = false
 		evaluation.kind = config.ScoreKindNone
-	} else if evaluation.state == evaluationTrue {
+	case evaluationTrue:
 		evidence.apply(&evaluation, totalConfidence, matchedCount)
 	}
 	trace.finish(evaluation)

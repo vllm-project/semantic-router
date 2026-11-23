@@ -85,7 +85,8 @@ deployment，`ready_models` 和 `total_models` 给出计数。`/startup-status` 
 列出它们，每项包含 `name`、`artifact`、`process`、`state`、`ready`，失败后还有 `reason`；启动完成后该列表仍然保留。
 模型加载失败时，启动以 `phase: error` 结束。配置重新加载不会让 `/ready` 变回 `503`：在新配置的模型就绪之前，
 上一份配置继续服务。standalone 监听器和 ext_proc gRPC 端口只在这些模型就绪后才打开，因此监听器的 `/ready`
-和 gRPC 健康服务不会早于管理端口的 `/ready` 报告就绪。
+和 gRPC 健康服务不会早于管理端口的 `/ready` 报告就绪。使用 `config_source: kubernetes` 时，两者还会等到来自
+Kubernetes 的第一份配置生效后才报告就绪。关闭开始后，两者都报告未就绪，同时排空进行中的请求。
 
 ## 不调用推理即可检查信号 {#inspect-signals-without-an-inference-call}
 
@@ -221,6 +222,8 @@ Router 管理的存储和记忆：
 
 所需服务不可用时，这些路由返回 `503`。文件上传使用 multipart 表单数据，并接受文档（`.txt`、`.md`、`.json`、`.csv`、`.html`）供向量存储摄入；上传图像（`.png`、`.jpg`、`.jpeg`、`.gif`、`.webp`）并设置 `purpose=vision`，即可通过 `file_id` 从 Response API 的 `input_image` 部分引用。限制和字段见实时 schema。它们仅存在于管理监听器。`/v1/files` 和 `/v1/vector_stores` 不是推理监听器别名，也不会由 Router API 注册。
 
+删除文件时，会先将其从所有已附加的向量存储中分离，使其分块不再出现在搜索结果中。如果分离失败，删除返回 `500`，文件及其附加关系保留，可以重试删除。
+
 ## 发现并检查插件 {#discover-and-inspect-plugins}
 
 `GET /api/v1/plugins` 直接投影规范插件注册表，返回每种插件的 schema、绑定与操作链接。
@@ -257,6 +260,11 @@ Header 预览中的值需要 `secret_view`。
 | `POST` | `/api/v1/storage/response-cache/test` | 校验并探测候选配置 |
 | `POST` | `/api/v1/storage/response-cache/invalidate` | 试运行或使范围内分区失效 |
 | `POST` | `/api/v1/storage/response-cache/flush` | 推进范围内或全局缓存 epoch |
+
+`invalidate` 推进 `selector.partition` 所指分区的 epoch，使该分区的条目变为未命中；没有分区的选择器会以 `400` 拒绝。
+`flush` 推进某个分区的 epoch，未指定分区时推进全局 epoch，需要 `cache.manage` 和
+`"confirm": "flush response cache"`。两者都不删除也不统计所涉及的条目，因此都把
+`matched_estimate` 和 `deleted` 报告为 `0`，并带有 `count_unknown: true`。
 
 破坏性缓存变更前，优先使用范围失效和试运行。Bearer 角色区分读取、失效以及更广的缓存管理权限。
 

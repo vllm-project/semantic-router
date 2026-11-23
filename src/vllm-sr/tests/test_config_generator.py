@@ -215,7 +215,10 @@ recipes:
 
 def test_envoy_mode_refuses_a_listener_model_allow_list(tmp_path, monkeypatch):
     with pytest.raises(
-        ValueError, match="listener 'public': models is enforced in standalone mode"
+        ValueError,
+        match=re.escape(
+            "listener 'public': apis.chat_completions.models is enforced in standalone mode"
+        ),
     ):
         _render_envoy_config(
             tmp_path,
@@ -227,7 +230,8 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: [workshop-key]
-    models: [vllm-sr/auto]
+    apis:
+      openai: {models: [vllm-sr/auto]}
 providers:
   defaults:
     model: local-model
@@ -242,6 +246,109 @@ recipes:
             extproc_host="localhost",
             router_api_host="localhost",
         )
+
+
+def test_envoy_mode_refuses_a_listener_system_one_api(tmp_path, monkeypatch):
+    # ext_proc answers /v1/systemone with 404, so a published model would be
+    # unreachable behind the generated Envoy listener.
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "listener 'public': apis.systemone is served in standalone mode"
+        ),
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.5
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    apis:
+      openai: {}
+      systemone:
+        models: [vllm-sr/d3-ultra]
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
+
+
+def test_envoy_routes_only_the_paths_of_the_apis_a_listener_serves(
+    tmp_path, monkeypatch
+):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.5
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    apis:
+      openai: {}
+      messages: {}
+  - name: open
+    address: 0.0.0.0
+    port: 8900
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+    gated, open_listener = rendered["static_resources"]["listeners"][:2]
+
+    def routes(listener):
+        manager = listener["filter_chains"][0]["filters"][0]["typed_config"]
+        return manager["route_config"]["virtual_hosts"][0]["routes"]
+
+    served = routes(gated)
+    pattern = re.compile(served[0]["match"]["safe_regex"]["regex"])
+    for path in (
+        "/v1/chat/completions",
+        "/openai/deployments/gpt/chat/completions",
+        "/v1/messages",
+        "/v1/models",
+    ):
+        assert pattern.fullmatch(path), path
+    for path in ("/v1/responses", "/v1/systemone", "/v1/images/generations"):
+        assert not pattern.fullmatch(path), path
+    # Envoy refuses a regex over 100 RE2 instructions by default, and the
+    # three model APIs with the model listing compile to about 200
+    runtime = rendered["layered_runtime"]["layers"][0]["static_layer"]
+    assert runtime["re2.max_program_size.error_level"] >= 1000
+    refused = served[-1]
+    assert (
+        refused["match"] == {"prefix": "/"}
+        and refused["direct_response"]["status"] == 404
+    )
+    assert (
+        "chat_completions, messages"
+        in refused["direct_response"]["body"]["inline_string"]
+    )
+    assert all(route["match"].get("prefix") == "/" for route in routes(open_listener))
 
 
 def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):
@@ -290,6 +397,11 @@ recipes:
     cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
+    # an idle connection closes before a 5s keep-alive backend closes it
+    options = cluster["typed_extension_protocol_options"][
+        "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
+    ]
+    assert options["common_http_protocol_options"]["idle_timeout"] == "4s"
     lb_endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
     assert [endpoint["load_balancing_weight"] for endpoint in lb_endpoints] == [
         75,
@@ -661,7 +773,11 @@ recipes:
         ]
         == "/etc/ssl/certs/ca-certificates.crt"
     )
-    assert "typed_extension_protocol_options" not in cluster
+    # the TLS backend stays on HTTP/1.1: only the idle timeout is set
+    options = cluster["typed_extension_protocol_options"][
+        "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
+    ]
+    assert options["explicit_http_config"] == {"http_protocol_options": {}}
 
     route = _model_route(rendered, "test-model")
     route_action = route["route"]

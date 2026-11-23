@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { Download } from 'lucide-react'
+import { Button } from '../../ui'
 import { benchApi } from './api'
 import { number } from './model'
-import styles from './SrBench.module.css'
+import { ActionRow, BenchBlock, Disclosure, Notice } from './benchUi'
+import { benchText, codeBlockClass } from './benchStyles'
 
 export default function RunArtifacts({ id, canRun }: { id: string; canRun: boolean }) {
   const [pending, setPending] = useState(false)
@@ -31,28 +34,42 @@ export default function RunArtifacts({ id, canRun }: { id: string; canRun: boole
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   return (
-    <section>
-      <h3>Reuse saved evidence</h3>
-      <p>
+    <BenchBlock className="mt-5">
+      <h3 className={benchText.h3}>Reuse saved evidence</h3>
+      <p className={`${benchText.muted} mt-1 max-w-3xl`}>
         Regrade deterministic multiple-choice or grid answers without model calls. Export a
         development-only model matrix for router training; holdout and unknown splits are rejected.
       </p>
-      <div className={styles.actions}>
-        <button disabled={!canRun || pending} onClick={() => void create('regrade')}>
+      <ActionRow className="mt-3">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canRun || pending}
+          onClick={() => void create('regrade')}
+        >
           Regrade saved answers
-        </button>
-        <button disabled={!canRun || pending} onClick={() => void create('export')}>
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!canRun || pending}
+          onClick={() => void create('export')}
+        >
           Export training matrix
-        </button>
-      </div>
-      {pending && <p role="status">Preparing saved evidence…</p>}
-      {error && (
-        <p className={styles.error} role="alert">
-          {error}
+        </Button>
+      </ActionRow>
+      {pending && (
+        <p role="status" className={`${benchText.muted} mt-2`}>
+          Preparing saved evidence…
         </p>
       )}
+      {error && (
+        <Notice tone="danger" as="p" role="alert">
+          {error}
+        </Notice>
+      )}
       {artifact && (
-        <div className={styles.notice}>
+        <Notice tone="success">
           <strong>
             {artifact.kind === 'offline-regrade'
               ? 'Offline regrade ready'
@@ -64,13 +81,17 @@ export default function RunArtifacts({ id, canRun }: { id: string; canRun: boole
               model requests
             </p>
           )}
-          <button onClick={download}>Download artifact JSON</button>
-          <details>
-            <summary>Inspect artifact</summary>
-            <pre>{JSON.stringify(artifact, null, 2)}</pre>
-          </details>
-        </div>
+          <div>
+            <Button variant="outline" size="xs" onClick={download}>
+              <Download aria-hidden="true" />
+              Download artifact JSON
+            </Button>
+          </div>
+          <Disclosure summary="Inspect artifact" bare className="my-0">
+            <pre className={codeBlockClass}>{JSON.stringify(artifact, null, 2)}</pre>
+          </Disclosure>
+        </Notice>
       )}
-    </section>
+    </BenchBlock>
   )
 }

@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
@@ -67,141 +68,6 @@ func TestGetInt32OrDefault(t *testing.T) {
 	}
 }
 
-func TestConvertStringValue(t *testing.T) {
-	r := &SemanticRouterReconciler{}
-
-	tests := []struct {
-		name  string
-		input string
-		want  interface{}
-	}{
-		{
-			name:  "integer string",
-			input: "100",
-			want:  int64(100),
-		},
-		{
-			name:  "float string",
-			input: "0.6",
-			want:  float64(0.6),
-		},
-		{
-			name:  "boolean true",
-			input: "true",
-			want:  true,
-		},
-		{
-			name:  "boolean false",
-			input: "false",
-			want:  false,
-		},
-		{
-			name:  "regular string",
-			input: "hello",
-			want:  "hello",
-		},
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := r.convertStringValue(tt.input)
-			if got != tt.want {
-				t.Errorf("convertStringValue(%q) = %v (type %T), want %v (type %T)",
-					tt.input, got, got, tt.want, tt.want)
-			}
-		})
-	}
-}
-
-func TestConvertStringsToFloats(t *testing.T) {
-	r := &SemanticRouterReconciler{}
-
-	tests := []struct {
-		name  string
-		input map[string]interface{}
-		want  map[string]interface{}
-	}{
-		{
-			name: "convert float strings",
-			input: map[string]interface{}{
-				"threshold": "0.6",
-				"name":      "test",
-				"count":     "100",
-			},
-			want: map[string]interface{}{
-				"threshold": float64(0.6),
-				"name":      "test",
-				"count":     int64(100),
-			},
-		},
-		{
-			name: "nested maps",
-			input: map[string]interface{}{
-				"config": map[string]interface{}{
-					"threshold": "0.8",
-					"enabled":   "true",
-				},
-			},
-			want: map[string]interface{}{
-				"config": map[string]interface{}{
-					"threshold": float64(0.8),
-					"enabled":   true,
-				},
-			},
-		},
-		{
-			name: "arrays",
-			input: map[string]interface{}{
-				"values": []interface{}{"0.1", "0.2", "100"},
-			},
-			want: map[string]interface{}{
-				"values": []interface{}{float64(0.1), float64(0.2), int64(100)},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r.convertStringsToFloats(tt.input)
-			// Deep comparison would be complex, just check a few key conversions
-			for k, expectedVal := range tt.want {
-				actualVal, ok := tt.input[k]
-				if !ok {
-					t.Errorf("key %q not found in result", k)
-					continue
-				}
-
-				// Type assertion to compare
-				switch expected := expectedVal.(type) {
-				case float64:
-					actual, ok := actualVal.(float64)
-					if !ok || actual != expected {
-						t.Errorf("key %q: got %v (type %T), want %v (type %T)",
-							k, actualVal, actualVal, expectedVal, expectedVal)
-					}
-				case int64:
-					actual, ok := actualVal.(int64)
-					if !ok || actual != expected {
-						t.Errorf("key %q: got %v (type %T), want %v (type %T)",
-							k, actualVal, actualVal, expectedVal, expectedVal)
-					}
-				case bool:
-					actual, ok := actualVal.(bool)
-					if !ok || actual != expected {
-						t.Errorf("key %q: got %v (type %T), want %v (type %T)",
-							k, actualVal, actualVal, expectedVal, expectedVal)
-					}
-				}
-			}
-		})
-	}
-}
-
 func TestValidateSemanticCacheConfig(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -217,14 +83,14 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "disabled cache is valid",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled: false,
+				Enabled: ptr.To(false),
 			},
 			expectError: false,
 		},
 		{
 			name: "memory backend is valid without additional config",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "memory",
 			},
 			expectError: false,
@@ -232,7 +98,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "empty backend type defaults to memory",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "",
 			},
 			expectError: false,
@@ -240,7 +106,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "redis without config fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "redis",
 				Redis:       nil,
 			},
@@ -250,7 +116,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "redis without host fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "redis",
 				Redis: &vllmv1alpha1.RedisCacheConfig{
 					Connection: vllmv1alpha1.RedisCacheConnection{
@@ -264,7 +130,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "redis with valid config succeeds",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "redis",
 				Redis: &vllmv1alpha1.RedisCacheConfig{
 					Connection: vllmv1alpha1.RedisCacheConnection{
@@ -278,7 +144,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "valkey without config fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "valkey",
 				Valkey:      nil,
 			},
@@ -288,7 +154,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "valkey without host fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "valkey",
 				Valkey: &vllmv1alpha1.ValkeyCacheConfig{
 					Connection: vllmv1alpha1.ValkeyCacheConnection{
@@ -302,7 +168,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "valkey with valid config succeeds",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "valkey",
 				Valkey: &vllmv1alpha1.ValkeyCacheConfig{
 					Connection: vllmv1alpha1.ValkeyCacheConnection{
@@ -316,7 +182,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "milvus without config fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "milvus",
 				Milvus:      nil,
 			},
@@ -326,7 +192,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "milvus without host fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "milvus",
 				Milvus: &vllmv1alpha1.MilvusCacheConfig{
 					Connection: vllmv1alpha1.MilvusCacheConnection{
@@ -340,7 +206,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "milvus with valid config succeeds",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "milvus",
 				Milvus: &vllmv1alpha1.MilvusCacheConfig{
 					Connection: vllmv1alpha1.MilvusCacheConnection{
@@ -354,7 +220,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "hybrid without milvus config fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "hybrid",
 				Milvus:      nil,
 			},
@@ -364,7 +230,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "hybrid with valid config succeeds",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "hybrid",
 				Milvus: &vllmv1alpha1.MilvusCacheConfig{
 					Connection: vllmv1alpha1.MilvusCacheConnection{
@@ -381,7 +247,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "qdrant without config fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "qdrant",
 				Qdrant:      nil,
 			},
@@ -391,7 +257,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "qdrant without host fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "qdrant",
 				Qdrant: &vllmv1alpha1.QdrantCacheConfig{
 					Host: "",
@@ -404,7 +270,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "qdrant with valid config succeeds",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "qdrant",
 				Qdrant: &vllmv1alpha1.QdrantCacheConfig{
 					Host: "qdrant.cache-backends.svc.cluster.local",
@@ -416,7 +282,7 @@ func TestValidateSemanticCacheConfig(t *testing.T) {
 		{
 			name: "unsupported backend type fails",
 			cache: &vllmv1alpha1.SemanticCacheConfig{
-				Enabled:     true,
+				Enabled:     ptr.To(true),
 				BackendType: "invalid",
 			},
 			expectError: true,
@@ -623,7 +489,7 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 				Spec: vllmv1alpha1.SemanticRouterSpec{
 					Config: vllmv1alpha1.ConfigSpec{
 						SemanticCache: &vllmv1alpha1.SemanticCacheConfig{
-							Enabled:     true,
+							Enabled:     ptr.To(true),
 							BackendType: "redis",
 							Redis: &vllmv1alpha1.RedisCacheConfig{
 								Connection: vllmv1alpha1.RedisCacheConnection{
@@ -661,7 +527,7 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 				Spec: vllmv1alpha1.SemanticRouterSpec{
 					Config: vllmv1alpha1.ConfigSpec{
 						SemanticCache: &vllmv1alpha1.SemanticCacheConfig{
-							Enabled:     true,
+							Enabled:     ptr.To(true),
 							BackendType: "valkey",
 							Valkey: &vllmv1alpha1.ValkeyCacheConfig{
 								Connection: vllmv1alpha1.ValkeyCacheConnection{
@@ -699,7 +565,7 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 				Spec: vllmv1alpha1.SemanticRouterSpec{
 					Config: vllmv1alpha1.ConfigSpec{
 						SemanticCache: &vllmv1alpha1.SemanticCacheConfig{
-							Enabled:     true,
+							Enabled:     ptr.To(true),
 							BackendType: "milvus",
 							Milvus: &vllmv1alpha1.MilvusCacheConfig{
 								Connection: vllmv1alpha1.MilvusCacheConnection{
@@ -741,7 +607,7 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 				Spec: vllmv1alpha1.SemanticRouterSpec{
 					Config: vllmv1alpha1.ConfigSpec{
 						SemanticCache: &vllmv1alpha1.SemanticCacheConfig{
-							Enabled:     true,
+							Enabled:     ptr.To(true),
 							BackendType: "redis",
 							Redis: &vllmv1alpha1.RedisCacheConfig{
 								Connection: vllmv1alpha1.RedisCacheConnection{
@@ -770,7 +636,7 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 				Spec: vllmv1alpha1.SemanticRouterSpec{
 					Config: vllmv1alpha1.ConfigSpec{
 						SemanticCache: &vllmv1alpha1.SemanticCacheConfig{
-							Enabled:     true,
+							Enabled:     ptr.To(true),
 							BackendType: "valkey",
 							Valkey: &vllmv1alpha1.ValkeyCacheConfig{
 								Connection: vllmv1alpha1.ValkeyCacheConnection{
@@ -818,255 +684,6 @@ func TestResolveSemanticCacheSecrets(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestConvertToConfigMapWithRedis(t *testing.T) {
-	r := &SemanticRouterReconciler{}
-
-	cache := &vllmv1alpha1.SemanticCacheConfig{
-		Enabled:             true,
-		BackendType:         "redis",
-		SimilarityThreshold: "0.85",
-		TTLSeconds:          3600,
-		Redis: &vllmv1alpha1.RedisCacheConfig{
-			Connection: vllmv1alpha1.RedisCacheConnection{
-				Host:     "redis.default.svc",
-				Port:     6379,
-				Database: 0,
-				Password: "test-password",
-				Timeout:  30,
-			},
-			Index: vllmv1alpha1.RedisCacheIndex{
-				Name:   "test_idx",
-				Prefix: "cache:",
-				VectorField: vllmv1alpha1.RedisCacheVectorField{
-					Name:       "embedding",
-					Dimension:  384,
-					MetricType: "COSINE",
-				},
-				IndexType: "HNSW",
-				Params: vllmv1alpha1.RedisCacheIndexParams{
-					M:              16,
-					EfConstruction: 64,
-				},
-			},
-		},
-	}
-
-	result := r.convertToConfigMap(cache)
-	configMap, ok := result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("convertToConfigMap() did not return map[string]interface{}, got %T", result)
-	}
-
-	// Verify top-level fields
-	if configMap["enabled"] != true {
-		t.Errorf("enabled = %v, want true", configMap["enabled"])
-	}
-	if configMap["backend_type"] != "redis" {
-		t.Errorf("backend_type = %v, want redis", configMap["backend_type"])
-	}
-	if configMap["similarity_threshold"] != float64(0.85) {
-		t.Errorf("similarity_threshold = %v (type %T), want 0.85 (float64)", configMap["similarity_threshold"], configMap["similarity_threshold"])
-	}
-	if configMap["ttl_seconds"] != float64(3600) {
-		t.Errorf("ttl_seconds = %v, want 3600", configMap["ttl_seconds"])
-	}
-
-	// Verify Redis nested structure
-	redis, ok := configMap["redis"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("redis field is not a map, got %T", configMap["redis"])
-	}
-
-	connection, ok := redis["connection"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("redis.connection is not a map, got %T", redis["connection"])
-	}
-
-	if connection["host"] != "redis.default.svc" {
-		t.Errorf("redis.connection.host = %v, want redis.default.svc", connection["host"])
-	}
-	if connection["port"] != float64(6379) {
-		t.Errorf("redis.connection.port = %v (type %T), want 6379", connection["port"], connection["port"])
-	}
-
-	index, ok := redis["index"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("redis.index is not a map, got %T", redis["index"])
-	}
-
-	if index["name"] != "test_idx" {
-		t.Errorf("redis.index.name = %v, want test_idx", index["name"])
-	}
-
-	vectorField, ok := index["vector_field"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("redis.index.vector_field is not a map, got %T", index["vector_field"])
-	}
-
-	if vectorField["dimension"] != float64(384) {
-		t.Errorf("redis.index.vector_field.dimension = %v, want 384", vectorField["dimension"])
-	}
-}
-
-func TestConvertToConfigMapWithMilvus(t *testing.T) {
-	r := &SemanticRouterReconciler{}
-
-	cache := &vllmv1alpha1.SemanticCacheConfig{
-		Enabled:             true,
-		BackendType:         "milvus",
-		SimilarityThreshold: "0.90",
-		TTLSeconds:          7200,
-		Embedding:           &vllmv1alpha1.EmbeddingBinding{Deployment: "qwen3-embedding"},
-		Milvus: &vllmv1alpha1.MilvusCacheConfig{
-			Connection: vllmv1alpha1.MilvusCacheConnection{
-				Host:     "milvus.default.svc",
-				Port:     19530,
-				Database: "semantic_cache",
-				Timeout:  30,
-				Auth: vllmv1alpha1.MilvusCacheAuth{
-					Enabled:  true,
-					Username: "root",
-					Password: "test-password",
-				},
-			},
-			Collection: vllmv1alpha1.MilvusCacheCollection{
-				Name:        "cache",
-				Description: "Test cache",
-				VectorField: vllmv1alpha1.MilvusCacheVectorField{
-					Name:       "embedding",
-					Dimension:  1024,
-					MetricType: "IP",
-				},
-				Index: vllmv1alpha1.MilvusCacheCollectionIndex{
-					Type: "HNSW",
-					Params: vllmv1alpha1.MilvusCacheIndexParams{
-						M:              16,
-						EfConstruction: 64,
-					},
-				},
-			},
-			Search: vllmv1alpha1.MilvusCacheSearch{
-				Params: vllmv1alpha1.MilvusCacheSearchParams{
-					Ef: 64,
-				},
-				TopK:             10,
-				ConsistencyLevel: "Session",
-			},
-		},
-	}
-
-	result := r.convertToConfigMap(cache)
-	configMap, ok := result.(map[string]interface{})
-	if !ok {
-		t.Fatalf("convertToConfigMap() did not return map[string]interface{}, got %T", result)
-	}
-
-	// Verify top-level fields
-	if configMap["backend_type"] != "milvus" {
-		t.Errorf("backend_type = %v, want milvus", configMap["backend_type"])
-	}
-	if embedding, isMap := configMap["embedding"].(map[string]interface{}); !isMap || embedding["deployment"] != "qwen3-embedding" {
-		t.Errorf("embedding = %v, want deployment qwen3-embedding", configMap["embedding"])
-	}
-
-	// Verify Milvus nested structure
-	milvus, ok := configMap["milvus"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("milvus field is not a map, got %T", configMap["milvus"])
-	}
-
-	connection, ok := milvus["connection"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("milvus.connection is not a map, got %T", milvus["connection"])
-	}
-
-	if connection["host"] != "milvus.default.svc" {
-		t.Errorf("milvus.connection.host = %v, want milvus.default.svc", connection["host"])
-	}
-	if connection["port"] != float64(19530) {
-		t.Errorf("milvus.connection.port = %v, want 19530", connection["port"])
-	}
-
-	auth, ok := connection["auth"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("milvus.connection.auth is not a map, got %T", connection["auth"])
-	}
-
-	if auth["enabled"] != true {
-		t.Errorf("milvus.connection.auth.enabled = %v, want true", auth["enabled"])
-	}
-	if auth["username"] != "root" {
-		t.Errorf("milvus.connection.auth.username = %v, want root", auth["username"])
-	}
-
-	collection, ok := milvus["collection"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("milvus.collection is not a map, got %T", milvus["collection"])
-	}
-
-	vectorField, ok := collection["vector_field"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("milvus.collection.vector_field is not a map, got %T", collection["vector_field"])
-	}
-
-	if vectorField["dimension"] != float64(1024) {
-		t.Errorf("milvus.collection.vector_field.dimension = %v, want 1024", vectorField["dimension"])
-	}
-
-	search, ok := milvus["search"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("milvus.search is not a map, got %T", milvus["search"])
-	}
-
-	if search["consistency_level"] != "Session" {
-		t.Errorf("milvus.search.consistency_level = %v, want Session", search["consistency_level"])
-	}
-}
-
-func TestConvertToConfigMapWithSliceRoot(t *testing.T) {
-	r := &SemanticRouterReconciler{}
-
-	rules := []vllmv1alpha1.ComplexityRulesConfig{
-		{
-			Name:        "code-complexity",
-			Description: "Classify coding tasks by complexity",
-			Threshold:   "0.3",
-			Hard: &vllmv1alpha1.ComplexityCandidates{
-				Candidates: []string{"Implement a distributed lock manager"},
-			},
-			Easy: &vllmv1alpha1.ComplexityCandidates{
-				Candidates: []string{"Reverse a string"},
-			},
-		},
-	}
-
-	result := r.convertToConfigMap(rules)
-	items, ok := result.([]interface{})
-	if !ok {
-		t.Fatalf("convertToConfigMap() did not return []interface{}, got %T", result)
-	}
-	if len(items) != 1 {
-		t.Fatalf("expected 1 converted rule, got %d", len(items))
-	}
-
-	rule, ok := items[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("converted rule is not a map, got %T", items[0])
-	}
-	if rule["threshold"] != float64(0.3) {
-		t.Fatalf("threshold = %v (type %T), want 0.3 (float64)", rule["threshold"], rule["threshold"])
-	}
-
-	hard, ok := rule["hard"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("hard block is not a map, got %T", rule["hard"])
-	}
-	candidates, ok := hard["candidates"].([]interface{})
-	if !ok || len(candidates) != 1 || candidates[0] != "Implement a distributed lock manager" {
-		t.Fatalf("unexpected hard candidates: %#v", hard["candidates"])
 	}
 }
 

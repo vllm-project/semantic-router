@@ -36,7 +36,11 @@ document. Do not maintain a second, hand-converted configuration.
 
 ```yaml
 configOverride:
-  version: v0.3
+  version: v0.5
+  listeners:
+    - name: http-8899
+      address: 0.0.0.0
+      port: 8899
   providers:
     defaults:
       model: my-model
@@ -46,10 +50,8 @@ configOverride:
           - name: primary
             endpoint: my-vllm.default.svc.cluster.local:8000
             provider: vllm
-  routing:
-    modelCards:
-      - name: my-model
-    decisions: []
+  recipes:
+    - name: default
 ```
 
 Replace the model and endpoint and add the signals, decisions, algorithms, and

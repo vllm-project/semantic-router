@@ -92,8 +92,8 @@ recipes:
 :::tip
 A late or failed answer leaves the rule unknown. A decision's
 `rules.on_unknown`, or a condition's `on_error`, says what that means; a
-`jailbreak` or `pii` rule with `on_unknown: match` matches when its model gives
-no answer.
+request-stage `jailbreak` or `pii` rule matches when its model gives no answer,
+unless it sets `on_unknown: no_match`.
 :::
 
 ## The `systemone` selector
@@ -257,9 +257,12 @@ Every judge has a hard cap on the candidates it reads, `judge.max_candidates`:
 
 - a choice judge (`tool_rank`) offers at most 255 candidates, the protocol's
   option limit, which is also its default;
-- a per-candidate judge (`relevance`, `same_request`) judges 64 by default.
+- a per-candidate judge (`relevance`, `same_request`) judges 64 by default
+  and at most 4096, the states one bundle to a model runtime carries at its
+  default `--max-bundle-tasks` (64 tasks of 64 states).
 
-A value below 1, or above 255 on a choice judge, fails to load. Overflow never
+A value below 1, above 255 on a choice judge, or above 4096 on a per-candidate
+judge, fails to load. Overflow never
 fails a request: the judge reads the first `max_candidates` candidates by
 recall rank or, without a recall stage, in the order the feature lists them,
 most recent first.

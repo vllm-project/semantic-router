@@ -29,7 +29,10 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		ctx.UpstreamStatusCode = outcome.statusCode
 	}
 	annotateUpstreamResponseSpan(ctx, outcome)
-	maybeRecordResponseHeaderTTFT(ctx)
+	if outcome.isSuccessful {
+		// A failed response is not the model's time to first token.
+		maybeRecordResponseHeaderTTFT(ctx)
+	}
 	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx != nil && ctx.IsStreamingResponse)
 	r.observeRouterLearningProviderStatus(ctx, outcome.statusCode)
 
@@ -39,6 +42,11 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		if fallbackResp := r.maybeExecuteFallback(nil, ctx); fallbackResp != nil {
 			return fallbackResp, nil
 		}
+	}
+	if !outcome.isSuccessful {
+		// The failed call's reservation ends before its headers report the
+		// budget.
+		r.releaseFailedSpend(ctx)
 	}
 	// Once response headers are continued to Envoy, Envoy's response_header_mode: SEND
 	// sends the headers downstream to the client, committing the response.
@@ -60,8 +68,8 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		headerMutation = mergeHeaderMutations(headerMutation,
 			&ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}})
 	}
-	response = buildResponseHeadersContinueResponse(headerMutation, ctx != nil && ctx.IsStreamingResponse)
-	holdStreamForResponseGuard(ctx, response)
+	response = buildResponseHeadersContinueResponse(headerMutation, outcome.bodyStreamed)
+	holdStreamedAnswer(ctx, response)
 	return response, nil
 }
 

@@ -40,13 +40,26 @@ func (r *OpenAIRouter) sessionTurnPricing(model string) sessiontelemetry.TurnPri
 	}
 }
 
-func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) {
-	recordSessionTurnOutcome(ctx, usage, pricing)
-	if ctx == nil || usage.promptTokens+usage.completionTokens <= 0 {
-		return
-	}
+func recordSessionLastModel(ctx *RequestContext) {
 	sessiontelemetry.RecordLastModel(routingSessionStateKey(ctx), ctx.RequestModel)
 	sessiontelemetry.RecordLastModel(promptCacheKeyStateKey(ctx), ctx.RequestModel)
+}
+
+func recordSessionTurn(ctx *RequestContext, usage responseUsageMetrics, pricing sessiontelemetry.TurnPricing) {
+	recordSessionTurnOutcome(ctx, usage, pricing)
+	if ctx == nil {
+		return
+	}
+	if usage.invalid {
+		// The turn was served, so continuity follows its model even though
+		// partial usage must not reach the session totals.
+		recordSessionLastModel(ctx)
+		return
+	}
+	if usage.promptTokens+usage.completionTokens <= 0 {
+		return
+	}
+	recordSessionLastModel(ctx)
 	accounting := estimateRouterCacheAccounting(ctx, usage, pricing)
 	// Routing ownership follows the dispatch identity; protocol telemetry keeps
 	// its own Chat fingerprint or Responses lineage without creating an owner.
@@ -138,11 +151,15 @@ func recordRouterSessionUsageFromContext(
 		PromptTokens:                usage.promptTokens,
 		CachedPromptTokens:          usage.cachedPromptTokens,
 		CacheWriteTokens:            usage.cacheWriteTokens,
+		CacheWrite5mTokens:          usage.cacheWrite5mTokens,
+		CacheWrite1hTokens:          usage.cacheWrite1hTokens,
 		EstimatedCachedPromptTokens: accounting.estimatedCachedTokens,
 		CompletionTokens:            usage.completionTokens,
 		Cost:                        sessionTurnCost(usage, pricing),
 		EstimatedCacheSavings:       accounting.estimatedSavings,
 		CacheAccountingSource:       accounting.source,
+		CacheReported:               usageReportsCache(usage),
+		Apart:                       ctx.protectionKeyApart,
 		Timestamp:                   time.Now(),
 	})
 	recordRouterLearningUsageFromContext(ctx, usage, pricing, accounting)
@@ -174,8 +191,15 @@ func recordRouterLearningUsageFromContext(
 		Cost:                        sessionTurnCost(usage, pricing),
 		EstimatedCacheSavings:       accounting.estimatedSavings,
 		CacheAccountingSource:       accounting.source,
+		CacheReported:               usageReportsCache(usage),
 		Timestamp:                   time.Now(),
 	})
+}
+
+// usageReportsCache is true when the backend counted cache reads or writes,
+// so a zero is a cold cache rather than an unknown one.
+func usageReportsCache(usage responseUsageMetrics) bool {
+	return usage.cachedPromptTokensReported || usage.cacheWriteTokensReported
 }
 
 func estimateRouterCacheAccounting(

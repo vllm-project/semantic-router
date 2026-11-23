@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +39,11 @@ func TestUpdateConfigHandler_ValidUpdates(t *testing.T) {
 			name:     "Valid config - domain name (DNS names now allowed)",
 			method:   http.MethodPost,
 			endpoint: "example.com:8000",
+		},
+		{
+			name:     "Valid config - host:port with a path, as the Router reads it",
+			method:   http.MethodPost,
+			endpoint: "127.0.0.1:8000/v1",
 		},
 		{
 			name:     "PUT request should work",
@@ -158,13 +164,6 @@ func TestUpdateConfigHandler_InvalidUpdates(t *testing.T) {
 			expectedError:  "Config validation failed",
 		},
 		{
-			name:           "Invalid config - path in backend ref endpoint",
-			method:         http.MethodPost,
-			requestBody:    canonicalConfigBody("127.0.0.1:8000/v1"),
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Config validation failed",
-		},
-		{
 			name:           "Invalid JSON body",
 			method:         http.MethodPost,
 			requestBody:    "invalid json",
@@ -201,6 +200,34 @@ func TestUpdateConfigHandler_InvalidUpdates(t *testing.T) {
 				t.Errorf("Expected error message to contain '%s', got: %s", tt.expectedError, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestUpdateConfigHandler_RejectsUnknownFieldWithoutWriting(t *testing.T) {
+	configPath := createValidTestConfig(t, t.TempDir())
+	before := mustReadFile(t, configPath)
+	config := canonicalConfigBody("127.0.0.1:9000")
+	providers := config["providers"].(map[string]interface{})
+	providers["models"].([]map[string]interface{})[0]["descriptin"] = "misspelled description"
+	body, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, routerErr := routerconfig.ParseYAMLBytes(body)
+	if routerErr == nil || !strings.Contains(routerErr.Error(), `unknown field "descriptin" in providers.models[0]`) {
+		t.Fatalf("expected the Router to reject the nested typo, got %v", routerErr)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/router/config/update", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	UpdateConfigHandler(configPath, false, "")(w, req)
+
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), routerErr.Error()) {
+		t.Errorf("update = %d %q, want 400 with Router diagnostic %q", w.Code, w.Body.String(), routerErr)
+	}
+	if !bytes.Equal(mustReadFile(t, configPath), before) {
+		t.Error("rejected update changed the saved config")
 	}
 }
 
@@ -363,6 +390,7 @@ func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
 			"headers":     map[string]string{"X-Tenant": "production"},
 			"api_version": "2026-09-01",
 			"chat_path":   "/chat/completions",
+			"tls":         map[string]string{"ca_file": "/etc/vllm-sr/certs/example-corp-ca.pem", "server_name": "provider.internal"},
 		},
 	}
 
@@ -374,7 +402,8 @@ func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	UpdateConfigHandler(configPath, false, "")(w, req)
+	// A user who may read secrets names the operator's variable.
+	asSecretReader(UpdateConfigHandler(configPath, false, ""))(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d. Response: %s", w.Code, w.Body.String())
@@ -404,6 +433,7 @@ func TestUpdateConfigHandler_PreservesBackendTargetFields(t *testing.T) {
 		"headers":     map[string]interface{}{"X-Tenant": "production"},
 		"api_version": "2026-09-01",
 		"chat_path":   "/chat/completions",
+		"tls":         map[string]interface{}{"ca_file": "/etc/vllm-sr/certs/example-corp-ca.pem", "server_name": "provider.internal"},
 	}
 	for key, expected := range want {
 		if actual := got[key]; !reflect.DeepEqual(actual, expected) {

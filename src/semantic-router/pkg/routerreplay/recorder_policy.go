@@ -3,11 +3,14 @@ package routerreplay
 // CapturePolicy is the effective content policy for one request. Store capacity
 // belongs to the shared recorder and is not a per-request setting.
 type CapturePolicy struct {
-	CaptureRequestBody  bool
-	CaptureResponseBody bool
-	MaxBodyBytes        int
-	MaxToolTraceBytes   int
-	MaxToolTraceSteps   int
+	CaptureRequestBody     bool
+	CaptureResponseBody    bool
+	MaxBodyBytes           int
+	MaxPromptBytes         int
+	MaxToolTraceBytes      int
+	MaxRawToolTraceBytes   int
+	MaxToolTraceTotalBytes int
+	MaxToolTraceSteps      int
 }
 
 // WithCapturePolicy returns an independent policy view of the same recorder.
@@ -20,12 +23,18 @@ func (r *Recorder) WithCapturePolicy(policy CapturePolicy) *Recorder {
 	}
 	base := r.policySnapshot()
 	view := &Recorder{
-		recorderState:     r.recorderState,
-		maxToolTraceBytes: base.maxToolTraceBytes,
-		maxToolTraceSteps: base.maxToolTraceSteps,
+		recorderState:          r.recorderState,
+		maxPromptBytes:         base.maxPromptBytes,
+		maxToolTraceBytes:      base.maxToolTraceBytes,
+		maxRawToolTraceBytes:   base.maxRawToolTraceBytes,
+		maxToolTraceTotalBytes: base.maxToolTraceTotalBytes,
+		maxToolTraceSteps:      base.maxToolTraceSteps,
 	}
 	view.SetCapturePolicy(policy.CaptureRequestBody, policy.CaptureResponseBody, policy.MaxBodyBytes)
+	view.SetMaxPromptBytes(policy.MaxPromptBytes)
 	view.SetMaxToolTraceBytes(policy.MaxToolTraceBytes)
+	view.SetMaxRawToolTraceBytes(policy.MaxRawToolTraceBytes)
+	view.SetMaxToolTraceTotalBytes(policy.MaxToolTraceTotalBytes)
 	view.SetMaxToolTraceSteps(policy.MaxToolTraceSteps)
 	return view
 }

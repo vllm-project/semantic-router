@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"net/http"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -18,23 +19,24 @@ type routingFailure struct {
 	category llmprotocol.ErrorCategory
 	code     string
 	message  string
+	// param names the request field at fault, as OpenAI's error does.
+	param string
 }
 
 // These are the only routing failures a client can see, and the Router API
 // reference documents every one. A candidate-budget rejection keeps the code
 // and message of its selection.RequestBudgetError.
 var (
-	routingFailureModelNotFound = routingFailure{
-		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
-		code: "model_not_found", message: "the requested model is not available",
-	}
 	routingFailureNoRoute = routingFailure{
 		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
 		code: "no_route", message: "no route matched the request",
 	}
+	// A refusal on the Router's count names the window and the count
+	// instead (contextLengthFailure).
 	routingFailureContextLength = routingFailure{
-		status: http.StatusUnprocessableEntity, category: llmprotocol.ErrorInvalidRequest,
+		status: http.StatusBadRequest, category: llmprotocol.ErrorInvalidRequest,
 		code: "context_length_exceeded", message: "the request exceeds the context window of the models that can serve it",
+		param: "messages",
 	}
 	routingFailureDecisionUnresolved = routingFailure{
 		status: http.StatusServiceUnavailable, category: llmprotocol.ErrorInternal,
@@ -54,11 +56,22 @@ var (
 	}
 )
 
+// modelNotFoundFailure answers a model the Router does not serve as OpenAI
+// does, which its SDKs read as an unknown model, not a credential problem.
+// The message names the model the client sent.
+func modelNotFoundFailure(model string) routingFailure {
+	return routingFailure{
+		status: http.StatusNotFound, category: llmprotocol.ErrorNotFound,
+		code: "model_not_found", message: fmt.Sprintf("The model `%s` does not exist or you do not have access to it.", model),
+	}
+}
+
 // routingFailureResponse answers a request with failure. The client's error
 // envelope is rendered from it when the reply is encoded for the client.
 func (r *OpenAIRouter) routingFailureResponse(ctx *RequestContext, failure routingFailure) *ext_proc.ProcessingResponse {
 	if ctx != nil {
 		ctx.ImmediateProtocolError = llmprotocol.NewError(failure.category, failure.code, failure.message, nil)
+		ctx.ImmediateProtocolError.Parameter = failure.param
 	}
 	return r.createErrorResponse(failure.status, failure.message)
 }

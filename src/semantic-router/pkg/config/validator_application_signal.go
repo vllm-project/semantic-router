@@ -39,6 +39,9 @@ func validateApplicationSignalContracts(cfg *RouterConfig) (err error) {
 		if err := CheckApplicationAnswerer(cfg.ApplicationRulePath(spec.signalType, spec.name), cfg.ScopePath(""), deployment, rule, questionTypes, cfg.ModelDeployments[deployment].DeclaredPresets(), modalities); err != nil {
 			return err
 		}
+		if err := checkSchemaCarries(cfg, cfg.ApplicationRulePath(spec.signalType, spec.name), deployment, rule.Rule); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -59,6 +62,17 @@ func validateApplicationRuleSpec(spec applicationRuleSpec) error {
 	}
 	if spec.onUnknown != "" && spec.stage == presets.StageResponse {
 		return fmt.Errorf("on_unknown applies to a request-stage rule; the response_guard plugin's on_unknown decides a response-stage rule")
+	}
+	switch spec.onUnscanned {
+	case "", SystemOneUnscannedBestEffort, SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown:
+	default:
+		return fmt.Errorf("on_unscanned must be %s, %s, %s or %s", SystemOneUnscannedBestEffort, SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown)
+	}
+	if !(spec.minCoverage >= 0 && spec.minCoverage <= 1) {
+		return fmt.Errorf("min_coverage must be between 0 and 1")
+	}
+	if spec.minCoverage > 0 && spec.onUnscanned != SystemOneUnscannedBestEffort {
+		return fmt.Errorf("min_coverage applies to on_unscanned: %s, which decides on the windows read", SystemOneUnscannedBestEffort)
 	}
 	if spec.input.PreviousTurns < 0 || spec.input.PreviousTurns > MaxSystemOnePreviousTurns {
 		return fmt.Errorf("input.previous_turns must be within [1, %d] when set", MaxSystemOnePreviousTurns)

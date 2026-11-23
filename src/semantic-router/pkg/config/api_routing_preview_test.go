@@ -14,7 +14,7 @@ func TestCanonicalRoutingPreviewBudget(t *testing.T) {
 		concurrency  int
 		invalid      bool
 	}{
-		{name: "defaults", timeout: 120 * time.Second, concurrency: 16},
+		{name: "defaults", fields: "{}", timeout: 120 * time.Second, concurrency: 16},
 		{name: "long request", fields: "request_timeout_seconds: 1800\n        max_concurrency: 8", timeout: 1800 * time.Second, concurrency: 8},
 		{name: "maximum timeout", fields: "request_timeout_seconds: 3600", timeout: 3600 * time.Second, concurrency: 16},
 		{name: "zero timeout", fields: "request_timeout_seconds: 0", invalid: true},

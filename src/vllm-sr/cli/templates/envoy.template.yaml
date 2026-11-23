@@ -8,7 +8,7 @@
                   {% endif %}
                   {% if r.retry_count | default(0) > 0 or r.per_try_timeout %}
                   retry_policy:
-                    retry_on: {{ r.retry_on | default('connect-failure,refused-stream') }}
+                    retry_on: {{ r.retry_on | default('connect-failure,refused-stream', true) }}
                     num_retries: {{ r.retry_count | default(0) }}
                     {% if r.per_try_timeout %}
                     per_try_timeout: {{ r.per_try_timeout }}
@@ -79,7 +79,13 @@ static_resources:
               {% for model in models %}
               # Route for model: {{ model.name | tojson }}
               - match:
+                  {% if listener.served_path_regex %}
+                  # Only the paths of the APIs this listener serves.
+                  safe_regex:
+                    regex: {{ listener.served_path_regex | tojson }}
+                  {% else %}
                   prefix: "/"
+                  {% endif %}
                   headers:
                   - name: x-vsr-route-model
                     string_match:
@@ -108,7 +114,12 @@ static_resources:
               {% endfor %}
               # Default route (no x-vsr-route-model header)
               - match:
+                  {% if listener.served_path_regex %}
+                  safe_regex:
+                    regex: {{ listener.served_path_regex | tojson }}
+                  {% else %}
                   prefix: "/"
+                  {% endif %}
                 {% if models and models[0].route_request_headers %}
                 request_headers_to_add:
                 {% for header in models[0].route_request_headers %}
@@ -143,6 +154,20 @@ static_resources:
                       regex: "^/v1([/?].*)?$"
                     substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
+              {% if listener.served_path_regex %}
+              # A path of an API this listener does not serve.
+              - match:
+                  prefix: "/"
+                direct_response:
+                  status: 404
+                  body:
+                    inline_string: {{ listener.unserved_body | tojson }}
+                response_headers_to_add:
+                - header:
+                    key: content-type
+                    value: application/json
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+              {% endif %}
           http_filters:
           {% if not listener.trust_identity_headers %}
           # Only an authenticating proxy in front of a listener that sets
@@ -333,6 +358,16 @@ static_resources:
       http_health_check:
         path: {{ model.reliability.health_check_path | tojson }}
     {% endif %}
+    # Close an idle connection before the backend does: uvicorn (vLLM's server)
+    # and Node close theirs after 5s, and a call sent while that close is on its
+    # way gets no response. The standalone gateway uses the same 4s.
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        common_http_protocol_options:
+          idle_timeout: 4s
+        explicit_http_config:
+          http_protocol_options: {}
     load_assignment:
       cluster_name: {{ model.cluster_name }}_cluster
       endpoints:
@@ -355,15 +390,22 @@ static_resources:
       name: envoy.transport_sockets.tls
       typed_config:
         "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-        sni: {{ model.endpoints[0].address }}
+        sni: {{ model.tls.server_name | tojson if model.tls.server_name else model.endpoints[0].address }}
         auto_sni_san_validation: true
         common_tls_context:
           tls_params:
             tls_minimum_protocol_version: TLSv1_2
             tls_maximum_protocol_version: TLSv1_3
+          {%- if model.tls.cert_file %}
+          tls_certificates:
+          - certificate_chain:
+              filename: {{ model.tls.cert_file | tojson }}
+            private_key:
+              filename: {{ model.tls.key_file | tojson }}
+          {%- endif %}
           validation_context:
             trusted_ca:
-              filename: /etc/ssl/certs/ca-certificates.crt
+              filename: {{ model.tls.ca_file | tojson if model.tls.ca_file else "/etc/ssl/certs/ca-certificates.crt" }}
     {% endif %}
   {% endfor %}
 
@@ -372,5 +414,9 @@ layered_runtime:
   layers:
   - name: static_layer
     static_layer:
+      # A listener's served path regex grows with its APIs: chat completions,
+      # responses and messages with the model listing compile to about 200
+      # RE2 instructions, over Envoy's default limit of 100.
+      re2.max_program_size.error_level: 1000
       overload:
         global_downstream_max_connections: 50000

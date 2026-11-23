@@ -47,7 +47,7 @@ func TestOutlierDetectionIsValidated(t *testing.T) {
 		{"a maximum below the default base", managed(DeploymentOutlierDetection{MaxEjectionMs: 1000}), "must not be below base_ejection_ms (30000)"},
 		{"a share over 100", managed(DeploymentOutlierDetection{MaxEjectionPercent: 101}), "outlier_detection.max_ejection_percent must be between 0 and 100"},
 		{"a remote model", ModelDeployment{Provider: OpenAIChatProvider, Endpoint: "http://chat:8000/v1", Model: "chat", OutlierDetection: &DeploymentOutlierDetection{}}, "outlier_detection and public_name belong to model_runtime"},
-		{"a systemone model", ModelDeployment{Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "d3", OutlierDetection: &DeploymentOutlierDetection{}}, "outlier_detection and public_name belong to model_runtime"},
+		{"a systemone model", ModelDeployment{Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "d3", OutlierDetection: &DeploymentOutlierDetection{}}, "outlier_detection and public_name belong to model_runtime"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			err := test.deployment.WithDefaults().validate()

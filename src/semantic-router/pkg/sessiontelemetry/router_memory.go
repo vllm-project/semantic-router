@@ -63,6 +63,10 @@ type RouterSessionSnapshot struct {
 	LastPolicy                map[string]interface{}
 
 	RecentOutcomes []TurnOutcome `json:"recent_outcomes,omitempty"`
+
+	// LastCacheReceipt is the latest response's usage, which prices the
+	// prompt cache a model switch would throw away.
+	LastCacheReceipt *modelpricing.Receipt `json:"last_cache_receipt,omitempty"`
 }
 
 // SessionDecisionParams records the pre-dispatch policy result for one session
@@ -97,7 +101,13 @@ type SessionUsageParams struct {
 	Cost                        float64
 	EstimatedCacheSavings       float64
 	CacheAccountingSource       string
-	Timestamp                   time.Time
+	// CacheReported is true when the backend reported cache reads or writes.
+	CacheReported bool
+	// Apart marks the usage of a request held under a key of its own in the
+	// session, a subagent's or a side request's. It counts in the session's
+	// usage but neither sets the session's model nor replaces its receipt.
+	Apart     bool
+	Timestamp time.Time
 }
 
 type routerSessionState struct {
@@ -132,6 +142,7 @@ type routerSessionState struct {
 	lastDecisionReason        string
 	lastCacheAccountingSource string
 	lastPolicy                map[string]interface{}
+	lastCacheReceipt          *modelpricing.Receipt
 
 	recentOutcomes    []TurnOutcome
 	outcomeWindowSize int
@@ -236,7 +247,7 @@ func RecordSessionUsage(p SessionUsageParams) {
 	}
 	s.evictExpiredLocked(now)
 	st := s.sessionLocked(p.SessionID, now)
-	if st.turnCount == 0 {
+	if st.turnCount == 0 && !p.Apart {
 		st.currentModel = p.Model
 	}
 	st.lastSeen = now
@@ -260,6 +271,30 @@ func RecordSessionUsage(p SessionUsageParams) {
 	if p.CacheAccountingSource != "" {
 		st.lastCacheAccountingSource = p.CacheAccountingSource
 	}
+	// Responses can complete out of order; the latest one describes the cache.
+	if !p.Apart && (st.lastCacheReceipt == nil || !now.Before(st.lastCacheReceipt.At)) {
+		st.lastCacheReceipt = &modelpricing.Receipt{
+			Model: p.Model,
+			Usage: modelpricing.Usage{
+				PromptTokens:       p.PromptTokens,
+				CachedInputTokens:  p.CachedPromptTokens,
+				CacheWriteTokens:   p.CacheWriteTokens,
+				CacheWrite5mTokens: p.CacheWrite5mTokens,
+				CacheWrite1hTokens: p.CacheWrite1hTokens,
+				CompletionTokens:   p.CompletionTokens,
+			},
+			CacheReported: p.CacheReported,
+			At:            now,
+		}
+	}
+}
+
+func cloneCacheReceipt(receipt *modelpricing.Receipt) *modelpricing.Receipt {
+	if receipt == nil {
+		return nil
+	}
+	clone := *receipt
+	return &clone
 }
 
 // GetRouterSessionSnapshot returns a clone of the router-owned session memory.
@@ -327,6 +362,7 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 		LastCacheAccountingSource:       st.lastCacheAccountingSource,
 		LastPolicy:                      clonePolicyMap(st.lastPolicy),
 		RecentOutcomes:                  cloneTurnOutcomes(st.recentOutcomes),
+		LastCacheReceipt:                cloneCacheReceipt(st.lastCacheReceipt),
 	}
 	s.mu.Unlock()
 	return snapshot, true

@@ -68,6 +68,7 @@ global:
     deployments:
       gateway-d3:
         provider: systemone
+        schema: vllm-sr/4.0
         endpoint: GATEWAY/Unified/v1/systemone
         model: vLLM-SR-d3-27B
         auth: {header: Ocp-Apim-Subscription-Key, prefix: "", api_key_env: REMOTE_DECISION_TEST_KEY}
@@ -248,6 +249,7 @@ global:
     deployments:
       gateway-d3:
         provider: systemone
+        schema: vllm-sr/4.0
         endpoint: ` + gatewayServer.URL + `/Unified/v1/systemone
         model: vLLM-SR-d3-27B
         auth: {header: Ocp-Apim-Subscription-Key, prefix: "", api_key_env: REMOTE_DECISION_TEST_KEY}

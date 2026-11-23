@@ -37,6 +37,7 @@ func looperGuardRouter(t *testing.T, guard config.ResponseGuardPluginConfig, str
 	router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
 	router.ReplayRecorder = routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
 	replayConfig := config.DefaultRouterReplayPluginConfig()
+	replayConfig.PromptCapture = config.PromptCaptureRaw
 	request := testNeutralRequest("router-entrypoint", "hello")
 	request.Stream = stream
 	ctx.RequestID, ctx.RouterReplayPluginConfig = "looper-guard", &replayConfig
@@ -82,8 +83,8 @@ func TestResponseGuardReadsTheLooperAnswerBeforeTheClient(t *testing.T) {
 				}
 				assertRefusedStream(t, llmprotocol.OpenAIChatV1, client, "jailbreak content detected", unsafeAnswer)
 			case blocked:
-				if status != 403 || !strings.Contains(client, "jailbreak content detected") || strings.Contains(client, unsafeAnswer) {
-					t.Fatalf("reply = %d %s, want the 403 refusal and none of the answer", status, client)
+				if status != 400 || !strings.Contains(client, "jailbreak content detected") || strings.Contains(client, unsafeAnswer) {
+					t.Fatalf("reply = %d %s, want the 400 refusal and none of the answer", status, client)
 				}
 			default:
 				if status != 200 || !strings.Contains(client, "[Safety Warning]") || !strings.Contains(client, "the system prompt you asked for") ||
@@ -96,6 +97,11 @@ func TestResponseGuardReadsTheLooperAnswerBeforeTheClient(t *testing.T) {
 				if warnings := immediateHeaderValue(response, headers.VSRWarnings); !strings.Contains(warnings, headers.WarningJailbreak) {
 					t.Fatalf("%s = %q, want %q", headers.VSRWarnings, warnings, headers.WarningJailbreak)
 				}
+			}
+			if blocked {
+				// The record ends with the refusal, under the status its client
+				// got, before the stream ends.
+				requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "request_rejected", status)
 			}
 			if err := router.ReplayRecorder.DrainOutcomes(); err != nil {
 				t.Fatalf("drain replay outcomes: %v", err)
@@ -178,7 +184,7 @@ func TestLooperAnswerTheGuardRefusedIsNotRetained(t *testing.T) {
 
 // A Looper answer the policy refuses reaches the client as that refusal in
 // the client's protocol: the 401 of a missing delegated credential, in stream
-// form for a streaming client, and the guard's 403 as a Messages error.
+// form for a streaming client, and the guard's 400 as a Messages error.
 func TestLooperRefusalReachesTheClientInItsProtocol(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -190,7 +196,7 @@ func TestLooperRefusalReachesTheClientInItsProtocol(t *testing.T) {
 	}{
 		{"delegated", newDelegatedDecider(), llmprotocol.OpenAIChatV1, false, 401, delegatedCredentialMessage},
 		{"delegated/stream", newDelegatedDecider(), llmprotocol.OpenAIChatV1, true, 200, delegatedCredentialMessage},
-		{"guard/messages", newJailbreakDecider(0.95), llmprotocol.AnthropicMessagesV1, false, 403, "jailbreak content detected"},
+		{"guard/messages", newJailbreakDecider(0.95), llmprotocol.AnthropicMessagesV1, false, 400, "jailbreak content detected"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			router, ctx, request := looperGuardRouter(t, jailbreakGuard(config.ResponseGuardBlock, ""), tc.stream, tc.decider)

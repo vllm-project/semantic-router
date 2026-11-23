@@ -69,14 +69,14 @@ Where each view of the schema comes from:
 | View | Schema |
 | --- | --- |
 | Dashboard, `GET /api/router/config/schema` | The deployed Router's contract, proxied. If that Router endpoint is unavailable, the schema embedded in the Dashboard build, marked `X-Vllm-Sr-Schema-Source: bundled`. |
-| Dashboard, **Operate → Platform & Access → Schema Reference** | Shows which of the two it uses, and warns when the deployed and bundled contracts differ. |
+| Dashboard, **Settings → Schema reference** | Shows which of the two it uses, and warns when the deployed and bundled contracts differ. |
 | Website, [Configuration Schema Reference](../api/configuration-schema) | The current documentation release, not any deployment. |
 
 An Agent does not need the Dashboard. Query `GET /api/v1` on the Router for the
 compact endpoint inventory, then request one operation with
 `GET /openapi.json?path=...&method=...`; use `GET /openapi.json` only when the
-complete API document is needed. The Dashboard's **Router API Docs** link is a
-human-facing proxy to that same runtime document.
+complete API document is needed. The **Router API reference** link in the
+Dashboard's help menu is a human-facing proxy to that same runtime document.
 
 Every representation has its own `ETag`; use `If-None-Match` when an agent or
 editor caches it.
@@ -167,8 +167,10 @@ An automation or deployment agent should:
 5. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
 6. plan the mutation; apply a hot-reloadable change with the returned
    `current_etag` in `If-Match`. A change the running Router can't take returns
-   `RESTART_REQUIRED`: a listener change in standalone mode, or a listener or
-   provider topology change with `--gateway extproc`. On local Docker,
+   `RESTART_REQUIRED`: in standalone mode, a new or removed listener or a
+   listener's new `address`, `port`, `timeout` or `tls` paths (its `api_keys`,
+   `apis` and `identity` reload in place); with
+   `--gateway extproc`, a listener or provider topology change. On local Docker,
    `vllm-sr config apply` saves such a change and the next `vllm-sr serve`
    applies it (or, after approval, run the explicit
    `vllm-sr serve --config <candidate> --replace-active-config`); elsewhere,

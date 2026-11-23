@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"slices"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -59,24 +59,18 @@ func (r *OpenAIRouter) projectAnthropicRequestForBackendWithDiagnostics(
 		changed = true
 	}
 	if request.ReasoningDisplay != "" {
-		if request.ReasoningDisplay != "omitted" {
-			return request, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_reasoning_display",
-				fmt.Sprintf("the selected backend cannot produce thinking display %q", request.ReasoningDisplay), nil)
-		}
-		// The Router enforces omitted on the client response, both buffered
-		// and streaming, instead of relying on a backend display control.
+		// Neither format has a display control. The Router enforces omitted
+		// on the client response, buffered and streaming, and cannot
+		// summarize, so summarized and updates return the backend's reasoning
+		// as it is (see reportApproximatedReasoningDisplay).
 		projected.ReasoningDisplay = ""
 		changed = true
 	}
 	if changed {
 		projected.Generation++ // The source envelope no longer describes this request.
 	}
-	var systemDiagnostics llmprotocol.Diagnostics
-	if r.Config != nil && slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldSystemMessageRole) {
-		projected, systemDiagnostics = llmprotocol.ProjectAnthropicSystemMessages(projected, target)
-	}
 	projected, cacheDiagnostics := llmprotocol.ProjectAnthropicCacheDirectives(projected, target)
-	return projected, append(systemDiagnostics, cacheDiagnostics...), nil
+	return projected, cacheDiagnostics, nil
 }
 
 func anthropicBackendCanDisableReasoning(family *config.ReasoningFamilyConfig) bool {
@@ -142,16 +136,32 @@ func preserveExplicitAnthropicReasoningOff(request *llmprotocol.Request, target 
 		request.ReasoningMode == llmprotocol.ReasoningModeDisabled
 }
 
+// requestToolNamespaces reads the tools this request dispatched, whose flat names
+// are the only ones a backend can answer with.
+func requestToolNamespaces(ctx *RequestContext) llmprotocol.ToolNamespaces {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return nil
+	}
+	return llmprotocol.RequestToolNamespaces(ctx.SemanticRequest.Tools)
+}
+
 func clientResponseMutation(ctx *RequestContext, backend llmprotocol.WireFormat) protocolcodec.ResponseMutation {
 	responseID := responseObjectPublicID(ctx)
 	omitReasoning := omitCrossFormatReasoning(ctx, backend)
-	if responseID == "" && !omitReasoning {
+	namespaces := requestToolNamespaces(ctx)
+	if responseID == "" && !omitReasoning && len(namespaces) == 0 {
 		return nil
 	}
 	return func(response *llmprotocol.Response) error {
 		if responseID != "" {
+			// The Router owns the Responses object: its ID, and its creation
+			// time when the backend reports none, as Messages backends don't.
 			response.ID = responseID
+			if response.CreatedAt.IsZero() {
+				response.CreatedAt = time.Now().UTC()
+			}
 		}
+		namespaces.RestoreResponse(response)
 		if omitReasoning {
 			omitResponseReasoning(response)
 		}
@@ -162,14 +172,19 @@ func clientResponseMutation(ctx *RequestContext, backend llmprotocol.WireFormat)
 func clientStreamMutation(ctx *RequestContext, backend llmprotocol.WireFormat) protocolcodec.StreamEventMutation {
 	responseID := responseObjectPublicID(ctx)
 	omitReasoning := omitCrossFormatReasoning(ctx, backend)
-	if responseID == "" && !omitReasoning {
+	namespaces := requestToolNamespaces(ctx)
+	if responseID == "" && !omitReasoning && len(namespaces) == 0 {
 		return nil
 	}
 	hiddenItems := make(map[int]struct{})
 	return func(event *llmprotocol.Event) error {
 		if responseID != "" {
 			event.ResponseID = responseID
+			if event.CreatedAt.IsZero() && (event.Type == llmprotocol.EventResponseStarted || event.Type == llmprotocol.EventResponseFailed) {
+				event.CreatedAt = time.Now().UTC()
+			}
 		}
+		event.ToolCall = namespaces.RestoreCall(event.ToolCall)
 		if !omitReasoning {
 			return nil
 		}

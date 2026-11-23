@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // NativeRequest retains the wire document. Routing and acceptance inspect typed
@@ -20,6 +23,9 @@ type NativeRequest struct {
 	// InferenceBody requests internal provenance when an algorithm needs it.
 	// Only metadata visibility differs from Body; the native task stays raw.
 	InferenceBody json.RawMessage
+	// Requirements are what a candidate model must answer and read to answer
+	// the whole task.
+	Requirements Requirements
 }
 
 // Question identifies a question within one named state: a batch entry's
@@ -30,6 +36,9 @@ type Question struct {
 	FullInput         bool
 	ChoiceKeys        map[string]bool
 	Levels            int
+	// Labels are the names a set question declares: its answer gives each a
+	// probability and selects any number of them.
+	Labels map[string]bool
 }
 
 // Observation is a typed answer and its available evidence. Missing evidence
@@ -40,6 +49,9 @@ type Observation struct {
 	Confidence   *float64
 	Probability  *float64
 	Distribution []float64
+	// LabelProbabilities are a set answer's probabilities, one for each
+	// declared label. They are independent, not a distribution.
+	LabelProbabilities map[string]float64
 }
 
 type nativeState struct {
@@ -80,6 +92,7 @@ func ParseNativeRequest(body json.RawMessage) (*NativeRequest, error) {
 			return nil, err
 		}
 	}
+	request.Requirements = requirementsOf(request.Questions, body)
 	// Signals see the complete native task, including all states and questions.
 	// The model selector and transport options are not task evidence.
 	options := map[string]json.RawMessage{}
@@ -149,9 +162,8 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 			RequireFullInput bool              `json:"require_full_input"`
 			Criteria         json.RawMessage   `json:"criteria"`
 			Levels           []json.RawMessage `json:"levels"`
-			Choices          []struct {
-				Key string `json:"key"`
-			} `json:"choices"`
+			Choices          []keyed           `json:"choices"`
+			Labels           []keyed           `json:"labels"`
 		}
 		if key == "" || json.Unmarshal(state.Questions[key], &question) != nil || question.Preset != "" {
 			return errors.New("auto requires explicit named questions without model-specific presets")
@@ -159,19 +171,21 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 		q := Question{State: name, Name: key, Type: question.Type, FullInput: question.RequireFullInput}
 		switch question.Type {
 		case "choice":
-			q.ChoiceKeys = map[string]bool{}
-			var criteria map[string]json.RawMessage
-			if len(question.Choices) > 0 {
-				for _, choice := range question.Choices {
-					q.ChoiceKeys[choice.Key] = true
-				}
-			} else if json.Unmarshal(question.Criteria, &criteria) == nil {
-				for choice := range criteria {
-					q.ChoiceKeys[choice] = true
-				}
-			}
+			q.ChoiceKeys = optionNames(question.Choices, question.Criteria)
 			if len(q.ChoiceKeys) < 2 {
 				return errors.New("choice requires at least two named criteria")
+			}
+		case "set":
+			q.Labels = optionNames(question.Labels, question.Criteria)
+			if len(q.Labels) == 0 {
+				return errors.New("set requires at least one named label")
+			}
+			// A set answers each label as a Noul under "<name>.<label>", so
+			// no other question of the state may have that name.
+			for label := range q.Labels {
+				if _, taken := state.Questions[key+"."+label]; taken {
+					return fmt.Errorf("a label answer %s.<label> is another question's name", key)
+				}
 			}
 		case "score":
 			levels := question.Levels
@@ -182,7 +196,7 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 			if q.Levels < 2 || q.Levels > 10 {
 				return errors.New("score requires two to ten levels")
 			}
-		case "noul":
+		case "noul", "box":
 		default:
 			return fmt.Errorf("auto does not support question type %q", question.Type)
 		}
@@ -191,31 +205,176 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 	return nil
 }
 
-// Observe preserves absent, failed and incomplete answers as invalid rather
-// than dropping them from a bundle's quality denominator.
-func (r *NativeRequest) Observe(body json.RawMessage) []Observation {
-	type responseState struct {
-		Answers map[string]json.RawMessage `json:"answers"`
+// keyed is one entry of a vllm-sr/4.0 option list: choices, or a set's labels.
+type keyed struct {
+	Key string `json:"key"`
+}
+
+// optionNames are the options a question names: the keys of its option list
+// when it has one, else the names of its criteria.
+func optionNames(listed []keyed, criteria json.RawMessage) map[string]bool {
+	names := map[string]bool{}
+	var described map[string]json.RawMessage
+	if len(listed) > 0 {
+		for _, option := range listed {
+			names[option.Key] = true
+		}
+	} else if json.Unmarshal(criteria, &described) == nil {
+		for name := range described {
+			names[name] = true
+		}
 	}
+	return names
+}
+
+// requirementsOf are what a task's questions and media need of its model:
+// each question type, image or video for the media of the task and its
+// states, and full input when a question requires it.
+func requirementsOf(questions []Question, body json.RawMessage) Requirements {
+	var needs Requirements
+	for _, q := range questions {
+		if !slices.Contains(needs.QuestionTypes, q.Type) {
+			needs.QuestionTypes = append(needs.QuestionTypes, q.Type)
+		}
+		needs.FullInput = needs.FullInput || q.FullInput
+	}
+	sort.Strings(needs.QuestionTypes)
+	type media struct {
+		Images []json.RawMessage `json:"images"`
+		Videos []json.RawMessage `json:"videos"`
+	}
+	var task struct {
+		media
+		Assets map[string]json.RawMessage `json:"assets"`
+		States map[string]media           `json:"states"`
+	}
+	_ = json.Unmarshal(body, &task)
+	image, video := len(task.Images) > 0, len(task.Videos) > 0
+	for _, state := range task.States {
+		image = image || len(state.Images) > 0
+		video = video || len(state.Videos) > 0
+	}
+	for _, raw := range task.Assets {
+		var asset struct {
+			Type string `json:"type"`
+		}
+		_ = json.Unmarshal(raw, &asset)
+		if asset.Type == "video" {
+			video = true
+		} else {
+			image = true
+		}
+	}
+	if image {
+		needs.Modalities = append(needs.Modalities, config.SystemOneModalityImage)
+	}
+	if video {
+		needs.Modalities = append(needs.Modalities, config.SystemOneModalityVideo)
+	}
+	return needs
+}
+
+// stateAnswers is one state's part of a response: its answers by question
+// name and, beside them, the family-specific sets and spans. A set question
+// answers in sets and has no entry of its own in answers, where each label
+// repeats as a "<name>.<label>" Noul; a span question answers a Noul and lists
+// its spans in spans. Entries stay raw, so an absent entry, a null and an
+// empty result remain different.
+type stateAnswers struct {
+	Answers map[string]json.RawMessage `json:"answers"`
+	Sets    map[string]json.RawMessage `json:"sets"`
+	Spans   map[string]json.RawMessage `json:"spans"`
+}
+
+// answersByState decodes a response once and returns each state's part of it:
+// a standard request's under the empty name, a batch entry's under its own.
+func answersByState(body json.RawMessage) func(state string) stateAnswers {
 	var response struct {
-		responseState
-		States map[string]responseState `json:"states"`
+		stateAnswers
+		States map[string]stateAnswers `json:"states"`
 	}
 	if json.Unmarshal(body, &response) != nil {
 		// json.Unmarshal may populate a valid prefix before reporting a bad
 		// field later in the envelope. Never accept that partial decoding.
-		response.Answers = nil
-		response.States = nil
+		return func(string) stateAnswers { return stateAnswers{} }
 	}
+	return func(state string) stateAnswers {
+		if state == "" {
+			return response.stateAnswers
+		}
+		return response.States[state]
+	}
+}
+
+// Observe preserves absent, failed and incomplete answers as invalid rather
+// than dropping them from a bundle's quality denominator.
+func (r *NativeRequest) Observe(body json.RawMessage) []Observation {
+	answers := answersByState(body)
 	observations := make([]Observation, 0, len(r.Questions))
 	for _, q := range r.Questions {
-		answers := response.Answers
-		if q.State != "" {
-			answers = response.States[q.State].Answers
-		}
-		observations = append(observations, observeAnswer(q, answers[q.Name]))
+		observations = append(observations, answers(q.State).observe(q))
 	}
 	return observations
+}
+
+// observe checks what the state answers to one question.
+func (s stateAnswers) observe(q Question) Observation {
+	if q.Type == "set" {
+		return observeSet(q, s)
+	}
+	return observeAnswer(q, s.Answers[q.Name])
+}
+
+// agreement bounds how far a set's two forms of one probability may differ.
+const agreement = 1e-4
+
+// observeSet checks a set answer against the labels its question declares.
+// The answer comes in two forms that must agree: the set's own entry, with a
+// probability for every label and the labels selected, and one Noul for each
+// label beside the other answers. Selecting no label is an answer; a set
+// without its entry, its selection or a label's probability is not.
+func observeSet(q Question, state stateAnswers) Observation {
+	out := Observation{Question: q}
+	if raw, answered := state.Answers[q.Name]; answered {
+		// A set has no answer of its own. A failed one has its error here.
+		var failed struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(raw, &failed) != nil || failed.Error != "" {
+			return out
+		}
+	}
+	var set struct {
+		Selected      []string            `json:"selected"`
+		Probabilities map[string]*float64 `json:"probabilities"`
+		Coverage      string              `json:"input_coverage"`
+	}
+	if json.Unmarshal(state.Sets[q.Name], &set) != nil || set.Selected == nil ||
+		len(set.Probabilities) != len(q.Labels) || (q.FullInput && set.Coverage != "complete") {
+		return out
+	}
+	for _, label := range set.Selected {
+		if !q.Labels[label] {
+			return out
+		}
+	}
+	probabilities := make(map[string]float64, len(q.Labels))
+	for label := range q.Labels {
+		var answer struct {
+			Type  string   `json:"type"`
+			Error string   `json:"error"`
+			Noul  *float64 `json:"noul"`
+		}
+		p := set.Probabilities[label]
+		if !probability(p) || json.Unmarshal(state.Answers[q.Name+"."+label], &answer) != nil ||
+			answer.Type != "noul" || answer.Error != "" || !probability(answer.Noul) ||
+			math.Abs(*answer.Noul-*p) > agreement {
+			return out
+		}
+		probabilities[label] = *p
+	}
+	out.Valid, out.LabelProbabilities = true, probabilities
+	return out
 }
 
 func observeAnswer(q Question, raw json.RawMessage) Observation {
@@ -229,6 +388,12 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 		Confidence    *float64           `json:"confidence"`
 		Coverage      string             `json:"input_coverage"`
 		Probabilities map[string]float64 `json:"probabilities"`
+		Box           *struct {
+			Top    *float64 `json:"top"`
+			Bottom *float64 `json:"bottom"`
+			Left   *float64 `json:"left"`
+			Right  *float64 `json:"right"`
+		} `json:"box"`
 	}
 	if json.Unmarshal(raw, &answer) != nil || answer.Type != q.Type || answer.Error != "" || (q.FullInput && answer.Coverage != "complete") {
 		return out
@@ -244,6 +409,10 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 			out.Probability = answer.Noul
 			out.Distribution = []float64{*answer.Noul, 1 - *answer.Noul}
 		}
+	case "box":
+		box := answer.Box
+		out.Valid = box != nil && probability(box.Top) && probability(box.Bottom) && probability(box.Left) && probability(box.Right) &&
+			*box.Top <= *box.Bottom && *box.Left <= *box.Right
 	}
 	if !out.Valid {
 		return out
@@ -251,7 +420,7 @@ func observeAnswer(q Question, raw json.RawMessage) Observation {
 	if probability(answer.Confidence) {
 		out.Confidence = answer.Confidence
 	}
-	if q.Type != "noul" {
+	if q.Type == "choice" || q.Type == "score" {
 		expected := q.Levels
 		if q.Type == "choice" {
 			expected = len(q.ChoiceKeys)

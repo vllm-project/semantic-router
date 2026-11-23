@@ -84,8 +84,8 @@ class ReMoMAlgorithmConfig(BaseModel):
         Literal["weighted", "equal", "round_robin", "first_only"] | None
     ) = "weighted"
 
-    # Temperature for model calls (default: 1.0 for diverse exploration)
-    temperature: float | None = 1.0
+    # Temperature for model calls; unset sends the request's own
+    temperature: float | None = None
 
     # Whether to include reasoning content in synthesis prompts
     include_reasoning: bool | None = False
@@ -115,11 +115,11 @@ class ReMoMAlgorithmConfig(BaseModel):
     # Return from a parallel round as soon as this many responses succeed.
     min_successful_responses: int | None = Field(default=None, ge=1)
 
-    # Random seed for shuffling responses (for reproducibility)
-    shuffle_seed: int | None = 42
+    # Random seed for shuffling responses (for reproducibility); unset is 0
+    shuffle_seed: int | None = None
 
     # Whether to include intermediate responses in the response body
-    include_intermediate_responses: bool | None = True
+    include_intermediate_responses: bool | None = False
 
     # Maximum number of responses to keep per round (for memory efficiency)
     max_responses_per_round: int | None = None

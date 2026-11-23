@@ -21,8 +21,9 @@ version: v0.5
 listeners:
   - name: native
     port: 8801
-    systemone:
-      models: [vllm-sr/auto, kai, strong]
+    apis:
+      systemone:
+        models: [vllm-sr/auto, kai, strong]
 providers:
   models:
     - {name: kai, api_format: systemone, deployment: local-kai}
@@ -278,7 +279,7 @@ def test_native_cascade_accepts_a_scan_budget_on_a_local_alias(
     models = ["vllm-sr/auto", "strong"]
     if publish:
         models.append("kai")
-    native_document["listeners"][0]["systemone"]["models"] = models
+    native_document["listeners"][0]["apis"]["systemone"]["models"] = models
     native_document["global"]["model_catalog"]["deployments"]["local-kai"]["input"] = {
         "max_tokens": 32768,
         "overflow": "window",

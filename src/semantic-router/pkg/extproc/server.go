@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/clientauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
@@ -68,6 +69,9 @@ type Server struct {
 	// gateway is the mode client traffic reaches the server in; a reload
 	// that needs a capability the mode lacks is rejected.
 	gateway config.GatewayMode
+	// servingActive, under servingMu, is what the gRPC health service
+	// reports as SERVING.
+	servingActive bool
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -123,7 +127,7 @@ func NewServer(
 	}
 	router.nameSignals(snapshot.ComponentKey(configsnapshot.ComponentSignals))
 	server.service = newRouterServiceWithSnapshot(router, snapshot)
-	publishSnapshotState(cfg, snapshot, router, runtimeRegistry, server.service.current.Load().acquire)
+	publishSnapshotState(cfg, snapshot, router, runtimeRegistry, server.service.current.Load().acquire, server.service)
 	return server, nil
 }
 
@@ -377,6 +381,8 @@ type routerGeneration struct {
 	router *OpenAIRouter
 	// snapshot is nil for routers installed without the lifecycle.
 	snapshot *configsnapshot.Snapshot
+	// service serves the generation, and later the ones that replace it.
+	service *RouterService
 
 	mu      sync.Mutex
 	refs    sync.WaitGroup
@@ -401,7 +407,10 @@ func NewRouterServiceForSnapshot(r *OpenAIRouter, snapshot *configsnapshot.Snaps
 
 func newRouterServiceWithSnapshot(r *OpenAIRouter, snapshot *configsnapshot.Snapshot) *RouterService {
 	rs := &RouterService{}
-	rs.current.Store(newRouterGeneration(r, snapshot))
+	generation := newRouterGeneration(r, snapshot)
+	generation.service = rs
+	r.commitReplayFileRetention()
+	rs.current.Store(generation)
 	return rs
 }
 
@@ -481,7 +490,9 @@ func (rs *RouterService) swapSnapshot(r *OpenAIRouter, snapshot *configsnapshot.
 		return errors.New("router service is shutting down")
 	}
 	generation := newRouterGeneration(r, snapshot)
+	generation.service = rs
 	old := rs.current.Swap(generation)
+	r.commitReplayFileRetention()
 	if publish != nil {
 		publish(generation.acquire)
 	}
@@ -552,6 +563,7 @@ func (rs *RouterService) lease() (*OpenAIRouter, func(), error) {
 type Lease struct {
 	Router   *OpenAIRouter
 	Snapshot *configsnapshot.Snapshot
+	service  *RouterService
 	release  func()
 }
 
@@ -571,7 +583,7 @@ func (rs *RouterService) Pin() (*Lease, error) {
 	if !acquired {
 		return nil, errors.New("router is shutting down")
 	}
-	return &Lease{Router: generation.router, Snapshot: generation.snapshot, release: release}, nil
+	return &Lease{Router: generation.router, Snapshot: generation.snapshot, service: rs, release: release}, nil
 }
 
 func (rs *RouterService) Close() error {
@@ -736,23 +748,29 @@ func publishRouterState(
 	runtimeRegistry *routerruntime.Registry,
 	acquire AcquireFunc,
 ) {
-	publishSnapshotState(cfg, nil, router, runtimeRegistry, acquire)
+	publishSnapshotState(cfg, nil, router, runtimeRegistry, acquire, nil)
 }
 
 // publishSnapshotState publishes a router generation, and the snapshot it
-// serves, as the management runtime.
+// serves, as the management runtime. Admission keeps reading the serving
+// owner's active policy even while the registry still publishes this snapshot.
 func publishSnapshotState(
 	cfg *config.RouterConfig,
 	snapshot *configsnapshot.Snapshot,
 	router *OpenAIRouter,
 	runtimeRegistry *routerruntime.Registry,
 	acquire AcquireFunc,
+	service *RouterService,
 ) {
+	activeClientAuth := func() *clientauth.Policy {
+		return service.activeClientAuth(snapshotClientAuth(snapshot))
+	}
 	if router == nil {
 		if runtimeRegistry != nil {
 			runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 				Config: cfg, ConfigSnapshot: snapshot, AcquireClassification: routerruntime.AcquireClassification(acquire),
-				MemoryStatus: routerruntime.MemoryStatus{Reason: routerruntime.MemoryReasonStarting},
+				ActiveClientAuth: activeClientAuth,
+				MemoryStatus:     routerruntime.MemoryStatus{Reason: routerruntime.MemoryReasonStarting},
 			})
 		} else {
 			services.SetGlobalClassificationService(nil)
@@ -767,6 +785,7 @@ func publishSnapshotState(
 		runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 			Config:                cfg,
 			ConfigSnapshot:        snapshot,
+			ActiveClientAuth:      activeClientAuth,
 			ClassificationService: router.ClassificationService,
 			AcquireClassification: routerruntime.AcquireClassification(acquire),
 			MemoryStore:           router.MemoryStore,

@@ -217,6 +217,12 @@ func (t *DeploymentTLS) validate(endpoint *url.URL) error {
 	if endpoint == nil || endpoint.Scheme != "https" {
 		return fmt.Errorf("tls applies to an https:// endpoint")
 	}
+	return t.validateShape()
+}
+
+// validateShape checks the block itself: absolute files, a client
+// certificate with its key, and a host name.
+func (t *DeploymentTLS) validateShape() error {
 	for field, path := range map[string]string{"ca_file": t.CAFile, "cert_file": t.CertFile, "key_file": t.KeyFile} {
 		if path != "" && !filepath.IsAbs(path) {
 			return fmt.Errorf("tls.%s must be an absolute path", field)
@@ -272,6 +278,9 @@ func (d ModelDeployment) validateConnection(endpoint *url.URL, maxTimeoutMs int)
 		return err
 	}
 	if err := validateConnectionHeaders(d.Headers, d.Auth); err != nil {
+		return err
+	}
+	if err := validateForwardRequestHeaders(d.ForwardRequestHeaders, d.Auth.HeaderName()); err != nil {
 		return err
 	}
 	return d.Auth.validate()

@@ -538,3 +538,51 @@ test('a guard waiting until done holds a command whose answer was an error, and 
   expect(await paneText($, /waiting for you/)).toContain('1 of 1 step not checked · no step was scored')
 })
 
+
+const startSession = ($: Parameters<Parameters<typeof test>[1]>[0]) =>
+  $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+
+// vela3-fast, measured through a Router listener, scores `git push --force origin main` 0.02 for review.
+test('a session start says once when the decision model would let a force push run', async ($, on) => {
+  const reply = { review: 0.02, toasts: [] as string[], seen: [] as string[] }
+  const clock = engine(on, reply)
+
+  await startSession($)
+  await clock.advance(0)
+
+  expect(reply.seen).toEqual(['Tool: Bash\nCommand: git push --force origin main'])
+  expect(reply.toasts).toEqual([
+    'vSR guard: this model scores "git push --force origin main" 0.02 < 0.90, so guard would let it run · fixed rules still hold · /vsr:setup',
+  ])
+})
+
+test('a model that would hold the force push starts quietly', async ($, on) => {
+  const reply = { review: 0.98, toasts: [] as string[] }
+  const clock = engine(on, reply)
+
+  await startSession($)
+  await clock.advance(0)
+
+  expect(reply.toasts).toEqual([])
+})
+
+test('an offline runtime is not asked about the force push', async ($, on) => {
+  const reply = { offline: true, review: 0.02, toasts: [] as string[], seen: [] as string[] }
+  const clock = engine(on, reply)
+
+  await startSession($)
+  await clock.advance(0)
+
+  expect(reply.seen).toEqual([])
+  expect(reply.toasts.some(text => text.startsWith('vSR guard'))).toBe(false)
+})
+
+test('with guard off the force push is not asked', { options: { guard: false } }, async ($, on) => {
+  const reply = { review: 0.02, toasts: [] as string[], seen: [] as string[] }
+  const clock = engine(on, reply)
+
+  await startSession($)
+  await clock.advance(0)
+
+  expect(reply.seen).toEqual([])
+})

@@ -63,10 +63,10 @@ vllm-sr config schema \
 | 视图 | Schema |
 | --- | --- |
 | 控制面板，`GET /api/router/config/schema` | 代理已部署 Router 的契约。如果该 Router 端点不可用，则使用控制面板构建中嵌入的 schema，并标记 `X-Vllm-Sr-Schema-Source: bundled`。 |
-| 控制面板，**Operate → Platform & Access → Schema Reference** | 显示使用的是哪一份，并在已部署契约与捆绑契约不同时发出警告。 |
+| 控制面板，**Settings → Schema reference** | 显示使用的是哪一份，并在已部署契约与捆绑契约不同时发出警告。 |
 | 网站，[配置 Schema 参考](../api/configuration-schema) | 当前文档发行版，不代表任何部署。 |
 
-Agent 不需要控制面板。在 Router 上查询 `GET /api/v1` 获取紧凑端点清单，然后用 `GET /openapi.json?path=...&method=...` 请求一项操作；仅在需要完整 API 文档时使用 `GET /openapi.json`。控制面板的 **Router API Docs** 链接是指向同一运行时文档的面向人工的代理。
+Agent 不需要控制面板。在 Router 上查询 `GET /api/v1` 获取紧凑端点清单，然后用 `GET /openapi.json?path=...&method=...` 请求一项操作；仅在需要完整 API 文档时使用 `GET /openapi.json`。控制面板帮助菜单中的 **Router API reference** 链接是指向同一运行时文档的面向人工的代理。
 
 每种表示都有自己的 `ETag`；当 Agent 或编辑器缓存它时，使用 `If-None-Match`。
 
@@ -123,7 +123,7 @@ Router 在每次加载配置时都会检查静态全局设置，包括 `global.r
 3. 使用 `schema_id`、`contract_version` 和 `ETag` 作为契约身份；
 4. 从 schema 字段和路由表面引用构建最小的 canonical 文档；
 5. 省略仅用于引导的 `setup` 块，并调用语义校验端点；
-6. 规划变更；使用返回的 `current_etag` 在 `If-Match` 中应用可热重载的变更。运行中的 Router 无法接收的变更返回 `RESTART_REQUIRED`：standalone 模式下是 listener 变更，`--gateway extproc` 时是 listener 或 provider 拓扑变更。在本地 Docker 上，`vllm-sr config apply` 会保存这类变更，由下一次 `vllm-sr serve` 应用（或在批准后运行显式的 `vllm-sr serve --config <candidate> --replace-active-config`）；其他环境使用部署工作流；
+6. 规划变更；使用返回的 `current_etag` 在 `If-Match` 中应用可热重载的变更。运行中的 Router 无法接收的变更返回 `RESTART_REQUIRED`：standalone 模式下是增删 listener，或修改 listener 的 `address`、`port`、`timeout` 或 `tls` 路径（其 `api_keys`、`apis` 和 `identity` 可原地重新加载）；`--gateway extproc` 时是 listener 或 provider 拓扑变更。在本地 Docker 上，`vllm-sr config apply` 会保存这类变更，由下一次 `vllm-sr serve` 应用（或在批准后运行显式的 `vllm-sr serve --config <candidate> --replace-active-config`）；其他环境使用部署工作流；
 7. 轮询 `activation_status`，并在保留变更之前探测数据平面。
 
 当目标 Router 的 schema 可用时，Agent 绝不应该从示例推断字段，或发送未知键。

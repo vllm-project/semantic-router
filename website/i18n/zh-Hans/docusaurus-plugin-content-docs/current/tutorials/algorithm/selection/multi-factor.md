@@ -15,7 +15,7 @@ translation:
 | 因素 | 来源 | 方向 |
 | --- | --- | --- |
 | 质量 | 版本化 Overall、能力或运维人员索引 | 越高越好 |
-| 延迟 | 所选百分位的 TTFT 或 TPOT 观测值 | 越低越好 |
+| 延迟 | 成功响应上观测到的 TTFT 或 TPOT，取所选百分位 | 越低越好 |
 | 成本 | 按本次请求 token 预算应用的输入/输出定价 | 越低越好 |
 | 负载 | 该 Router 进程中当前进行中的请求 | 越低越好 |
 
@@ -72,7 +72,7 @@ algorithm:
 
 只有通过全部优先级筛选的候选才能参与后续自适应、会话防护和派发。这些步骤不能重新引入被先前质量或成本容差排除的模型。记录的分数仍可包含已排除模型，用于解释选择结果。
 
-Preview 通过 `selection_trace` 返回字典序选择过程，Insights 在 `route_diagnostics.selection_trace` 中保存同样的结构：
+Preview 通过 `selection_trace` 返回字典序选择过程，Dashboard 的 **Requests** 页面所显示的请求记录在 `route_diagnostics.selection_trace` 中保存同样的结构：
 
 - 执行到和跳过的阶段，以及测量覆盖率和可用值；
 - 淘汰原因，以及最终保留的候选。

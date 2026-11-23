@@ -31,12 +31,14 @@ test('equal easy and hard lines are allowed, as the setup script allows them', (
   expect(parseSettings({ routerEasyBelow: 1, routerHardFrom: 1 }).thresholds.router).toMatchObject({ easyBelow: 1, hardFrom: 1 })
 })
 
-test('the runtime URL and token are trimmed', () => {
-  expect(parseSettings({ runtime: 'remote', runtimeUrl: ' https://sr.example/v1/decisions ', runtimeToken: ' tok ' }).runtime).toEqual({
+test('the runtime URL, token and model are trimmed, and no model is the empty string', () => {
+  expect(parseSettings({ runtime: 'remote', runtimeUrl: ' https://sr.example/v1/decisions ', runtimeToken: ' tok ', runtimeModel: ' vllm-sr/vela3-flash ' }).runtime).toEqual({
     kind: 'remote',
     url: 'https://sr.example/v1/decisions',
     token: 'tok',
+    model: 'vllm-sr/vela3-flash',
   })
+  expect(parseSettings({ runtime: 'remote', runtimeUrl: 'https://sr.example/v1/decisions', runtimeToken: '' }).runtime.model).toBe('')
 })
 
 test('the manifest defaults reach the hooks: check is off and the others are on', { options: {} }, async ($, on) => {

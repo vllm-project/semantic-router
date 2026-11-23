@@ -4,6 +4,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -18,19 +19,21 @@ import (
 
 // MockMilvusClient facilitates testing without a running Milvus instance
 type MockMilvusClient struct {
-	SearchFunc           func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
-	HasCollectionFunc    func(ctx context.Context, coll string) (bool, error)
-	InsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
-	UpsertFunc           func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
-	DeleteFunc           func(ctx context.Context, coll string, part string, expr string) error
-	QueryFunc            func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
-	CreateCollectionFunc func(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error
-	SearchCallCount      int
-	InsertCallCount      int
-	UpsertCallCount      int
-	DeleteCallCount      int
-	QueryCallCount       int
-	CapturedSchema       *entity.Schema // Captures schema passed to CreateCollection
+	SearchFunc              func(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error)
+	HasCollectionFunc       func(ctx context.Context, coll string) (bool, error)
+	InsertFunc              func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	UpsertFunc              func(ctx context.Context, coll string, part string, cols ...entity.Column) (entity.Column, error)
+	DeleteFunc              func(ctx context.Context, coll string, part string, expr string) error
+	QueryFunc               func(ctx context.Context, coll string, parts []string, expr string, out []string, opts ...client.SearchQueryOptionFunc) (client.ResultSet, error)
+	CreateCollectionFunc    func(ctx context.Context, schema *entity.Schema, shardNum int32, opts ...client.CreateCollectionOption) error
+	DescribeCollectionFunc  func(ctx context.Context, coll string) (*entity.Collection, error)
+	SearchCallCount         int
+	InsertCallCount         int
+	UpsertCallCount         int
+	DeleteCallCount         int
+	QueryCallCount          int
+	LoadCollectionCallCount int
+	CapturedSchema          *entity.Schema // Captures schema passed to CreateCollection
 }
 
 func (m *MockMilvusClient) Search(ctx context.Context, coll string, parts []string, expr string, out []string, vectors []entity.Vector, vField string, mType entity.MetricType, topK int, sp entity.SearchParam, opts ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
@@ -87,7 +90,10 @@ func (m *MockMilvusClient) CreateCollection(ctx context.Context, schema *entity.
 	return nil
 }
 
-func (m *MockMilvusClient) DescribeCollection(context.Context, string) (*entity.Collection, error) {
+func (m *MockMilvusClient) DescribeCollection(ctx context.Context, collection string) (*entity.Collection, error) {
+	if m.DescribeCollectionFunc != nil {
+		return m.DescribeCollectionFunc(ctx, collection)
+	}
 	return nil, nil
 }
 
@@ -100,6 +106,7 @@ func (m *MockMilvusClient) GetCollectionStatistics(context.Context, string) (map
 }
 
 func (m *MockMilvusClient) LoadCollection(context.Context, string, bool, ...client.LoadCollectionOption) error {
+	m.LoadCollectionCallCount++
 	return nil
 }
 
@@ -344,6 +351,9 @@ func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 		Provider:   memoryTestEmbeddingProvider(),
 		Deployment: "qwen3-embedding",
 	}
+	mockClient.DescribeCollectionFunc = func(_ context.Context, collection string) (*entity.Collection, error) {
+		return &entity.Collection{Schema: memoryCollectionSchema(collection, testEmbeddingConfig.Provider.Dimension())}, nil
+	}
 	options := MilvusStoreOptions{
 		Client:          mockClient,
 		CollectionName:  "test_memories",
@@ -367,7 +377,7 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 				entity.NewColumnVarChar("id", []string{"mem_1"}),
 				entity.NewColumnVarChar("content", []string{"The budget is $50k"}),
 				entity.NewColumnVarChar("memory_type", []string{"semantic"}),
-				entity.NewColumnVarChar("metadata", []string{`{"source": "slack", "importance": "high"}`}),
+				entity.NewColumnVarChar("metadata", []string{`{"source":"slack","importance":"high","created_by_user_id":"user-origin","conversation_id":"conversation-123","created_via":"llm_extraction"}`}),
 			},
 		},
 	}
@@ -388,8 +398,35 @@ func TestMilvusStore_Retrieve_InflateJSONMetadata(t *testing.T) {
 	assert.Equal(t, "The budget is $50k", results[0].Memory.Content)
 	assert.Equal(t, MemoryTypeSemantic, results[0].Memory.Type)
 	assert.Equal(t, "slack", results[0].Memory.Source)
+	assert.Equal(t, "user-origin", results[0].Memory.CreatedByUserID)
+	assert.Equal(t, "conversation-123", results[0].Memory.ConversationID)
+	assert.Equal(t, "llm_extraction", results[0].Memory.CreatedVia)
 	assert.Equal(t, float32(0.95), results[0].Score)
 	// Note: "importance": "high" is a string, so it won't be set in Memory.Importance (which is float32)
+}
+
+func TestMemoryMetadataJSON_ProvenanceRoundTrip(t *testing.T) {
+	input := &Memory{
+		UserID:          "owner",
+		CreatedByUserID: "user-origin",
+		ConversationID:  "conversation-123",
+		CreatedVia:      "llm_extraction",
+	}
+
+	raw, err := memoryMetadataJSON(input)
+	require.NoError(t, err)
+
+	var metadata map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &metadata))
+	assert.Equal(t, "user-origin", metadata["created_by_user_id"])
+	assert.Equal(t, "conversation-123", metadata["conversation_id"])
+	assert.Equal(t, "llm_extraction", metadata["created_via"])
+
+	got := &Memory{}
+	populateMemoryFromMetadataString(got, string(raw))
+	assert.Equal(t, input.CreatedByUserID, got.CreatedByUserID)
+	assert.Equal(t, input.ConversationID, got.ConversationID)
+	assert.Equal(t, input.CreatedVia, got.CreatedVia)
 }
 
 func TestMilvusStore_Retrieve_FilterByThreshold(t *testing.T) {
@@ -1040,6 +1077,34 @@ func TestMilvusStore_Update_NotFound(t *testing.T) {
 // ============================================================================
 // Schema Tests
 // ============================================================================
+
+func TestMilvusStore_ExistingCollectionDimension(t *testing.T) {
+	embeddingConfig := EmbeddingConfig{Provider: memoryTestEmbeddingProvider()}
+	expected := embeddingConfig.Provider.Dimension()
+	for _, stored := range []int{expected, expected * 2} {
+		t.Run(fmt.Sprintf("stored_%d", stored), func(t *testing.T) {
+			mockClient := &MockMilvusClient{DescribeCollectionFunc: func(_ context.Context, collection string) (*entity.Collection, error) {
+				return &entity.Collection{Schema: memoryCollectionSchema(collection, stored)}, nil
+			}}
+			store, err := NewMilvusStore(MilvusStoreOptions{
+				Client:          mockClient,
+				CollectionName:  "test_memories",
+				Enabled:         true,
+				EmbeddingConfig: &embeddingConfig,
+			})
+			if stored == expected {
+				require.NoError(t, err)
+				require.NotNil(t, store)
+				assert.Equal(t, 1, mockClient.LoadCollectionCallCount)
+			} else {
+				assert.ErrorContains(t, err, fmt.Sprintf(`collection "test_memories" vector field "embedding" has dimension %d, expected %d`, stored, expected))
+				assert.Nil(t, store)
+				assert.Zero(t, mockClient.LoadCollectionCallCount)
+			}
+			assert.Nil(t, mockClient.CapturedSchema, "existing collections must not be recreated")
+		})
+	}
+}
 
 func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	mockClient := &MockMilvusClient{}

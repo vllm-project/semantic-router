@@ -2,10 +2,11 @@
 
 ## Overview
 
-Router Learning uses in-process online state on the hot path. Router Replay can
-record events when enabled; persistence across configuration reloads and restarts
-requires a durable backend. Request routing does not depend on synchronous
-replay-store reads.
+Router Learning uses in-process online state on the hot path. Router Replay
+records routing data by default, in a file that
+[survives reloads and restarts](../plugin/router-replay#keep-records-across-restarts); records that keep request text
+need a durable backend to survive them. Request routing does not depend on
+synchronous replay-store reads.
 
 ## Key Advantages
 
@@ -44,7 +45,8 @@ on the selected backend.
 
 ## Configuration
 
-Enable Router Replay with a `router_replay` plugin in `global.plugins`; the
+Router Replay records each request's routing data by default. A
+`router_replay` plugin in `global.plugins` sets what it captures, and the
 service config holds its store:
 
 ```yaml
@@ -58,10 +60,13 @@ global:
         enabled: true
 ```
 
-This example uses Postgres for persistence. The default `memory` backend loses
-records on configuration reload or restart, even when a reload keeps the router
-process running. Use durable storage to keep session traces available in the API
-and Dashboard while tuning recipes.
+This example uses Postgres for persistence. The default `file` backend keeps
+routing data only, as
+[Router Replay](../plugin/router-replay#keep-records-across-restarts)
+describes, and the `memory` backend loses records on configuration reload or
+restart, even when a reload keeps the router process running. Use durable
+storage to keep session traces available in the API and Dashboard while tuning
+recipes.
 
 Learning diagnostics are written into replay records when replay is enabled:
 
@@ -119,6 +124,12 @@ POST /api/v1/observability/outcomes
 `target: policy`, `target: stability`, `target: provider`, and
 `target: router` outcomes are kept for replay and offline recipe learning unless
 a typed online consumer exists.
+
+A model outcome is credited to the model that answered the request. When a
+fallback candidate's answer reached the client, that is the candidate the
+response named in `x-vsr-selected-model`, not the model the request was first
+routed to. A candidate whose answer a response policy blocked did not answer. A
+`target_ref` naming any other model is rejected with `409`.
 
 ## Recipe Learning Command
 

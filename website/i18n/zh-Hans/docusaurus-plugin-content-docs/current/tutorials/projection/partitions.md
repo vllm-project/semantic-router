@@ -28,8 +28,10 @@ translation:
 
 - 分区只接受 `domain` 成员
 - `default` 是必需的，并且也必须出现在 `members` 中
+- 只要有决策或投影读取任一成员，运行时就评估所有成员，因此胜者不取决于决策读取了哪些成员
 - 若多个成员匹配，运行时只保留一个胜者
 - 若没有成员匹配，运行时把 `default` 成员合成进匹配集合
+- 若没有成员匹配且某个成员的信号失败，运行时不合成 `default`，并把 `default` 成员也标记为失败：读取失败成员或 `default` 的决策按其 `on_unknown` 策略处理
 
 支持的语义：
 
@@ -76,7 +78,7 @@ PROJECTION partition balance_domain_partition {
 | `semantics` | 胜者选择模式：`exclusive` 或 `softmax_exclusive` |
 | `temperature` | 仅对 `softmax_exclusive` 有意义；更低的值让胜者更果断 |
 | `members` | 要协调的现有 `domain` 信号名 |
-| `default` | 当没有任何成员匹配时合成的回退成员 |
+| `default` | 当所有成员都已评估且没有任何成员匹配时合成的回退成员 |
 
 ## 何时使用
 
@@ -94,5 +96,5 @@ PROJECTION partition balance_domain_partition {
 - 互相竞争的通道是意图而不是学科领域；用一个 [`systemone`](../signal/systemone) `choice` 问题从中选出一个
 - 需要可复用的命名档位，例如 `balance_reasoning`；那属于映射，而不是分区
 
-分区不做额外模型调用；它们协调成员信号已产生的结果。配置的默认值是路由回退，不是默认值实际匹配的证据。完整示例见
+分区不提出自己的问题；它们协调成员信号的结果，只要有决策读取任一成员，所有成员信号都会运行。配置的默认值是路由回退，不是默认值实际匹配的证据。完整示例见
 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。

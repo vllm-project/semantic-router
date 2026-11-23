@@ -379,7 +379,9 @@ def detect(plugin_id: str | None) -> dict:
         "savedRuntime": saved_runtime,
     }
     if found["runtime"]["ready"]:
-        found["runtime"]["questionMs"] = runtime.time_question(url)
+        found["runtime"]["questionMs"] = runtime.time_question(
+            url, model=settings.options_for(plugin_id).get("runtimeModel") or None
+        )
     found["recommendation"] = recommend(found)
     return found
 

@@ -16,6 +16,14 @@ type CanonicalProviders struct {
 type CanonicalProviderDefaults struct {
 	DefaultModel           string `yaml:"model,omitempty"`
 	DefaultReasoningEffort string `yaml:"reasoning_effort,omitempty"`
+	// ReasoningMinOutputTokens is the smallest output limit a request keeps its
+	// decision's reasoning at. A backend counts reasoning against the limit, so
+	// a request that states no reasoning preference and sets a smaller one
+	// runs with the model's reasoning off; the client's own preference always
+	// wins. Unset or 0 keeps every request's reasoning as its decision chose.
+	ReasoningMinOutputTokens int `yaml:"reasoning_min_output_tokens,omitempty" jsonschema:"minimum=0"`
+	// TLS is the trust of every https backend whose own tls names no CA.
+	TLS *ProviderDefaultsTLS `yaml:"tls,omitempty"`
 }
 
 // CanonicalProviderModel describes one model alias in one place: how requests
@@ -23,17 +31,39 @@ type CanonicalProviderDefaults struct {
 // is (its facts). The facts overlay the built-in catalog card named by
 // catalog, or describe a custom model.
 type CanonicalProviderModel struct {
-	Name             string                `yaml:"name"`
-	Catalog          string                `yaml:"catalog,omitempty"`
-	Deployment       string                `yaml:"deployment,omitempty"`
-	Reasoning        *CanonicalReasoning   `yaml:"reasoning,omitempty"`
-	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
-	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
-	Pricing          ModelPricing          `yaml:"pricing,omitempty"`
-	Reliability      ProviderReliability   `yaml:"reliability,omitempty"`
-	APIFormat        string                `yaml:"api_format,omitempty"`
-	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
-	ModelFacts       `yaml:",inline"`
+	Name            string                `yaml:"name"`
+	Catalog         string                `yaml:"catalog,omitempty"`
+	Deployment      string                `yaml:"deployment,omitempty"`
+	Reasoning       *CanonicalReasoning   `yaml:"reasoning,omitempty"`
+	ProviderModelID string                `yaml:"provider_model_id,omitempty"`
+	BackendRefs     []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
+	Pricing         ModelPricing          `yaml:"pricing,omitempty"`
+	Reliability     ProviderReliability   `yaml:"reliability,omitempty"`
+	// APIFormat is the API the model's backends serve, by API name:
+	// chat_completions (the default), responses, messages, images, speech or
+	// systemone. openai and anthropic are accepted as aliases of
+	// chat_completions and messages.
+	APIFormat string `yaml:"api_format,omitempty"`
+	// Schema is the version of that API the backends speak, one of the API's
+	// schema IDs; omitted, the API's default (systemone/0.2 for systemone).
+	Schema           string            `yaml:"schema,omitempty"`
+	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
+	// UnsupportedCapabilities lists the request capabilities the model's
+	// backends lack: sampling_min_p or sampling_logit_bias, both of which a
+	// vLLM backend that runs speculative decoding rejects, and developer_role,
+	// which DeepSeek V4 drops without tools when it thinks. The Router sends
+	// this model requests without those sampling fields and with developer
+	// messages as system messages, and reports each change in x-vsr-warnings;
+	// other models still receive them.
+	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
+	// Tokenizer counts the model's prompts for the context window check: a
+	// Hugging Face repo id ([org/]name[@revision]), whose tokenizer.json the
+	// Router downloads beside its models, a built-in encoding (o200k_base,
+	// cl100k_base), or a path to a tokenizer.json. Omitted, it is the repo
+	// the model comes from, if any; else
+	// global.router.context_window.proxy_tokenizer counts.
+	Tokenizer  string `yaml:"tokenizer,omitempty"`
+	ModelFacts `yaml:",inline"`
 }
 
 // ModelFactFields are the keys of the facts a providers.models[] entry states.
@@ -67,8 +97,11 @@ type CanonicalReasoning struct {
 // and endpoint health for one provider model. Every data plane honors it the
 // same way; an empty field keeps the default.
 type ProviderReliability struct {
-	LBPolicy            string `yaml:"lb_policy,omitempty"`
-	RetryCount          int    `yaml:"retry_count,omitempty"`
+	LBPolicy string `yaml:"lb_policy,omitempty"`
+	// RetryCount is the retries after the first attempt. Unset, it is
+	// DefaultProviderRetryCount when RetryOn is unset too, else 0; see
+	// Retries.
+	RetryCount          *int   `yaml:"retry_count,omitempty"`
 	RetryOn             string `yaml:"retry_on,omitempty"`
 	Consecutive5xx      int    `yaml:"consecutive_5xx,omitempty"`
 	BaseEjectionTime    string `yaml:"base_ejection_time,omitempty"`
@@ -130,6 +163,11 @@ type CanonicalBackendRef struct {
 	Auth *DeploymentAuth `yaml:"auth,omitempty"`
 	// Headers are non-secret headers sent with every request.
 	Headers map[string]string `yaml:"headers,omitempty"`
+	// TLS verifies an https backend as a deployment's tls block does, for
+	// Envoy and for the Router's own calls alike: ca_file replaces the system
+	// roots, server_name the endpoint's host, and cert_file with key_file
+	// present a client certificate. Verification is never skipped.
+	TLS *DeploymentTLS `yaml:"tls,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

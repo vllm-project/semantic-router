@@ -403,7 +403,7 @@ func migrateModelConfig(m *Migration, at FormMatch) error {
 			refs := ensureSequence(model, "backend_refs")
 			refs.Content = append(refs.Content, backend)
 		}
-		if scalarAt(model, "api_format") == "anthropic" && mappingValue(model, "backend_refs") == nil && ownsTransport(at.Root) {
+		if CanonicalAPIFormat(scalarAt(model, "api_format")) == APIFormatMessages && mappingValue(model, "backend_refs") == nil && ownsTransport(at.Root) {
 			// The v0.3 layout's one implicit endpoint: an Anthropic model the
 			// Router itself sent to the Anthropic API.
 			setNode(model, "backend_refs", sequenceOf(flowMapping("provider", "anthropic")))

@@ -44,7 +44,7 @@ func TestSystemOneBudgetIncludesSignalsAndVariesByDecision(t *testing.T) {
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - {name: kai, api_format: systemone, deployment: local-kai}
@@ -231,7 +231,7 @@ recipes:
 				backendCalls++
 				return http.StatusOK, []byte(`{"answers":{}}`), nil
 			})
-		})
+		}, systemone.ClientAuth{})
 		request := httptest.NewRequest(http.MethodPost, "/v1/systemone", nil)
 		request.Body = io.NopCloser(&delayedReader{reader: strings.NewReader(`{"model":"vllm-sr/auto","state":"original task","questions":{"needs_reasoning":{"type":"noul"}}}`), delay: 250 * time.Millisecond})
 		response := httptest.NewRecorder()

@@ -1,6 +1,7 @@
 package routerruntime
 
 import (
+	"context"
 	"sync/atomic"
 	"testing"
 )
@@ -9,7 +10,7 @@ type leasedReplayRuntime struct {
 	releases atomic.Int32
 }
 
-func (*leasedReplayRuntime) HandleReplayRequest(string, string) (ReplayResponse, bool) {
+func (*leasedReplayRuntime) HandleReplayRequest(context.Context, string, string) (ReplayResponse, bool) {
 	return ReplayResponse{StatusCode: 200, Body: []byte(`{"ok":true}`)}, true
 }
 

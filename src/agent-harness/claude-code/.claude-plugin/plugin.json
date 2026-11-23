@@ -42,11 +42,23 @@
       "default": "",
       "sensitive": true
     },
+    "runtimeModel": {
+      "type": "string",
+      "title": "Runtime model",
+      "description": "Sent as the request's model when set, for a runtime that serves several models, such as a System One API (GET /v1/systemone/models lists them). Empty sends none.",
+      "default": ""
+    },
     "router": {
       "type": "boolean",
       "title": "App: router",
       "description": "Routes each general-purpose subagent to Haiku, Sonnet or Opus by how hard its task is, and sets its starting effort by how many steps it needs. Off: no classifier call, no card.",
       "default": true
+    },
+    "routerTurns": {
+      "type": "boolean",
+      "title": "App: router · your turns",
+      "description": "The router also picks the model (Sonnet or Opus, Haiku too with the save goal) and effort for each prompt you send, on your own Claude login. A turn keeps its model through its tool calls, a short reply is read with the prompt before it and keeps the last turn's model, and a move to a smaller model waits while writing the conversation to its cache would cost more than it saves. A model you pick yourself pauses it until /vsr turns on. Off: your turns run on the model you picked.",
+      "default": false
     },
     "escalate": {
       "type": "boolean",

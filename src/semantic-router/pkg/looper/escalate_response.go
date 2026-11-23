@@ -146,12 +146,15 @@ func StreamWithUsage(body []byte, model string, usage TokenUsage) []byte {
 // emits exactly one aggregate usage chunk before DONE; otherwise it emits none.
 // Escalate may pay for rejected candidates and self-verification calls, so
 // forwarding the selected model's usage would under-report the escalation.
+// The usage chunk names the stream's own model, which a backend may report
+// differently from the requested name; model names a stream that reports none.
 func normalizeEscalateSSEUsage(body []byte, model string, usage TokenUsage, includeUsage bool) []byte {
 	normalized := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
 	state := escalateSSEUsageState{
 		out:     make([]byte, 0, len(body)+192),
 		id:      fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano()),
 		created: time.Now().Unix(),
+		model:   model,
 	}
 	for _, line := range bytes.Split(normalized, []byte("\n")) {
 		state.consumeLine(line)
@@ -162,7 +165,7 @@ func normalizeEscalateSSEUsage(body []byte, model string, usage TokenUsage, incl
 			"id":      state.id,
 			"object":  "chat.completion.chunk",
 			"created": state.created,
-			"model":   model,
+			"model":   state.model,
 			"choices": []interface{}{},
 			"usage":   usage.Map(),
 		}
@@ -175,6 +178,7 @@ type escalateSSEUsageState struct {
 	out     []byte
 	id      string
 	created int64
+	model   string
 }
 
 func (state *escalateSSEUsageState) consumeLine(line []byte) {
@@ -220,6 +224,9 @@ func (state *escalateSSEUsageState) captureEnvelope(payload map[string]interface
 	}
 	if value, ok := payload["created"].(float64); ok {
 		state.created = int64(value)
+	}
+	if value, ok := payload["model"].(string); ok && value != "" {
+		state.model = value
 	}
 }
 

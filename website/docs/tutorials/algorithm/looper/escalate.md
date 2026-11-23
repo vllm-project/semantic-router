@@ -77,7 +77,9 @@ recipes:
 `providers.models[].param_size` first, `cost` the cheapest priced model
 first, and omitting it keeps the `modelRefs` order. `size` reads the leading
 count of a size, so `397B (17B active)` is 397B and `1.6T` is 1600B. A model
-without a readable size, or for `cost` without pricing, is tried last.
+without a readable size, or for `cost` without pricing, is tried last; a Model
+whose catalog [list price](../../../installation/catalog-backed-models#list-prices)
+prices it is placed by that price.
 
 `accept` names exactly one check:
 
@@ -103,7 +105,11 @@ scores only the generated tool-call arguments instead of every token;
 
 `systemone: {gte, deployment, timeout_ms}` asks the decision model, or the
 named System One deployment, its `answer_check` preset question about the
-request and the candidate's answer. `refusal: false` asks the `refusal`
+request and the candidate's answer. The request is the user's own words in the
+last user turn that has some: its string content or its joined text parts,
+without `<system-reminder>` blocks. A turn of reminders only leaves the request
+to an earlier turn, and when no turn has words of its own, the last turn's
+reminders are the request. `refusal: false` asks the `refusal`
 preset question; `refusal: true` is rejected, because it would accept only
 refusals. Both checks are one decision-model call per judged answer; the call
 counts against the executor's `deadline` but not its `max_calls`. An answer
@@ -145,8 +151,10 @@ A recipe published with `api: systemone` runs escalate with
   deciding whether to call Vega.
 - There is no separate mandatory Kai classification call, and the recipe does
   not run again after the first answer.
-- It supports `choice`, `score` and `noul` requests, and keeps the original
-  question bundle together.
+- It supports `choice`, `score`, `noul`, `box` and `set` requests, and keeps the
+  original question bundle together. A stage runs only if its model answers
+  what the request needs; see
+  [Route by what each model answers](#route-by-what-each-model-answers).
 
 #### Connect the models
 
@@ -194,8 +202,9 @@ listeners:
   - name: inference
     address: 127.0.0.1
     port: 8801
-    systemone:
-      models: [vllm-sr/auto]
+    apis:
+      systemone:
+        models: [vllm-sr/auto]
 
 entrypoints:
   - api: systemone
@@ -205,7 +214,7 @@ entrypoints:
 
 Add client authentication to the listener before exposing it beyond a trusted
 development environment. To allow a concrete model as well, add its native
-provider alias to `systemone.models`.
+provider alias to `apis.systemone.models`.
 
 #### Define the stages
 
@@ -355,15 +364,88 @@ for the response fields and error contract.
 
 To try it in Dashboard:
 
-1. Open **System One → Decision Playground**, and choose `vllm-sr/auto` under
-   **Automatic routes**.
+1. Open **Models → Decision models**, select the **Playground** tab, and choose
+   `vllm-sr/auto` under **Automatic routes**.
 2. Load an example your recipe supports, or enter your own questions, then
    select **Run**. Dashboard uses your signed-in management permissions, so no
    public API key is needed.
-3. Open **Decision Monitoring** for stage outcomes, request rates and latency.
+3. Open the **Monitoring** tab for stage outcomes, request rates and latency.
 
 These views describe live execution; evaluate labeled requests separately to
 measure accuracy.
+
+#### Route by what each model answers
+
+Before the first stage, the Router compares what the request needs with what
+each stage's model answers:
+
+- **What a request needs:** its question types; `image` when it carries an
+  image and `video` when it carries a video (in `images`, `videos` or
+  `assets`); and `full_input` when a question sets `require_full_input`.
+- **What a model answers** comes from the first of these that tells:
+  - the card of the deployment its alias names, as the model runtime reports
+    it or a `provider: systemone` API lists it;
+  - the entry its backend lists for its `provider_model_id` (`GET /v1/models`
+    beside the endpoint under `vllm-sr/5.0`, `GET <endpoint>/models` under
+    `vllm-sr/4.0`), read once per configuration;
+  - the deployment's `capabilities` (`question_types`, `modalities`), or the
+    built-in catalog for a model the runtime serves.
+
+  A model that nothing describes is asked as before.
+- **A stage whose model lacks a need is skipped** without a call, and counted
+  in `sr_systemone_stage_total` with `outcome="incapable"`.
+- **When no stage's model can answer**, the request fails with `400` and
+  `unsupported_capability`. Its `detail` names what is missing and each model,
+  with what it lacks and where that came from:
+
+  ```json
+  {
+    "detail": "no candidate model of decision \"answer\" answers this request, which needs box, image: kai lacks box, image (card); vega lacks box (listing)",
+    "code": "unsupported_capability"
+  }
+  ```
+
+- **A request that needs only `choice`, `noul` and `score` over text is not
+  checked**, because every System One model answers it.
+
+So one pool can hold a text model and a vision model: `choice` requests start
+at the first stage as before, and `box` questions go to the vision model
+alone. For an API that lists nothing, declare what its model answers on the
+deployment its alias names:
+
+```yaml
+providers:
+  models:
+    - name: vision
+      api_format: systemone
+      deployment: gateway-vision
+
+global:
+  model_catalog:
+    deployments:
+      gateway-vision:
+        provider: systemone
+        endpoint: https://gateway.example.com/v1/systemone
+        model: vision-27b
+        capabilities:
+          question_types: [choice, noul, score, box]
+          modalities: [text, image]
+```
+
+A `box` answer counts as complete when its box lies within the image.
+Acceptance rules can gate it with
+`{question_type: box, field: confidence, gte: ...}`. A calibrated policy never
+accepts it, because calibration covers `choice`, `score` and `noul`.
+
+Auto needs a `set` question to name its labels in `criteria`. A `set` answer
+counts as complete when `sets` gives every label a probability, selects only
+those labels, and agrees with each label's own `<question>.<label>` answer.
+Selecting no label is a complete answer. Acceptance rules can gate it with
+`{question_type: set, field: probability_margin, gte: ...}`. A calibrated
+policy never accepts it either.
+
+Auto does not route `span` or `track` questions yet: their answers are
+family-specific, so a request with one is refused with `400`.
 
 #### Add routing signals
 
@@ -407,7 +489,7 @@ An uncalibrated rule can inspect these observations:
 | --- | --- |
 | `top_probability` | Largest probability in the native answer distribution; for `noul`, `max(p, 1-p)` |
 | `confidence` | The confidence reported by the native model, when present: System One's published statistic for Choice and Score (see [Decisions](https://vllm-sr.ai/docs/model-runtime/reference/http-api#decisions)); since runtime contract 3.2.0 its values differ from earlier releases, so recheck thresholds |
-| `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin |
+| `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin. For `set`, the smallest such margin among its labels |
 
 - **Bounds.** A rule bounds its field with `gt`, `gte`, `lt` or `lte`, in
   `[0, 1]`.

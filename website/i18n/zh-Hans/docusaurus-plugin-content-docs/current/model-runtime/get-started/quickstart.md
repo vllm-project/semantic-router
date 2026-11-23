@@ -91,7 +91,7 @@ Decision 3.0 模型还能回答关于图像和视频的问题。在 AMD GPU 上�
 <summary>Engine 模式把状态保存在哪里，以及它发布哪些模型</summary>
 
 - 没有 `--config`，且工作目录中也没有 `config.yaml` 时，Engine 模式把每个模型的配置、状态和下载内容保存在 `~/.local/state/vllm-sr/engine/<model>`。
-- 初始的 Engine 配置在默认监听器上发布所选模型。已有的配置会保留其显式的 `listeners[].systemone.models` 允许列表和 API 密钥；以另一种模式重启或选择模型都不会扩大它。
+- 初始的 Engine 配置在默认监听器上发布所选模型。已有的配置会保留其显式的 `listeners[].apis.systemone.models` 允许列表和 API 密钥；以另一种模式重启或选择模型都不会扩大它。
 - 每次不带 `--engine` 启动都使用 Router 模式；仅指定 MODEL 不会选择 Engine 模式。不带参数的 `vllm-sr serve` 保留已配置的默认判断部署，在新配置中则初始化 Vela 3.0 vela3-fast。
 
 </details>
@@ -143,8 +143,10 @@ listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
-    systemone:
-      models: [vllm-sr/vela3-fast]
+    apis:
+      chat_completions: {}
+      systemone:
+        models: [vllm-sr/vela3-fast]
 providers:
   defaults:
     model: answer-model

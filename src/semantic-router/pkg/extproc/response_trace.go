@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"time"
@@ -23,6 +24,9 @@ func responseTrace(ctx *RequestContext) string {
 	if signals := matchedSignalTrace(ctx); len(signals) > 0 {
 		trace.Set(headers.TraceSignals, headers.List(signals...))
 	}
+	if coverage := scanCoverageTrace(ctx.VSRScanCoverage); len(coverage) > 0 {
+		trace.Set(headers.TraceScanCoverage, headers.List(coverage...))
+	}
 	if ctx.VSRContextTokenCount > 0 {
 		trace.Set(headers.TraceContextTokens, headers.Integer(int64(ctx.VSRContextTokenCount)))
 	}
@@ -34,11 +38,31 @@ func responseTrace(ctx *RequestContext) string {
 	return trace.Encode()
 }
 
+// scanCoverageTrace lists, in rule order, the guard rules that read their
+// input in windows and how much of it they read.
+func scanCoverageTrace(coverage map[string]string) []headers.Item {
+	items := make([]headers.Item, 0, len(coverage))
+	for _, rule := range slices.Sorted(maps.Keys(coverage)) {
+		var read, windows int64
+		if _, err := fmt.Sscanf(coverage[rule], "partial %d/%d", &read, &windows); err == nil {
+			items = append(items, headers.String(rule).With("coverage", headers.Token("partial")).
+				With("read", headers.Integer(read)).With("windows", headers.Integer(windows)))
+			continue
+		}
+		items = append(items, headers.String(rule).With("coverage", headers.Token(coverage[rule])))
+	}
+	return items
+}
+
 // addResponseGuardTrace adds what the selected decision's response_guard did
 // with the answer, and whether the Router held a streamed answer for it.
 func addResponseGuardTrace(trace *headers.Trace, ctx *RequestContext) {
+	hold := ctx.ResponseGuardHold
+	if hold != nil && !hold.guarded {
+		hold = nil
+	}
 	outcome := ""
-	if hold := ctx.ResponseGuardHold; hold != nil && hold.outcome != "" {
+	if hold != nil && hold.outcome != "" {
 		outcome = hold.outcome
 	} else if ctx.ResponseGuard != nil {
 		outcome = ctx.ResponseGuard.outcome()
@@ -47,7 +71,7 @@ func addResponseGuardTrace(trace *headers.Trace, ctx *RequestContext) {
 		return
 	}
 	item := headers.Token(outcome)
-	if ctx.ResponseGuardHold != nil {
+	if hold != nil {
 		item = item.With("buffered", headers.Boolean(true))
 	}
 	trace.Set(headers.TraceResponseGuard, item)
@@ -90,6 +114,9 @@ func addRoutingTrace(trace *headers.Trace, ctx *RequestContext) {
 	}
 	trace.Set(headers.TraceClientProtocol, headers.Token(normalizeProtocol(string(ctx.SourceFormat))))
 	trace.Set(headers.TraceUpstreamProtocol, headers.Token(normalizeProtocol(string(ctx.TargetFormat))))
+	if ctx.RequestedModel != "" {
+		trace.Set(headers.TraceRequestedModel, headers.String(ctx.RequestedModel))
+	}
 	if ctx.SkipProcessing || ctx.LooperRequest || ctx.VSRCacheHit || ctx.SemanticRequest == nil {
 		return
 	}
@@ -129,6 +156,7 @@ func matchedSignalTrace(ctx *RequestContext) []headers.Item {
 		{config.SignalTypeConversation, ctx.VSRMatchedConversation},
 		{config.SignalTypeMetadata, ctx.VSRMatchedMetadata},
 		{config.SignalTypeInputModality, ctx.VSRMatchedInputModality},
+		{config.SignalTypeAgent, ctx.VSRMatchedAgent},
 		{config.SignalTypeSystemOne, append(slices.Clone(ctx.VSRMatchedDecisionModel), response[config.SignalTypeSystemOne]...)},
 		{config.SignalTypeProjection, ctx.VSRMatchedProjection},
 	}
@@ -151,7 +179,11 @@ func addDecisionDetailTrace(trace *headers.Trace, ctx *RequestContext) {
 		trace.Set(headers.TraceCategory, headers.String(ctx.VSRSelectedCategory))
 	}
 	if ctx.VSRReasoningMode != "" {
-		trace.Set(headers.TraceReasoning, headers.Token(ctx.VSRReasoningMode))
+		item := headers.Token(ctx.VSRReasoningMode)
+		if ctx.VSRReasoningReason != "" {
+			item = item.With("reason", headers.Token(ctx.VSRReasoningReason))
+		}
+		trace.Set(headers.TraceReasoning, item)
 	}
 	if decision := ctx.VSRSelectedDecision; decision != nil && decision.Output != nil {
 		kinds := decision.Output.Kinds()

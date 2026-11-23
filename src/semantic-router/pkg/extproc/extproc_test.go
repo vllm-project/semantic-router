@@ -735,11 +735,11 @@ var _ = Describe("Edge Cases and Error Conditions", func() {
 
 			response, err := router.HandleRequestBody(bodyRequest, ctx)
 			Expect(err).NotTo(HaveOccurred())
-			// A model that is not configured is rejected with a clear 400 rather
+			// A model that is not configured is rejected with a clear 404 rather
 			// than being silently forwarded to a backend with no resolvable
 			// credential (which surfaced as a misleading upstream "401 No api key").
 			Expect(response.GetImmediateResponse()).NotTo(BeNil())
-			Expect(int(response.GetImmediateResponse().GetStatus().GetCode())).To(Equal(400))
+			Expect(int(response.GetImmediateResponse().GetStatus().GetCode())).To(Equal(404))
 		})
 
 		It("should handle requests with extremely long message chains", func() {
@@ -1749,7 +1749,7 @@ var _ = Describe("Metrics recording", func() {
 
 		respHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HttpHeaders{
-				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: "content-type", Value: "application/json"}}},
+				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "200"}, {Key: "content-type", Value: "application/json"}}},
 			},
 		}
 

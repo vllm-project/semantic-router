@@ -71,9 +71,59 @@ func TestNativeQualityCannotDropMissingOrIncompleteAnswers(t *testing.T) {
 
 func TestMalformedNativeEnvelopeCannotAcceptPartiallyDecodedAnswers(t *testing.T) {
 	request, _ := ParseNativeRequest(json.RawMessage(singleRequest))
-	body := strings.TrimSuffix(certainResponse, "}") + `,"states":"invalid"}`
-	if observations := request.Observe(json.RawMessage(body)); observations[0].Valid {
-		t.Fatal("malformed native envelope accepted its otherwise valid answer")
+	for _, member := range []string{`"states":"invalid"`, `"sets":"invalid"`, `"spans":[]`} {
+		body := strings.TrimSuffix(certainResponse, "}") + "," + member + "}"
+		if observations := request.Observe(json.RawMessage(body)); observations[0].Valid {
+			t.Fatalf("malformed native envelope (%s) accepted its otherwise valid answer", member)
+		}
+	}
+	batch, _ := ParseNativeRequest(json.RawMessage(batchRequest))
+	body := strings.Replace(batchResponse, `"second":{`, `"second":{"spans":"invalid",`, 1)
+	if observations := batch.Observe(json.RawMessage(body)); observations[0].Valid {
+		t.Fatal("a batch entry's malformed spans left another entry's answer accepted")
+	}
+}
+
+// A set question answers in sets and a span question lists its spans in
+// spans, each beside the answers of its own state: the response's for a
+// standard request, the entry's for a batch.
+func TestNativeResponseKeepsTheSetsAndSpansOfEachState(t *testing.T) {
+	const (
+		set      = `{"selected":["code"],"probabilities":{"code":0.9,"chat":0.2}}`
+		spans    = `[{"label":"person","start":0,"end":3,"text":"Ada","probability":0.8}]`
+		entry    = `"answers":{"task":{"type":"choice","choice":"chat","confidence":0.99,"probabilities":{"code":0.001,"chat":0.999}},"names":{"type":"noul","noul":0.8},"topics.code":{"type":"noul","noul":0.9},"topics.chat":{"type":"noul","noul":0.2}},"thresholds":{"topics":0.5,"names":0.5}`
+		standard = `{"model":"m",` + entry + `,"sets":{"topics":` + set + `},"spans":{"names":` + spans + `}}`
+	)
+	state := answersByState(json.RawMessage(standard))
+	if got := state(""); string(got.Sets["topics"]) != set || string(got.Spans["names"]) != spans || len(got.Answers) != 4 {
+		t.Fatalf("a standard response's sets and spans: %s", standard)
+	}
+	if got := state("first"); got.Answers != nil || got.Sets != nil || got.Spans != nil {
+		t.Fatal("a standard response answered a batch entry")
+	}
+	request, _ := ParseNativeRequest(json.RawMessage(singleRequest))
+	if observations := request.Observe(json.RawMessage(standard)); !complete(observations) {
+		t.Fatal("sets and spans beside a valid answer made it invalid")
+	}
+
+	// An empty result is an answer; a null and an absent entry are not one.
+	batch := `{"model":"m","sets":{"topics":` + set + `},"states":{` +
+		`"found":{` + entry + `,"sets":{"topics":` + set + `},"spans":{"names":` + spans + `}},` +
+		`"none":{` + entry + `,"sets":{"topics":{"selected":[],"probabilities":{"code":0.1,"chat":0.2}}},"spans":{"names":[]}},` +
+		`"null":{` + entry + `,"sets":{"topics":null},"spans":{"names":null}},` +
+		`"absent":{` + entry + `}}}`
+	state = answersByState(json.RawMessage(batch))
+	if got := state("found"); string(got.Sets["topics"]) != set || string(got.Spans["names"]) != spans {
+		t.Fatal("a batch entry's sets and spans were not read from the entry")
+	}
+	if got := state("none"); string(got.Spans["names"]) != "[]" || !strings.Contains(string(got.Sets["topics"]), `"selected":[]`) {
+		t.Fatal("an entry's empty set and span results were lost")
+	}
+	if got := state("null"); string(got.Sets["topics"]) != "null" || string(got.Spans["names"]) != "null" {
+		t.Fatal("an entry's null results became absent or empty ones")
+	}
+	if got := state("absent"); got.Sets["topics"] != nil || got.Spans["names"] != nil || len(got.Answers) != 4 {
+		t.Fatal("an entry without sets and spans took another entry's or the response's")
 	}
 }
 

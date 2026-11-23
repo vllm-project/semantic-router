@@ -10,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-使用路由回放在 Dashboard 的 Insights 中检查请求：选中的路由、模型、token 用量、响应和工具轨迹。存储在 `global.services.router_replay` 中配置，开关和采集默认值在 `global.plugins` 的 `router_replay` 插件中配置；配方或决策的 `router_replay` 插件只需覆盖不同的采集字段。
+使用路由回放在 Dashboard 的 **Requests** 页面检查请求：选中的路由、模型、token 用量、响应和工具轨迹。存储在 `global.services.router_replay` 中配置，开关和采集默认值在 `global.plugins` 的 `router_replay` 插件中配置；配方或决策的 `router_replay` 插件只需覆盖不同的采集字段。
 
 ## 解决什么问题？ {#what-problem-does-it-solve}
 
@@ -39,13 +39,12 @@ global:
     - type: router_replay
       configuration:
         enabled: true
+        prompt_capture: none
         capture_request_body: true
         capture_response_body: true
-        capture_personal_data: false
         capture_tool_results: false
         max_records: 10000
         max_body_bytes: 4096
-        max_tool_trace_bytes: 0
         max_tool_trace_steps: 100
 ```
 
@@ -53,27 +52,52 @@ global:
 
 | 采集设置 | 默认值 |
 | --- | --- |
-| 请求体和响应体 | 采集 |
-| 个人数据 | 采集 |
+| `prompt_capture` | `none`：只保留路由数据 |
+| 请求体和响应体 | 在 `raw` 下采集 |
 | 工具结果 | 脱敏 |
 | `max_records` | 10,000 |
 | `max_body_bytes` | 每个 body 4,096 字节 |
-| `max_tool_trace_bytes` | 不限制单个字段 |
+| `max_prompt_bytes` | 未设置时：设置了 `max_tool_trace_bytes` 则提示词沿用它的上限，否则 65,536 字节（64 KiB），在 `raw` 和 `verified` 下 |
+| `max_tool_trace_bytes` | 未设置时：每个工具文本字段 65,536 字节（64 KiB），包括原始副本，在 `raw` 下 |
+| `max_tool_trace_total_bytes` | 未设置时：每条记录的轨迹步骤共 262,144 字节（256 KiB），前提是 `max_tool_trace_bytes` 也未设置 |
 | `max_tool_trace_steps` | 100 |
+
+### 选择记录保留的内容 {#choose-what-a-record-keeps}
+
+`prompt_capture` 决定记录在路由数据之外还保留什么。路由数据包括决策、模型、信号、分数、耗时、token 用量和各类 ID。
+
+| 模式 | 记录保留 | 是否读取提示词检查个人数据 |
+| --- | --- | --- |
+| `none`（默认） | 只保留路由数据 | 否 |
+| `raw` | 采集开关允许的请求和响应文本，原样保存 | 否 |
+| `verified` | 只保留提示词，且要等配方的 `pii` 规则完整读过并确认不含个人数据 | 是，在决策模型上读取 |
+
+- **`none`** 不保留任何请求或响应文本，无论 `capture_request_body`、`capture_response_body`、`capture_tool_results` 和影子的 `capture.enabled` 如何设置；它也不读取任何内容检查个人数据，因此回放不会给决策模型增加工作。
+- **`raw`** 不经检查就保留采集开关允许的内容，因此记录可能包含密钥和个人数据。请用 `replay.read` 和 `replay.detail` 限制谁能读取，并选择保留期限。记录保留的提示词以[它的上限](#bound-the-prompt)为限；除非设置了 `max_prompt_bytes` 或 `max_tool_trace_bytes`，上限为 64 KiB。请求的工具轨迹也会保留每个用户轮次，以[轨迹的上限](#bound-the-trace)为限：除非另行设置，每个字段 64 KiB，每条记录的步骤共 256 KiB。
+- **`verified`** 见[不把个人数据写入回放](#keep-personal-data-out-of-replay)。
+
+`capture_personal_data` 是这项设置已弃用的写法。Router 会把它当作 `prompt_capture` 加载，并给出 `renamed_field` 警告；`vllm-sr config migrate` 会改写它：
+
+| 原来的写法 | 加载为 |
+| --- | --- |
+| `capture_personal_data: false` | `prompt_capture: verified` |
+| `capture_personal_data: true` | `prompt_capture: raw` |
+| 两个字段都没写 | `prompt_capture: none`：记录只保留路由数据。要保留这类配置以前保留的文本，请设置 `prompt_capture: raw`。 |
 
 ### 限制某个决策的采集 {#limit-capture-on-a-decision}
 
-把这个片段加入决策的 `plugins`，记录有上限的摘录：
+把这个片段加入决策的 `plugins`，记录有上限的请求摘录，不记录响应文本：
 
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
+      prompt_capture: raw
       capture_request_body: true
       capture_response_body: false
-      capture_personal_data: false
       max_body_bytes: 4096
+      max_tool_trace_bytes: 4096
       max_tool_trace_steps: 100
 ```
 
@@ -81,30 +105,83 @@ plugins:
 
 - **按 UTF-8 字节计算**，适用于 body 和结构化文本。摘录在完整字符处结束，因此可能比上限略短。
 - **被截断的原始 body** 可能不再是完整的 JSON；请检查它的截断标志。
-- **工具轨迹**有自己的上限，与请求体和响应体分开。
+- **提示词**有自己的上限 `max_prompt_bytes`；没有任何一层设置它时，沿用 `max_tool_trace_bytes` 的上限，见[限制提示词](#bound-the-prompt)。上面的片段中，提示词按 `max_tool_trace_bytes` 保留 4,096 字节。被截断的提示词带有 `prompt_truncated: true`，并在 `prompt_original_bytes` 中记录完整提示词的字节数、在 `prompt_original_sha256` 中记录其 SHA-256，因此记录仍能标识它。
+- **工具轨迹**有自己的上限，与请求体和响应体分开。`max_tool_trace_bytes` 限制每个结构化文本字段：工具定义，以及每个轨迹步骤的文本、参数和输出。`max_tool_trace_total_bytes` 限制一条记录所有步骤的总和。被截断的步骤带有 `truncated: true`。像上面的片段这样设置 `max_tool_trace_bytes` 时，步骤的原始副本保持完整，轨迹也没有总上限；见[限制轨迹](#bound-the-trace)。
+
+在 `raw` 和 `verified` 下，body 开关覆盖的范围如下（在 `none` 下，记录不保留任何文本）：
+
+- **`capture_request_body: false`** 让记录不含任何请求文本：请求体、提示词、工具定义，以及工具轨迹中的每个请求步骤，包括用户轮次、工具参数和工具结果。
+- **`capture_response_body: false`** 对响应同样处理：响应体、轨迹中的回答和工具调用、幻觉片段摘录，以及失败的回退尝试中提供方返回的内容；这些尝试只保留状态码和固定的原因。
+- **始终保留：**步骤类型、工具名、调用 ID、结果状态和路由元数据。以这种方式省略的文本直接缺失，不标记为 `content_redacted`，因此 Dashboard 显示为未采集。
 
 各层如何组合：
 
 - **让某个决策退出采集**：设置 `configuration: {enabled: false}`。
 - **修改整个部署的默认值**：在 `global.plugins` 的 `router_replay` 插件上设置 `enabled: false`，或者不写这个插件。配方或决策仍可单独开启。
-- **省略的字段沿用**更通用一层的值。显式的 `false` 是一次覆盖；`max_tool_trace_bytes: 0` 或 `max_tool_trace_steps: 0` 会取消对应的上限。
+- **省略的字段沿用**更通用一层的值。显式的 `false` 是一次覆盖；`max_prompt_bytes: 0`、`max_tool_trace_bytes: 0`、`max_tool_trace_total_bytes: 0` 或 `max_tool_trace_steps: 0` 会取消对应的上限。没有任何一层设置 `max_prompt_bytes` 时，提示词的上限按[限制提示词](#bound-the-prompt)所述回退；没有任何一层设置 `max_tool_trace_bytes` 时，轨迹按[限制轨迹](#bound-the-trace)所述使用默认上限。
 - **在选出决策之前**，被拒绝的请求使用其配方的采集默认值；选出决策后，决策的覆盖才生效。
 
 这些设置不会改变提供方的保留策略，也不会删除已有记录。
 
 :::note 零值
-显式的 `max_body_bytes: 0` 回退为 4,096 字节；对 memory 存储，`max_records: 0` 回退为 200 条记录。这些零值会覆盖继承来的值，所以要继承某个字段，请省略它。
+显式的 `max_body_bytes: 0` 回退为 4,096 字节；对 memory 存储，`max_records: 0` 回退为 200 条记录。`max_prompt_bytes: 0` 与工具轨迹的上限一样，表示取消上限。这些零值会覆盖继承来的值，所以要继承某个字段，请省略它。
+:::
+
+### 限制提示词 {#bound-the-prompt}
+
+在 `raw` 和 `verified` 下，记录保留的提示词以一个上限为限，取下列第一条适用的：
+
+1. **`max_prompt_bytes`**，取自设置了它的最具体的一层：先是决策，再是其配方，最后是 `global.plugins`。显式的值优先于下面的回退，即使更具体的一层设置了 `max_tool_trace_bytes` 也是如此；`0` 保留完整提示词。
+2. **`max_tool_trace_bytes`**，按各层组合后的值，前提是没有任何一层设置 `max_prompt_bytes` 且它大于 `0`。在 `max_prompt_bytes` 出现之前，它就限制着提示词，因此这类配置保持原来的上限。
+3. 其余情况为 **65,536 字节（64 KiB）**。
+
+要让提示词的上限与工具轨迹分开，请同时设置两者：
+
+```yaml
+max_tool_trace_bytes: 262144 # 工具定义和轨迹步骤
+max_prompt_bytes: 65536 # 提示词；0 保留完整提示词
+```
+
+:::note 升级
+`max_prompt_bytes` 是新增的设置。没有任何一层设置它时：
+
+- **`max_tool_trace_bytes` 大于 `0` 的配置**保持原来的提示词上限。
+- **两个上限都没设置**（或 `max_tool_trace_bytes: 0`）**的 `raw` 或 `verified` 配置**，对更长的提示词只保留前 64 KiB，而以前保留完整提示词。要保留完整提示词，请设置 `max_prompt_bytes: 0`。
+- **在 `none` 下**，记录照旧不保留提示词。
+
+另外，影子请求的 `capture.enabled: true` 现在只在 `raw` 下保留影子回答的摘录；在 `verified` 下，结果只保留回答的大小和 SHA-256。见[回放与审计采集](#replay-and-audit-capture)。
+:::
+
+### 限制轨迹 {#bound-the-trace}
+
+在 `raw` 下，请求轨迹把每个用户轮次、工具调用和工具结果保留为一个步骤，最多 `max_tool_trace_steps` 个，另有回答的步骤。没有任何一层设置 `max_tool_trace_bytes` 时，有两个默认上限：
+
+- **每个文本字段 65,536 字节（64 KiB）：**工具定义，每个步骤的文本、参数和输出，以及步骤对参数和输出的原始副本（`raw_arguments`、`raw_output`）。被截断的步骤带有 `truncated: true`；原始副本也被截断时还带有 `raw_truncated: true`。
+- **每条记录的步骤共 262,144 字节（256 KiB）**，包括原始副本（`max_tool_trace_total_bytes`）。超出时先丢弃最旧的步骤，与 `max_tool_trace_steps` 的做法相同，轨迹带有 `steps_truncated: true`，丢弃的个数记在 `dropped_step_count` 中。最新的步骤总会保留。
+
+这样一条记录最多保留约 64 KiB 的提示词、64 KiB 的工具定义、320 KiB 的轨迹（单个步骤超过总上限时，即一个步骤的五个字段）以及每个 body 4 KiB：不到 0.5 MiB，因此内存存储中的 10,000 条记录不超过 5 GiB。
+
+任何一层设置的 `max_tool_trace_bytes`（包括 `0`）会让轨迹保持这些默认值出现之前的样子：每个步骤的文本、参数和输出按这个上限截断，原始副本保持完整，供逐字节重放调用的读取方使用，并且没有总上限，除非同时设置了 `max_tool_trace_total_bytes`。任何一层设置的 `max_tool_trace_total_bytes` 在两种情况下都生效，`0` 保留所有步骤。提示词只沿用某一层设置的 `max_tool_trace_bytes`，从不沿用这些默认值。
+
+:::note 升级
+这些默认值是新增的：
+
+- **设置了 `max_tool_trace_bytes` 的配置**（包括 `0`）保持原来的轨迹。
+- **两个上限都没设置的 `raw` 配置**会把每个工具文本字段（包括原始副本）限制为 64 KiB，把一条记录的步骤限制为共 256 KiB，而以前完整保留。要保留完整轨迹，请设置 `max_tool_trace_bytes: 0`。
+- **在 `verified` 和 `none` 下**，记录的轨迹照旧不含文本，因此没有变化。
+
+`vllm-sr config migrate` 不会写入任何上限：依赖完整轨迹的配置需要自己设置 `max_tool_trace_bytes: 0`。
 :::
 
 ### 不把个人数据写入回放 {#keep-personal-data-out-of-replay}
 
-在全局或某个决策的 `router_replay` 插件上设置 `capture_personal_data: false`：
+在全局或某个决策的 `router_replay` 插件上设置 `prompt_capture: verified`，只在请求的提示词不含个人数据时保留它：
 
-- **保留的：**路由证据、模型、信号和检测到的 PII 类型。
-- **含个人数据的请求会省略：**请求体和响应体、提示词、工具定义和工具轨迹。
-- **请求从不等待这项检查。**除非某个路由决策已经用 PII 信号读过提示词，记录会先在不含提示词的情况下写入。随后，配方配置的 PII 规则只读取最新一条用户消息；这次读取没有发现个人数据时，提示词才会加入记录。
+- **保留的：**路由证据、模型、信号和检测到的 PII 类型，以及确认不含个人数据的提示词，以[它的上限](#bound-the-prompt)为限。
+- **省略的：**请求体和响应体、工具定义和工具轨迹，以及含个人数据的请求的提示词。
+- **请求从不等待这项检查。**除非某个路由决策已经用 PII 信号读过提示词，记录会先在不含提示词的情况下写入。随后，配方配置的 PII 规则只读取最新一条用户消息；这次读取没有发现个人数据时，提示词才会加入记录。这类读取同时最多两个，每个最长 30 秒。无法在这段时间内读完的读取不会开始，提示词照旧不加入记录，与读取超时的结果相同：例如按决策模型实测的速度 30 秒读不完的消息；在这一速度测得之前，还包括路由时防护扫描已经超时的消息。
 
-如果没有 PII 证据、`pii` 规则的模型没有给出回答，或者配方没有 `pii` 规则，采集会保守地省略内容。PII 信号是可选的；配置 PII 信号后，它判定为不含个人数据的请求就可以采集内容。例如：
+如果没有 PII 证据、`pii` 规则的模型没有给出回答，或者配方没有 `pii` 规则，采集会保守地省略提示词。PII 信号是可选的；配置 PII 信号后，它判定为不含个人数据的请求就可以保留提示词。这些读取与防护一起运行在决策模型上，因此 `verified` 会占用决策模型的时间，而 `none` 和 `raw` 不会。例如：
 
 ```yaml
 recipes:
@@ -116,13 +193,14 @@ recipes:
 
 ### 为开发和审计采集工具结果 {#capture-tool-results-for-development-and-audit}
 
-默认情况下，记录会保留每个客户端工具结果的调用 ID 及其成功或失败，但不保留输出；采集的请求体也会去掉工具结果。无论 PII 信号是否读取工具结果，都是如此。要调试智能体的工具循环，请在全局或某个决策的 `router_replay` 插件上设置 `capture_tool_results: true`：
+默认情况下，记录会保留每个客户端工具结果的调用 ID 及其成功或失败，但不保留输出；采集的请求体也会去掉工具结果。无论 PII 信号是否读取工具结果，都是如此。要调试智能体的工具循环，请在全局或某个决策的 `router_replay` 插件上同时设置 `capture_tool_results: true` 和 `prompt_capture: raw`：
 
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
+      prompt_capture: raw
       capture_request_body: true
       capture_tool_results: true
       max_tool_trace_bytes: 16384
@@ -133,14 +211,15 @@ plugins:
 - **每个 `client_tool_result` 步骤**把结果文本存入 `output`，并标记 `content_redacted: false`。
 - **采集的请求体**保留工具结果，最多 `max_body_bytes`。
 - **`max_tool_trace_bytes`** 限制每条存储的结果；截断时会设置该步骤的 `truncated` 标志。
+- **`capture_request_body: false`** 时仍不存储工具结果，因为它们属于请求文本。
 
 :::tip 设置上限
-默认值 `0` 会完整存储结果。较大的工具输出会让记录变大，存储也可能拒绝超出其大小上限的记录。
+没有任何一层设置 `max_tool_trace_bytes` 时，每条结果保留 64 KiB，一条记录的步骤共保留 256 KiB（[限制轨迹](#bound-the-trace)）。设置 `max_tool_trace_bytes: 0` 时会完整存储结果。较大的工具输出会让记录变大，存储也可能拒绝超出其大小上限的记录。
 :::
 
 工具结果是原始的客户端数据，因此：
 
-- **`capture_tool_results: true` 要求 `capture_personal_data: true`。**如果全局默认值或任一决策生效的 `router_replay` 设置把 `capture_tool_results: true` 与 `capture_personal_data: false` 组合在一起，Router 会拒绝加载该配置。
+- **`capture_tool_results: true` 只在 `prompt_capture: raw` 下存储结果。**如果全局默认值或任一决策生效的 `router_replay` 设置把 `capture_tool_results: true` 与 `prompt_capture: verified` 组合在一起，Router 会拒绝加载该配置；在 `none` 下它什么也不存储。
 - **掩码路由**从不记录其请求轨迹或请求体。
 - **没有 `replay.detail` 的主体**收到的工具结果仍是脱敏的。
 
@@ -152,7 +231,7 @@ plugins:
 
 ## 影子请求 {#shadow}
 
-`shadow` 块把决策已批准请求的一份有上限、按比例抽样的副本发给候选模型，并把结果保存在回放记录中。主响应永远不会被改变或延迟，影子请求也只在该决策记录回放时运行。
+`shadow` 块把决策已批准请求的一份有上限、按比例抽样的副本发给一组候选模型，并把各自的结果保存在回放记录中。主响应永远不会被改变或延迟，影子请求也只在该决策记录回放时运行。
 
 推广一个模型需要来自生产形态请求的证据：离线评估覆盖不到真实的提示词，灰度发布又会让用户接触未经验证的模型。影子请求填补了这一空白。主模型仍回答每个请求，候选模型的结果则作为不可变的结果存储，供之后比较。
 
@@ -161,8 +240,8 @@ plugins:
 - **已批准的请求。**它与构建主请求派发所依据的请求相同，在所有请求插件运行之后生成。
 - **影子模型自己的编码。**它经过相同的编码和提供方适配步骤，因此推理控制遵循影子模型的模型族。它的寻址方式与主请求访问该后端时相同，包括 profile 的 `chat_path` 和 Azure OpenAI 的 `api_version` 查询参数。
 - **不使用流式。**它总是以非流式发送。
-- **只传 trace 头。**只传播 W3C 的 `traceparent` 和 `tracestate` 请求头。客户端的请求头（包括 `baggage`）都不传播。
-- **不带主请求的凭据。**决策的请求头修改只留在主请求路径上，除非 `forward_headers` 列出了它们。已知的凭据载体和每个 profile 的 `auth.header` 即使被列出也会被丢弃，只使用 Router 为影子后端配置的静态凭据。
+- **Trace 上下文。**传播 W3C 的 `traceparent` 和 `tracestate` 请求头。客户端的请求头（包括 `baggage`）都不传播。
+- **不带主请求的凭据。**仅复制 `forward_headers` 明确允许的决策请求头，凭据头留在主请求路径上。每个候选模型仅使用 Router 为其配置的凭据和提供方的 `auth.header`。HTTPS 会验证证书。
 - **不跟随重定向。**调用只发往配置的后端地址；重定向响应永远不会被跟随。
 
 适合使用影子请求的场景：
@@ -180,54 +259,68 @@ plugins:
 
 ### 配置影子请求 {#configure-the-shadow}
 
+在决策的 Replay 插件上声明 `shadow`。父级的 `enabled` 控制记录与派发，`shadow` 本身没有 `enabled` 字段。即使 Replay 已禁用或 `sample_rate: 0`，声明的影子块仍须通过完整校验。
+
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
       shadow:
-        model: candidate-model
+        models: [candidate-a, candidate-b]
         sample_rate: 0.05
-        max_concurrency: 2
-        max_queue_depth: 8
-        timeout_seconds: 30
-        max_response_bytes: 1048576
-        max_retries: 0
-        capture_response_body: false
-        max_capture_bytes: 4096
-        tls_skip_verify: false
-        forward_headers: []
+        execution:
+          max_concurrency: 2
+          max_queue_size: 8
+          timeout: 30s
+        budget:
+          max_response_bytes: 2097152
+          # max_estimated_cost: 0.01
+        capture:
+          enabled: false
+          max_bytes: 8192
 ```
+
+下表中 `N` 为配置的模型数量。所有整数上限必须为正数。
 
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
-| `model` | 必填 | 接收影子副本的已配置逻辑模型。必须在 `providers.models` 中有后端。 |
-| `sample_rate` | `1.0` | 发送影子副本的合格请求比例，取值 `[0, 1]`。`0` 保留影子声明，但从不派发。 |
-| `max_concurrency` | `2` | 该决策同时进行的影子调用数。 |
-| `max_queue_depth` | `8` | 等待空位的调用数。超出部分以原因 `queue_full` 丢弃。 |
-| `timeout_seconds` | `30` | 排队等待加执行的截止时间，所有重试共用。 |
-| `max_response_bytes` | `1048576` | 读取的最大影子响应体。更大的响应体以 `response_too_large` 失败。 |
-| `max_retries` | `0` | 遇到传输错误或可重试状态码时的额外尝试次数，上限为 `3`。 |
-| `capture_response_body` | `false` | 在结果中保存影子文本的有上限摘录。默认关闭，只保留大小、token 数和 SHA-256。 |
-| `max_capture_bytes` | `4096` | 开启采集时摘录的上限。 |
-| `tls_skip_verify` | `false` | 对证书由内部 CA 签发的 https 影子后端跳过证书校验。该设置只作用于影子 HTTP 客户端，不配置主后端的传输。 |
-| `forward_headers` | `[]` | 影子副本可以携带的决策 `header_mutation` 名称，不区分大小写匹配。决策为主后端设置的其他内容都不会转发，因此像 `X-Internal-Token` 这样的自定义凭据只留在主请求路径上。已知的凭据载体（`Authorization`、`Proxy-Authorization`、`Cookie`、`x-api-key`、`api-key`、`x-goog-api-key`、`x-user-*-key` 请求头）即使被列出，也会在加载配置时被拒绝，并在运行时被丢弃。 |
+| `models` | 必填 | 1–8 个互不重复、非空的逻辑模型名，每个模型必须在 `providers.models` 中有后端。单个候选模型也使用列表。 |
+| `sample_rate` | `1.0` | 可选，范围为 `[0, 1]`。整组共享一次抽样决定；`0` 禁用派发。 |
+| `execution.max_concurrency` | `2` | 同时进行的候选 HTTP 调用数，由同一配方和决策的所有请求共享。 |
+| `execution.max_queue_size` | `8` | 同一配方和决策等待执行的请求组数，由所有请求共享。按组计数，不按候选模型计数。 |
+| `execution.timeout` | `30s` | 整组共享的截止时间，包括排队等待和所有候选调用。必须为正时长，最多 `5m`。 |
+| `budget.max_response_bytes` | `N × 1048576` | 整组的响应字节预算，在派发前分配给有效候选。最小值为 `2 × N`：每个候选预留一个字节，用于检测超大响应。 |
+| `budget.max_estimated_cost` | — | 可选。单次抽样的 Shadow 候选组最高预估费用，币种使用 `global.services.budgets.currency`（默认 USD）。 |
+| `capture.enabled` | `false` | 仅在 `prompt_capture: raw` 下保存候选文本的有上限摘录。关闭时只保留大小、token 用量和 SHA-256。 |
+| `forward_headers` | `[]` | 允许复制的决策请求头，不区分大小写。凭据头不会转发。 |
+| `capture.max_bytes` | `N × 4096` | 整组的摘录字节上限，分配给有效候选。 |
 
-当请求未被抽中，或主请求派发已经选中了影子模型时，影子请求会被跳过：只记录指标，不产生结果。算法为执行器（`escalate`、`fusion`、`remom`、`ratings` 或 `workflows`）的决策会在加载配置时拒绝影子请求，因为影子请求只在单模型的提供方派发上运行。
+设置 `budget.max_estimated_cost` 后，Router 根据各候选的输入 token 估算值和发往后端的输出上限估价。如果出站请求未指定输出上限，依次使用模型的 `max_output_tokens`、`global.services.budgets.output_reserve_tokens`（默认 4096）。
+
+预估总额超限、有候选缺少同币种价格，或请求一次生成多个答案时，Router 跳过整组并在 Replay 记录原因。对于已尝试派发的调用，Replay 记录预估费用，有后端用量时按用量计价。实际费用可能有差异。主请求仍按自己的会话和用户预算规则执行。
+
+旧的扁平影子字段会被拒绝，请使用上面的嵌套结构。
+
+主模型会从组中排除。其余候选最多各调用一次，不重试；等待并发空位的时间也计入同一截止时间。字节额度在派发前分配，失败时不返还。派发后记录后端返回的 token 用量，缺失用量保持未知。
+
+未被抽中或排除后没有候选的请求只产生指标。算法为执行器（`escalate`、`fusion`、`remom`、`ratings` 或 `workflows`）的决策会在加载配置时拒绝影子请求，因为影子请求只在单模型的提供方派发上运行。
 
 ### 失败时放行 {#fail-open-behavior}
 
-请求路径只做一次非阻塞的空位检查就返回；其余工作都在主请求派发的响应构建完成后，由有上限的工作线程运行。缓慢、不可用、格式错误或过载的影子端点都无法改变主响应或其延迟。每个影子请求恰好以一个结果结束：
+请求路径只做一次非阻塞的组准入检查就返回；其余工作都在主请求派发的响应构建完成后，由有上限的工作线程运行。主请求路径从不等待候选响应。候选缓慢或失败时，主响应保持不变。每个候选以一个结果结束：
 
 | 结果 | 原因 |
 | --- | --- |
 | `completed` | `completed` |
-| `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable` |
+| `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `queue_timeout`, `canceled`, `router_closing`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
+| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability` |
 | `sampled_out` | `sampled_out` |
 
 - **指标。**结果和原因导出为 `sr_shadow_dispatch_total{decision,result,reason}`，另有 `sr_shadow_dispatch_latency_seconds`、`sr_shadow_dispatch_inflight` 和 `sr_shadow_dispatch_queued`。
 - **因资源上限造成的丢弃**通过指标和结构化的 `shadow_dispatch_dropped` 事件报告，而不写入回放，因此过载的影子通道不会给回放存储增加负载。
+
+候选在调用模型前会在 Replay 的有界结果队列中预留空间；队列已满时产生 `replay_queue_full`。
 
 ### 解读失败 {#interpreting-failures}
 
@@ -236,23 +329,23 @@ plugins:
 | 含义 | 原因 | 如何解读 |
 | --- | --- | --- |
 | 候选模型拒绝了请求 | `upstream_status`（`status_code` 为 4xx） | 影子模型无法接受已批准的请求，例如不支持某个参数，或上下文窗口太小。计入候选模型。 |
-| 候选模型的健康或容量 | `upstream_status`（`status_code` 为 5xx）、`timeout`、`transport_error` | 后端不可达、过载，或在 `max_retries` 次重试后仍未在 `timeout_seconds` 内完成。这衡量的是部署，不是回答质量。 |
+| 候选模型的健康或容量 | `upstream_status`（`status_code` 为 5xx）、`timeout`、`transport_error` | 后端不可达、过载，或未在整组的 `execution.timeout` 内完成。这衡量的是部署，不是回答质量。 |
 | 候选模型尝试重定向 | `redirect_rejected`（`status_code` 为 3xx） | 后端返回了重定向。Router 从不跟随，因此提示词和影子凭据只到达了配置的后端。请把影子模型指向后端的最终地址。 |
-| 候选模型的输出问题 | `malformed_response`、`response_too_large` | 后端作了回答，但响应体不是其线格式的有效响应，或超过了 `max_response_bytes`。 |
+| 候选模型的输出问题 | `malformed_response`、`response_too_large` | 后端作了回答，但响应体不是其线格式的有效响应，或超过了其分得的 `budget.max_response_bytes`。 |
 | Router 侧的问题，与候选模型无关 | `backend_unresolved`、`credential_unresolved`、`encode_failed` | Router 无法构建影子调用或为其寻址。请修正配置，并把这些结果排除在候选模型的比较之外。 |
 
 `dropped` 和 `sampled_out` 永远不会进入回放记录。它们表示 Router 选择不发送影子请求，因此不包含关于候选模型的任何信息，只在指标和日志中可见。
 
 ### 回放与审计采集 {#replay-and-audit-capture}
 
-完成和失败的影子请求会在主请求的回放记录中追加一条结果。结果只能追加：
+每个完成或失败的候选都会在主请求的回放记录中追加一条结果。结果只能追加：
 
 | 部分 | 内容 |
 | --- | --- |
 | 结果 | `source: shadow_dispatch`、`target: model`、`target_ref: <shadow model>`、判定和原因 |
 | 元数据 | 主请求和影子请求的身份；主模型和影子模型及其后端；决策和配方；抽样率；入队、开始和结束时间戳；排队等待和延迟；尝试次数；状态码；响应大小；停止原因；token 数；影子文本的 SHA-256 |
 
-回放脱敏对影子结果的作用与对记录其他部分相同：没有内容权限的查看者能看到路由和耗时字段，但看不到 `target_ref`、`reason` 或 `metadata`。除非回放存储及其读者已获准接触提示词级的内容，否则请保持 `capture_response_body` 关闭。参见片段：
+回放脱敏对影子结果的作用与对记录其他部分相同：没有内容权限的查看者能看到路由和耗时字段，但看不到 `target_ref`、`reason` 或 `metadata`。影子请求的 `shadow.capture.enabled` 是它自己的设置，只在 `raw` 下保留摘录，因为只有 `raw` 保留主模型的回答：生成的文本可能重复提示词，而 `verified` 只检查提示词。在 `none` 和 `verified` 下，记录不保留任何摘录。除非回放存储及其读者已获准接触提示词级的内容，否则请保持它关闭。参见片段：
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml)。
 
 ### 导出比较数据集 {#export-a-comparison-dataset}
@@ -282,7 +375,7 @@ curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
 - **上限保留哪些行由种子决定**，而不是时间，因此平衡后的数据集是对流量的抽样，而不是对到达时间的抽样。
 - **因平衡而丢弃的行**和其他排除一样，计入 `balance_cap`。
 
-导出需要 `replay.read`，读取的记录与列表 API 相同。被比较的决策必须开启 body 采集，因为没有采集请求的观测会以 `request_body_missing` 被排除。
+导出需要 `replay.read`，读取的记录与列表 API 相同。被比较的决策需要设置 `prompt_capture: raw` 并开启请求体采集，因为没有采集请求的观测会以 `request_body_missing` 被排除。
 
 ### 把比较交给评判者 {#hand-the-comparison-to-a-judge}
 
@@ -301,7 +394,7 @@ curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
 
 - **输入摘要**覆盖去掉顶层模型字段（记录的请求中为 `Model`，客户端请求体中为 `model`）后的请求体，因为存储的请求写明了 Router 把它发给了哪个模型。这个请求体也是评判者读取的 `input`，每个任务都带有它的 `input_digest`。
 - **版本。**清单为 `shadow-dataset.v2`，任务为 `shadow-judge-tasks.v2`。`shadow-dataset.v1` 清单会被拒绝。
-- **影子文本**来自采集的摘录，因此影子决策需要开启 `capture_response_body`，并把 `max_capture_bytes` 设得足以容纳完整的回答。
+- **影子文本**来自采集的摘录，因此影子决策需要开启 `shadow.capture.enabled`，并把 `shadow.capture.max_bytes` 设得足以让每个候选的份额容纳完整的回答。
 
 被排除的对按原因计数：
 
@@ -345,7 +438,9 @@ make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
 
 ## 查看结果 {#read-the-results}
 
-在 Dashboard 中打开 **Insights**，或使用[回放 API](../../api/router#router-replay) 过滤记录并查看会话。成本是[根据记录的 token 和配置的费率得出的估算](../../api/router#router-replay)，不是账单。缺失的价格和用量保持未知。
+在 Dashboard 中打开 **Observe → Requests**，或使用[回放 API](../../api/router#router-replay) 过滤记录并查看会话。每个请求都会标明发送它的编码 Agent Harness、所属会话，以及调用来自主 Agent 还是子代理。**Client** 过滤器保留所选 Harness 或普通 API 客户端的请求；Router 在全部历史上应用它，并在其他过滤器选出的全部请求上统计每个客户端，因此发送大部分流量的脚本不会掩盖较早的 Agent 请求。搜索按请求 ID、配方或会话 ID 查找记录，因此 Agent Harness 发送的会话 ID（例如 Claude Code 的 `x-claude-code-session-id`）能找到该会话的每次调用。记录的页头会说明该请求在会话中的位置。会话路由历史先给出摘要：发起调用的 Agent、作答的模型及次数、模型切换次数、调用的结束情况，以及从第一次调用开始到最后一次调用结束的时长。其下每次调用占一行，当前页面的请求会被标出，模型切换会被高亮。子代理按首次调用的顺序显示为 `subagent 1`、`subagent 2` 等，Agent 身份标头的短哈希在该行的提示中，主对话显示为 `main`。只有 `identity.headers.agent` 指定了该标头时才会记录哈希（见[会话标识](../../api/session-identification)）；未设置时每次调用都显示为 `main`。Codex 的根线程（Agent ID 与会话 ID 相同）显示为 `main`。没有 `replay.detail` 权限的查看者拿不到哈希（与被脱敏的会话策略一致），因此子代理的调用在那里显示为 `hidden`。成本是[根据记录的 token 和配置的费率得出的估算](../../api/router#router-replay)，不是账单。缺失的价格和用量保持未知。
+
+该页面的 **Sessions** 视图按 Harness 会话归组记录。每个会话展开为其 Agent：主 Agent 在前，每个子代理位于启动它的 Agent 之下并显示其类型；每个 Agent 再展开为各轮调用及其决策、模型、耗时和 token。运行标记的调用在请求列表、会话视图和运行页面中共用同一组事件标签：子代理的首次调用、上下文压缩、会话标题或其他内务调用、工具循环、最新一轮中的图片、Guard 拒绝和失败。**Signals by harness** 显示每个 Harness 在已加载的会话中给出了哪些 Agent 信号（会话 ID、子代理及其类型、请求类别、上下文压缩、会话标题或其他内务调用以及图片）、哪些信号其请求从不携带，以及哪些会话因客户端未发送会话 ID 而由 Router 自行标识。工具循环对每个 Harness 都从请求体中识别，因此显示在每一轮调用上，而不在该表中。成本数字按参考模型的标价比较每个请求：它们只是成本估算，不是质量比较；记录的数据不足以支撑的数字显示为短横线并说明原因。
 
 每条记录的 `route_diagnostics` 解释该路由：
 

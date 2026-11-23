@@ -25,7 +25,7 @@ func TestNativeCascadeAndCalibrationUseCommonContract(t *testing.T) {
 	native.Decisions[0].Algorithm.Escalate.Quality = &EscalateQuality{
 		Type: "calibrated", Calibration: "suite-v1", Loss: "bundle_error", MaxRisk: &risk,
 	}
-	calibrated, err := normalizeCanonicalConfig(&canonical)
+	calibrated, err := normalizeCanonicalConfig(&canonical, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestNativeCascadeAndCalibrationUseCommonContract(t *testing.T) {
 		t.Fatalf("calibration reference = %+v, %v", artifact, ok)
 	}
 	native.Decisions[0].Algorithm.Escalate.Quality.Calibration = "missing"
-	if _, err := normalizeCanonicalConfig(&canonical); err == nil || !strings.Contains(err.Error(), "unknown evaluation calibration") {
+	if _, err := normalizeCanonicalConfig(&canonical, false); err == nil || !strings.Contains(err.Error(), "unknown evaluation calibration") {
 		t.Fatalf("unresolved evidence reference accepted: %v", err)
 	}
 }
@@ -76,7 +76,7 @@ func TestNativeDecisionsHaveIndependentAlgorithmBudgets(t *testing.T) {
 	second.Name = "alternate"
 	second.Algorithm.Budget = &AlgorithmBudget{Deadline: "9s", MaxCalls: 2}
 	authored.Decisions = append(authored.Decisions, second)
-	compiled, err := normalizeCanonicalConfig(&canonical)
+	compiled, err := normalizeCanonicalConfig(&canonical, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestNativeDecisionsHaveIndependentAlgorithmBudgets(t *testing.T) {
 	if !compiled.IsRecipeReachableForRouting(native.Name) {
 		t.Fatal("published native signal consumers are not reachable")
 	}
-	compiled.Listeners[0].SystemOne = nil
+	compiled.Listeners[0].APIs = nil
 	if compiled.IsRecipeReachableForRouting(native.Name) {
 		t.Fatal("unpublished recipe remains reachable")
 	}
@@ -143,6 +143,20 @@ func TestNativeAcceptanceProbabilityBounds(t *testing.T) {
 		}}})
 		if err != nil {
 			t.Fatalf("valid native threshold failed: %v", err)
+		}
+	}
+}
+
+// A set answer has a probability for each label and no distribution, so a
+// rule gates it on probability_margin and on no other field.
+func TestNativeAcceptanceGatesASetOnItsProbabilityMargin(t *testing.T) {
+	threshold := 0.5
+	for field, valid := range map[string]bool{"probability_margin": true, "top_probability": false, "confidence": false} {
+		err := validateNativeAcceptance(&EscalateAccept{Native: []NativeAcceptanceRule{{
+			QuestionType: "set", Field: field, NumericPredicate: NumericPredicate{GTE: &threshold},
+		}}})
+		if (err == nil) != valid {
+			t.Fatalf("a set rule on %s: %v", field, err)
 		}
 	}
 }

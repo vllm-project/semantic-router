@@ -578,7 +578,7 @@ const config: Config = {
         },
         {
           label: 'Community',
-          to: '/community/team',
+          to: '/community/contributor-guide',
           className: 'nav-primary',
           position: 'left',
         },
@@ -610,6 +610,12 @@ const config: Config = {
               label: 'Discussions',
               href: 'https://github.com/vllm-project/semantic-router/discussions',
             },
+            // The locale dropdown above gives up its place from 997px to
+            // 1339px; shell.css shows these links only in that range.
+            {
+              type: 'custom-localeLinks',
+              className: 'nav-locale-more',
+            },
           ],
         },
         {
@@ -633,6 +639,10 @@ const config: Config = {
             {
               label: 'Quick Start',
               to: '/docs/installation',
+            },
+            {
+              label: 'Contributor Guide',
+              to: '/community/contributor-guide',
             },
             {
               label: 'Governance',

@@ -135,7 +135,8 @@ func (s *ClassificationAPIServer) handleSystemOneRouteDiagnostic(w http.Response
 	nativeBody, _ := json.Marshal(task)
 	nativeRequest, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, "/v1/systemone", bytes.NewReader(nativeBody))
 	// This managed route has already enforced classify.invoke. Its operator
-	// capability never becomes an API key or changes a public listener grant.
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{input.Model}}}
-	systemone.Handler(cfg, listener, retainedSystemOneInvoker(snapshot, router, ""))(w, nativeRequest)
+	// capability never becomes an API key or changes a public listener grant,
+	// and it stands in for an entrypoint's client key too.
+	listener := &config.Listener{APIs: config.ListenerAPIs{config.APIFormatSystemOne: {Models: []string{input.Model}}}}
+	systemone.Handler(cfg, listener, retainedSystemOneInvoker(snapshot, router, ""), systemone.ClientAuth{})(w, nativeRequest)
 }

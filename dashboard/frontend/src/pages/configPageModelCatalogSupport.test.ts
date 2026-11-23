@@ -64,7 +64,14 @@ describe('effective model API format', () => {
   const model = { name: 'alias', catalog: modelID, backend_refs: [{ provider: 'test' }] }
 
   it('exposes only formats accepted by canonical provider input', () => {
-    expect(modelAPIFormats).toEqual(['openai', 'responses', 'anthropic', 'images', 'systemone'])
+    expect(modelAPIFormats).toEqual([
+      'chat_completions',
+      'responses',
+      'messages',
+      'images',
+      'speech',
+      'systemone',
+    ])
   })
 
   it('resolves native backends without pretending they are Chat models', () => {
@@ -81,11 +88,13 @@ describe('effective model API format', () => {
 
   it('uses the single model protocol ahead of the provider default', () => {
     expect(effectiveModelAPIFormat(model, fixture([responses]))).toEqual({ format: 'responses' })
-    expect(effectiveModelAPIFormat(model, fixture([messages]))).toEqual({ format: 'anthropic' })
+    expect(effectiveModelAPIFormat(model, fixture([messages]))).toEqual({ format: 'messages' })
   })
 
   it('uses a provider default only when a multiple-protocol binding includes it', () => {
-    expect(effectiveModelAPIFormat(model, fixture([chat, responses]))).toEqual({ format: 'openai' })
+    expect(effectiveModelAPIFormat(model, fixture([chat, responses]))).toEqual({
+      format: 'chat_completions',
+    })
     expect(effectiveModelAPIFormat(model, fixture([messages, responses])).error).toMatch(
       /ambiguous/,
     )
@@ -98,7 +107,7 @@ describe('effective model API format', () => {
     const bound = fixture([messages])
     bound.providers[0].models[0].restrictions = { provider_model_id_kind: 'deployment_name' }
     expect(effectiveModelAPIFormat({ ...model, provider_model_id: 'production' }, bound)).toEqual({
-      format: 'anthropic',
+      format: 'messages',
     })
     expect(
       effectiveModelAPIFormat(
@@ -108,7 +117,7 @@ describe('effective model API format', () => {
     ).toEqual({ format: 'responses' })
     expect(
       effectiveModelAPIFormat({ ...model, provider_model_id: 'other' }, fixture([responses])),
-    ).toEqual({ format: 'openai' })
+    ).toEqual({ format: 'chat_completions' })
   })
 
   it('does not guess formats for unresolved models or unsupported operations', () => {
@@ -116,9 +125,18 @@ describe('effective model API format', () => {
     expect(effectiveModelAPIFormat({ ...model, backend_refs: [] }, catalog).error).toMatch(
       /backend/,
     )
-    expect(effectiveModelAPIFormat({ ...model, api_format: 'speech' }, catalog).error).toMatch(
-      /Unsupported/,
-    )
+    expect(
+      effectiveModelAPIFormat({ ...model, api_format: 'not-an-api' as 'speech' }, catalog).error,
+    ).toMatch(/Unsupported/)
+    expect(
+      effectiveModelAPIFormat({ ...model, api_format: 'speech' }, fixture([chat])).error,
+    ).toMatch(/cannot create/)
+    const speaking = fixture(['openai/audio-speech@1'])
+    speaking.providers[0].protocols = ['openai/audio-speech@1']
+    speaking.providers[0].supported_operations = ['openai/audio-speech@1#create']
+    expect(effectiveModelAPIFormat({ ...model, api_format: 'speech' }, speaking)).toEqual({
+      format: 'speech',
+    })
     const noCreate = fixture([chat])
     noCreate.providers[0].supported_operations = []
     expect(effectiveModelAPIFormat(model, noCreate).error).toMatch(/cannot create/)
@@ -128,7 +146,7 @@ describe('effective model API format', () => {
     const virtual = catalog.models.find((entry) => entry.kind === 'virtual')!
     expect(virtual).toBeDefined()
     expect(effectiveModelAPIFormat({ ...model, catalog: virtual.id }, fixture([]))).toEqual({
-      format: 'openai',
+      format: 'chat_completions',
     })
   })
 

@@ -103,6 +103,7 @@ global:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: SYSTEMONE_API_KEY}
         timeout_ms: 1500
     system:
@@ -114,13 +115,27 @@ global:
 
 - `endpoint` is the URL the API answers `POST` requests on, with any path
   prefix; `model` is the model it answers with.
-- The API must take both [request forms](../use/api.md): the Router sends each
-  stage's questions in one call, a batch with as many entries as the stage asks
-  about (up to `judge.max_candidates` per judge), and never splits it.
-- The question types, presets and input modalities come from the API's
-  `GET <endpoint>/models` when it lists the model; otherwise from the
-  deployment's `capabilities` (`question_types`, `presets`, `modalities`);
-  otherwise they are `choice`, `noul` and `score` over text.
+- `schema` is the [System One schema](../use/schemas.md#the-schema-an-upstream-speaks)
+  the API speaks: `systemone/0.2`, the published standard (the default);
+  `vllm-sr/5.0` for vllm-sr serve; or `vllm-sr/4.0` for a server not yet
+  upgraded. Under `vllm-sr/5.0` and `vllm-sr/4.0` the Router sends each stage's
+  questions in one call, a batch with as many entries as the stage asks about
+  (up to `judge.max_candidates` per judge). Under `systemone/0.2` it splits the
+  stage into one call per state, at most `max_concurrency` (default 8) in
+  flight, every call within the caller's deadline.
+- `deviations` declare a backend's tested departures from its schema; the
+  first is `state_text`, for a standard API that refuses any state but a
+  string. Under `systemone/0.2`, span, set, video and full-coverage rules fail
+  to load, naming the rule and the deployment.
+- The question types, presets and input modalities come from the API's listing
+  when its schema has model cards (`GET <endpoint>/models` under `vllm-sr/4.0`,
+  `GET /v1/models` beside the endpoint under `vllm-sr/5.0`) and it lists the
+  model; otherwise from the deployment's `capabilities` (`question_types`,
+  `presets`, `modalities`); otherwise they are `choice`, `noul` and `score` over
+  text. `question_types` may list `choice`, `noul`, `score`, `box`, `track`,
+  `set` and `span`; a `vllm-sr/auto` pool sends a request only to models that
+  answer what it needs
+  ([Route by what each model answers](../../tutorials/algorithm/looper/escalate.md#route-by-what-each-model-answers)).
 - A question without its own `timeout_ms` takes the deployment's, else
   1000 ms. A slow, failing or unreachable API leaves its questions unknown; it
   never fails the request by itself, except a delegated one the request carries

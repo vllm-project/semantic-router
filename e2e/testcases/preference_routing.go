@@ -9,7 +9,7 @@ import (
 )
 
 // targetPreferenceDecision is one of the decisions configured to route on the
-// preference rule's labels (see e2e/profiles/preference-routing/values.yaml).
+// preference rule's labels (see the preference recipe in e2e/profiles/signal-routing/values.yaml).
 // The rule is a systemone choice, so every case reports the option the System
 // One fixture chose in the trace's systemone signals, none included.
 const targetPreferenceDecision = "terse_preference_routing"
@@ -29,5 +29,6 @@ func testPreferenceRouting(ctx context.Context, client *kubernetes.Clientset, op
 		TargetDecision: targetPreferenceDecision,
 		ResultsTitle:   "PREFERENCE ROUTING TEST RESULTS",
 		LogLabel:       "Preference",
+		Entrypoint:     "vllm-sr/preference",
 	})
 }

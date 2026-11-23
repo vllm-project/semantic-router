@@ -66,7 +66,8 @@ TRACE_NOTES = (
     (
         ("confidence",),
         "`confidence` is absent when the decision rests on policy leaves, "
-        "aggregates several evidence leaves, or resolves through an error policy.",
+        "aggregates several evidence leaves, resolves through an error policy, "
+        "or is a catch-all.",
     ),
     (
         ("fallback_attempts",),
@@ -281,7 +282,7 @@ def render(reference: dict) -> str:
         "- Recipe names scope local signal, projection, decision, cache, replay, "
         "metric, and learning or session identities. Use `x-vsr-selected-recipe` "
         "together with the local decision and signal names when correlating a "
-        "response with Insights or metrics.",
+        "response with the Dashboard's Requests page or metrics.",
         "",
         "## The trace {#the-trace}",
         "",

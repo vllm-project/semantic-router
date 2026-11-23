@@ -3,6 +3,7 @@ package modelservice
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"sync"
 	"testing"
@@ -175,5 +176,29 @@ func TestCallsCarryTheirDeadline(t *testing.T) {
 	defer leave()
 	if _, err := lease.Classify(bundled, "domain", classifyText("later")); ErrorReason(err) != "timeout" {
 		t.Fatalf("a bundled late answer is a timeout, got %v", err)
+	}
+}
+
+// A per-candidate judge reads at most config.MaxMatchJudgeCandidates
+// candidates because that many states, asked as a judge asks them, fit one
+// bundle to an attached runtime at its default task cap. One more needs a
+// second bundle, sent at once, which the runtime refuses while the first runs.
+func TestAJudgeAtItsCandidateCapSendsOneBundle(t *testing.T) {
+	for _, test := range []struct{ states, bundles int }{{config.MaxMatchJudgeCandidates, 1}, {config.MaxMatchJudgeCandidates + 1, 2}} {
+		runtime := runtimetest.New(vela2Fake("vela"))
+		lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"vela"}})
+		stage, bundle := WithBundle(context.Background(), 0)
+		leave := bundle.Join()
+		errs := make([]error, test.states)
+		Fan(stage, test.states, func(i int) {
+			_, errs[i] = lease.Decide(stage, "vela", Request{State: fmt.Sprintf("candidate %d", i), Questions: []Question{{ID: "q", Type: "noul", Instructions: "Relevant?"}}})
+		})
+		leave()
+		if err := errors.Join(errs...); err != nil {
+			t.Fatal(err)
+		}
+		if calls, _ := runtime.Bundles(); calls != test.bundles {
+			t.Fatalf("%d candidates went in %d bundles, want %d", test.states, calls, test.bundles)
+		}
 	}
 }

@@ -16,6 +16,11 @@ import (
 // their prompt and answered with the image an image decision's model generates.
 const imagesGenerationsPath = "/v1/images/generations"
 
+// audioSpeechPath is the Speech API entry. Unlike images, it is not gated on
+// a decision output kind: a backend that cannot speak fails closed with
+// unsupported_capability.
+const audioSpeechPath = "/v1/audio/speech"
+
 // applyDecisionOutput adds the operation the selected decision's output
 // contract produces to the request before its candidates are qualified, so a
 // model that cannot carry it is never selected. A request that forbids the
@@ -43,7 +48,7 @@ func (r *OpenAIRouter) applyDecisionOutput(ctx *RequestContext) error {
 	}
 	if supported, ok := r.codecCapabilitiesForFormat(client); !ok || !supported.Supports(llmprotocol.CapabilityImageGeneration) {
 		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
-			fmt.Sprintf("the matched route answers with a generated image, which the %s API cannot return; call the Responses API or the Images API", clientAPIName(client)))
+			fmt.Sprintf("the matched route answers with a generated image, which the %s API cannot return; call the Responses API or the Images API", client.APIName()))
 	}
 	if selection.ApplyDecisionOutput(request, decision) {
 		request.Generation++
@@ -108,15 +113,4 @@ func (r *OpenAIRouter) imagesEntryRejection(ctx *RequestContext) *ext_proc.Proce
 func refuseDecisionOutput(ctx *RequestContext, decision *config.Decision, category llmprotocol.ErrorCategory, code, message string) error {
 	logRoutingFailure(ctx, "decision_output_refused", code, fmt.Errorf("decision %q answers in %s", decision.Name, decision.Output))
 	return llmprotocol.NewError(category, code, message, nil)
-}
-
-func clientAPIName(format llmprotocol.WireFormat) string {
-	switch format {
-	case llmprotocol.OpenAIChatV1:
-		return "Chat Completions"
-	case llmprotocol.AnthropicMessagesV1:
-		return "Anthropic Messages"
-	default:
-		return string(format)
-	}
 }

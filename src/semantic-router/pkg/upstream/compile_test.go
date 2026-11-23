@@ -200,9 +200,10 @@ func TestCompileMapsReliabilityWithTheTemplateConditions(t *testing.T) {
 	if single.Outlier != nil || single.Breakers.MaxRequests != 4096 {
 		t.Fatalf("single = %+v", single)
 	}
+	// The default retries raise max_requests as set ones do.
 	plain := topology.cluster("plain")
-	if plain.Outlier != nil || plain.HealthCheck != nil || plain.Breakers != (Breakers{}) {
-		t.Fatalf("plain = %+v, want Envoy's defaults only", plain)
+	if plain.Outlier != nil || plain.HealthCheck != nil || plain.Breakers != (Breakers{MaxRequests: 4096}) {
+		t.Fatalf("plain = %+v, want the default retries' breakers only", plain)
 	}
 }
 

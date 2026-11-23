@@ -9,7 +9,7 @@ DOCS_VENV ?= $(CURDIR)/website/.venv
 DOCS_VENV_PYTHON = $(DOCS_VENV)/bin/python
 DOCS_PYTHON ?= $(if $(wildcard $(DOCS_VENV_PYTHON)),$(DOCS_VENV_PYTHON),$(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3))
 
-.PHONY: docs-cli docs-cli-check docs-cli-test docs-headers docs-headers-check docs-community-check docs-community-test docs-generated-check docs-model-pages docs-model-pages-check
+.PHONY: docs-cli docs-cli-check docs-cli-test docs-headers docs-headers-check docs-community-check docs-community-test docs-generated-check docs-i18n-shell-test docs-model-pages docs-model-pages-check
 docs-cli: ## Generate the CLI command reference from the registered Click command tree
 	@$(DOCS_PYTHON) tools/docs/generate_cli_reference.py
 
@@ -37,6 +37,9 @@ docs-community-check: ## Check source provenance of the published GitHub statist
 
 docs-community-test: ## Test offline snapshot provenance and stale-refresh rejection
 	@node --test website/scripts/lib/generated-source.test.mjs
+
+docs-i18n-shell-test: ## Test that the localized page shells keep zh-Hans catalog coverage
+	@node --test website/scripts/lib/community-shell-i18n.test.mjs
 
 docs-generated-check: MODEL_CATALOG_PYTHON = $(DOCS_PYTHON)
 docs-generated-check: model-catalog-generated-check docs-cli-check docs-headers-check docs-model-pages-check docs-config-check docs-community-check agent-skill-check ## Check generated website contracts without native builds or rewriting
@@ -176,13 +179,13 @@ APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
 APISERVER_INDEX_END := <!-- END-GENERATED-ENDPOINT-INDEX -->
 
 .PHONY: generated-contract-check generated-contract-generate
-generated-contract-check: training-contract-check config-schema-check headers-check api-docs-check agent-skill-check docs-generated-check docs-crd-check model-runtime-client-check decision-runtime-catalog-check ## Check all generated public references without rewriting
+generated-contract-check: training-contract-check config-schema-check headers-check api-docs-check agent-skill-check docs-generated-check docs-crd-check model-runtime-client-check decision-runtime-catalog-check systemone-schemas-check ## Check all generated public references without rewriting
 
 # OpenAPI embeds the config schema: regenerate it before exporting API docs.
 generated-contract-generate: training-contract-generate config-schema-generate headers-generate ## Regenerate OpenAPI, config contracts, and the public skill package in dependency order
 	@$(MAKE) api-docs-generate
 	@$(MAKE) agent-skill-sync
-	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd model-runtime-client-generate decision-runtime-catalog-generate
+	@$(MAKE) model-catalog-generate docs-cli docs-config docs-crd model-runtime-client-generate decision-runtime-catalog-generate systemone-schemas-generate
 	@$(MAKE) docs-model-pages
 
 .PHONY: api-docs-openapi

@@ -39,13 +39,29 @@ func (config *setupConfigFile) canonicalTransport() canonicalConfigTransport {
 	return canonicalConfigTransport{CanonicalConfig: config.CanonicalConfig, globalOverrideRaw: config.globalOverrideRaw}
 }
 
+// decodeYAMLTaggedBody checks the original document before decoding, which
+// would discard unknown fields and explicit nulls the Router rejects.
 func decodeYAMLTaggedBody[T any](reader io.Reader) (T, error) {
 	var value T
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return value, err
 	}
-	return decodeYAMLTaggedBytes[T](data)
+	if err := routerconfig.ValidateRawCanonicalFields(data); err != nil {
+		return value, err
+	}
+	return decodeConfigDocument[T](data)
+}
+
+// decodeConfigDocument decodes a whole config as the Router reads it, with
+// its renamed forms in their canonical form.
+func decodeConfigDocument[T any](data []byte) (T, error) {
+	canonical, err := routerconfig.CanonicalConfigBytes(data)
+	if err != nil {
+		var value T
+		return value, err
+	}
+	return decodeYAMLTaggedBytes[T](canonical)
 }
 
 func decodeYAMLTaggedBytes[T any](data []byte) (T, error) {
@@ -97,7 +113,7 @@ func readCanonicalConfigFile(configPath string) (*canonicalConfigTransport, erro
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := decodeYAMLTaggedBytes[canonicalConfigTransport](data)
+	cfg, err := decodeConfigDocument[canonicalConfigTransport](data)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +125,7 @@ func readSetupConfigFile(configPath string) (*setupConfigFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := decodeYAMLTaggedBytes[setupConfigFile](data)
+	cfg, err := decodeConfigDocument[setupConfigFile](data)
 	if err != nil {
 		return nil, err
 	}

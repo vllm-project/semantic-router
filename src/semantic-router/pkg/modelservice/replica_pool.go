@@ -37,6 +37,9 @@ const (
 	replicaRejected replicaOutcome = "rejected"
 	replicaCanceled replicaOutcome = "canceled"
 	replicaTimeout  replicaOutcome = "timeout"
+	// replicaExpired is an exchange past the deployment's own timeout_ms: a
+	// timeout that also backs the replica off and probes it, as a failure does.
+	replicaExpired replicaOutcome = "expired"
 )
 
 // replicaLoad belongs to a physical worker, so overlapping generations and
@@ -388,23 +391,27 @@ func (p *replicaPool) retain(cost int64) (replicaWorker, func(replicaOutcome), e
 	var once sync.Once
 	release := func(outcome replicaOutcome) {
 		once.Do(func() {
+			unwell := outcome == replicaFailed || outcome == replicaExpired
+			if outcome == replicaExpired {
+				outcome = replicaTimeout
+			}
 			load.mu.Lock()
 			load.inflight--
 			load.work -= cost
 			replicaInflightGauge.WithLabelValues(p.name, w.id).Set(float64(load.inflight))
 			replicaWorkGauge.WithLabelValues(p.name, w.id).Set(float64(load.work))
 			replicaRequestsTotal.WithLabelValues(p.name, w.id, string(outcome)).Inc()
-			switch outcome {
-			case replicaFailed:
+			switch {
+			case unwell:
 				load.failures++
 				delay := time.Duration(1<<min(load.failures-1, 5)) * 100 * time.Millisecond
 				load.backoff = time.Now().Add(delay)
-			case replicaOK:
+			case outcome == replicaOK:
 				load.failures = 0
 				load.backoff = time.Time{}
 			}
 			load.mu.Unlock()
-			if outcome == replicaFailed {
+			if unwell {
 				w.member.group.requestProbe()
 			}
 			p.recordTimeouts(w, outcome, dispatched)

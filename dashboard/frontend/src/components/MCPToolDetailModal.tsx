@@ -1,7 +1,20 @@
-import React, { useId } from 'react'
-import useAccessibleDialog from '../hooks/useAccessibleDialog'
-import styles from './MCPConfigPanel.module.css'
+import React from 'react'
+import { X } from 'lucide-react'
+
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  IconTile,
+} from '../ui'
 import type { UnifiedTool } from './mcpConfigPanelTypes'
+import { TOOL_SOURCE_META, toolIcon } from './mcpConfigPanelUtils'
 
 interface MCPToolDetailModalProps {
   tool: UnifiedTool
@@ -9,88 +22,74 @@ interface MCPToolDetailModalProps {
 }
 
 export const MCPToolDetailModal: React.FC<MCPToolDetailModalProps> = ({ tool, onClose }) => {
-  const dialogId = useId()
-  const titleId = `${dialogId}-title`
-  const descriptionId = `${dialogId}-description`
-  const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: true, onClose })
-
+  const source = TOOL_SOURCE_META[tool.sourceType]
   return (
-    <div className={styles.dialogOverlay} role="presentation" onMouseDown={onClose}>
-      <div
-        ref={dialogRef}
-        className={styles.toolDetailDialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        tabIndex={-1}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className={styles.dialogHeader}>
-          <div className={styles.toolDetailTitle}>
-            <span className={styles.toolDetailIcon}>🔧</span>
-            <h3 id={titleId}>{tool.name}</h3>
-            <span className={`${styles.sourceTypeBadge} ${styles[tool.sourceType]}`}>
-              {tool.sourceType === 'mcp'
-                ? '🔌 MCP'
-                : tool.sourceType === 'frontend'
-                  ? '⚡ Frontend'
-                  : '🌐 Backend'}
-            </span>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent size="lg" hideClose>
+        <div className="flex items-start gap-3 px-6 pb-2 pt-5">
+          <IconTile icon={toolIcon(tool.name)} tone="slate" />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <DialogTitle className="truncate font-mono text-[15px]">{tool.name}</DialogTitle>
+              <Badge tone={source.tone}>{source.label}</Badge>
+            </div>
+            <DialogDescription>{tool.description || 'No description'}</DialogDescription>
           </div>
-          <button
-            type="button"
-            className={styles.closeBtn}
-            onClick={onClose}
-            aria-label="Close tool details"
-            data-dialog-initial-focus
-          >
-            ×
-          </button>
+          <DialogClose asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="Close tool details">
+              <X />
+            </Button>
+          </DialogClose>
         </div>
-
-        <div className={styles.toolDetailContent}>
-          <div className={styles.toolDetailSource}>
-            <span className={styles.detailLabel}>Source:</span>
-            <span className={styles.detailValue}>{tool.source}</span>
-          </div>
-
-          <div className={styles.toolDetailDescription}>
-            <span className={styles.detailLabel}>Description:</span>
-            <p id={descriptionId}>{tool.description || 'No description'}</p>
-          </div>
-
-          <div className={styles.toolDetailParams}>
-            <span className={styles.detailLabel}>Parameters ({tool.parameters.length}):</span>
-            {tool.parameters.length === 0 ? (
-              <p className={styles.noParamsHint}>This tool requires no parameters</p>
-            ) : (
-              <div className={styles.paramDetailList}>
-                {tool.parameters.map((parameter) => (
-                  <div key={parameter.name} className={styles.paramDetailItem}>
-                    <div className={styles.paramDetailHeader}>
-                      <span className={styles.paramDetailName}>{parameter.name}</span>
-                      <span className={styles.paramDetailType}>({parameter.type})</span>
-                      {parameter.required && (
-                        <span className={styles.paramDetailRequired}>Required</span>
-                      )}
-                    </div>
-                    {parameter.description && (
-                      <div className={styles.paramDetailDesc}>{parameter.description}</div>
-                    )}
+        <DialogBody className="flex flex-col gap-4 pb-5">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-[13px]">
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs text-subtle-foreground">Source</dt>
+              <dd className="font-mono text-[12.5px]">{tool.source}</dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="text-xs text-subtle-foreground">Parameters</dt>
+              <dd className="tabular">{tool.parameters.length}</dd>
+            </div>
+          </dl>
+          {tool.parameters.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-3 text-[13px] text-muted-foreground">
+              This tool requires no parameters.
+            </p>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-border">
+              {tool.parameters.map((parameter) => (
+                <div
+                  key={parameter.name}
+                  className="flex flex-col gap-1 border-b border-border px-3.5 py-2.5 last:border-0"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="font-mono text-[12.5px] font-medium">{parameter.name}</code>
+                    <Badge size="sm" tone="outline" className="font-mono">
+                      {parameter.type}
+                    </Badge>
+                    {parameter.required ? (
+                      <Badge size="sm" tone="warning">
+                        Required
+                      </Badge>
+                    ) : null}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className={styles.dialogFooter}>
-          <button type="button" className={styles.cancelBtn} onClick={onClose}>
+                  {parameter.description ? (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {parameter.description}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
             Close
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

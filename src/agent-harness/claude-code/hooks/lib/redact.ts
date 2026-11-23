@@ -1,4 +1,4 @@
-import type { Tag } from '../../types'
+import type { BuiltinTag, Tag } from '../../types'
 import { isRecord, numberAt, type Reply } from './classify'
 
 // A piece of text to hide, in UTF-16 offsets of the text it was found in; `probability` the classifier's, for a span it found.
@@ -10,7 +10,7 @@ export const PII_QUESTIONS = { pii: { preset: 'pii' } }
 
 // DATE_TIME is left out: the runtime tags every date, commit dates included, and hiding them
 // stopped Claude from lining events up in a live run.
-const LABEL_TAGS: Record<string, Tag> = {
+const LABEL_TAGS: Record<string, BuiltinTag> = {
   PERSON: 'name',
   EMAIL_ADDRESS: 'email',
   PHONE_NUMBER: 'phone',
@@ -104,6 +104,23 @@ export function secretsIn(text: string): Found[] {
 
 const WORD = /[A-Za-z0-9]/
 
+// An IPv4 address (with an optional /prefix or :port) or an IPv6 one. The model also tags version numbers such as
+// the 2.32 in requests==2.32.3 as IP_ADDRESS, and hiding those breaks the files Claude reads.
+const OCTET = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)'
+const IPV4 = new RegExp(`^${OCTET}(?:\\.${OCTET}){3}(?:/\\d{1,2})?(?::\\d{1,5})?$`)
+const IPV6 = /^\[?[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:%\w+)?\]?(?::\d{1,5})?$/
+export const looksLikeIp = (text: string) => IPV4.test(text) || (text.includes(':') && IPV6.test(text))
+
+// The dotted number around [from, to), without dots at its ends. The model cuts such numbers short (it tags the 2.32
+// of 2.32.3), so a span over part of an IPv4 address is checked, and hidden, as the whole address.
+function dottedAround(text: string, from: number, to: number): [number, number] {
+  while (from > 0 && /[0-9.]/.test(text[from - 1])) from--
+  while (to < text.length && /[0-9.]/.test(text[to])) to++
+  while (from < to && text[from] === '.') from++
+  while (to > from && text[to - 1] === '.') to--
+  return [from, to]
+}
+
 // The spans at or above `line`, of the labels that are personal data (a DOMAIN_NAME is not), in UTF-16 offsets of `text`; a span that stops inside a word runs to the word's end.
 export function piiIn(text: string, spans: readonly Span[], line: number): Found[] {
   const offsets: number[] = []
@@ -125,6 +142,12 @@ export function piiIn(text: string, spans: readonly Span[], line: number): Found
     if (from < 0 || span.text === '') return []
     while (from > 0 && WORD.test(text[from - 1]) && WORD.test(text[from])) from--
     while (to < text.length && WORD.test(text[to]) && WORD.test(text[to - 1])) to++
+    if (tag === 'ip' && !looksLikeIp(text.slice(from, to))) {
+      const [start, end] = dottedAround(text, from, to)
+      if (!IPV4.test(text.slice(start, end))) return []
+      from = Math.min(from, start)
+      to = Math.max(to, end)
+    }
     return [{ from, to, tag, probability: span.probability }]
   })
 }
@@ -132,15 +155,22 @@ export function piiIn(text: string, spans: readonly Span[], line: number): Found
 export type Hidden = { text: string; counts: Partial<Record<Tag, number>> }
 
 // What stands where a value was hidden: `[vsr:email]`, a tag no code holds, so writing one back is always a lost value.
+// The Router's masking plugin leaves text of this shape alone (placeholderPattern in pkg/masking), so keep it.
 export const tagText = (tag: Tag) => `[vsr:${tag}]`
 
-// Replaces each found piece with its tag; of two that overlap, the one that starts first stays.
+// Replaces each found piece with its tag. Pieces that overlap are hidden as one, under the tag of the one that starts
+// first (the longer at an equal start), so the tail of a piece that crosses another is not left in clear text.
 export function hide(text: string, found: readonly Found[]): Hidden {
+  const merged: Found[] = []
+  for (const one of [...found].sort((a, b) => a.from - b.from || b.to - a.to)) {
+    const last = merged.at(-1)
+    if (last !== undefined && one.from < last.to) last.to = Math.max(last.to, one.to)
+    else merged.push({ ...one })
+  }
   const counts: Partial<Record<Tag, number>> = {}
   let out = ''
   let at = 0
-  for (const one of [...found].sort((a, b) => a.from - b.from || b.to - a.to)) {
-    if (one.from < at) continue
+  for (const one of merged) {
     out += `${text.slice(at, one.from)}${tagText(one.tag)}`
     counts[one.tag] = (counts[one.tag] ?? 0) + 1
     at = one.to

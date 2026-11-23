@@ -18,6 +18,7 @@ from vllm_srun.supervision.readiness import (
     GPU_TOLERANCE,
     compare_numbers,
     golden_check,
+    recorded_at,
 )
 
 FLA_FORWARD_KERNELS = {
@@ -267,25 +268,114 @@ def test_a_dtype_is_checked_only_against_the_references_recorded_at_it():
     assert result.status == "unverified" and result.reference is None
 
 
+def test_a_vendor_key_falls_back_to_the_key_without_it_then_the_device_class():
+    """References recorded before keys named a vendor still check that class's hosts."""
+    amd = "cpu:x86_64:avx512:bf16_native:amd"
+    classed = "cpu:x86_64:avx512:bf16_native"
+    golden = decisions_golden(
+        {
+            "cpu@bfloat16": answers(0.7),
+            f"{amd}@bfloat16": answers(0.6),
+            "cpu:x86_64:avx2:bf16_emulated@bfloat16": answers(0.8),
+        }
+    )
+
+    def reference(keys):
+        return golden_check(
+            answers_of(answers(0.6)), decisions, [golden], "cpu", keys, "bfloat16"
+        ).reference
+
+    assert reference((amd, classed)) == f"{amd}@bfloat16"
+    assert reference(("cpu:x86_64:avx512:bf16_native:intel", classed)) == "cpu@bfloat16"
+    assert (
+        reference(
+            ("cpu:x86_64:avx2:bf16_emulated:amd", "cpu:x86_64:avx2:bf16_emulated")
+        )
+        == "cpu:x86_64:avx2:bf16_emulated@bfloat16"
+    )
+    assert reference(()) == reference(None) == "cpu@bfloat16"
+
+
+def test_recorded_at_names_the_hardware_keys_every_golden_has_at_a_dtype():
+    amd = "cpu:x86_64:avx512:bf16_native:amd"
+    intel = "cpu:x86_64:avx512:bf16_native:intel"
+    first = decisions_golden(
+        {
+            "cpu": answers(0.5),
+            "cpu@bfloat16": answers(0.6),
+            f"{amd}@bfloat16": answers(0.6),
+            f"{intel}@bfloat16": answers(0.6),
+            "cpu:x86_64:avx2:bf16_emulated": answers(0.5),
+        }
+    )
+    second = decisions_golden({"cpu": answers(0.5), f"{amd}@bfloat16": answers(0.6)})
+    assert recorded_at([first], "bfloat16") == {amd, intel}
+    assert recorded_at([first, second], "bfloat16") == {amd}
+    assert recorded_at([first, decisions_golden({})], "bfloat16") == frozenset()
+    assert recorded_at([], "bfloat16") == frozenset()
+    assert recorded_at([first], "float16") == frozenset()
+
+
+@pytest.mark.parametrize("vendor", [None, "amd", "intel"])
 @pytest.mark.parametrize("capability", ["AVX2", "AVX512", "NO AVX"])
 @pytest.mark.parametrize("bf16", [False, True])
 def test_accelerator_selects_the_cpu_instruction_set_reference(
-    monkeypatch, capability, bf16
+    monkeypatch, capability, bf16, vendor
 ):
     from vllm_srun.accel.cpu import CPUAccelerator
     from vllm_srun.accel.cuda import CUDAAccelerator
 
     monkeypatch.setattr(torch.backends.cpu, "get_cpu_capability", lambda: capability)
+    monkeypatch.setattr("vllm_srun.accel.cpu.x86_vendor", lambda: vendor)
     device = DeviceInfo("cpu", None, "host", arch="x86_64", bf16=bf16)
-    assert (
-        CPUAccelerator().golden_reference(device)
-        == f"cpu:x86_64:{capability.lower().replace(' ', '_')}:{'bf16_native' if bf16 else 'bf16_emulated'}"
+    classed = f"cpu:x86_64:{capability.lower().replace(' ', '_')}:{'bf16_native' if bf16 else 'bf16_emulated'}"
+    full = f"{classed}:{vendor}" if vendor else classed
+    assert CPUAccelerator().golden_reference(device) == full
+    assert CPUAccelerator().golden_references(device) == tuple(
+        dict.fromkeys((full, classed))
     )
     assert (
         CUDAAccelerator().golden_reference(DeviceInfo("cuda", 0, "L4", arch="sm_89"))
         == "cuda:sm_89"
     )
     assert CPUAccelerator().golden_reference(DeviceInfo("cpu", None, "unknown")) is None
+    assert CPUAccelerator().golden_references(DeviceInfo("cpu", None, "unknown")) == ()
+
+
+@pytest.mark.parametrize(
+    ("line", "vendor"),
+    [
+        ("vendor_id\t: AuthenticAMD", "amd"),
+        ("vendor_id\t: GenuineIntel", "intel"),
+        ("vendor_id\t: HygonGenuine", None),
+        ("processor\t: 0", None),
+    ],
+)
+def test_x86_vendor_reads_proc_cpuinfo(monkeypatch, tmp_path, line, vendor):
+    import builtins
+
+    from vllm_srun.accel import cpu
+
+    cpuinfo = tmp_path / "cpuinfo"
+    cpuinfo.write_text(f"processor\t: 0\n{line}\n", encoding="utf-8")
+    real = builtins.open
+    monkeypatch.setattr(
+        builtins,
+        "open",
+        lambda path, *a, **k: real(
+            cpuinfo if path == "/proc/cpuinfo" else path, *a, **k
+        ),
+    )
+    assert cpu.x86_vendor() == vendor
+
+
+def test_a_non_x86_cpu_key_names_no_vendor(monkeypatch):
+    from vllm_srun.accel.cpu import CPUAccelerator
+
+    monkeypatch.setattr(torch.backends.cpu, "get_cpu_capability", lambda: "SVE256")
+    monkeypatch.setattr("vllm_srun.accel.cpu.x86_vendor", lambda: "amd")
+    device = DeviceInfo("cpu", None, "host", arch="aarch64", bf16=True)
+    assert CPUAccelerator().golden_reference(device) == "cpu:aarch64:sve256:bf16_native"
 
 
 @pytest.mark.parametrize(
@@ -308,6 +398,7 @@ def test_onednn_capped_below_bf16_selects_the_emulated_reference(
     monkeypatch.setattr(torch.cpu, "_is_amx_tile_supported", lambda: False)
     monkeypatch.setattr(torch.backends.cpu, "get_cpu_capability", lambda: "AVX2")
     monkeypatch.setattr("platform.machine", lambda: "x86_64")
+    monkeypatch.setattr("vllm_srun.accel.cpu.x86_vendor", lambda: None)
     for name in ("ONEDNN_MAX_CPU_ISA", "DNNL_MAX_CPU_ISA"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv(variable, cap)

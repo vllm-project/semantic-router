@@ -175,7 +175,7 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 	}
 	if err != nil {
 		metrics.RecordBatchClassificationError("unified", "classification_failed")
-		s.writeErrorResponse(w, http.StatusInternalServerError, "UNIFIED_CLASSIFICATION_ERROR", err.Error())
+		s.writeClassificationError(w, err)
 		return
 	}
 

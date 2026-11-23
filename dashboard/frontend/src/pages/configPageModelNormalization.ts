@@ -1,4 +1,8 @@
-import { effectiveModelAPIFormat, protocolForModelAPIFormat } from './configPageModelCatalogSupport'
+import {
+  canonicalAPIFormat,
+  effectiveModelAPIFormat,
+  protocolForModelAPIFormat,
+} from './configPageModelCatalogSupport'
 import bundledCatalog from '../modelCatalogMetadata'
 import type { BuiltInModelCatalog, BuiltInModelMetadata } from '../types/modelCatalog'
 import {
@@ -57,7 +61,7 @@ const normalizedProviderModel = (
     ...reasoningConstraints,
     provider_model_id: model.provider_model_id,
     api_format: effectiveModelAPIFormat(model, catalog).format,
-    api_format_override: model.api_format,
+    api_format_override: canonicalAPIFormat(model.api_format),
     external_model_ids: model.external_model_ids,
     backend_refs: model.backend_refs,
     endpoints: normalizeProviderModelEndpoints(model),
