@@ -918,7 +918,13 @@ test.describe('Shell navigation', () => {
     await expect(page).toHaveURL(/\/observe\/requests$/)
     await expect(page.getByRole('heading', { name: 'Requests', exact: true })).toBeVisible()
     const summary = page.getByRole('region', { name: 'Requests summary' })
-    for (const label of ['Requests', 'Estimated spend', 'Cost vs reference', 'Tokens', 'Failed']) {
+    for (const label of [
+      'Requests',
+      'Estimated spend',
+      'Saved vs priciest model',
+      'Tokens',
+      'Failed',
+    ]) {
       await expect(summary.getByText(label, { exact: true })).toBeVisible()
     }
     await expect(page.getByRole('columnheader', { name: 'Decision' })).toBeVisible()

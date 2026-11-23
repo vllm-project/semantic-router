@@ -208,6 +208,14 @@ controlled production environment, pre-create the collection and leave
 automatic creation disabled. Ensure the schema and vector dimension match the
 Router config.
 
+### Existing collection has the wrong vector dimension
+
+At startup, the response cache and Router Memory check an existing collection's
+vector field against the resolved embedding dimension. If they differ, the
+error names the collection, stored dimension, and expected dimension. Use a
+new collection for the new dimension, or migrate and re-embed the existing
+data. The check does not modify the collection.
+
 ### Connection timeout
 
 Check the Service and endpoints, DNS from the Router namespace, NetworkPolicy,

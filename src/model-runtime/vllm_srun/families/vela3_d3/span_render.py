@@ -10,13 +10,12 @@ and end on word boundaries.
 from __future__ import annotations
 
 from bisect import bisect_left
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
-from ...errors import QuestionError
+from ...text import bounds
 from ..decision3.prompt import PromptEncoder, render
 from ..vela2.words import words_of
 
@@ -131,25 +130,39 @@ class Renderer:
             option_ranges=tuple(ranges),
         )
 
+    def read(self, text: str, budget: int | None) -> Any:
+        """The target's encoding, or None when it holds more than ``budget`` tokens.
+
+        A target within the budget is read whole, since its windows cover all
+        of it. A longer one is read only one token past the budget, and not at
+        all when it is certainly longer.
+        """
+        tokenizer = self.prompts.text
+        if budget is None:
+            return tokenizer.encode(text, add_special_tokens=False)
+        if bounds.surely_over(tokenizer, text, budget):
+            return None
+        read = bounds.read(tokenizer, text, budget + 1)
+        return read.encoding if read.tokens <= budget else None
+
     def windows(
         self,
         parts: list[tuple[str, str]],
         target: str,
         question: str,
         labels: list[tuple[str, str]],
-        refuse: Callable[[int], QuestionError | None] = lambda count: None,
-    ) -> tuple[list[Window], int]:
+        budget: int | None = None,
+    ) -> tuple[list[Window], int] | None:
         """The question's windows and its target's token count.
 
-        ``refuse`` sees the target's token count before any window is
-        rendered; the error it returns fails the question.
+        None for a target of more than ``budget`` tokens, before any window is
+        rendered.
         """
         text = dict(parts)[target]
-        encoding = self.prompts.text.encode(text, add_special_tokens=False)
+        encoding = self.read(text, budget)
+        if encoding is None:
+            return None
         count = len(encoding.ids)
-        refused = refuse(count)
-        if refused is not None:
-            raise refused
         if count <= MAX_TARGET:
             return [self.window(parts, target, question, labels, text, 0)], count
         offsets = np.asarray(encoding.offsets, dtype=np.int32).reshape(-1, 2)
