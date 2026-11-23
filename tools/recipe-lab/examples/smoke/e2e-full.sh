@@ -191,7 +191,7 @@ start_router "$TOP_REF" "candidate"
 
 # explicit sr-bench service (a store with prior evidence refuses autostart;
 # serve takes its store from --store via the module entrypoint)
-cd "$REPO/src/vllm-sr"
+cd "$REPO/src/vllm-sr" || exit 1
 setsid nohup "$RL/python" -m cli.sr_bench.service \
   --store "$WORK/srbench-store" --port 18099 > "$WORK/srbench-serve.log" 2>&1 < /dev/null &
 sleep 4

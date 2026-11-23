@@ -1300,6 +1300,8 @@ def cmd_record_draft(args: argparse.Namespace) -> int:
         {"draft": args.output, "candidate": (record.get("candidate") or {}).get("ref")}
     )
     return 0
+
+
 def cmd_score_candidate(args: argparse.Namespace) -> int:
     """Score one deployed candidate against a saved sr-bench baseline.
 

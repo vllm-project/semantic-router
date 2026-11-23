@@ -1,5 +1,3 @@
-
-
 ## Reports, manifests and promotion drafts
 
 The ledger is the single replay source for every human-facing artifact: the

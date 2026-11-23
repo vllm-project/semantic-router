@@ -12,7 +12,6 @@ from recipe_lab.contract import ExperimentSpec
 from recipe_lab.next import render_next_context
 from recipe_lab.provenance import build_run_manifest
 from recipe_lab.report import render_run_report
-
 from tests.fixtures import VALID_SPLITS_SPEC
 
 REPLAY = {
@@ -454,7 +453,6 @@ def test_attribute_writes_summary_json(tmp_path, capsys):
     # G3: attribute writes the summarize() result next to attribution.jsonl
     # so `next` can resolve a record's attribution_ref and read it.
     from recipe_lab.cli import main
-
     from tests.fixtures import VALID_SPEC
 
     cases = tmp_path / "cases.jsonl"
@@ -499,5 +497,9 @@ def test_attribute_writes_summary_json(tmp_path, capsys):
     parsed = json.loads(capsys.readouterr().out)
     summary = json.loads((out_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["class_counts"]["decision_mismatch"] == 1
-    assert summary["accuracy"] is None  # the single case produced no answered class
+    # the decision_mismatch case has a known answer, so it counts against
+    # the metrics: 0.0, not the None the answered-classes denominator gave
+    assert summary["accuracy"] == 0.0
+    assert summary["answer_accuracy"] == 0.0
+    assert summary["routing_correctness"] == 0.0
     assert parsed["summary_json"] == str(out_dir / "summary.json")
