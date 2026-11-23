@@ -86,6 +86,7 @@ for `live-verdict`.
 `--insight-refs` (comma-separated, on `run`, `ledger append` and
 `live-verdict`) merges provenance links into
 `candidate.provenance.insight_refs`; unverifiable references exit 2:
+
 - `rec-<id>` - an existing ledger record_id (G1: every record carries one)
 - `bench:<run_id>` - a benchmark run id (format-checked)
 - `attr:<path>@sha256:<hex>` - attribution artifact, hash-verified
