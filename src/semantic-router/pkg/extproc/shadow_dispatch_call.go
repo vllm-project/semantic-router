@@ -53,6 +53,9 @@ func (p *preparedShadowCall) estimateTokens(engine *protocolcodec.Engine) (shado
 		return shadowTokenEstimate{}, err
 	}
 	output := request.Sampling.MaxOutputTokens
+	if output != nil && *output <= 0 {
+		return shadowTokenEstimate{}, errors.New("shadow token estimate requires a positive output limit when specified")
+	}
 	if request.CandidateCount != nil && *request.CandidateCount > 1 {
 		return shadowTokenEstimate{}, errors.New("shadow token estimate requires a single completion")
 	}

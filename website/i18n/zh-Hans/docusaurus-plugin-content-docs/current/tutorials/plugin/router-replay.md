@@ -296,7 +296,7 @@ plugins:
 | `forward_headers` | `[]` | 允许复制的决策请求头，不区分大小写。凭据头不会转发。 |
 | `capture.max_bytes` | `N × 4096` | 整组的摘录字节上限，分配给有效候选。 |
 
-设置 `budget.max_estimated_cost` 后，Router 根据各候选编码后的输入 token 估算值计算费用，输出部分沿用主请求费用预算的估算规则。优先取请求里的输出上限，并受模型的 `max_output_tokens` 约束。请求未指定时，使用模型上限，两者都没有时使用 `global.services.budgets.output_reserve_tokens`（默认 4096）。估算不会改动发往后端的请求。
+设置 `budget.max_estimated_cost` 后，Router 根据各候选的输入 token 估算值和发往后端的输出上限估价。如果出站请求未指定输出上限，依次使用模型的 `max_output_tokens`、`global.services.budgets.output_reserve_tokens`（默认 4096）。
 
 预估总额超限、有候选缺少同币种价格，或请求一次生成多个答案时，Router 跳过整组并在 Replay 记录原因。对于已尝试派发的调用，Replay 记录预估费用，有后端用量时按用量计价。实际费用可能有差异。主请求仍按自己的会话和用户预算规则执行。
 

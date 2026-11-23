@@ -58,7 +58,10 @@ func estimateShadowSpend(job *shadowJob, tokens shadowTokenEstimate) (*shadowSpe
 	if !ok || normalizeReplayCurrency(pricing.Currency) != currency {
 		return nil, false
 	}
-	output := estimatedOutputTokens(job.routerConfig, job.model, tokens.output)
+	output := tokens.output
+	if output == 0 {
+		output = defaultSpendOutputTokens(job.routerConfig, job.model)
+	}
 	estimate := estimateDispatchCost(tokens.input, output, pricing)
 	if math.IsInf(estimate, 1) {
 		return nil, false

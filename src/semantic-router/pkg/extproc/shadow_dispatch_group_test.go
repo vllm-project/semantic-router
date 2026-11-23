@@ -569,6 +569,7 @@ func TestShadowGroupSpendBudget(t *testing.T) {
 			model := router.Config.ModelConfig[shadowTestModel]
 			model.Pricing = config.ModelPricing{Currency: "USD", PromptPer1M: 1e6, CachedInputPer1M: 5e5, CompletionPer1M: 1e6}
 			if tc.boundaryRates {
+				model.MaxOutputTokens = 80
 				model.Pricing = config.ModelPricing{Currency: "USD", CompletionPer1M: 1000}
 			}
 			router.Config.ModelConfig[shadowTestModel] = model
@@ -620,16 +621,21 @@ func TestShadowGroupSpendBudget(t *testing.T) {
 	}
 }
 
-func TestShadowSpendEstimatesOmittedOutputLimit(t *testing.T) {
+func TestShadowSpendEstimatesOutputTokens(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
+		requestLimit  *int64
 		modelLimit    int
 		outputReserve int
 		wantEstimate  string
 	}{
-		{"model limit takes precedence", 120, 240, "120"},
-		{"configured reserve", 0, 240, "240"},
-		{"default reserve", 0, 0, "4096"},
+		{"explicit limit below model limit", llmprotocol.Int64(32), 64, 128, "32"},
+		{"explicit limit equals model limit", llmprotocol.Int64(64), 64, 128, "64"},
+		{"explicit limit above model limit", llmprotocol.Int64(96), 64, 128, "96"},
+		{"model limit takes precedence", nil, 64, 128, "64"},
+		{"configured reserve", nil, 0, 128, "128"},
+		{"default reserve", nil, 0, 0, "4096"},
+		{"explicit zero is unbounded", llmprotocol.Int64(0), 64, 128, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			backend := newShadowTestBackend(t)
@@ -643,9 +649,17 @@ func TestShadowSpendEstimatesOmittedOutputLimit(t *testing.T) {
 			limit := 5000.0
 			cfg.Budget.MaxEstimatedCost = &limit
 
-			run := runShadowRequest(t, router, primary, cfg, nil)
+			run := runShadowRequest(t, router, primary, cfg, func(ctx *RequestContext) {
+				ctx.SemanticRequest.Sampling.MaxOutputTokens = tc.requestLimit
+			})
 			waitForShadow(t, router)
 			outcome := singleShadowOutcome(t, run)
+			if tc.wantEstimate == "" {
+				if outcome.Reason != shadowReasonBudgetUnbounded || backend.requestCount() != 0 {
+					t.Fatalf("invalid output limit: reason %q, requests %d", outcome.Reason, backend.requestCount())
+				}
+				return
+			}
 			if outcome.Reason != shadowReasonCompleted || outcome.Metadata["budget_estimated_cost"] != tc.wantEstimate {
 				t.Fatalf("got reason %q and estimate %q, want completion with estimate %s", outcome.Reason, outcome.Metadata["budget_estimated_cost"], tc.wantEstimate)
 			}
@@ -658,8 +672,16 @@ func TestShadowSpendEstimatesOmittedOutputLimit(t *testing.T) {
 			if err := json.Unmarshal(backend.bodies[0], &wire); err != nil {
 				t.Fatal(err)
 			}
-			if wire["max_tokens"] != nil || wire["max_completion_tokens"] != nil {
-				t.Fatalf("estimate changed the outgoing output limit: %s", backend.bodies[0])
+			wireLimit := wire["max_completion_tokens"]
+			if wireLimit == nil {
+				wireLimit = wire["max_tokens"]
+			}
+			if tc.requestLimit == nil {
+				if wireLimit != nil {
+					t.Fatalf("estimate set an outgoing output limit: %s", wireLimit)
+				}
+			} else if string(wireLimit) != tc.wantEstimate {
+				t.Fatalf("outgoing output limit = %s, want %s", wireLimit, tc.wantEstimate)
 			}
 		})
 	}
