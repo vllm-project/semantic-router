@@ -36,6 +36,7 @@ function stubRouter() {
 async function previewAndDeploy() {
   useDSLStore.setState({ yamlOutput: 'recipes: []\n', dirty: false })
   await useDSLStore.getState().requestDeploy()
+  await vi.waitFor(() => expect(useDSLStore.getState().deployPreviewLoading).toBe(false))
   await useDSLStore.getState().executeDeploy()
 }
 
@@ -79,6 +80,38 @@ describe('Builder deploy base', () => {
     expect(body('/api/router/config/deploy/preview')).toMatchObject({
       baseYaml: '',
       mode: 'replace',
+    })
+  })
+
+  it('requires a new review when a pending import replaces the previewed draft', async () => {
+    const body = stubRouter()
+    useDSLStore.setState({ dslSource: 'ROUTE a {}', yamlOutput: 'draft A' })
+    let finishImport!: (value: { dsl: string }) => void
+    vi.mocked(dslCompiler.decompile).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishImport = resolve
+      }),
+    )
+    const importing = useDSLStore.getState().importYaml('imported base B')
+    await useDSLStore.getState().requestDeploy()
+    await vi.waitFor(() => expect(useDSLStore.getState().deployPreviewLoading).toBe(false))
+    expect(useDSLStore.getState().showDeployConfirm).toBe(true)
+
+    finishImport({ dsl: 'ROUTE b {}' })
+    await importing
+    vi.mocked(dslCompiler.compile).mockResolvedValue({ yaml: 'draft B', diagnostics: [] })
+    await useDSLStore.getState().compile()
+    await useDSLStore.getState().executeDeploy()
+    expect(fetch).not.toHaveBeenCalledWith('/api/router/config/deploy', expect.anything())
+    expect(useDSLStore.getState().showDeployConfirm).toBe(false)
+
+    await useDSLStore.getState().requestDeploy()
+    await vi.waitFor(() => expect(useDSLStore.getState().deployPreviewLoading).toBe(false))
+    await useDSLStore.getState().executeDeploy()
+    expect(body('/api/router/config/deploy')).toMatchObject({
+      yaml: 'draft B',
+      dsl: 'ROUTE b {}',
+      baseYaml: 'imported base B',
     })
   })
 

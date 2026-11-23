@@ -162,6 +162,8 @@ class DtypePolicy:
     a CPU kernel, and the reverse. ``approximate_cpu_kernels`` is True for every
     slot, or the names of the slots (``linear``, ``sdpa``) the family's record
     covers, so a kernel added to another slot later does not change its answers.
+    ``approximate_accelerators`` scopes that accelerator consent to the named
+    accelerators (None: every accelerator the spec runs on).
     ``cpu_bf16_references`` names the CPU hardware keys
     (``CPUAccelerator.golden_reference``) on which every golden request has a
     BF16 reference: on such a host ``--dtype auto`` holds BF16 instead of
@@ -183,6 +185,7 @@ class DtypePolicy:
     approximate_kernels: bool = False
     approximate_cpu_kernels: bool | frozenset[str] = False
     cpu_bf16_references: frozenset[str] = frozenset()
+    approximate_accelerators: frozenset[str] | None = None
 
     @property
     def needs_gpu_bf16(self) -> bool:

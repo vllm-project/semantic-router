@@ -368,6 +368,27 @@ def test_videos_reach_the_model_and_count_as_input_tokens(d3_runtime, mp4_url, p
     assert again == seen
 
 
+def test_an_mpeg_ts_segment_is_read_as_the_same_clip_in_mp4(
+    d3_runtime, mp4_url, ts_url
+):
+    """A transport stream segment (``video/mp2t``), as a live stream cuts them, is a video like any other."""
+    segment = ts_url(96, 64, frames=12, fps=8.0, seed=1)
+    assert segment.startswith("data:video/mp2t;base64,")
+    request = {"state": "What happens?", "questions": QUESTIONS}
+    text = call(d3_runtime, request)[1]
+    status, seen = call(d3_runtime, {**request, "videos": [segment]})
+    assert status == 200
+    assert seen["answers"] != text["answers"]
+    assert seen["usage"]["input_tokens"] > text["usage"]["input_tokens"]
+    decoded = vid.decode(segment)
+    assert decoded.fps == 8.0 and decoded.indices == (0, 4, 7, 11)
+    # The window decoder of box and track questions opens the segment as well.
+    assert next(iter(vid.decode_windows(segment, 1))) is not None
+    # The frames are those of the MP4, so the model answers as it answers the MP4.
+    clip = mp4_url(96, 64, frames=12, fps=8.0, seed=1)
+    assert call(d3_runtime, {**request, "videos": [clip]})[1] == seen
+
+
 @pytest.mark.parametrize(
     "videos,message,reason",
     [

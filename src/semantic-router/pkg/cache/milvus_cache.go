@@ -236,7 +236,7 @@ func (c *MilvusCache) initializeCollection() error {
 		})
 	}
 
-	if err := milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, c.client, c.collectionName, func(innerCtx context.Context) error {
+	if err := milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(ctx, c.client, c.collectionName, func(innerCtx context.Context) error {
 		logging.Debugf("MilvusCache: collection '%s' does not exist. AutoCreateCollection=%v",
 			c.collectionName, c.config.Development.AutoCreateCollection)
 		if !c.config.Development.AutoCreateCollection {
@@ -253,6 +253,8 @@ func (c *MilvusCache) initializeCollection() error {
 			"dimension":  c.config.Collection.VectorField.Dimension,
 		})
 		return nil
+	}, func(innerCtx context.Context) error {
+		return milvuslifecycle.ValidateFloatVectorDimension(innerCtx, c.client, c.collectionName, c.config.Collection.VectorField.Name, c.embeddingDimension())
 	}, milvuslifecycle.CollectionRetryOptions{}); err != nil {
 		logging.Debugf("MilvusCache: failed to ensure/load collection: %v", err)
 		return fmt.Errorf("failed to ensure/load collection: %w", err)
