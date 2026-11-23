@@ -7,7 +7,6 @@ import urllib.error
 from unittest import mock
 
 import pytest
-from recipe_lab import cli
 from recipe_lab.adapters.router_replay import (
     fetch_replays,
     load_cases,
@@ -15,6 +14,8 @@ from recipe_lab.adapters.router_replay import (
     records_to_cases,
     records_to_rows,
 )
+
+from recipe_lab import cli
 from recipe_lab.contract import ContractError
 
 

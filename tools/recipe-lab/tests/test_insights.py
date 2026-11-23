@@ -6,14 +6,15 @@ import hashlib
 import json
 
 import pytest
-from recipe_lab.cli import main
-from recipe_lab.contract import ContractError
 from recipe_lab.insights import (
     merge_insight_refs,
     parse_insight_refs,
     resolve_insight_refs,
 )
 from recipe_lab.ledger import Ledger, LedgerRecord
+
+from recipe_lab.cli import main
+from recipe_lab.contract import ContractError
 from tests.test_cli import _replay_record, _write_frozen_spec
 
 

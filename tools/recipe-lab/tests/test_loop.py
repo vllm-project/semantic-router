@@ -7,8 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from recipe_lab import loop
 from recipe_lab.loop_evidence import digest
+
+from recipe_lab import loop
 
 
 class LedgerTest(unittest.TestCase):
