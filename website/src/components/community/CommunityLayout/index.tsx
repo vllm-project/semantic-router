@@ -15,14 +15,21 @@ export interface CommunityNavGroup {
   items: CommunityNavItem[]
 }
 
-/* Grouped like the docs sidebar. The labels and their order are unchanged
- * from the workgroups reset; the rule falls between the fourth and fifth.
+/* Grouped like the docs sidebar, with a rule between groups. The guide leads,
+ * so a newcomer meets it first in the rail and in the pill row on narrow screens.
  *
  * Every label is a literal `translate()` call: Docusaurus extracts translation
  * IDs by statically evaluating the argument, so a computed id never reaches
  * `write-translations`. `key` and `to` stay literal so destinations and the
  * active-page state cannot drift; only the visible text is translated. */
 export const COMMUNITY_NAV_GROUPS: CommunityNavGroup[] = [
+  {
+    key: 'start-here',
+    label: translate({ id: 'community.nav.group.startHere', message: 'Start here' }),
+    items: [
+      { key: 'contributor-guide', label: translate({ id: 'community.nav.item.contributorGuide', message: 'Contributor Guide' }), to: '/community/contributor-guide' },
+    ],
+  },
   {
     key: 'people',
     label: translate({ id: 'community.nav.group.people', message: 'People' }),
@@ -52,6 +59,7 @@ export interface CommunityLayoutProps {
   activeKey: string
   title: ReactNode
   description?: ReactNode
+  actions?: ReactNode
   children: ReactNode
 }
 
@@ -59,11 +67,13 @@ export default function CommunityLayout({
   activeKey,
   title,
   description,
+  actions,
   children,
 }: CommunityLayoutProps): ReactNode {
   return (
     <BrowseLayout
       activeKey={activeKey}
+      actions={actions}
       description={description}
       eyebrow={<Translate id="community.layout.eyebrow">Community</Translate>}
       groups={COMMUNITY_NAV_GROUPS}
