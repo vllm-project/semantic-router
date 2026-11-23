@@ -1,7 +1,12 @@
 package extproc
 
 import (
+	"strconv"
+
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // Internal hops skip final response policy and persistence, which belong to
@@ -23,10 +28,11 @@ func (r *OpenAIRouter) handleLooperResponseBody(
 	}
 
 	response := buildResponseBodyContinueResponse(nil, nil)
+	var semantic *llmprotocol.Response
 	rewrite := requiresClientResponseRewrite(ctx)
 	if rewrite || ctx.nativeFallbackResponse != nil {
-		semantic, err := r.decodeClientResponse(responseBody, ctx)
-		if err != nil {
+		var err error
+		if semantic, err = r.decodeClientResponse(responseBody, ctx); err != nil {
 			return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 		}
 		if rewrite {
@@ -37,6 +43,11 @@ func (r *OpenAIRouter) handleLooperResponseBody(
 			setResponseBodyMutation(response, responseBody)
 			setResponseContentType(response, "application/json")
 		}
+	}
+	if cost, currency, priced := r.settleHopSpend(ctx, semantic, responseBody); priced {
+		// The Looper prices the call at this, not at its Chat projection.
+		setResponseBodyHeader(response, headers.VSRCost, strconv.FormatFloat(cost, 'f', -1, 64))
+		setResponseBodyHeader(response, headers.VSRCostCurrency, currency)
 	}
 	r.finishNativeFallbackResponse(ctx, "")
 	// Same-wire Chat remains byte-preserving. An empty completion can still
@@ -62,11 +73,14 @@ func (r *OpenAIRouter) handleLooperStreamingResponseBody(
 		semantic, err := ctx.SemanticStreamState.response()
 		if err != nil {
 			ctx.StreamingAborted = true
-		} else if body, err := r.encodeClientResponse(*semantic, ctx); err == nil {
-			if !ctx.StreamingAborted {
-				r.finishNativeFallbackResponse(ctx, "")
+		} else {
+			r.settleHopSpend(ctx, semantic, nil)
+			if body, err := r.encodeClientResponse(*semantic, ctx); err == nil {
+				if !ctx.StreamingAborted {
+					r.finishNativeFallbackResponse(ctx, "")
+				}
+				r.attachRouterReplayResponse(ctx, body, true)
 			}
-			r.attachRouterReplayResponse(ctx, body, true)
 		}
 		r.endStreamRouterReplay(ctx, clean)
 	}

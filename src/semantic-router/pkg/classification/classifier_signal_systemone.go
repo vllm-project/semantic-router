@@ -20,6 +20,10 @@ const systemOneSignalErrorPrefix = "systemone_"
 // of them: a tool result held content the Router cannot read as text.
 const unreadToolResult = "unreadable_tool_result"
 
+// unreadUserContent is why a text-only jailbreak projection left part of a
+// user message unread.
+const unreadUserContent = "unreadable_user_content"
+
 // unreadImage is why a rule that reads the images read only part of them: an
 // image no decision model decodes, such as a remote URL or a GIF.
 const unreadImage = "unreadable_image"
@@ -102,7 +106,9 @@ func tailCap(s string, limit int) string {
 
 type systemOneReading struct {
 	request               string
+	requestIncomplete     bool
 	history               []string
+	historyIncomplete     bool
 	turns                 []ConversationTurn
 	toolResults           []string
 	toolResultsIncomplete bool
@@ -241,12 +247,13 @@ func (r systemOneReading) hasInput(rule config.SystemOneRule) bool {
 }
 
 // unread is why a full-coverage rule misses part of its input, which it then
-// resolves as on_unscanned says: a tool result it cannot read as text, or an
-// image no decision model decodes. It is empty when the rule reads it all.
+// resolves as on_unscanned says. Only the input the rule reads counts.
 func (r systemOneReading) unread(rule config.SystemOneRule) string {
 	switch {
 	case !rule.FullCoverage():
 		return ""
+	case r.requestIncomplete && rule.Input.ReadsRequest(), r.historyIncomplete && rule.Input.History:
+		return unreadUserContent
 	case r.toolResultsIncomplete && rule.Input.ToolResults:
 		return unreadToolResult
 	case r.contextIncomplete && rule.Input.Context:
@@ -443,8 +450,8 @@ func newResponseSignalResults() *SignalResults {
 }
 
 // askSystemOneRules asks rules about reading. Rules read only the images a
-// decision model decodes. A rule whose tool results hold no text at all, only
-// content it cannot read, is not asked and resolves as its on_unscanned says.
+// decision model decodes. A rule with only unreadable input is not asked and
+// resolves as its on_unscanned says.
 func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []askedRule, reading systemOneReading) {
 	reading.images, reading.imagesIncomplete = decodedImages(reading.images)
 	reading.videos, reading.videosIncomplete = decodedVideos(reading.videos)
@@ -622,11 +629,20 @@ func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, resp
 			continue
 		}
 		c.recordGuardRead(results, asked, true)
-		if asked.unread != "" && c.resolveUnread(results, asked, deployment, asked.unread) {
+		if c.resolveUnreadCall(results, asked, deployment, answer) {
 			continue
 		}
 		c.applyRuleAnswer(results, asked, answer)
 	}
+}
+
+// resolveUnreadCall preserves a positive verdict on the text that was read,
+// just as a matching window decides a longer guard scan.
+func (c *Classifier) resolveUnreadCall(results *SignalResults, asked askedRule, deployment string, answer modelservice.Answer) bool {
+	if asked.unread == "" || (guardScanned(asked) && answer.InputCoverage == "complete" && decidedBy(asked, []windowAnswer{{answer: answer}})) {
+		return false
+	}
+	return c.resolveUnread(results, asked, deployment, asked.unread)
 }
 
 // recordGuardRead counts the coverage of a guard rule that read its input
@@ -715,7 +731,7 @@ func mergeReads(reads, more []string) []string {
 // read the whole input.
 func unscanned(reason string) bool {
 	switch reason {
-	case "scan_budget_exceeded", "input_coverage_unknown", "max_length_exceeded", "partial_scan", unreadToolResult, unreadImage:
+	case "scan_budget_exceeded", "input_coverage_unknown", "max_length_exceeded", "partial_scan", unreadToolResult, unreadUserContent, unreadImage:
 		return true
 	}
 	return false
