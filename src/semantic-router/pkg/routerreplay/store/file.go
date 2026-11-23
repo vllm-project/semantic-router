@@ -28,6 +28,7 @@ type FileStore struct {
 	limit          int
 	pending        []Record
 	rewritePending bool
+	writerStarted  bool
 	closed         bool
 	wake           chan struct{}
 	stop           chan struct{}
@@ -50,6 +51,17 @@ var openFileStores = struct {
 // to its owner, or shares the one this process has open there. It fails while
 // another process holds the file.
 func OpenFileStore(path string, maxRecords, ttlSeconds int) (*FileStore, error) {
+	return openFileStore(path, maxRecords, ttlSeconds, true)
+}
+
+// PrepareFileStore opens or shares a store for a Router candidate. loadLimit
+// bounds the history loaded on a new open. The candidate must commit its
+// retention policy before serving, or close its reference without committing.
+func PrepareFileStore(path string, loadLimit, ttlSeconds int) (*FileStore, error) {
+	return openFileStore(path, loadLimit, ttlSeconds, false)
+}
+
+func openFileStore(path string, maxRecords, ttlSeconds int, activate bool) (*FileStore, error) {
 	path, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -58,10 +70,9 @@ func OpenFileStore(path string, maxRecords, ttlSeconds int) (*FileStore, error) 
 	defer openFileStores.Unlock()
 	if store := openFileStores.byPath[path]; store != nil {
 		store.refs++
-		store.mu.Lock()
-		store.SetMaxRecords(maxRecords)
-		store.limit = store.maxRecords
-		store.mu.Unlock()
+		if activate {
+			store.CommitRetention(maxRecords)
+		}
 		return store, nil
 	}
 	store := &FileStore{MemoryStore: NewMemoryStore(maxRecords, ttlSeconds), path: path, refs: 1}
@@ -79,9 +90,28 @@ func OpenFileStore(path string, maxRecords, ttlSeconds int) (*FileStore, error) 
 	store.wake = make(chan struct{}, 1)
 	store.stop = make(chan struct{})
 	store.done = make(chan struct{})
-	go store.writeLoop()
+	if activate {
+		store.CommitRetention(maxRecords)
+	}
 	openFileStores.byPath[path] = store
 	return store, nil
+}
+
+// CommitRetention applies the serving Router's record limit. For a newly
+// prepared store it also starts the writer, so discarding a candidate that
+// opened the file cannot checkpoint its provisional history.
+func (f *FileStore) CommitRetention(maxRecords int) {
+	if maxRecords <= 0 {
+		maxRecords = DefaultMaxRecords
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.MemoryStore.SetMaxRecords(maxRecords)
+	f.limit = maxRecords
+	if !f.writerStarted {
+		f.writerStarted = true
+		go f.writeLoop()
+	}
 }
 
 // lockFile takes the lock that keeps a second process off a store's file. It
@@ -198,8 +228,8 @@ func recordEnded(state string) bool {
 }
 
 // Close releases this user's share of the store. Once no Router generation
-// uses it, it rewrites the file with the ended records, as they are now, and
-// closes it.
+// uses it, it checkpoints the ended records and closes the file. A prepared
+// store that never served closes without a checkpoint.
 func (f *FileStore) Close() error {
 	openFileStores.Lock()
 	defer openFileStores.Unlock()
@@ -212,8 +242,13 @@ func (f *FileStore) Close() error {
 	delete(openFileStores.byPath, f.path)
 	f.mu.Lock()
 	f.closed = true
+	writerStarted := f.writerStarted
 	close(f.stop)
 	f.mu.Unlock()
+	if !writerStarted {
+		f.closeErr = errors.Join(f.file.Close(), f.lock.Close())
+		return f.closeErr
+	}
 	<-f.done
 	return f.closeErr
 }
