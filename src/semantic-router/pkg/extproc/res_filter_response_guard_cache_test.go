@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -249,6 +250,34 @@ func TestResponseCachePartitionFollowsTheDecisionsGuard(t *testing.T) {
 	}
 	if !strings.HasSuffix(unguarded, ":") {
 		t.Fatalf("partition %q of a decision without a guard carries an epoch", unguarded)
+	}
+}
+
+// A guard that read only the first choice stored its entries under the
+// guard's fingerprint alone; with the same guard they are a cache miss.
+func TestResponseCacheMissesFirstChoiceGuardEntries(t *testing.T) {
+	service, err := newResponseCacheService(nil, cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, MaxEntries: 10, TTLSeconds: 60}), "", nil)
+	if err != nil {
+		t.Fatalf("response cache: %v", err)
+	}
+	decision := config.Decision{Name: "guarded", Plugins: []config.DecisionPlugin{guardPlugin(jailbreakGuard(config.ResponseGuardBlock, ""))}}
+	ctx := &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1, VSRSelectedDecision: &decision, CacheExactFingerprint: "question"}
+	current := responseCacheIdentity(ctx, "vllm-sr/auto")
+	fingerprint, err := cache.FingerprintValue(requestResponseGuard(ctx))
+	if err != nil {
+		t.Fatalf("guard fingerprint: %v", err)
+	}
+	earlier := current
+	earlier.Partition.Epoch = cache.CombineFingerprints("", fingerprint)
+	answer := []byte(`{"choices":[{"index":0},{"index":1}]}`)
+	if err := service.StoreExact(t.Context(), cache.CacheWrite{Identity: earlier, ResponseBody: answer, TTL: cache.DefaultTTL()}); err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	if hit, err := service.LookupExact(t.Context(), cache.ExactLookup{Identity: earlier}); err != nil || !hit.Found {
+		t.Fatalf("lookup under the earlier key = %+v, %v; want the stored entry", hit, err)
+	}
+	if hit, err := service.LookupExact(t.Context(), cache.ExactLookup{Identity: current}); err != nil || hit.Found {
+		t.Fatalf("lookup under the current key = %+v, %v; want a miss", hit, err)
 	}
 }
 
