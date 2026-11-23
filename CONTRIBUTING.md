@@ -3,6 +3,11 @@
 Thank you for contributing. This guide covers the repository workflow; the
 public installation guide is at <https://vllm-sr.ai/docs/installation/>.
 
+New to the project? Start with the
+[Contributor Guide](https://vllm-sr.ai/community/contributor-guide): how
+vLLM Semantic Router works, which Work Group owns each area, and how to grow
+from your first pull request to maintainer.
+
 ## Before you start
 
 Install:
@@ -351,6 +356,15 @@ Summary check shows the effective conditions, including inherited requirements.
   stop and retain the evidence; do not change native failures to success or
   neutral. This is a controlled recovery path, not a guarantee that every
   branch update resolves every check conflict.
+
+- **Waiting Gate disappears after a Community rerun:** the trusted publisher
+  can restore a verified current-attempt pending Gate without another branch
+  push or manual Actions rerun. It keeps the check pending and preserves the
+  existing `/ci run` guidance; it does not authorize CI, publish success, or
+  replace a completed verdict. Recovery must confirm the replacement in the
+  latest check set before retiring the original pending check. An uncertain
+  write or visibility result stops repeated creation. Retain the qualification
+  run/attempt and check IDs for Maintainer investigation of #5866.
 
 To recover from a branch-update failure, merge upstream `main` into your PR
 branch and push it, or use GitHub's **Update branch** button when available.

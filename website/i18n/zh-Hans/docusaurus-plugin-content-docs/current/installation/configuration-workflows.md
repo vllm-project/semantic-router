@@ -45,6 +45,8 @@ vllm-sr serve --config config.yaml
 
 **Routing → Config editor** 拥有路由语义。它在替换其路由表面时保留 listeners、providers、全局设置和设置状态。多配方生命周期变更从 **Routing → Recipes** 或管理 API 管理，以免编辑器中的变更悄悄丢弃另一个配方。
 
+在 Dashboard 保存完整配置时，如果配置中包含未知字段，Dashboard 会指出字段路径，并保留原有配置。
+
 ## Helm {#helm}
 
 直接 Helm 部署将完整的 canonical 文档放在 `configOverride` 下。这会在 chart 应用显式 Kubernetes 集成重写之前，将 chart 的示例配置作为一份文档替换；它不会将示例模型或决策合并到你的策略中。将 canonical 文档编写并校验为 `config.yaml`，然后将该文档放在 Helm values 文件的 `configOverride` 下。
@@ -102,7 +104,7 @@ Helm values 在安装时为 Router ConfigMap 提供初始内容：
 
 - **在线编辑在升级后保留。** 之后由 Dashboard 或 Router API 保存的配置编辑，会在普通的 Helm 升级中保留。
 - **有意应用修订后的 `configOverride`**，需要在那次升级中修改 `configMap.applyValuesRevision`。之后的升级沿用同一修订值时，会保留后续的在线编辑。
-- **滚动发布。** 保存的 ConfigMap 编辑会在 Router Deployment 滚动发布后生效。
+- **滚动发布。** 保存的 ConfigMap 编辑会在 Router Deployment 滚动发布后生效。Dashboard 通过 Kubernetes API 读取已保存的 ConfigMap，因此其配置页面和模型健康状态会在几秒内显示该编辑，无需重启。
 
 `vllm-sr serve --target kubernetes --config config.yaml` 将所选文档作为原子覆盖传递，因此 chart 示例路由不能合并到其中。该命令拒绝空文档或仅包含 setup 的文档，并且不会注入本地 Docker 服务地址或知识库路径。先运行 `vllm-sr config validate`，以便 schema 和引用错误在部署前失败。
 

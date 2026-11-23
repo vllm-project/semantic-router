@@ -72,7 +72,7 @@ func wireHandler(t *testing.T, sink *forwarded) http.HandlerFunc {
 			response = `{"model":"private","answers":{"q":{"type":"noul","noul":0.5}},"usage":{"input_tokens":1,"output_tokens":0}}`
 		}
 		return status, []byte(response), nil
-	})
+	}, ClientAuth{})
 }
 
 func send(handler http.HandlerFunc, path string, body []byte, headers map[string]string) (int, map[string]string) {
@@ -171,6 +171,27 @@ func TestPublicSystemOneForwardsLongContext(t *testing.T) {
 	}
 	if status, answer := send(handler, "/v1/systemone", []byte(`{"model":"vllm-sr/test","options":{"long_context":"yes"},"state":"s"}`), nil); status != 400 || !strings.Contains(answer["message"], "long_context") {
 		t.Fatalf("a non-boolean long_context => %d %v", status, answer)
+	}
+}
+
+// A runtime answers type_unsupported both for a type System One does not
+// define and for one it defines that the selected model does not answer, such
+// as span on a Decision 3.0 model, so the wording must be true of both.
+func TestPublicSystemOneSaysTheModelDoesNotAnswerAQuestionType(t *testing.T) {
+	const words = "this model does not answer this question type; GET /v1/systemone/models lists the types each model answers"
+	sink := &forwarded{response: `{"model":"private","answers":{"ok":{"type":"noul","noul":0.5},"where":{"type":"span","error":"invalid_question","reason":"type_unsupported","message":"type must be one of ['choice', 'noul', 'score']"}},"usage":{"input_tokens":1,"output_tokens":0}}`}
+	handler := wireHandler(t, sink)
+	body := []byte(`{"model":"vllm-sr/test","state":"s","questions":{"ok":{"type":"noul","instructions":"?"},"where":{"type":"span","instructions":"the name"}}}`)
+	status, answer := send(handler, "/v1/systemone", body, nil)
+	if status != 422 || answer["code"] != "question_failed" || answer["question_error"] != "invalid_question" || answer["reason"] != "type_unsupported" || answer["question"] != "where" {
+		t.Fatalf("/v1/systemone => %d %v", status, answer)
+	}
+	if want := `question "where" cannot be answered: ` + words; answer["message"] != want {
+		t.Fatalf("/v1/systemone message = %q, want %q", answer["message"], want)
+	}
+	sink.status, sink.response = 400, `{"error":{"code":"invalid_request","message":"no question is valid (where: ...)","reason":"type_unsupported","question":"where"}}`
+	if status, answer := send(handler, "/v1/decisions", body, nil); status != 400 || answer["reason"] != "type_unsupported" || answer["message"] != "no question is valid: "+words {
+		t.Fatalf("a request without a valid question on /v1/decisions => %d %v", status, answer)
 	}
 }
 

@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "response_parallel_1",
+          "id": "msg_dc6219cb42e5e48404289aee",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,
@@ -40,7 +40,7 @@
       "event": "content_block_start",
       "data": {
         "content_block": {
-          "id": "call_time",
+          "id": "toolu_4707db55596c8ba03bd20742",
           "input": {},
           "name": "lookup_time",
           "type": "tool_use"
@@ -71,7 +71,7 @@
       "event": "content_block_start",
       "data": {
         "content_block": {
-          "id": "call_weather",
+          "id": "toolu_46a3b02feff9a8237e1a13ce",
           "input": {},
           "name": "lookup_weather",
           "type": "tool_use"

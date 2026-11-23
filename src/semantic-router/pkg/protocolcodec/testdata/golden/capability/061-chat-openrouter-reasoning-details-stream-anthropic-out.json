@@ -11,7 +11,7 @@
                 "message": {
                   "container": null,
                   "content": [],
-                  "id": "gen-openrouter-1",
+                  "id": "msg_e731f5e8f8dd75fd75423da3",
                   "model": "public-model",
                   "role": "assistant",
                   "stop_details": null,
@@ -45,6 +45,7 @@
             {
               "data": {
                 "content_block": {
+                  "signature": "",
                   "thinking": "",
                   "type": "thinking"
                 },
@@ -77,6 +78,17 @@
             },
             {
               "data": {
+                "delta": {
+                  "signature": "",
+                  "type": "signature_delta"
+                },
+                "index": 0,
+                "type": "content_block_delta"
+              },
+              "event": "content_block_delta"
+            },
+            {
+              "data": {
                 "index": 0,
                 "type": "content_block_stop"
               },
@@ -85,7 +97,7 @@
             {
               "data": {
                 "content_block": {
-                  "id": "call_2",
+                  "id": "toolu_1b68f83fa344ae7239a1f9c0",
                   "input": {},
                   "name": "get_weather",
                   "type": "tool_use"

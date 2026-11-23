@@ -65,6 +65,9 @@ providers, global settings, and setup state when replacing its routing surface.
 Multi-recipe lifecycle changes are managed from **Routing → Recipes** or the
 management API so an editor change cannot silently discard another recipe.
 
+When a Dashboard save submits a full configuration with an unknown field, the
+Dashboard reports the field's path and leaves the saved configuration unchanged.
+
 ## Helm
 
 Direct Helm deployments place a complete canonical document under
@@ -131,7 +134,9 @@ Helm values seed the Router ConfigMap at install:
   `configMap.applyValuesRevision` for that upgrade. Reusing the same revision
   later keeps subsequent live edits.
 - **Rollout.** A saved ConfigMap edit takes effect after the Router deployment
-  rolls out.
+  rolls out. The Dashboard reads the saved ConfigMap through the Kubernetes
+  API, so its configuration pages and model health show the edit within a few
+  seconds, without a restart.
 
 `vllm-sr serve --target kubernetes --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command

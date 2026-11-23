@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -59,12 +60,16 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	// LiteLLM's provider_specific_fields are similarly non-canonical and must
 	// not be replayed.
 	needsReencode := wire.hasOpenRouterDecorations() || wire.hasLiteLLMDecorations() || chatChoicesHaveReasoningDetails(wire.Choices) || wire.hasDeepSeekDecorations()
-	replay := body
-	if needsReencode {
-		replay = nil
+	var replay []byte
+	public := false
+	if !needsReencode {
+		if replay, public, err = publicChatResponseBody(body); err != nil {
+			return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, invalidProviderResponse("invalid_upstream_json", "upstream response JSON is invalid")
+		}
 	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, replay, response.Generation, response.SourceStopReason, policy)
-	envelope.ResponseReencodeRequired = needsReencode
+	// Public bytes too large to keep are rendered again rather than forwarded.
+	envelope.ResponseReencodeRequired = needsReencode || public && len(envelope.Response) == 0
 	return response, envelope, diagnostics, nil
 }
 
@@ -414,6 +419,11 @@ func encodeChatOutput(items []llmprotocol.OutputItem, index int, stop llmprotoco
 	message, err := encodeChatMessage(combined)
 	if err != nil {
 		return chatChoiceWire{}, err
+	}
+	if len(combined.Content) == 0 {
+		// A reply with no output, such as a turn the model ended with nothing
+		// to say, is an empty assistant message, as OpenAI sends one.
+		message.Content = json.RawMessage(`""`)
 	}
 	reason := encodeChatStop(stop)
 	return chatChoiceWire{Index: index, Message: message, FinishReason: &reason}, nil

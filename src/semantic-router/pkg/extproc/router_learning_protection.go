@@ -44,6 +44,7 @@ func (r *OpenAIRouter) applyProtectionPreflight(input routerLearningInput) route
 		if input.ctx != nil {
 			input.ctx.VSRLearningSessionID = identity.memoryKey
 			input.ctx.VSRLearningConversationID = identity.declaredConversationID()
+			input.ctx.protectionKeyApart = identity.agentID != "" || identity.sideClass != ""
 		}
 	}
 	if mode == config.DecisionAdaptationModeBypass {
@@ -608,6 +609,10 @@ func (r *OpenAIRouter) protectionIdentity(
 		// or conversation key has, so the two can never collide.
 		components = append(components, "agent", agentID)
 	}
+	sideClass := protectionSideRequestClass(ctx)
+	if sideClass != "" {
+		components = append(components, "class", sideClass)
+	}
 	return routerLearningIdentity{
 		sessionID:           sessionID,
 		conversationID:      conversationID,
@@ -618,6 +623,7 @@ func (r *OpenAIRouter) protectionIdentity(
 		conversationHeader:  conversationHeader,
 		agentID:             agentID,
 		agentHeader:         agentHeader,
+		sideClass:           sideClass,
 	}, true
 }
 

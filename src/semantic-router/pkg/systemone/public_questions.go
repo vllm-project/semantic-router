@@ -23,7 +23,7 @@ var questionStatus = map[string]int{
 // own messages never reach a client.
 var questionReasons = map[string]string{
 	"question_malformed":          "the question is malformed",
-	"type_unsupported":            "the question type is not one System One defines",
+	"type_unsupported":            "this model does not answer this question type; GET /v1/systemone/models lists the types each model answers",
 	"box_unsupported":             "this model does not answer box questions",
 	"track_unsupported":           "this model does not answer track questions",
 	"question_images_unsupported": "this model reads images only in the state, not in a question's instructions or options",

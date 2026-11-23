@@ -254,7 +254,8 @@ func TestNativeFallbackAsksAStreamedChatCandidateForUsage(t *testing.T) {
 			require.Equal(t, true, call["stream"])
 			require.Equal(t, tc.want, call["stream_options"])
 
-			session.fallback.succeeded(http.StatusOK)
+			session.fallback.beginResponse(http.StatusOK)
+			session.router.finishNativeFallbackResponse(session.ctx, "")
 			require.Equal(t, tc.options, ctx.SemanticRequest.StreamOptions, "the client's stream options changed")
 		})
 	}

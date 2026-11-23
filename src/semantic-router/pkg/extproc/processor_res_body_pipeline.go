@@ -40,12 +40,20 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
 		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 	}
+	second, err := r.structuredOutputAnswer(ctx, semanticResponse, diagnosticsBeforeBody)
+	if err != nil {
+		r.settleNonStreamingUsage(ctx, semanticResponse, completionLatency)
+		return r.refuseStructuredOutput(ctx, err)
+	}
+	if second != nil {
+		semanticResponse, completionLatency = second, time.Since(ctx.StartTime)
+	}
 	decodedDiagnosticsEnd := len(ctx.ProtocolDiagnostics)
 	clientBody := responseBody
 	// Same-format Chat usually forwards upstream bytes. When codec translation
-	// changed those bytes (for example, by dropping provider decorations), send
-	// the translated response instead.
-	rewriteClientBody := requiresClientResponseRewrite(ctx) ||
+	// changed those bytes (for example, by dropping provider decorations), or a
+	// second call answered in their place, send the translated response instead.
+	rewriteClientBody := second != nil || requiresClientResponseRewrite(ctx) ||
 		ctx.SourceFormat == llmprotocol.OpenAIChatV1 && ctx.ResponseBodyNeedsRewrite
 	if rewriteClientBody {
 		clientBody, err = r.encodeClientResponse(*semanticResponse, ctx)
@@ -56,10 +64,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			ctx.ProtocolDiagnostics, diagnosticsBeforeBody, decodedDiagnosticsEnd,
 		)
 	}
-	usage := r.takeNeutralResponseUsage(ctx)
-	observeUpstreamResponse(ctx, semanticResponse.Model, usage)
-	r.reportNonStreamingUsage(ctx, completionLatency, usage)
-	r.calibrateTokenEstimator(ctx, usage.promptTokens)
+	r.settleNonStreamingUsage(ctx, semanticResponse, completionLatency)
 
 	r.updateKVAddressRegistry(ctx)
 	cacheable := r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx)
@@ -95,6 +100,15 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	return response
 }
 
+// settleNonStreamingUsage settles the usage of a buffered answer: rate limits,
+// cost, spend, session telemetry and the token estimator.
+func (r *OpenAIRouter) settleNonStreamingUsage(ctx *RequestContext, response *llmprotocol.Response, completionLatency time.Duration) {
+	usage := r.takeNeutralResponseUsage(ctx)
+	observeUpstreamResponse(ctx, response.Model, usage)
+	r.reportNonStreamingUsage(ctx, completionLatency, usage)
+	r.calibrateTokenEstimator(ctx, usage.promptTokens)
+}
+
 // Translation validates and renders the client wire before response policy
 // runs. The buffered path renders it again to apply response mutations; a
 // warning emitted by both renders describes one loss, not two.
@@ -122,6 +136,11 @@ func (r *OpenAIRouter) finalizeResponsePolicy(
 	clientBody []byte,
 ) (*ext_proc.ProcessingResponse, []byte, []*core.HeaderValueOption) {
 	plan := r.prepareResponsePolicy(ctx, semanticResponse, clientBody)
+	if plan.blocked == nil {
+		r.finishNativeFallbackResponse(ctx, "")
+	} else {
+		r.finishNativeFallbackResponse(ctx, "policy_blocked")
+	}
 	plan.commit()
 	return plan.blocked, plan.finalBody, plan.headerOptions()
 }
@@ -251,10 +270,12 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 
 // addResponseStageTrace rewrites x-vsr-trace once the guard has read the
 // answer, so it carries the guard's outcome and its signals the
-// response-stage matches: the response headers phase wrote the trace before
-// the body existed. Only for a caller allowed the debug headers.
+// response-stage matches, and once a structured output pass made a second
+// call, which a benchmark receipt counts: the response headers phase wrote
+// the trace before the body existed. Only for a caller allowed the debug
+// headers.
 func addResponseStageTrace(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
-	if ctx.ResponseGuard == nil {
+	if ctx.ResponseGuard == nil && (ctx.structuredOutputPass == nil || !ctx.structuredOutputPass.answered) {
 		return
 	}
 	if trace := responseTrace(ctx); trace != "" {
