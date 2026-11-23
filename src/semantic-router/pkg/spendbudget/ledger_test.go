@@ -96,9 +96,54 @@ func TestRefusalNamesTheBudgetThatDoesNotFit(t *testing.T) {
 	if want := time.Date(2026, 11, 16, 11, 0, 0, 0, time.UTC); !refusal.ResetAt.Equal(want) {
 		t.Fatalf("reset %v, want %v", refusal.ResetAt, want)
 	}
-	if refusal.Error() == "" {
-		t.Fatal("empty refusal message")
+	if want := "out of budget until 2026-11-16T11:00:00Z: the user/hourly spend budget of 2.000000 has 0.500000 left (1.500000 spent), and this call is estimated at 1.000000"; refusal.InFlight || refusal.Error() != want {
+		t.Fatalf("refusal %q (in flight %t), want %q", refusal.Error(), refusal.InFlight, want)
 	}
+}
+
+// A call refused only for what calls in flight hold is told so, and that a
+// retry may fit; a call the spend alone leaves no room for is out of budget,
+// whatever else is in flight, and so is a budget reported beside one that is
+// only held. Both refusals say what was spent apart from what is held.
+func TestRefusalTellsInFlightReservationsFromSpend(t *testing.T) {
+	now := time.Date(2026, 11, 16, 10, 0, 0, 0, time.UTC)
+	ledger := testLedger(&now)
+	limits := []Limit{run(1)}
+	spent, _ := ledger.Reserve(limits, 0.3)
+	spent.Settle(0.3)
+	held, _ := ledger.Reserve(limits, 0.6)
+	_, refusal := ledger.Reserve(limits, 0.5)
+	if refusal == nil || !refusal.InFlight || refusal.Reserved != 0.6 {
+		t.Fatalf("0.5 fits the 0.7 spend leaves once 0.6 in flight settles: %+v", refusal)
+	}
+	if want := "the run spend budget of 1.000000 has 0.100000 left (0.300000 spent, 0.600000 held by calls in flight), and this call is estimated at 0.500000: retry once they finish"; refusal.Error() != want {
+		t.Fatalf("refusal %q, want %q", refusal.Error(), want)
+	}
+	if _, refusal = ledger.Reserve(limits, 0.8); refusal == nil || refusal.InFlight {
+		t.Fatalf("0.8 never fits the 0.7 spend leaves: %+v", refusal)
+	}
+	if want := "out of budget: the run spend budget of 1.000000 has 0.100000 left (0.300000 spent, 0.600000 held by calls in flight), and this call is estimated at 0.800000"; refusal.Error() != want {
+		t.Fatalf("refusal %q, want %q", refusal.Error(), want)
+	}
+	if _, refusal = ledger.Reserve(limits, 0.1); refusal != nil {
+		t.Fatal(refusal)
+	}
+	if refusal = ledger.Check(limits); refusal == nil || !refusal.InFlight {
+		t.Fatalf("a budget only calls in flight fill: %+v", refusal)
+	}
+	held.Settle(0.7)
+	if refusal = ledger.Check(limits); refusal == nil || refusal.InFlight {
+		t.Fatalf("a budget spent with 0.1 in flight: %+v", refusal)
+	}
+
+	both := []Limit{{Key: "run|bob|s2", Scope: "run", Amount: 10, Idle: time.Hour}, {Key: "user|daily|bob", Scope: "user/daily", Amount: 1, Window: WindowDay}}
+	busy, _ := ledger.Reserve(both[:1], 9.95)
+	daily, _ := ledger.Reserve(both[1:], 0.98)
+	daily.Settle(0.98)
+	if _, refusal = ledger.Reserve(both, 0.05); refusal == nil || refusal.Scope != "user/daily" || refusal.InFlight {
+		t.Fatalf("the spent daily budget is the refusal, not the run held by a call: %+v", refusal)
+	}
+	busy.Release()
 }
 
 func TestCheckRefusesOnlyAnExhaustedBudget(t *testing.T) {
@@ -117,7 +162,7 @@ func TestCheckRefusesOnlyAnExhaustedBudget(t *testing.T) {
 	if refusal == nil || refusal.Remaining >= 0 {
 		t.Fatalf("an overspent budget is admitted: %+v", refusal)
 	}
-	if want := "the run spend budget of 1.000000 has nothing left"; refusal.Error() != want {
+	if want := "out of budget: the run spend budget of 1.000000 has nothing left (1.200000 spent)"; refusal.Error() != want {
 		t.Fatalf("refusal %q, want %q", refusal.Error(), want)
 	}
 }
@@ -167,6 +212,29 @@ func TestIdleRunIsForgottenAndOthersAreKept(t *testing.T) {
 		t.Fatalf("an idle run keeps its spend: %v", refusal)
 	}
 	open.Release()
+}
+
+// A run idle past its timeout starts again at the call that finds it so,
+// not at the prune, which runs at most once a minute.
+func TestIdleTimeoutHoldsAtTheNextCall(t *testing.T) {
+	now := time.Date(2026, 11, 16, 10, 0, 0, 0, time.UTC)
+	ledger := testLedger(&now)
+	limits := []Limit{{Key: "run|alice|s3", Scope: "run", Amount: 1, Idle: 10 * time.Second}}
+	ledger.Charge(limits, 1)
+	now = now.Add(9 * time.Second)
+	if refusal := ledger.Check(limits); refusal == nil {
+		t.Fatal("a spent run used 9 s ago was admitted")
+	}
+	now = now.Add(10 * time.Second)
+	if refusal := ledger.Check(limits); refusal != nil {
+		t.Fatalf("a run idle for 10 s of its 10 s timeout keeps its spend: %v", refusal)
+	}
+	held, _ := ledger.Reserve(limits, 0.5)
+	now = now.Add(time.Minute)
+	held.Settle(0.5)
+	if status, _ := ledger.Tightest(limits); status.Remaining != 0.5 {
+		t.Fatalf("a call in flight past the timeout settles into its run: remaining %v", status.Remaining)
+	}
 }
 
 func TestWindowBounds(t *testing.T) {
