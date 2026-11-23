@@ -1,0 +1,128 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 300s
+
+global:
+  stores:
+    response_cache:
+      enabled: false
+      backend_type: memory
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/d3-lite
+    system:
+      decision_model:
+        deployment: primary
+
+providers:
+  defaults:
+    model: local/private-qwen
+  models:
+    - name: local/private-qwen
+      provider_model_id: local/private-qwen
+      api_format: openai
+      backend_refs:
+        - name: mock-backend
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: mock-backend
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+    - name: cloud/frontier-reasoning
+      provider_model_id: cloud/frontier-reasoning
+      api_format: openai
+      backend_refs:
+        - name: mock-backend
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+
+routing:
+  modelCards:
+    - name: local/private-qwen
+      context_window_size: 131072
+      description: Local low-cost lane for ordinary requests.
+      capabilities:
+        - chat
+        - text
+      modality: text
+    - name: local/omni
+      context_window_size: 131072
+      description: Local multimodal lane.
+      capabilities:
+        - chat
+        - image_understanding
+        - multimodal
+      modality: omni
+    - name: cloud/frontier-reasoning
+      context_window_size: 262144
+      description: Cloud frontier lane for deep reasoning.
+      capabilities:
+        - frontier_reasoning
+        - deep_synthesis
+      modality: text
+
+  signals:
+    decision:
+      - name: depth
+        description: A good answer needs deep multi-step reasoning.
+        question:
+          type: noul
+          instructions: Does a good answer need deep multi-step reasoning, such as comparing designs from
+            first principles, analysing a root cause, or justifying trade-offs and a recommendation?
+        predicate:
+          gte: 0.6
+
+  decisions:
+    - name: cloud_frontier_reasoning
+      description: Deep reasoning goes to the cloud frontier model.
+      priority: 200
+      tier: 1
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: depth
+      modelRefs:
+        - model: cloud/frontier-reasoning
+          use_reasoning: true
+          reasoning_effort: high
+      plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 1000
+            max_body_bytes: 2048
+    - name: local_standard
+      description: Everything else stays on the local model.
+      priority: 100
+      tier: 2
+      modelRefs:
+        - model: local/private-qwen
+          use_reasoning: false
+      plugins:
+        - type: router_replay
+          configuration:
+            enabled: true
+            max_records: 1000
+            max_body_bytes: 2048
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

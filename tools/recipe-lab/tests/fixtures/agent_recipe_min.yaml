@@ -1,0 +1,160 @@
+# Minimal fixture extracted from config/recipes/agent/config.yaml for the
+# rule-level threshold proposer tests (C). Faithful to the real difficulty
+# wiring: four rule sites write `difficulty gte 2.5` (two bare, two under
+# NOT), and simple_math_fast_path / the no-predicate leaves only use the
+# signal-level default (gte 1.0). BUG-3 calibration (PR #5568) moved exactly
+# those four sites from 2.5 to 1.75.
+version: v0.2
+listeners:
+  - name: gateway
+    address: 0.0.0.0:30632
+providers: {}
+routing:
+  modelCards:
+    - name: qwen/qwen3.6-rocm
+      capabilities: [chat]
+    - name: local/private-qwen
+      capabilities: [chat]
+    - name: google/gemini-2.5-flash-lite
+      capabilities: [chat]
+    - name: google/gemini-3.1-pro
+      capabilities: [chat]
+    - name: openai/gpt5.4
+      capabilities: [chat]
+  signals:
+    decision:
+      - name: domain
+        description: Which field does this request belong to?
+        question:
+          type: choice
+          instructions: Which field does this request belong to?
+          choices:
+            - key: code
+              description: Software work
+            - key: math_science
+              description: Math and science
+            - key: general
+              description: Anything else
+        predicate:
+          gte: 0.4
+      - name: difficulty
+        description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer this request well?
+          levels:
+            - Answer immediately, with no thinking
+            - A little thought, one or two simple steps
+            - Multi-step reasoning or a careful check
+            - Deep expert reasoning on a hard problem
+            - Research-level work on an open or frontier problem
+        predicate:
+          gte: 1.0
+  decisions:
+    - name: simple_math_fast_path
+      description: Math and science that needs almost no reasoning stays on the local model.
+      priority: 300
+      tier: 2
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: domain
+            label: math_science
+          - operator: NOT
+            conditions:
+              - type: decision
+                name: difficulty
+      modelRefs:
+        - model: qwen/qwen3.6-rocm
+          use_reasoning: false
+    - name: domain_code_complex
+      description: 'Hard software work (domain: code, difficulty 2.5 or more) goes to the strongest technical models.'
+      priority: 255
+      tier: 3
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: domain
+            label: code
+          - type: decision
+            name: difficulty
+            predicate:
+              gte: 2.5
+      modelRefs:
+        - model: google/gemini-3.1-pro
+          use_reasoning: false
+    - name: domain_code
+      description: Other software work that needs some reasoning (difficulty 1 to 2.5) goes to the code model.
+      priority: 250
+      tier: 3
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: domain
+            label: code
+          - type: decision
+            name: difficulty
+          - operator: NOT
+            conditions:
+              - type: decision
+                name: difficulty
+                predicate:
+                  gte: 2.5
+      modelRefs:
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
+    - name: complex_general
+      description: Any other request that needs deep reasoning (difficulty 2.5 or more) goes to the stronger models.
+      priority: 190
+      tier: 4
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: difficulty
+            predicate:
+              gte: 2.5
+          - operator: NOT
+            conditions:
+              - type: decision
+                name: domain
+                label: code
+      modelRefs:
+        - model: google/gemini-3.1-pro
+          use_reasoning: false
+    - name: medium_general
+      description: Any other request that needs some reasoning (difficulty 1 to 2.5) goes to the medium model.
+      priority: 150
+      tier: 5
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: difficulty
+          - operator: NOT
+            conditions:
+              - type: decision
+                name: difficulty
+                predicate:
+                  gte: 2.5
+      modelRefs:
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
+    - name: simple_general
+      description: Everything else stays on the local model.
+      priority: 80
+      tier: 6
+      modelRefs:
+        - model: qwen/qwen3.6-rocm
+          use_reasoning: false
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

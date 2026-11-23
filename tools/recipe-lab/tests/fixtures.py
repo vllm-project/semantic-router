@@ -50,6 +50,15 @@ VALID_SPEC: dict = {
     "attribution": {
         "oracle_policy": {"math": "local/model-math", "code": "local/model-code"},
     },
+    "gates": [
+        {"name": "pii-recall-floor", "metric": "guard.pii.recall", "floor": "baseline"},
+    ],
+    "budget": {"rounds": 5, "max_minutes_per_trial": 60},
+    "stack": {
+        "mode": "external",
+        "endpoint": "http://127.0.0.1:8899",
+        "baseline_ref": "config-revision@main",
+    },
 }
 
 # B: the preferred three-way workload form (splits must be disjoint)

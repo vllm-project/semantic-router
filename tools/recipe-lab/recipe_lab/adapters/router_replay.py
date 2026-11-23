@@ -21,6 +21,18 @@ that choice), while score-type signals keep the numeric score under
 `decision:<name>` (e.g. `decision:difficulty` -> 0..4). `decision_tier`
 carries the routing tier as an integer when present.
 
+Verified against the router source (H prerequisite): the replay record's
+`request_id` is the client's `x-request-id` header verbatim. The extproc
+header phase copies it into the request context
+(pkg/extproc/processor_req_header.go, `captureRequestHeaders`), and the
+replay recorder stamps it onto every RoutingRecord (pkg/extproc/recorder.go;
+serialized as `request_id`, pkg/routerreplay/store/store.go). The standalone
+gateway forwards the client header unchanged (pkg/gateway/request.go only
+generates one when absent), so the replay tier can tag every request with a
+candidate-scoped id (`rl-<tag>-<case_id>`) and later filter one candidate's
+records out of the shared replay store (the management API has no
+delete/clear endpoint for records).
+
 This adapter pulls those records and joins them against a hand-labeled case
 list (prompt -> truth label) to produce attribution input records:
 
@@ -178,23 +190,13 @@ def _record_field(record: dict, *names: str) -> Any:
     return None
 
 
-def record_to_case(
-    record: dict[str, Any],
-    cases_by_prompt: dict[str, CaseJoin],
-    *,
-    family: str = "d3",
-) -> tuple[dict[str, Any] | None, str]:
-    """Convert one RoutingRecord into an attribution input row.
+def _case_row(record: dict[str, Any], case: CaseJoin, *, family: str) -> dict[str, Any]:
+    """Build one attribution input row from a record joined with its case.
 
-    Returns (row, join_state) where join_state is "matched" or the skip
-    reason ("no_prompt", "unlabeled"). Only matched records become rows.
+    Carries the record timeline and lifecycle evidence the same way
+    record_to_case does: prompt-join and request-id-join rows keep one
+    shape.
     """
-    prompt = _record_field(record, "prompt", "Prompt")
-    if not isinstance(prompt, str) or not prompt.strip():
-        return None, "no_prompt"
-    case = cases_by_prompt.get(prompt)
-    if case is None:
-        return None, "unlabeled"
     decision = _record_field(record, "decision", "Decision") or ""
     selected = _record_field(record, "selected_model", "SelectedModel") or ""
     request_id = _record_field(record, "request_id", "RequestID") or ""
@@ -213,7 +215,89 @@ def record_to_case(
         or {},
         "decision_tier": _record_field(record, "decision_tier", "DecisionTier"),
     }
-    return row, "matched"
+    record_ts = _record_field(record, "timestamp", "Timestamp")
+    if record_ts is not None:
+        row["record_ts"] = str(record_ts)
+    lifecycle_state = _record_field(record, "lifecycle_state", "LifecycleState")
+    if lifecycle_state:
+        row["lifecycle_state"] = str(lifecycle_state)
+    terminal_reason = _record_field(record, "terminal_reason", "TerminalReason")
+    if terminal_reason:
+        row["terminal_reason"] = str(terminal_reason)
+    response_status = _record_field(record, "response_status", "ResponseStatus")
+    if response_status is not None:
+        row["response_status"] = response_status
+    session_evidence = {
+        "conversation_id": _record_field(record, "conversation_id", "ConversationID"),
+        "session_id": _record_field(record, "session_id", "SessionID"),
+        "turn_index": _record_field(record, "turn_index", "TurnIndex"),
+        "session_action": _record_field(record, "session_action", "SessionAction"),
+        "selection_reasoning": _record_field(
+            record, "selection_reasoning", "SelectionReasoning"
+        ),
+    }
+    if any(value is not None for value in session_evidence.values()):
+        row["session"] = {k: v for k, v in session_evidence.items() if v is not None}
+    return row
+
+
+def record_to_case(
+    record: dict[str, Any],
+    cases_by_prompt: dict[str, CaseJoin],
+    *,
+    family: str = "d3",
+) -> tuple[dict[str, Any] | None, str]:
+    """Convert one RoutingRecord into an attribution input row.
+
+    Returns (row, join_state) where join_state is "matched" or the skip
+    reason ("no_prompt", "unlabeled"). Only matched records become rows.
+
+    Session evidence (conversation_id / turn_index / session_action /
+    selection_reasoning) is carried through verbatim when the record has it;
+    missing fields stay absent so single-turn records keep their shape. The
+    record timeline (record_ts) and lifecycle evidence (lifecycle_state /
+    terminal_reason / response_status) are carried the same way: session
+    attribution orders one user turn's fan-out requests by record_ts, and a
+    lifecycle_state=failed record is the direct evidence of an interrupted
+    tool loop (requires the rejection-recording router fix).
+    """
+    prompt = _record_field(record, "prompt", "Prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        return None, "no_prompt"
+    case = cases_by_prompt.get(prompt)
+    if case is None:
+        return None, "unlabeled"
+    return _case_row(record, case, family=family), "matched"
+
+
+def records_to_cases_by_request_id(
+    records: list[dict[str, Any]],
+    cases_by_request_id: dict[str, CaseJoin],
+    *,
+    family: str = "d3",
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """H: exact request-id join for the hot-reload replay tier.
+
+    One router process serves many candidates, so records are separated by
+    the `x-request-id` the runner sent (`rl-<candidate tag>-<case_id>`,
+    verified to surface verbatim in the record's `request_id`). Rows keep
+    the same shape as the prompt join. Callers assert one row per case
+    (count check) before trusting the metrics.
+    """
+    rows: list[dict[str, Any]] = []
+    stats: dict[str, int] = {"matched": 0, "unmatched": 0, "no_request_id": 0}
+    for record in records:
+        request_id = _record_field(record, "request_id", "RequestID")
+        if not isinstance(request_id, str) or not request_id:
+            stats["no_request_id"] += 1
+            continue
+        case = cases_by_request_id.get(request_id)
+        if case is None:
+            stats["unmatched"] += 1
+            continue
+        rows.append(_case_row(record, case, family=family))
+        stats["matched"] += 1
+    return rows, stats
 
 
 def records_to_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -257,7 +341,10 @@ def records_to_cases(
     """Join replay records against the labeled case list.
 
     Returns (rows, join_stats). Duplicate prompts keep their first record;
-    later duplicates count as skipped with reason "duplicate_prompt".
+    later duplicates count as skipped with reason "duplicate_prompt" — except
+    records with lifecycle_state=failed, which are never deduped: they are
+    the direct evidence of interrupted selections and several retries can
+    share one prompt.
     """
     by_prompt: dict[str, CaseJoin] = {}
     for case in cases:
@@ -274,11 +361,16 @@ def records_to_cases(
         row, state = record_to_case(record, by_prompt, family=family)
         if state == "matched":
             prompt = _record_field(record, "prompt", "Prompt")
-            if prompt in seen_prompts:
+            if str(row.get("lifecycle_state") or "") == "failed":
+                rows.append(
+                    row
+                )  # rejection evidence is never deduped and never claims the prompt
+            elif prompt in seen_prompts:
                 stats["duplicate_prompt"] += 1
                 continue
-            seen_prompts.add(prompt)
-            rows.append(row)
+            else:
+                seen_prompts.add(prompt)
+                rows.append(row)
         stats[state] = stats.get(state, 0) + 1
     return rows, stats
 
