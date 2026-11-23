@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from recipe_lab.contract import ContractError
 from recipe_lab.splitting import (
     default_split_rule,
     group_cases,
@@ -13,8 +14,6 @@ from recipe_lab.splitting import (
     split_cases,
     write_splits,
 )
-
-from recipe_lab.contract import ContractError
 
 
 def _cases(n: int, groups: int = 4) -> list[dict]:

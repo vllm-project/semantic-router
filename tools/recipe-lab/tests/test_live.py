@@ -9,10 +9,9 @@ from pathlib import Path
 
 import pytest
 import yaml
-from recipe_lab.ledger import Ledger, LedgerRecord
-
 from recipe_lab.cli import main
 from recipe_lab.contract import ContractError, CostBasis, ExperimentSpec, References
+from recipe_lab.ledger import Ledger, LedgerRecord
 from recipe_lab.live import (
     _merge_paired_stats,
     _pair_metrics,

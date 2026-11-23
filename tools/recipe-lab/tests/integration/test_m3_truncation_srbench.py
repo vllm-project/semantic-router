@@ -18,9 +18,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from recipe_lab.splitting import load_cases
-
 from recipe_lab.live import arm_evidence_quality
+from recipe_lab.splitting import load_cases
 from recipe_lab.srbench import SrbenchCli, cases_to_srbench_rows
 
 pytestmark = [

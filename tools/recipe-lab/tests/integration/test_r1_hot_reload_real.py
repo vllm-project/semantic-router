@@ -16,7 +16,6 @@ import statistics
 from pathlib import Path
 
 import pytest
-
 from recipe_lab.cli import main
 
 pytestmark = [

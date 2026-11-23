@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from recipe_lab.cli import build_parser, main, verdict_exit_code
 from tests.fixtures import VALID_SPEC, VALID_WORKLOADS_SPEC
 
