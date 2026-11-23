@@ -113,6 +113,50 @@ class PublicSkillTests(unittest.TestCase):
 
     def test_repository_publication_is_complete_and_current(self):
         self.assertEqual(skill.sync(skill.SOURCE, skill.DESTINATION, check=True), [])
+        self.assertEqual(
+            skill.sync(
+                skill.SERVE_SOURCE,
+                skill.SERVE_DESTINATION,
+                check=True,
+                public_origin=skill.SERVE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-serve",
+                public_name="vllm-sr-serve",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.DECISION_SOURCE,
+                skill.DECISION_DESTINATION,
+                check=True,
+                public_origin=skill.DECISION_PUBLIC_ORIGIN,
+                source_name="vllm-sr-decision-model",
+                public_name="vllm-sr-decision-model",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.CONFIGURE_SOURCE,
+                skill.CONFIGURE_DESTINATION,
+                check=True,
+                public_origin=skill.CONFIGURE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-configure-recipe",
+                public_name="vllm-sr-configure-recipe",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.DIAGNOSE_SOURCE,
+                skill.DIAGNOSE_DESTINATION,
+                check=True,
+                public_origin=skill.DIAGNOSE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-diagnose-routing",
+                public_name="vllm-sr-diagnose-routing",
+            ),
+            [],
+        )
         source_refs = list((skill.SOURCE / "references").glob("*.md"))
         self.assertEqual(
             {path.name for path in source_refs},
