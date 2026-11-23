@@ -287,9 +287,10 @@ func testLooperFusionQuorumFallbackFailure(ctx context.Context, client *kubernet
 	if err != nil {
 		return fmt.Errorf("fusion fallback-failure request failed: %w", err)
 	}
-	if response.StatusCode != http.StatusInternalServerError {
+	// The broken fallback target's 502 ends the run, so the client gets it.
+	if response.StatusCode != http.StatusBadGateway {
 		logUnexpectedChatCompletionStatus(opts.Verbose, response, "looper-fusion-quorum-fallback-failure")
-		return fmt.Errorf("fusion fallback-failure status = %d, want %d", response.StatusCode, http.StatusInternalServerError)
+		return fmt.Errorf("fusion fallback-failure status = %d, want %d", response.StatusCode, http.StatusBadGateway)
 	}
 
 	var errorResponse looperFusionErrorResponse
@@ -380,9 +381,10 @@ func testLooperFusionUsableQuorum(ctx context.Context, client *kubernetes.Client
 	if err != nil {
 		return fmt.Errorf("fusion quorum request failed: %w", err)
 	}
-	if response.StatusCode != http.StatusInternalServerError {
+	// The failed panel model's 502 left the panel below quorum, so the client gets it.
+	if response.StatusCode != http.StatusBadGateway {
 		logUnexpectedChatCompletionStatus(opts.Verbose, response, "looper-fusion-usable-quorum")
-		return fmt.Errorf("fusion quorum status = %d, want %d", response.StatusCode, http.StatusInternalServerError)
+		return fmt.Errorf("fusion quorum status = %d, want %d", response.StatusCode, http.StatusBadGateway)
 	}
 
 	var errorResponse looperFusionErrorResponse

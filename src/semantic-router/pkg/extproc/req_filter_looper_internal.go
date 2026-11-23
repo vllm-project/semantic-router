@@ -321,6 +321,15 @@ func (r *OpenAIRouter) startLooperInternalReplay(
 	decisionName string,
 ) {
 	ctx.RouterReplayID = ""
+	// A hop's record opens before its dispatch, from a request that already
+	// carries the reasoning controls the hop's decision wrote for its model.
+	ctx.dispatchReasoningMode, ctx.dispatchReasoningEffort = "", ""
+	if ctx.SemanticRequest != nil {
+		ctx.dispatchReasoningEffort = ctx.SemanticRequest.ReasoningEffort
+	}
+	if decisionName != "" && r.getModelReasoningFamily(modelName) != nil {
+		ctx.dispatchReasoningMode = ctx.VSRReasoningMode
+	}
 	r.startRouterReplay(ctx, looperHopLabel(ctx.VSRSelectedDecision), modelName, decisionName)
 	// A hop's usage and price belong to the request that made it, whose
 	// record counts the call; this one says so rather than reading as unpriced.
