@@ -1,0 +1,36 @@
+version: v0.5
+listeners:
+  - name: http-8899
+    address: 127.0.0.1
+    port: 8899
+providers:
+  defaults:
+    model: fast
+  models:
+    - name: fast
+      provider_model_id: fast
+      backend_refs:
+        - {name: fast-local, provider: vllm, endpoint: "host.docker.internal:8000", protocol: http}
+    - name: strong
+      provider_model_id: strong
+      backend_refs:
+        - {name: strong-local, provider: vllm, endpoint: "host.docker.internal:8001", protocol: http}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+  - model_names: [example/code]
+    recipe: code
+recipes:
+  - name: default
+    decisions:
+      - name: direct
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: fast}]
+  - name: code
+    decisions:
+      - name: code-strong
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: strong}]

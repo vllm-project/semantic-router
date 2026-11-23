@@ -21,11 +21,18 @@ class SkillCatalogTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        public_copies = [
+            Path(entry["published"])
+            for entry in yaml.safe_load((catalog.ROOT / catalog.CATALOG).read_text())[
+                "skills"
+            ]
+            if "published" in entry
+        ]
         for source in (
             catalog.CATALOG,
             catalog.README,
-            catalog.PUBLIC_COPY,
             Path("tools/agent/docs/README.md"),
+            *public_copies,
         ):
             target = self.root / source
             target.parent.mkdir(parents=True, exist_ok=True)

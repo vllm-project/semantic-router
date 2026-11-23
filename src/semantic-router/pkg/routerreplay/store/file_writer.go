@@ -78,7 +78,7 @@ func (f *FileStore) appendBatch(writer *bufio.Writer, batch []Record) error {
 	writer.Reset(f.file)
 	encoder := json.NewEncoder(writer)
 	for i := range batch {
-		if err := encoder.Encode(&batch[i]); err != nil {
+		if err := encoder.Encode(batch[i].JSONWire()); err != nil {
 			return err
 		}
 	}
@@ -104,7 +104,7 @@ func (f *FileStore) rewrite(writer *bufio.Writer, records []Record) error {
 		if !recordEnded(record.LifecycleState) || f.expired(*record, now) {
 			continue
 		}
-		if err = encoder.Encode(record); err != nil {
+		if err = encoder.Encode(record.JSONWire()); err != nil {
 			break
 		}
 		lines++
