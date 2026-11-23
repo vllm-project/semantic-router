@@ -25,6 +25,21 @@ func TestChatDiscoveryExcludesNativeOnlyAliases(t *testing.T) {
 	}
 }
 
+func TestEntrypointsOnlyCatalogListsOnlyExplicitChatAliases(t *testing.T) {
+	cfg := &config.RouterConfig{
+		RouterOptions: config.RouterOptions{EntrypointsOnly: true, ListBackendModels: true},
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{"worker": {}}},
+		Entrypoints:   []config.EntrypointMapping{{API: config.SystemOneAPI, ModelNames: []string{"native"}}},
+	}
+	if data := NewOpenAIModelList(cfg, 123).Data; data == nil || len(data) != 0 {
+		t.Fatalf("catalog without explicit chat entrypoints = %#v, want an empty JSON array", data)
+	}
+	cfg.Entrypoints = append(cfg.Entrypoints, config.EntrypointMapping{ModelNames: []string{"company/chat"}, Recipe: "other"})
+	if data := NewOpenAIModelList(cfg, 123).Data; len(data) != 1 || data[0].ID != "company/chat" {
+		t.Fatalf("catalog with one explicit chat entrypoint = %#v", data)
+	}
+}
+
 func TestNewOpenAIModelListUsesSourceMetadata(t *testing.T) {
 	cfg := &config.RouterConfig{
 		RouterOptions: config.RouterOptions{

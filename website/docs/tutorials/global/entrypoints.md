@@ -84,6 +84,17 @@ model and LoRA name a direct request is served for. Successful routed
 responses expose `x-vsr-selected-recipe`; Router Replay and the Dashboard's
 **Requests** page can also filter records by recipe.
 
+Set `global.router.entrypoints_only: true` to serve only the names explicitly
+declared in `entrypoints` for the requested API, on every listener. A public
+entrypoint needs no entrypoint key; listener credentials and model grants still
+apply. A listener cannot redirect a withheld name to its catch-all entrypoint.
+A direct backend or LoRA name, or the built-in
+`vllm-sr/auto` without an explicit declaration, cannot be used as a shortcut:
+the Router refuses the request before routing, even with skip-processing enabled.
+Model discovery then lists only explicit entrypoints, even if `list_backend_models`
+is on. With no explicit entrypoints for an API, there are no eligible models.
+The default is `false`. This setting does not change access to stored Responses.
+
 To rename the default entrypoint, give the entrypoint marked `default: true`
 your desired `model_names`. This replaces the built-in `vllm-sr/auto` name, so
 include that name explicitly if existing clients still need it. Bare `auto` and

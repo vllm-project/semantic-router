@@ -3137,8 +3137,9 @@ class UserConfig(BaseModel):
     @classmethod
     def validate_routing_mode(cls, value):
         router = (value or {}).get("router") or {}
-        if not isinstance(router.get("enabled", True), bool):
-            raise ValueError("global.router.enabled must be a boolean")
+        for field in ("enabled", "entrypoints_only"):
+            if field in router and not isinstance(router[field], bool):
+                raise ValueError(f"global.router.{field} must be a boolean")
         return value
 
     @property

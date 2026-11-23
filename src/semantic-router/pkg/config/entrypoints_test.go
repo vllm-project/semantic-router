@@ -87,6 +87,33 @@ func yamlForEntrypointRoundTrip(cfg *RouterConfig) ([]byte, error) {
 	return yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
 }
 
+func TestEntrypointsOnlySurvivesCanonicalExportWithoutPublishingBuiltins(t *testing.T) {
+	for _, tc := range []struct {
+		block  string
+		strict bool
+	}{
+		{"", false},
+		{"global: {router: {entrypoints_only: false}}\n", false},
+		{"global: {router: {entrypoints_only: true}}\n", true},
+	} {
+		cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + tc.block))
+		if err != nil {
+			t.Fatal(err)
+		}
+		document, err := yamlForEntrypointRoundTrip(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		again, err := ParseYAMLBytes(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.EntrypointsOnly != tc.strict || again.EntrypointsOnly != tc.strict || len(again.Entrypoints) != 0 {
+			t.Fatalf("round trip changed mode or published an implicit name: mode %t, entries %+v", again.EntrypointsOnly, again.Entrypoints)
+		}
+	}
+}
+
 // Unmapped named recipes remain dormant; the default recipe is always reachable.
 func moveTestRoutingToUnmappedRecipe(cfg *RouterConfig) {
 	cfg.Recipes = []RoutingRecipe{

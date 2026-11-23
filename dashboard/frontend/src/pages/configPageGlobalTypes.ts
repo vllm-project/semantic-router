@@ -228,6 +228,7 @@ export interface RouterCoreConfig {
   config_source?: string
   strategy?: string
   list_backend_models?: boolean
+  entrypoints_only?: boolean
   clear_route_cache?: boolean
   streamed_body?: StreamedBodyConfig
   skip_processing?: { enabled?: boolean }

@@ -8,7 +8,7 @@ import (
 
 func mustCompile(t *testing.T, values map[string]string, entrypoints ...config.EntrypointMapping) *Policy {
 	t.Helper()
-	policy, problems := Compile(entrypoints, env(values))
+	policy, problems := Compile(entrypoints, false, env(values))
 	if problems != nil {
 		t.Fatal(problems)
 	}

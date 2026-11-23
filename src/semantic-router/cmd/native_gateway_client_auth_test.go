@@ -14,6 +14,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
@@ -22,6 +24,53 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
+
+func TestStandaloneEntrypointsOnlyWithoutClientKeys(t *testing.T) {
+	arrived, release := make(chan struct{}, 8), make(chan struct{})
+	close(release)
+	backend := heldBackend(arrived, release)
+	t.Cleanup(backend.Close)
+	url, _, _ := startDrainTestGateway(t, backend.URL, `    decisions:
+      - name: answer
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: m}]
+entrypoints:
+  - model_names: [company/public]
+    recipe: default
+global:
+  router:
+    entrypoints_only: true
+    skip_processing: {enabled: true}
+`)
+	for _, tc := range []struct {
+		model  string
+		skip   bool
+		status int
+	}{
+		{"m", false, http.StatusForbidden},
+		{"m", true, http.StatusForbidden},
+		{"vllm-sr/auto", false, http.StatusForbidden},
+		{"company/public", false, http.StatusOK},
+	} {
+		body := `{"model":"` + tc.model + `","messages":[{"role":"user","content":"hi"}]}`
+		req, err := http.NewRequest(http.MethodPost, url+"/v1/chat/completions", strings.NewReader(body))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+		if tc.skip {
+			req.Header.Set("x-vsr-skip-processing", "true")
+		}
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		out, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		require.NoError(t, err)
+		require.Equal(t, tc.status, resp.StatusCode, "%s: %s", tc.model, out)
+		if tc.status == http.StatusForbidden {
+			require.Empty(t, arrived, "a refused request reached the backend")
+		}
+	}
+	require.Len(t, arrived, 1, "only the public entrypoint should reach the backend")
+}
 
 // A standalone listener serves an entrypoint with client keys only to a
 // request that presents one of them, and no refused request reaches a

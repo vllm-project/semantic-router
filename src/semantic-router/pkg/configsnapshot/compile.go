@@ -320,7 +320,7 @@ func (c *compiler) entrypointSecret(path string, api config.InferenceAPI, entryp
 // clientAuth compiles the client policy of the entrypoints, reporting each
 // reference to a variable that holds no usable key.
 func (c *compiler) clientAuth() *clientauth.Policy {
-	policy, problems := clientauth.Compile(c.cfg.Entrypoints, os.LookupEnv)
+	policy, problems := clientauth.Compile(c.cfg.Entrypoints, c.cfg.EntrypointsOnly, os.LookupEnv)
 	for _, problem := range problems {
 		c.reasons = append(c.reasons, Reason{
 			Stage: StageCompile, Code: CodeUnresolvedReference, Path: problem.Path, Message: problem.Message,
