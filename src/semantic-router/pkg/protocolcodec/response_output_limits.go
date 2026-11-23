@@ -32,10 +32,11 @@ func (engine *Engine) ValidateEncodedResponse(body []byte, streaming bool) error
 	return nil
 }
 
-// NewChatPublicStreamFilter shares this engine's configured frame limit and
-// the output limit of the request whose stream it filters.
+// NewChatPublicStreamFilter shares this engine's configured frame limit, the
+// output limit of the request whose stream it filters and the configured JSON
+// depth.
 func (engine *Engine) NewChatPublicStreamFilter(includeUsage bool) *ChatUsageStreamFilter {
-	filter := NewChatPublicStreamFilter(engine.policy.Limits.SSEFrameBytes, includeUsage)
+	filter := NewChatPublicStreamFilter(engine.policy.Limits.SSEFrameBytes, includeUsage, engine.policy.Limits.JSONDepth)
 	filter.outputLimit = engine.policy.RequestOutputLimit
 	return filter
 }

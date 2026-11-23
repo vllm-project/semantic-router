@@ -288,8 +288,20 @@ func (encoder *responsesStreamEncoder) encodeResponsesToolProgress(
 	}
 	emitted := encoder.toolArgumentsEmitted[event.ItemIndex]
 	if emitted > len(allArguments) {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable,
-			"stream_tool_arguments_mismatch", "upstream tool input changed after it was streamed", nil)
+		// A stream that ends mid-call closes the members the model finished:
+		// the close is shorter than the fragments the deltas already carried,
+		// so nothing is appended and the done events name the close.
+		streamed, repaired := encoder.closedToolArguments[event.ItemIndex]
+		var closed string
+		var ok bool
+		if repaired {
+			closed, ok = llmprotocol.TruncatedJSONObject(streamed, encoder.policy.Limits.JSONDepth)
+		}
+		if !repaired || !ok || closed != allArguments {
+			return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable,
+				"stream_tool_arguments_mismatch", "upstream tool input changed after it was streamed", nil)
+		}
+		return nil, nil
 	}
 	if encoder.outputDone[encoder.currentResponsesOutput(event.ItemIndex, responsesOutputTool)] {
 		// A call closed before its item once its arguments formed a JSON

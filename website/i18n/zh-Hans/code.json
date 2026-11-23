@@ -2607,6 +2607,75 @@
   "community.contributors.range.all.caption": {
     "message": "仓库全量历史"
   },
+  "community.layout.eyebrow": {
+    "message": "社区"
+  },
+  "community.layout.sidebarLabel": {
+    "message": "社区栏目"
+  },
+  "community.nav.group.startHere": {
+    "message": "从这里开始"
+  },
+  "community.nav.item.contributorGuide": {
+    "message": "贡献者指南"
+  },
+  "community.nav.group.people": {
+    "message": "人员"
+  },
+  "community.nav.group.howWeWork": {
+    "message": "协作方式"
+  },
+  "community.nav.item.team": {
+    "message": "开源团队"
+  },
+  "community.nav.item.steeringCommittee": {
+    "message": "指导委员会"
+  },
+  "community.nav.item.workGroups": {
+    "message": "工作组"
+  },
+  "community.nav.item.leaderboard": {
+    "message": "排行榜"
+  },
+  "community.nav.item.governance": {
+    "message": "治理"
+  },
+  "community.nav.item.contributing": {
+    "message": "参与贡献"
+  },
+  "community.nav.item.codeOfConduct": {
+    "message": "行为准则"
+  },
+  "community.team.pageTitle": {
+    "message": "项目团队"
+  },
+  "community.team.pageDescription": {
+    "message": "vLLM Semantic Router 的维护者、提交者与荣誉提交者"
+  },
+  "community.team.title": {
+    "message": "项目团队"
+  },
+  "community.team.description": {
+    "message": "负责 vLLM Semantic Router 的健康、质量与持续发展的人员。"
+  },
+  "community.team.maintainers.title": {
+    "message": "维护者"
+  },
+  "community.team.maintainers.description": {
+    "message": "项目级负责人，负责制定工程方向、批准发布、处理技术升级事项并管理仓库访问权限。"
+  },
+  "community.team.committers.title": {
+    "message": "提交者"
+  },
+  "community.team.committers.description": {
+    "message": "活跃的受信任贡献者，负责评审变更、承担具体实现领域、分诊 issue，并推动项目持续向前。"
+  },
+  "community.team.emeritus.title": {
+    "message": "荣誉提交者"
+  },
+  "community.team.emeritus.description": {
+    "message": "曾为项目做出贡献的前活跃提交者。本名册依据 GitHub 活动在滚动三个月窗口内刷新，当前窗口为 {fromDate} 至 {toDate}。"
+  },
   "theme.SearchBar.section.docs": {
     "message": "文档"
   },

@@ -268,6 +268,13 @@ contract without making roadmap, priority, or close decisions:
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;
+- `/assign` and `/unassign` reconcile the commented issue in the command job
+  itself, because writes made with the workflow token do not start the `issues`
+  lifecycle job: an accepted issue with an assignee enters `in-progress` and
+  drops contributor-ready labels, and removing the last assignee clears
+  `in-progress`; command runs and manual assignment syncs for one issue are
+  serialized in the same queue (`queue: max`), and a command on any comment
+  line is recognized;
 - title-only issue edits validate naming without changing acceptance,
   assignment, priority, milestone, or delivery state;
 - non-trivial PRs must link accepted work with exactly one recognized owner.
