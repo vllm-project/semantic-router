@@ -320,6 +320,7 @@ domains:
   calibration-tuning:
     owner: router-core
     paths:
+      - tools/recipe-lab/**
       - tools/calibration/recipe/**
       - tools/calibration/tuning/**
       - tools/calibration/systemone_auto/**
