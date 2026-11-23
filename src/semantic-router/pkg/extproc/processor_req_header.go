@@ -24,7 +24,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The skip-processing opt-out would bypass a listener's model allow-list
 	// and an entrypoint's client keys, so a restricted listener and a
 	// configuration with client keys do not honor it.
-	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil && !r.clientKeysRequired())
+	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil && !r.targetAdmissionRequired())
 	r.captureDelegatedCredential(ctx)
 	r.captureCallerCredential(ctx)
 	if r.Config != nil {

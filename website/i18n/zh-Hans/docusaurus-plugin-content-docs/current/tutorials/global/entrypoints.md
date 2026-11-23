@@ -73,6 +73,13 @@ curl http://localhost:8899/v1/chat/completions \
 
 入口会由 `/v1/models` 列出，并带有路由元数据。设置 `global.router.list_backend_models: true` 时，该列表还会按名称排序列出直接请求可以送达的每个模型和 LoRA 名称。成功路由的响应会暴露 `x-vsr-selected-recipe`；路由回放和 Dashboard 的 **Requests** 页面也可以按配方过滤记录。
 
+设置 `global.router.entrypoints_only: true` 后，所有监听器都只接受当前 API 在
+`entrypoints` 中显式声明的名称。公开入口不要求入口密钥，监听器本身的鉴权和模型限制仍然生效，
+不在该监听器授权范围内的名称也不会被重定向到兜底入口。即使启用了 skip-processing，
+客户端直接指定后端模型、LoRA 或未显式声明的内置 `vllm-sr/auto`，请求也会在路由前被拒绝。
+即使打开 `list_backend_models`，模型发现也只列出显式入口；该 API 没有显式入口时，列表为空。
+此选项默认关闭，不改变已存储 Responses 对象的访问规则。
+
 要改名默认入口，为标记 `default: true` 的入口设置 `model_names`。这会替换内置的
 `vllm-sr/auto`；如果旧客户端仍需使用它，请显式保留该名称。
 裸 `auto` 和 looper 名称都没有隐式行为。

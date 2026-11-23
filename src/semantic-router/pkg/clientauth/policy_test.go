@@ -26,7 +26,7 @@ func TestPolicyAdmitsOnlyTheKeysOfEachEntrypoint(t *testing.T) {
 		{ModelNames: []string{"company/slow"}, Recipe: "shared", ClientAuth: bearer("SLOW_KEY")},
 		{ModelNames: []string{"company/public"}, Recipe: "shared"},
 		{API: config.SystemOneAPI, ModelNames: []string{"company/fast"}, Recipe: "native"},
-	}, env(map[string]string{"FAST_CURRENT": "fast-1", "FAST_NEXT": "fast-2", "SLOW_KEY": "slow-1"}))
+	}, false, env(map[string]string{"FAST_CURRENT": "fast-1", "FAST_NEXT": "fast-2", "SLOW_KEY": "slow-1"}))
 	if problems != nil {
 		t.Fatal(problems)
 	}
@@ -62,7 +62,7 @@ func TestPolicyAdmitsOnlyTheKeysOfEachEntrypoint(t *testing.T) {
 }
 
 func TestPublicPoliciesRequireNothing(t *testing.T) {
-	public, problems := Compile([]config.EntrypointMapping{{ModelNames: []string{"company/public"}, Recipe: "shared"}}, env(nil))
+	public, problems := Compile([]config.EntrypointMapping{{ModelNames: []string{"company/public"}, Recipe: "shared"}}, false, env(nil))
 	if problems != nil {
 		t.Fatal(problems)
 	}
@@ -79,7 +79,7 @@ func TestCompileReportsEveryUnusableKeyWithoutItsValue(t *testing.T) {
 		{ModelNames: []string{"company/fast"}, Recipe: "shared", ClientAuth: bearer("FAST_KEY", "FAST_UNSET")},
 		{ModelNames: []string{"company/slow"}, Recipe: "shared", ClientAuth: bearer("SLOW_EMPTY", "SLOW_SPACED")},
 		{ModelNames: []string{"company/basic"}, Recipe: "shared", ClientAuth: &config.EntrypointClientAuth{Type: "basic"}},
-	}, env(map[string]string{"FAST_KEY": "fast-1", "SLOW_EMPTY": "", "SLOW_SPACED": "secret-value\n"}))
+	}, false, env(map[string]string{"FAST_KEY": "fast-1", "SLOW_EMPTY": "", "SLOW_SPACED": "secret-value\n"}))
 	want := []Problem{
 		{Path: "entrypoints[0].client_auth.api_key_envs[1]", Message: "environment variable FAST_UNSET is not set"},
 		{Path: "entrypoints[1].client_auth.api_key_envs[0]", Message: "environment variable SLOW_EMPTY is empty"},
@@ -99,7 +99,7 @@ func TestCompileReportsEveryUnusableKeyWithoutItsValue(t *testing.T) {
 func TestPolicyKeepsNoKey(t *testing.T) {
 	policy, problems := Compile([]config.EntrypointMapping{
 		{ModelNames: []string{"company/fast"}, Recipe: "shared", ClientAuth: bearer("FAST_KEY")},
-	}, env(map[string]string{"FAST_KEY": "plain-key-value"}))
+	}, false, env(map[string]string{"FAST_KEY": "plain-key-value"}))
 	if problems != nil {
 		t.Fatal(problems)
 	}

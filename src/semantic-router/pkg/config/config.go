@@ -286,6 +286,7 @@ type LLMObservability struct {
 
 type RouterOptions struct {
 	RouterEnabled               *bool                `yaml:"router_enabled,omitempty"`
+	EntrypointsOnly             bool                 `yaml:"entrypoints_only,omitempty"`
 	ListBackendModels           bool                 `yaml:"list_backend_models,omitempty"`
 	ClearRouteCache             bool                 `yaml:"clear_route_cache"`
 	StreamedBodyMode            bool                 `yaml:"streamed_body_mode,omitempty"`
