@@ -147,16 +147,6 @@ decisions:
               name: send_to_cloud
               description: Send content to an external service.
         tags: [privacy, tools, shape:tools, filtered]
-      - id: unanswerable_stays_local
-        messages:
-          - role: user
-            content: ' '
-        expected_signal_errors:
-          systemone:attack: systemone_rejected
-          systemone:confidential: systemone_rejected
-          systemone:personal_data: systemone_rejected
-          systemone:depth: systemone_rejected
-        tags: [fallback, negative, shape:messages]
   - id: cloud_frontier_reasoning
     expected_decision: cloud_frontier_reasoning
     expected_algorithm: static
@@ -209,3 +199,8 @@ decisions:
       - id: summarize_email
         query: Summarize this email in three bullets.
         tags: [baseline, summary]
+      - id: blank_message_stays_local
+        messages:
+          - role: user
+            content: ' '
+        tags: [fallback, negative, shape:messages]

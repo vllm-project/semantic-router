@@ -1469,6 +1469,14 @@ class RouterReplayShadowBudgetConfig(BaseModel):
         description="Default: max(1, len(models)) * 1048576 total response bytes",
     )
 
+    max_estimated_cost: Optional[float] = Field(
+        default=None,
+        strict=True,
+        gt=0,
+        allow_inf_nan=False,
+        description="Maximum estimated spend per sampled Shadow group, in the configured budget currency",
+    )
+
 
 class RouterReplayShadowCaptureConfig(BaseModel):
     """Optional bounded response capture."""

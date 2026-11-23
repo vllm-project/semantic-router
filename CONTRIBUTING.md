@@ -3,6 +3,11 @@
 Thank you for contributing. This guide covers the repository workflow; the
 public installation guide is at <https://vllm-sr.ai/docs/installation/>.
 
+New to the project? Start with the
+[Contributor Guide](https://vllm-sr.ai/community/contributor-guide): how
+vLLM Semantic Router works, which Work Group owns each area, and how to grow
+from your first pull request to maintainer.
+
 ## Before you start
 
 Install:
